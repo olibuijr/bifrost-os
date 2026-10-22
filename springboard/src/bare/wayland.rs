@@ -116,6 +116,8 @@ struct State {
     /// window capture (the global is listed on the privileged socket only): the manager, the requests in flight by token, the answers
     cap_mgr:Option<cap_manager::BifrostWindowCaptureManagerV1>, cap_jobs:HashMap<u64,CapJob>, cap_results:Vec<(u64,ShotOutcome)>,
     cursor_manager: Option<cursor_manager::WpCursorShapeManagerV1>, cursor_device: Option<cursor_device::WpCursorShapeDeviceV1>, pointer: Option<wl_pointer::WlPointer>, cursor_serial:u32,
+    /// the seat's keyboard: one object only, or every capability change would add one and each key would arrive again
+    keyboard: Option<wl_keyboard::WlKeyboard>,
     /// the seat's touch device (bound when the seat reports touch) and the fingers on it
     touch: Option<wl_touch::WlTouch>, fingers: touch_model::Translator,
     lock_manager:Option<lock_manager::ExtSessionLockManagerV1>, output:Option<wl_output::WlOutput>, lock:Option<Lock>, lock_wanted:bool, redraw:bool, refresh:u32,
@@ -686,6 +688,13 @@ fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_
         }
         self.render_chrome()?;transient(self.conn.flush())
     }
+    /// Draws chrome that `chrome` left pending because the compositor still held both of its buffers (a keyboard
+    /// sliding in changes its surface every frame): called on every pass of the main loop, which a buffer release
+    /// wakes, so the last image of a change is not left out.
+    pub fn chrome_flush(&mut self)->io::Result<()> {
+        if self.state.chrome.values().any(|w|!w.pending.is_empty()) {self.render_chrome()?;transient(self.conn.flush())?;}
+        Ok(())
+    }
     fn render_chrome(&mut self)->io::Result<()> {
         let qh=self.queue.handle();
         if let Some(g)=&mut self.gpu {
@@ -758,8 +767,9 @@ fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_
         out.append(&mut self.state.inputs);
     }
     /// The wallpaper the GPU draws under the desktop (uploaded and blurred once per change).
-    pub fn wallpaper(&mut self, wp: crate::gfx::View, x: i32) {
-        if let Some(g) = &mut self.gpu { g.p.set_wallpaper(wp, x, 0); }
+    /// Returns false when there is no GPU presenter or the blur did not land (the shell asks again).
+    pub fn wallpaper(&mut self, wp: crate::gfx::View, x: i32) -> bool {
+        if let Some(g) = &mut self.gpu { g.p.set_wallpaper(wp, x, 0) } else { false }
     }
     /// Frees the spare background drawable once the shell has drawn nothing for `GPU_POOL_IDLE_SECS`.
     pub fn trim_idle(&mut self) {
@@ -790,6 +800,8 @@ fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_
         for (_, slots) in self.state.gpu_slots.drain() {
             for s in slots { s.buffer.destroy(); }
         }
+        // glass is drawn by the GPU presenter only: with it gone, nothing is pushed to a presenter that no longer exists
+        bifrost_render::glass::enable(false);
         self.gpu = None;
         // the CPU frame now carries the wallpaper itself: the shell stops leaving it to the presenter
         bifrost_render::glass::enable(false);
@@ -998,7 +1010,14 @@ impl Dispatch<wl_seat::WlSeat, ()> for State {
                 if let Some(manager)=&s.cursor_manager { s.cursor_device=Some(manager.get_pointer(&pointer,q,())); }
                 s.pointer=Some(pointer);
             }
-            if c.contains(wl_seat::Capability::Keyboard) { seat.get_keyboard(q,()); }
+            if c.contains(wl_seat::Capability::Keyboard) {
+                // the seat repeats its capabilities whenever one changes (touch, a plugged keyboard): bind the keyboard once,
+                // a second object delivered every key twice
+                if s.keyboard.is_none() { s.keyboard=Some(seat.get_keyboard(q,())); }
+            } else if let Some(keyboard)=s.keyboard.take() {
+                for code in s.keys.drain() { s.inputs.push(Event::Key {code,down:false}); }
+                if keyboard.version()>=3 { keyboard.release(); }
+            }
             if c.contains(wl_seat::Capability::Touch) {
                 if s.touch.is_none() { s.touch=Some(seat.get_touch(q,())); }
             } else if let Some(touch)=s.touch.take() {
@@ -1572,7 +1591,7 @@ mod material_tests {
     use bifrost_render::glass::Kind;
     #[test]
     fn blur_rects_are_offset_by_the_shadow_margin() {
-        let g = Glass { x: 0.0, y: 30.5, w: 200.2, h: 400.0, r: 0.0, kind: Kind::Sidebar, active: None, detail: None };
+        let g = Glass { x: 0.0, y: 30.5, w: 200.2, h: 400.0, r: 0.0, kind: Kind::Sidebar, active: None, detail: None, tint: [0.0; 4] };
         assert_eq!(blur_rects(&[g], 40), vec![[40, 70, 201, 400]]);
         assert!(blur_rects(&[], 40).is_empty());
     }

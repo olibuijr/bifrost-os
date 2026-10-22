@@ -1350,12 +1350,59 @@ impl Shell {
             Event::Up(x, y) if self.kb_touch => {
                 self.kb_touch = false;
                 if let Some(out) = self.keyboard.up(x, y - top, t) {
-                    self.type_out(out, t);
+                    // the keys go where a hardware keyboard's would (`hw_type`); Hide lowers the keyboard
+                    if out == super::keyboard::Out::Hide {
+                        self.set_keyboard(false, t);
+                        return Some(vec![]);
+                    }
+                    return Some(self.hw_type(out, t));
                 }
             }
             _ => return None,
         }
         Some(vec![])
+    }
+
+    /// Ends the press in progress without its lift (a long press became a secondary click): a Dock icon held down is
+    /// not left dragging, where the next tap would drop it off the Dock.
+    pub(super) fn desk_cancel_press(&mut self) {
+        if let Some(d) = self.desk.as_mut() {
+            if d.grab.take().is_some() {
+                d.dock_drop = None;
+                d.dock_slide.borrow_mut().clear();
+                self.dirty = true;
+            }
+        }
+    }
+
+    /// What the tablet desktop's on-screen keyboard should do for the text field in focus: `Some(true)` when typing
+    /// reaches a field, `Some(false)` when it reaches none, and `None` to leave the keyboard alone (no desktop, a
+    /// locked screen, a Wayland client's field that the input method serves, or a terminal, which raises and lowers
+    /// its own keyboard). The order follows `hw_type`.
+    pub(super) fn desk_text_focus(&self) -> Option<bool> {
+        if !self.desk_active() || self.is_locked() || self.im.active {
+            return None;
+        }
+        if self.auth_showing() || self.volume_showing() || self.package_showing() || self.net_auth_showing() {
+            return Some(true);
+        }
+        if self.quicksearch.is_shown() || self.assistant.is_shown() || self.char_viewer.is_some() {
+            return Some(true);
+        }
+        #[cfg(feature = "desktop-wayland")]
+        if self.doc_panel.is_some() || self.compose.is_some() {
+            return Some(true);
+        }
+        match self.screen {
+            Screen::App(AppId::Terminal | AppId::External(_)) => None,
+            Screen::App(AppId::AppStore) => Some(self.store.as_ref().is_some_and(|c| c.text_focused())),
+            Screen::App(AppId::Settings) => Some(self.settings.as_ref().is_some_and(|s| s.text_focused())),
+            Screen::App(AppId::Browser) => Some(self.browser.as_ref().is_some_and(|b| b.text_focused())),
+            Screen::App(AppId::Files) => Some(self.files.as_ref().is_some_and(|f| f.text_focused())),
+            Screen::App(AppId::Photos) => Some(self.photos.as_ref().is_some_and(|p| p.text_focused())),
+            Screen::App(AppId::Deildu) => Some(self.deildu.as_ref().is_some_and(|d| d.text_focused())),
+            _ => Some(false),
+        }
     }
 
     /// Settings > Appearance without a restart: the pref is saved and `appearance_tick` fades to it.
@@ -4339,14 +4386,14 @@ impl Shell {
 #[cfg(feature = "desktop-wayland")]
 fn expand_material((x, y, rw, rh, r, kind, active): (f32, f32, f32, f32, f32, bifrost_render::glass::Kind, Option<bool>), (ww, wh): (f32, f32), maximized: bool, corner: f32) -> bifrost_render::glass::Rect {
     if maximized {
-        return bifrost_render::glass::Rect { x, y, w: rw, h: rh, r, kind, active, detail: None };
+        return bifrost_render::glass::Rect { x, y, w: rw, h: rh, r, kind, active, detail: None, tint: [0.0; 4] };
     }
     let e = 0.5;
     let x0 = if x <= e { 0.0 } else { (x - corner).max(0.0) };
     let y0 = if y <= e { 0.0 } else { (y - corner).max(0.0) };
     let x1 = if x + rw >= ww - e { ww } else { (x + rw + corner).min(ww) };
     let y1 = if y + rh >= wh - e { wh } else { (y + rh + corner).min(wh) };
-    bifrost_render::glass::Rect { x: x0, y: y0, w: x1 - x0, h: y1 - y0, r: corner.max(r), kind, active, detail: None }
+    bifrost_render::glass::Rect { x: x0, y: y0, w: x1 - x0, h: y1 - y0, r: corner.max(r), kind, active, detail: None, tint: [0.0; 4] }
 }
 
 #[cfg(all(test, feature = "desktop-wayland"))]

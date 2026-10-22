@@ -226,7 +226,7 @@ pub struct AppStore {
     catalog: Vec<StoreApp>,
     installed: Vec<InstalledApp>,
     registry_changed: bool,
-    tab: Tab,
+    pub(super) tab: Tab,
     page: Option<Page>,
     category: Option<usize>,
     fetching: bool,
@@ -859,6 +859,11 @@ impl AppStore {
                 self.failed.insert(id.to_string(), e);
             }
         }
+    }
+
+    /// Whether typing reaches the query field: the Search tab with no product page or sheet open (see `key`).
+    pub fn text_focused(&self) -> bool {
+        self.tab == Tab::Search && self.page.is_none() && self.sheet.is_none()
     }
 
     /// Typed text for the Search tab (from the on-screen keyboard or a hardware keyboard); other keys are ignored.
@@ -2103,7 +2108,7 @@ mod tests {
             assert!(!ids.iter().any(|i| i == "is.o.update" || i == "is.o.audio"), "{tab:?} lists a service");
         }
         assert_eq!(s.update_count(), 0);
-        let plan = api::system_plan(&s.catalog, &[], "9.9.9");
+        let plan = api::system_plan(&s.catalog, &[], "9.9.9", &[]);
         assert!(plan.iter().any(|a| a.id == "is.o.update") && plan.iter().any(|a| a.id == "is.o.audio"));
         assert!(api::updates(&s.catalog, &s.installed).is_empty());
     }

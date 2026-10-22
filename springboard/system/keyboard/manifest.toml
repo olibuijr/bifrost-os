@@ -1,6 +1,6 @@
 id = "is.olibuijr.keyboard"
 name = "Keyboard"
-version = "1.1.4"
+version = "1.1.5"
 kind = "system"
 provides = ["keyboard"]
 exec = "bifrost-keyboard"

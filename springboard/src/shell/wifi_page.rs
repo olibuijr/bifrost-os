@@ -312,6 +312,11 @@ impl Sheet {
         v
     }
 
+    /// Whether a field has the caret: typing edits the focused field (see `edit`).
+    pub fn text_focused(&self) -> bool {
+        self.field.focused || self.other.as_ref().is_some_and(|o| o.name.focused || o.identity.focused || o.anonymous.focused)
+    }
+
     /// Moves the caret to `row`'s field; only that field blinks.
     fn set_focus(&mut self, row: Row) {
         for (r, f) in self.fields_mut() {

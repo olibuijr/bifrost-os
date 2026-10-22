@@ -269,6 +269,14 @@ impl Shell {
   Some(match self.dock_preferences().position{Position::Bottom=>Rect{x:trash.x-trash.w-trash.w/4,..trash},_=>Rect{y:trash.y-trash.h-trash.h/4,..trash}})
  }
 }
+impl Shell {
+ /// A swipe up from the bottom edge of the tablet desktop shows the Dock (`tablet_gestures`), as a pointer at its edge does.
+ pub(super) fn desk_reveal_dock(&mut self,t:f64){
+  if let Some(d)=self.desk.as_mut(){d.dock_hide_at=None;dock_reveal(d,t/1000.);}
+  self.dirty=true;
+ }
+}
+
 /// Makes the dock visible again, sliding it in from wherever a slide-out had got to.
 fn dock_reveal(d:&mut super::desk::Desk,now:f64){
  let hiding=d.dock_vis_anim.as_ref().is_some_and(|a|a.to<0.5);

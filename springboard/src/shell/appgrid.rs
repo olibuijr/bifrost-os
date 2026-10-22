@@ -272,6 +272,8 @@ pub(super) struct AppGrid {
     selected: Option<usize>,
     scroll_acc: f32,
     icons: HashMap<(usize, usize), Image>,
+    /// every window's minimized flag from before the grid hid them; restored when the grid closes
+    pub(super) saved: Vec<(AppId, bool)>,
 }
 
 fn catalogue() -> Vec<(String, String)> {
@@ -305,6 +307,11 @@ impl AppGrid {
             return None;
         }
         sh.overview_veil_rect()
+    }
+
+    /// True while the veil fades: opening, or closing until the grid is gone.
+    pub(super) fn veil_animating(&self, t: f64) -> bool {
+        self.open && (self.closing.is_some() || prog(Kind::OverviewEnter, Curve::EaseOut, self.start, t) < 1.0)
     }
 
     fn lay(&self, sh: &Shell) -> Lay {
@@ -374,6 +381,14 @@ impl AppGrid {
         self.lifted = None;
         self.selected = None;
         self.scroll_acc = 0.0;
+        if self.saved.is_empty() {
+            if let Some(d) = sh.desk.as_mut() {
+                self.saved = d.wins.iter().map(|w| (w.app, w.minimized)).collect();
+                for w in d.wins.iter_mut() {
+                    w.minimized = true;
+                }
+            }
+        }
         sh.cc.hide();
         sh.dirty = true;
     }
@@ -382,6 +397,14 @@ impl AppGrid {
         if !self.open || self.closing.is_some() {
             return;
         }
+        if let Some(d) = sh.desk.as_mut() {
+            for (app, min) in std::mem::take(&mut self.saved) {
+                if let Some(w) = d.wins.iter_mut().find(|w| w.app == app) {
+                    w.minimized = min;
+                }
+            }
+        }
+        sh.desk_refocus();
         self.press = None;
         self.lifted = None;
         if motion::duration(Kind::OverviewEnter) <= 0.0 {

@@ -314,7 +314,7 @@ mod tests {
         let a = AccessibilitySettings { switch_control: true, voice_control: true, ..Default::default() };
         a.save(&mut p);
         assert_eq!(AccessibilitySettings::load(&p), a);
-        assert_eq!((p.get("a11y_switch_control"), p.get("a11y_voice_control")), (Some("1"), Some("1")));
+        assert_eq!((p.get("a11y_switch_control"), p.get(super::services::recognizer::VOICE_CONTROL_PREF)), (Some("1"), Some("1")));
         let only_voice = AccessibilitySettings { voice_control: true, ..Default::default() };
         only_voice.save(&mut p);
         let back = AccessibilitySettings::load(&p);

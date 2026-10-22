@@ -153,14 +153,22 @@ impl Damage {
     /// Copies the pixels under `rects` (x, y, w, h; clipped to the frame) so a later draw can be
     /// compared with them by `changed_in`.
     pub fn snapshot_rects(frame: &[u32], stride: usize, w: usize, h: usize, rects: &[(i32, i32, i32, i32)]) -> Vec<Vec<u32>> {
-        rects.iter().map(|&r| {
+        let mut out = Vec::new();
+        Self::snapshot_rects_into(frame, stride, w, h, rects, &mut out);
+        out
+    }
+
+    /// `snapshot_rects` into `out`, reusing its buffers: the inner Vecs keep their capacity between
+    /// frames, so a steady-state redraw does not reallocate.
+    pub fn snapshot_rects_into(frame: &[u32], stride: usize, w: usize, h: usize, rects: &[(i32, i32, i32, i32)], out: &mut Vec<Vec<u32>>) {
+        out.resize_with(rects.len(), Vec::new);
+        for (&r, v) in rects.iter().zip(out.iter_mut()) {
             let (x0, y0, x1, y1) = clip_rect(r, w, h);
-            let mut v = Vec::with_capacity((x1 - x0) * (y1 - y0));
+            v.clear();
             for y in y0..y1 {
                 v.extend_from_slice(&frame[y * stride + x0..y * stride + x1]);
             }
-            v
-        }).collect()
+        }
     }
 
     /// The exact changed row runs inside `rects`, comparing `frame` with the `before` snapshot of
@@ -1038,6 +1046,19 @@ mod tests {
         assert_eq!(snap[0].len(), 32);
         frame[31] = 9;
         assert_eq!(Damage::changed_in(&rects, &snap, &frame, 8, 8, 4).pixels(), 1);
+    }
+
+    #[test]
+    fn snapshot_rects_into_reuses_buffers() {
+        let frame: Vec<u32> = (0..16 * 8).collect();
+        let rects = [(0, 0, 16, 2), (4, 3, 8, 4)];
+        let mut out = Vec::new();
+        Damage::snapshot_rects_into(&frame, 16, 16, 8, &rects, &mut out);
+        assert_eq!(out, Damage::snapshot_rects(&frame, 16, 16, 8, &rects));
+        let ptr = out[0].as_ptr();
+        Damage::snapshot_rects_into(&frame, 16, 16, 8, &rects, &mut out);
+        assert_eq!(out, Damage::snapshot_rects(&frame, 16, 16, 8, &rects));
+        assert_eq!(out[0].as_ptr(), ptr);
     }
 
     use super::*;

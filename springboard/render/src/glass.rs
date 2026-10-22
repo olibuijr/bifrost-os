@@ -17,6 +17,8 @@ pub struct Rect {
     /// The full request when the declarer has one (the shared `visual_effect::MaterialRequest`), for the window
     /// server; `None` for shell-side regions, which derive theirs from `kind`.
     pub detail: Option<Detail>,
+    /// A premultiplied RGBA colour (0..1) laid over the blur of this shape by the presenter; `[0.0; 4]` is none.
+    pub tint: [f32; 4],
 }
 
 /// What `Rect` loses of a shared material request: the window server's `bifrost_material_v1` values (plain data;
@@ -182,13 +184,24 @@ pub fn gpu() -> bool {
     ON.load(Relaxed)
 }
 
-/// Records a glass shape in frame pixels (deduplicated).
+/// Records a glass shape in frame pixels. A shape with the same geometry and kind replaces the stored one.
 pub fn push(r: Rect) {
     if let Ok(mut v) = RECTS.lock() {
-        if !v.contains(&r) {
-            v.push(r);
+        match v.iter_mut().find(|s| same_shape(s, &r)) {
+            Some(s) => *s = r,
+            None => v.push(r),
         }
     }
+}
+
+/// Records a glass shape with a tint laid over its blur (see `Rect::tint`).
+pub fn push_tinted(r: Rect, tint: [f32; 4]) {
+    push(Rect { tint, ..r });
+}
+
+/// The same plate in every field but the tint: a changed tint replaces the stored shape, a changed state does not.
+fn same_shape(a: &Rect, b: &Rect) -> bool {
+    Rect { tint: [0.0; 4], ..*a } == Rect { tint: [0.0; 4], ..*b }
 }
 
 /// The shapes recorded since the last call.
@@ -227,12 +240,13 @@ pub fn changed_shapes(before: &[Rect], after: &[Rect]) -> Vec<(f32, f32, f32, f3
 /// Updates the shapes the presenter keeps between frames. `damage` is the frame's redrawn areas as
 /// (x0, y0, x1, y1). A stored shape that lies wholly inside redrawn pixels was drawn again this frame, so
 /// it is dropped unless `fresh` records it (a closed menu's shape goes away); shapes outside the damage,
-/// whose pixels were not redrawn, stay. `fresh` shapes are added once.
+/// whose pixels were not redrawn, stay. A fresh shape with the geometry of a stored one replaces it; others are added.
 pub fn merge(stored: &mut Vec<Rect>, fresh: Vec<Rect>, damage: &[(f32, f32, f32, f32)]) {
     stored.retain(|r| !damage.iter().any(|&(x0, y0, x1, y1)| r.x >= x0 && r.y >= y0 && r.x + r.w <= x1 && r.y + r.h <= y1));
     for r in fresh {
-        if !stored.contains(&r) {
-            stored.push(r);
+        match stored.iter_mut().find(|s| same_shape(s, &r)) {
+            Some(s) => *s = r,
+            None => stored.push(r),
         }
     }
 }
@@ -381,6 +395,15 @@ mod merge_tests {
         let end = Look::mix(d, l, 1.0);
         assert!((end.brightness - l.brightness).abs() < 1e-6 && (end.lum_values[1] - l.lum_values[1]).abs() < 1e-6);
         assert!((Look::mix(d, l, 0.5).brightness - 0.05).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_shape_whose_tint_changed_replaces_the_stored_one() {
+        let a = r(1.0, 2.0, 30.0, 40.0);
+        let tinted = Rect { tint: [0.1, 0.2, 0.3, 0.4], ..a };
+        let mut stored = vec![a];
+        merge(&mut stored, vec![tinted], &[(500.0, 500.0, 600.0, 600.0)]);
+        assert_eq!(stored, vec![tinted]);
     }
 
     #[test]

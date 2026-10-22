@@ -190,7 +190,7 @@ fn run_check(url: Option<&str>, version: &str, git: &str, auto_apps: bool, log: 
     let catalog = api::fetch(&cache).ok().or_else(|| api::load_cache(&cache));
     let mut installed = vec![];
     if let Some(catalog) = &catalog {
-        let plan: Vec<api::StoreApp> = api::system_plan(catalog, &install::installed_apps(), install::shell_version()).into_iter().cloned().collect();
+        let plan: Vec<api::StoreApp> = api::system_plan(catalog, &install::installed_apps(), install::shell_version(), &install::refused(&root)).into_iter().cloned().collect();
         installed = install_system(&root, log, &plan);
         if auto_apps {
             let have = install::installed_apps();

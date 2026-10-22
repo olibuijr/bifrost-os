@@ -164,6 +164,11 @@ impl ZonePicker {
     }
 
     /// Typed input for the search field (the on-screen or a hardware keyboard).
+    /// Whether the query field has the caret: `key` edits it only then.
+    pub fn text_focused(&self) -> bool {
+        self.query.focused
+    }
+
     pub fn key(&mut self, ui: &Ui, out: Out, t: f64) {
         match out {
             Out::Hide | Out::Enter => {

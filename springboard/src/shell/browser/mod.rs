@@ -997,6 +997,11 @@ impl Browser {
     }
 
     /// Typed input for the address bar.
+    /// Whether typing reaches the address field: `key` edits it only while it is being edited.
+    pub fn text_focused(&self) -> bool {
+        self.editing
+    }
+
     pub fn key(&mut self, ui: &Ui, out: Out, t: f64) {
         self.dirty = true;
         if !self.editing {

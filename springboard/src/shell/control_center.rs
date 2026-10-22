@@ -2039,7 +2039,7 @@ pub(super) fn shell_glass_rect(req: &MaterialRequest) -> bifrost_render::glass::
         radii: [c.tl, c.tr, c.br, c.bl],
     };
     let r = c.tl.max(c.tr).max(c.br).max(c.bl);
-    bifrost_render::glass::Rect { x: req.rect.x, y: req.rect.y, w: req.rect.w, h: req.rect.h, r, kind, active, detail: Some(detail) }
+    bifrost_render::glass::Rect { x: req.rect.x, y: req.rect.y, w: req.rect.w, h: req.rect.h, r, kind, active, detail: Some(detail), tint: [0.0; 4] }
 }
 
 /// Declare a shell surface's material: the presenter's blur under it on the GPU path (nothing under
@@ -2061,6 +2061,27 @@ pub(super) fn request_shell_material(req: MaterialRequest) -> u32 {
 pub(super) fn desk_glass(s: &mut Surface, surface: ShellSurface, (x, y, w, h): (f32, f32, f32, f32), r: f32, alpha: u32) {
     let fill = request_shell_material(surface.request((x, y, w, h), r));
     s.fill_rrect(x, y, w, h, r, scale(fill, alpha));
+}
+
+/// A full-screen veil over the desktop: `desk_glass` at `alpha`, then a black scrim of `black` alpha. On the GPU
+/// path the two fills become one tint over the blur (the scrim source-over the glass), so the CPU draws nothing.
+pub(super) fn desk_veil(s: &mut Surface, surface: ShellSurface, (x, y, w, h): (f32, f32, f32, f32), alpha: u32, black: u8) {
+    if bifrost_render::glass::gpu() && !bifrost_render::appearance::reduce_transparency() {
+        let req = surface.request((x, y, w, h), 0.0);
+        let glass = scale(bifrost_render::glass::tint(super::ui::MENU_TINT.now()), alpha);
+        let unpack = |c: u32| {
+            let ch = |sh: u32| ((c >> sh) & 0xff) as f32 / 255.0;
+            [ch(0), ch(8), ch(16), ch(24)]
+        };
+        // source-over of the black scrim (premultiplied: rgb 0, alpha a2) over the glass (premultiplied, a1)
+        let [r1, g1, b1, a1] = unpack(glass);
+        let a2 = black as f32 / 255.0;
+        let tint = [r1 * (1.0 - a2), g1 * (1.0 - a2), b1 * (1.0 - a2), a1 + a2 * (1.0 - a1)];
+        bifrost_render::glass::push_tinted(shell_glass_rect(&req), tint);
+    } else {
+        desk_glass(s, surface, (x, y, w, h), 0.0, alpha);
+        s.fill_rrect(x, y, w, h, 0.0, rgba(0, 0, 0, black));
+    }
 }
 
 #[cfg(test)]

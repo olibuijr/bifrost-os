@@ -306,6 +306,17 @@
     }
 
     #[test]
+    fn the_tablet_desktop_keyboard_follows_the_app_store_search_field() {
+        let mut sh = tablet_desk_with_window_under_keyboard();
+        sh.desk_open(AppId::AppStore, 0.);
+        assert_eq!(sh.desk_text_focus(), Some(false), "the Today tab has no field");
+        sh.store.as_mut().unwrap().tab = super::store::Tab::Search;
+        assert_eq!(sh.desk_text_focus(), Some(true), "the Search tab's query field takes the typing");
+        sh.store.as_mut().unwrap().tab = super::store::Tab::Today;
+        assert_eq!(sh.desk_text_focus(), Some(false));
+    }
+
+    #[test]
     fn a_tablet_keyboard_lifts_the_front_window_clear_of_it_and_lets_it_back_down() {
         let mut sh = tablet_desk_with_window_under_keyboard();
         sh.set_keyboard(true, 1000.);
@@ -317,6 +328,19 @@
         sh.set_keyboard(false, 1100.);
         assert_eq!(sh.desk.as_ref().unwrap().wins[0].r.y, 1200, "it goes back down when the keyboard does");
         assert!(sh.desk_kb_lift.is_none());
+    }
+
+    #[test]
+    fn a_still_tablet_desktop_with_the_keyboard_up_stops_asking_for_frames() {
+        let mut sh = tablet_desk_with_window_under_keyboard();
+        sh.set_keyboard(true, 1000.);
+        let mut buf = vec![0u32; 1200 * 1920];
+        // past the dock's launch bounce for the window (at most 10 s)
+        for t in [20000., 20016.] {
+            sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, t);
+        }
+        assert!(sh.keyboard.shown() && !sh.keyboard.animating());
+        assert!(!sh.needs_frame(), "nothing moves: {}", sh.frame_reason());
     }
 
     #[test]
@@ -369,6 +393,22 @@
         // the Window menu lists the front app's windows only (bf8aa3ab6), so Terminal is not offered here
         let name=apps().iter().find(|a|a.id==AppId::Terminal).unwrap().name;
         assert!(!rows.iter().any(|t|t.ends_with(name)),"{name} is not the front app: {rows:?}");
+    }
+
+    /// The Apps grid hides the desk windows under it and gives them back, as they were, when it closes.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn appgrid_hides_desk_windows_and_restores_them_on_close() {
+        let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
+        sh.desk_open(AppId::Terminal,0.);sh.desk_open(AppId::Settings,0.);
+        sh.desk.as_mut().unwrap().wins[0].minimized=true;
+        sh.appgrid_toggle(0.);
+        assert!(sh.overview.grid.visible());
+        assert!(sh.desk.as_ref().unwrap().wins.iter().all(|w|w.minimized),"the grid shows over no window");
+        sh.appgrid_toggle(0.);
+        let d=sh.desk.as_ref().unwrap();
+        assert!(d.wins[0].minimized,"a window the person had minimized stays minimized");
+        assert!(!d.wins[1].minimized,"a window that was open comes back");
     }
 
     /// Window > Zoom acts on the front visible window, not on a minimized one that still sits last in the stack.

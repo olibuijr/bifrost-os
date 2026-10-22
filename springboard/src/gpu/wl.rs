@@ -527,20 +527,20 @@ impl Presenter {
     }
 
     /// Uploads the wallpaper (once per change) at screen position (`x`, `y`) and blurs it on the GPU.
-    pub fn set_wallpaper(&mut self, wp: View, x: i32, y: i32) {
+    /// Returns false when the rebuild did not land: nothing is kept, the key is not stored, and the next call tries again.
+    pub fn set_wallpaper(&mut self, wp: View, x: i32, y: i32) -> bool {
         self.current();
         let key = (wp.px.as_ptr() as usize, wp.px.len(), x, WALLPAPER_GEN.load(std::sync::atomic::Ordering::Relaxed));
         if key == self.wallpaper_key && self.wallpaper.is_some() {
-            return;
+            return true;
         }
-        self.wallpaper_key = key;
         if let Some((t, ..)) = self.wallpaper.take() {
             self.free(t);
         }
         for t in std::mem::take(&mut self.blur) {
             self.free(t);
         }
-        let Ok(t) = self.texture(wp.w, wp.h, GL_LINEAR, Some(wp.px)) else { return };
+        let Ok(t) = self.texture(wp.w, wp.h, GL_LINEAR, Some(wp.px)) else { return false };
         // the blur pyramid: down LEVELS times, up LEVELS-1 times; the last texture is the material
         let mut sizes = Vec::new();
         let (mut w, mut h) = (wp.w, wp.h);
@@ -559,13 +559,19 @@ impl Presenter {
                         self.free(c);
                     }
                     self.free(t);
-                    return;
+                    return false;
                 }
             }
         }
         let gl = self.gl;
         gl!(gl, disable(GL_SCISSOR_TEST));
         gl!(gl, disable(GL_BLEND));
+        // the chain starts cleared: a pass that does not land leaves transparent black, not recycled memory
+        for c in &chain {
+            gl!(gl, bind_framebuffer(GL_FRAMEBUFFER, c.fbo));
+            gl!(gl, clear_color(0.0, 0.0, 0.0, 0.0));
+            gl!(gl, clear(GL_COLOR_BUFFER_BIT));
+        }
         gl!(gl, use_program(self.prog.id));
         gl!(gl, uniform1i(self.prog.mode, 1));
         let mut src = (t.tex, t.w, t.h);
@@ -576,20 +582,39 @@ impl Presenter {
         for i in (0..LEVELS - 1).rev() {
             let (w, h) = (chain[i].w, chain[i].h);
             if let Ok(up) = self.texture(w, h, GL_LINEAR, None) {
+                gl!(gl, bind_framebuffer(GL_FRAMEBUFFER, up.fbo));
+                gl!(gl, clear_color(0.0, 0.0, 0.0, 0.0));
+                gl!(gl, clear(GL_COLOR_BUFFER_BIT));
                 self.pass(&up, src, 2);
                 src = (up.tex, up.w, up.h);
                 self.blur.push(up);
             }
         }
+        self.finish();
         for c in chain {
             self.free(c);
         }
+        // the blur is only kept when every level landed and the GPU is still healthy; otherwise nothing is kept
+        if !self.health.is_ok() || self.blur.len() != LEVELS - 1 {
+            let made = self.blur.len();
+            self.free(t);
+            for b in std::mem::take(&mut self.blur) {
+                self.free(b);
+            }
+            self.wallpaper = None;
+            self.wallpaper_key = (0, 0, 0, 0);
+            bifrost_core::log::shell_logger("presenter").error(format!("wallpaper blur failed ({}x{}, {made} of {} levels made): retrying on the next frame", wp.w, wp.h, LEVELS - 1));
+            return false;
+        }
+        self.wallpaper_key = key;
         self.wallpaper = Some((t, x, y));
         for s in self.surfaces.values_mut() {
             for d in &mut s.owed {
                 d.all();
             }
         }
+        bifrost_core::log::shell_logger("presenter").notice(format!("wallpaper blurred: {}x{}, {} levels", wp.w, wp.h, LEVELS));
+        true
     }
 
     /// Renders surface `id` into drawable `slot`: uploads the content's `damage`, then redraws what
@@ -717,6 +742,16 @@ impl Presenter {
                         let mix = if full_wp { 0.5 + 0.5 * bifrost_render::glass::clarity() } else { 1.0 };
                         self.quad_uv(b.tex, r, uv, mix, Some((r, g.r)));
                         gl!(gl, uniform1f(self.prog.glass, 0.0));
+                        if g.tint[3] > 0.0 {
+                            // the shape's tint (the GPU veil) over the blur: the same plate as the opaque one
+                            let t = g.tint;
+                            gl!(gl, uniform1i(self.prog.mode, 4));
+                            gl!(gl, uniform4f(self.prog.color, t[0], t[1], t[2], t[3]));
+                            gl!(gl, uniform4f(self.prog.rrect, r[0], r[1], r[2], r[3]));
+                            gl!(gl, uniform1f(self.prog.radius, g.r.min(r[2] / 2.0).min(r[3] / 2.0)));
+                            self.quad_raw(r);
+                            gl!(gl, uniform1i(self.prog.mode, 0));
+                        }
                     }
                 }
             }

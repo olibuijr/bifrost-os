@@ -207,6 +207,7 @@ fn run() -> std::io::Result<()> {
     let mut mapped = match map_wallpaper(&dir, &current_wallpaper) {
         Some(m) => m,
         None => {
+            eprintln!("springboard: wallpaper {current_wallpaper} could not be mapped, using wallpaper.raw");
             current_wallpaper.clear();
             map_file(&format!("{dir}/wallpaper.raw"))?
         }
@@ -239,6 +240,8 @@ fn run() -> std::io::Result<()> {
     // grabbed only as the root OS shell (a session under a compositor shares them)
     let mut inputs = match emulated {
         None if !wayland => input::InputSet::desktop(w as f32, h as f32, unsafe { geteuid() } == 0),
+        // under the compositor: the power and volume buttons are read here too, so they work whatever has focus
+        None => input::InputSet::buttons(),
         _ => input::InputSet::none(),
     };
 
@@ -554,8 +557,12 @@ fn run() -> std::io::Result<()> {
         if wayland { disp.wayland_output_modes()?; }
         #[cfg(feature = "desktop-wayland")]
         if wayland {
-            if let Some((wp, x)) = shell.desktop_wallpaper_once() { disp.wayland_wallpaper(wp, x); }
-            if disp.wayland_gpu_active() { shell.note_wallpaper_uploaded(); }
+            // the wallpaper stays pending until the presenter reports the blur landed (a failed rebuild is retried)
+            let uploaded = match shell.desktop_wallpaper_once() {
+                Some((wp, x)) => disp.wayland_wallpaper(wp, x),
+                None => disp.wayland_gpu_active(),
+            };
+            if uploaded { shell.note_wallpaper_uploaded(); }
             // the GPU presenter gave up: the SHM path has no frame of its own yet, so the next one is drawn whole
             if disp.wayland_take_gpu_fallback() { shell.gpu_presenter_lost(); }
         }
@@ -648,6 +655,10 @@ fn run() -> std::io::Result<()> {
         #[cfg(feature = "desktop-wayland")]
         {
             disp.wayland_inputs(&mut events);
+            // the buttons come from evdev (`InputSet::buttons`); the compositor's copy of them would count twice
+            if inputs.has_buttons() {
+                events.retain(|e| !matches!(e, input::Event::Key { code, .. } if matches!(*code, input::KEY_POWER | input::KEY_VOLUMEUP | input::KEY_VOLUMEDOWN)));
+            }
             for batch in disp.wayland_input_method_batches() { shell.input_method_batch(batch, t); }
             if let Some(windows)=disp.wayland_foreign_windows() { shell.wayland_foreign_windows(windows); }
             for ev in disp.wayland_window_events() { shell.wayland_window_event(ev); }
@@ -967,7 +978,11 @@ fn run() -> std::io::Result<()> {
                     let (x, y) = map(x, y);
                     let (lw, lh) = shell.size();
                     let frame = springboard::shell::touch_gestures::Frame { size_px: (lw as f32, lh as f32), points_px: shell.points_px() };
-                    let states = system_gestures.feed(phase, id, (x, y), at, frame);
+                    // the setting is read as a finger lands, not on every contact sample
+                    if phase == input::TouchPhase::Down {
+                        system_gestures.four_finger_enabled = shell.four_finger_swipes();
+                    }
+                    let (states, desk) = system_gestures.feed_desk(phase, id, (x, y), at, frame);
                     // a touch the system took away ends the home swipe without its action; nothing else follows a cancel
                     if phase == input::TouchPhase::Cancel {
                         system_gestures.cancel_all();
@@ -976,11 +991,15 @@ fn run() -> std::io::Result<()> {
                         shell.cancel_home_gesture(t);
                     }
                     // a system gesture that is active holds the finger: the foreground app loses the touches it had
-                    let taken = states.iter().any(|s| s.is_active());
+                    // (a tablet desktop decision that began one takes the finger too)
+                    let taken = states.iter().any(|s| s.is_active()) || desk.contains(&springboard::shell::touch_gestures::DeskGesture::Taken);
                     if taken {
                         shell.ext_cancel_touches(at);
                     }
                     shell.ext_contact(id, phase, x, y, at, !taken);
+                    for g in desk {
+                        effects.extend(shell.desk_gesture(g, t));
+                    }
                     continue;
                 }
                 input::Event::Key { code: input::KEY_WAKEUP, down: true } => Event::Wake,
@@ -1332,7 +1351,6 @@ fn run() -> std::io::Result<()> {
                 Effect::Wallpaper(id) => match map_wallpaper(&dir, &id).and_then(|m| View::from_raw(m).map(|v| (m, v))) {
                     Some((m, view)) => {
                         shell.set_wallpaper(view);
-                        springboard::gpu::wl::bump_wallpaper_generation();
                         // the first-frame caches follow the new still (boot-08): rebuilt in the background
                         if let Some(path) = springboard::first_frame_cache::wallpaper_path(&dir, &id) {
                             springboard::first_frame_cache::spawn_build_here((w as u32, h as u32), &dir, &path);
@@ -1876,6 +1894,10 @@ fn run() -> std::io::Result<()> {
             }
             disp.wayland_windows(shell.take_wayland_windows())?;
             disp.wayland_chrome(shell.desktop_chrome_frames(&frame,fw,fh))?;
+        }
+        #[cfg(feature = "desktop-wayland")]
+        if wayland {
+            disp.wayland_chrome_flush()?;
         }
         if let Some((wakeups, frames)) = idle_stats.note(sys::now_ms(), last_present != present_at_start) {
             bifrost_core::log::shell_logger("presenter").debug(format!("idle: {wakeups} wakeups, {frames} frames"));

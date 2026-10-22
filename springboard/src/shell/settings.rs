@@ -2104,6 +2104,18 @@ impl Settings {
         }
     }
 
+    /// Whether typing reaches a text field, by the routing of `key`: the zone picker's query while it is up, else the
+    /// focused field of the sheet, else the sidebar or root search while it is open.
+    pub fn text_focused(&self) -> bool {
+        if let Some(p) = &self.zone_picker {
+            return p.text_focused();
+        }
+        match &self.sheet {
+            Some(sh) => sh.text_focused(),
+            None => self.search.active && (self.stack.len() == 1 || self.side_w > 0),
+        }
+    }
+
     pub fn key(&mut self, ui: &Ui, out: Out, t: f64) -> Vec<Effect> {
         if let Some(p) = &mut self.zone_picker {
             p.key(ui, out, t);
@@ -3334,7 +3346,6 @@ impl Settings {
             Toggle::InputMenu => flip(&mut self.opts.input_menu),
             Toggle::MotionCues => flip(&mut self.a11y.motion_cues),
             Toggle::SwitchControl => flip(&mut self.a11y.switch_control),
-            Toggle::VoiceControl => flip(&mut self.a11y.voice_control),
             Toggle::LiveCaptions => flip(&mut self.a11y.live_captions),
             Toggle::AutoTime => {
                 let on = flip(&mut self.info.time_manual);

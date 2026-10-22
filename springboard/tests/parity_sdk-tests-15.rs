@@ -64,15 +64,15 @@ fn the_system_plan_installs_missing_and_older_packages_and_skips_the_rest() {
         entry("svc.bg", "1.0.0", "service", "0.1.0", 0),
     ]);
     let have = [installed("sys.old", "0.9.0", "system"), installed("sys.current", "1.0.0", "system")];
-    let plan = system_plan(&cat, &have, "1.0.0");
+    let plan = system_plan(&cat, &have, "1.0.0", &[]);
     assert_eq!(ids(&plan), ["sys.new", "sys.old", "svc.bg"]);
 }
 
 #[test]
 fn the_system_plan_waits_for_a_shell_new_enough_for_the_package() {
     let cat = catalog(&[entry("sys.needs-newer", "1.0.0", "system", "2.0.0", 0)]);
-    assert!(system_plan(&cat, &[], "1.5.0").is_empty());
-    assert_eq!(ids(&system_plan(&cat, &[], "2.0.0")), ["sys.needs-newer"]);
+    assert!(system_plan(&cat, &[], "1.5.0", &[]).is_empty());
+    assert_eq!(ids(&system_plan(&cat, &[], "2.0.0", &[])), ["sys.needs-newer"]);
 }
 
 #[test]

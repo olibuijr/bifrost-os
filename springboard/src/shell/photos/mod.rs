@@ -667,6 +667,24 @@ fn nav_mid(ui: &Ui) -> f32 {
 }
 
 impl Photos {
+    /// A pinch step on the open picture, about `focal` (px in the Photos content). False when no picture is open.
+    pub fn pinch(&mut self, step: f32, focal: (f32, f32)) -> bool {
+        match self.viewer.as_mut() {
+            Some(v) => {
+                v.pinch(step, focal);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// The pinch's fingers lifted: the zoom settles inside its limits.
+    pub fn end_pinch(&mut self) {
+        if let Some(v) = self.viewer.as_mut() {
+            v.end_pinch();
+        }
+    }
+
     /// Lays the app out for a pane of `w` x `h` px (Split View, Slide Over).
     pub fn set_size(&mut self, w: i32, h: i32) {
         self.w = w;

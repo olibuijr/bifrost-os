@@ -716,6 +716,9 @@ impl Shell {
         if let Some((x,y,w,h))=self.cmdtab_rect(){v.push((x as i32,y as i32,w as i32,h as i32));}
         // the system menu's card (Force Quit, About, Log Out) is an overlay surface above the windows as well
         if let Some((x,y,w,h))=self.utility_rect(){v.push((x as i32,y as i32,w as i32,h as i32));}
+        // a tablet's on-screen keyboard, from its resting top to the bottom edge: drawn here while it slides, and its
+        // rows cleared again on the frame after it is gone
+        if self.desk_keyboard_visible(){let top=self.kb_top().max(0.) as i32;v.push((0,top,self.w,self.h-top));}
         if self.perf.enabled||self.perf_drawn{let (x,y,w,h)=self.perf_rect();let g=self.ui.pt(2.) as i32;v.push((x as i32-g,y as i32-g,w as i32+2*g,h as i32+2*g));}
         Some(v)
     }
@@ -1140,6 +1143,16 @@ impl Shell {
         for (id,layer) in [(11,&self.capture_layer),(12,&self.shot_layer),(MODAL_CHROME_ID,&self.modal_layer)] {
             if let Some(l)=layer {
                 if l.image.w>0&&l.image.h>0 {frames.push(crate::bare::wayland::ChromeFrame{id,x:l.x,y:l.y,width:l.image.w,height:l.image.h,pixels:l.image.px.clone(),input:l.input});}
+            }
+        }
+        // a tablet's on-screen keyboard: id 7, an overlay surface above every window from its resting top to the bottom
+        // edge (drawn only into the desktop frame, the windows covered it). It stays up for the whole slide: the frame
+        // is clear above the sliding keyboard, so the surface keeps one size and the slide plays inside it.
+        if self.desk_keyboard_visible() {
+            let top=(self.kb_top().max(0.0) as usize).min(height);
+            if top<height&&width>0 {
+                let data=pixels[top*width..height*width].to_vec();
+                frames.push(crate::bare::wayland::ChromeFrame{id:7,x:0,y:top as i32,width,height:height-top,pixels:data});
             }
         }
         frames

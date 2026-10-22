@@ -148,7 +148,7 @@ thread_local! {
 fn find_provider() -> Option<(String, std::path::PathBuf)> {
     super::store::install::installed_in(&apphost::root())
         .into_iter()
-        .find(|a| a.provides.iter().any(|p| p == "keyboard") && a.exec_path.is_file())
+        .find(|a| a.provides.iter().any(|p| p == "keyboard") && a.exec_path.is_file() && super::store::install::runs_here(&a.exec_path))
         .map(|a| (a.id, a.exec_path))
 }
 
@@ -391,6 +391,15 @@ impl Keyboard {
     /// `w` is the screen width in px, `s` px per point; `accessory` adds the terminal row. Starts shown, without
     /// animation.
     pub fn new(w: f32, s: f32, accessory: bool) -> Self {
+        Self::make(w, s, accessory, true)
+    }
+
+    /// The shell's keyboard: the accessory row, starting off screen until a text field raises it (`set_shown`).
+    pub fn new_hidden_with_accessory(w: f32, s: f32) -> Self {
+        Self::make(w, s, true, false)
+    }
+
+    fn make(w: f32, s: f32, accessory: bool, shown: bool) -> Self {
         let id = NEXT_ID.with(|n| {
             let id = n.get();
             n.set(id + 1);
@@ -406,7 +415,7 @@ impl Keyboard {
             kbp: KbPrefs::default(),
             mode: Mode::Docked,
             return_key: ReturnKey::Return,
-            shown: true,
+            shown,
             slide: None,
             touching: false,
             user_opened: false,
@@ -436,9 +445,7 @@ impl Keyboard {
     /// A keyboard without the accessory row that starts off screen, to be slid in with `set_shown` when a field is
     /// tapped.
     pub fn new_hidden(w: f32, s: f32) -> Self {
-        let mut k = Keyboard::new(w, s, false);
-        k.shown = false;
-        k
+        Self::make(w, s, false, false)
     }
 
     /// Like `new_hidden`, for free text: smart typing follows the default set by `set_predictive_default`.
@@ -460,7 +467,10 @@ impl Keyboard {
             (self.predictive, kbflags::PREDICTIVE),
             (self.auto_caps, kbflags::AUTO_CAPS),
             (self.accessory, kbflags::ACCESSORY),
-            (self.shown, kbflags::SHOWN),
+            // always "shown": the shell slides the keyboard, the process draws it at rest. A process told it was hidden
+            // drew itself one keyboard height down and kept that picture after it was shown again (a tablet raising
+            // the keyboard right after it went down showed nothing)
+            (true, kbflags::SHOWN),
             (self.kbp.enable_caps_lock, kbflags::CAPS_LOCK),
             (self.kbp.period_shortcut, kbflags::PERIOD_SHORTCUT),
         ] {
@@ -474,6 +484,16 @@ impl Keyboard {
 
     fn buffer(&self) -> (u32, u32) {
         (self.w.max(1.0) as u32, (self.w * BUFFER_ASPECT).max(1.0) as u32)
+    }
+
+    /// Shows or hides the terminal's accessory row. A change reaches the keyboard process only when this view owns it,
+    /// and a hidden keyboard never starts the process (`claim`).
+    pub fn set_accessory(&mut self, on: bool) {
+        if self.accessory == on {
+            return;
+        }
+        self.accessory = on;
+        self.claim(false);
     }
 
     /// Makes this client the keyboard's owner and tells the process what it should look like.
@@ -493,8 +513,9 @@ impl Keyboard {
             if self.shown && (take_over || svc.owner == 0) {
                 svc.owner = id;
             }
-            // the process starts when a keyboard is shown, never because a view was created (a desktop never shows one)
-            if take_over && self.shown {
+            // the process starts when the keyboard in use is shown, also one created shown (the shell's, which the lock
+            // screen raises at once); a hidden view never starts it, and a desktop never shows one
+            if self.shown && svc.owner == id {
                 svc.ensure(w, h, s);
             }
             if svc.owner == id {

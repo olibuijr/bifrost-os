@@ -826,6 +826,15 @@ impl Files {
     }
 
     /// Typed input: the search field, or an alert's name field.
+    /// Whether typing reaches a text field, by the routing of `key`: an alert's field while an alert is up, else the
+    /// search of the folder on screen.
+    pub fn text_focused(&self) -> bool {
+        match &self.alert {
+            Some(a) => a.field.is_some(),
+            None => matches!(self.nav.top(), Page::Dir(d) if d.searching),
+        }
+    }
+
     pub fn key(&mut self, ui: &Ui, out: Out, t: f64) {
         if out == Out::Hide {
             self.hide_keyboard(t);

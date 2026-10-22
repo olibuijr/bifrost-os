@@ -31,7 +31,10 @@ use smithay::{
     },
 };
 
-use crate::{state::{ClientState, WmState}, wm::Rect};
+use crate::{
+    state::{ClientState, WmState},
+    wm::Rect,
+};
 
 /// Environment variable that selects the `Trust` policy.
 pub const POLICY_ENV: &str = "BIFROST_WM_INPUT_METHOD";
@@ -74,6 +77,9 @@ pub(crate) fn own_uid() -> Option<u32> {
 }
 
 /// The global filter of the privileged protocols: true for the clients `trust` admits.
+///
+/// The user id comes from the client's own data (`ClientState::peer_uid`, read when it connected). `Client::get_credentials`
+/// would deadlock: the backend runs global filters with its state lock held and that call takes the lock again.
 fn client_filter(trust: Trust, own: Option<u32>) -> impl for<'c> Fn(&'c Client) -> bool + Send + Sync + 'static {
     move |client: &Client| {
         let data = client.get_data::<ClientState>();
@@ -238,6 +244,13 @@ mod tests {
         for off in ["off", " OFF ", "0", "no", "false", "none"] {
             assert_eq!(Trust::parse(Some(off)), Trust::Off, "{off:?}");
         }
+    }
+
+    #[test]
+    fn the_user_of_a_socket_peer_is_read_from_the_socket() {
+        let (a, _b) = std::os::unix::net::UnixStream::pair().expect("socket pair");
+        assert!(own_uid().is_some());
+        assert_eq!(crate::state::peer_uid(&a), own_uid(), "both ends of the pair belong to this process");
     }
 
     #[test]

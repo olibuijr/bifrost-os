@@ -230,6 +230,7 @@ pub mod wake;
 pub mod desktop_network;
 pub mod disk_image;
 mod desktop_bar;
+mod tablet_gestures;
 #[cfg(feature = "desktop-wayland")]
 pub mod docpanel;
 pub mod preview_panel;
@@ -499,6 +500,11 @@ pub enum WifiAction {
 }
 
 pub use bifrost_ui::Event;
+
+/// How long a still finger on the tablet desktop is held before it is a secondary click, ms.
+const DESK_HOLD_MS: f64 = 550.0;
+/// How far a held finger may drift and still count as still, pt.
+const DESK_HOLD_SLOP_PT: f32 = 10.0;
 
 /// A tap on the dark screen wakes it: down and up within this time and distance.
 const TAP_WAKE_MS: f64 = 300.0;
@@ -850,6 +856,18 @@ pub struct Shell {
     kb_touch: bool,
     /// the desktop window the on-screen keyboard lifted: (app, y before the lift, y after it)
     desk_kb_lift: Option<(AppId, i32, i32)>,
+    /// the focus `desk_text_focus` reported at the last tick, so the keyboard follows a change of focus once
+    desk_text_focus_last: Option<bool>,
+    /// a finger held still on the tablet desktop: (x, y, when it landed, fired). Held `DESK_HOLD_MS` it is a secondary
+    /// click (`desktop_pointer` with context, as a right button), and the lift that ends it does nothing else
+    desk_hold: Option<(f32, f32, f64, bool)>,
+    /// A desktop overlay (Overview, Control Center, Notification Center, Search, the assistant) was up at the last tick:
+    /// the frame after it goes is painted whole, so no part of its veil or panel is left in a drawable
+    desk_overlay_was: bool,
+    /// a system gesture (`tablet_gestures`) took the touch in progress: its moves and its lift are not the app's
+    touch_taken: bool,
+    /// the scale of the tablet desktop's pinch so far, for the step of each new one (`desk_pinch`)
+    pinch_last: Option<f32>,
     /// touch on the terminal grid: scroll, tap, long-press selection, menu
     term_touch: termtouch::TermTouch,
     last_input: f64,
@@ -1009,8 +1027,12 @@ pub struct Shell {
     /// changes only a few rows of them, so the frame damages these too (`note_dock_glass`)
     dock_glass_bar:std::cell::Cell<Option<(i32,i32,i32,i32)>>,
     dock_glass_vacated:std::cell::RefCell<Vec<(i32,i32,i32,i32)>>,
+    /// pixels under `desk_clear` before the partial desktop draw, reused between frames
+    desk_snap:Vec<Vec<u32>>,
     /// A full desktop frame has been drawn since the last frame of any other screen (the HUD-only fast path needs it).
     desk_drawn:bool,
+    /// The time of the last `draw`: `needs_frame` (which gets no time) checks the timed desktop effects against it.
+    desk_t:f64,
     desktop_context:Option<desktop_bar::ContextMenu>,
     /// the open or save panel an app asked for (`docpanel`), shown as `desktop_menu = Document`
     #[cfg(feature = "desktop-wayland")]
@@ -1091,7 +1113,7 @@ impl Shell {
         let base_icons: Vec<Image> = dock.iter().chain(&grid).map(|t| t.icon.clone()).collect();
         let library = AppLibrary::new(&ui, &layout, &base_icons);
         let pager = Pager::new(Layout::pages(grid.len()) + 1, w as f32);
-        let keyboard = Keyboard::new(w as f32, layout.s, true);
+        let keyboard = Keyboard::new_hidden_with_accessory(w as f32, layout.s);
         let clock = clock::Clock::new(&ui, w, h);
         let quicksearch = QuickSearch::new(&ui, w as f32, layout.s);
         let assistant = assistant_panel::Panel::new(&ui);
@@ -1289,6 +1311,11 @@ impl Shell {
             haptics: false,
             kb_touch: false,
             desk_kb_lift: None,
+            desk_text_focus_last: None,
+            desk_hold: None,
+            desk_overlay_was: false,
+            touch_taken: false,
+            pinch_last: None,
             term_touch: termtouch::TermTouch::default(),
             last_input: 0.0,
             settings_changed: 0.0,
@@ -1370,7 +1397,7 @@ impl Shell {
             quick_look:Default::default(),
             pip:Default::default(),
             thermal:Default::default(),
-            bar_backdrop:std::cell::RefCell::new(None),chrome_text:std::cell::RefCell::new(bifrost_render::cache::TextCache::for_screen(w.max(0) as usize, h.max(0) as usize)),bar_shadows:Default::default(),desk_regions:None,panels_were_open:false,desk_clear:None,dock_glass_bar:std::cell::Cell::new(None),dock_glass_vacated:std::cell::RefCell::new(Vec::new()),desk_drawn:false,
+            bar_backdrop:std::cell::RefCell::new(None),chrome_text:std::cell::RefCell::new(bifrost_render::cache::TextCache::for_screen(w.max(0) as usize, h.max(0) as usize)),bar_shadows:Default::default(),desk_regions:None,panels_were_open:false,desk_clear:None,dock_glass_bar:std::cell::Cell::new(None),dock_glass_vacated:std::cell::RefCell::new(Vec::new()),desk_snap:Vec::new(),desk_drawn:false,desk_t:0.0,
             desktop_metrics:Default::default(),desktop_metrics_at:0.,metrics_sampler:Default::default(),metrics_running:false,
             desk: Some(desk::Desk::new()),
             desktop_gate: Default::default(),
@@ -1436,16 +1463,24 @@ impl Shell {
             || self.desk.as_ref().is_some_and(|d| d.dock_slide.borrow().active(t / 1000.0))
     }
 
+    /// Desktop motion that needs frames by itself: window effects and the dock's bounce, show/hide and slide.
+    /// Overlays that are only visible (Control Center, the keyboard, Spotlight...) redraw through `dirty` when they
+    /// change; counting them here redrew a static lock screen at the full frame rate.
+    fn desk_moving(&self) -> bool {
+        let t = self.desk_t;
+        self.fx_animating(t) || self.dock_animating(t) || self.desk.as_ref().is_some_and(|d| d.dock_slide.borrow().active(t / 1000.0))
+    }
+
     pub fn needs_frame(&self) -> bool {
         let files = self.screen == Screen::App(AppId::Files) && self.files.as_ref().is_some_and(Files::animating);
-        let desk_anim = self.desk_active() && self.desk_animating(0.0);
+        let desk_anim = self.desk_active() && self.desk_moving();
         self.screen_on && (self.dirty || self.ext_frame || bifrost_render::appearance::fading() || self.anim.is_some() || self.turning() || self.pager.animating() || self.cc.animating() || self.switcher.animating() || self.keyboard.animating() || self.quicksearch.animating() || self.notify.animating() || self.lock_pager.animating() || self.today.animating() || self.home_animating() || files || desk_anim)
     }
 
     /// Why `needs_frame` holds, for the frame trace: the first condition that does ("-" when none).
     pub fn frame_reason(&self) -> String {
         let files = self.screen == Screen::App(AppId::Files) && self.files.as_ref().is_some_and(Files::animating);
-        let desk_anim = self.desk_active() && self.desk_animating(0.0);
+        let desk_anim = self.desk_active() && self.desk_moving();
         let reasons = [
             (!self.screen_on, "screen-off"),
             // the partial frames name what asked for them; "dirty" is an ordinary full frame
@@ -2274,6 +2309,7 @@ impl Shell {
     pub fn next_wake(&self, t: f64) -> Option<f64> {
         let mut due = wake::Wake::default();
         due.add(self.clock.next_wake(t, self.screen_on));
+        if let Some((_, _, t0, false)) = self.desk_hold { due.add(Some(t0 + DESK_HOLD_MS)); }
         if bifrost_render::appearance::fading() { due.add(Some(t)); }
         if self.bell.pending() { due.add(Some(t)); }
         if let Some(end) = self.bell.flash_end(t) { due.add(Some(end.min(t + 33.0))); }
@@ -2842,6 +2878,9 @@ impl Shell {
             self.fit_home = rotate::fit_wallpaper(wp, self.w, self.h);
         }
         self.wallpaper_uploaded = false;
+        // every install invalidates the presenter's key, not only the Effect::Wallpaper path
+        #[cfg(target_os = "linux")]
+        crate::gpu::wl::bump_wallpaper_generation();
         *self.bar_backdrop.borrow_mut() = None;
         self.bar_on_light = desktop_bar::wallpaper_is_light(self.home_still(), self.desktop_bar_height());
         if self.desk_active() {
@@ -3269,10 +3308,58 @@ impl Shell {
         }
     }
 
+    /// Follows a finger for the tablet desktop's long press (`desk_hold`). True when the event is the lift of a press
+    /// that already fired as a secondary click: it is swallowed, so it cannot also choose the menu item under it.
+    fn desk_hold_event(&mut self, ev: Event, t: f64) -> bool {
+        match ev {
+            Event::Down(x, y, ..) => {
+                // not on the keyboard (its keys have their own long press), the terminal (selection) or an SDK app
+                // (its own gestures)
+                let own = matches!(self.screen, Screen::App(AppId::Terminal | AppId::External(_)));
+                let on_keyboard = self.desk_keyboard_visible() && y >= self.kb_top();
+                let held = self.desk_active() && self.form.is_tablet() && !self.is_locked() && !own && !on_keyboard;
+                self.desk_hold = held.then_some((x, y, t, false));
+                false
+            }
+            Event::Move(x, y, ..) => {
+                if let Some((hx, hy, _, false)) = self.desk_hold {
+                    let slop = self.ui.pt(DESK_HOLD_SLOP_PT);
+                    if (x - hx).powi(2) + (y - hy).powi(2) > slop * slop {
+                        self.desk_hold = None;
+                    }
+                }
+                false
+            }
+            Event::Up(..) => matches!(self.desk_hold.take(), Some((.., true))),
+            _ => false,
+        }
+    }
+
     pub fn event(&mut self, ev: Event, t: f64) -> Vec<Effect> {
+        // the touch a system gesture took belongs to that gesture: its first finger's moves and lift do nothing here
+        if self.touch_taken {
+            match ev {
+                Event::Down(..) => self.touch_taken = false,
+                Event::Move(..) => return vec![],
+                Event::Up(..) => {
+                    self.touch_taken = false;
+                    return vec![];
+                }
+                _ => {}
+            }
+        }
         // usage is recorded before and after the event, so a switch it makes is credited from its own time
         self.st_mark(t);
+        if self.desk_hold_event(ev, t) {
+            return vec![];
+        }
+        // a touch that is a key of the on-screen keyboard does not raise it again (a Hide lowers it)
+        let on_keyboard = self.kb_touch;
         let fx = self.event_inner(ev, t);
+        // a tap that leaves a text field in focus on the tablet desktop raises the keyboard for it
+        if matches!(ev, Event::Up(..)) && !on_keyboard && self.desk_active() && !self.keyboard.shown() && self.desk_text_focus() == Some(true) {
+            self.set_keyboard(true, t);
+        }
         self.st_mark(t);
         fx
     }
@@ -3855,6 +3942,38 @@ impl Shell {
 
     pub fn tick(&mut self, t: f64) -> Vec<Effect> {
         self.st_mark(t);
+        // the keyboard follows text focus on the tablet desktop: raised when a field gains it (edge-triggered, so a
+        // dismissal sticks while the field keeps it), lowered whenever the front window has no field
+        let now = self.desk_text_focus();
+        if now == Some(true) && self.desk_text_focus_last != Some(true) {
+            self.set_keyboard(true, t);
+        } else if now == Some(false) && self.keyboard.shown() {
+            // a front window without a text field never keeps it up, also when something else raised it (a terminal
+            // window restored behind it, an app that was in front)
+            self.set_keyboard(false, t);
+        }
+        if now != self.desk_text_focus_last && self.keyboard.shown() {
+            // the terminal's accessory row follows the front window while the keyboard stays up
+            let h = self.keyboard.h();
+            self.keyboard.set_accessory(self.screen == Screen::App(AppId::Terminal));
+            if self.keyboard.h() != h {
+                self.resize_terminals();
+            }
+        }
+        self.desk_text_focus_last = now;
+        let overlay = self.desk_active() && (self.overview_active() || self.cc_active() || self.center_active() || self.quicksearch.is_shown() || self.assistant.is_shown());
+        if self.desk_overlay_was && !overlay {
+            self.force_full_redraw();
+        }
+        self.desk_overlay_was = overlay;
+        if let Some((x, y, t0, false)) = self.desk_hold {
+            if t - t0 >= DESK_HOLD_MS {
+                self.desk_hold = Some((x, y, t0, true));
+                self.desk_cancel_press();
+                self.desktop_pointer(x, y, true, t);
+                self.dirty = true;
+            }
+        }
         let fx = self.tick_pumped(t);
         self.st_mark(t);
         fx
@@ -4112,6 +4231,9 @@ impl Shell {
             } else if out == Out::Hide && self.osk_pinned {
                 // the keyboard's own hide key is the user closing the keyboard they opened
                 self.keyboard_close_explicit(t);
+            } else if self.desk_active() && out != Out::Hide {
+                // on the desktop the keys go where a hardware keyboard's would: every built-in window, sheet and panel
+                effects.extend(self.hw_type(out, t));
             } else {
                 self.type_out(out, t);
             }
@@ -4257,6 +4379,7 @@ impl Shell {
         self.refresh_icon_style();
         // the audio service connects only once the desktop has been drawn (lazy; socket activation starts it then)
         self.audio.arm();
+        self.desk_t = t;
         let mut was_dirty = std::mem::replace(&mut self.dirty, false);
         // new pixels from the foreground app: on a settled desktop that is a frame of windows alone; anywhere else, or with
         // another cause pending, it is the ordinary frame (which draws the windows too)
@@ -4464,10 +4587,24 @@ impl Shell {
                 let now: Option<Vec<(i32, i32, i32, i32)>> = None;
                 let now = self.overview_regions(now);
                 if let (Some(prev), Some(cur)) = (&prev_regions, &now) {
-                    self.desk_clear = Some(prev.iter().chain(cur).copied().collect());
+                    let mut v: Vec<(i32, i32, i32, i32)> = prev.iter().chain(cur).copied().collect();
+                    // the full-screen veil repeats every frame: one whole-screen rect instead of a snapshot per copy
+                    v.sort_unstable();
+                    v.dedup();
+                    if v.contains(&(0, 0, self.w, self.h)) {
+                        v = vec![(0, 0, self.w, self.h)];
+                    }
+                    self.desk_clear = Some(v);
                 }
                 // what the regions held before this draw: pixels that come out the same are not damage
-                let before = self.desk_clear.as_ref().filter(|_| s.y0 == 0).map(|r| Damage::snapshot_rects(s.px, s.stride, s.w, s.h, r));
+                // taken out of self: the draws below borrow self mutably
+                let mut snap = std::mem::take(&mut self.desk_snap);
+                let have_before = match self.desk_clear.as_ref().filter(|_| s.y0 == 0) {
+                    Some(r) => { Damage::snapshot_rects_into(s.px, s.stride, s.w, s.h, r, &mut snap); true }
+                    None => false,
+                };
+                // the veil's tint is on the GPU: while it fades, repaint everything so the presenter redraws it
+                let veil = self.veil_animating(t);
                 self.draw_desk(s, t);
                 self.draw_overview(s, t);
                 // Control Center and Notification Center float over the live desktop, at the menus' layer
@@ -4508,9 +4645,10 @@ impl Shell {
                     damage.all();
                 }
                 match self.desk_clear.take() {
-                    Some(rects) => match before {
-                        Some(b) => damage.union(&Damage::changed_in(&rects, &b, s.px, s.stride, s.w, s.h)),
-                        None => for (x, y, w, h) in rects { damage.add(x, y, w, h); },
+                    Some(rects) => if have_before {
+                        damage.union(&Damage::changed_in(&rects, &snap, s.px, s.stride, s.w, s.h));
+                    } else {
+                        for (x, y, w, h) in rects { damage.add(x, y, w, h); }
                     },
                     None => damage.all(),
                 }
@@ -4518,8 +4656,9 @@ impl Shell {
                 for (x, y, w, h) in self.dock_glass_vacated.take() {
                     damage.add(x - 2, y - 2, w + 4, h + 4);
                 }
+                self.desk_snap = snap;
                 // the panels fade and slide in: repaint everything until they settle
-                if self.cc.animating() || self.notify.animating() {
+                if self.cc.animating() || self.notify.animating() || veil {
                     damage.all();
                 }
                 self.desk_regions = now;
@@ -5510,7 +5649,8 @@ impl Shell {
     /// Terminal px rect: below the status bar, above the keyboard or the home zone.
     fn term_area(&self) -> (i32, i32, i32, i32) {
         let top = self.ui.pt(scene::STATUS_PT + terminal::HEADER_PT + self.terminal_ui.search_height()).round() as i32;
-        let bottom = if self.keyboard.shown() { self.kb_top() } else { self.h as f32 - home_zone(&self.ui) } as i32;
+        // in a desktop window the keyboard sits over the desktop (the window is lifted clear of it), not inside the window
+        let bottom = if self.keyboard.shown() && !self.desk_active() { self.kb_top() } else { self.h as f32 - home_zone(&self.ui) } as i32;
         (0, top, self.w, bottom - top)
     }
 
@@ -5661,6 +5801,15 @@ impl Shell {
         // of the window. A keyboard the user opened on purpose stays up until they close it
         // (`keyboard_close_explicit`), so no automatic hide lowers it either.
         let shown = if self.osk_pinned { true } else { shown && self.keyboard_allowed() };
+        // the terminal's accessory row (paste, ctrl, esc, tab, arrows) is for the terminal's keyboard only
+        if shown {
+            let h = self.keyboard.h();
+            self.keyboard.set_accessory(self.screen == Screen::App(AppId::Terminal));
+            // a row that came or went under a keyboard that is already up changes the terminal's room
+            if self.keyboard.h() != h {
+                self.resize_terminals();
+            }
+        }
         if self.keyboard.shown() != shown {
             self.keyboard.set_shown(shown, t);
             self.resize_terminals();
@@ -5782,7 +5931,7 @@ impl Shell {
         }
         s.fill_rect(0, bottom, w, self.h as usize, bg);
         self.draw_terminal_chrome(s, t);
-        if self.keyboard.shown() || self.keyboard.animating() {
+        if (self.keyboard.shown() || self.keyboard.animating()) && !self.desk_active() {
             let kb_top = self.kb_top();
             self.keyboard.draw(s, &self.ui, kb_top, t);
             let below = (kb_top + self.keyboard.h() + self.keyboard.offset(t)) as usize;

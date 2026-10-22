@@ -45,6 +45,11 @@ cleanup() {
     [[ -n ${compositor_pid:-} ]] && kill "$compositor_pid" 2>/dev/null || true
     [[ -n ${bus_pid:-} ]] && kill "$bus_pid" 2>/dev/null || true
     rm -f "$priv_socket"
+    # every other background child as well (session-env, display-refresh, the portal, the chrome clients): one that
+    # outlives the compositor kept the wait below, and with it the session, from ever ending, so systemd never
+    # restarted a session whose compositor had failed at start (the boot stayed on a dead screen)
+    local job
+    for job in $(jobs -p); do kill "$job" 2>/dev/null || true; done
     wait 2>/dev/null || true
 }
 # A stop requested by systemd (reboot, shutdown, restart) is deliberate, not a crash: do not let it count toward the

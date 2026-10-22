@@ -136,6 +136,10 @@ pub fn parse_catalog(text: &str) -> Result<Vec<StoreApp>, String> {
         if parse_semver(&version).is_none() || sha256.len() != 64 || !sha256.bytes().all(|b| b.is_ascii_hexdigit()) {
             continue;
         }
+        // a package built for another CPU (`arch = "x86_64"` or `"aarch64"`) is not offered to this one
+        if a.str_field("arch").is_some_and(|arch| arch != std::env::consts::ARCH) {
+            continue;
+        }
         let summary = a.str_field("summary").unwrap_or_default();
         out.push(StoreApp {
             id,
@@ -199,11 +203,13 @@ pub fn updates_for<'a>(catalog: &'a [StoreApp], installed: &[InstalledApp], shel
 
 /// The packages to install or update in the background: every `kind = "system"`, `"system-app"` or `"service"` entry
 /// that is not installed yet, or has a newer version, and that this shell can run.
-pub fn system_plan<'a>(catalog: &'a [StoreApp], installed: &[InstalledApp], shell: &str) -> Vec<&'a StoreApp> {
+/// Packages whose sha256 is in `refused` (built for another CPU) are left out.
+pub fn system_plan<'a>(catalog: &'a [StoreApp], installed: &[InstalledApp], shell: &str, refused: &[String]) -> Vec<&'a StoreApp> {
     let have = parse_semver(shell).unwrap_or((0, 0, 0));
     catalog
         .iter()
         .filter(|s| s.is_preinstalled() && s.runs_on(bifrost_proto::SDK_VERSION) && parse_semver(&s.min_shell).is_some_and(|m| m <= have))
+        .filter(|s| !refused.iter().any(|r| r.eq_ignore_ascii_case(&s.sha256)))
         .filter(|s| match installed.iter().find(|i| i.id == s.id) {
             Some(i) => update_available(&i.version, &s.version),
             None => true,
@@ -259,6 +265,17 @@ mod tests {
         assert_eq!((apps[0].name.as_str(), apps[0].size, apps[0].min_shell.as_str()), ("Calc", 1234, "0.1.0"));
         assert_eq!(apps[0].description, "Adds");
         assert!(parse_catalog("{}").is_err() && parse_catalog("nope").is_err());
+    }
+
+    #[test]
+    fn a_package_for_another_cpu_is_not_listed() {
+        let arch = std::env::consts::ARCH;
+        let other = if arch == "x86_64" { "aarch64" } else { "x86_64" };
+        let text = format!(
+            r#"{{"apps":[{{"id":"a","name":"A","version":"1.0.0","sha256":"{SUM}","package":"/p","arch":"{other}"}},{{"id":"a","name":"A","version":"1.0.0","sha256":"{SUM}","package":"/q","arch":"{arch}"}},{{"id":"b","name":"B","version":"1.0.0","sha256":"{SUM}","package":"/r"}}]}}"#
+        );
+        let apps = parse_catalog(&text).unwrap();
+        assert_eq!(apps.iter().map(|a| a.package.as_str()).collect::<Vec<_>>(), ["/q", "/r"]);
     }
 
     #[test]
@@ -358,9 +375,18 @@ mod tests {
         let cat = vec![sys("is.o.kb", "1.1.0", "system", "0.1.0"), sys("is.o.app", "1.0.0", "app", "0.1.0"), sys("is.o.new", "1.0.0", "system", "9.0.0")];
         let ids = |p: Vec<&StoreApp>| p.iter().map(|s| s.id.clone()).collect::<Vec<_>>();
         let mk = |v: &str| InstalledApp { id: "is.o.kb".into(), version: v.into(), kind: "system".into(), ..Default::default() };
-        assert_eq!(ids(system_plan(&cat, &[], "0.1.0")), ["is.o.kb"], "missing: install; apps and too-new packages: skip");
-        assert_eq!(ids(system_plan(&cat, &[mk("1.0.0")], "0.1.0")), ["is.o.kb"], "outdated: update");
-        assert!(system_plan(&cat, &[mk("1.1.0")], "0.1.0").is_empty(), "current: nothing");
+        assert_eq!(ids(system_plan(&cat, &[], "0.1.0", &[])), ["is.o.kb"], "missing: install; apps and too-new packages: skip");
+        assert_eq!(ids(system_plan(&cat, &[mk("1.0.0")], "0.1.0", &[])), ["is.o.kb"], "outdated: update");
+        assert!(system_plan(&cat, &[mk("1.1.0")], "0.1.0", &[]).is_empty(), "current: nothing");
         assert_eq!(parse_catalog(&doc()).unwrap()[0].kind, "app");
+    }
+
+    #[test]
+    fn the_preinstall_plan_skips_packages_refused_for_another_cpu() {
+        let sys = |id: &str, sha: &str| StoreApp { id: id.into(), version: "1.0.0".into(), kind: "system".into(), min_shell: "0.1.0".into(), sha256: sha.into(), ..Default::default() };
+        let cat = vec![sys("is.o.kb", "AAAA"), sys("is.o.app", "bbbb")];
+        let ids = |p: Vec<&StoreApp>| p.iter().map(|s| s.id.clone()).collect::<Vec<_>>();
+        assert_eq!(ids(system_plan(&cat, &[], "0.1.0", &["aaaa".to_string()])), ["is.o.app"], "refused sha is skipped, case-insensitively");
+        assert_eq!(ids(system_plan(&cat, &[], "0.1.0", &[])), ["is.o.kb", "is.o.app"]);
     }
 }

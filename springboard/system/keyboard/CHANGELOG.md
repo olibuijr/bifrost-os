@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.5
+
+- The keyboard shows again after the terminal row comes or goes (a field without it after the terminal, or back): it was rebuilt hidden and the old picture stayed on screen.
+- A keyboard that has just started draws at rest: its first picture could sit mid-slide, low or off its area, until the next touch.
+
 ## 1.1.4
 
 - The Ctrl key uses the shared terminal-keys SDK kit: Ctrl+Space sends NUL, and keys Ctrl does not combine with are dropped instead of sending a shifted code.

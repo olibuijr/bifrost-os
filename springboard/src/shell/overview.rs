@@ -9,7 +9,7 @@
 //! shell's `t` in milliseconds, the durations are seconds (0 with Reduce Motion, so everything then snaps).
 
 use super::appgrid::AppGrid;
-use super::control_center::desk_glass;
+use super::control_center::{desk_glass, desk_veil};
 use bifrost_ui::material_request::ShellSurface;
 use super::desk::Metrics;
 use super::ui::{Weight, CARD_BG, FIELD_BG, LABEL, LABEL_2, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, SELECTION, TINT, WHITE, WINDOW_FRAME_BLURRED};
@@ -225,7 +225,7 @@ pub(super) struct Overview {
     /// a window of another client the person picked: it is activated when Overview has closed
     chosen_foreign: Option<u32>,
     /// every window's minimized flag from before Overview hid them
-    saved: Vec<(AppId, bool)>,
+    pub(super) saved: Vec<(AppId, bool)>,
     tiles: Vec<Tile>,
     hover: Option<Target>,
     selected: Option<usize>,
@@ -342,6 +342,9 @@ impl Overview {
     /// Whether the user minimized this window, as opposed to Overview or another desktop hiding it: only those
     /// windows get a dock slot.
     pub(super) fn user_minimized(&self, w: &super::desk::Win) -> bool {
+        if !self.grid.saved.is_empty() {
+            return self.grid.saved.iter().find(|(a, _)| *a == w.app).map_or(w.minimized, |(_, m)| *m);
+        }
         if self.open {
             return self.saved.iter().find(|(a, _)| *a == w.app).map_or(w.minimized, |(_, m)| *m);
         }
@@ -457,6 +460,11 @@ impl Overview {
     #[cfg(test)]
     fn tile_rects(&self) -> Vec<(AppId, FRect)> {
         self.tiles.iter().filter_map(|t| match t.key { TileKey::App(app) => Some((app, t.to)), TileKey::Foreign(_) => None }).collect()
+    }
+
+    /// True while the veil fades: opening, or closing until the overview is gone.
+    fn veil_animating(&self, t: f64) -> bool {
+        self.open && (self.closing.is_some() || progress(Kind::OverviewEnter, Curve::EaseOut, self.start, t) < 1.0)
     }
 
     fn prog(&self, t: f64) -> f32 {
@@ -783,8 +791,7 @@ impl Overview {
         let m = sh.desk_metrics();
         // the veil: the presenter's blur under a tint, below the menu bar and above the dock
         let veil_h = g.h - m.menubar as f32 - if sh.dock_is_visible() { m.dock_bottom as f32 } else { 0.0 };
-        desk_glass(s, ShellSurface::OverviewVeil, (0.0, m.menubar as f32, g.w, veil_h.max(1.0)), 0.0, (215.0 * p) as u32);
-        s.fill_rrect(0.0, m.menubar as f32, g.w, veil_h.max(1.0), 0.0, rgba(0, 0, 0, (60.0 * p) as u8));
+        desk_veil(s, ShellSurface::OverviewVeil, (0.0, m.menubar as f32, g.w, veil_h.max(1.0)), (215.0 * p) as u32, (60.0 * p) as u8);
         // the desktops strip slides down from the menu bar
         let slide_y = -(1.0 - p) * (g.strip_h + 10.0 * g.pt);
         let alpha = (255.0 * p) as u32;
@@ -1001,6 +1008,11 @@ impl Shell {
         self.desk_active() && self.overview.visible()
     }
 
+    /// True while Overview or the Apps grid fades its veil in or out: the desktop repaints in full until it settles.
+    pub(super) fn veil_animating(&self, t: f64) -> bool {
+        self.overview.veil_animating(t) || self.overview.grid.veil_animating(t)
+    }
+
     /// The content-layer regions of a GPU desktop frame: the whole screen while Overview or the Apps grid shows.
     pub(super) fn overview_regions(&self, regions: Option<Vec<(i32, i32, i32, i32)>>) -> Option<Vec<(i32, i32, i32, i32)>> {
         if self.overview_active() && bifrost_render::glass::gpu() {
@@ -1151,6 +1163,10 @@ impl Shell {
         let mut ov = std::mem::take(&mut self.overview);
         if ov.open {
             ov.close(self, None, t);
+            if !ov.grid.visible() {
+                // the windows stay hidden under the grid; closing the grid restores what Overview saved
+                ov.grid.saved = std::mem::take(&mut ov.saved);
+            }
         }
         // a grid that is still animating out opens again (a close that has been asked for once cannot be asked for twice,
         // so the Dock's Apps icon would do nothing during it)
