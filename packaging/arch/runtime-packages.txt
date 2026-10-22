@@ -106,6 +106,10 @@ rpcbind
 rsync
 ruby
 ruby-rake
+ruby-bundler
+ruby-erb
+ruby-irb
+ruby-rdoc
 samba
 screen
 sane
