@@ -1145,14 +1145,14 @@ impl Shell {
                 if l.image.w>0&&l.image.h>0 {frames.push(crate::bare::wayland::ChromeFrame{id,x:l.x,y:l.y,width:l.image.w,height:l.image.h,pixels:l.image.px.clone(),input:l.input});}
             }
         }
-        // a tablet's on-screen keyboard: id 7, an overlay surface above every window from its resting top to the bottom
+        // a tablet's on-screen keyboard: id 16 (7 is Quick Look), an overlay surface above every window from its resting top to the bottom
         // edge (drawn only into the desktop frame, the windows covered it). It stays up for the whole slide: the frame
         // is clear above the sliding keyboard, so the surface keeps one size and the slide plays inside it.
         if self.desk_keyboard_visible() {
             let top=(self.kb_top().max(0.0) as usize).min(height);
             if top<height&&width>0 {
                 let data=pixels[top*width..height*width].to_vec();
-                frames.push(crate::bare::wayland::ChromeFrame{id:7,x:0,y:top as i32,width,height:height-top,pixels:data});
+                frames.push(crate::bare::wayland::ChromeFrame{id:16,x:0,y:top as i32,width,height:height-top,pixels:data,input:None});
             }
         }
         frames

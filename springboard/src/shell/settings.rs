@@ -3346,6 +3346,7 @@ impl Settings {
             Toggle::InputMenu => flip(&mut self.opts.input_menu),
             Toggle::MotionCues => flip(&mut self.a11y.motion_cues),
             Toggle::SwitchControl => flip(&mut self.a11y.switch_control),
+            Toggle::VoiceControl => flip(&mut self.a11y.voice_control),
             Toggle::LiveCaptions => flip(&mut self.a11y.live_captions),
             Toggle::AutoTime => {
                 let on = flip(&mut self.info.time_manual);
