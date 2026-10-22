@@ -12,6 +12,7 @@
 //! `keychain::SHARE_LOGIN_SERVICE`, an 802.1X network's under [`WIFI_LOGIN_SERVICE`], both as `user NUL password`.
 
 use crate::keychain::{self, Error, ShareAccess, Store};
+use crate::net::wifi_config::{Eap, NetworkConfig, Security};
 
 /// The keychain group that holds the logins this agent keeps (opened with `Store::open_group` on the shell data folder).
 pub const GROUP: &str = "is.bifrost.network-auth";
@@ -180,6 +181,32 @@ pub fn access(store: &Store, target: &Target) -> Result<ShareAccess, Error> {
     }
 }
 
+/// The saved-network entry that joins an 802.1X network with a login the agent holds: the user name is the identity
+/// and the password the account password. `None` for a `Prompt` (nothing to join with yet) and for a login that
+/// does not make a complete network entry, so a bad login never reaches the supplicant.
+pub fn wifi_join_config(ssid: &str, access: &ShareAccess, eap: Eap) -> Option<NetworkConfig> {
+    let ShareAccess::Saved { user, password } = access else { return None };
+    let mut config = NetworkConfig::new(ssid, Security::Enterprise(eap));
+    config.identity = user.clone();
+    config.password = password.clone();
+    config.problem().is_none().then_some(config)
+}
+
+/// Keeps the login of an 802.1X network entry (typed on the Other Network sheet, for instance) in the agent's store,
+/// so a later join finds it and the user is not asked again. Returns whether a login was saved: entries that are not
+/// 802.1X, or whose login breaks the sheet's rules, save nothing.
+pub fn remember_wifi_config(store: &Store, config: &NetworkConfig) -> Result<bool, Error> {
+    if !config.security.is_enterprise() {
+        return Ok(false);
+    }
+    let answer = Answer { user: config.identity.clone(), password: config.password.clone(), remember: true };
+    if validate(&answer).is_err() {
+        return Ok(false);
+    }
+    save_wifi_login(store, &config.ssid, &answer.user, &answer.password)?;
+    Ok(true)
+}
+
 /// Forgets the stored login of `target`, for instance after the server refused it. Forgetting a login that is not
 /// there is not an error.
 pub fn forget(store: &Store, target: &Target) -> Result<(), Error> {
@@ -306,6 +333,50 @@ mod tests {
         forget(&s, &target).unwrap();
         assert_eq!(access(&s, &target), Ok(ShareAccess::Prompt));
         forget(&s, &target).unwrap();
+    }
+
+    #[test]
+    fn a_saved_login_becomes_an_802_1x_network_entry() {
+        let saved = ShareAccess::Saved { user: "ola@corp".into(), password: "pw".into() };
+        let c = wifi_join_config("Campus", &saved, Eap::Ttls).unwrap();
+        assert_eq!(c.security, Security::Enterprise(Eap::Ttls));
+        assert_eq!((c.ssid.as_str(), c.identity.as_str(), c.password.as_str()), ("Campus", "ola@corp", "pw"));
+        assert_eq!(c.problem(), None, "the entry is complete");
+        assert_eq!(wifi_join_config("Campus", &ShareAccess::Prompt, Eap::Peap), None, "nothing saved, so ask first");
+        let empty = ShareAccess::Saved { user: String::new(), password: "pw".into() };
+        assert_eq!(wifi_join_config("Campus", &empty, Eap::Peap), None, "an incomplete login is not joined with");
+        assert_eq!(wifi_join_config("", &saved, Eap::Peap), None, "no network name");
+    }
+
+    #[test]
+    fn an_802_1x_entry_is_remembered_and_a_personal_one_is_not() {
+        let s = store("remember");
+        let mut c = NetworkConfig::new("Campus", Security::Enterprise(Eap::Peap));
+        c.identity = "ola".into();
+        c.password = "pw1".into();
+        assert_eq!(remember_wifi_config(&s, &c), Ok(true));
+        let target = Target::Wifi { ssid: "Campus".into() };
+        assert_eq!(access(&s, &target), Ok(ShareAccess::Saved { user: "ola".into(), password: "pw1".into() }));
+        c.password = "pw2".into();
+        assert_eq!(remember_wifi_config(&s, &c), Ok(true));
+        assert_eq!(access(&s, &target), Ok(ShareAccess::Saved { user: "ola".into(), password: "pw2".into() }));
+        let home = NetworkConfig::personal("Home", Some("hunter22hunter"));
+        assert_eq!(remember_wifi_config(&s, &home), Ok(false));
+        assert_eq!(access(&s, &Target::Wifi { ssid: "Home".into() }), Ok(ShareAccess::Prompt));
+        let mut bad = NetworkConfig::new("Other", Security::Enterprise(Eap::Peap));
+        bad.identity = "ola".into();
+        assert_eq!(remember_wifi_config(&s, &bad), Ok(false), "no password, nothing saved");
+    }
+
+    #[test]
+    fn a_remembered_login_round_trips_into_a_join_entry() {
+        let s = store("roundtrip");
+        let mut c = NetworkConfig::new("Campus", Security::Enterprise(Eap::Peap));
+        c.identity = "ola".into();
+        c.password = "pw".into();
+        remember_wifi_config(&s, &c).unwrap();
+        let joined = wifi_join_config("Campus", &access(&s, &Target::Wifi { ssid: "Campus".into() }).unwrap(), Eap::Peap);
+        assert_eq!(joined.map(|j| (j.identity, j.password)), Some(("ola".to_string(), "pw".to_string())));
     }
 
     #[test]

@@ -153,6 +153,7 @@ pub mod stroke_coverage;
 pub mod shading_graph;
 pub mod kernel_layer_fx;
 pub mod kernel_vision;
+pub mod kernel_vision_print;
 pub mod kernel_portrait_matte;
 pub mod kernel_photo_adjust;
 pub mod kernel_video_filters;

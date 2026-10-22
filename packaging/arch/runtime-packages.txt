@@ -147,6 +147,7 @@ fprintd
 colord
 wpa_supplicant
 iw
+wireless-regdb
 v4l-utils
 audit
 davfs2
