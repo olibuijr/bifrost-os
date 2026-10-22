@@ -163,3 +163,4 @@ exfatprogs
 dosfstools
 tesseract
 tesseract-data-eng
+cppjieba

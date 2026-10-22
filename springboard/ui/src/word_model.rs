@@ -243,6 +243,24 @@ impl Lexicon {
         added
     }
 
+    /// Loads `word count [tag]` lines separated by spaces, the layout of the word list the `cppjieba` package ships
+    /// (a line with just a word counts as 1; a count that is not a number counts as 1; the tag is ignored). Blank
+    /// lines and lines starting with `#` are skipped. Returns how many words were added.
+    pub fn load_space_separated(&mut self, text: &str) -> usize {
+        let mut added = 0;
+        for line in text.lines() {
+            let mut fields = line.split_whitespace();
+            let Some(word) = fields.next().filter(|w| !w.starts_with('#')) else { continue };
+            let count = fields.next().and_then(|c| c.parse::<u32>().ok()).unwrap_or(1);
+            let before = self.words.len();
+            self.add(word, count);
+            if self.words.len() > before {
+                added += 1;
+            }
+        }
+        added
+    }
+
     /// Whether `word` is in the lexicon.
     pub fn contains(&self, word: &str) -> bool {
         self.words.contains_key(word)
@@ -268,6 +286,32 @@ impl Lexicon {
     fn unknown_cost(&self) -> f64 {
         ((self.total + 1) as f64).ln() + 2.0
     }
+}
+
+/// Where the Arch package `cppjieba` (MIT licence, listed in `packaging/arch/runtime-packages.txt`) installs its
+/// Chinese word list on an installed system.
+pub const CHINESE_WORD_LIST: &str = "/usr/share/cppjieba/dict/jieba.dict.utf8";
+
+/// The largest word list [`chinese_lexicon_from`] reads, so a damaged or replaced file cannot exhaust memory.
+const MAX_WORD_LIST_BYTES: u64 = 64 * 1024 * 1024;
+
+/// The Chinese lexicon read from the word list at `path`, or `None` when the file is missing, too large or has no
+/// words. Japanese and Korean have no system word list yet, so their text is split by script runs alone.
+pub fn chinese_lexicon_from(path: &std::path::Path) -> Option<Lexicon> {
+    let meta = std::fs::metadata(path).ok()?;
+    if !meta.is_file() || meta.len() > MAX_WORD_LIST_BYTES {
+        return None;
+    }
+    let text = std::fs::read_to_string(path).ok()?;
+    let mut lex = Lexicon::new();
+    (lex.load_space_separated(&text) > 0).then_some(lex)
+}
+
+/// The system Chinese lexicon, loaded on first use and shared afterwards. An empty lexicon when the word list is not
+/// installed, so splitting still works (one character per word for Han text).
+pub fn system_chinese_lexicon() -> &'static Lexicon {
+    static LEXICON: std::sync::OnceLock<Lexicon> = std::sync::OnceLock::new();
+    LEXICON.get_or_init(|| chinese_lexicon_from(std::path::Path::new(CHINESE_WORD_LIST)).unwrap_or_default())
 }
 
 /// Whether `c` is written in a script that runs words together.
@@ -520,6 +564,44 @@ mod tests {
         assert!(segment("", &chinese()).is_empty());
         assert_eq!(split_words("北京", &Lexicon::new()), vec!["北", "京"]);
         assert!(Lexicon::new().is_empty());
+    }
+
+    #[test]
+    fn the_jieba_layout_loads_word_count_and_ignores_the_tag() {
+        let mut lex = Lexicon::new();
+        let text = "# comment\n北京 30 ns\n天安门 20 ns\n\n我 50 r\n单独\n坏数 x v\n";
+        assert_eq!(lex.load_space_separated(text), 5);
+        assert!(lex.contains("北京") && lex.contains("单独") && lex.contains("坏数"));
+        assert!(!lex.contains("ns") && !lex.contains("#"));
+        // the loaded counts rank words: 北京 (30) beats the single characters 北 and 京 (1 each, never seen)
+        lex.add("北", 1);
+        lex.add("京", 1);
+        lex.add("爱", 40);
+        assert_eq!(split_words("我爱北京天安门", &lex), vec!["我", "爱", "北京", "天安门"]);
+    }
+
+    #[test]
+    fn a_word_list_file_loads_and_a_missing_or_empty_one_does_not() {
+        let dir = std::env::temp_dir().join(format!("bifrost-word-list-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let list = dir.join("jieba.dict.utf8");
+        std::fs::write(&list, "北京 30 ns\n天安门 20 ns\n").unwrap();
+        let lex = chinese_lexicon_from(&list).expect("the list loads");
+        assert_eq!(lex.len(), 2);
+        assert!(chinese_lexicon_from(&dir.join("missing")).is_none());
+        std::fs::write(dir.join("empty"), "# nothing\n\n").unwrap();
+        assert!(chinese_lexicon_from(&dir.join("empty")).is_none());
+        assert!(chinese_lexicon_from(&dir).is_none(), "a directory is not a word list");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_system_lexicon_is_always_usable() {
+        // with or without the package installed, splitting never fails
+        let words = split_words("北京", system_chinese_lexicon());
+        assert!(!words.is_empty());
+        assert_eq!(words.concat(), "北京");
     }
 
     #[test]
