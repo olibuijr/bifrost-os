@@ -134,16 +134,19 @@ def dump_doc(path, doc):
 
 def build_plan(os_dir=OS_DIR):
     """(plan, problems). Plan: rows [{shard, id, name, checks}] and tests [{crate, filter}] (unique, sorted)."""
-    rows, tests, problems = [], set(), []
+    rows, tests, problems, every = [], set(), [], set()
     for label, _, doc in load_shards(os_dir):
         for e in doc.get("entries", []):
+            every |= {c["crate"] for c in e.get("checks") or [] if isinstance(c, dict) and c.get("kind") == "test" and c.get("crate")}
             found = validate_entry(e)
             problems += found
             if found or e.get("ready") is not True or e.get("status") in SKIP_STATUS:
                 continue
             rows.append({"shard": label, "id": e["id"], "name": e.get("name", ""), "checks": e["checks"]})
             tests |= {(c["crate"], c["filter"]) for c in e["checks"] if c["kind"] == "test"}
-    plan = {"rows": rows, "tests": [{"crate": c, "filter": f} for c, f in sorted(tests)]}
+    # the crates of every row's test checks, whatever its status: the set `run` builds with, the same every run, so
+    # cargo resolves features as in the lead's build and recompiles nothing that is already built
+    plan = {"rows": rows, "tests": [{"crate": c, "filter": f} for c, f in sorted(tests)], "build_crates": sorted(every)}
     return plan, problems
 
 
@@ -361,7 +364,7 @@ def run_plan(plan, target, repo):
         crates.setdefault(t["crate"], []).append(t["filter"])
     test_results = {}
     if crates:
-        exes, err = test_executables(repo, set(crates))
+        exes, err = test_executables(repo, set(plan.get("build_crates") or crates) | set(crates))
         cache = load_cache()
         for crate, filters in sorted(crates.items()):
             if not exes.get(crate):
