@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.11.0
+
+- Upstream pdfcraft v0.11.0.
+  ## What's Changed
+  * Skip CodeRabbit reviews on Dependabot PRs by @echelon in https://github.com/storytold/pdfcraft/pull/3692
+  * fix(redact): evaluate OCMD visibility during sanitization by @skylartaylor in https://github.com/storytold/pdfcraft/pull/3522
+  * ci: switch to shared nix workflow from craft-common-actions by @dylanmtaylor in https://github.com/storytold/pdfcraft/pull/2753
+  * Release: PdfCraft v0.11.0 by @echelon in https://github.com/storytold/pdfcraft/pull/3893
+
 ## 0.9.0
 
 - Upstream pdfcraft v0.9.0.

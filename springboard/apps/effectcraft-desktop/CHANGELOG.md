@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.14.0
+
+- Upstream effectcraft v0.14.0.
+  ## What's Changed
+  * docs: add SonarCloud and CodeRabbit badges to README by @dylanmtaylor in https://github.com/storytold/effectcraft/pull/1803
+  * docs: drop references to competing commercial software by @dylanmtaylor in https://github.com/storytold/effectcraft/pull/1773
+  * Skip CodeRabbit reviews on Dependabot PRs by @echelon in https://github.com/storytold/effectcraft/pull/1962
+  **Full Changelog**: https://github.com/storytold/effectcraft/compare/v0.13.0...v0.14.0
+
 ## 0.11.2
 
 - Upstream effectcraft v0.11.1.

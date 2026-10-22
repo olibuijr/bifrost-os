@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.9.0
+
+- Upstream wordcraft v0.9.0.
+  > [!NOTE]
+  > **FreeBSD aarch64 is dropped from this release.** We had to cut releases, and we cannot build this target within the 5-hour CI limit for any of the Craft apps, so we are dropping it for now. This is a known blocker, flagged for a future fix in storytold/craft-common-actions#39. FreeBSD x86_64 and every other platform are included.
+  ## What's Changed
+  * Resolve exact OpenType full font names by @finwarman in https://github.com/storytold/wordcraft/pull/2516
+  * Recognize the Symbol PCL6 font alias by @finwarman in https://github.com/storytold/wordcraft/pull/2521
+
 ## 0.8.0
 
 - Upstream wordcraft v0.8.0.

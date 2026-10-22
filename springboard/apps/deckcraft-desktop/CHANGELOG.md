@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.9.0
+
+- Upstream deckcraft v0.9.0.
+  > [!NOTE]
+  > **FreeBSD aarch64 is dropped from this release.** We had to cut releases, and we cannot build this target within the 5-hour CI limit for any of the Craft apps, so we are dropping it for now. This is a known blocker, flagged for a future fix in storytold/craft-common-actions#39. FreeBSD x86_64 and every other platform are included.
+  ## What's Changed
+  * Keep bare '&' text when pasting HTML instead of dropping it by @Silvertree2010 in https://github.com/storytold/deckcraft/pull/795
+  * Keep multi-paragraph slide titles on one line in outline export by @Silvertree2010 in https://github.com/storytold/deckcraft/pull/796
+
 ## 0.8.0
 
 - Upstream deckcraft v0.8.0.

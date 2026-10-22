@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.10.0
+
+- Upstream gridcraft v0.10.0.
+  > [!NOTE]
+  > **FreeBSD aarch64 is dropped from this release.** We had to cut releases, and we cannot build this target within the 5-hour CI limit for any of the Craft apps, so we are dropping it for now. This is a known blocker, flagged for a future fix in storytold/craft-common-actions#39. FreeBSD x86_64 and every other platform are included.
+  ## What's Changed
+  * Skip CodeRabbit reviews on Dependabot PRs by @echelon in https://github.com/storytold/gridcraft/pull/2057
+  * ci: switch to shared nix workflow from craft-common-actions by @dylanmtaylor in https://github.com/storytold/gridcraft/pull/1620
+
 ## 0.8.0
 
 - Upstream gridcraft v0.8.0.
