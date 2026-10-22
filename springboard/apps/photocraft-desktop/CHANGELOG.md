@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.12.0
+
+- Upstream photocraft v0.12.0.
+  ## Scorecard since v0.11.1
+  From [`docs/scorecard.md`](https://github.com/storytold/photocraft/blob/v0.12.0/docs/scorecard.md) (done / partial / missing):
+  | Area | v0.11.1 | v0.12.0 |
+  |---|---|---|
+  | Tools | 33 / 11 / 0 | 36 / 8 / 0 |
+
 ## 0.10.0
 
 - Upstream photocraft v0.10.0.
