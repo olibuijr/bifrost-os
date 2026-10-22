@@ -68,10 +68,13 @@ pub fn call(method: &str, p: &Json) -> Result<Json, PErr> {
             let out = Command::new("/usr/bin/bifrost-update-guard").arg("status").output().map_err(|e| PErr::internal(e.to_string()))?;
             Ok(obj(vec![("status", s(String::from_utf8_lossy(&out.stdout).trim()))]))
         }
-        "store.install" => store_install(p),
+        "store.install" => install_logged("app install", str_param(p, "id").unwrap_or("?"), store_install(p)),
         "package.remove" => package_remove(str_param(p, "name")?),
-        "package.install_file" => package_install_file(str_param(p, "path")?),
-        "package.install_repo" => package_install_repo(p.get("names")),
+        "package.install_file" => {
+            let path = str_param(p, "path")?;
+            install_logged("package install", Path::new(path).file_name().and_then(|n| n.to_str()).unwrap_or(path), package_install_file(path))
+        }
+        "package.install_repo" => install_logged("package install", &repo_subject(p.get("names")), package_install_repo(p.get("names"))),
         bifrost_core::usb_approval::M_USB_AUTHORIZE => usb_authorize(Path::new(bifrost_core::usb_approval::SYSFS_USB_DEVICES), str_param(p, "port")?, p.get("allow")),
         "store.uninstall" => {
             let id = str_param(p, "id")?;
@@ -94,6 +97,31 @@ pub fn call(method: &str, p: &Json) -> Result<Json, PErr> {
         m if super::disk::handles(m) => super::disk::call(m, p),
         m if super::endpoint_security::handles(m) => super::endpoint_security::call(m, p),
         _ => super::accounts::call(method, p).unwrap_or_else(|| Err(PErr::bad(format!("unknown method {method}")))),
+    }
+}
+
+/// The install log of the root daemons: `STATE_DIR` is the root data directory, which Analytics & Diagnostics reads
+/// next to the user's own (`install_log::recent_in`).
+fn install_logged(what: &str, subject: &str, result: Result<Json, PErr>) -> Result<Json, PErr> {
+    log_install_failure(Path::new(STATE_DIR), what, subject, result)
+}
+
+/// Logs a failed install that ran in privd. Only `internal` errors are logged: a `bad_params` refusal means the request
+/// never started an install (a bad name, a path outside the allow-list), so it is not an install failure.
+fn log_install_failure(dir: &Path, what: &str, subject: &str, result: Result<Json, PErr>) -> Result<Json, PErr> {
+    if let Err(e) = &result {
+        if e.code == "internal" {
+            crate::install_log::record_once(dir, what, &format!("{subject}: {}", e.message));
+        }
+    }
+    result
+}
+
+/// The package names of a repo install, for the log line.
+fn repo_subject(names: Option<&Json>) -> String {
+    match names {
+        Some(Json::Arr(items)) => items.iter().filter_map(Json::as_str).collect::<Vec<_>>().join(" "),
+        _ => "?".to_string(),
     }
 }
 
@@ -487,6 +515,24 @@ mod tests {
         assert_eq!(repo(Json::Arr(vec![Json::Bool(true)])).unwrap_err().code, "bad_params");
         assert_eq!(repo(s("htop")).unwrap_err().code, "bad_params");
         assert_eq!(call("package.install_repo", &obj(vec![])).unwrap_err().code, "bad_params");
+    }
+
+    #[test]
+    fn a_failed_install_is_logged_but_a_refused_request_and_a_success_are_not() {
+        let dir = std::env::temp_dir().join(format!("privd-installlog-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(log_install_failure(&dir, "app install", "notes", Ok(obj(vec![]))).is_ok());
+        assert!(log_install_failure(&dir, "app install", "../x", Err(PErr::bad("invalid app id"))).is_err());
+        assert!(crate::install_log::read(&dir).is_empty());
+        let e = log_install_failure(&dir, "app install", "notes", Err(PErr::internal("hash mismatch"))).unwrap_err();
+        assert_eq!(e.message, "hash mismatch", "the caller still gets the error");
+        let _ = log_install_failure(&dir, "app install", "notes", Err(PErr::internal("hash mismatch")));
+        let got = crate::install_log::read(&dir);
+        assert_eq!(got.len(), 1, "the same failure twice is one record");
+        assert_eq!((got[0].what.as_str(), got[0].message.as_str()), ("app install", "notes: hash mismatch"));
+        assert_eq!(repo_subject(Some(&Json::Arr(vec![s("htop"), s("jq")]))), "htop jq");
+        assert_eq!(repo_subject(None), "?");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
