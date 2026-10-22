@@ -6,9 +6,11 @@
         (crate, filter) pair runs once. A malformed "ready" or "checks" field is an error (also in `parity check`).
   os-verify run PLAN.json --target local|ssh:HOST [--repo DIR] [--out RESULTS.json]
         file -> test -e; cmd -> sh -c with a 10 s timeout, as the login user (never root); unit -> systemctl
-        [--user] is-enabled|is-active NAME. test -> cargo test --offline --profile fast -p CRATE -- FILTER, once per
-        crate with all its filters, run locally in --repo (tests are host logic, even for an ssh target). A filter
-        that runs 0 tests fails. Exit 1 when any row fails.
+        [--user] is-enabled|is-active NAME. test -> one `cargo test --offline --profile fast --no-run` over all the
+        plan's crates (features resolve as in the lead's build, so nothing built is rebuilt), then each crate's test
+        executables run with its filters, locally in --repo (tests are host logic, even for an ssh target). Passing
+        outcomes are cached per executable SHA-256 (~/.cache/bifrost-parity/os-verify-tests.json): an unchanged binary's
+        passing filters never run again. A filter that runs 0 tests fails. Exit 1 when any row fails.
   os-verify promote RESULTS.json --version V [--target-name vm] [--dry-run]
         passing rows become status parity (ready dropped, note records the check); failing rows keep their status
         and get "ready": false and "ready_failed": reason.
@@ -165,10 +167,10 @@ class Target:
         return ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", self.host, shlex.join(argv)]
 
 
-def _run(argv, timeout, cwd=None):
+def _run(argv, timeout, cwd=None, env=None):
     """(returncode or None, stdout, stderr). None when the command timed out or could not start."""
     try:
-        p = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, cwd=cwd)
+        p = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, cwd=cwd, env=env)
         return p.returncode, p.stdout, p.stderr
     except subprocess.TimeoutExpired:
         return None, "", f"timed out after {timeout} s"
@@ -205,11 +207,104 @@ def judge_filters(filters, outcomes, rc=0, detail=""):
     return out
 
 
-def cargo_test(repo, crate, filters):
-    """{filter: (passed, reason)} for one cargo test run covering all of a crate's filters."""
-    argv = ["cargo", "test", "--offline", "--profile", "fast", "-p", crate, "--"] + list(filters)
-    rc, out, err = _run(argv, timeout=3600, cwd=os.path.join(repo, "springboard"))
-    return judge_filters(filters, parse_libtest(out), rc if rc is not None else -1, last_line(err))
+CACHE = os.path.join(os.path.expanduser("~"), ".cache", "bifrost-parity", "os-verify-tests.json")
+
+
+def test_executables(repo, crates):
+    """({crate: [(executable, package dir)]}, error) from one `cargo test --no-run` over every crate together, so the
+    features resolve as in the lead's build and nothing already built is compiled again."""
+    root = os.path.join(repo, "springboard")
+    argv = ["cargo", "test", "--offline", "--profile", "fast", "--no-run", "--message-format=json"]
+    for c in sorted(crates):
+        argv += ["-p", c]
+    rc, out, err = _run(argv, timeout=7200, cwd=root)
+    if rc != 0:
+        return {}, f"cargo test --no-run exit {rc}: {last_line(err)}"
+    return executables_from_messages(out, crates), ""
+
+
+def executables_from_messages(stdout, crates):
+    """{crate: [(executable, package dir)]} from cargo's JSON messages: the test-profile artifacts of `crates`."""
+    exes = {}
+    for line in (stdout or "").splitlines():
+        try:
+            m = json.loads(line)
+        except ValueError:
+            continue
+        if m.get("reason") != "compiler-artifact" or not m.get("executable") or not (m.get("profile") or {}).get("test"):
+            continue
+        pkg_dir = os.path.dirname(m.get("manifest_path", ""))
+        name = package_name(m.get("package_id", ""), pkg_dir)
+        if name in crates:
+            exes.setdefault(name, []).append((m["executable"], pkg_dir))
+    return exes
+
+
+def package_name(package_id, pkg_dir):
+    """A package's name from its cargo package id ('path+file:///x/sdk#bifrost-app@0.1.0', or '...#0.1.0' when the
+    name is the directory's), falling back to the manifest's name."""
+    frag = package_id.rsplit("#", 1)[-1] if "#" in package_id else ""
+    if "@" in frag:
+        return frag.split("@", 1)[0]
+    try:
+        with open(os.path.join(pkg_dir, "Cargo.toml"), encoding="utf-8") as fh:
+            m = re.search(r'^\[package\][^\[]*?^name\s*=\s*"([^"]+)"', fh.read(), re.M | re.S)
+        return m.group(1) if m else os.path.basename(pkg_dir)
+    except OSError:
+        return os.path.basename(pkg_dir)
+
+
+def file_digest(path):
+    import hashlib
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def load_cache(path=CACHE):
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return {}
+
+
+def save_cache(cache, path=CACHE):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(cache, fh)
+    os.replace(tmp, path)
+
+
+def run_executables(exes, filters, cache):
+    """{filter: (passed, reason)} for a crate's test executables. Each executable runs once with the filters it has no
+    cached outcome for; passing outcomes are cached by the executable's SHA-256, so an unchanged binary's passing tests
+    never run again (failures are retried)."""
+    outcomes, problems = {}, []
+    for exe, pkg_dir in exes:
+        key = file_digest(exe)
+        seen = cache.setdefault(key, {})
+        todo = [f for f in filters if f not in seen]
+        if todo:
+            env = dict(os.environ, CARGO_MANIFEST_DIR=pkg_dir)
+            rc, out, err = _run([exe] + todo, timeout=3600, cwd=pkg_dir, env=env)
+            got = parse_libtest(out)
+            if rc not in (0, 101):
+                problems.append(f"{os.path.basename(exe)} exit {rc}: {last_line(err)}")
+            else:
+                # only a filter that passed is cached: a failure, crash or timeout is tried again next time
+                for f in todo:
+                    mine = {n: st for n, st in got.items() if f in n}
+                    if mine and "FAILED" not in mine.values():
+                        seen[f] = mine
+            for f in todo:
+                outcomes.update({n: st for n, st in got.items() if f in n})
+        for f in filters:
+            outcomes.update(seen.get(f, {}))
+    return judge_filters(filters, outcomes, 1 if problems else 0, "; ".join(problems))
 
 
 def exec_check(target, check):
@@ -259,14 +354,23 @@ def describe(check):
 
 
 def run_plan(plan, target, repo):
-    """Results dict: rows with pass/checks, plus the test runs. Test checks run once per crate in --repo."""
+    """Results dict: rows with pass/checks. Test checks: one `cargo test --no-run` over all crates (no rebuild of what is
+    built), then each test executable runs with its filters; outcomes are cached per executable hash (CACHE)."""
     crates = {}
     for t in plan.get("tests", []):
         crates.setdefault(t["crate"], []).append(t["filter"])
     test_results = {}
-    for crate, filters in sorted(crates.items()):
-        for f, res in cargo_test(repo, crate, filters).items():
-            test_results[(crate, f)] = res
+    if crates:
+        exes, err = test_executables(repo, set(crates))
+        cache = load_cache()
+        for crate, filters in sorted(crates.items()):
+            if not exes.get(crate):
+                why = err or "no test executable for the crate"
+                test_results.update({(crate, f): (False, why) for f in filters})
+                continue
+            for f, res in run_executables(exes[crate], filters, cache).items():
+                test_results[(crate, f)] = res
+            save_cache(cache)
     rows = []
     for row in plan["rows"]:
         checks = []

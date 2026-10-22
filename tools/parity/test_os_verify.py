@@ -292,5 +292,51 @@ class Promote(unittest.TestCase):
         self.assertNotIn("missing", self.entries())
 
 
+class TestExecutableRuns(unittest.TestCase):
+    def test_package_name_from_id_or_manifest(self):
+        self.assertEqual(ov.package_name("path+file:///x/sdk#bifrost-app@0.1.0", "/x/sdk"), "bifrost-app")
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "Cargo.toml").write_text('[package]\nname = "netd"\nversion = "0.1.0"\n')
+            self.assertEqual(ov.package_name(f"path+file://{d}#0.1.0", d), "netd")
+
+    def test_only_test_artifacts_of_the_plan_crates_count(self):
+        msgs = [
+            {"reason": "compiler-artifact", "package_id": "path+file:///r/core#bifrost-core@0.1.0",
+             "manifest_path": "/r/core/Cargo.toml", "profile": {"test": True}, "executable": "/t/core-1"},
+            {"reason": "compiler-artifact", "package_id": "path+file:///r/core#bifrost-core@0.1.0",
+             "manifest_path": "/r/core/Cargo.toml", "profile": {"test": False}, "executable": "/t/corebin"},
+            {"reason": "compiler-artifact", "package_id": "path+file:///r/ui#bifrost-ui@0.1.0",
+             "manifest_path": "/r/ui/Cargo.toml", "profile": {"test": True}, "executable": "/t/ui-1"},
+            {"reason": "build-finished", "success": True},
+        ]
+        out = "\n".join(json.dumps(m) for m in msgs) + "\nnot json\n"
+        self.assertEqual(ov.executables_from_messages(out, {"bifrost-core"}), {"bifrost-core": [("/t/core-1", "/r/core")]})
+
+    def _fake(self, d, body):
+        exe = Path(d, "fake-test")
+        log = Path(d, "runs")
+        exe.write_text(f"#!/bin/sh\necho run >> {log}\n{body}\n")
+        exe.chmod(0o755)
+        return str(exe), log
+
+    def test_an_unchanged_binary_is_not_run_again_for_passing_filters(self):
+        with tempfile.TemporaryDirectory() as d:
+            exe, log = self._fake(d, 'echo "test a::tests::one ... ok"')
+            cache = {}
+            first = ov.run_executables([(exe, d)], ["a::tests"], cache)
+            self.assertEqual(first["a::tests"][0], True)
+            again = ov.run_executables([(exe, d)], ["a::tests"], cache)
+            self.assertEqual(again, first)
+            self.assertEqual(log.read_text().count("run"), 1, "the cached pass is reused")
+
+    def test_a_failure_is_not_cached(self):
+        with tempfile.TemporaryDirectory() as d:
+            exe, log = self._fake(d, 'echo "test a::tests::one ... FAILED"; exit 101')
+            cache = {}
+            self.assertEqual(ov.run_executables([(exe, d)], ["a::tests"], cache)["a::tests"][0], False)
+            ov.run_executables([(exe, d)], ["a::tests"], cache)
+            self.assertEqual(log.read_text().count("run"), 2, "a failure runs again")
+
+
 if __name__ == "__main__":
     unittest.main()
