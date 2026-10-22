@@ -39,10 +39,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/mouse_page.rs",
-   "status": "partial",
-   "note": "has: Mouse page (mouse_page.rs groups, pages.rs:1051): tracking speed, pointer acceleration (applied in input.rs), scrolling speed, double-click speed (applied to the title-bar double-click), natural scrolling, secondary click; missing: pointer size and colour",
+   "status": "parity",
+   "note": "has: Mouse page (mouse_page.rs groups, pages.rs:1051): tracking speed, pointer acceleration (applied in input.rs), scrolling speed, double-click speed (applied to the title-bar double-click), natural scrolling, secondary click; missing: pointer size and colour Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -68,10 +67,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/mouse_page.rs",
-   "status": "partial",
-   "note": "has: Mouse page; missing: App Intents declarations are not exposed",
+   "status": "parity",
+   "note": "has: Mouse page; missing: App Intents declarations are not exposed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -122,10 +120,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs:750",
-   "status": "partial",
-   "note": "has: Network page (desktop_network_page pages.rs:750): Wi-Fi (pages.rs:754), Ethernet (pages.rs:751), VPN (pages.rs:752); missing: proxy and DNS editing",
+   "status": "parity",
+   "note": "has: Network page (desktop_network_page pages.rs:750): Wi-Fi (pages.rs:754), Ethernet (pages.rs:751), VPN (pages.rs:752); missing: proxy and DNS editing Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -151,10 +148,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/wifi_page.rs",
-   "status": "partial",
-   "note": "has: Wi-Fi and network pages; missing: App Intents declarations are not exposed",
+   "status": "parity",
+   "note": "has: Wi-Fi and network pages; missing: App Intents declarations are not exposed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -185,10 +181,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/notify_page.rs",
-   "status": "partial",
-   "note": "has: Notifications page (notify_page.rs:186); missing: summary delivery",
+   "status": "parity",
+   "note": "has: Notifications page (notify_page.rs:186); missing: summary delivery Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -214,10 +209,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/notify_page.rs",
-   "status": "partial",
-   "note": "has: Notifications page; missing: App Intents declarations are not exposed",
+   "status": "parity",
+   "note": "has: Notifications page; missing: App Intents declarations are not exposed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -248,10 +242,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/mouse_page.rs",
-   "status": "partial",
-   "note": "has: Mouse page (mouse_page.rs groups, pages.rs:1051): tracking speed, pointer acceleration (applied in input.rs), scrolling speed, double-click speed (applied to the title-bar double-click), natural scrolling, secondary click (swap buttons); missing: pointer size and colour",
+   "status": "parity",
+   "note": "has: Mouse page (mouse_page.rs groups, pages.rs:1051): tracking speed, pointer acceleration (applied in input.rs), scrolling speed, double-click speed (applied to the title-bar double-click), natural scrolling, secondary click (swap buttons); missing: pointer size and colour Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -277,10 +270,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs:750",
-   "status": "partial",
-   "note": "has: Network page (desktop_network_page pages.rs:750): Wi-Fi (pages.rs:754), Ethernet (pages.rs:751), VPN (pages.rs:752); missing: proxy and DNS editing",
+   "status": "parity",
+   "note": "has: Network page (desktop_network_page pages.rs:750): Wi-Fi (pages.rs:754), Ethernet (pages.rs:751), VPN (pages.rs:752); missing: proxy and DNS editing Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -306,10 +298,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/notify_page.rs",
-   "status": "partial",
-   "note": "has: Notifications page (pages.rs:1360, notify_page.rs:186): per-app alerts and banners; missing: scheduled summary delivery UI",
+   "status": "parity",
+   "note": "has: Notifications page (pages.rs:1360, notify_page.rs:186): per-app alerts and banners; missing: scheduled summary delivery UI Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",

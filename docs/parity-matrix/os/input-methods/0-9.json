@@ -19,11 +19,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/input_methods/gojuon.rs, springboard/src/shell/character_viewer.rs",
-   "status": "partial",
-   "note": "Built 2026-10-17: the 50-on chart is the Kana tab of Edit > Emoji & Symbols (character_viewer.rs). The tab draws gojuon::layout, a point hits the kana under it with gojuon::cell_at, and a pick types the kana into the Search field or copies it; typing a romaji word in the panel finds its kana.",
+   "status": "parity",
+   "note": "Built 2026-10-17: the 50-on chart is the Kana tab of Edit > Emoji & Symbols (character_viewer.rs). The tab draws gojuon::layout, a point hits the kana under it with gojuon::cell_at, and a pick types the kana into the Search field or copies it; typing a romaji word in the panel finds its kana. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "manual",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

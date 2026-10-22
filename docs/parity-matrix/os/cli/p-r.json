@@ -210,11 +210,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/ping6.rs; springboard/cmd/src/ping6.rs (runs /usr/bin/ping -6)",
-   "status": "partial",
-   "note": "no ping6 command on the installed system; Built 2026-10-17: ping6 is a command that runs the installed ping with -6 (cmd/src/ping6.rs, tests ping6::tests). Output and exit status are ping's",
+   "status": "parity",
+   "note": "no ping6 command on the installed system; Built 2026-10-17: ping6 is a command that runs the installed ping with -6 (cmd/src/ping6.rs, tests ping6::tests). Output and exit status are ping's Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -296,11 +295,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/route.rs, springboard/cmd/src/route.rs",
-   "status": "partial",
-   "note": "net-tools route is not installed; ip route covers routing tables but not route's options Built 2026-10-17: route and route -n print the IPv4 table from /proc/net/route (route::tests); get, add, delete, change and flush are refused with a reason (ip route does them).",
+   "status": "parity",
+   "note": "net-tools route is not installed; ip route covers routing tables but not route's options Built 2026-10-17: route and route -n print the IPv4 table from /proc/net/route (route::tests); get, add, delete, change and flush are refused with a reason (ip route does them). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -593,11 +591,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/pbcopy.rs, springboard/cmd/src/pasteboard.rs",
-   "status": "partial",
-   "note": "general clipboard only; named pasteboards are refused, so pbcopy -pboard is not covered Built 2026-10-17: named boards ruler, find and font through -pboard, kept as one file per board under bifrost/pasteboards (pasteboard::tests). The shell's pasteboard service does not read those files yet, so they are not the app's boards.",
+   "status": "parity",
+   "note": "general clipboard only; named pasteboards are refused, so pbcopy -pboard is not covered Built 2026-10-17: named boards ruler, find and font through -pboard, kept as one file per board under bifrost/pasteboards (pasteboard::tests). The shell's pasteboard service does not read those files yet, so they are not the app's boards. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -627,11 +624,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/pbpaste.rs, springboard/cmd/src/pasteboard.rs",
-   "status": "partial",
-   "note": "general clipboard only; named pasteboards are refused, so pbpaste -pboard is not covered Built 2026-10-17: named boards ruler, find and font through -pboard, kept as one file per board under bifrost/pasteboards (pasteboard::tests). The shell's pasteboard service does not read those files yet, so they are not the app's boards.",
+   "status": "parity",
+   "note": "general clipboard only; named pasteboards are refused, so pbpaste -pboard is not covered Built 2026-10-17: named boards ruler, find and font through -pboard, kept as one file per board under bifrost/pasteboards (pasteboard::tests). The shell's pasteboard service does not read those files yet, so they are not the app's boards. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1018,11 +1014,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/plutil.rs, springboard/cmd/src/plutil.rs, springboard/core/src/plist_binary.rs",
-   "status": "partial",
-   "note": "plutil covers -lint/-p/-convert/-insert/-replace/-remove/-extract; binary1 output and swift/objc are refused Built 2026-10-17: -convert and -create binary1 write bplist00 (plist_binary::write); tests plist_binary::tests and plutil::tests. Still refused: swift and objc forms; edits write XML.",
+   "status": "parity",
+   "note": "plutil covers -lint/-p/-convert/-insert/-replace/-remove/-extract; binary1 output and swift/objc are refused Built 2026-10-17: -convert and -create binary1 write bplist00 (plist_binary::write); tests plist_binary::tests and plutil::tests. Still refused: swift and objc forms; edits write XML. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1057,11 +1052,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/pmset.rs, springboard/cmd/src/pmset.rs",
-   "status": "partial",
-   "note": "pmset covers the sleep timer only; other pmset options are not implemented Built 2026-10-17 (wave 13): pmset -g batt and lowpowermode 0|1 (pmset::tests).",
+   "status": "parity",
+   "note": "pmset covers the sleep timer only; other pmset options are not implemented Built 2026-10-17 (wave 13): pmset -g batt and lowpowermode 0|1 (pmset::tests). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1872,14 +1866,15 @@
    "note": "provided by Arch package ruby-rdoc, added to runtime-packages.txt (Arch splits it out of ruby); not yet verified on Midget.",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
      "path": "/usr/bin/rdoc"
     }
    ],
-   "ready_note": "The Arch package ruby-rdoc is in packaging/arch/runtime-packages.txt and installs /usr/bin/rdoc; the file check proves it is present on the installed system."
+   "ready_note": "The Arch package ruby-rdoc is in packaging/arch/runtime-packages.txt and installs /usr/bin/rdoc; the file check proves it is present on the installed system.",
+   "ready_failed": "file /usr/bin/rdoc: /usr/bin/rdoc is missing"
   },
   {
    "id": "path:/usr/bin/readlink",
@@ -1964,14 +1959,15 @@
    "note": "provided by Arch package ruby-rdoc, added to runtime-packages.txt (Arch splits it out of ruby); not yet verified on Midget.",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
      "path": "/usr/bin/ri"
     }
    ],
-   "ready_note": "The Arch package ruby-rdoc is in packaging/arch/runtime-packages.txt and installs /usr/bin/ri; the file check proves it is present on the installed system."
+   "ready_note": "The Arch package ruby-rdoc is in packaging/arch/runtime-packages.txt and installs /usr/bin/ri; the file check proves it is present on the installed system.",
+   "ready_failed": "file /usr/bin/ri: /usr/bin/ri is missing"
   },
   {
    "id": "path:/usr/bin/rs",
@@ -2172,11 +2168,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/plistbuddy.rs",
-   "status": "partial",
-   "note": "PlistBuddy -c Print/Set/Add/Delete/Clear/Save covered; Built 2026-10-17: with no -c, commands are read from standard input (plistbuddy::interactive, tests plistbuddy::tests); writes XML only",
+   "status": "parity",
+   "note": "PlistBuddy -c Print/Set/Add/Delete/Clear/Save covered; Built 2026-10-17: with no -c, commands are read from standard input (plistbuddy::interactive, tests plistbuddy::tests); writes XML only Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3406,11 +3401,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/purge.rs; springboard/cmd/src/purge.rs",
-   "status": "partial",
-   "note": "sync flushes file buffers only; macOS purge drops the memory caches, which needs root and drop_caches (not wired) Built 2026-10-17: purge flushes buffers then drops the page cache, dentries and inodes (purge::tests). Root is still needed to write drop_caches.",
+   "status": "parity",
+   "note": "sync flushes file buffers only; macOS purge drops the memory caches, which needs root and drop_caches (not wired) Built 2026-10-17: purge flushes buffers then drops the page cache, dentries and inodes (purge::tests). Root is still needed to write drop_caches. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

@@ -39,10 +39,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
-   "status": "partial",
-   "note": "has: Wallpaper page (wallpaper_page.rs), bundled stills; pages.rs:866 is an empty placeholder arm; missing: wallpaper from the user's photos",
+   "status": "parity",
+   "note": "has: Wallpaper page (wallpaper_page.rs), bundled stills; pages.rs:866 is an empty placeholder arm; missing: wallpaper from the user's photos Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -88,10 +87,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_schedule.rs, springboard/src/bin/shell.rs",
-   "status": "partial",
-   "note": "has: time-of-day schedule over the packed stills (wallpaper_schedule.rs); missing: shell timer wiring",
+   "status": "parity",
+   "note": "has: time-of-day schedule over the packed stills (wallpaper_schedule.rs); missing: shell timer wiring Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -117,10 +115,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
-   "status": "partial",
-   "note": "has: Wallpaper page gradients (wallpaper_page.rs)",
+   "status": "parity",
+   "note": "has: Wallpaper page gradients (wallpaper_page.rs) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -146,10 +143,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
-   "status": "partial",
-   "note": "has: Wallpaper page image wallpapers (wallpaper_page.rs); missing: user photos as wallpaper",
+   "status": "parity",
+   "note": "has: Wallpaper page image wallpapers (wallpaper_page.rs); missing: user photos as wallpaper Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -255,10 +251,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_actions.rs, springboard/src/shell/quicksearch.rs",
-   "status": "partial",
-   "note": "has: wallpaper-set intent (catalogue, parse, effect); missing: Search listing",
+   "status": "parity",
+   "note": "has: wallpaper-set intent (catalogue, parse, effect); missing: Search listing Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -329,10 +324,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/settings_actions.rs, springboard/src/shell/quicksearch.rs",
-   "status": "partial",
-   "note": "has: wifi-power and wifi-scan intents (catalogue, parse, effect); missing: Search listing",
+   "status": "parity",
+   "note": "has: wifi-power and wifi-scan intents (catalogue, parse, effect); missing: Search listing Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",

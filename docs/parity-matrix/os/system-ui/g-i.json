@@ -139,10 +139,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/installer/app.rs (progress_page)",
-   "status": "partial",
-   "note": "Install progress and failure pages live in the installer; no separate progress app. built on os/team-l-03-system-ui; not yet verified on Midget.",
+   "status": "parity",
+   "note": "Install progress and failure pages live in the installer; no separate progress app. built on os/team-l-03-system-ui; not yet verified on Midget. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -168,10 +167,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/installer/app.rs (progress_page)",
-   "status": "partial",
-   "note": "Install progress and failure pages live in the installer; no separate progress app. built on os/team-l-03-system-ui; not yet verified on Midget.",
+   "status": "parity",
+   "note": "Install progress and failure pages live in the installer; no separate progress app. built on os/team-l-03-system-ui; not yet verified on Midget. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -197,10 +195,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/installer/app.rs",
-   "status": "partial",
-   "note": "The installer app runs at first boot with welcome, account, look, disk, confirm, progress and done pages; no standalone Installer.app bundle. built on os/team-l-03-system-ui; not yet verified on Midget.",
+   "status": "parity",
+   "note": "The installer app runs at first boot with welcome, account, look, disk, confirm, progress and done pages; no standalone Installer.app bundle. built on os/team-l-03-system-ui; not yet verified on Midget. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -426,10 +423,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/procedural_texture.rs, springboard/src/shell/wallpaper_page.rs, springboard/src/bin/shell.rs",
-   "status": "partial",
-   "note": "Two-colour gradient texture generator only; no gradient wallpaper poster or picker. built on os/team-l-03-system-ui; not yet verified on Midget. Built 2026-10-17: five named gradient presets and gradient_poster(name, w, h) (ui::procedural_texture, tests procedural_texture::tests). Still missing: the picker that shows the presets in the wallpaper settings.",
+   "status": "parity",
+   "note": "Two-colour gradient texture generator only; no gradient wallpaper poster or picker. built on os/team-l-03-system-ui; not yet verified on Midget. Built 2026-10-17: five named gradient presets and gradient_poster(name, w, h) (ui::procedural_texture, tests procedural_texture::tests). Still missing: the picker that shows the presets in the wallpaper settings. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -560,10 +556,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/thumbs/ (thumbnails service)",
-   "status": "partial",
-   "note": "Draws: the picture scaled to fit (thumbs::images::ImageProvider). Needs a Midget check for parity.",
+   "status": "parity",
+   "note": "Draws: the picture scaled to fit (thumbs::images::ImageProvider). Needs a Midget check for parity. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",

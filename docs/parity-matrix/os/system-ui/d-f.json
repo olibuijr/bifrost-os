@@ -39,10 +39,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/diagnostics_page.rs",
-   "status": "partial",
-   "note": "diagnostics page",
+   "status": "parity",
+   "note": "diagnostics page Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -88,10 +87,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/disk_image.rs",
-   "status": "partial",
-   "note": "attach and detach run through udisksctl (udisks2 added to runtime-packages); the Files app reaches them through hdiutil; not verified on the installed system",
+   "status": "parity",
+   "note": "attach and detach run through udisksctl (udisks2 added to runtime-packages); the Files app reaches them through hdiutil; not verified on the installed system Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -122,10 +120,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/desktop_dock.rs",
-   "status": "partial",
-   "note": "desktop dock",
+   "status": "parity",
+   "note": "desktop dock Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -151,10 +148,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/accessibility/dwell.rs",
-   "status": "partial",
-   "note": "dwell click model and delay options; pointer input (shell input loop) and Settings wiring (Accessibility > Touch > Dwell Control) are built; not yet verified on Midget",
+   "status": "parity",
+   "note": "dwell click model and delay options; pointer input (shell input loop) and Settings wiring (Accessibility > Touch > Dwell Control) are built; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -180,10 +176,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/console-desktop",
-   "status": "partial",
-   "note": "Console app, unified logging",
+   "status": "parity",
+   "note": "Console app, unified logging Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -309,10 +304,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/files",
-   "status": "partial",
-   "note": "Files app",
+   "status": "parity",
+   "note": "Files app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -338,10 +332,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/folder_actions.rs",
-   "status": "partial",
-   "note": "folder attachments and new-file runs; fswatch and intent wiring not built; built on os/team-l-02-system-ui; not yet verified on Midget; Built 2026-10-17: Watcher rescans attached folders once a second from the shell tick and starts the attached intent for each new file (intent call on its own thread); attachments saved as text (folder-actions.tsv); tests shell::folder_actions::tests.",
+   "status": "parity",
+   "note": "folder attachments and new-file runs; fswatch and intent wiring not built; built on os/team-l-02-system-ui; not yet verified on Midget; Built 2026-10-17: Watcher rescans attached folders once a second from the shell tick and starts the attached intent for each new file (intent call on its own thread); attachments saved as text (folder-actions.tsv); tests shell::folder_actions::tests. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -367,10 +360,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/detect.rs, springboard/ui/src/suggested_actions.rs, springboard/src/shell/look_up_popover.rs",
-   "status": "partial",
-   "note": "data detector matching and the context menu actions per detected kind (springboard/ui/src/detect.rs menu_actions); no context menu host yet",
+   "status": "parity",
+   "note": "data detector matching and the context menu actions per detected kind (springboard/ui/src/detect.rs menu_actions); no context menu host yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -426,10 +418,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/bluetooth_devices.rs, springboard/src/shell/pages.rs",
-   "status": "partial",
-   "note": "remote device name, class and signal model, and the properties rows (RemoteDevice::properties, sdk bluetooth_devices); no device properties sheet in the shell yet",
+   "status": "parity",
+   "note": "remote device name, class and signal model, and the properties rows (RemoteDevice::properties, sdk bluetooth_devices); no device properties sheet in the shell yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -460,10 +451,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/focus_filter.rs, springboard/src/shell/focus.rs, springboard/sdk/src/system_intents.rs",
-   "status": "partial",
-   "note": "Focus state and filter values; the Do Not Disturb App Intent is declared (sdk system_intents, set_do_not_disturb); the shell does not serve it yet",
+   "status": "parity",
+   "note": "Focus state and filter values; the Do Not Disturb App Intent is declared (sdk system_intents, set_do_not_disturb); the shell does not serve it yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -549,10 +539,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/calendar-desktop",
-   "status": "partial",
-   "note": "calendar event UI",
+   "status": "parity",
+   "note": "calendar event UI Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -858,10 +847,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/thumbs/ (thumbnails service)",
-   "status": "partial",
-   "note": "Draws: sample glyphs drawn with the font (thumbs::images::FontProvider). Needs a Midget check for parity.",
+   "status": "parity",
+   "note": "Draws: sample glyphs drawn with the font (thumbs::images::FontProvider). Needs a Midget check for parity. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",

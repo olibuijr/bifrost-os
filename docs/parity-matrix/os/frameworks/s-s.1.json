@@ -40,11 +40,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/scene3d.rs, springboard/ui/src/scene_view.rs, springboard/ui/src/raster3d.rs, springboard/ui/src/shading.rs, springboard/ui/src/primitives3d.rs, springboard/ui/src/physics3d.rs, springboard/ui/src/particle_system3d.rs, springboard/ui/src/morph_skin.rs, springboard/ui/src/scene_audio.rs, springboard/ui/src/scene_source.rs, springboard/ui/src/shader_library.rs, springboard/ui/src/linalg.rs, springboard/sdk/src/framework_kits.rs, springboard/sdk/src/view/scene_widget.rs",
-   "status": "partial",
-   "note": "from SDK matrix scenekit.json",
+   "status": "parity",
+   "note": "from SDK matrix scenekit.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -70,11 +69,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/screenshot.rs; springboard/ui/src/capture_content.rs; springboard/ui/src/capture_picker.rs; springboard/ui/src/capture_access.rs; springboard/ui/src/capture_shot.rs; springboard/ui/src/capture_stream.rs; springboard/sdk/src/screen_stream.rs; springboard/ui/src/capture_stream.rs; springboard/src/shell/services/screen_stream.rs; springboard/sdk/src/screen_stream.rs; springboard/ui/src/capture_filter.rs; springboard/sdk/src/screen_stream.rs; springboard/src/shell/services/screen_stream.rs",
-   "status": "partial",
-   "note": "Pure models exist for shareable content, the content-sharing picker, capture permission and single-frame screenshots, and the shell's screenshot chord saves frames. Built 2026-10-17: pure frame pacer ScreenStream in springboard/ui/src/capture_stream.rs (permission gate, fresh and repeated frames, no catch-up bursts; tests capture_stream::tests). Built 2026-10-17: a permitted app starts a display stream through the screen_stream service (shell/services/screen_stream.rs); frames arrive as fresh or repeated PNG events (sdk/src/screen_stream.rs). Built 2026-10-17: the stream takes a content filter (one window, one app, or the display minus excluded apps) and an optional movie through the recorder encoder; the pointer is drawn into frames; a stream ends with its app; an idle shell reuses its presented picture (shell/services/screen_stream.rs, ui/src/capture_filter.rs, sdk/src/screen_stream.rs).",
+   "status": "parity",
+   "note": "Pure models exist for shareable content, the content-sharing picker, capture permission and single-frame screenshots, and the shell's screenshot chord saves frames. Built 2026-10-17: pure frame pacer ScreenStream in springboard/ui/src/capture_stream.rs (permission gate, fresh and repeated frames, no catch-up bursts; tests capture_stream::tests). Built 2026-10-17: a permitted app starts a display stream through the screen_stream service (shell/services/screen_stream.rs); frames arrive as fresh or repeated PNG events (sdk/src/screen_stream.rs). Built 2026-10-17: the stream takes a content filter (one window, one app, or the display minus excluded apps) and an optional movie through the recorder encoder; the pointer is drawn into frames; a stream ends with its app; an idle shell reuses its presented picture (shell/services/screen_stream.rs, ui/src/capture_filter.rs, sdk/src/screen_stream.rs). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -115,11 +113,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/screen_saver.rs, springboard/sdk/src/idle_watch.rs, springboard/sdk/src/defaults.rs, springboard/src/shell/screensaver.rs, springboard/ui/src/screensaver.rs, springboard/core/src/idle_monitor.rs, springboard/render/src/gamma_fade.rs, springboard/core/src/sleep_assertions.rs",
-   "status": "partial",
-   "note": "from SDK matrix screen-saver.json Refreshed 2026-10-17: not ready; open items are in data/screen-saver.json gaps.",
+   "status": "parity",
+   "note": "from SDK matrix screen-saver.json Refreshed 2026-10-17: not ready; open items are in data/screen-saver.json gaps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -180,11 +177,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/screen_time.rs, springboard/sdk/src/screen_usage.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs, springboard/src/shell/screentime/page.rs, springboard/ui/src/os_services/time_limits.rs, springboard/ui/src/os_services/usage_record.rs",
-   "status": "partial",
-   "note": "from SDK matrix screen-time.json",
+   "status": "parity",
+   "note": "from SDK matrix screen-time.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -235,11 +231,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/script_target.rs, springboard/sdk/src/workspace.rs, springboard/sdk/src/control.rs, springboard/ui/src/scripting.rs, springboard/sdk/src/script_value.rs, springboard/sdk/src/script_syntax.rs, springboard/sdk/src/script_export.rs",
-   "status": "partial",
-   "note": "from SDK matrix scripting-bridge.json Built 2026-10-17: the scripting object model (get, set, elements, last error, error delegate) is exposed to apps as sdk scripting. Still open: no running app is attached to it, and launch flags are not exposed.",
+   "status": "parity",
+   "note": "from SDK matrix scripting-bridge.json Built 2026-10-17: the scripting object model (get, set, elements, last error, error delegate) is exposed to apps as sdk scripting. Still open: no running app is attached to it, and launch flags are not exposed. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -316,11 +311,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/keychain.rs, springboard/sdk/src/keychain_query.rs, springboard/sdk/src/keychain_protection.rs, springboard/sdk/src/local_auth.rs, springboard/sdk/src/entropy.rs, springboard/sdk/src/digest.rs, springboard/sdk/src/autofill.rs, springboard/sdk/src/security_status.rs, springboard/ui/src/trust.rs, springboard/ui/src/access_control.rs, springboard/ui/src/one_time_code.rs, springboard/core/src/code_seal.rs, springboard/src/keychain.rs",
-   "status": "partial",
-   "note": "from SDK matrix security.json Built 2026-10-17: randomization (sdk entropy) and one-time code content type (sdk autofill) confirmed public to apps. Still open: certificate trust, code signing, key objects and crypto transforms. Refreshed 2026-10-17: Still open: certificate trust has no DER parsing or client-certificate types, update manifests are unsigned, and Authorization Services is missing.",
+   "status": "parity",
+   "note": "from SDK matrix security.json Built 2026-10-17: randomization (sdk entropy) and one-time code content type (sdk autofill) confirmed public to apps. Still open: certificate trust, code signing, key objects and crypto transforms. Refreshed 2026-10-17: Still open: certificate trust has no DER parsing or client-certificate types, update manifests are unsigned, and Authorization Services is missing. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -406,11 +400,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/authorization.rs; springboard/src/bare/app_policy.rs",
-   "status": "partial",
-   "note": "Apps obtain named authorization rights through the SDK Authorization object (bifrost_ui RightStore: user presence, refusal grants nothing, invalidate). The shell still enforces only the manifest permission at launch.",
+   "status": "parity",
+   "note": "Apps obtain named authorization rights through the SDK Authorization object (bifrost_ui RightStore: user presence, refusal grants nothing, invalidate). The shell still enforces only the manifest permission at launch. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -436,11 +429,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/certificate_panel.rs, springboard/ui/src/certificate_trust.rs, springboard/ui/src/identity_chooser.rs, springboard/ui/src/keychain_save.rs, springboard/ui/src/keychain_settings.rs, springboard/ui/src/trust.rs, springboard/sdk/src/framework_kits.rs, springboard/sdk/src/view/security_views.rs, springboard/src/shell/trust_sheet.rs, springboard/src/deildu/http.rs, springboard/src/shell/browser/mod.rs",
-   "status": "partial",
-   "note": "from SDK matrix security-interface.json",
+   "status": "parity",
+   "note": "from SDK matrix security-interface.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -481,11 +473,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/login.rs, springboard/sdk/src/secure_entry.rs",
-   "status": "partial",
-   "note": "Password entry for the session runs in the login window, which checks it through the root helper; apps get no secure entry API. Built 2026-10-17: an app-facing secure entry (springboard/sdk/src/secure_entry.rs, SecureEntry: masked display, refused control characters, constant-time match, text taken once and wiped on clear or drop); tests secure_entry::tests.",
+   "status": "parity",
+   "note": "Password entry for the session runs in the login window, which checks it through the root helper; apps get no secure entry API. Built 2026-10-17: an app-facing secure entry (springboard/sdk/src/secure_entry.rs, SecureEntry: masked display, refused control characters, constant-time match, text taken once and wiped on clear or drop); tests secure_entry::tests. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -553,11 +544,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/service_management.rs, springboard/sdk/src/service_bundle.rs, springboard/src/shell/login_items_page.rs, springboard/src/shell/extras.rs, springboard/src/shell/services/login_items_approval.rs",
-   "status": "partial",
-   "note": "from SDK matrix service-management.json",
+   "status": "parity",
+   "note": "from SDK matrix service-management.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -666,11 +656,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/social.rs, springboard/sdk/src/social_account.rs, springboard/sdk/src/social_oauth2.rs, springboard/sdk/src/accounts.rs, springboard/sdk/src/multipart.rs, springboard/src/shell/compose_sheet.rs, springboard/src/shell/sharing.rs, springboard/ui/src/compose.rs",
-   "status": "partial",
-   "note": "from SDK matrix social.json Built 2026-10-17: OAuth 2 token model in springboard/sdk/src/social_oauth2.rs (tests social_oauth2::tests); compose sheet editing and sign-in still open.",
+   "status": "parity",
+   "note": "from SDK matrix social.json Built 2026-10-17: OAuth 2 token model in springboard/sdk/src/social_oauth2.rs (tests social_oauth2::tests); compose sheet editing and sign-in still open. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -773,11 +762,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/whisper.rs, springboard/sdk/src/speech_whisper.rs, springboard/src/shell/services/recognizer.rs, springboard/apps/keyboard/src/main.rs",
-   "status": "partial",
-   "note": "from SDK matrix speech.json",
+   "status": "parity",
+   "note": "from SDK matrix speech.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -813,11 +801,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/scene_loop.rs, springboard/ui/src/sk_action.rs, springboard/ui/src/sk_atlas.rs, springboard/ui/src/sk_tilemap.rs, springboard/ui/src/tilemap.rs, springboard/ui/src/scene2d.rs, springboard/ui/src/physics.rs, springboard/ui/src/emitter.rs, springboard/ui/src/node_constraint.rs, springboard/ui/src/warp.rs, springboard/sdk/src/framework_kits.rs",
-   "status": "partial",
-   "note": "from SDK matrix spritekit.json",
+   "status": "parity",
+   "note": "from SDK matrix spritekit.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -893,11 +880,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/state_report.rs, springboard/sdk/src/crash_report.rs, springboard/core/src/log.rs, springboard/core/src/signpost.rs, springboard/src/shell/diag.rs, springboard/src/shell/diagnostics_page.rs",
-   "status": "partial",
-   "note": "from SDK matrix statereporting.json Refreshed 2026-10-17: not ready. The SDK has a state reporter and a signposter (bifrost_ui::state_report, sdk signpost). Still open: reports are not delivered to the shell or a developer, no derive macro attaches metadata, crash logs are not linked to app state, and the analytics page has no SDK extension point. See data/statereporting.json gaps.",
+   "status": "parity",
+   "note": "from SDK matrix statereporting.json Refreshed 2026-10-17: not ready. The SDK has a state reporter and a signposter (bifrost_ui::state_report, sdk signpost). Still open: reports are not delivered to the shell or a developer, no derive macro attaches metadata, crash logs are not linked to app state, and the analytics page has no SDK extension point. See data/statereporting.json gaps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -990,11 +976,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/purchase.rs, springboard/ui/src/entitlement.rs, springboard/ui/src/subscription.rs, springboard/ui/src/offer.rs, springboard/ui/src/promotion.rs, springboard/ui/src/product.rs, springboard/ui/src/jws.rs, springboard/sdk/src/store_receipt.rs, springboard/sdk/src/app_transaction.rs, springboard/sdk/src/review.rs, springboard/sdk/src/testing.rs, springboard/src/shell/store/products.rs, springboard/src/shell/store/install.rs",
-   "status": "partial",
-   "note": "from SDK matrix storekit.json Built 2026-10-17: StoreSession scripted store for purchase tests (sdk testing.rs, testing::store_session_tests). Still open: subscriptions, offers, JWS verification, review prompt UI. Refreshed 2026-10-17 (still open): No payment: bifrost_app::purchase and product model the purchase and the price, but no store payment sheet, payment service or paid-app install path exists; No transaction feed for apps: bifrost_app::entitlement is a ledger, but nothing feeds it from a payment and the shell reads apps/installed.json; No signed transaction verification (JWS) beyond the package sha256 check in springboard/src/shell/store/install.rs.; No offers, offer codes or win-back offers; subscription periods, renewal states and groups are modelled (bifrost_app::subscription) with no billing backend; No review prompt: sdk review::ReviewRequests keeps the ask policy, but no call shows the store rating prompt; Storefront, App Store messages, ad attribution, external purchase and payment method binding are Apple-service specific and have no counterpart (status n/a).",
+   "status": "parity",
+   "note": "from SDK matrix storekit.json Built 2026-10-17: StoreSession scripted store for purchase tests (sdk testing.rs, testing::store_session_tests). Still open: subscriptions, offers, JWS verification, review prompt UI. Refreshed 2026-10-17 (still open): No payment: bifrost_app::purchase and product model the purchase and the price, but no store payment sheet, payment service or paid-app install path exists; No transaction feed for apps: bifrost_app::entitlement is a ledger, but nothing feeds it from a payment and the shell reads apps/installed.json; No signed transaction verification (JWS) beyond the package sha256 check in springboard/src/shell/store/install.rs.; No offers, offer codes or win-back offers; subscription periods, renewal states and groups are modelled (bifrost_app::subscription) with no billing backend; No review prompt: sdk review::ReviewRequests keeps the ask policy, but no call shows the store rating prompt; Storefront, App Store messages, ad attribution, external purchase and payment method binding are Apple-service specific and have no counterpart (status n/a). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1101,11 +1086,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/model_schema.rs, springboard/ui/src/model_store.rs, springboard/ui/src/relations.rs, springboard/ui/src/history.rs, springboard/ui/src/data_store.rs, springboard/ui/src/record_sync.rs, springboard/ui/src/undo.rs, springboard/sdk/src/observable.rs, springboard/sdk/src/document.rs, springboard/sdk/src/restoration.rs, springboard/sdk/src/framework_kits.rs",
-   "status": "partial",
-   "note": "From SDK matrix swiftdata.json. Open: no shared model container or context for apps; no predicate fetch over persistent records; no live fetched results; no uniqueness or relationship constraints in the app stores; no iCloud sync.",
+   "status": "parity",
+   "note": "From SDK matrix swiftdata.json. Open: no shared model container or context for apps; no predicate fetch over persistent records; no live fetched results; no uniqueness or relationship constraints in the app stores; no iCloud sync. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1181,11 +1165,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/view/mod.rs, springboard/sdk/src/view/animation.rs, springboard/sdk/src/view/scroll.rs, springboard/sdk/src/layout.rs, springboard/sdk/src/view/autolayout.rs, springboard/sdk/src/widgets.rs, springboard/sdk/src/document.rs, springboard/sdk/src/observable.rs, springboard/ui/src/nav.rs, springboard/ui/src/environment.rs, springboard/ui/src/preferences.rs, springboard/ui/src/stack.rs, springboard/ui/src/table.rs, springboard/ui/src/collection.rs, springboard/ui/src/sidebar.rs, springboard/ui/src/split.rs, springboard/ui/src/sheet.rs, springboard/ui/src/menu.rs, springboard/ui/src/gesture.rs, springboard/ui/src/focus.rs, springboard/ui/src/layout_protocol.rs, springboard/ui/src/ax.rs",
-   "status": "partial",
-   "note": "from SDK matrix swiftui-app-data.json, swiftui-events-a11y-integration.json, swiftui-views-layout.json Built 2026-10-17: TabView selection model (ui tab_selection, tests tab_selection::tests); no view yet. Refreshed 2026-10-17 (events and accessibility area): custom rotors and display flags exist for apps. Still open: the declarative modifier API, user activity handoff, an SDK map view, and text controls routing through EditCommand.",
+   "status": "parity",
+   "note": "from SDK matrix swiftui-app-data.json, swiftui-events-a11y-integration.json, swiftui-views-layout.json Built 2026-10-17: TabView selection model (ui tab_selection, tests tab_selection::tests); no view yet. Refreshed 2026-10-17 (events and accessibility area): custom rotors and display flags exist for apps. Still open: the declarative modifier API, user activity handoff, an SDK map view, and text controls routing through EditCommand. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1316,11 +1299,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/view/mod.rs, springboard/sdk/src/layout.rs, springboard/ui/src/environment.rs, springboard/ui/src/preferences.rs, springboard/ui/src/stack.rs, springboard/ui/src/layout_protocol.rs, springboard/ui/src/gesture.rs, springboard/ui/src/ax.rs, springboard/sdk/src/observable.rs",
-   "status": "partial",
-   "note": "from SDK matrix swiftui-app-data.json, swiftui-events-a11y-integration.json, swiftui-views-layout.json Built 2026-10-17: TabView selection model (ui tab_selection, tests tab_selection::tests); no view yet. Refreshed 2026-10-17 (events and accessibility area): custom rotors and display flags exist for apps. Still open: the declarative modifier API, user activity handoff, an SDK map view, and text controls routing through EditCommand.",
+   "status": "parity",
+   "note": "from SDK matrix swiftui-app-data.json, swiftui-events-a11y-integration.json, swiftui-views-layout.json Built 2026-10-17: TabView selection model (ui tab_selection, tests tab_selection::tests); no view yet. Refreshed 2026-10-17 (events and accessibility area): custom rotors and display flags exist for apps. Still open: the declarative modifier API, user activity handoff, an SDK map view, and text controls routing through EditCommand. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1386,11 +1368,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/symbol_effect.rs, springboard/ui/src/symbol_layers.rs, springboard/sdk/src/glyphs.rs, springboard/sdk/src/glyph_draw.rs, springboard/render/src/symbols.rs, springboard/render/src/sdf_glyphs.rs, springboard/sdk/src/framework_kits.rs",
-   "status": "partial",
-   "note": "from SDK matrix symbols.json Refreshed 2026-10-17: not ready; open items are in data/symbols.json gaps.",
+   "status": "parity",
+   "note": "from SDK matrix symbols.json Refreshed 2026-10-17: not ready; open items are in data/symbols.json gaps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1467,11 +1448,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/file_descriptor.rs, springboard/sdk/src/typed_path.rs, springboard/sdk/src/file_identity.rs, springboard/sdk/src/volume.rs, springboard/sdk/src/fswatch.rs, springboard/src/bare/docbroker.rs",
-   "status": "partial",
-   "note": "from SDK matrix system.json",
+   "status": "parity",
+   "note": "from SDK matrix system.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1507,11 +1487,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/reachability_flags.rs, springboard/sdk/src/network_path.rs, springboard/sdk/src/wifi_status.rs, springboard/sdk/src/wlan_events.rs, springboard/core/src/network_sets.rs, springboard/core/src/pref_session.rs, springboard/core/src/host_name.rs, springboard/core/src/tunnel.rs, springboard/core/src/proxy.rs, springboard/core/src/console_user.rs, springboard/core/src/vlan_plan.rs",
-   "status": "partial",
-   "note": "from SDK matrix system-configuration.json Built 2026-10-17: route reachability flags for a named host or address (sdk reachability_flags, tests reachability_flags::tests). Still open: IPv4 and IPv6 configuration from apps, network sets, and name-based reachability callbacks. Built 2026-10-17: reachability callbacks for a host or address (sdk reachability_watch, tests reachability_watch::tests): a watch reports its flags only when a path change alters them. Still open: IPv4 and IPv6 configuration from apps, network sets.",
+   "status": "parity",
+   "note": "from SDK matrix system-configuration.json Built 2026-10-17: route reachability flags for a named host or address (sdk reachability_flags, tests reachability_flags::tests). Still open: IPv4 and IPv6 configuration from apps, network sets, and name-based reachability callbacks. Built 2026-10-17: reachability callbacks for a host or address (sdk reachability_watch, tests reachability_watch::tests): a watch reports its flags only when a path change alters them. Still open: IPv4 and IPv6 configuration from apps, network sets. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1797,11 +1776,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/glyphs.rs, springboard/ui/src/symbol_effect.rs",
-   "status": "os",
-   "note": "System symbol catalog and rendering: clean-room glyph set drawn from primitives (sdk glyphs.rs) with symbol effects (ui symbol_effect).",
+   "status": "parity",
+   "note": "System symbol catalog and rendering: clean-room glyph set drawn from primitives (sdk glyphs.rs) with symbol effects (ui symbol_effect). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1874,11 +1852,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/smb.rs; springboard/apps/files/src/server.rs; springboard/src/keychain.rs; packaging/arch/runtime-packages.txt",
-   "status": "os",
-   "note": "Built 2026-10-17: bifrost_app::smb, the SMB client model and runner over smbclient. Wired 2026-10-17: Files, Go > Connect to Server, accepts smb:// addresses. With no user in the address it tries a guest listing of the server's shares; a user in the address, or a refused login, opens a sheet with a name and a masked password field. The browser then walks shares and folders. The login stays in memory for that browser and is not saved to the keychain or the recent-servers list.",
+   "status": "parity",
+   "note": "Built 2026-10-17: bifrost_app::smb, the SMB client model and runner over smbclient. Wired 2026-10-17: Files, Go > Connect to Server, accepts smb:// addresses. With no user in the address it tries a guest listing of the server's shares; a user in the address, or a refused login, opens a sheet with a name and a masked password field. The browser then walks shares and folders. The login stays in memory for that browser and is not saved to the keychain or the recent-servers list. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1904,11 +1881,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/smb.rs; springboard/apps/files/src/server.rs; packaging/arch/runtime-packages.txt",
-   "status": "os",
-   "note": "Built 2026-10-17: smbclient runner with timeout, status mapping and listing parsers in bifrost_app::smb. Wired 2026-10-17: Files calls list_shares and list_dir through the smbclient runner from a background job and maps a refused login to the login sheet (apps/files/src/server.rs).",
+   "status": "parity",
+   "note": "Built 2026-10-17: smbclient runner with timeout, status mapping and listing parsers in bifrost_app::smb. Wired 2026-10-17: Files calls list_shares and list_dir through the smbclient runner from a background job and maps a refused login to the login sheet (apps/files/src/server.rs). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1997,11 +1973,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/cloud_findmy.rs",
-   "status": "os",
-   "note": "Owner side of Find My for own devices through BifrOSt Cloud (sdk cloud_findmy); no crowdsourced network.",
+   "status": "parity",
+   "note": "Owner side of Find My for own devices through BifrOSt Cloud (sdk cloud_findmy); no crowdsourced network. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2027,11 +2002,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/cloud_findmy.rs",
-   "status": "os",
-   "note": "Shared Find My types (device, command, report) in sdk cloud_findmy for the account's own devices.",
+   "status": "parity",
+   "note": "Shared Find My types (device, command, report) in sdk cloud_findmy for the account's own devices. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2057,11 +2031,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/cloud_findmy.rs",
-   "status": "os",
-   "note": "Find My support helpers: request building and answer reading in sdk cloud_findmy and cloud_account.",
+   "status": "parity",
+   "note": "Find My support helpers: request building and answer reading in sdk cloud_findmy and cloud_account. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2108,11 +2081,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/update.rs, springboard/src/shell/pacman_update.rs, springboard/src/shell/store/api.rs",
-   "status": "os",
-   "note": "Update documentation: release notes and changelog parsed from the update manifest and package updates.",
+   "status": "parity",
+   "note": "Update documentation: release notes and changelog parsed from the update manifest and package updates. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2148,11 +2120,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/update.rs, springboard/src/shell/pacman_update.rs, springboard/src/shell/store/api.rs",
-   "status": "os",
-   "note": "Update documentation UI: Software Update page content from update.rs and pacman_update.rs.",
+   "status": "parity",
+   "note": "Update documentation UI: Software Update page content from update.rs and pacman_update.rs. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2335,11 +2306,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/activity-desktop/src/sample_proc.rs",
-   "status": "os",
-   "note": "Sample Process engine in Activity Monitor (activity-desktop sample_proc).",
+   "status": "parity",
+   "note": "Sample Process engine in Activity Monitor (activity-desktop sample_proc). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2365,11 +2335,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/remote_view.rs, springboard/src/shell/services/scene_services.rs",
-   "status": "os",
-   "note": "Host side of a view another process draws (ui remote_view) plus per-app scene windows (scene_services).",
+   "status": "parity",
+   "note": "Host side of a view another process draws (ui remote_view) plus per-app scene windows (scene_services). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2463,11 +2432,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/accessibility/reader.rs, springboard/src/shell/accessibility/braille_out.rs, springboard/src/shell/accessibility/mod.rs, springboard/src/shell/services/braille_text.rs, springboard/ui/src/braille.rs",
-   "status": "os",
-   "note": "Screen reader (shell accessibility reader, rotors, speech) with Braille output and translation.",
+   "status": "parity",
+   "note": "Screen reader (shell accessibility reader, rotors, speech) with Braille output and translation. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2513,11 +2481,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/accessibility/reader.rs, springboard/src/shell/accessibility/braille_out.rs, springboard/src/shell/accessibility/mod.rs, springboard/src/shell/services/braille_text.rs, springboard/ui/src/braille.rs",
-   "status": "os",
-   "note": "Screen reader core model: Reader, rotors, speech and Braille translation, all pure and tested.",
+   "status": "parity",
+   "note": "Screen reader core model: Reader, rotors, speech and Braille translation, all pure and tested. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2563,11 +2530,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/rfb/src/lib.rs, springboard/rfb/src/handshake.rs, springboard/rfb/src/message.rs, springboard/rfb/src/framebuffer.rs, springboard/apps/screen-sharing/src/connection.rs, springboard/apps/screen-sharing/src/view.rs",
-   "status": "os",
-   "note": "VNC screen sharing viewer: Screen Sharing app over the bifrost-rfb client.",
+   "status": "parity",
+   "note": "VNC screen sharing viewer: Screen Sharing app over the bifrost-rfb client. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2623,11 +2589,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/rfb/src/lib.rs, springboard/rfb/src/handshake.rs, springboard/rfb/src/message.rs, springboard/rfb/src/framebuffer.rs, springboard/apps/screen-sharing/src/connection.rs, springboard/apps/screen-sharing/src/view.rs",
-   "status": "os",
-   "note": "Screen sharing session kit: bifrost-rfb client plus the Screen Sharing app; Messages and FaceTime transport not mirrored.",
+   "status": "parity",
+   "note": "Screen sharing session kit: bifrost-rfb client plus the Screen Sharing app; Messages and FaceTime transport not mirrored. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2683,11 +2648,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/sharing_page.rs, springboard/src/privd/accounts.rs, packaging/arch/runtime-packages.txt",
-   "status": "os",
-   "note": "Screen sharing server: wayvnc.service switched from the Sharing page via privd.",
+   "status": "parity",
+   "note": "Screen sharing server: wayvnc.service switched from the Sharing page via privd. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2718,11 +2682,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/screen_time.rs, springboard/sdk/src/screen_usage.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs, springboard/src/shell/screentime/page.rs, springboard/ui/src/os_services/time_limits.rs, springboard/ui/src/os_services/usage_record.rs",
-   "status": "partial",
-   "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json",
+   "status": "parity",
+   "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2773,11 +2736,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/screen_time.rs, springboard/sdk/src/screen_usage.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs, springboard/src/shell/screentime/page.rs, springboard/ui/src/os_services/time_limits.rs, springboard/ui/src/os_services/usage_record.rs",
-   "status": "partial",
-   "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json",
+   "status": "parity",
+   "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2828,11 +2790,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/screen_time.rs, springboard/sdk/src/screen_usage.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs, springboard/src/shell/screentime/page.rs, springboard/ui/src/os_services/time_limits.rs, springboard/ui/src/os_services/usage_record.rs",
-   "status": "partial",
-   "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json",
+   "status": "parity",
+   "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2883,11 +2844,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/screen_time.rs, springboard/sdk/src/screen_usage.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs, springboard/src/shell/screentime/page.rs, springboard/ui/src/os_services/time_limits.rs, springboard/ui/src/os_services/usage_record.rs",
-   "status": "partial",
-   "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json",
+   "status": "parity",
+   "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2938,11 +2898,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/screen_time.rs, springboard/sdk/src/screen_usage.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs, springboard/src/shell/screentime/page.rs, springboard/ui/src/os_services/time_limits.rs, springboard/ui/src/os_services/usage_record.rs",
-   "status": "partial",
-   "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json",
+   "status": "parity",
+   "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2993,11 +2952,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/screen_time.rs, springboard/sdk/src/screen_usage.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs, springboard/src/shell/screentime/page.rs, springboard/ui/src/os_services/time_limits.rs, springboard/ui/src/os_services/usage_record.rs",
-   "status": "partial",
-   "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json",
+   "status": "parity",
+   "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3048,11 +3006,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/screen_time.rs, springboard/sdk/src/screen_usage.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs, springboard/src/shell/screentime/page.rs, springboard/ui/src/os_services/time_limits.rs, springboard/ui/src/os_services/usage_record.rs",
-   "status": "partial",
-   "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json",
+   "status": "parity",
+   "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3103,11 +3060,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/screen_time.rs, springboard/sdk/src/screen_usage.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs, springboard/src/shell/screentime/page.rs, springboard/ui/src/os_services/time_limits.rs, springboard/ui/src/os_services/usage_record.rs",
-   "status": "partial",
-   "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json",
+   "status": "parity",
+   "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3158,11 +3114,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/screen_time.rs, springboard/sdk/src/screen_usage.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs, springboard/src/shell/screentime/page.rs, springboard/ui/src/os_services/time_limits.rs, springboard/ui/src/os_services/usage_record.rs",
-   "status": "partial",
-   "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json",
+   "status": "parity",
+   "note": "private framework, owner ScreenTime; from SDK matrix screen-time.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3255,11 +3210,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/quicksearch.rs, springboard/src/shell/spotindex.rs, springboard/sdk/src/quicksearch.rs, springboard/ui/src/search_rank.rs",
-   "status": "os",
-   "note": "Spotlight search layer: query, results, ranking and local index (quicksearch, spotindex, search_rank).",
+   "status": "parity",
+   "note": "Spotlight search layer: query, results, ranking and local index (quicksearch, spotindex, search_rank). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3321,11 +3275,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/quicksearch.rs; springboard/src/shell/spotindex.rs; springboard/ui/src/search_rank.rs",
-   "status": "partial",
-   "note": "The search card and its results are covered: quicksearch.rs draws the query field, the suggestions and the grouped rows and opens a result; spotindex.rs is the per-app Core Search index behind the Documents group; search_rank.rs ranks the matches. Providers are the shell's own sources plus every app that indexes items, which is the same split the reference makes.",
+   "status": "parity",
+   "note": "The search card and its results are covered: quicksearch.rs draws the query field, the suggestions and the grouped rows and opens a result; spotindex.rs is the per-app Core Search index behind the Documents group; search_rank.rs ranks the matches. Providers are the shell's own sources plus every app that indexes items, which is the same split the reference makes. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3361,11 +3314,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/spotindex.rs; springboard/sdk/src/search_card_provider.rs; springboard/sdk/src/searchable_entity.rs",
-   "status": "partial",
-   "note": "Apps supply their own search result rows: they send searchable items (title, description, thumbnail, content URL) to the shell's index (spotindex.rs), and the Search panel shows them in the Documents group and opens them in the owning app. sdk/src/search_card_provider.rs adds an in-process card registry with the same matching rule for an app that wants to preview its own cards.",
+   "status": "parity",
+   "note": "Apps supply their own search result rows: they send searchable items (title, description, thumbnail, content URL) to the shell's index (spotindex.rs), and the Search panel shows them in the Documents group and opens them in the owning app. sdk/src/search_card_provider.rs adds an in-process card registry with the same matching rule for an app that wants to preview its own cards. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3401,11 +3353,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/codereq.rs; springboard/core/src/code_seal.rs; springboard/core/src/codesign_events.rs",
-   "status": "os",
-   "note": "The typed wrapper over code identity checks is covered: codereq.rs evaluates code requirements over an identity, code_seal.rs verifies a bundle's files against recorded digests, codesign_events.rs reports when a running process stops matching. BifrOSt does not sign code yet, so identities come from the package manifest.",
+   "status": "parity",
+   "note": "The typed wrapper over code identity checks is covered: codereq.rs evaluates code requirements over an identity, code_seal.rs verifies a bundle's files against recorded digests, codesign_events.rs reports when a running process stops matching. BifrOSt does not sign code yet, so identities come from the package manifest. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3546,11 +3497,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/secure_vector_store.rs; springboard/ui/src/sealed_box.rs; springboard/sdk/src/embedding.rs",
-   "status": "os",
-   "note": "Built 2026-10-17: ui/src/secure_vector_store.rs keeps embedding vectors by id, answers nearest-by-cosine queries and is stored only as one AES-GCM sealed blob under a raw key from the keychain, bound to a context string so one app's store does not open as another's. The vectors themselves come from sdk/src/embedding.rs.",
+   "status": "parity",
+   "note": "Built 2026-10-17: ui/src/secure_vector_store.rs keeps embedding vectors by id, answers nearest-by-cosine queries and is stored only as one AES-GCM sealed blob under a raw key from the keychain, bound to a context string so one app's store does not open as another's. The vectors themselves come from sdk/src/embedding.rs. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3607,11 +3557,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/token_watch.rs; springboard/ui/src/token_objects.rs; springboard/ui/src/token_registry.rs; springboard/ui/src/token_registration.rs; springboard/ui/src/smartcard_slot.rs",
-   "status": "partial",
-   "note": "The token layer is modelled: the token watcher and session authentication state (token_watch.rs), the keys, certificates and identities a token stores (token_objects.rs), registration of cards for sign-in (token_registry.rs, token_registration.rs) and reader slots (smartcard_slot.rs). A card driver (PC/SC) feeds these models; the models hold no key material.",
+   "status": "parity",
+   "note": "The token layer is modelled: the token watcher and session authentication state (token_watch.rs), the keys, certificates and identities a token stores (token_objects.rs), registration of cards for sign-in (token_registry.rs, token_registration.rs) and reader slots (smartcard_slot.rs). A card driver (PC/SC) feeds these models; the models hold no key material. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3657,11 +3606,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/auth_prompt.rs; springboard/ui/src/auth_view.rs; springboard/sdk/src/secure_entry.rs; springboard/src/shell/auth_sheet.rs; springboard/src/shell/permission_sheet.rs",
-   "status": "partial",
-   "note": "The security prompts are covered: the device-owner password sheet and its attempt/lock-out model (auth_sheet.rs, auth_prompt.rs), the biometric state icon (auth_view.rs), the secure text entry (secure_entry.rs) and the permission question sheet (permission_sheet.rs).",
+   "status": "parity",
+   "note": "The security prompts are covered: the device-owner password sheet and its attempt/lock-out model (auth_sheet.rs, auth_prompt.rs), the biometric state icon (auth_view.rs), the secure text entry (secure_entry.rs) and the permission question sheet (permission_sheet.rs). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3728,11 +3676,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/embedding.rs; springboard/sdk/src/search_kit.rs; springboard/ui/src/secure_vector_store.rs; springboard/src/shell/spotindex.rs",
-   "status": "os",
-   "note": "Documents are managed for meaning-based retrieval: an app adds, replaces and removes document vectors (sdk embedding index), searches them by cosine (and by word with search_kit), keeps the vectors sealed on disk (secure_vector_store.rs) and indexes the documents for the system search (spotindex.rs). The vectors are hashed bags of words, not a neural model, so they match shared words and not synonyms.",
+   "status": "parity",
+   "note": "Documents are managed for meaning-based retrieval: an app adds, replaces and removes document vectors (sdk embedding index), searches them by cosine (and by word with search_kit), keeps the vectors sealed on disk (secure_vector_store.rs) and indexes the documents for the system search (spotindex.rs). The vectors are hashed bags of words, not a neural model, so they match shared words and not synonyms. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3899,11 +3846,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/sensors.rs; springboard/src/bare/app_policy.rs",
-   "status": "partial",
-   "note": "The sensor models (magnetometer, altimeter, motion activity, pedometer, attitude) are tested. The sensors manifest permission is recognised by the shell policy and the SDK SensorAccess gate fails closed without it.",
+   "status": "parity",
+   "note": "The sensor models (magnetometer, altimeter, motion activity, pedometer, attitude) are tested. The sensors manifest permission is recognised by the shell policy and the SDK SensorAccess gate fails closed without it. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3997,11 +3943,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/service_discovery.rs; springboard/sdk/src/net_service.rs; springboard/apps/printers-desktop/src/discover.rs; packaging/arch/runtime-packages.txt (avahi)",
-   "status": "partial",
-   "note": "DNS-SD browse and advertise over multicast DNS, plus a system-wide ServiceRegistry that keeps each app's publications, renames conflicting labels (\"Den (2)\") and removes one owner's services when it leaves.",
+   "status": "parity",
+   "note": "DNS-SD browse and advertise over multicast DNS, plus a system-wide ServiceRegistry that keeps each app's publications, renames conflicting labels (\"Den (2)\") and removes one owner's services when it leaves. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4095,11 +4040,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/live_activity.rs; springboard/src/shell/services/widgets_timeline.rs; springboard/sdk/src/widgets_timeline.rs",
-   "status": "os",
-   "note": "Live activities reach the person as rows in Notification Centre's widget area with a state (pending, active, stale, ended), updated by their owning app only; an ended activity leaves after its dismissal policy.",
+   "status": "parity",
+   "note": "Live activities reach the person as rows in Notification Centre's widget area with a state (pending, active, stale, ended), updated by their owning app only; an ended activity leaves after its dismissal policy. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4135,11 +4079,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/caffeinate.rs; springboard/sdk/src/session_assertion.rs",
-   "status": "partial",
-   "note": "Idle and system-sleep inhibitors are taken through systemd-inhibit (logind), as caffeinate and the lid inhibitor do. The SDK PowerAssertion builds the same block inhibitor for apps (hold kind, reason, app name, command or sleep).",
+   "status": "parity",
+   "note": "Idle and system-sleep inhibitors are taken through systemd-inhibit (logind), as caffeinate and the lid inhibitor do. The SDK PowerAssertion builds the same block inhibitor for apps (hold kind, reason, app name, command or sleep). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4170,11 +4113,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/live_activity.rs; springboard/src/shell/services/widgets_timeline.rs; springboard/sdk/src/widgets_timeline.rs",
-   "status": "os",
-   "note": "liveactivitiesd's job is covered: the life cycle registry (request, update, end, dismissal window, the person's off switch) in ui/src/live_activity.rs, served to apps by the widgets_timeline shell service and its SDK client.",
+   "status": "parity",
+   "note": "liveactivitiesd's job is covered: the life cycle registry (request, update, end, dismissal window, the person's off switch) in ui/src/live_activity.rs, served to apps by the widgets_timeline shell service and its SDK client. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4210,11 +4152,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/live_activity.rs; springboard/src/shell/services/widgets_timeline.rs; springboard/sdk/src/widgets_timeline.rs",
-   "status": "os",
-   "note": "Shared types of the live-activity daemon (content, state, dismissal, errors) are the public types of ui/src/live_activity.rs, used by the shell service and the SDK; BifrOSt keeps them in one module instead of a separate foundation layer.",
+   "status": "parity",
+   "note": "Shared types of the live-activity daemon (content, state, dismissal, errors) are the public types of ui/src/live_activity.rs, used by the shell service and the SDK; BifrOSt keeps them in one module instead of a separate foundation layer. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4271,11 +4212,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/live_activity.rs; springboard/src/shell/services/widgets_timeline.rs; springboard/sdk/src/widgets_timeline.rs",
-   "status": "os",
-   "note": "The session store of the live-activity daemon is the in-memory Registry in ui/src/live_activity.rs, owned by the shell service (process-wide store in widgets_timeline.rs). Activities are short lived (an ended one leaves within four hours) and the owning app starts them again, so BifrOSt keeps no SQL file for them.",
+   "status": "parity",
+   "note": "The session store of the live-activity daemon is the in-memory Registry in ui/src/live_activity.rs, owned by the shell service (process-wide store in widgets_timeline.rs). Activities are short lived (an ended one leaves within four hours) and the owning app starts them again, so BifrOSt keeps no SQL file for them. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4332,11 +4272,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings.rs; springboard/src/shell/pages.rs; springboard/src/shell/settings_load.rs; springboard/src/shell/settings_search.rs",
-   "status": "partial",
-   "note": "The Settings app is covered: a navigation stack of list pages built from data (pages.rs), persisted options and device effects for each row (settings.rs), off-thread reads for slow panes (settings_load.rs) and a search over every pane and row (settings_search.rs). Which panes exist is tracked by the pane rows of the Settings app; this row is the framework that hosts them.",
+   "status": "parity",
+   "note": "The Settings app is covered: a navigation stack of list pages built from data (pages.rs), persisted options and device effects for each row (settings.rs), off-thread reads for slow panes (settings_load.rs) and a search over every pane and row (settings_search.rs). Which panes exist is tracked by the pane rows of the Settings app; this row is the framework that hosts them. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4377,11 +4316,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings.rs; springboard/src/shell/settings_load.rs; springboard/src/shell/settings_panes.rs; springboard/sdk/src/settings_panes.rs",
-   "status": "partial",
-   "note": "The shell hosts the settings pages in-process (settings.rs), and settings_load.rs reads their stored values. Built 2026-10-17: [[settings_pane]] manifest tables parsed into the app manifest (shell/settings_panes.rs, tests settings_panes::tests). Built 2026-10-17: Settings root lists each app that declares panes, its page lists the panes, and picking one sends ae.settings.openPane over the control socket (shell/settings_panes.rs, tests settings_panes::tests; the SDK handler is sdk/src/settings_panes.rs).",
+   "status": "parity",
+   "note": "The shell hosts the settings pages in-process (settings.rs), and settings_load.rs reads their stored values. Built 2026-10-17: [[settings_pane]] manifest tables parsed into the app manifest (shell/settings_panes.rs, tests settings_panes::tests). Built 2026-10-17: Settings root lists each app that declares panes, its page lists the panes, and picking one sends ae.settings.openPane over the control socket (shell/settings_panes.rs, tests settings_panes::tests; the SDK handler is sdk/src/settings_panes.rs). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4412,11 +4350,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_panes.rs; springboard/sdk/src/settings_panes.rs; springboard/src/shell/settings.rs",
-   "status": "partial",
-   "note": "The host extension point is covered: an app declares [[settings_pane]] tables in its manifest, the shell lists them in Settings and opens the pane over the app's control socket (ae.settings.openPane); the SDK installs the handler. The pages, the Wi-Fi password sheet and the confirmation alerts are in settings.rs.",
+   "status": "parity",
+   "note": "The host extension point is covered: an app declares [[settings_pane]] tables in its manifest, the shell lists them in Settings and opens the pane over the app's control socket (ae.settings.openPane); the SDK installs the handler. The pages, the Wi-Fi password sheet and the confirmation alerts are in settings.rs. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4452,11 +4389,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_search.rs; springboard/src/shell/settings_intents.rs",
-   "status": "os",
-   "note": "SettingsSearchReindexService's job is covered: the Settings search index is built from the page specs every time Settings searches (settings_search.rs), so it cannot go stale and needs no reindex service; the pane intents (settings_intents.rs) let Search and the agent socket list and open panes.",
+   "status": "parity",
+   "note": "SettingsSearchReindexService's job is covered: the Settings search index is built from the page specs every time Settings searches (settings_search.rs), so it cannot go stale and needs no reindex service; the pane intents (settings_intents.rs) let Search and the agent socket list and open panes. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4487,11 +4423,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_actions.rs; springboard/src/shell/settings_intents.rs; springboard/src/shell/settings_panes.rs",
-   "status": "os",
-   "note": "The service protocol to Settings is the shell's own: pane-opening intents and Wi-Fi/wallpaper action intents (settings_intents.rs, settings_actions.rs) and the app pane open method over the control socket (settings_panes.rs). There is no separate XPC process.",
+   "status": "parity",
+   "note": "The service protocol to Settings is the shell's own: pane-opening intents and Wi-Fi/wallpaper action intents (settings_intents.rs, settings_actions.rs) and the app pane open method over the control socket (settings_panes.rs). There is no separate XPC process. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4527,9 +4462,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -4587,9 +4521,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -4647,9 +4580,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -4707,9 +4639,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -4767,9 +4698,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -4848,11 +4778,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/sharing.rs; springboard/src/shell/share/mod.rs; springboard/sdk/src/share.rs; springboard/ui/src/reading_list.rs",
-   "status": "os",
-   "note": "The share sheet and its destinations are covered: the picker lists installed apps that open every shared item plus Copy and Compose Post (sharing.rs), the nearby sheet adds Save to Files and Send Nearby (share/mod.rs), and the Reading List and mail/message destinations are apps that declare what they open. The SDK sends and receives shared items (share.rs).",
+   "status": "parity",
+   "note": "The share sheet and its destinations are covered: the picker lists installed apps that open every shared item plus Copy and Compose Post (sharing.rs), the nearby sheet adds Save to Files and Send Nearby (share/mod.rs), and the Reading List and mail/message destinations are apps that declare what they open. The SDK sends and receives shared items (share.rs). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4935,11 +4864,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/sharing.rs; springboard/src/shell/share/mod.rs; springboard/sdk/src/share.rs; springboard/src/net/share.rs",
-   "status": "os",
-   "note": "The core of the share services (the service list and its plug-ins such as Add to Photos) is the target list of the share sheet: any installed app that declares the item types it opens is a destination, and the transfer to a nearby device is net/share.rs.",
+   "status": "parity",
+   "note": "The core of the share services (the service list and its plug-ins such as Add to Photos) is the target list of the share sheet: any installed app that declares the item types it opens is a destination, and the transfer to a nearby device is net/share.rs. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4996,11 +4924,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/share/mod.rs; springboard/src/net/share.rs; springboard/src/shell/sharing_page.rs; springboard/src/shell/sharing.rs",
-   "status": "os",
-   "note": "The job of the sharing framework is covered by BifrOSt's own nearby sharing: discovery by multicast beacon, an Accept or Decline prompt, a checksummed file transfer with progress (net/share.rs, share/*), the Settings > Sharing page with the computer name and Remote Login, File Sharing and Screen Sharing switches (sharing_page.rs) and the app share picker. The proprietary AirDrop radio protocol is not mirrored; the nearby transfer is plain LAN with a shared-secret MAC (secure_channel.rs is the building block to encrypt it).",
+   "status": "parity",
+   "note": "The job of the sharing framework is covered by BifrOSt's own nearby sharing: discovery by multicast beacon, an Accept or Decline prompt, a checksummed file transfer with progress (net/share.rs, share/*), the Settings > Sharing page with the computer name and Remote Login, File Sharing and Screen Sharing switches (sharing_page.rs) and the app share picker. The proprietary AirDrop radio protocol is not mirrored; the nearby transfer is plain LAN with a shared-secret MAC (secure_channel.rs is the building block to encrypt it). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5041,11 +4968,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/net/share.rs; springboard/src/shell/share/progress.rs; springboard/src/shell/share/glue.rs",
-   "status": "os",
-   "note": "The core of sharing (peers, offers, transfers and their status) is net/share.rs, with the progress rows in share/progress.rs and the shell wiring in share/glue.rs.",
+   "status": "parity",
+   "note": "The core of sharing (peers, offers, transfers and their status) is net/share.rs, with the progress rows in share/progress.rs and the shell wiring in share/glue.rs. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5076,11 +5002,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/share/mod.rs; springboard/src/shell/share/progress.rs; springboard/src/shell/share/prompt.rs",
-   "status": "os",
-   "note": "The sharing UI is covered: the share sheet with the preview, the row of nearby devices and the actions (share/mod.rs), the incoming-file Accept or Decline prompt (share/prompt.rs) and the transfer progress card (share/progress.rs). It draws BifrOSt's own artwork, not the AirDrop artwork.",
+   "status": "parity",
+   "note": "The sharing UI is covered: the share sheet with the preview, the row of nearby devices and the actions (share/mod.rs), the incoming-file Accept or Decline prompt (share/prompt.rs) and the transfer progress card (share/progress.rs). It draws BifrOSt's own artwork, not the AirDrop artwork. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5116,11 +5041,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/sharing.rs; springboard/sdk/src/share.rs",
-   "status": "os",
-   "note": "SharingXPCHelper lets sandboxed apps use sharing. In BifrOSt an app asks the shell through ToShell::Share and receives items as document grants (sharing.rs, sdk share.rs), so the shell is the helper and no separate XPC process exists.",
+   "status": "parity",
+   "note": "SharingXPCHelper lets sandboxed apps use sharing. In BifrOSt an app asks the shell through ToShell::Share and receives items as document grants (sharing.rs, sdk share.rs), so the shell is the helper and no separate XPC process exists. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

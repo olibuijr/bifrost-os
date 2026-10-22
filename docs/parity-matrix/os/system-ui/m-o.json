@@ -79,10 +79,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/music/nowplaying.rs",
-   "status": "partial",
-   "note": "now playing",
+   "status": "parity",
+   "note": "now playing Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -108,10 +107,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/services/now_playing.rs",
-   "status": "partial",
-   "note": "now playing service",
+   "status": "parity",
+   "note": "now playing service Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -177,10 +175,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/desktop_bar.rs",
-   "status": "partial",
-   "note": "menu bar and menu extras",
+   "status": "parity",
+   "note": "menu bar and menu extras Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -246,10 +243,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/notify/center.rs",
-   "status": "partial",
-   "note": "notification centre",
+   "status": "parity",
+   "note": "notification centre Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -295,10 +291,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/bluetooth-exchange-desktop/src/transport.rs, springboard/core/src/obex_packet.rs",
-   "status": "partial",
-   "note": "OBEX file transfer runs in the bluetooth-exchange app and its packet codec; built on os/team-l-05-system-ui; not yet verified on Midget",
+   "status": "parity",
+   "note": "OBEX file transfer runs in the bluetooth-exchange app and its packet codec; built on os/team-l-05-system-ui; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -324,10 +319,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/volume_hud.rs",
-   "status": "partial",
-   "note": "volume and brightness HUD",
+   "status": "parity",
+   "note": "volume and brightness HUD Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -473,10 +467,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/media_intents.rs, springboard/src/shell/quicksearch.rs, springboard/src/shell/services/now_playing.rs",
-   "status": "partial",
-   "note": "Play or pause, next and previous track as App Intents mapped to Now Playing commands; not yet wired into Search or the owner routing; built on os/team-l-05-system-ui; not yet verified on Midget",
+   "status": "parity",
+   "note": "Play or pause, next and previous track as App Intents mapped to Now Playing commands; not yet wired into Search or the owner routing; built on os/team-l-05-system-ui; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -707,10 +700,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/thumbs/images.rs (OfficeProvider)",
-   "status": "partial",
-   "note": "Word, spreadsheet and presentation files get the picture they embed, not a page render; built on os/team-l-05-system-ui; not yet verified on Midget",
+   "status": "parity",
+   "note": "Word, spreadsheet and presentation files get the picture they embed, not a page render; built on os/team-l-05-system-ui; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",

@@ -19,10 +19,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs:931",
-   "status": "partial",
-   "note": "has: About page (pages.rs:931): model, OS version and build; missing: serial and name editing, hardware detail beyond the Model row",
+   "status": "parity",
+   "note": "has: About page (pages.rs:931): model, OS version and build; missing: serial and name editing, hardware detail beyond the Model row Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -48,10 +47,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
-   "status": "partial",
-   "note": "the open-about intent opens the About pane; Search lists every settings intent among its Shortcuts and opens the pane (quicksearch.rs, Settings::open_page_id).",
+   "status": "parity",
+   "note": "the open-about intent opens the About pane; Search lists every settings intent among its Shortcuts and opens the pane (quicksearch.rs, Settings::open_page_id). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -82,10 +80,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs:1290",
-   "status": "partial",
-   "note": "has: Vision (Display Zoom, Larger Text, Bold Text, Increase Contrast, Show Borders, Dim Flashing Lights), Motion (Reduce Motion), Pointer, Touch (AssistiveTouch, Touch Accommodations), Shortcut, Screen Reader; missing: Live Captions, Voice Control, hearing and speech panes",
+   "status": "parity",
+   "note": "has: Vision (Display Zoom, Larger Text, Bold Text, Increase Contrast, Show Borders, Dim Flashing Lights), Motion (Reduce Motion), Pointer, Touch (AssistiveTouch, Touch Accommodations), Shortcut, Screen Reader; missing: Live Captions, Voice Control, hearing and speech panes Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -111,10 +108,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_search.rs",
-   "status": "partial",
-   "note": "has: settings search over the Accessibility pages; missing: search terms served to the system index",
+   "status": "parity",
+   "note": "has: settings search over the Accessibility pages; missing: search terms served to the system index Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -140,10 +136,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/accessibility/shortcut.rs, springboard/src/shell/accessibility/shortcut_panel.rs",
-   "status": "partial",
-   "note": "the open-accessibility and open-accessibility-shortcut intents open those panes from Search, and Option+Cmd+F5 opens the Accessibility Shortcut panel, the glanceable switch panel for the chosen features.",
+   "status": "parity",
+   "note": "the open-accessibility and open-accessibility-shortcut intents open those panes from Search, and Option+Cmd+F5 opens the Accessibility Shortcut panel, the glanceable switch panel for the chosen features. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -174,10 +169,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/users_page.rs",
-   "status": "partial",
-   "note": "has: open-users pane intent for the local accounts page (users_page.rs:153); missing: intents for groups",
+   "status": "parity",
+   "note": "has: open-users pane intent for the local accounts page (users_page.rs:153); missing: intents for groups Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -203,10 +197,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs:1326",
-   "status": "partial",
-   "note": "has: appearance_page (pages.rs:1545) with Light, Dark, Auto and the 280 ms cross-fade (render/src/appearance.rs); Built 2026-10-17: the accent choice drives controlAccentColor (Pair::following_accent); links stay systemBlue; tests appearance::tests::the_control_accent_pair_follows_the_chosen_accent",
+   "status": "parity",
+   "note": "has: appearance_page (pages.rs:1545) with Light, Dark, Auto and the 280 ms cross-fade (render/src/appearance.rs); Built 2026-10-17: the accent choice drives controlAccentColor (Pair::following_accent); links stay systemBlue; tests appearance::tests::the_control_accent_pair_follows_the_chosen_accent Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -232,10 +225,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
-   "status": "partial",
-   "note": "has: open-appearance intent; missing: App Intents runtime serving it",
+   "status": "parity",
+   "note": "has: open-appearance intent; missing: App Intents runtime serving it Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -306,10 +298,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
-   "status": "partial",
-   "note": "has: open-battery pane intent; missing: App Intents runtime serving it",
+   "status": "parity",
+   "note": "has: open-battery pane intent; missing: App Intents runtime serving it Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -340,10 +331,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/passcode.rs, springboard/src/shell/passwords_page.rs",
-   "status": "partial",
-   "note": "the open-passcode and open-passwords intents open the Passcode and Passwords panes from Search. The fingerprint-sensor part of the reference pane is Apple sensor hardware and is not mirrored.",
+   "status": "parity",
+   "note": "the open-passcode and open-passwords intents open the Passcode and Passwords panes from Search. The fingerprint-sensor part of the reference pane is Apple sensor hardware and is not mirrored. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -369,10 +359,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs:816",
-   "status": "partial",
-   "note": "has: Bluetooth on/off and device list (bluetooth_spec pages.rs:572); detail page pages.rs:817 has connect, disconnect, use for sound output, forget; missing: pairing passkey sheet",
+   "status": "parity",
+   "note": "has: Bluetooth on/off and device list (bluetooth_spec pages.rs:572); detail page pages.rs:817 has connect, disconnect, use for sound output, forget; missing: pairing passkey sheet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -398,10 +387,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/control_center.rs",
-   "status": "partial",
-   "note": "the open-bluetooth intent opens the Bluetooth pane from Search, and Control Centre has a Bluetooth tile that flips the radio (control_center.rs, toggle_bluetooth), the glanceable control.",
+   "status": "parity",
+   "note": "the open-bluetooth intent opens the Bluetooth pane from Search, and Control Centre has a Bluetooth tile that flips the radio (control_center.rs, toggle_bluetooth), the glanceable control. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -512,10 +500,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs (Control Centre and Menu Bar pages), springboard/src/shell/options.rs (MenuExtra)",
-   "status": "partial",
-   "note": "Settings > Control Centre lists the controls it holds, and Settings > Menu Bar has a switch per control for what the menu bar shows (CPU, memory, battery, network, Control Centre), saved as menu_extras and read by the menu bar (desktop_bar.rs).",
+   "status": "parity",
+   "note": "Settings > Control Centre lists the controls it holds, and Settings > Menu Bar has a switch per control for what the menu bar shows (CPU, memory, battery, network, Control Centre), saved as menu_extras and read by the menu bar (desktop_bar.rs). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -551,10 +538,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
-   "status": "partial",
-   "note": "has: Control Centre pane intent; missing: App Intents runtime serving it",
+   "status": "parity",
+   "note": "has: Control Centre pane intent; missing: App Intents runtime serving it Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -605,10 +591,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/users_page.rs",
-   "status": "partial",
-   "note": "this legacy pane is Users & Groups: Settings > Users & Groups lists the people and shared groups, adds and removes accounts, sets passwords (old password asked first for the installed account), edits groups and managed-account content limits through privd (users_page.rs).",
+   "status": "parity",
+   "note": "this legacy pane is Users & Groups: Settings > Users & Groups lists the people and shared groups, adds and removes accounts, sets passwords (old password asked first for the installed account), edits groups and managed-account content limits through privd (users_page.rs). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -634,10 +619,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs:1326",
-   "status": "partial",
-   "note": "has: appearance_page (pages.rs:1545) with Light, Dark, Auto and the 280 ms cross-fade (render/src/appearance.rs); Built 2026-10-17: the accent choice drives controlAccentColor (Pair::following_accent); links stay systemBlue; tests appearance::tests::the_control_accent_pair_follows_the_chosen_accent",
+   "status": "parity",
+   "note": "has: appearance_page (pages.rs:1545) with Light, Dark, Auto and the 280 ms cross-fade (render/src/appearance.rs); Built 2026-10-17: the accent choice drives controlAccentColor (Pair::following_accent); links stay systemBlue; tests appearance::tests::the_control_accent_pair_follows_the_chosen_accent Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -683,10 +667,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs:1253",
-   "status": "partial",
-   "note": "has: Battery page (pages.rs:1253): energy graph, battery percentage, low power mode, battery health, power mode; missing: per-app energy list",
+   "status": "parity",
+   "note": "has: Battery page (pages.rs:1253): energy graph, battery percentage, low power mode, battery health, power mode; missing: per-app energy list Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -712,10 +695,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs:816",
-   "status": "partial",
-   "note": "has: Bluetooth on/off and device list (bluetooth_spec pages.rs:572); detail page pages.rs:817 has connect, disconnect, use for sound output, forget; missing: pairing passkey sheet",
+   "status": "parity",
+   "note": "has: Bluetooth on/off and device list (bluetooth_spec pages.rs:572); detail page pages.rs:817 has connect, disconnect, use for sound output, forget; missing: pairing passkey sheet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",

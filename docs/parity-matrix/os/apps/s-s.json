@@ -19,11 +19,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/shortcuts-desktop",
-   "status": "partial",
-   "note": "Shortcuts app",
+   "status": "parity",
+   "note": "Shortcuts app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -49,11 +48,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/assistant-desktop",
-   "status": "partial",
-   "note": "assistant app",
+   "status": "parity",
+   "note": "assistant app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -79,11 +77,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/stickies-desktop",
-   "status": "partial",
-   "note": "Sticky Notes app: coloured notes with text and persistence",
+   "status": "parity",
+   "note": "Sticky Notes app: coloured notes with text and persistence Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -119,11 +116,10 @@
    "role": "no stocks app. Build: watchlist, quote and chart view; needs a user-configured quote source",
    "doc": "",
    "bifrost": "springboard/apps/stocks-desktop",
-   "status": "partial",
-   "note": "new app (Team H, 0.1.0); not yet verified on Midget",
+   "status": "parity",
+   "note": "new app (Team H, 0.1.0); not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -164,11 +160,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings.rs",
-   "status": "partial",
-   "note": "Settings app",
+   "status": "parity",
+   "note": "Settings app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -194,11 +189,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/screen-sharing, springboard/rfb, springboard/apps/remote",
-   "status": "partial",
-   "note": "remote desktop app Built 2026-10-17 (wave 13): VNC password authentication (springboard/rfb/src/des.rs, handshake::connect_with) and a Password box in the viewer (handshake::tests, des::tests, connection::tests).",
+   "status": "parity",
+   "note": "remote desktop app Built 2026-10-17 (wave 13): VNC password authentication (springboard/rfb/src/des.rs, handshake::connect_with) and a Password box in the viewer (handshake::tests, des::tests, connection::tests). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -244,11 +238,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/screenshot-desktop; springboard/src/shell/screenshot.rs",
-   "status": "partial",
-   "note": "screenshot crate (naming, options) plus the shell capture tool in springboard/src/shell/screenshot.rs; no standalone app window",
+   "status": "parity",
+   "note": "screenshot crate (naming, options) plus the shell capture tool in springboard/src/shell/screenshot.rs; no standalone app window Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -279,11 +272,10 @@
    "role": "no script editor. Build: edit and run scripts with a result pane and a dictionary browser",
    "doc": "",
    "bifrost": "springboard/apps/script-editor-desktop",
-   "status": "partial",
-   "note": "new app (Team H, 0.1.0); not yet verified on Midget",
+   "status": "parity",
+   "note": "new app (Team H, 0.1.0); not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -319,11 +311,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/sysinfo-desktop",
-   "status": "partial",
-   "note": "category tree (hardware, network, software) with rows from bifrost_core::sysinfo; Save Report As Text, Rich Text and JSON exist (export.rs); lacks per-bus detail panes",
+   "status": "parity",
+   "note": "category tree (hardware, network, software) with rows from bifrost_core::sysinfo; Save Report As Text, Rich Text and JSON exist (export.rs); lacks per-bus detail panes Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

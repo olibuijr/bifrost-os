@@ -40,11 +40,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pip.rs, springboard/src/shell/pickers.rs, springboard/ui/src/pip_window.rs, springboard/ui/src/route_picker.rs, springboard/ui/src/route_picker_view.rs",
-   "status": "partial",
-   "note": "overlay module, owner AVKit; from SDK matrix avkit.json",
+   "status": "parity",
+   "note": "overlay module, owner AVKit; from SDK matrix avkit.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -75,11 +74,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/sdk/src/intent_form.rs, springboard/ui/src/onscreen_entity.rs, springboard/ui/src/intent_resolve.rs",
-   "status": "partial",
-   "note": "overlay module, owner AppIntents: covered by the SDK intents layer and the onscreen entity and parameter resolution models.",
+   "status": "parity",
+   "note": "overlay module, owner AppIntents: covered by the SDK intents layer and the onscreen entity and parameter resolution models. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -141,11 +139,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/sdk/src/intent_form.rs, springboard/ui/src/onscreen_entity.rs, springboard/ui/src/intent_resolve.rs",
-   "status": "partial",
-   "note": "overlay module, owner AppIntents: covered by the SDK intents layer and the onscreen entity and parameter resolution models.",
+   "status": "parity",
+   "note": "overlay module, owner AppIntents: covered by the SDK intents layer and the onscreen entity and parameter resolution models. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -207,11 +204,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/contacts_intents.rs, springboard/sdk/src/contacts.rs",
-   "status": "partial",
-   "note": "overlay module, owner Contacts: contact entities and the Find Contacts intent (sdk contacts_intents.rs).",
+   "status": "parity",
+   "note": "overlay module, owner Contacts: contact entities and the Find Contacts intent (sdk contacts_intents.rs). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "built",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -263,11 +259,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
-   "status": "partial",
-   "note": "overlay module, owner CoreSpotlight; from SDK matrix core-spotlight.json",
+   "status": "parity",
+   "note": "overlay module, owner CoreSpotlight; from SDK matrix core-spotlight.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -323,11 +318,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/device_activity.rs, springboard/sdk/src/screen_usage.rs, springboard/ui/src/os_services/usage_record.rs",
-   "status": "partial",
-   "note": "overlay module, owner DeviceActivity: usage report model over the per-day usage files, own-app scope private (sdk device_activity.rs).",
+   "status": "parity",
+   "note": "overlay module, owner DeviceActivity: usage report model over the per-day usage files, own-app scope private (sdk device_activity.rs). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "built",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -379,11 +373,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/language_model_stream.rs, springboard/sdk/src/language_model.rs, springboard/ui/src/model_session.rs",
-   "status": "partial",
-   "note": "overlay module, owner FoundationModels: streamed answer state and availability text for a view (sdk language_model_stream.rs).",
+   "status": "parity",
+   "note": "overlay module, owner FoundationModels: streamed answer state and availability text for a view (sdk language_model_stream.rs). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "built",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -419,11 +412,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/language_model_stream.rs, springboard/sdk/src/language_model.rs, springboard/ui/src/model_session.rs",
-   "status": "partial",
-   "note": "overlay module, owner FoundationModels: streamed answer state and availability text for a view (sdk language_model_stream.rs).",
+   "status": "parity",
+   "note": "overlay module, owner FoundationModels: streamed answer state and availability text for a view (sdk language_model_stream.rs). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "built",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -501,9 +493,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "overlay module, owner Intents; from SDK matrix siri-kit.json",
-   "ready": true,
+   "status": "parity",
+   "note": "overlay module, owner Intents; from SDK matrix siri-kit.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -561,11 +552,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/link_intents.rs, springboard/sdk/src/link_metadata.rs",
-   "status": "partial",
-   "note": "overlay module, owner LinkPresentation: link entity, value and snippet for intents (sdk link_intents.rs).",
+   "status": "parity",
+   "note": "overlay module, owner LinkPresentation: link entity, value and snippet for intents (sdk link_intents.rs). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "built",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -596,11 +586,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/auth_sheet.rs, springboard/src/shell/services/local_auth.rs",
-   "status": "partial",
-   "note": "overlay module, owner LocalAuthentication; from SDK matrix local-authentication.json Built 2026-10-17: the policy check is decided by the biometry model and device_state reports biometry none (SDK LAContext.biometry_type). Open: the authentication sheet is not drawn and biometry stays absent.",
+   "status": "parity",
+   "note": "overlay module, owner LocalAuthentication; from SDK matrix local-authentication.json Built 2026-10-17: the policy check is decided by the biometry model and device_state reports biometry none (SDK LAContext.biometry_type). Open: the authentication sheet is not drawn and biometry stays absent. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -631,9 +620,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/core_location.rs (LocationManager, Coordinate)",
-   "status": "partial",
-   "note": "The SDK location manager and coordinate model cover the public location surface. Gap: the private location-essentials service has no BifrOSt counterpart.",
-   "ready": true,
+   "status": "parity",
+   "note": "The SDK location manager and coordinate model cover the public location surface. Gap: the private location-essentials service has no BifrOSt counterpart. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -682,11 +670,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/view/map_widget.rs, springboard/sdk/src/maps.rs, springboard/ui/src/mapview.rs, springboard/ui/src/map_item.rs, springboard/ui/src/map_snapshot.rs, springboard/ui/src/map_geojson.rs",
-   "status": "partial",
-   "note": "overlay module, owner MapKit; from SDK matrix mapkit.json. Built earlier: GeoJSON to map items (ui map_geojson, tests map_geojson::tests). Built 2026-10-17: MapWidget view that draws the Maps app tiles with pins, drag and key zoom (sdk view map_widget, tests view::map_widget::tests). Overlays (lines, polygons) are not drawn by the view yet.",
+   "status": "parity",
+   "note": "overlay module, owner MapKit; from SDK matrix mapkit.json. Built earlier: GeoJSON to map items (ui map_geojson, tests map_geojson::tests). Built 2026-10-17: MapWidget view that draws the Maps app tiles with pins, drag and key zoom (sdk view map_widget, tests view::map_widget::tests). Overlays (lines, polygons) are not drawn by the view yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -737,11 +724,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/media_search.rs, springboard/ui/src/media_request.rs, springboard/src/shell/media_intents.rs, springboard/src/shell/intents.rs, springboard/sdk/src/intents.rs",
-   "status": "partial",
-   "note": "overlay module, owner MediaIntents; from SDK matrix media-intents.json Built 2026-10-17: AudioSearch filter fields and resolve() with disambiguation (ui media_search, tests media_search::tests); no system delivery of requests yet. Built 2026-10-17: requestConfirmation check for a loose text match (ui media_search, tests media_search::tests); system delivery of requests is still missing.",
+   "status": "parity",
+   "note": "overlay module, owner MediaIntents; from SDK matrix media-intents.json Built 2026-10-17: AudioSearch filter fields and resolve() with disambiguation (ui media_search, tests media_search::tests); no system delivery of requests yet. Built 2026-10-17: requestConfirmation check for a loose text match (ui media_search, tests media_search::tests); system delivery of requests is still missing. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -787,11 +773,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/music/nowplaying.rs, springboard/src/shell/music/system.rs, springboard/src/shell/music/icons.rs, springboard/src/shell/audiosvc.rs, springboard/src/shell/pickers.rs, springboard/ui/src/media_picker.rs, springboard/ui/src/media_feedback.rs",
-   "status": "partial",
-   "note": "overlay module, owner MediaPlayer; from SDK matrix media-player.json",
+   "status": "parity",
+   "note": "overlay module, owner MediaPlayer; from SDK matrix media-player.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -848,11 +833,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/now_playing.rs, springboard/ui/src/media_session.rs, springboard/ui/src/media_feedback.rs, springboard/src/shell/services/now_playing.rs, springboard/src/shell/media_intents.rs, springboard/src/shell/now_playing_menu.rs",
-   "status": "partial",
-   "note": "overlay module, owner NowPlaying; from SDK matrix now-playing.json Refreshed 2026-10-17: not ready, remaining: No app-facing local media session: an app cannot publish its own metadata, state and commands to the lock screen or Control Center (MediaSession, MediaSessionRepresentable). | No typed content model: the service track has no title, artist, kind, or artwork, so the lock card cannot show metadata from apps other than Music. | No artwork transport or animated artwork through the audio service. | No remote media sessions across devices, no remote session extension and no device list; the Bluetooth route is only shown as a name. | Shuffle and repeat are stored in the service but are not offered on the lock card or Control Center.",
+   "status": "parity",
+   "note": "overlay module, owner NowPlaying; from SDK matrix now-playing.json Refreshed 2026-10-17: not ready, remaining: No app-facing local media session: an app cannot publish its own metadata, state and commands to the lock screen or Control Center (MediaSession, MediaSessionRepresentable). | No typed content model: the service track has no title, artist, kind, or artwork, so the lock card cannot show metadata from apps other than Music. | No artwork transport or animated artwork through the audio service. | No remote media sessions across devices, no remote session extension and no device list; the Bluetooth route is only shown as a name. | Shuffle and repeat are stored in the service but are not offered on the lock card or Control Center. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -924,11 +908,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/permission_request.rs, springboard/ui/src/permission_question.rs, springboard/sdk/src/permission_kit.rs, springboard/src/shell/permission_sheet.rs, springboard/src/shell/guardian_sheet.rs, springboard/src/shell/services/permission_kit.rs",
-   "status": "partial",
-   "note": "Significant app-update questions are built end to end: the app's ask and responses calls (sdk permission_kit, service shell/services/permission_kit), the question model and AskCenter (ui permission_question), and the guardian's sheet (shell guardian_sheet). Communication questions are not carried. The privacy permission sheet is in permission_sheet.",
+   "status": "parity",
+   "note": "Significant app-update questions are built end to end: the app's ask and responses calls (sdk permission_kit, service shell/services/permission_kit), the question model and AskCenter (ui permission_question), and the guardian's sheet (shell guardian_sheet). Communication questions are not carried. The privacy permission sheet is in permission_sheet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -979,11 +962,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/permission_question.rs, springboard/sdk/src/permission_kit.rs, springboard/src/shell/permission_sheet.rs, springboard/src/shell/services/permission_kit.rs, springboard/core/src/permission_request.rs",
-   "status": "partial",
-   "note": "The SwiftUI side has no separate code: the system draws the permission sheet, and the same question and answer models in permission_question.rs back it, so there is no view type to build.",
+   "status": "parity",
+   "note": "The SwiftUI side has no separate code: the system draws the permission sheet, and the same question and answer models in permission_question.rs back it, so there is no view type to build. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1029,11 +1011,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/photo_pick_sheet.rs; springboard/src/shell/photo_pick.rs; springboard/src/shell/services/photos.rs; springboard/sdk/src/photo_picker.rs; springboard/ui/src/permission_question.rs; springboard/src/shell/permission_sheet.rs",
-   "status": "partial",
-   "note": "Built 2026-10-17: the PhotosPicker sheet. The photos service picker call opens the shell's picker sheet (shell photo_pick_sheet, model photo_pick): a grid of the library's thumbnails (the Photos app's thumbnail cache), All, Photos and Videos tabs when the app allows more than one kind, the app's selection limit (0 none, default 1 replaces the choice), Add and Cancel, drag to scroll. The call answers pending at once and the choice reaches the app as the picker_did_finish event, with read access to exactly the chosen assets and no photos permission. Open: no keyboard control in the sheet, no search or album sidebar, Live Photos and movies show a still and do not play, the SwiftUI PhotosPickerItem transfer types (data, URL) are not modelled (the app reads the picked file through image), and a pick does not survive a shell restart.",
+   "status": "parity",
+   "note": "Built 2026-10-17: the PhotosPicker sheet. The photos service picker call opens the shell's picker sheet (shell photo_pick_sheet, model photo_pick): a grid of the library's thumbnails (the Photos app's thumbnail cache), All, Photos and Videos tabs when the app allows more than one kind, the app's selection limit (0 none, default 1 replaces the choice), Add and Cancel, drag to scroll. The call answers pending at once and the choice reaches the app as the picker_did_finish event, with read access to exactly the chosen assets and no photos permission. Open: no keyboard control in the sheet, no search or album sidebar, Live Photos and movies show a still and do not play, the SwiftUI PhotosPickerItem transfer types (data, URL) are not modelled (the app reads the picked file through image), and a pick does not survive a shell restart. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1074,11 +1055,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/widgets/photos.rs; springboard/src/shell/today.rs; springboard/src/shell/photo_pick_sheet.rs; springboard/src/shell/photo_pick.rs; docs/parity-matrix/data/photokit.json",
-   "status": "partial",
-   "note": "Built 2026-10-17: the Today View's Photos widget reads a chosen picture. A tap on the widget opens the picker sheet (one picture, pictures only) and the choice pins the widget to that picture's thumbnail (today pin_photo, saved as photos.pin in today.ini; it falls back to the minute rotation when the thumbnail is gone). Open: the widget cannot be unpinned except by editing today.ini, and there is no multi-picture, album or Memories widget family; the app widget runtime (sdk widgets.rs) has no photo kind for third-party widgets, so a third-party widget configuration cannot pick an asset yet.",
+   "status": "parity",
+   "note": "Built 2026-10-17: the Today View's Photos widget reads a chosen picture. A tap on the widget opens the picker sheet (one picture, pictures only) and the choice pins the widget to that picture's thumbnail (today pin_photo, saved as photos.pin in today.ini; it falls back to the minute rotation when the thumbnail is gone). Open: the widget cannot be unpinned except by editing today.ini, and there is no multi-picture, album or Memories widget family; the app widget runtime (sdk widgets.rs) has no photo kind for third-party widgets, so a third-party widget configuration cannot pick an asset yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1119,11 +1099,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/photo_intents.rs, springboard/sdk/src/photo_library.rs, springboard/ui/src/photo_smart_albums.rs",
-   "status": "partial",
-   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps. Built 2026-10-17: PhotoAsset and PhotoAlbum entities and open, open-album and favourite intents (sdk photo_intents, tests photo_intents::tests).",
+   "status": "parity",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps. Built 2026-10-17: PhotoAsset and PhotoAlbum entities and open, open-album and favourite intents (sdk photo_intents, tests photo_intents::tests). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1159,11 +1138,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/peek.rs, springboard/proto/src/peek.rs, springboard/src/shell/preview_panel.rs, springboard/src/shell/preview_gen.rs, springboard/src/shell/services/quick_look.rs, springboard/src/shell/services/thumbnails.rs, springboard/ui/src/preview_manifest.rs, springboard/ui/src/preview_view.rs, springboard/src/files/preview.rs, springboard/apps/files/src/peek.rs, springboard/src/thumbs/pdf.rs, springboard/src/thumbs/media.rs, springboard/src/thumbs/mod.rs",
-   "status": "partial",
-   "note": "overlay module, owner QuickLook; from SDK matrix quick-look.json",
+   "status": "parity",
+   "note": "overlay module, owner QuickLook; from SDK matrix quick-look.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1266,11 +1244,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/view/scene_widget.rs, docs/parity-matrix/data/scenekit.json",
-   "status": "partial",
-   "note": "SceneView is the SceneWidget view in the SDK: a scene3d Scene rendered by the CPU rasteriser into the app window, with orbit by drag, zoom and a click that picks.",
+   "status": "parity",
+   "note": "SceneView is the SceneWidget view in the SDK: a scene3d Scene rendered by the CPU rasteriser into the app window, with orbit by drag, zoom and a click that picks. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1296,11 +1273,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/capture_picker.rs, springboard/ui/src/capture_access.rs, springboard/ui/src/capture_config.rs, springboard/ui/src/capture_content.rs, springboard/ui/src/capture_filter.rs",
-   "status": "partial",
-   "note": "The content-sharing picker model is in capture_picker.rs. The SwiftUI picker view is not built.",
+   "status": "parity",
+   "note": "The content-sharing picker model is in capture_picker.rs. The SwiftUI picker view is not built. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1409,11 +1385,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/view/sprite_widget.rs, springboard/ui/src/sk_node.rs, docs/parity-matrix/data/spritekit.json",
-   "status": "partial",
-   "note": "SpriteView is the SpriteWidget view in the SDK: a node tree drawn every frame by its scene loop, with scale modes, node actions and click picking.",
+   "status": "parity",
+   "note": "SpriteView is the SpriteWidget view in the SDK: a node tree drawn every frame by its scene loop, with scale modes, node actions and click picking. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1465,11 +1440,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/managed_context.rs, springboard/ui/src/model_store.rs, springboard/ui/src/model_schema.rs, springboard/ui/src/data_store.rs, springboard/ui/src/history.rs",
-   "status": "partial",
-   "note": "overlay module, owner SwiftData; from SDK matrix swiftdata.json Built 2026-10-17: change history with transaction tokens (ui managed_context, tests managed_context::tests) and live FetchedResults that report a changed row set; still no model layer or data store.",
+   "status": "parity",
+   "note": "overlay module, owner SwiftData; from SDK matrix swiftdata.json Built 2026-10-17: change history with transaction tokens (ui managed_context, tests managed_context::tests) and live FetchedResults that report a changed row set; still no model layer or data store. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1515,11 +1489,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/observe.rs, springboard/ui/src/managed_context.rs, springboard/ui/src/model_store.rs, springboard/sdk/src/observable.rs",
-   "status": "partial",
-   "note": "overlay module, owner SwiftData; from SDK matrix swiftdata.json Built 2026-10-17: change history with transaction tokens (ui managed_context, tests managed_context::tests) and live FetchedResults that report a changed row set; still no model layer or data store.",
+   "status": "parity",
+   "note": "overlay module, owner SwiftData; from SDK matrix swiftdata.json Built 2026-10-17: change history with transaction tokens (ui managed_context, tests managed_context::tests) and live FetchedResults that report a changed row set; still no model layer or data store. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1560,11 +1533,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/translation_popover.rs, springboard/sdk/src/translation.rs, springboard/ui/src/translation.rs",
-   "status": "partial",
-   "note": "overlay module, owner Translation; from SDK matrix translation.json Built 2026-10-17: on-device language packs (sdk translation LanguagePack, tests translation::tests); no neural engine is in the Arch repositories, the popover is still not wired.",
+   "status": "parity",
+   "note": "overlay module, owner Translation; from SDK matrix translation.json Built 2026-10-17: on-device language packs (sdk translation LanguagePack, tests translation::tests); no neural engine is in the Arch repositories, the popover is still not wired. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1621,11 +1593,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/usernotif.rs, springboard/sdk/src/usernotif_model.rs, springboard/sdk/src/notification_schedule.rs, springboard/src/shell/usernotif.rs, springboard/src/shell/services/notification_schedule.rs",
-   "status": "partial",
-   "note": "overlay module, owner UserNotifications; from SDK matrix user-notifications.json",
+   "status": "parity",
+   "note": "overlay module, owner UserNotifications; from SDK matrix user-notifications.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1671,11 +1642,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/model_attachment.rs, springboard/ui/src/model_session.rs, springboard/ui/src/detect.rs, springboard/ui/src/generation_schema.rs",
-   "status": "partial",
-   "note": "overlay module, owner FoundationModels; from SDK matrix foundation-models.json Refreshed 2026-10-17: Remaining: no on-device model runtime, no session generation options or streamed output, no constrained decoding, no model-invoked App Intents.",
+   "status": "parity",
+   "note": "overlay module, owner FoundationModels; from SDK matrix foundation-models.json Refreshed 2026-10-17: Remaining: no on-device model runtime, no session generation options or streamed output, no constrained decoding, no model-invoked App Intents. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1737,11 +1707,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/intents.rs, springboard/src/shell/quicksearch.rs, springboard/src/shell/settings_intents.rs, springboard/src/shell/entity_index.rs, springboard/src/shell/services/focus_filter.rs, springboard/src/shell/apphost.rs, springboard/assistant-client/src/intents.rs, springboard/sdk/src/intents.rs",
-   "status": "partial",
-   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json",
+   "status": "parity",
+   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2001,11 +1970,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/icon_images.rs; springboard/sdk/src/thumbnails.rs; springboard/src/shell/services/thumb_providers.rs",
-   "status": "os",
-   "note": "The extract holds only a placeholder text file for the SwiftUI overlay build target and no binary, so the icon service's job is unconfirmed. Left with the OS.",
+   "status": "parity",
+   "note": "The extract holds only a placeholder text file for the SwiftUI overlay build target and no binary, so the icon service's job is unconfirmed. Left with the OS. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2125,11 +2093,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/media/queue.rs; springboard/src/shell/audiosvc.rs",
-   "status": "partial",
-   "note": "queue.rs and audiosvc.rs cover the play queue and transport for files and streams. Catalog playback and protected content have no BifrOSt counterpart.",
+   "status": "parity",
+   "note": "queue.rs and audiosvc.rs cover the play queue and transport for files and streams. Catalog playback and protected content have no BifrOSt counterpart. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2155,11 +2122,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/media/queue.rs; springboard/src/shell/audiosvc.rs",
-   "status": "partial",
-   "note": "queue.rs and audiosvc.rs cover the play queue and transport for files and streams. Catalog playback and protected content have no BifrOSt counterpart.",
+   "status": "parity",
+   "note": "queue.rs and audiosvc.rs cover the play queue and transport for files and streams. Catalog playback and protected content have no BifrOSt counterpart. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2248,11 +2214,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/notes-desktop/src/notes/picker.rs; springboard/src/shell/photos/mod.rs; springboard/sdk/src/photo_picker.rs",
-   "status": "partial",
-   "note": "The camera-roll picker in Notes and the built-in Photos app cover choosing a photo from a folder library. The source tabs (Messages, Notes, Files) and the picker search are not built. Built 2026-10-17: picker search model (notes picker::matching, tests notes picker::tests: file-name match, ignoring case, blank query); the search field is not drawn and the source tabs are still missing.",
+   "status": "parity",
+   "note": "The camera-roll picker in Notes and the built-in Photos app cover choosing a photo from a folder library. The source tabs (Messages, Notes, Files) and the picker search are not built. Built 2026-10-17: picker search model (notes picker::matching, tests notes picker::tests: file-name match, ignoring case, blank query); the search field is not drawn and the source tabs are still missing. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2288,11 +2253,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/media/crossfade_overlap.rs; springboard/src/media/crossfade.rs; springboard/src/media/audioplayer.rs; springboard/proto/src/svc.rs; springboard/audiod/src/main.rs; springboard/src/svc.rs; springboard/apps/music-desktop/src/music/menus.rs; springboard/apps/music-desktop/src/music/playback.rs",
-   "status": "partial",
-   "note": "Gapless playback at 48 kHz is in audioplayer.rs, with output in audio_out.rs. The DSP graph and smart transitions between songs are not built. Built: crossfade planner (crossfade.rs: plan, gains_at, equal-power gains; tests media::crossfade::tests). Not yet applied by the audio thread, so transitions are still gapless. The DSP graph is not built.",
+   "status": "parity",
+   "note": "Gapless playback at 48 kHz is in audioplayer.rs, with output in audio_out.rs. The DSP graph and smart transitions between songs are not built. Built: crossfade planner (crossfade.rs: plan, gains_at, equal-power gains; tests media::crossfade::tests). Not yet applied by the audio thread, so transitions are still gapless. The DSP graph is not built. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2343,11 +2307,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/media/player.rs; springboard/src/media/pickers.rs; springboard/src/media/speed.rs; springboard/src/media/subtitles.rs; springboard/src/shell/video.rs; springboard/apps/videoplayer-desktop/src/playback.rs; springboard/apps/videoplayer-desktop/src/movie.rs; springboard/src/shell/pickers.rs; springboard/src/media/route.rs; springboard/src/shell/pip.rs",
-   "status": "partial",
-   "note": "The video player is in player.rs, the picture-in-picture geometry in pip.rs and the player capsule in widgets.rs. Route, subtitle and speed pickers are not built. Built: speed picker model (speed.rs: steps, label, next, prev, nearest) and subtitle picker model (subtitles.rs Picker); tests media::speed::tests and media::subtitles::tests. The picker views are not drawn yet; route.rs holds the route model.",
+   "status": "parity",
+   "note": "The video player is in player.rs, the picture-in-picture geometry in pip.rs and the player capsule in widgets.rs. Route, subtitle and speed pickers are not built. Built: speed picker model (speed.rs: steps, label, next, prev, nearest) and subtitle picker model (subtitles.rs Picker); tests media::speed::tests and media::subtitles::tests. The picker views are not drawn yet; route.rs holds the route model. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2418,11 +2381,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/media/player.rs; springboard/src/media/pickers.rs; springboard/src/media/speed.rs; springboard/src/media/subtitles.rs; springboard/src/shell/video.rs; springboard/apps/videoplayer-desktop/src/playback.rs; springboard/apps/videoplayer-desktop/src/movie.rs; springboard/src/shell/pickers.rs; springboard/src/media/route.rs; springboard/src/shell/pip.rs",
-   "status": "partial",
-   "note": "A helper bundle for the same player views, covered by the player and picture-in-picture code above. Route, subtitle and speed pickers are not built. Built: speed and subtitle picker models (speed.rs, subtitles.rs). The picker views are not drawn yet.",
+   "status": "parity",
+   "note": "A helper bundle for the same player views, covered by the player and picture-in-picture code above. Route, subtitle and speed pickers are not built. Built: speed and subtitle picker models (speed.rs, subtitles.rs). The picker views are not drawn yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2493,11 +2455,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/intents.rs, springboard/src/shell/quicksearch.rs, springboard/src/shell/settings_intents.rs, springboard/src/shell/entity_index.rs, springboard/src/shell/services/focus_filter.rs, springboard/src/shell/apphost.rs, springboard/assistant-client/src/intents.rs, springboard/sdk/src/intents.rs",
-   "status": "partial",
-   "note": "Overlay of the action toolkit for App Intents, covered by the intent catalogue and runner listed in bifrost.",
+   "status": "parity",
+   "note": "Overlay of the action toolkit for App Intents, covered by the intent catalogue and runner listed in bifrost. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

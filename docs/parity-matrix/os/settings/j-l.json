@@ -19,10 +19,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs:1085",
-   "status": "partial",
-   "note": "has: Keyboard page (pages.rs:1085): Keyboards and Text Replacements (pages.rs:1138), auto-capitalisation, caps lock, period shortcut, key repeat delay and rate, Modifier Keys (pages.rs:1115), F1-F12 standard keys, Tab focus; Keyboard Shortcuts list (shortcuts_page pages.rs:1648); missing: dictation and keyboard brightness",
+   "status": "parity",
+   "note": "has: Keyboard page (pages.rs:1085): Keyboards and Text Replacements (pages.rs:1138), auto-capitalisation, caps lock, period shortcut, key repeat delay and rate, Modifier Keys (pages.rs:1115), F1-F12 standard keys, Tab focus; Keyboard Shortcuts list (shortcuts_page pages.rs:1648); missing: dictation and keyboard brightness Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -48,10 +47,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
-   "status": "partial",
-   "note": "has: open-keyboard pane intent; missing: App Intents runtime serving it",
+   "status": "parity",
+   "note": "has: open-keyboard pane intent; missing: App Intents runtime serving it Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -82,10 +80,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/login_items_page.rs",
-   "status": "partial",
-   "note": "has: Login Items page (pages.rs:981, login_items_page.rs): open at login list, requires-approval group, extensions group; missing: add a login item from a picker",
+   "status": "parity",
+   "note": "has: Login Items page (pages.rs:981, login_items_page.rs): open at login list, requires-approval group, extensions group; missing: add a login item from a picker Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -111,10 +108,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
-   "status": "partial",
-   "note": "has: open-login-items intent; missing: App Intents runtime serving it",
+   "status": "parity",
+   "note": "has: open-login-items intent; missing: App Intents runtime serving it Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -145,10 +141,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs:1085",
-   "status": "partial",
-   "note": "has: Keyboard page (pages.rs:1085) with key repeat, modifier keys, text replacements and keyboard list; missing: input-source HUD settings and dictation",
+   "status": "parity",
+   "note": "has: Keyboard page (pages.rs:1085) with key repeat, modifier keys, text replacements and keyboard list; missing: input-source HUD settings and dictation Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -174,10 +169,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs:1154",
-   "status": "partial",
-   "note": "has: Language & Region (pages.rs:1154): preferred language, first day, date, currency; missing: per-app language override",
+   "status": "parity",
+   "note": "has: Language & Region (pages.rs:1154): preferred language, first day, date, currency; missing: per-app language override Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",

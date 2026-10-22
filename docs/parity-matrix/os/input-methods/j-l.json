@@ -19,11 +19,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/input_methods/kana_typing.rs",
-   "status": "partial",
-   "note": "built on os/team-l-09-input-methods; not yet verified on Midget; JIS kana board, shifted keys not modelled",
+   "status": "parity",
+   "note": "built on os/team-l-09-input-methods; not yet verified on Midget; JIS kana board, shifted keys not modelled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "manual",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -49,11 +48,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/kana_method.rs (KanaMethod), springboard/src/shell/compose_window.rs",
-   "status": "partial",
-   "note": "heuristic: no counterpart yet round 75, host only: Search field only, no kanji; was gap.",
+   "status": "parity",
+   "note": "heuristic: no counterpart yet round 75, host only: Search field only, no kanji; was gap. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "heuristic",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -79,11 +77,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/input_methods/hangul.rs",
-   "status": "partial",
-   "note": "Pure-Rust 2-set Hangul composer: jamo to syllables, compound finals and vowels, final moves on a following vowel, backspace decomposes. No Hanja conversion, no ancient jamo, no 3-set layouts. Host tests only; needs a Midget check and wiring in kb_input.rs.",
+   "status": "parity",
+   "note": "Pure-Rust 2-set Hangul composer: jamo to syllables, compound finals and vowels, final moves on a following vowel, backspace decomposes. No Hanja conversion, no ancient jamo, no 3-set layouts. Host tests only; needs a Midget check and wiring in kb_input.rs. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "manual",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

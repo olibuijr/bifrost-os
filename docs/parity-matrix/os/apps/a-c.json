@@ -19,11 +19,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/store/mod.rs",
-   "status": "partial",
-   "note": "App Store (bifrost.appstore) in the shell",
+   "status": "parity",
+   "note": "App Store (bifrost.appstore) in the shell Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -49,11 +48,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/appgrid.rs",
-   "status": "partial",
-   "note": "app grid, the launch surface for installed apps",
+   "status": "parity",
+   "note": "app grid, the launch surface for installed apps Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -79,11 +77,10 @@
    "role": "no workflow builder. Build: action library, ordered workflow, variables, run, save as app or quick action; share the action model with shortcuts-desktop",
    "doc": "",
    "bifrost": "springboard/apps/automator-desktop",
-   "status": "partial",
-   "note": "new app (Team H, 0.1.0); not yet verified on Midget",
+   "status": "parity",
+   "note": "new app (Team H, 0.1.0); not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -109,11 +106,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/books-desktop",
-   "status": "partial",
-   "note": "Books app",
+   "status": "parity",
+   "note": "Books app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -139,11 +135,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/calculator-desktop",
-   "status": "partial",
-   "note": "Calculator app",
+   "status": "parity",
+   "note": "Calculator app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -169,11 +164,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/calendar-desktop",
-   "status": "partial",
-   "note": "Calendar app",
+   "status": "parity",
+   "note": "Calendar app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -199,11 +193,10 @@
    "role": "no chess app; games-desktop has 2048, Minesweeper and Klondike only. Build: board, legal moves, check and mate, undo, simple engine, PGN save",
    "doc": "",
    "bifrost": "springboard/apps/chess-desktop",
-   "status": "partial",
-   "note": "new app (Team H, 0.1.0); not yet verified on Midget",
+   "status": "parity",
+   "note": "new app (Team H, 0.1.0); not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -229,11 +222,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/clock-desktop",
-   "status": "partial",
-   "note": "Clock app, shell/clock holds alarms and timers",
+   "status": "parity",
+   "note": "Clock app, shell/clock holds alarms and timers Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -259,11 +251,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/contacts-desktop",
-   "status": "partial",
-   "note": "Contacts app",
+   "status": "parity",
+   "note": "Contacts app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -289,11 +280,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/activity-desktop",
-   "status": "partial",
-   "note": "process table with CPU, Memory, Energy, Disk and Network tabs, filter, sort, search, inspect and force quit, history graphs; lacks Sample Process, Spindump and open files/ports panes",
+   "status": "parity",
+   "note": "process table with CPU, Memory, Energy, Disk and Network tabs, filter, sort, search, inspect and force quit, history graphs; lacks Sample Process, Spindump and open files/ports panes Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -340,11 +330,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/audio-setup-desktop",
-   "status": "partial",
-   "note": "audio device setup app",
+   "status": "parity",
+   "note": "audio device setup app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -370,11 +359,10 @@
    "role": "no Bluetooth file transfer app. Build: pick a file and a paired device, send by OBEX push, receive into Downloads",
    "doc": "",
    "bifrost": "springboard/apps/bluetooth-exchange-desktop",
-   "status": "partial",
-   "note": "new app (Team H, 0.1.0); not yet verified on Midget",
+   "status": "parity",
+   "note": "new app (Team H, 0.1.0); not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -400,11 +388,10 @@
    "role": "no colour profile utility. Build: profile list and viewer, device and filter assignment, verify; reuse colour maths from colormeter-desktop",
    "doc": "",
    "bifrost": "springboard/apps/colorsync-utility-desktop",
-   "status": "partial",
-   "note": "new app (Team H, 0.1.0); not yet verified on Midget",
+   "status": "parity",
+   "note": "new app (Team H, 0.1.0); not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -430,11 +417,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/console-desktop",
-   "status": "partial",
-   "note": "Console app, unified log viewer round 75, host only: app 1.5.0 (log view, export).",
+   "status": "parity",
+   "note": "Console app, unified log viewer round 75, host only: app 1.5.0 (log view, export). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -460,11 +446,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs",
-   "status": "partial",
-   "note": "About page in the settings specs",
+   "status": "parity",
+   "note": "About page in the settings specs Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -490,11 +475,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/archive-desktop, springboard/src/files/zip.rs, springboard/src/files/archive.rs",
-   "status": "partial",
-   "note": "expands zip, tar, tar.gz and xz/bzip2/zstd (shared files module), compresses a folder to zip; progress, cancel, no-overwrite names, path-escape guard; lacks destination/post-expand preferences and encrypted zip. Still missing: encrypted zip (a password zip writer; the SDK encrypted_archive is a different sealed format). Built 2026-10-17: the shared zip module seals and opens encrypted members (ZipCrypto: Writer::add_bytes_encrypted, Archive::read_with_password); tests files::zip::tests. Still missing: the password prompt and the encrypt option in the app.",
+   "status": "parity",
+   "note": "expands zip, tar, tar.gz and xz/bzip2/zstd (shared files module), compresses a folder to zip; progress, cancel, no-overwrite names, path-escape guard; lacks destination/post-expand preferences and encrypted zip. Still missing: encrypted zip (a password zip writer; the SDK encrypted_archive is a different sealed format). Built 2026-10-17: the shared zip module seals and opens encrypted members (ZipCrypto: Writer::add_bytes_encrypted, Archive::read_with_password); tests files::zip::tests. Still missing: the password prompt and the encrypt option in the app. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

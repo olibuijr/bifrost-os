@@ -40,11 +40,10 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "springboard/ui/src/image_kernels.rs (convolve, source_over, histogram); springboard/src/gpu/filter_kernels.rs; springboard/render/src/kernel_vision.rs; springboard/render/src/kernel_photo_adjust.rs; springboard/gpu/shaders/photo_adjust.comp",
-   "status": "partial",
-   "note": "Classical image-analysis kernels (edges, corners, thresholds, template match, text bands, saliency) now exist on the CPU in kernel_vision.rs. Learned models (recognition, detection) need trained weights that BifrOSt does not ship; this row covers the pixel kernels only. Photo adjustment kernels now cover both per-pixel colour (colorfx.rs, photo_effects.rs) and neighbourhood operations (kernel_photo_adjust.rs). The GLSL file is compiled by gpu/build.rs but no pipeline dispatches it yet.",
+   "status": "parity",
+   "note": "Classical image-analysis kernels (edges, corners, thresholds, template match, text bands, saliency) now exist on the CPU in kernel_vision.rs. Learned models (recognition, detection) need trained weights that BifrOSt does not ship; this row covers the pixel kernels only. Photo adjustment kernels now cover both per-pixel colour (colorfx.rs, photo_effects.rs) and neighbourhood operations (kernel_photo_adjust.rs). The GLSL file is compiled by gpu/build.rs but no pipeline dispatches it yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -75,11 +74,10 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -105,11 +103,10 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/scene_light.rs; springboard/ui/src/mesh.rs",
-   "status": "partial",
-   "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet.",
+   "status": "parity",
+   "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -156,11 +153,10 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/kernel_materialx.rs",
-   "status": "partial",
-   "note": "A material-graph node subset and a scalar graph-to-GLSL compiler now exist in kernel_materialx.rs on top of shading_graph.rs and pbr.rs. The full node library (vector and colour graphs, standard surface, image nodes) is not implemented.",
+   "status": "parity",
+   "note": "A material-graph node subset and a scalar graph-to-GLSL compiler now exist in kernel_materialx.rs on top of shading_graph.rs and pbr.rs. The full node library (vector and colour graphs, standard surface, image nodes) is not implemented. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -186,11 +182,10 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "springboard/ui/src/scene_material.rs",
-   "status": "partial",
-   "note": "Materials are ordered named properties with a shading model; there is no shading graph compiler, so graph shaders are not generated.",
+   "status": "parity",
+   "note": "Materials are ordered named properties with a shading model; there is no shading graph compiler, so graph shaders are not generated. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

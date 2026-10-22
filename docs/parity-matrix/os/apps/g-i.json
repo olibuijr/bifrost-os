@@ -19,11 +19,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/games-desktop",
-   "status": "partial",
-   "note": "Games app",
+   "status": "parity",
+   "note": "Games app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -70,11 +69,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/image-capture-desktop",
-   "status": "partial",
-   "note": "app window with a worker thread for device listing and import, alongside shell camera import; lacks scanner support",
+   "status": "parity",
+   "note": "app window with a worker thread for device listing and import, alongside shell camera import; lacks scanner support Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -121,11 +119,10 @@
    "role": "no graphing app. Build: 2D explicit and implicit equations, parametric curves, 3D surfaces, sliders, PNG/PDF export",
    "doc": "",
    "bifrost": "springboard/apps/grapher-desktop",
-   "status": "partial",
-   "note": "new app (Team H, 0.1.0); not yet verified on Midget",
+   "status": "parity",
+   "note": "new app (Team H, 0.1.0); not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

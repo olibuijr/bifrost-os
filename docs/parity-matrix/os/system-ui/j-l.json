@@ -39,10 +39,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/keyboard.rs",
-   "status": "partial",
-   "note": "keyboard access",
+   "status": "parity",
+   "note": "keyboard access Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -68,10 +67,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/kb_layouts.rs",
-   "status": "partial",
-   "note": "keyboard layouts",
+   "status": "parity",
+   "note": "keyboard layouts Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -117,10 +115,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/installer/app.rs, springboard/src/shell/pages.rs, springboard/src/setup.rs",
-   "status": "partial",
-   "note": "Setup language step, plus Settings > Language & Region reachable by Search (settings_intents open-language-region, 2026-10-17). Still missing: a standalone Language Chooser app (the picker outside Settings); built on os/team-l-04-system-ui; not yet verified on Midget",
+   "status": "parity",
+   "note": "Setup language step, plus Settings > Language & Region reachable by Search (settings_intents open-language-region, 2026-10-17). Still missing: a standalone Language Chooser app (the picker outside Settings); built on os/team-l-04-system-ui; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -171,10 +168,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/login.rs",
-   "status": "partial",
-   "note": "login and lock",
+   "status": "parity",
+   "note": "login and lock Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -220,10 +216,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs",
-   "status": "partial",
-   "note": "Language & Region page",
+   "status": "parity",
+   "note": "Language & Region page Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -249,10 +244,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/login.rs",
-   "status": "partial",
-   "note": "lock screen",
+   "status": "parity",
+   "note": "lock screen Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -278,10 +272,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/system_intents.rs, springboard/src/shell/services/system_intents.rs, springboard/src/shell/settings_actions.rs, springboard/src/shell/mod.rs",
-   "status": "partial",
-   "note": "Lock Screen is a Search action (settings_actions lock-screen, runs Shell::lock_screen); not yet exposed as an App Intent to Shortcuts; built on os/team-l-04-system-ui; not yet verified on Midget. Built 2026-10-17: Search row and lock hit.",
+   "status": "parity",
+   "note": "Lock Screen is a Search action (settings_actions lock-screen, runs Shell::lock_screen); not yet exposed as an App Intent to Shortcuts; built on os/team-l-04-system-ui; not yet verified on Midget. Built 2026-10-17: Search row and lock hit. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",

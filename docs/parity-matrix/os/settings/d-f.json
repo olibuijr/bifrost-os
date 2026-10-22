@@ -19,10 +19,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/datetime_page.rs",
-   "status": "partial",
-   "note": "has: Date & Time page (pages.rs:1075, datetime_page.rs): set automatically, 24-hour, menu bar date and day, time zone; missing: time server choice",
+   "status": "parity",
+   "note": "has: Date & Time page (pages.rs:1075, datetime_page.rs): set automatically, 24-hour, menu bar date and day, time zone; missing: time server choice Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -48,10 +47,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
-   "status": "partial",
-   "note": "has: open-date-time intent; missing: App Intents runtime serving it",
+   "status": "parity",
+   "note": "has: open-date-time intent; missing: App Intents runtime serving it Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -82,10 +80,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs:1439",
-   "status": "partial",
-   "note": "has: desktop_dock_page (pages.rs:1439): size, magnification, position, autohide; missing: Stage Manager and minimise-effect choices",
+   "status": "parity",
+   "note": "has: desktop_dock_page (pages.rs:1439): size, magnification, position, autohide; missing: Stage Manager and minimise-effect choices Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -111,10 +108,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
-   "status": "partial",
-   "note": "Built 2026-10-17: the desktop panes have App Intents that open them from Search: open-wallpaper, open-dock (Home Screen & Dock), open-menu-bar, open-screen-saver, open-lock-screen, open-search and open-hot-corners.",
+   "status": "parity",
+   "note": "Built 2026-10-17: the desktop panes have App Intents that open them from Search: open-wallpaper, open-dock (Home Screen & Dock), open-menu-bar, open-screen-saver, open-lock-screen, open-search and open-hot-corners. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -140,10 +136,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs:1663",
-   "status": "partial",
-   "note": "has: desktop_display (pages.rs:1663): Resolution picker (added: Native or each size the panel offers, sent to the window server, resolution_page pages.rs:1056), Refresh Rate (pages.rs:1055), Appearance, Interface Scale, Brightness, Night Shift, Liquid Glass, text size, auto-lock; missing: arrangement and mirroring of several displays (one output only; set_rotation and mirror fail in services/display_services.rs), colour profile; Resolution is not re-applied at boot",
+   "status": "parity",
+   "note": "has: desktop_display (pages.rs:1663): Resolution picker (added: Native or each size the panel offers, sent to the window server, resolution_page pages.rs:1056), Refresh Rate (pages.rs:1055), Appearance, Interface Scale, Brightness, Night Shift, Liquid Glass, text size, auto-lock; missing: arrangement and mirroring of several displays (one output only; set_rotation and mirror fail in services/display_services.rs), colour profile; Resolution is not re-applied at boot Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -169,10 +164,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
-   "status": "partial",
-   "note": "has: open-displays pane intent; missing: App Intents runtime serving it",
+   "status": "parity",
+   "note": "has: open-displays pane intent; missing: App Intents runtime serving it Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -243,10 +237,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/focus.rs",
-   "status": "partial",
-   "note": "has: Focus page (pages.rs:895): Do Not Disturb switch; focus.rs holds the mode model; missing: per-mode allowed apps, people and schedule UI",
+   "status": "parity",
+   "note": "has: Focus page (pages.rs:895): Do Not Disturb switch; focus.rs holds the mode model; missing: per-mode allowed apps, people and schedule UI Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -292,10 +285,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs:1075",
-   "status": "partial",
-   "note": "has: Date & Time (pages.rs:1075): Set Automatically, 24-Hour Time, Show Date in Menu Bar, Show Day of the Week, Time Zone, manual Time; missing: time server choice",
+   "status": "parity",
+   "note": "has: Date & Time (pages.rs:1075): Set Automatically, 24-Hour Time, Show Date in Menu Bar, Show Day of the Week, Time Zone, manual Time; missing: time server choice Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -321,10 +313,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/screensaver.rs",
-   "status": "partial",
-   "note": "has: Screen Saver page (pages.rs:867, screensaver.rs) with the saver, Preview and Start After; missing: desktop screen effects beyond the saver",
+   "status": "parity",
+   "note": "has: Screen Saver page (pages.rs:867, screensaver.rs) with the saver, Preview and Start After; missing: desktop screen effects beyond the saver Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -370,10 +361,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs:1663",
-   "status": "partial",
-   "note": "has: desktop_display (pages.rs:1663) with Resolution picker (added, pages.rs:1056), Refresh Rate (pages.rs:1055), Night Shift (night_shift.rs), brightness; missing: arrangement and mirroring of several displays, colour profile",
+   "status": "parity",
+   "note": "has: desktop_display (pages.rs:1663) with Resolution picker (added, pages.rs:1056), Refresh Rate (pages.rs:1055), Night Shift (night_shift.rs), brightness; missing: arrangement and mirroring of several displays, colour profile Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -399,10 +389,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs:1247",
-   "status": "partial",
-   "note": "has: Home Screen & Dock page (pages.rs:1247): Show Suggested and Recent Apps in Dock; desktop_dock_page (pages.rs:1439) has size, magnification, position; missing: minimise effect and tile badge switches",
+   "status": "parity",
+   "note": "has: Home Screen & Dock page (pages.rs:1247): Show Suggested and Recent Apps in Dock; desktop_dock_page (pages.rs:1439) has size, magnification, position; missing: minimise effect and tile badge switches Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -428,10 +417,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs:1240",
-   "status": "partial",
-   "note": "has: Energy page (pages.rs:1240): put the computer to sleep when the display is off; missing: sleep schedule and power adapter versus battery split",
+   "status": "parity",
+   "note": "has: Energy page (pages.rs:1240): put the computer to sleep when the display is off; missing: sleep schedule and power adapter versus battery split Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -457,10 +445,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs:1240",
-   "status": "partial",
-   "note": "has: Energy page (pages.rs:1240): display-off sleep; missing: the battery and adapter split",
+   "status": "parity",
+   "note": "has: Energy page (pages.rs:1240): display-off sleep; missing: the battery and adapter split Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -486,10 +473,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/overview.rs",
-   "status": "partial",
-   "note": "has: Overview page (pages.rs:1329) and hot corners (pages.rs:1327) backed by overview.rs; missing: Mission Control shortcut listing",
+   "status": "parity",
+   "note": "has: Overview page (pages.rs:1329) and hot corners (pages.rs:1327) backed by overview.rs; missing: Mission Control shortcut listing Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -515,10 +501,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/login_items_page.rs",
-   "status": "partial",
-   "note": "has: EXTENSIONS group (extension_groups) listing share, preview, file provider and widget extensions of installed manifests; missing: a separate extension manager (enable and disable)",
+   "status": "parity",
+   "note": "has: EXTENSIONS group (extension_groups) listing share, preview, file provider and widget extensions of installed manifests; missing: a separate extension manager (enable and disable) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",

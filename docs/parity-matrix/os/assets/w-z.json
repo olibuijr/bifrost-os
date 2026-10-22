@@ -47,11 +47,10 @@
    "role": "Symbol, dingbat or math font: Webdings",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans Symbols 2 (noto-fonts), design-similar",
+   "status": "parity",
+   "note": "open equivalent Noto Sans Symbols 2 (noto-fonts), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -81,11 +80,10 @@
    "role": "Symbol, dingbat or math font: Wingdings 2",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent D050000L (gsfonts), design-similar",
+   "status": "parity",
+   "note": "open equivalent D050000L (gsfonts), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -115,11 +113,10 @@
    "role": "Symbol, dingbat or math font: Wingdings 3",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans Symbols (noto-fonts), design-similar",
+   "status": "parity",
+   "note": "open equivalent Noto Sans Symbols (noto-fonts), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -149,11 +146,10 @@
    "role": "Symbol, dingbat or math font: Wingdings",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent D050000L (gsfonts), design-similar",
+   "status": "parity",
+   "note": "open equivalent D050000L (gsfonts), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -183,11 +179,10 @@
    "role": "Latin text/display font: Zapfino",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar",
+   "status": "parity",
+   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -413,8 +408,8 @@
    "role": "CJK or Korean/Japanese decorative or serif font: Xingkai",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "parity",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
    "checks": [
@@ -428,7 +423,6 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready": true,
    "ready_note": "Open-source substitute Noto Serif CJK (noto-fonts-cjk, OFL-1.1) for the same role; design-similar CJK serif; no open kai brush face packaged."
   },
   {
@@ -615,11 +609,10 @@
    "role": "Screen reader earcon: Web Area Loaded",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -645,11 +638,10 @@
    "role": "Screen reader earcon: Web Page Loaded",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -675,11 +667,10 @@
    "role": "Screen reader earcon: Window Activated",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -705,11 +696,10 @@
    "role": "Screen reader earcon: Wrap Back",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -735,11 +725,10 @@
    "role": "Screen reader earcon: Wrap Back Hard",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -765,11 +754,10 @@
    "role": "Screen reader earcon: Wrap Boundary",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -795,11 +783,10 @@
    "role": "Screen reader earcon: Wrap Forward",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -825,11 +812,10 @@
    "role": "Screen reader earcon: Wrap Forward Hard",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -855,11 +841,10 @@
    "role": "Screen reader earcon: Xcode Line Breakpoint",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -885,11 +870,10 @@
    "role": "Screen reader earcon: Xcode Line Error",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -915,11 +899,10 @@
    "role": "Screen reader earcon: Xcode Line Warning",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -945,11 +928,10 @@
    "role": "Latin text/display font: WorkflowGlyphs",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans Symbols 2 (noto-fonts), design-similar",
+   "status": "parity",
+   "note": "open equivalent Noto Sans Symbols 2 (noto-fonts), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",

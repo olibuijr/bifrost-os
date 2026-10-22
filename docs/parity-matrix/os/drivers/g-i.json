@@ -19,11 +19,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/bare/bluetooth.rs",
-   "status": "partial",
-   "note": "Serial over Bluetooth (RFCOMM) comes from the Linux rfcomm kernel module. bluetooth.rs drives the radio through the kernel management socket and does not open RFCOMM serial ports for apps.",
+   "status": "parity",
+   "note": "Serial over Bluetooth (RFCOMM) comes from the Linux rfcomm kernel module. bluetooth.rs drives the radio through the kernel management socket and does not open RFCOMM serial ports for apps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",

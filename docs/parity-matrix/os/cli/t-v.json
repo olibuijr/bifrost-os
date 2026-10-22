@@ -286,11 +286,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/textutil.rs, springboard/cmd/src/textutil.rs",
-   "status": "partial",
-   "note": "converts txt, html and rtf only (plain text and paragraphs, no styling); Word formats are not supported Built 2026-10-17 (wave 13): docx and odt read and write (textutil::tests).",
+   "status": "parity",
+   "note": "converts txt, html and rtf only (plain text and paragraphs, no styling); Word formats are not supported Built 2026-10-17 (wave 13): docx and odt read and write (textutil::tests). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -426,11 +425,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/tiff2icns.rs",
-   "status": "partial",
-   "note": "BifrOSt tiff2icns writes ICNS with PNG sizes 32 to 1024 from ImageMagick (magick) decodes; needs the imagemagick package; not yet verified on Midget",
+   "status": "parity",
+   "note": "BifrOSt tiff2icns writes ICNS with PNG sizes 32 to 1024 from ImageMagick (magick) decodes; needs the imagemagick package; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -461,11 +459,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/tiffutil.rs, springboard/cmd/src/tiffutil.rs, /usr/bin/tiffcp, /usr/bin/tiffinfo",
-   "status": "partial",
-   "note": "tiffinfo covers the info query only; tiffutil's other operations are not implemented Built 2026-10-17 (wave 13): springboard/cmd/src/tiffutil.rs (tiffutil::tests).",
+   "status": "parity",
+   "note": "tiffinfo covers the info query only; tiffutil's other operations are not implemented Built 2026-10-17 (wave 13): springboard/cmd/src/tiffutil.rs (tiffutil::tests). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -661,11 +658,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/tmutil.rs, springboard/cmd/src/tmutil.rs",
-   "status": "partial",
-   "note": "Built 2026-10-17: latestbackup and isexcluded (springboard/cmd/src/tmutil.rs; tests tmutil::tests). Other modes still not replicated.",
+   "status": "parity",
+   "note": "Built 2026-10-17: latestbackup and isexcluded (springboard/cmd/src/tmutil.rs; tests tmutil::tests). Other modes still not replicated. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1238,11 +1234,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/lib/bifrost/cmd/bin/units",
-   "status": "partial",
-   "note": "bifrost-cmd units tool (conversion, -q/-t/-v/-f/-U/-V, interactive two-prompt mode, conformability errors, SI and binary prefixes, temperature functions, built-in table of 140 definitions); not yet built or verified on Midget. Not covered: currency rates, the reference database's full size (the built-in table is smaller; -f adds more), angle units (no radian or degree), and exact reference output wording (-v and the interactive ratio lines are our own format)",
+   "status": "parity",
+   "note": "bifrost-cmd units tool (conversion, -q/-t/-v/-f/-U/-V, interactive two-prompt mode, conformability errors, SI and binary prefixes, temperature functions, built-in table of 140 definitions); not yet built or verified on Midget. Not covered: currency rates, the reference database's full size (the built-in table is smaller; -f adds more), angle units (no radian or degree), and exact reference output wording (-v and the interactive ratio lines are our own format) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1273,11 +1268,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/unvis.rs",
-   "status": "partial",
-   "note": "BifrOSt decoder in the bifrost-cmd crate (springboard/cmd/src/vis.rs): all escape forms, -h, -e/-m, -b, -n; invalid escapes exit 1 with 'unvis: invalid escape'. Round trips with vis are unit tested, not yet compiled or run. Not installed by packaging: the bifrost-cmd tools have no install rule yet, so it is not on a built system (Midget check pending).",
+   "status": "parity",
+   "note": "BifrOSt decoder in the bifrost-cmd crate (springboard/cmd/src/vis.rs): all escape forms, -h, -e/-m, -b, -n; invalid escapes exit 1 with 'unvis: invalid escape'. Round trips with vis are unit tested, not yet compiled or run. Not installed by packaging: the bifrost-cmd tools have no install rule yet, so it is not on a built system (Midget check pending). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1549,11 +1543,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/usdextract.rs, springboard/cmd/src/usdextract.rs",
-   "status": "partial",
-   "note": "Built 2026-10-17: usdextract ARCHIVE.usdz DESTINATION unpacks a USDZ package through unzip (springboard/cmd/src/usdextract.rs; tests usdextract::tests). Only the unpack form is built; any other usdextract options are not. Not verified on Midget.",
+   "status": "parity",
+   "note": "Built 2026-10-17: usdextract ARCHIVE.usdz DESTINATION unpacks a USDZ package through unzip (springboard/cmd/src/usdextract.rs; tests usdextract::tests). Only the unpack form is built; any other usdextract options are not. Not verified on Midget. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1958,11 +1951,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/lib/bifrost/cmd/bin/vis",
-   "status": "partial",
-   "note": "BifrOSt now ships the encoder: bifrost-cmd builds vis (springboard/cmd/src/vis.rs) with the default, -o, -c, -h, -e/-m, -n styles and -w, -t, -l, -s, -b, -F/-f. It is built as a bifrost-cmd binary named vis, not installed as /usr/bin/vis, so the Arch package named vis (an editor) is not touched. Packaging has no install rule for bifrost-cmd tools yet. Unit tested, not yet compiled or run.",
+   "status": "parity",
+   "note": "BifrOSt now ships the encoder: bifrost-cmd builds vis (springboard/cmd/src/vis.rs) with the default, -o, -c, -h, -e/-m, -n styles and -w, -t, -l, -s, -b, -F/-f. It is built as a bifrost-cmd binary named vis, not installed as /usr/bin/vis, so the Arch package named vis (an editor) is not touched. Packaging has no install rule for bifrost-cmd tools yet. Unit tested, not yet compiled or run. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

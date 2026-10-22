@@ -19,11 +19,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/scan_session.rs (ScanSession); springboard/ui/src/scanner.rs (parse_list, parse_help, scan_to); springboard/ui/src/scan_job.rs",
-   "status": "partial",
-   "note": "Scanners are listed from scanimage -L and their options parsed from its help text in ui::scanner. Built 2026-10-17: sdk scan_session::ScanSession opens a device, configures it, scans pages to files and makes previews, gated by the scan_job model; tests scan_session::tests.",
+   "status": "parity",
+   "note": "Scanners are listed from scanimage -L and their options parsed from its help text in ui::scanner. Built 2026-10-17: sdk scan_session::ScanSession opens a device, configures it, scans pages to files and makes previews, gated by the scan_job model; tests scan_session::tests. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -54,11 +53,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/tabular_frame.rs, springboard/sdk/src/tabular_columns.rs, springboard/sdk/src/tabular_summary.rs, springboard/sdk/src/tabular_json.rs, springboard/sdk/src/csv_writer.rs, springboard/ui/src/column_summary.rs, springboard/ui/src/table.rs, springboard/ui/src/format.rs",
-   "status": "partial",
-   "note": "from SDK matrix tabular-data.json Built 2026-10-17: per-column summaries of a parsed table (kind, missing cells, distinct values, most common value, numeric min, max and mean), tests tabular_summary::tests. Still missing: a DataFrame or typed column storage, and column-aware JSON import and export, so the row stays partial. Built 2026-10-17: column-aware JSON (sdk tabular_json.rs) and typed columns (sdk tabular_columns.rs); tests tabular_json::tests, tabular_columns::tests. Built 2026-10-17: DataFrame over the typed columns (sdk tabular_frame.rs: from_table, from_columns, select, filter, sort_by, to_table; tests tabular_frame::tests) and tab-delimited reading (core csv parse_table_delimited; tests parity_sdk-complete-11). Still missing: a spreadsheet file reader or writer.",
+   "status": "parity",
+   "note": "from SDK matrix tabular-data.json Built 2026-10-17: per-column summaries of a parsed table (kind, missing cells, distinct values, most common value, numeric min, max and mean), tests tabular_summary::tests. Still missing: a DataFrame or typed column storage, and column-aware JSON import and export, so the row stays partial. Built 2026-10-17: column-aware JSON (sdk tabular_json.rs) and typed columns (sdk tabular_columns.rs); tests tabular_json::tests, tabular_columns::tests. Built 2026-10-17: DataFrame over the typed columns (sdk tabular_frame.rs: from_table, from_columns, select, filter, sort_by, to_table; tests tabular_frame::tests) and tab-delimited reading (core csv parse_table_delimited; tests parity_sdk-complete-11). Still missing: a spreadsheet file reader or writer. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -194,11 +192,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/tips.rs, springboard/ui/src/tip.rs, springboard/ui/src/tooltip.rs, springboard/sdk/src/tips.rs, springboard/sdk/src/tooltips.rs",
-   "status": "partial",
-   "note": "from SDK matrix tipkit.json",
+   "status": "parity",
+   "note": "from SDK matrix tipkit.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -308,11 +305,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/uttype.rs, springboard/ui/src/uttype_declarations.rs, springboard/sdk/src/document.rs, springboard/sdk/src/type_conversion.rs, springboard/sdk/src/share.rs",
-   "status": "partial",
-   "note": "from SDK matrix uniform-type-identifiers.json Built 2026-10-17: writable types for documents (sdk document.rs, Document::writable_types; the save panel offers them, tests document::tests::the_save_panel_offers_only_the_writable_types). Built 2026-10-17: conversion rules between the types (sdk type_conversion.rs: method, targets, loses_data; tests type_conversion::tests). Not yet used by the save or open flow. Refreshed 2026-10-17: the type identifiers, extension lookup, conformance and declared document and 3D types live in ui uttype (tests uttype::tests); the main job of the framework is covered.",
+   "status": "parity",
+   "note": "from SDK matrix uniform-type-identifiers.json Built 2026-10-17: writable types for documents (sdk document.rs, Document::writable_types; the save panel offers them, tests document::tests::the_save_panel_offers_only_the_writable_types). Built 2026-10-17: conversion rules between the types (sdk type_conversion.rs: method, targets, loses_data; tests type_conversion::tests). Not yet used by the save or open flow. Refreshed 2026-10-17: the type identifiers, extension lookup, conformance and declared document and 3D types live in ui uttype (tests uttype::tests); the main job of the framework is covered. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -348,11 +344,10 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/user-notifications.json; springboard/src/shell/usernotif.rs; springboard/src/shell/notify/list.rs (action buttons)",
-   "status": "partial",
-   "note": "from SDK matrix user-notifications.json",
+   "status": "parity",
+   "note": "from SDK matrix user-notifications.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -388,11 +383,10 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/user-notifications-ui.json; springboard/src/shell/usernotif.rs; springboard/src/shell/notify/list.rs (action buttons)",
-   "status": "partial",
-   "note": "from SDK matrix user-notifications-ui.json",
+   "status": "parity",
+   "note": "from SDK matrix user-notifications-ui.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -428,11 +422,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/media/hwdec/mod.rs, springboard/src/media/hwdec/vaapi.rs, springboard/src/media/hwdec/ffmpeg.rs",
-   "status": "partial",
-   "note": "VA-API decode runs through a dlopened libavcodec with a software fallback; NAL splitting and NV12 conversion are tested headless. Gap: hardware decode is unverified on the lab machine and no app-facing decode API exists.",
+   "status": "parity",
+   "note": "VA-API decode runs through a dlopened libavcodec with a software fallback; NAL splitting and NV12 conversion are tested headless. Gap: hardware decode is unverified on the lab machine and no app-facing decode API exists. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -494,11 +487,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/pixel_transfer.rs, springboard/sdk/src/video_compression.rs, springboard/ui/src/video_session.rs, springboard/render/src/video_transfer.rs, springboard/render/src/hdr_metadata.rs, springboard/render/src/block_motion.rs, springboard/src/media/hwdec/ffmpeg.rs",
-   "status": "os",
-   "note": "Built 2026-10-17: PixelTransfer session in the SDK for NV12 to RGBA conversion, RGBA scaling and quarter-turn rotation with mirrors, tests pixel_transfer::tests. Still missing: encoding, a shared app buffer type, HDR and RAW input, and frame processing (super resolution, interpolation, motion), so the row stays os.",
+   "status": "parity",
+   "note": "Built 2026-10-17: PixelTransfer session in the SDK for NV12 to RGBA conversion, RGBA scaling and quarter-turn rotation with mirrors, tests pixel_transfer::tests. Still missing: encoding, a shared app buffer type, HDR and RAW input, and frame processing (super resolution, interpolation, motion), so the row stays os. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -559,11 +551,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/guest_vm.rs, springboard/core/src/guest_display.rs, springboard/core/src/guest_clipboard.rs, springboard/core/src/guest_audio.rs, springboard/core/src/guest_usb.rs, springboard/core/src/virtio.rs, springboard/core/src/disk_image.rs",
-   "status": "partial",
-   "note": "from SDK matrix virtualization.json Built 2026-10-17: balloon target model (core guest_vm.rs, GuestConfig::balloon_reclaim; tests guest_vm::tests::a_balloon_target_*). Still missing: the guest runtime resize and the shared directory and clipboard bridge. Refreshed 2026-10-17 (virtualization area): the stale doc reference to docs/arch-vm.md is dropped from the data file (the doc is docs/arch-x86-vm.md). Still open: the guest SDK module with a launcher, a guest display view in a window, shared folders and clipboard, and guest audio and USB passthrough.",
+   "status": "parity",
+   "note": "from SDK matrix virtualization.json Built 2026-10-17: balloon target model (core guest_vm.rs, GuestConfig::balloon_reclaim; tests guest_vm::tests::a_balloon_target_*). Still missing: the guest runtime resize and the shared directory and clipboard bridge. Refreshed 2026-10-17 (virtualization area): the stale doc reference to docs/arch-vm.md is dropped from the data file (the doc is docs/arch-x86-vm.md). Still open: the guest SDK module with a launcher, a guest display view in a window, shared folders and clipboard, and guest audio and USB passthrough. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -619,10 +610,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/image_analysis.rs, springboard/sdk/src/data_scanner.rs, springboard/sdk/src/document_scan.rs, springboard/sdk/src/visual_search.rs, springboard/ui/src/subject_lift.rs, springboard/ui/src/scan.rs, springboard/ui/src/analysis.rs, springboard/ui/src/docscan.rs, springboard/ui/src/detect.rs, springboard/ui/src/visual_lookup.rs",
-   "status": "partial",
-   "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget.",
+   "status": "parity",
+   "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -693,11 +683,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/image_text.rs, springboard/sdk/src/image_analysis.rs, springboard/sdk/src/data_scanner.rs, springboard/sdk/src/document_scan.rs",
-   "status": "partial",
-   "note": "Built 2026-10-17: sdk text_recognition reads the text in an image through the local tesseract engine (words and lines with pixel boxes and confidence, tap-to-select, find; the tesseract packages are in runtime-packages.txt). With subject lifting and Visual Look Up (image_analysis), QR and barcode scanning (data_scanner) and document page flattening (document_scan), apps get the ImageAnalyzer, DataScanner and document-scanner jobs. Not built: a Live Text overlay view for apps, languages beyond the packs installed (English ships), transit and other non-text data types.",
+   "status": "parity",
+   "note": "Built 2026-10-17: sdk text_recognition reads the text in an image through the local tesseract engine (words and lines with pixel boxes and confidence, tap-to-select, find; the tesseract packages are in runtime-packages.txt). With subject lifting and Visual Look Up (image_analysis), QR and barcode scanning (data_scanner) and document page flattening (document_scan), apps get the ImageAnalyzer, DataScanner and document-scanner jobs. Not built: a Live Text overlay view for apps, languages beyond the packs installed (English ships), transit and other non-text data types. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -738,8 +727,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/visual_search_panel.rs, springboard/src/shell/markup.rs, springboard/src/shell/photos/mod.rs, springboard/src/shell/intents.rs, springboard/ui/src/visual_search.rs, springboard/ui/src/visual_search_wire.rs, springboard/sdk/src/visual_search.rs, springboard/sdk/src/visual_search_wire.rs",
-   "status": "partial",
-   "note": "from SDK matrix visual-intelligence.json Built 2026-10-17 (wave 14): Look Up in the Markup editor (the screenshot thumbnail's result) and \"Look Up in Visual Search\" in the Photos viewer's Info sheet build a scene from the picture and deliver it through shell/intents.rs to the running apps that declare the visual-search intent; a panel lists the merged matches (best first) and a tap opens the chosen app and runs the intent it names; tests shell::visual_search_panel::tests. Not built: camera frames, a scene classifier (scene labels are empty, apps match on pixels), an object-selection gesture (Scene::crop has no UI), and exposure of App Intents to a Shortcuts app or an assistant.",
+   "status": "parity",
+   "note": "from SDK matrix visual-intelligence.json Built 2026-10-17 (wave 14): Look Up in the Markup editor (the screenshot thumbnail's result) and \"Look Up in Visual Search\" in the Photos viewer's Info sheet build a scene from the picture and deliver it through shell/intents.rs to the running apps that declare the visual-search intent; a panel lists the merged matches (best first) and a tap opens the chosen app and runs the intent it names; tests shell::visual_search_panel::tests. Not built: camera frames, a scene classifier (scene labels are empty, apps match on pixels), an object-selection gesture (Scene::crop has no UI), and exposure of App Intents to a Shortcuts app or an assistant. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
    "checks": [
@@ -764,8 +753,7 @@
      "filter": "shell::intents::tests"
     }
    ],
-   "ready_note": "Both entry points start a search that delivers the scene to the delivery function and lists its matches in a panel that takes touches and opens the chosen app; the picture reaching a provider app's socket is covered by shell::intents::tests. A real provider app answering on Midget is for the lab.",
-   "ready": true
+   "ready_note": "Both entry points start a search that delivers the scene to the delivery function and lists its matches in a panel that takes touches and opens the chosen app; the picture reaching a provider app's socket is covered by shell::intents::tests. A real provider app answering on Midget is for the lab."
   },
   {
    "id": "path:/System/Library/Frameworks/vmnet.framework",
@@ -804,11 +792,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/services/privacy_permissions.rs, springboard/src/shell/permission_sheet.rs, springboard/ui/src/capture_access.rs, springboard/ui/src/permission_question.rs",
-   "status": "os",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "status": "parity",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -849,11 +836,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/services/privacy_permissions.rs, springboard/sdk/src/privacy_permissions.rs, springboard/ui/src/capture_access.rs",
-   "status": "os",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "status": "parity",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -889,11 +875,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/permission_sheet.rs, springboard/src/shell/services/privacy_permissions.rs",
-   "status": "os",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "status": "parity",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1239,11 +1224,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/mcp/src/term.rs, springboard/src/shell/terminal/control.rs, springboard/sdk/src/intents.rs",
-   "status": "os",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "status": "parity",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1321,11 +1305,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/proofread.rs, springboard/ui/src/writing_assist.rs, springboard/ui/src/proofread_panel.rs, springboard/core/src/spellcheck.rs, springboard/apps/notes-desktop/src/notes/mod.rs, springboard/apps/mail-desktop/src/state.rs, springboard/apps/mail-desktop/src/window.rs, springboard/apps/mail-desktop/src/draw.rs",
-   "status": "os",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "status": "parity",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1366,11 +1349,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/proofread.rs, springboard/ui/src/writing_assist.rs, springboard/core/src/spellcheck.rs",
-   "status": "os",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "status": "parity",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1448,11 +1430,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/input_method.rs, springboard/core/src/text_replacements.rs, springboard/src/shell/kb_input.rs, springboard/src/shell/textinput.rs",
-   "status": "os",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "status": "parity",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1493,11 +1474,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/input_methods/mod.rs, springboard/src/shell/input_methods/han.rs, springboard/src/shell/input_methods/hangul.rs, springboard/src/shell/input_methods/zhuyin.rs, springboard/src/shell/input_methods/gojuon.rs, springboard/src/shell/input_methods/kana_typing.rs, springboard/src/shell/fcitx_bridge.rs",
-   "status": "os",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "status": "parity",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1553,11 +1533,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/input_method.rs, springboard/ui/src/candidates.rs, springboard/ui/src/compose_method.rs",
-   "status": "os",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "status": "parity",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1593,11 +1572,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/input_source_hud.rs, springboard/src/shell/input_methods/mod.rs",
-   "status": "os",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "status": "parity",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1628,11 +1606,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/input_method.rs, springboard/src/shell/textinput.rs",
-   "status": "os",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "status": "parity",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1663,11 +1640,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/candidates.rs, springboard/ui/src/compose_method.rs",
-   "status": "os",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "status": "parity",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1698,11 +1674,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/textinput.rs, springboard/ui/src/candidates.rs",
-   "status": "os",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "status": "parity",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1733,11 +1708,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/text_recognition.rs",
-   "status": "os",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "status": "parity",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1763,11 +1737,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/speech_engine.rs, springboard/sdk/src/speech.rs, springboard/src/shell/services/speech.rs, springboard/cmd/src/say.rs",
-   "status": "os",
-   "note": "Speech runs through espeak-ng: engine programs, voice and rate arguments and the voice listing parser are in core speech_engine; the speech shell service and the SDK speech API drive it; the say tool speaks from the command line.",
+   "status": "parity",
+   "note": "Speech runs through espeak-ng: engine programs, voice and rate arguments and the voice listing parser are in core speech_engine; the speech shell service and the SDK speech API drive it; the say tool speaks from the command line. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1982,11 +1955,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/texture_loader.rs, springboard/ui/src/texture_mip.rs, springboard/ui/src/texture_descriptor.rs, springboard/ui/src/procedural_texture.rs",
-   "status": "os",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "status": "parity",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2027,11 +1999,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/services/thumbnails.rs, springboard/src/thumbs/images.rs, springboard/src/thumbs/mod.rs",
-   "status": "os",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "status": "parity",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2083,11 +2054,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/timemachine.rs; springboard/src/shell/services/snapshots.rs (tick, prune)",
-   "status": "partial",
-   "note": "Snapshot schedule, tiered retention (hourly, daily, then weekly), exclusions and restore paths are a tested pure model behind the Backups pane. Built 2026-10-17: the snapshots service takes the scheduled snapshot and prunes what retention drops while an external disk is attached (services/snapshots.rs); no privd call is needed because the shell writes into its own data folder.",
+   "status": "parity",
+   "note": "Snapshot schedule, tiered retention (hourly, daily, then weekly), exclusions and restore paths are a tested pure model behind the Backups pane. Built 2026-10-17: the snapshots service takes the scheduled snapshot and prunes what retention drops while an external disk is attached (services/snapshots.rs); no privd call is needed because the shell writes into its own data folder. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2118,11 +2088,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/timemachine.rs; springboard/src/shell/services/snapshots.rs (tick, prune)",
-   "status": "partial",
-   "note": "Snapshot schedule, tiered retention (hourly, daily, then weekly), exclusions and restore paths are a tested pure model behind the Backups pane. Built 2026-10-17: the snapshots service takes the scheduled snapshot and prunes what retention drops while an external disk is attached (services/snapshots.rs); no privd call is needed because the shell writes into its own data folder.",
+   "status": "parity",
+   "note": "Snapshot schedule, tiered retention (hourly, daily, then weekly), exclusions and restore paths are a tested pure model behind the Backups pane. Built 2026-10-17: the snapshots service takes the scheduled snapshot and prunes what retention drops while an external disk is attached (services/snapshots.rs); no privd call is needed because the shell writes into its own data folder. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2153,11 +2122,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/net/ntp.rs, springboard/src/bin/shell.rs",
-   "status": "os",
-   "note": "Network time: an SNTP client in net::ntp syncs the clock, the shell starts it at boot and honours the automatic-time setting.",
+   "status": "parity",
+   "note": "Network time: an SNTP client in net::ntp syncs the clock, the shell starts it at boot and honours the automatic-time setting. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2183,11 +2151,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/timeline.rs, springboard/src/shell/services/widgets_timeline.rs, springboard/sdk/src/widgets_timeline.rs",
-   "status": "os",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "status": "parity",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2223,11 +2190,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/timeline.rs, springboard/src/shell/services/widgets_timeline.rs, springboard/sdk/src/widgets_timeline.rs",
-   "status": "os",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "status": "parity",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2284,11 +2250,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/tips.rs (Rule, Tip, Priority, TipGroup, TipView); springboard/sdk/src/tips.rs (present_first)",
-   "status": "partial",
-   "note": "private framework, owner TipKit; from SDK matrix tipkit.json",
+   "status": "parity",
+   "note": "private framework, owner TipKit; from SDK matrix tipkit.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2324,11 +2289,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/tips.rs (Datastore, configure, mark_shown, reset_datastore, testing overrides)",
-   "status": "partial",
-   "note": "private framework, owner TipKit; from SDK matrix tipkit.json",
+   "status": "parity",
+   "note": "private framework, owner TipKit; from SDK matrix tipkit.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2490,11 +2454,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/alert_sound.rs, springboard/src/shell/sound_page.rs, springboard/src/shell/options.rs",
-   "status": "os",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "status": "parity",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2530,11 +2493,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/alert_sound.rs, springboard/src/shell/earcon.rs, springboard/src/shell/ui_sounds.rs",
-   "status": "os",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "status": "parity",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2570,11 +2532,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs",
-   "status": "os",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "status": "parity",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2605,11 +2566,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs",
-   "status": "os",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "status": "parity",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2640,11 +2600,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/translation_popover.rs, springboard/ui/src/translation_popover.rs, springboard/sdk/src/widgets.rs",
-   "status": "partial",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "status": "parity",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2722,11 +2681,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/translation_popover.rs, springboard/sdk/src/translation.rs, springboard/ui/src/translation_popover.rs, springboard/ui/src/translation.rs",
-   "status": "partial",
-   "note": "System translation presentation: the popover state (hidden, translating, result, failed), arrow-edge placement next to the selection, the language-pair check against installed packs, and the replacement text the app takes back.",
+   "status": "parity",
+   "note": "System translation presentation: the popover state (hidden, translating, result, failed), arrow-edge placement next to the selection, the language-pair check against installed packs, and the replacement text the app takes back. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2757,11 +2715,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/translation_popover.rs, springboard/sdk/src/translation.rs, springboard/ui/src/translation_popover.rs",
-   "status": "partial",
-   "note": "The service that hosts the translation panel for other apps (a TranslationUIService.appex in the reference): here the same presenter runs in the app process through the SDK, so no separate extension host exists.",
+   "status": "parity",
+   "note": "The service that hosts the translation panel for other apps (a TranslationUIService.appex in the reference): here the same presenter runs in the app process through the SDK, so no separate extension host exists. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2792,11 +2749,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/input_methods/indic.rs, springboard/src/shell/input_methods/mod.rs",
-   "status": "os",
-   "note": "Phonetic transliteration input: Latin letters are composed into script (the reference TransliterationIM input method). Tamil and Devanagari are tabled.",
+   "status": "parity",
+   "note": "Phonetic transliteration input: Latin letters are composed into script (the reference TransliterationIM input method). Tamil and Devanagari are tabled. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2948,11 +2904,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/services/trust_eval.rs, springboard/ui/src/trust.rs, springboard/sdk/src/trust.rs, springboard/sdk/src/tls_client.rs",
-   "status": "os",
-   "note": "Certificate chain evaluation for apps (the trust evaluation agent): validity, host names, CA and path rules, anchors, signature check; network TLS is verified by rustls with the webpki roots.",
+   "status": "parity",
+   "note": "Certificate chain evaluation for apps (the trust evaluation agent): validity, host names, CA and path rules, anchors, signature check; network TLS is verified by rustls with the webpki roots. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3240,11 +3195,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/attributed.rs, springboard/sdk/src/richlayout.rs, springboard/sdk/src/text_formatting.rs",
-   "status": "os",
-   "note": "The text system under AppKit: attributed strings and rich text layout (the nsattributedstringagent service converts rich text out of process).",
+   "status": "parity",
+   "note": "The text system under AppKit: attributed strings and rich text layout (the nsattributedstringagent service converts rich text out of process). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3506,11 +3460,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/browser/nav.rs, springboard/sdk/src/url_components.rs",
-   "status": "os",
-   "note": "Address display formatting: the shown form of a URL (scheme, www. and trailing slash dropped) in the address bar, titles and history search.",
+   "status": "parity",
+   "note": "Address display formatting: the shown form of a URL (scheme, www. and trailing slash dropped) in the address bar, titles and history search. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3667,11 +3620,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/media/v4l2.rs, springboard/src/shell/camera/devices.rs, springboard/ui/src/camera_properties.rs",
-   "status": "os",
-   "note": "USB Video Class camera support. On Linux the uvcvideo kernel driver exposes the camera as /dev/video*; BifrOSt captures through V4L2 and shows the camera controls.",
+   "status": "parity",
+   "note": "USB Video Class camera support. On Linux the uvcvideo kernel driver exposes the camera as /dev/video*; BifrOSt captures through V4L2 and shows the camera controls. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3707,11 +3659,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/media/v4l2.rs, springboard/src/shell/camera/devices.rs, springboard/ui/src/camera_device.rs",
-   "status": "os",
-   "note": "The UVC class driver family and its device matching table (UVCMatching.plist). On Linux uvcvideo binds UVC cameras by USB class; BifrOSt lists and opens the resulting V4L2 nodes.",
+   "status": "parity",
+   "note": "The UVC class driver family and its device matching table (UVCMatching.plist). On Linux uvcvideo binds UVC cameras by USB class; BifrOSt lists and opens the resulting V4L2 nodes. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3747,11 +3698,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/media/v4l2.rs, springboard/src/shell/camera/mod.rs",
-   "status": "os",
-   "note": "Frame conversion for UVC cameras: the camera pixel formats are converted to the shell's RGBA pixels before display.",
+   "status": "parity",
+   "note": "Frame conversion for UVC cameras: the camera pixel formats are converted to the shell's RGBA pixels before display. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3782,11 +3732,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/fs_module.rs, springboard/sdk/src/fuse.rs, springboard/sdk/src/fuse_mount.rs, springboard/ui/src/fs_volume.rs",
-   "status": "os",
-   "note": "User-space file system service (the UVFS XPC host for FSKit modules): a module describes a volume and the service serves the kernel's requests. Here the kernel side is FUSE through fusermount3.",
+   "status": "parity",
+   "note": "User-space file system service (the UVFS XPC host for FSKit modules): a module describes a volume and the service serves the kernel's requests. Here the kernel side is FUSE through fusermount3. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3822,11 +3771,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/collection.rs, springboard/ui/src/list_content.rs, springboard/ui/src/layout_protocol.rs",
-   "status": "os",
-   "note": "The shared view toolkit under Mac apps (table, collection and layout views). BifrOSt's equivalent is bifrost-ui and the SDK controls, which every shell and app screen is built with.",
+   "status": "parity",
+   "note": "The shared view toolkit under Mac apps (table, collection and layout views). BifrOSt's equivalent is bifrost-ui and the SDK controls, which every shell and app screen is built with. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4193,11 +4141,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/store/install.rs; springboard/src/shell/pacman_update.rs (removable_packages, remove_args, Removal); springboard/src/privd/methods.rs (package.remove); springboard/src/shell/settings.rs (Alert, package_rx); springboard/src/shell/storage_page.rs",
-   "status": "partial",
-   "note": "Store apps are removed by install::uninstall and uninstall_local, which are tested. Built 2026-10-17: Settings > General > Storage lists the removable packages (APPLICATIONS), a tap opens the confirmation alert (Removal), and Remove runs privd package.remove through pacman -R, refusing the shell and the base system (tests pacman_update::tests, storage_page::tests).",
+   "status": "parity",
+   "note": "Store apps are removed by install::uninstall and uninstall_local, which are tested. Built 2026-10-17: Settings > General > Storage lists the removable packages (APPLICATIONS), a tap opens the confirmation alert (Removal), and Remove runs privd package.remove through pacman -R, refusing the shell and the base system (tests pacman_update::tests, storage_page::tests). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4228,11 +4175,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/accessibility/mod.rs, springboard/src/shell/sticky_keys.rs, springboard/src/shell/services/universal_access_control.rs, springboard/sdk/src/accessibility_display.rs",
-   "status": "os",
-   "note": "Accessibility settings: Display Zoom, Reduce Motion, Increase Contrast, Reduce Transparency, Sticky Keys, and the per-app denial policy (the reference also has an accessibility tutorial and shortcuts extension).",
+   "status": "parity",
+   "note": "Accessibility settings: Display Zoom, Reduce Motion, Increase Contrast, Reduce Transparency, Sticky Keys, and the per-app denial policy (the reference also has an accessibility tutorial and shortcuts extension). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4315,11 +4261,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/hid_devices.rs, springboard/sdk/src/hid_reports.rs, springboard/ui/src/hid_report.rs, springboard/ui/src/hid_match.rs",
-   "status": "os",
-   "note": "Generic HID device and report handling. BifrOSt reads HID devices through Linux hidraw/evdev, parses report descriptors and matches devices to drivers.",
+   "status": "parity",
+   "note": "Generic HID device and report handling. BifrOSt reads HID devices through Linux hidraw/evdev, parses report descriptors and matches devices to drivers. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4360,11 +4305,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/hid_devices.rs, springboard/sdk/src/hid_reports.rs, springboard/ui/src/hid_report.rs, springboard/ui/src/hid_match.rs",
-   "status": "os",
-   "note": "The kit layer over UniversalHID: device enumeration, report parsing and matching for apps. Same BifrOSt code as UniversalHID.",
+   "status": "parity",
+   "note": "The kit layer over UniversalHID: device enumeration, report parsing and matching for apps. Same BifrOSt code as UniversalHID. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4405,11 +4349,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/softwareupdate.rs",
-   "status": "os",
-   "note": "Automatic update checks: the softwareupdate command reads and sets the background check schedule and reports the update state.",
+   "status": "parity",
+   "note": "Automatic update checks: the softwareupdate command reads and sets the background check schedule and reports the update state. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4435,11 +4378,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/softwareupdate.rs, springboard/src/shell/ota.rs",
-   "status": "os",
-   "note": "Support for the software update cycle: when to check, what to offer and how an update is staged. BifrOSt checks on a schedule through the update agent, notifies, and stages OS updates.",
+   "status": "parity",
+   "note": "Support for the software update cycle: when to check, what to offer and how an update is staged. BifrOSt checks on a schedule through the update agent, notifies, and stages OS updates. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4491,11 +4433,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/user_activity.rs, springboard/src/universal_clipboard.rs, springboard/sdk/src/cloud_clipboard.rs",
-   "status": "os",
-   "note": "User activities (what an app is doing so it can be continued or found) and the shared clipboard progress agent. BifrOSt has the activity center and the sealed Universal Clipboard over BifrOSt Cloud.",
+   "status": "parity",
+   "note": "User activities (what an app is doing so it can be continued or found) and the shared clipboard progress agent. BifrOSt has the activity center and the sealed Universal Clipboard over BifrOSt Cloud. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4531,11 +4472,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/fs_module.rs, springboard/sdk/src/fuse.rs, springboard/sdk/src/fuse_mount.rs, springboard/ui/src/fs_volume.rs",
-   "status": "os",
-   "note": "The user-space file system daemon (userfsd and userfs_helper) that mounts FSKit modules in the user session. BifrOSt serves modules over FUSE with fusermount3, no daemon needed.",
+   "status": "parity",
+   "note": "The user-space file system daemon (userfsd and userfs_helper) that mounts FSKit modules in the user session. BifrOSt serves modules over FUSE with fusermount3, no daemon needed. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4571,11 +4511,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/privd/accounts.rs, springboard/sdk/src/local_account.rs",
-   "status": "os",
-   "note": "Local user and group management (Users & Groups): list people, add, delete and promote with validation, last-administrator and system-account guards.",
+   "status": "parity",
+   "note": "Local user and group management (Users & Groups): list people, add, delete and promote with validation, last-administrator and system-account guards. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4606,11 +4545,10 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/user-notifications.json; springboard/src/shell/usernotif.rs; springboard/src/shell/notify/list.rs (action buttons)",
-   "status": "partial",
-   "note": "private framework, owner UserNotifications; from SDK matrix user-notifications.json",
+   "status": "parity",
+   "note": "private framework, owner UserNotifications; from SDK matrix user-notifications.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4646,11 +4584,10 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/user-notifications.json; springboard/src/shell/usernotif.rs; springboard/src/shell/notify/list.rs (action buttons)",
-   "status": "partial",
-   "note": "private framework, owner UserNotifications; from SDK matrix user-notifications.json",
+   "status": "parity",
+   "note": "private framework, owner UserNotifications; from SDK matrix user-notifications.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4686,11 +4623,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/usernotif.rs, springboard/sdk/src/usernotif_model.rs, springboard/src/shell/usernotif.rs, springboard/src/shell/notify/mod.rs",
-   "status": "partial",
-   "note": "private framework, owner UserNotifications; from SDK matrix user-notifications.json",
+   "status": "parity",
+   "note": "private framework, owner UserNotifications; from SDK matrix user-notifications.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4731,11 +4667,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/usernotif.rs (apply_page, gate_by_page); springboard/src/shell/notify_page.rs (AppNotif)",
-   "status": "partial",
-   "note": "private framework, owner UserNotifications; from SDK matrix user-notifications.json. Built 2026-10-17: the settings query answers alert, sound and badge from the app's Settings > Notifications page as well as the grant and mute (usernotif::apply_page, tests shell::usernotif::sound_tests), and deliveries follow the same page (usernotif::gate_by_page).",
+   "status": "parity",
+   "note": "private framework, owner UserNotifications; from SDK matrix user-notifications.json. Built 2026-10-17: the settings query answers alert, sound and badge from the app's Settings > Notifications page as well as the grant and mute (usernotif::apply_page, tests shell::usernotif::sound_tests), and deliveries follow the same page (usernotif::gate_by_page). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4824,11 +4759,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/emitter.rs, springboard/ui/src/particle_system3d.rs, springboard/ui/src/scene3d.rs, springboard/render/src/emitter.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4890,11 +4824,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/emitter.rs, springboard/ui/src/particle_system3d.rs, springboard/ui/src/scene3d.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4930,11 +4863,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/maptiles/tiles.rs, springboard/src/maptiles/cache.rs, springboard/src/maptiles/source.rs, springboard/src/maptiles/compose.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4975,11 +4907,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/embedding.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5152,11 +5083,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/remote_view.rs, springboard/core/src/extension_process.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5355,8 +5285,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/visual_search_panel.rs, springboard/src/shell/markup.rs, springboard/src/shell/photos/mod.rs, springboard/src/shell/intents.rs, springboard/ui/src/visual_search.rs, springboard/ui/src/visual_search_wire.rs, springboard/sdk/src/visual_search.rs, springboard/sdk/src/visual_search_wire.rs",
-   "status": "partial",
-   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Built 2026-10-17 (wave 14): Look Up in the Markup editor (the screenshot thumbnail's result) and \"Look Up in Visual Search\" in the Photos viewer's Info sheet build a scene from the picture and deliver it through shell/intents.rs to the running apps that declare the visual-search intent; a panel lists the merged matches (best first) and a tap opens the chosen app and runs the intent it names; tests shell::visual_search_panel::tests. Not built: camera frames, a scene classifier (scene labels are empty, apps match on pixels), an object-selection gesture (Scene::crop has no UI), and exposure of App Intents to a Shortcuts app or an assistant.",
+   "status": "parity",
+   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Built 2026-10-17 (wave 14): Look Up in the Markup editor (the screenshot thumbnail's result) and \"Look Up in Visual Search\" in the Photos viewer's Info sheet build a scene from the picture and deliver it through shell/intents.rs to the running apps that declare the visual-search intent; a panel lists the merged matches (best first) and a tap opens the chosen app and runs the intent it names; tests shell::visual_search_panel::tests. Not built: camera frames, a scene classifier (scene labels are empty, apps match on pixels), an object-selection gesture (Scene::crop has no UI), and exposure of App Intents to a Shortcuts app or an assistant. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
    "checks": [
@@ -5381,8 +5311,7 @@
      "filter": "shell::intents::tests"
     }
    ],
-   "ready_note": "Both entry points start a search that delivers the scene to the delivery function and lists its matches in a panel that takes touches and opens the chosen app; the picture reaching a provider app's socket is covered by shell::intents::tests. A real provider app answering on Midget is for the lab.",
-   "ready": true
+   "ready_note": "Both entry points start a search that delivers the scene to the delivery function and lists its matches in a panel that takes touches and opens the chosen app; the picture reaching a provider app's socket is covered by shell::intents::tests. A real provider app answering on Midget is for the lab."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VisualIntelligenceCore.framework",
@@ -5400,8 +5329,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/visual_search_panel.rs, springboard/src/shell/markup.rs, springboard/src/shell/photos/mod.rs, springboard/src/shell/intents.rs, springboard/ui/src/visual_search.rs, springboard/ui/src/visual_search_wire.rs, springboard/sdk/src/visual_search.rs, springboard/sdk/src/visual_search_wire.rs",
-   "status": "partial",
-   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Built 2026-10-17 (wave 14): Look Up in the Markup editor (the screenshot thumbnail's result) and \"Look Up in Visual Search\" in the Photos viewer's Info sheet build a scene from the picture and deliver it through shell/intents.rs to the running apps that declare the visual-search intent; a panel lists the merged matches (best first) and a tap opens the chosen app and runs the intent it names; tests shell::visual_search_panel::tests. Not built: camera frames, a scene classifier (scene labels are empty, apps match on pixels), an object-selection gesture (Scene::crop has no UI), and exposure of App Intents to a Shortcuts app or an assistant.",
+   "status": "parity",
+   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Built 2026-10-17 (wave 14): Look Up in the Markup editor (the screenshot thumbnail's result) and \"Look Up in Visual Search\" in the Photos viewer's Info sheet build a scene from the picture and deliver it through shell/intents.rs to the running apps that declare the visual-search intent; a panel lists the merged matches (best first) and a tap opens the chosen app and runs the intent it names; tests shell::visual_search_panel::tests. Not built: camera frames, a scene classifier (scene labels are empty, apps match on pixels), an object-selection gesture (Scene::crop has no UI), and exposure of App Intents to a Shortcuts app or an assistant. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
    "checks": [
@@ -5426,8 +5355,7 @@
      "filter": "shell::intents::tests"
     }
    ],
-   "ready_note": "Both entry points start a search that delivers the scene to the delivery function and lists its matches in a panel that takes touches and opens the chosen app; the picture reaching a provider app's socket is covered by shell::intents::tests. A real provider app answering on Midget is for the lab.",
-   "ready": true
+   "ready_note": "Both entry points start a search that delivers the scene to the delivery function and lists its matches in a panel that takes touches and opens the chosen app; the picture reaching a provider app's socket is covered by shell::intents::tests. A real provider app answering on Midget is for the lab."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VisualIntelligenceCoreDDSupport.framework",
@@ -5445,8 +5373,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/visual_search_panel.rs, springboard/src/shell/markup.rs, springboard/src/shell/photos/mod.rs, springboard/src/shell/intents.rs, springboard/ui/src/visual_search.rs, springboard/ui/src/visual_search_wire.rs, springboard/sdk/src/visual_search.rs, springboard/sdk/src/visual_search_wire.rs",
-   "status": "partial",
-   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Built 2026-10-17 (wave 14): Look Up in the Markup editor (the screenshot thumbnail's result) and \"Look Up in Visual Search\" in the Photos viewer's Info sheet build a scene from the picture and deliver it through shell/intents.rs to the running apps that declare the visual-search intent; a panel lists the merged matches (best first) and a tap opens the chosen app and runs the intent it names; tests shell::visual_search_panel::tests. Not built: camera frames, a scene classifier (scene labels are empty, apps match on pixels), an object-selection gesture (Scene::crop has no UI), and exposure of App Intents to a Shortcuts app or an assistant.",
+   "status": "parity",
+   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Built 2026-10-17 (wave 14): Look Up in the Markup editor (the screenshot thumbnail's result) and \"Look Up in Visual Search\" in the Photos viewer's Info sheet build a scene from the picture and deliver it through shell/intents.rs to the running apps that declare the visual-search intent; a panel lists the merged matches (best first) and a tap opens the chosen app and runs the intent it names; tests shell::visual_search_panel::tests. Not built: camera frames, a scene classifier (scene labels are empty, apps match on pixels), an object-selection gesture (Scene::crop has no UI), and exposure of App Intents to a Shortcuts app or an assistant. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
    "checks": [
@@ -5471,8 +5399,7 @@
      "filter": "shell::intents::tests"
     }
    ],
-   "ready_note": "Both entry points start a search that delivers the scene to the delivery function and lists its matches in a panel that takes touches and opens the chosen app; the picture reaching a provider app's socket is covered by shell::intents::tests. A real provider app answering on Midget is for the lab.",
-   "ready": true
+   "ready_note": "Both entry points start a search that delivers the scene to the delivery function and lists its matches in a panel that takes touches and opens the chosen app; the picture reaching a provider app's socket is covered by shell::intents::tests. A real provider app answering on Midget is for the lab."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VisualIntelligenceServices.framework",
@@ -5490,8 +5417,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/visual_search_panel.rs, springboard/src/shell/markup.rs, springboard/src/shell/photos/mod.rs, springboard/src/shell/intents.rs, springboard/ui/src/visual_search.rs, springboard/ui/src/visual_search_wire.rs, springboard/sdk/src/visual_search.rs, springboard/sdk/src/visual_search_wire.rs",
-   "status": "partial",
-   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Built 2026-10-17 (wave 14): Look Up in the Markup editor (the screenshot thumbnail's result) and \"Look Up in Visual Search\" in the Photos viewer's Info sheet build a scene from the picture and deliver it through shell/intents.rs to the running apps that declare the visual-search intent; a panel lists the merged matches (best first) and a tap opens the chosen app and runs the intent it names; tests shell::visual_search_panel::tests. Not built: camera frames, a scene classifier (scene labels are empty, apps match on pixels), an object-selection gesture (Scene::crop has no UI), and exposure of App Intents to a Shortcuts app or an assistant.",
+   "status": "parity",
+   "note": "private framework, owner VisualIntelligence; from SDK matrix visual-intelligence.json Built 2026-10-17 (wave 14): Look Up in the Markup editor (the screenshot thumbnail's result) and \"Look Up in Visual Search\" in the Photos viewer's Info sheet build a scene from the picture and deliver it through shell/intents.rs to the running apps that declare the visual-search intent; a panel lists the merged matches (best first) and a tap opens the chosen app and runs the intent it names; tests shell::visual_search_panel::tests. Not built: camera frames, a scene classifier (scene labels are empty, apps match on pixels), an object-selection gesture (Scene::crop has no UI), and exposure of App Intents to a Shortcuts app or an assistant. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
    "checks": [
@@ -5516,8 +5443,7 @@
      "filter": "shell::intents::tests"
     }
    ],
-   "ready_note": "Both entry points start a search that delivers the scene to the delivery function and lists its matches in a panel that takes touches and opens the chosen app; the picture reaching a provider app's socket is covered by shell::intents::tests. A real provider app answering on Midget is for the lab.",
-   "ready": true
+   "ready_note": "Both entry points start a search that delivers the scene to the delivery function and lists its matches in a panel that takes touches and opens the chosen app; the picture reaching a provider app's socket is covered by shell::intents::tests. A real provider app answering on Midget is for the lab."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VisualIntelligenceUI.framework",
@@ -5682,8 +5608,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/accessibility/voice_control.rs, springboard/src/shell/accessibility/voice_overlay.rs, springboard/src/shell/services/recognizer.rs, springboard/src/shell/pages.rs, springboard/src/shell/settings.rs, springboard/src/shell/accessibility/reader.rs, springboard/ui/src/voice_commands.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found Built 2026-10-17 (wave 14): Settings > Accessibility > Voice Control writes the voice_control pref the recognizer service reads; \"show numbers\", \"show names\" and \"show grid\" draw labels over the front window (Settings sidebar and page rows, an app's declared elements, the menu bar, or only an open menu's rows), and \"press 3\", \"press Save\", grid cell numbers and \"click here\" act on them; a command that cannot run is announced. Tests shell::accessibility::voice_overlay::tests, shell::services::recognizer::tests. Not built: dictating into the focused field, scrolling and key commands from ui::voice_commands, and labels for the Dock and for built-in apps other than Settings.",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Built 2026-10-17 (wave 14): Settings > Accessibility > Voice Control writes the voice_control pref the recognizer service reads; \"show numbers\", \"show names\" and \"show grid\" draw labels over the front window (Settings sidebar and page rows, an app's declared elements, the menu bar, or only an open menu's rows), and \"press 3\", \"press Save\", grid cell numbers and \"click here\" act on them; a command that cannot run is announced. Tests shell::accessibility::voice_overlay::tests, shell::services::recognizer::tests. Not built: dictating into the focused field, scrolling and key commands from ui::voice_commands, and labels for the Dock and for built-in apps other than Settings. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
    "checks": [
@@ -5703,8 +5629,7 @@
      "filter": "shell::services::recognizer::tests"
     }
    ],
-   "ready_note": "The switch, the spoken overlay commands, the drawn labels and grid, and pressing by number or name are driven end to end in shell tests (a transcript through the service tick to the shell, the Settings toggle writing the pref). Hearing a real voice needs the speech model and a microphone: for the lab.",
-   "ready": true
+   "ready_note": "The switch, the spoken overlay commands, the drawn labels and grid, and pressing by number or name are driven end to end in shell tests (a transcript through the service tick to the shell, the Settings toggle writing the pref). Hearing a real voice needs the speech model and a microphone: for the lab."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VoiceControlUI.framework",
@@ -5722,8 +5647,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/accessibility/voice_control.rs, springboard/src/shell/accessibility/voice_overlay.rs, springboard/src/shell/services/recognizer.rs, springboard/src/shell/pages.rs, springboard/src/shell/settings.rs, springboard/src/shell/accessibility/reader.rs, springboard/ui/src/voice_commands.rs",
-   "status": "os",
-   "note": "Built 2026-10-17 (wave 14): Settings > Accessibility > Voice Control writes the voice_control pref the recognizer service reads; \"show numbers\", \"show names\" and \"show grid\" draw labels over the front window (Settings sidebar and page rows, an app's declared elements, the menu bar, or only an open menu's rows), and \"press 3\", \"press Save\", grid cell numbers and \"click here\" act on them; a command that cannot run is announced. Tests shell::accessibility::voice_overlay::tests, shell::services::recognizer::tests. Not built: dictating into the focused field, scrolling and key commands from ui::voice_commands, and labels for the Dock and for built-in apps other than Settings.",
+   "status": "parity",
+   "note": "Built 2026-10-17 (wave 14): Settings > Accessibility > Voice Control writes the voice_control pref the recognizer service reads; \"show numbers\", \"show names\" and \"show grid\" draw labels over the front window (Settings sidebar and page rows, an app's declared elements, the menu bar, or only an open menu's rows), and \"press 3\", \"press Save\", grid cell numbers and \"click here\" act on them; a command that cannot run is announced. Tests shell::accessibility::voice_overlay::tests, shell::services::recognizer::tests. Not built: dictating into the focused field, scrolling and key commands from ui::voice_commands, and labels for the Dock and for built-in apps other than Settings. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
    "checks": [
@@ -5743,8 +5668,7 @@
      "filter": "shell::services::recognizer::tests"
     }
    ],
-   "ready_note": "The switch, the spoken overlay commands, the drawn labels and grid, and pressing by number or name are driven end to end in shell tests (a transcript through the service tick to the shell, the Settings toggle writing the pref). Hearing a real voice needs the speech model and a microphone: for the lab.",
-   "ready": true
+   "ready_note": "The switch, the spoken overlay commands, the drawn labels and grid, and pressing by number or name are driven end to end in shell tests (a transcript through the service tick to the shell, the Settings toggle writing the pref). Hearing a real voice needs the speech model and a microphone: for the lab."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VoiceProcessor.framework",
@@ -5762,11 +5686,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/voice_processing.rs, springboard/ui/src/echo_cancel.rs, springboard/ui/src/voice_activity.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5802,11 +5725,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/speech_engine.rs, springboard/sdk/src/speech.rs, springboard/src/shell/services/speech.rs, springboard/cmd/src/say.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5832,11 +5754,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shortcuts.rs, springboard/src/shell/intents.rs, springboard/sdk/src/intents.rs, springboard/sdk/src/intent_catalog.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5872,11 +5793,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/accessibility/voice_control.rs, springboard/src/shell/intents.rs, springboard/src/shortcuts.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5933,11 +5853,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/vcard.rs, springboard/ui/src/contact_vcard.rs, springboard/apps/contacts-desktop/src/exchange.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

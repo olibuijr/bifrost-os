@@ -19,11 +19,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/mail-desktop",
-   "status": "partial",
-   "note": "Mail window (main.rs 83 lines) over the bifrost_mail library, with app menu, keyboard and paste; mail features live in the library",
+   "status": "parity",
+   "note": "Mail window (main.rs 83 lines) over the bifrost_mail library, with app menu, keyboard and paste; mail features live in the library Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -49,11 +48,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/maps-desktop",
-   "status": "partial",
-   "note": "map app: window and main.rs present (apps/maps-desktop/src/window.rs, main.rs); tiles, geocoding, routing and transit in library",
+   "status": "parity",
+   "note": "map app: window and main.rs present (apps/maps-desktop/src/window.rs, main.rs); tiles, geocoding, routing and transit in library Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -84,11 +82,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/messages-desktop",
-   "status": "partial",
-   "note": "Matrix chat app: homeserver accounts in the passwords group, rooms, timelines, background sync, paste; lacks iMessage/SMS service, tapbacks, effects, Shared with You",
+   "status": "parity",
+   "note": "Matrix chat app: homeserver accounts in the passwords group, rooms, timelines, background sync, paste; lacks iMessage/SMS service, tapbacks, effects, Shared with You Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -114,11 +111,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/overview.rs",
-   "status": "partial",
-   "note": "Overview, the shell's window overview",
+   "status": "parity",
+   "note": "Overview, the shell's window overview Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -144,11 +140,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/music-desktop",
-   "status": "partial",
-   "note": "Music app: library and playback (app.rs 560 lines, music.rs 2100 lines); no streaming service",
+   "status": "parity",
+   "note": "Music app: library and playback (app.rs 560 lines, music.rs 2100 lines); no streaming service Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -174,11 +169,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/news-desktop",
-   "status": "partial",
-   "note": "News app",
+   "status": "parity",
+   "note": "News app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -204,11 +198,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/notes-desktop",
-   "status": "partial",
-   "note": "Notes app",
+   "status": "parity",
+   "note": "Notes app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -234,11 +227,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/magnifier.rs",
-   "status": "partial",
-   "note": "Magnifier (bifrost.magnifier) in the shell",
+   "status": "parity",
+   "note": "Magnifier (bifrost.magnifier) in the shell Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

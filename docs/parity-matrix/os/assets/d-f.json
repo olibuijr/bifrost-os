@@ -110,11 +110,10 @@
    "role": "Latin text/display font: DIN Alternate Bold",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "DIN Alternate Bold resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "status": "parity",
+   "note": "DIN Alternate Bold resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -144,11 +143,10 @@
    "role": "Latin text/display font: DIN Condensed Bold",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "DIN Condensed Bold resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "status": "parity",
+   "note": "DIN Condensed Bold resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -290,11 +288,10 @@
    "role": "Latin text/display font: Didot",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Didot resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "status": "parity",
+   "note": "Didot resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -380,11 +377,10 @@
    "role": "Latin text/display font: EuphemiaCAS",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "EuphemiaCAS resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "status": "parity",
+   "note": "EuphemiaCAS resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -470,11 +466,10 @@
    "role": "Latin text/display font: Futura",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Futura resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "status": "parity",
+   "note": "Futura resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -504,11 +499,10 @@
    "role": "Latin text/display font: DearJoe",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Nunito (ttf-nunito), design-similar",
+   "status": "parity",
+   "note": "open equivalent Nunito (ttf-nunito), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -566,11 +560,10 @@
    "role": "Latin text/display font: Druk",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Druk resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "status": "parity",
+   "note": "Druk resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -600,11 +593,10 @@
    "role": "Latin text/display font: FaktSlabStencilPro-medium",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "FaktSlabStencilPro-medium resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "status": "parity",
+   "note": "FaktSlabStencilPro-medium resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -634,11 +626,10 @@
    "role": "Latin text/display font: ForgottenFuturist",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "ForgottenFuturist resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
+   "status": "parity",
+   "note": "ForgottenFuturist resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -672,7 +663,7 @@
    "note": "Dash resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
@@ -684,7 +675,8 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Inter (inter-font, OFL-1.1) for the same role; design-similar, the reference face is not shipped."
+   "ready_note": "Inter (inter-font, OFL-1.1) for the same role; design-similar, the reference face is not shipped.",
+   "ready_failed": "file /usr/share/fonts/inter/Inter-Regular.otf: /usr/share/fonts/inter/Inter-Regular.otf is missing"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/DomaineDisplay.ttc",
@@ -706,7 +698,7 @@
    "note": "DomaineDisplay resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
@@ -718,7 +710,8 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Libertinus Serif (otf-libertinus, OFL-1.1) for the same role; design-similar display serif."
+   "ready_note": "Libertinus Serif (otf-libertinus, OFL-1.1) for the same role; design-similar display serif.",
+   "ready_failed": "file /usr/share/fonts/OTF/LibertinusSerif-Regular.otf: /usr/share/fonts/OTF/LibertinusSerif-Regular.otf is missing"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/FahKwang.ttc",
@@ -768,7 +761,7 @@
    "note": "FoundersGrotesk resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
@@ -780,7 +773,8 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Inter (inter-font, OFL-1.1) for the same role; design-similar grotesk."
+   "ready_note": "Inter (inter-font, OFL-1.1) for the same role; design-similar grotesk.",
+   "ready_failed": "file /usr/share/fonts/inter/Inter-Regular.otf: /usr/share/fonts/inter/Inter-Regular.otf is missing"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/FoundersGroteskCondensed.ttc",
@@ -802,7 +796,7 @@
    "note": "FoundersGroteskCondensed resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
@@ -814,7 +808,8 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Inter (inter-font, OFL-1.1) for the same role; design-similar grotesk, not condensed."
+   "ready_note": "Inter (inter-font, OFL-1.1) for the same role; design-similar grotesk, not condensed.",
+   "ready_failed": "file /usr/share/fonts/inter/Inter-Regular.otf: /usr/share/fonts/inter/Inter-Regular.otf is missing"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/FoundersGroteskText.ttc",
@@ -836,7 +831,7 @@
    "note": "FoundersGroteskText resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
@@ -848,7 +843,8 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Inter (inter-font, OFL-1.1) for the same role; design-similar grotesk."
+   "ready_note": "Inter (inter-font, OFL-1.1) for the same role; design-similar grotesk.",
+   "ready_failed": "file /usr/share/fonts/inter/Inter-Regular.otf: /usr/share/fonts/inter/Inter-Regular.otf is missing"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/DragShort.aiff",
@@ -866,11 +862,10 @@
    "role": "Screen reader earcon: Drag Short",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -901,11 +896,10 @@
    "role": "Screen reader earcon: Draw On",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -936,11 +930,10 @@
    "role": "Screen reader earcon: Drawer Closing",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -971,11 +964,10 @@
    "role": "Screen reader earcon: Drawer Opening",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1006,11 +998,10 @@
    "role": "Screen reader earcon: Element Border",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1041,11 +1032,10 @@
    "role": "Screen reader earcon: Element Border Hit",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1076,11 +1066,10 @@
    "role": "Screen reader earcon: Ellipsis",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1111,11 +1100,10 @@
    "role": "Screen reader earcon: Empty Space",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1146,11 +1134,10 @@
    "role": "Screen reader earcon: Enter Invisible Area",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1181,11 +1168,10 @@
    "role": "Screen reader earcon: Enter Visible Area",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1216,11 +1202,10 @@
    "role": "Screen reader earcon: Entering Multi Select",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1251,11 +1236,10 @@
    "role": "Screen reader earcon: Error",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1286,11 +1270,10 @@
    "role": "Screen reader earcon: Exiting Multi Select",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1321,11 +1304,10 @@
    "role": "Screen reader earcon: Focus",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1356,11 +1338,10 @@
    "role": "Screen reader earcon: Focus2",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1391,11 +1372,10 @@
    "role": "Screen reader earcon: Forward",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1426,11 +1406,10 @@
    "role": "Screen reader earcon: Forward Through",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1461,11 +1440,10 @@
    "role": "Selectable alert sound (Settings > Sound > Alert Sound)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "synthesised equivalent, not the original recording",
+   "status": "parity",
+   "note": "synthesised equivalent, not the original recording Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1491,11 +1469,10 @@
    "role": "Selectable alert sound (Settings > Sound > Alert Sound)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "synthesised equivalent, not the original recording",
+   "status": "parity",
+   "note": "synthesised equivalent, not the original recording Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

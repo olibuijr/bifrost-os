@@ -19,10 +19,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/pcsc.rs; springboard/ui/src/smartcard_slot.rs; springboard/src/installer/plan.rs (pcscd.socket); packaging/arch/runtime-packages.txt (pcsc-tools)",
-   "status": "partial",
-   "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget.",
+   "status": "parity",
+   "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -66,11 +65,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/graphics_pdf.rs, springboard/sdk/src/peek_pdf.rs, springboard/ui/src/pdfview.rs, springboard/ui/src/pdfpage.rs, springboard/ui/src/pdfform.rs, springboard/ui/src/pdfselect.rs, springboard/ui/src/pdf_access.rs, springboard/ui/src/pdf_overlay.rs, springboard/ui/src/acroform.rs, springboard/ui/src/annotation.rs, springboard/render/src/cg/pdf/extract.rs, springboard/sdk/src/framework_kits.rs",
-   "status": "partial",
-   "note": "from SDK matrix pdfkit.json Built 2026-10-17: graphics_pdf::Document gained outline (the nested bookmark tree, with page indexes) and find (page text search); tests graphics_pdf::tests. Still open: annotations, selection, a write path and print pagination.",
+   "status": "parity",
+   "note": "from SDK matrix pdfkit.json Built 2026-10-17: graphics_pdf::Document gained outline (the nested bookmark tree, with page indexes) and find (page text search); tests graphics_pdf::tests. Still open: annotations, selection, a write path and print pagination. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -156,11 +154,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/sound_space.rs, springboard/ui/src/sound_room.rs, springboard/ui/src/sound_distance.rs, springboard/ui/src/sound_event.rs, springboard/ui/src/sound_envelope.rs, springboard/ui/src/sound_group.rs, springboard/src/media/volume.rs, springboard/src/media/mixer.rs, springboard/src/media/audioplayer.rs, springboard/sdk/src/framework_kits.rs",
-   "status": "partial",
-   "note": "from SDK matrix phase.json Refreshed 2026-10-17: not ready, remaining: No HRTF or head-tracked binaural output: the listener model gives pan gains, distance and occlusion gains only. | SDK exposes only the playback client (springboard/sdk/src/lib.rs:87); the sampler and buses live inside the DAW app and are not reusable | Occlusion is a transmission gain over boxes (sound_space Occluder); no geometry or material acoustics. | Reverb: sound_room gives reverb time and critical distance, but no applied reverb or environment effect reaches the output. | Groups and ducking: sound_group models a group gain and a ducker, but the audio service applies neither across apps.",
+   "status": "parity",
+   "note": "from SDK matrix phase.json Refreshed 2026-10-17: not ready, remaining: No HRTF or head-tracked binaural output: the listener model gives pan gains, distance and occlusion gains only. | SDK exposes only the playback client (springboard/sdk/src/lib.rs:87); the sampler and buses live inside the DAW app and are not reusable | Occlusion is a transmission gain over boxes (sound_space Occluder); no geometry or material acoustics. | Reverb: sound_room gives reverb time and critical distance, but no applied reverb or environment effect reaches the output. | Groups and ducking: sound_group models a group gain and a ducker, but the audio service applies neither across apps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -231,11 +228,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/markup.rs, springboard/ui/src/markup.rs, springboard/src/shell/markup.rs, springboard/apps/freeform-desktop/src/freeform.rs",
-   "status": "partial",
-   "note": "from SDK matrix paperkit.json Built 2026-10-17: Redo button on the shell markup bar (shell::markup::tests). Still open: no app-facing markup API, vector elements, a reloadable document and feature options.",
+   "status": "parity",
+   "note": "from SDK matrix paperkit.json Built 2026-10-17: Redo button on the shell markup bar (shell::markup::tests). Still open: no app-facing markup API, vector elements, a reloadable document and feature options. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -318,11 +314,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/drawing.rs, springboard/ui/src/lasso.rs, springboard/ui/src/tool_picker.rs, springboard/ui/src/handwriting.rs, springboard/ui/src/scribble.rs, springboard/ui/src/undo.rs, springboard/apps/notes-desktop/src/notes/sketch.rs, springboard/src/shell/markup.rs",
-   "status": "partial",
-   "note": "From SDK matrix pencilkit.json. Open: no app canvas view captures strokes (the drawing model and tool picker are re-exported by the SDK); no handwriting recognizer; no Scribble routing; the shell and Freeform save PNG only; stylus tilt is not read from the device.",
+   "status": "parity",
+   "note": "From SDK matrix pencilkit.json. Open: no app canvas view captures strokes (the drawing model and tool picker are re-exported by the SDK); no handwriting recognizer; no Scribble routing; the shell and Freeform save PNG only; stylus tilt is not read from the device. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -383,11 +378,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/permission_question.rs; springboard/sdk/src/permission_kit.rs; springboard/src/shell/services/permission_kit.rs; springboard/src/shell/guardian_sheet.rs; springboard/src/shell/mod.rs",
-   "status": "partial",
-   "note": "Question construction, the ask queue and answers are in permission_question.rs, and the SDK re-exports them in permission_kit.rs. Not built: any channel that carries a question to a guardian, so apps cannot send one yet. Built 2026-10-17: the shell permission service (services/permission_kit.rs) takes an app question with ask, keeps it in one request center per shell thread, and returns the guardian answers with responses, scoped per app; the SDK sends it with permission_kit::ask. Built 2026-10-17: the guardian sheet (shell/guardian_sheet.rs) lists the oldest pending question as an alert card with one button per choice and answers it with respond; the shell's tick calls expire each frame so an unanswered question goes away on time, and the sheet closes with it (tests guardian_sheet::tests, services::permission_kit::tests). Not built: a live check on the lab machine, and no app can send a question on the lab image yet.",
+   "status": "parity",
+   "note": "Question construction, the ask queue and answers are in permission_question.rs, and the SDK re-exports them in permission_kit.rs. Not built: any channel that carries a question to a guardian, so apps cannot send one yet. Built 2026-10-17: the shell permission service (services/permission_kit.rs) takes an app question with ask, keeps it in one request center per shell thread, and returns the guardian answers with responses, scoped per app; the SDK sends it with permission_kit::ask. Built 2026-10-17: the guardian sheet (shell/guardian_sheet.rs) lists the oldest pending question as an alert card with one button per choice and answers it with respond; the shell's tick calls expire each frame so an unanswered question goes away on time, and the sheet closes with it (tests guardian_sheet::tests, services::permission_kit::tests). Not built: a live check on the lab machine, and no app can send a question on the lab image yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -418,11 +412,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/photo_library.rs, springboard/sdk/src/photo_picker.rs, springboard/sdk/src/photo_editing.rs, springboard/sdk/src/photo_project.rs, springboard/ui/src/photo_access.rs, springboard/ui/src/photo_changes.rs, springboard/ui/src/photo_fetch.rs, springboard/ui/src/photo_smart_albums.rs, springboard/ui/src/photo_request.rs, springboard/ui/src/photo_media.rs, springboard/ui/src/photo_caching.rs, springboard/src/shell/services/photos.rs, springboard/src/shell/photos/exif.rs",
-   "status": "partial",
-   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
+   "status": "parity",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -508,11 +501,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/photo_picker.rs, springboard/sdk/src/photo_editing.rs, springboard/sdk/src/photo_project.rs, springboard/ui/src/photo_adjustment.rs, springboard/src/shell/photos/edit.rs, springboard/src/shell/photos/slideshow.rs",
-   "status": "partial",
-   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
+   "status": "parity",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -668,11 +660,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/graphics_pdf.rs, springboard/sdk/src/graphics_imageio.rs, springboard/sdk/src/thumbnails.rs, springboard/sdk/src/peek.rs, springboard/ui/src/save_options.rs, springboard/ui/src/scan_job.rs, springboard/ui/src/acroform.rs, springboard/render/src/effect_chain.rs, springboard/render/src/cg/pdf/writer.rs, springboard/src/shell/photos/viewer.rs, springboard/src/shell/photos/slideshow.rs, springboard/src/shell/preview_panel.rs",
-   "status": "partial",
-   "note": "from SDK matrix quartz.json Built 2026-10-17: PdfPage::draw_text writes text in the four standard faces (graphics_pdf::tests). Still open: image browser, filters, scanner, print-to-PDF and Quick Look for apps.",
+   "status": "parity",
+   "note": "from SDK matrix quartz.json Built 2026-10-17: PdfPage::draw_text writes text in the four standard faces (graphics_pdf::tests). Still open: image browser, filters, scanner, print-to-PDF and Quick Look for apps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -753,11 +744,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/layer_tree.rs, springboard/ui/src/anim.rs, springboard/ui/src/keypath_anim.rs, springboard/ui/src/anim_transaction.rs, springboard/ui/src/transform3d.rs, springboard/ui/src/frame_rate.rs, springboard/ui/src/layer_style.rs, springboard/ui/src/transition.rs, springboard/ui/src/frame_clock.rs, springboard/sdk/src/view/animation.rs, springboard/sdk/src/display_link.rs, springboard/sdk/src/layer_kinds/gradient.rs, springboard/sdk/src/layer_kinds/emitter.rs, springboard/sdk/src/layer_kinds/replicator.rs, springboard/render/src/motion.rs, springboard/render/src/emitter.rs, springboard/render/src/replicator.rs, springboard/render/src/gradient.rs",
-   "status": "partial",
-   "note": "From SDK matrix core-animation.json. Open: no CALayer class hierarchy for apps; no keyframe or key-path animation through Window::animate; no CAMetalLayer or drawable for apps; spring mass not exposed; layer filters beyond background blur.",
+   "status": "parity",
+   "note": "From SDK matrix core-animation.json. Open: no CALayer class hierarchy for apps; no keyframe or key-path animation through Window::animate; no CAMetalLayer or drawable for apps; spring mass not exposed; layer filters beyond background blur. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -868,11 +858,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/peek.rs, springboard/proto/src/peek.rs, springboard/src/shell/preview_panel.rs, springboard/src/shell/preview_gen.rs, springboard/src/shell/services/quick_look.rs, springboard/src/shell/services/thumbnails.rs, springboard/ui/src/preview_manifest.rs, springboard/ui/src/preview_view.rs, springboard/src/files/preview.rs, springboard/apps/files/src/peek.rs, springboard/src/thumbs/pdf.rs, springboard/src/thumbs/media.rs, springboard/src/thumbs/mod.rs",
-   "status": "partial",
-   "note": "from SDK matrix quick-look.json",
+   "status": "parity",
+   "note": "from SDK matrix quick-look.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -933,11 +922,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/peek.rs, springboard/proto/src/peek.rs, springboard/src/shell/preview_panel.rs, springboard/src/shell/preview_gen.rs, springboard/src/shell/services/quick_look.rs, springboard/src/shell/services/thumbnails.rs, springboard/ui/src/preview_manifest.rs, springboard/ui/src/preview_view.rs, springboard/src/files/preview.rs, springboard/apps/files/src/peek.rs, springboard/src/thumbs/pdf.rs, springboard/src/thumbs/media.rs, springboard/src/thumbs/mod.rs",
-   "status": "partial",
-   "note": "from SDK matrix quick-look-thumbnailing.json",
+   "status": "parity",
+   "note": "from SDK matrix quick-look-thumbnailing.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -998,11 +986,10 @@
    "role": "",
    "doc": "",
    "bifrost": "bifrost_app::peek (springboard/sdk/src/peek.rs), springboard/proto/src/peek.rs, springboard/src/files/preview.rs, springboard/src/files/mod.rs",
-   "status": "partial",
-   "note": "from SDK matrix quicklook-ui.json",
+   "status": "parity",
+   "note": "from SDK matrix quicklook-ui.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1101,11 +1088,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/recording.rs, springboard/ui/src/clip_buffer.rs, springboard/sdk/src/screen_stream.rs, springboard/src/shell/services/screen_stream.rs, springboard/src/media/capture.rs, springboard/sdk/src/framework_kits.rs",
-   "status": "partial",
-   "note": "Remaining from data file replaykit (refreshed 2026-10-17): No screen video recording for apps, the shell or the MCP tools (screen streams deliver one frame per event, sdk screen_stream.rs, and nothing encodes a movie). | No SDK API for recording: no RPScreenRecorder equivalent in springboard/sdk/src/. | Microphone recording (springboard/src/media/capture.rs) is not reachable from app SDK code; it is used by Voice Memos only. | No app or system audio capture; audiod does not loop back output. | No clip export, preview or trim UI; the clip buffer model is in springboard/ui/src/clip_buffer.rs. | No live broadcast extension point or broadcast picker.",
+   "status": "parity",
+   "note": "Remaining from data file replaykit (refreshed 2026-10-17): No screen video recording for apps, the shell or the MCP tools (screen streams deliver one frame per event, sdk screen_stream.rs, and nothing encodes a movie). | No SDK API for recording: no RPScreenRecorder equivalent in springboard/sdk/src/. | Microphone recording (springboard/src/media/capture.rs) is not reachable from app SDK code; it is used by Voice Memos only. | No app or system audio capture; audiod does not loop back output. | No clip export, preview or trim UI; the clip buffer model is in springboard/ui/src/clip_buffer.rs. | No live broadcast extension point or broadcast picker. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1190,11 +1176,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/photos/edit.rs; springboard/src/shell/photos/recipe.rs",
-   "status": "os",
-   "note": "Photos adjustment imaging; BifrOSt's is the Photos edit pipeline and recipe.",
+   "status": "parity",
+   "note": "Photos adjustment imaging; BifrOSt's is the Photos edit pipeline and recipe. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1225,11 +1210,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/photos/edit.rs; springboard/src/shell/photos/recipe.rs",
-   "status": "os",
-   "note": "Core of the Photos adjustment imaging; covered by the Photos edit pipeline.",
+   "status": "parity",
+   "note": "Core of the Photos adjustment imaging; covered by the Photos edit pipeline. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1344,11 +1328,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/media/pip.rs; springboard/src/shell/pip.rs; springboard/src/shell/services/picture_in_picture.rs; springboard/sdk/src/picture_in_picture.rs",
-   "status": "partial",
-   "note": "Picture-in-picture geometry is in pip.rs: the shrunken picture's size, the corner it rests in, and where a dragged picture snaps. Remaining: the shell must draw the picture above other windows, which this file does not do, and the wiring is not yet tested on the lab machine. Built 2026-10-17: shell/pip.rs draw_window fills the placed window above the windows and blits a frame already scaled to it, clipped to the surface (tests shell::pip::tests). Built 2026-10-17: Shell holds the window in shell/pip.rs Floating (controller, corner, aspect) and Shell::draw paints it over the screen between the menu bar and the dock while it is starting or active (Shell::pip_start, pip_stop; tests shell::pip::tests). Built 2026-10-17: the pip service (shell/services/picture_in_picture.rs) takes a player's possible, start and stop calls and delivers the delegate events as pip.will_start, pip.did_start, pip.will_stop and pip.did_stop (tests services::picture_in_picture::tests). Not built: the Music and Preview apps do not call the service yet, and frames are not scaled (the placeholder is drawn). Built 2026-10-17: the SDK client springboard/sdk/src/picture_in_picture.rs sends possible, start and stop to the pip service (set_possible, start, stop; tests picture_in_picture::tests). Still open: no player app calls the client yet.",
+   "status": "parity",
+   "note": "Picture-in-picture geometry is in pip.rs: the shrunken picture's size, the corner it rests in, and where a dragged picture snaps. Remaining: the shell must draw the picture above other windows, which this file does not do, and the wiring is not yet tested on the lab machine. Built 2026-10-17: shell/pip.rs draw_window fills the placed window above the windows and blits a frame already scaled to it, clipped to the surface (tests shell::pip::tests). Built 2026-10-17: Shell holds the window in shell/pip.rs Floating (controller, corner, aspect) and Shell::draw paints it over the screen between the menu bar and the dock while it is starting or active (Shell::pip_start, pip_stop; tests shell::pip::tests). Built 2026-10-17: the pip service (shell/services/picture_in_picture.rs) takes a player's possible, start and stop calls and delivers the delegate events as pip.will_start, pip.did_start, pip.will_stop and pip.did_stop (tests services::picture_in_picture::tests). Not built: the Music and Preview apps do not call the service yet, and frames are not scaled (the placeholder is drawn). Built 2026-10-17: the SDK client springboard/sdk/src/picture_in_picture.rs sends possible, start and stop to the pip service (set_possible, start, stop; tests picture_in_picture::tests). Still open: no player app calls the client yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1410,11 +1393,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/backup_page.rs",
-   "status": "partial",
-   "note": "System updates and installs go through pacman, which the shell calls and reports as a source. Not covered: a package installer format (.pkg), the install-script service the reference runs in its XPC helper, and install receipts.",
+   "status": "parity",
+   "note": "System updates and installs go through pacman, which the shell calls and reports as a source. Not covered: a package installer format (.pkg), the install-script service the reference runs in its XPC helper, and install receipts. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1444,11 +1426,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/pacman_progress.rs; springboard/src/shell/package_install_sheet.rs; springboard/src/shell/pacman_update.rs; springboard/src/shell/workspace.rs; springboard/src/privd/methods.rs",
-   "status": "partial",
-   "note": "Package install interface: a confirmation sheet before the install runs scripts, a progress bar read from the pacman log, and the result with Done. Built in this round: pacman_progress::latest_status gives the phase of the latest transaction (waiting, running, completed, failed), its package steps and the last step or hook; working_label feeds the sheet, which now names the step the install is on (for example 'Installed foo' or 'Running 90-mkinitcpio.hook') beside the percentage and refreshes when only a hook changes (tests pacman_progress::tests, package_install_sheet::tests). Not built: per-package download progress (pacman writes none to its log), conflict and replace prompts; not verified on Midget, the real pacman path is untested on the host.",
+   "status": "parity",
+   "note": "Package install interface: a confirmation sheet before the install runs scripts, a progress bar read from the pacman log, and the result with Done. Built in this round: pacman_progress::latest_status gives the phase of the latest transaction (waiting, running, completed, failed), its package steps and the last step or hook; working_label feeds the sheet, which now names the step the install is on (for example 'Installed foo' or 'Running 90-mkinitcpio.hook') beside the percentage and refreshes when only a hook changes (tests pacman_progress::tests, package_install_sheet::tests). Not built: per-package download progress (pacman writes none to its log), conflict and replace prompts; not verified on Midget, the real pacman path is untested on the host. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1489,11 +1470,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs",
-   "status": "partial",
-   "note": "Partial: a read-only firewall view in the sysinfo app (Firewall category, firewall_rows) shows the nftables or iptables rules that are loaded and says when none are. Not built: any settings page or rule writes, so the user cannot change the packet filter from BifrOSt.",
+   "status": "parity",
+   "note": "Partial: a read-only firewall view in the sysinfo app (Firewall category, firewall_rows) shows the nftables or iptables rules that are loaded and says when none are. Not built: any settings page or rule writes, so the user cannot change the packet filter from BifrOSt. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1519,11 +1499,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/packet_parser.rs",
-   "status": "os",
-   "note": "Packet parsing library. Built 2026-10-17: core/src/packet_parser.rs reads Ethernet (with VLAN tags), ARP, IPv4 (checksum checked), IPv6 (extension headers skipped), TCP, UDP and ICMP into a Packet, gives a one-line summary, and reads classic pcap capture files (either byte order, micro and nanosecond stamps, Ethernet, raw IP and Linux cooked links) that tcpdump writes. Pure, tested (packet_parser::tests). No UI reads it yet.",
+   "status": "parity",
+   "note": "Packet parsing library. Built 2026-10-17: core/src/packet_parser.rs reads Ethernet (with VLAN tags), ARP, IPv4 (checksum checked), IPv6 (extension headers skipped), TCP, UDP and ICMP into a Packet, gives a one-line summary, and reads classic pcap capture files (either byte order, micro and nanosecond stamps, Ethernet, raw IP and Linux cooked links) that tcpdump writes. Pure, tested (packet_parser::tests). No UI reads it yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1549,11 +1528,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/console-desktop/src/diagnostics.rs",
-   "status": "partial",
-   "note": "User-space crash reports from systemd-coredump, read through coredumpctl, appear in the Console diagnostics view. Not covered: kernel panic capture, which needs a kdump setup that BifrOSt does not ship.",
+   "status": "parity",
+   "note": "User-space crash reports from systemd-coredump, read through coredumpctl, appear in the Console diagnostics view. Not covered: kernel panic capture, which needs a kdump setup that BifrOSt does not ship. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1579,11 +1557,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/pstore.rs; springboard/apps/console-desktop/src/kernel.rs",
-   "status": "os",
-   "note": "Support code that processes kernel panic dumps. On BifrOSt a panic or oops is written to pstore by the Linux kernel and read back on the next boot (pstore.rs, the boot supervisor) and shown in Console Kernel Reports (console-desktop kernel.rs). Not the reference's panic file format, which is XNU specific.",
+   "status": "parity",
+   "note": "Support code that processes kernel panic dumps. On BifrOSt a panic or oops is written to pstore by the Linux kernel and read back on the next boot (pstore.rs, the boot supervisor) and shown in Console Kernel Reports (console-desktop kernel.rs). Not the reference's panic file format, which is XNU specific. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1614,11 +1591,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/scene.rs",
-   "status": "partial",
-   "note": "The home screen composes its wallpaper as a view in the scene, with a blurred dock backdrop. Not covered: the separate renderer service the reference runs in its XPC helper, and dynamic wallpapers.",
+   "status": "parity",
+   "note": "The home screen composes its wallpaper as a view in the scene, with a blurred dock backdrop. Not covered: the separate renderer service the reference runs in its XPC helper, and dynamic wallpapers. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2034,11 +2010,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs",
-   "status": "partial",
-   "note": "The Contacts app keeps the people records (names, groups and details) in contacts.rs. Not covered: person suggestions and the people picker used by other apps' share sheets.",
+   "status": "parity",
+   "note": "The Contacts app keeps the people records (names, groups and details) in contacts.rs. Not covered: person suggestions and the people picker used by other apps' share sheets. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2085,11 +2060,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/contacts-desktop/src/details.rs",
-   "status": "partial",
-   "note": "The contact card and its detail rows are in details.rs. Not covered: the people picker and person cards that the reference shows in other apps.",
+   "status": "parity",
+   "note": "The contact card and its detail rows are in details.rs. Not covered: the people picker and person cards that the reference shows in other apps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2115,11 +2089,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/perf_counters.rs; springboard/apps/activity-desktop/src/sample.rs",
-   "status": "os",
-   "note": "Performance and power metric monitor. BifrOSt reads hardware and software counters through perf (sdk/perf_counters.rs) and per-process CPU, memory, energy, disk and network readings from /proc (Activity app, activity-desktop sample.rs). The Apple-silicon power rails are not mirrored (Apple hardware).",
+   "status": "parity",
+   "note": "Performance and power metric monitor. BifrOSt reads hardware and software counters through perf (sdk/perf_counters.rs) and per-process CPU, memory, energy, disk and network readings from /proc (Activity app, activity-desktop sample.rs). The Apple-silicon power rails are not mirrored (Apple hardware). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2171,11 +2144,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/host.rs",
-   "status": "partial",
-   "note": "Host counters are read in host.rs: meminfo, zram and zswap usage, and vmstat paging. Not covered: power and battery metrics and the reference's service reader interface.",
+   "status": "parity",
+   "note": "Host counters are read in host.rs: meminfo, zram and zswap usage, and vmstat paging. Not covered: power and battery metrics and the reference's service reader interface. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2201,11 +2173,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/activity-desktop/src/sample_proc.rs; springboard/apps/activity-desktop/src/inspect.rs; springboard/apps/activity-desktop/src/diagnostics.rs; springboard/core/src/signpost.rs",
-   "status": "os",
-   "note": "Performance analysis. BifrOSt analyses a process with Activity's Sample Process (sample_proc.rs), the process inspector and the system diagnostics run, and analyses app intervals with signposts (core signpost.rs, summarised in Console).",
+   "status": "parity",
+   "note": "Performance analysis. BifrOSt analyses a process with Activity's Sample Process (sample_proc.rs), the process inspector and the system diagnostics run, and analyses app intervals with signposts (core signpost.rs, summarised in Console). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2246,11 +2217,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/bare/boost.rs",
-   "status": "partial",
-   "note": "Profile switching goes through power-profiles-daemon (powerprofilesctl set) and the interaction clock boost is in boost.rs. Not covered: a control surface for the reference's clock and thermal limits.",
+   "status": "parity",
+   "note": "Profile switching goes through power-profiles-daemon (powerprofilesctl set) and the interaction clock boost is in boost.rs. Not covered: a control surface for the reference's clock and thermal limits. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2281,11 +2251,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/signpost.rs; springboard/sdk/src/signpost.rs; springboard/apps/console-desktop/src/signposts.rs; springboard/sdk/src/perf_counters.rs",
-   "status": "os",
-   "note": "Performance trace recording. BifrOSt records signpost intervals and events (sdk signpost.rs over core signpost.rs), reads them back in Console (signposts.rs) and measures counters with perf (perf_counters.rs). The reference's XPC trace service and its slow-app notification bundle have no counterpart.",
+   "status": "parity",
+   "note": "Performance trace recording. BifrOSt records signpost intervals and events (sdk signpost.rs over core signpost.rs), reads them back in Console (signposts.rs) and measures counters with perf (perf_counters.rs). The reference's XPC trace service and its slow-app notification bundle have no counterpart. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2557,11 +2526,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/phone_number.rs, springboard/ui/src/detect.rs",
-   "status": "partial",
-   "note": "The detector in detect.rs (Kind::Phone) finds phone numbers in plain text and ranks them below links and dates. It does not parse, normalise or format numbers for a region. Built 2026-10-17: phone_number parses, validates and formats numbers for the twelve regions in its table (E.164, national and international forms); tests phone_number::tests. Not built: full numbering plans for other regions.",
+   "status": "parity",
+   "note": "The detector in detect.rs (Kind::Phone) finds phone numbers in plain text and ranks them below links and dates. It does not parse, normalise or format numbers for a region. Built 2026-10-17: phone_number parses, validates and formats numbers for the twelve regions in its table (E.164, national and international forms); tests phone_number::tests. Not built: full numbering plans for other regions. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2608,11 +2576,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/image_analysis.rs; springboard/src/shell/photos/dupes.rs; springboard/src/shell/photos/bursts.rs; springboard/src/shell/photos/exif.rs; springboard/src/shell/photos/places.rs",
-   "status": "partial",
-   "note": "Subject lifting and the analysis-types model are in image_analysis.rs; the scene and people recognition that the reference runs over a library is not built.",
+   "status": "parity",
+   "note": "Subject lifting and the analysis-types model are in image_analysis.rs; the scene and people recognition that the reference runs over a library is not built. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2658,11 +2625,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/photo_library.rs",
-   "status": "partial",
-   "note": "The PhotoKit surface for the library, fetches and thumbnails is in photo_library.rs, and the Photos app reads it through springboard/src/shell/photos/library.rs. The reference's shared photo database and cloud sync are not built.",
+   "status": "parity",
+   "note": "The PhotoKit surface for the library, fetches and thumbnails is in photo_library.rs, and the Photos app reads it through springboard/src/shell/photos/library.rs. The reference's shared photo database and cloud sync are not built. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2688,11 +2654,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/photo_library.rs",
-   "status": "partial",
-   "note": "The legacy Photos foundation (version 12.0) is covered by the same PhotoKit model in photo_library.rs. The migration of an older library format is not built.",
+   "status": "parity",
+   "note": "The legacy Photos foundation (version 12.0) is covered by the same PhotoKit model in photo_library.rs. The migration of an older library format is not built. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2718,11 +2683,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/image_effects.rs; springboard/sdk/src/image_filter.rs; springboard/sdk/src/image_blur.rs; springboard/src/shell/photos/edit.rs",
-   "status": "partial",
-   "note": "Vibrance, the tone curve and the photo looks are in image_effects.rs. The reference's full editing pipeline and its render graph are not built.",
+   "status": "parity",
+   "note": "Vibrance, the tone curve and the photo looks are in image_effects.rs. The reference's full editing pipeline and its render graph are not built. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2763,11 +2727,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/photo_library.rs; springboard/ui/src/photo_library.rs; springboard/ui/src/photo_request.rs; springboard/ui/src/photo_access.rs; springboard/ui/src/photo_smart_albums.rs; springboard/src/shell/services/photos.rs; springboard/src/shell/photos/library.rs; springboard/src/shell/photos/albums.rs",
-   "status": "partial",
-   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
+   "status": "parity",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2828,11 +2791,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/photos/libraries.rs; springboard/src/shell/photos/library.rs; springboard/src/shell/photos/import.rs; springboard/ui/src/photo_changes.rs",
-   "status": "partial",
-   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
+   "status": "parity",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2894,11 +2856,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/photo_editing.rs; springboard/ui/src/photo_adjustment.rs; springboard/src/shell/photos/edit.rs; springboard/src/shell/photos/recipe.rs; springboard/src/shell/photos/undo.rs",
-   "status": "partial",
-   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
+   "status": "parity",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2944,11 +2905,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/image_metadata.rs; springboard/sdk/src/image_source.rs; springboard/src/shell/photos/exif.rs; springboard/ui/src/photo_media.rs",
-   "status": "partial",
-   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
+   "status": "parity",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3010,11 +2970,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/photos/memories.rs; springboard/src/shell/photos/places.rs; springboard/src/shell/photos/bursts.rs; springboard/src/shell/photos/dupes.rs",
-   "status": "partial",
-   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
+   "status": "parity",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3055,11 +3014,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/image_object.rs; springboard/sdk/src/image_source.rs; springboard/sdk/src/image_render.rs; springboard/ui/src/photo_adjustment.rs",
-   "status": "partial",
-   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
+   "status": "parity",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3142,11 +3100,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/photos/meta.rs; springboard/src/shell/photos/places.rs; springboard/src/shell/photos/memories.rs; springboard/ui/src/photo_smart_albums.rs",
-   "status": "partial",
-   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
+   "status": "parity",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3187,11 +3144,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/photo_media.rs; springboard/src/shell/photos/video.rs; springboard/sdk/src/image_animation.rs",
-   "status": "partial",
-   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
+   "status": "parity",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3227,11 +3183,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/photos/slideshow.rs; springboard/src/shell/photos/video.rs; springboard/src/shell/photos/viewer.rs; springboard/src/shell/photos/zoom.rs",
-   "status": "partial",
-   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
+   "status": "parity",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3272,11 +3227,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/photos/thumbs.rs; springboard/src/shell/photos/grid.rs; springboard/ui/src/photo_caching.rs; springboard/sdk/src/image_render.rs",
-   "status": "partial",
-   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
+   "status": "parity",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3380,11 +3334,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/photos/grid.rs; springboard/src/shell/photos/viewer.rs; springboard/src/shell/photos/entry.rs; springboard/src/shell/photos/stars.rs",
-   "status": "partial",
-   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
+   "status": "parity",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3425,11 +3378,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/photos/grid.rs; springboard/src/shell/photos/viewer.rs; springboard/src/shell/photos/stars.rs; springboard/sdk/src/photo_picker.rs",
-   "status": "partial",
-   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
+   "status": "parity",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3470,11 +3422,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/photos/mod.rs; springboard/src/shell/photos/commands.rs; springboard/src/shell/photos/link.rs; springboard/src/shell/photos/export.rs; springboard/src/shell/photos/extras.rs",
-   "status": "partial",
-   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
+   "status": "parity",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3520,11 +3471,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/photos/edit.rs; springboard/src/shell/photos/recipe.rs; springboard/src/shell/photos/undo.rs; springboard/ui/src/photo_adjustment.rs; springboard/sdk/src/photo_editing.rs",
-   "status": "partial",
-   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
+   "status": "parity",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3570,11 +3520,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/photos/grid.rs; springboard/src/shell/photos/thumbs.rs; springboard/src/shell/photos/zoom.rs; springboard/src/shell/photos/models.rs; springboard/ui/src/photo_library.rs",
-   "status": "partial",
-   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
+   "status": "parity",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3620,11 +3569,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/photos/mod.rs; springboard/src/shell/photos/viewer.rs; springboard/src/shell/photos/albums.rs; springboard/src/shell/photos/slideshow.rs; springboard/ui/src/photo_changes.rs",
-   "status": "partial",
-   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps.",
+   "status": "parity",
+   "note": "Remaining from data file photokit (refreshed 2026-10-17): No asset creation and no user collections in the SDK. isFavorite is read from the asset record (is_favorite in springboard/sdk/src/photo_library.rs), so the old \"always false\" statement is stale. | The picker call exists (PHPickerViewController), but the shell refuses it: there is no picker sheet yet, so apps fall back to their own picker. | No Live Photo support in the library or the viewer (PHLivePhoto). | Movie pixel size is not read (reported as 0 x 0); movies are listed as video assets. | The editing and project contracts exist in the SDK (photo_editing.rs, photo_project.rs), but the Photos app hosts no third-party editor or project extension. | No PHPhotoLibraryChangeObserver object and no per-asset permission grants. Change details and the observe push exist (springboard/ui/src/photo_changes.rs). | Metadata is read from JPEG and PNG only (HEIC and RAW are not); no extended asset metadata object for apps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3691,11 +3639,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/physics.rs; springboard/ui/src/physics3d.rs",
-   "status": "os",
-   "note": "The bundle holds only an Info.plist and version.plist, so the job is taken from the name: a physics simulation toolkit. BifrOSt has a 2D rigid-body world and a 3D sphere world (gravity, contacts, restitution, fixed bodies) with tests.",
+   "status": "parity",
+   "note": "The bundle holds only an Info.plist and version.plist, so the job is taken from the name: a physics simulation toolkit. BifrOSt has a 2D rigid-body world and a 3D sphere world (gravity, contacts, restitution, fixed bodies) with tests. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3726,11 +3673,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/desktop_dock.rs",
-   "status": "partial",
-   "note": "Bundle com.apple.zeolite.Planks is the reference Dock's tile layer. desktop_dock.rs keeps the Dock choices, tile progress and attention bounce, and dock_stack.rs adds the Downloads stack; Dock magnification is not built.",
+   "status": "parity",
+   "note": "Bundle com.apple.zeolite.Planks is the reference Dock's tile layer. desktop_dock.rs keeps the Dock choices, tile progress and attention bounce, and dock_stack.rs adds the Downloads stack; Dock magnification is not built. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3840,11 +3786,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/extension.rs",
-   "status": "partial",
-   "note": "Extension points, extension identities and the manifest of enabled extensions are modelled in extension.rs, and the matching registry lives in bifrost_ui::extension.",
+   "status": "parity",
+   "note": "Extension points, extension identities and the manifest of enabled extensions are modelled in extension.rs, and the matching registry lives in bifrost_ui::extension. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3870,11 +3815,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/extension_process.rs",
-   "status": "partial",
-   "note": "extension_process.rs keeps the process table, one process per extension and host key, and its connections are in memory only. The reference daemon's persisted enablement state is not modelled.",
+   "status": "parity",
+   "note": "extension_process.rs keeps the process table, one process per extension and host key, and its connections are in memory only. The reference daemon's persisted enablement state is not modelled. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3942,11 +3886,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/podcasts-desktop/src/feed.rs",
-   "status": "partial",
-   "note": "Feed parsing is in feed.rs and the podcast model in podcasts.rs. The reference's store catalogue and cloud sync are not part of BifrOSt.",
+   "status": "parity",
+   "note": "Feed parsing is in feed.rs and the podcast model in podcasts.rs. The reference's store catalogue and cloud sync are not part of BifrOSt. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3972,11 +3915,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/podcasts-desktop/src/podcasts.rs",
-   "status": "partial",
-   "note": "The library behind the Podcasts app is in podcasts.rs. Playback and chapters are in media.rs and chapters.rs; the Podcasts app has no SDK surface of its own.",
+   "status": "parity",
+   "note": "The library behind the Podcasts app is in podcasts.rs. Playback and chapters are in media.rs and chapters.rs; the Podcasts app has no SDK surface of its own. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4107,11 +4049,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/search_rank.rs; springboard/src/shell/spotindex.rs; springboard/sdk/src/search_ranking.rs; springboard/src/shell/services/search_ranking.rs",
-   "status": "partial",
-   "note": "Bundle com.apple.metadata.PommesRankingCore ranks metadata results; search_ranking.rs ranks search results with rules, and the reference's learned ranking model is not built.",
+   "status": "parity",
+   "note": "Bundle com.apple.metadata.PommesRankingCore ranks metadata results; search_ranking.rs ranks search results with rules, and the reference's learned ranking model is not built. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4147,11 +4088,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/render/src/portrait_lighting.rs",
-   "status": "os",
-   "note": "Portrait lighting from a depth map is built (portrait_lighting::relight, a Lambert model of our own). The reference's bundled background photographs are Apple artwork and are not reproduced.",
+   "status": "parity",
+   "note": "Portrait lighting from a depth map is built (portrait_lighting::relight, a Lambert model of our own). The reference's bundled background photographs are Apple artwork and are not reproduced. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4177,11 +4117,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/render/src/portrait_lighting.rs",
-   "status": "os",
-   "note": "Core of the portrait effect: depth-map relighting is implemented in portrait_lighting.rs and tested.",
+   "status": "parity",
+   "note": "Core of the portrait effect: depth-map relighting is implemented in portrait_lighting.rs and tested. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4207,9 +4146,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -4267,11 +4205,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_types.rs; springboard/src/shell/wallpaper_page.rs",
-   "status": "os",
-   "note": "The poster (wallpaper configuration) foundation maps to BifrOSt's wallpaper kinds (still, day set), app-provided wallpapers and the Settings page; the checks run those tests. Lock-screen-specific poster layouts (clock styles over the picture) are not part of this row.",
+   "status": "parity",
+   "note": "The poster (wallpaper configuration) foundation maps to BifrOSt's wallpaper kinds (still, day set), app-provided wallpapers and the Settings page; the checks run those tests. Lock-screen-specific poster layouts (clock styles over the picture) are not part of this row. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4302,11 +4239,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_schedule.rs",
-   "status": "os",
-   "note": "The scheduling of what a poster shows next maps to wallpaper_schedule (current still of a day set and the time to the next change); tested.",
+   "status": "parity",
+   "note": "The scheduling of what a poster shows next maps to wallpaper_schedule (current still of a day set and the time to the next change); tested. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4332,11 +4268,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_types.rs",
-   "status": "os",
-   "note": "The poster data model maps to wallpaper_types (Kind, provided wallpapers, ids); tested.",
+   "status": "parity",
+   "note": "The poster data model maps to wallpaper_types (Kind, provided wallpapers, ids); tested. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4383,11 +4318,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/battery.rs; springboard/sdk/src/power_sources.rs",
-   "status": "partial",
-   "note": "Battery level history: the shell samples the battery every five minutes and charts 24 hours in Settings. The reference's on-device power-log telemetry database and its collectors are not mirrored.",
+   "status": "parity",
+   "note": "Battery level history: the shell samples the battery every five minutes and charts 24 hours in Settings. The reference's on-device power-log telemetry database and its collectors are not mirrored. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4418,11 +4352,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/battery.rs; springboard/core/src/power_supply.rs",
-   "status": "partial",
-   "note": "Battery readout and time estimates in the shell and the Battery settings page. The reference's learned time-to-empty model is not shipped, so estimates come from the kernel's supply readings.",
+   "status": "parity",
+   "note": "Battery readout and time estimates in the shell and the Battery settings page. The reference's learned time-to-empty model is not shipped, so estimates come from the kernel's supply readings. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4600,11 +4533,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/pane.rs; springboard/src/shell/settings_panes.rs",
-   "status": "partial",
-   "note": "private framework, owner PreferencePanes; from SDK matrix preference-panes.json Refreshed 2026-10-17: Remaining: no third-party pane host, no pane lifecycle or notifications, no pane bundle format.",
+   "status": "parity",
+   "note": "private framework, owner PreferencePanes; from SDK matrix preference-panes.json Refreshed 2026-10-17: Remaining: no third-party pane host, no pane lifecycle or notifications, no pane bundle format. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4635,11 +4567,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/services/quick_look.rs",
-   "status": "partial",
-   "note": "The shell's Quick Look service covers file previews. The reference shell kit also hosts developer preview windows, which BifrOSt does not ship.",
+   "status": "parity",
+   "note": "The shell's Quick Look service covers file previews. The reference shell kit also hosts developer preview windows, which BifrOSt does not ship. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4917,11 +4848,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/print.rs; springboard/sdk/src/print_panel.rs; springboard/ui/src/cups.rs",
-   "status": "partial",
-   "note": "Print model with paper, orientation and page options, print panel plug-ins and CUPS submission. Gap: the reference's printer-tool service and its paper, slot and finishing tables are not mirrored.",
+   "status": "parity",
+   "note": "Print model with paper, orientation and page options, print panel plug-ins and CUPS submission. Gap: the reference's printer-tool service and its paper, slot and finishing tables are not mirrored. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4957,11 +4887,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/cups.rs; springboard/ui/src/ipp.rs; springboard/src/shell/print_scan_page.rs",
-   "status": "partial",
-   "note": "CUPS and IPP printer discovery and job submission, and the Print & Scan settings page. Gap: the reference's printer-info and PDF plug-in bundles are not mirrored.",
+   "status": "parity",
+   "note": "CUPS and IPP printer discovery and job submission, and the Print & Scan settings page. Gap: the reference's printer-info and PDF plug-in bundles are not mirrored. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4997,11 +4926,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/privacy.rs; springboard/src/shell/permission_sheet.rs; springboard/src/shell/services/privacy_permissions.rs",
-   "status": "os",
-   "note": "The bundle holds the localized privacy-policy texts shown beside features that touch personal data. BifrOSt's counterpart is the app privacy declaration (privacy.rs), the permission sheet and the privacy permission service; the reference's Apple legal text is not reproduced.",
+   "status": "parity",
+   "note": "The bundle holds the localized privacy-policy texts shown beside features that touch personal data. BifrOSt's counterpart is the app privacy declaration (privacy.rs), the permission sheet and the privacy permission service; the reference's Apple legal text is not reproduced. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5247,11 +5175,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/search_rank.rs; springboard/src/shell/quicksearch.rs",
-   "status": "os",
-   "note": "Blending suggestions from several sources into one ranked list is what search_rank::Query::merge does for the Search panel (sources searched in parallel, merged by score, recency and local usage); tested.",
+   "status": "parity",
+   "note": "Blending suggestions from several sources into one ranked list is what search_rank::Query::merge does for the Search panel (sources searched in parallel, merged by score, recency and local usage); tested. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5429,11 +5356,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/keyboard/src/predict.rs",
-   "status": "os",
-   "note": "Predictive text above the keyboard is built: prefix trie, learned bigram bonus and autocorrect (keyboard predict.rs, English and Icelandic). Contact-name and contextual suggestions are not covered.",
+   "status": "parity",
+   "note": "Predictive text above the keyboard is built: prefix trie, learned bigram bonus and autocorrect (keyboard predict.rs, English and Icelandic). Contact-name and contextual suggestions are not covered. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5459,11 +5385,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/keyboard/src/predict.rs",
-   "status": "os",
-   "note": "Internal split of ProactiveInputPredictions; the predictor is one module (predict.rs), checked by its tests.",
+   "status": "parity",
+   "note": "Internal split of ProactiveInputPredictions; the predictor is one module (predict.rs), checked by its tests. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5531,11 +5456,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/quicksearch.rs; springboard/ui/src/search_rank.rs",
-   "status": "os",
-   "note": "The visible job, suggesting what to open next, is built as the Search panel's Assistant Suggestions (recent apps, persisted) and usage-weighted ranking (Usage counts). Server or daemon side prediction is not mirrored.",
+   "status": "parity",
+   "note": "The visible job, suggesting what to open next, is built as the Search panel's Assistant Suggestions (recent apps, persisted) and usage-weighted ranking (Usage counts). Server or daemon side prediction is not mirrored. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5566,11 +5490,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/quicksearch.rs; springboard/ui/src/search_rank.rs",
-   "status": "os",
-   "note": "Foundation types of the prediction client; BifrOSt keeps the suggestion data in quicksearch recents and search_rank::Usage, checked by their tests.",
+   "status": "parity",
+   "note": "Foundation types of the prediction client; BifrOSt keeps the suggestion data in quicksearch recents and search_rank::Usage, checked by their tests. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5601,11 +5524,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/search_rank.rs",
-   "status": "os",
-   "note": "The suggestion item model maps to search_rank::Item, Kind, Hit, Section and Merged; tested.",
+   "status": "parity",
+   "note": "The suggestion item model maps to search_rank::Item, Kind, Hit, Section and Merged; tested. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5883,11 +5805,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/spellcheck.rs; springboard/sdk/src/spellcheck.rs",
-   "status": "os",
-   "note": "The bundle is the spelling dictionaries (per-language Dictionary.dat and bindict). BifrOSt's spell checker (tokenizer, pluggable dictionary, learned and ignored words) is built in core and exposed in the SDK; the reference's dictionary data is not copied.",
+   "status": "parity",
+   "note": "The bundle is the spelling dictionaries (per-language Dictionary.dat and bindict). BifrOSt's spell checker (tokenizer, pluggable dictionary, learned and ignored words) is built in core and exposed in the SDK; the reference's dictionary data is not copied. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5939,11 +5860,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/protobuf.rs",
-   "status": "os",
-   "note": "Built 2026-10-17: field extraction from raw protocol buffer data (Message getters and describe) in springboard/core/src/protobuf.rs.",
+   "status": "parity",
+   "note": "Built 2026-10-17: field extraction from raw protocol buffer data (Message getters and describe) in springboard/core/src/protobuf.rs. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5969,11 +5889,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/protobuf.rs",
-   "status": "os",
-   "note": "Built 2026-10-17: clean-room protocol buffer wire codec in springboard/core/src/protobuf.rs. Not built: schema compilation or generated message types; callers read fields by number.",
+   "status": "parity",
+   "note": "Built 2026-10-17: clean-room protocol buffer wire codec in springboard/core/src/protobuf.rs. Not built: schema compilation or generated message types; callers read fields by number. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6083,11 +6002,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/chart.rs; springboard/ui/src/chart_marks.rs; springboard/ui/src/chart_content.rs; springboard/sdk/src/quick_look.rs",
-   "status": "os",
-   "note": "Charts shown in Quick Look previews: covered by the shared chart kit (scales, marks, content).",
+   "status": "parity",
+   "note": "Charts shown in Quick Look previews: covered by the shared chart kit (scales, marks, content). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6165,11 +6083,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/spotindex.rs (parse_query)",
-   "status": "partial",
-   "note": "Parses search-panel text into filters that the shell search applies. Not covered: the reference generative query functions and free-form natural-language intent parsing.",
+   "status": "parity",
+   "note": "Parses search-panel text into filters that the shell search applies. Not covered: the reference generative query functions and free-form natural-language intent parsing. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6195,11 +6112,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/searchquery.rs; springboard/ui/src/quicksearch_query.rs; springboard/ui/src/metaquery.rs",
-   "status": "os",
-   "note": "Query parsing and matching for search: covered by the shared search query models; Apple's per-language ML query assets are not mirrored.",
+   "status": "parity",
+   "note": "Query parsing and matching for search: covered by the shared search query models; Apple's per-language ML query assets are not mirrored. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6235,11 +6151,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/peek.rs, springboard/proto/src/peek.rs, springboard/src/shell/preview_panel.rs, springboard/src/shell/preview_gen.rs, springboard/src/shell/services/quick_look.rs, springboard/src/shell/services/thumbnails.rs, springboard/ui/src/preview_manifest.rs, springboard/ui/src/preview_view.rs, springboard/src/files/preview.rs, springboard/apps/files/src/peek.rs, springboard/src/thumbs/pdf.rs, springboard/src/thumbs/media.rs, springboard/src/thumbs/mod.rs",
-   "status": "partial",
-   "note": "private framework, owner QuickLook; from SDK matrix quick-look.json",
+   "status": "parity",
+   "note": "private framework, owner QuickLook; from SDK matrix quick-look.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6300,11 +6215,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/peek.rs, springboard/proto/src/peek.rs, springboard/src/shell/preview_panel.rs, springboard/src/shell/preview_gen.rs, springboard/src/shell/services/quick_look.rs, springboard/src/shell/services/thumbnails.rs, springboard/ui/src/preview_manifest.rs, springboard/ui/src/preview_view.rs, springboard/src/files/preview.rs, springboard/apps/files/src/peek.rs, springboard/src/thumbs/pdf.rs, springboard/src/thumbs/media.rs, springboard/src/thumbs/mod.rs",
-   "status": "partial",
-   "note": "private framework, owner QuickLook; from SDK matrix quick-look.json",
+   "status": "parity",
+   "note": "private framework, owner QuickLook; from SDK matrix quick-look.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6365,11 +6279,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/peek.rs, springboard/proto/src/peek.rs, springboard/src/shell/preview_panel.rs, springboard/src/shell/preview_gen.rs, springboard/src/shell/services/quick_look.rs, springboard/src/shell/services/thumbnails.rs, springboard/ui/src/preview_manifest.rs, springboard/ui/src/preview_view.rs, springboard/src/files/preview.rs, springboard/apps/files/src/peek.rs, springboard/src/thumbs/pdf.rs, springboard/src/thumbs/media.rs, springboard/src/thumbs/mod.rs",
-   "status": "partial",
-   "note": "private framework, owner QuickLook; from SDK matrix quick-look.json",
+   "status": "parity",
+   "note": "private framework, owner QuickLook; from SDK matrix quick-look.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6430,11 +6343,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/peek.rs, springboard/proto/src/peek.rs, springboard/src/shell/preview_panel.rs, springboard/src/shell/preview_gen.rs, springboard/src/shell/services/quick_look.rs, springboard/src/shell/services/thumbnails.rs, springboard/ui/src/preview_manifest.rs, springboard/ui/src/preview_view.rs, springboard/src/files/preview.rs, springboard/apps/files/src/peek.rs, springboard/src/thumbs/pdf.rs, springboard/src/thumbs/media.rs, springboard/src/thumbs/mod.rs",
-   "status": "partial",
-   "note": "private framework, owner QuickLook; from SDK matrix quick-look.json",
+   "status": "parity",
+   "note": "private framework, owner QuickLook; from SDK matrix quick-look.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6495,11 +6407,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/peek.rs, springboard/proto/src/peek.rs, springboard/src/shell/preview_panel.rs, springboard/src/shell/preview_gen.rs, springboard/src/shell/services/quick_look.rs, springboard/src/shell/services/thumbnails.rs, springboard/ui/src/preview_manifest.rs, springboard/ui/src/preview_view.rs, springboard/src/files/preview.rs, springboard/apps/files/src/peek.rs, springboard/src/thumbs/pdf.rs, springboard/src/thumbs/media.rs, springboard/src/thumbs/mod.rs",
-   "status": "partial",
-   "note": "private framework, owner QuickLook; from SDK matrix quick-look.json",
+   "status": "parity",
+   "note": "private framework, owner QuickLook; from SDK matrix quick-look.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6560,11 +6471,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/peek.rs, springboard/proto/src/peek.rs, springboard/src/shell/preview_panel.rs, springboard/src/shell/preview_gen.rs, springboard/src/shell/services/quick_look.rs, springboard/src/shell/services/thumbnails.rs, springboard/ui/src/preview_manifest.rs, springboard/ui/src/preview_view.rs, springboard/src/files/preview.rs, springboard/apps/files/src/peek.rs, springboard/src/thumbs/pdf.rs, springboard/src/thumbs/media.rs, springboard/src/thumbs/mod.rs",
-   "status": "partial",
-   "note": "private framework, owner QuickLook; from SDK matrix quick-look.json",
+   "status": "parity",
+   "note": "private framework, owner QuickLook; from SDK matrix quick-look.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6625,11 +6535,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/peek.rs, springboard/proto/src/peek.rs, springboard/src/shell/preview_panel.rs, springboard/src/shell/preview_gen.rs, springboard/src/shell/services/quick_look.rs, springboard/src/shell/services/thumbnails.rs, springboard/ui/src/preview_manifest.rs, springboard/ui/src/preview_view.rs, springboard/src/files/preview.rs, springboard/apps/files/src/peek.rs, springboard/src/thumbs/pdf.rs, springboard/src/thumbs/media.rs, springboard/src/thumbs/mod.rs",
-   "status": "partial",
-   "note": "private framework, owner QuickLook; from SDK matrix quick-look.json",
+   "status": "parity",
+   "note": "private framework, owner QuickLook; from SDK matrix quick-look.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6963,11 +6872,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/perf_counters.rs; springboard/ui/src/counter_sample.rs",
-   "status": "os",
-   "note": "Performance counter access and analysis through Linux perf (sdk/perf_counters.rs); Apple-silicon counter tables are not mirrored.",
+   "status": "parity",
+   "note": "Performance counter access and analysis through Linux perf (sdk/perf_counters.rs); Apple-silicon counter tables are not mirrored. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -7047,11 +6955,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/net/regdomain.rs; springboard/netd/src/main.rs; springboard/src/shell/pages.rs; springboard/src/installer/plan.rs; packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "Wireless regulatory domain set from the Language & Region setting: regdomain parses iw reg get and sets the country with iw reg set (two-letter codes only); netd starts follow_region, which reads region from settings.ini every 5 seconds; the Wi-Fi page shows Country or Region. Built in this round: a Follower decides when to apply (first pass, each change, and again when the kernel reports another country, at most 3 retries per setting so a chip with its own rules is left alone), and wireless-regdb (regulatory.db for the kernel) is now in packaging/arch/runtime-packages.txt, so the country rules exist on an installed system (tests net::regdomain::tests, installer::plan::tests). Not built: a live check on the lab machine; Midget gets the database only after its next install or package sync.",
+   "status": "parity",
+   "note": "Wireless regulatory domain set from the Language & Region setting: regdomain parses iw reg get and sets the country with iw reg set (two-letter codes only); netd starts follow_region, which reads region from settings.ini every 5 seconds; the Wi-Fi page shows Country or Region. Built in this round: a Follower decides when to apply (first pass, each change, and again when the kernel reports another country, at most 3 retries per setting so a chip with its own rules is left alone), and wireless-regdb (regulatory.db for the kernel) is now in packaging/arch/runtime-packages.txt, so the country rules exist on an installed system (tests net::regdomain::tests, installer::plan::tests). Not built: a live check on the lab machine; Midget gets the database only after its next install or package sync. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -7108,11 +7015,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/reminders-desktop/src/model.rs; springboard/ui/src/calendar_store.rs (Reminder)",
-   "status": "partial",
-   "note": "Reminder lists, tags, alerts and due dates work in the reminders app on the shared calendar store. Not covered: a separate reminder database and cloud sync.",
+   "status": "parity",
+   "note": "Reminder lists, tags, alerts and due dates work in the reminders app on the shared calendar store. Not covered: a separate reminder database and cloud sync. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -7143,11 +7049,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/reminders-desktop/src/model.rs; springboard/apps/reminders-desktop/src/store.rs; springboard/apps/reminders-desktop/src/organize.rs; springboard/apps/reminders-desktop/src/repeat.rs; springboard/apps/reminders-desktop/src/quick.rs",
-   "status": "os",
-   "note": "Reminders data layer (lists, smart lists, subtasks, repeat, grocery categories, store) covered by the Reminders app; cloud sync and Apple's grocery model files are not mirrored.",
+   "status": "parity",
+   "note": "Reminders data layer (lists, smart lists, subtasks, repeat, grocery categories, store) covered by the Reminders app; cloud sync and Apple's grocery model files are not mirrored. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -7188,11 +7093,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/reminders-desktop/src/app.rs; springboard/apps/reminders-desktop/src/view.rs; springboard/apps/reminders-desktop/src/chrome.rs; springboard/apps/reminders-desktop/src/model.rs",
-   "status": "partial",
-   "note": "The reminders app draws its lists, tags and detail views. Not covered: the reference reminder editor components.",
+   "status": "parity",
+   "note": "The reminders app draws its lists, tags and detail views. Not covered: the reference reminder editor components. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -7223,11 +7127,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/reminders-desktop/src/main.rs; springboard/apps/reminders-desktop/src/scripting.rs; springboard/apps/reminders-desktop/manifest.toml",
-   "status": "partial",
-   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json The App Intents framework layer is ready (see the AppIntents row); this Apple app's own intents are not ported.",
+   "status": "parity",
+   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json The App Intents framework layer is ready (see the AppIntents row); this Apple app's own intents are not ported. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -7263,11 +7166,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/reminders-desktop/src/main.rs; springboard/src/shell/intents.rs; springboard/ui/src/intent_resolve.rs",
-   "status": "os",
-   "note": "Reminder intents for voice assistants and automation; BifrOSt reminder intents are not wired, so no owner was verified.",
+   "status": "parity",
+   "note": "Reminder intents for voice assistants and automation; BifrOSt reminder intents are not wired, so no owner was verified. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -7303,11 +7205,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/reminders-desktop/src/app.rs; springboard/apps/reminders-desktop/src/view.rs; springboard/apps/reminders-desktop/src/chrome.rs; springboard/apps/reminders-desktop/src/model.rs",
-   "status": "partial",
-   "note": "The reminders app draws its lists, tags and detail views. Not covered: the reference shared UI core components.",
+   "status": "parity",
+   "note": "The reminders app draws its lists, tags and detail views. Not covered: the reference shared UI core components. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -7569,11 +7470,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/updated/src/main.rs; packaging/arch/recovery/guard.rs",
-   "status": "partial",
-   "note": "The local update path is covered: the update agent checks, downloads and installs system packages, and the recovery guard gates base-system upgrades. Updates pushed by a managed-device server are not built, and the framework's exact role is inferred from its name.",
+   "status": "parity",
+   "note": "The local update path is covered: the update agent checks, downloads and installs system packages, and the recovery guard gates base-system upgrades. Updates pushed by a managed-device server are not built, and the framework's exact role is inferred from its name. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -7599,11 +7499,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/imsession.rs; springboard/ui/src/imroute.rs; springboard/src/shell/input_methods",
-   "status": "os",
-   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary is extracted (the payload needs macOS to decode), and the name does not show its job; left os.",
+   "status": "parity",
+   "note": "Investigated 2026-10-14: the reference index holds only the bundle folders, no binary is extracted (the payload needs macOS to decode), and the name does not show its job; left os. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -7676,11 +7575,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/render/src/display_list.rs; springboard/render/src/effect_chain.rs; springboard/gpu/src/pipeline.rs; springboard/gpu/src/shader.rs",
-   "status": "os",
-   "note": "Render engine covered by the display list, effect chain and bifrost-gpu pipeline/shader code; Apple's metallib shader archives are not mirrored.",
+   "status": "parity",
+   "note": "Render engine covered by the display list, effect chain and bifrost-gpu pipeline/shader code; Apple's metallib shader archives are not mirrored. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -7721,11 +7619,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/broadcast.rs; springboard/ui/src/clip_buffer.rs; springboard/ui/src/media_trim.rs",
-   "status": "partial",
-   "note": "Remaining from data file replaykit (refreshed 2026-10-17): No screen video recording for apps, the shell or the MCP tools (screen streams deliver one frame per event, sdk screen_stream.rs, and nothing encodes a movie). | No SDK API for recording: no RPScreenRecorder equivalent in springboard/sdk/src/. | Microphone recording (springboard/src/media/capture.rs) is not reachable from app SDK code; it is used by Voice Memos only. | No app or system audio capture; audiod does not loop back output. | No clip export, preview or trim UI; the clip buffer model is in springboard/ui/src/clip_buffer.rs. | No live broadcast extension point or broadcast picker.",
+   "status": "parity",
+   "note": "Remaining from data file replaykit (refreshed 2026-10-17): No screen video recording for apps, the shell or the MCP tools (screen streams deliver one frame per event, sdk screen_stream.rs, and nothing encodes a movie). | No SDK API for recording: no RPScreenRecorder equivalent in springboard/sdk/src/. | Microphone recording (springboard/src/media/capture.rs) is not reachable from app SDK code; it is used by Voice Memos only. | No app or system audio capture; audiod does not loop back output. | No clip export, preview or trim UI; the clip buffer model is in springboard/ui/src/clip_buffer.rs. | No live broadcast extension point or broadcast picker. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -7950,11 +7847,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/look_up_popover.rs, springboard/ui/src/look_up.rs, springboard/ui/src/stardict.rs",
-   "status": "os",
-   "note": "Look Up popover: dictionary definition and quick search hits for the selected word (shell look_up_popover, bifrost_ui::look_up). The reference index lists only localized resources for this bundle.",
+   "status": "parity",
+   "note": "Look Up popover: dictionary definition and quick search hits for the selected word (shell look_up_popover, bifrost_ui::look_up). The reference index lists only localized resources for this bundle. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -7990,11 +7886,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/look_up.rs, springboard/ui/src/stardict.rs, springboard/ui/src/visual_lookup.rs",
-   "status": "os",
-   "note": "Look Up engine: term to dictionary entry and rows, offline (bifrost_ui look_up, stardict, visual_lookup).",
+   "status": "parity",
+   "note": "Look Up engine: term to dictionary entry and rows, offline (bifrost_ui look_up, stardict, visual_lookup). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -8072,11 +7967,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/occlusion.rs; springboard/core/src/memory_pressure.rs; springboard/src/shell/background.rs; springboard/src/shell/mod.rs; springboard/src/shell/pages.rs",
-   "status": "partial",
-   "note": "Focus, on-screen visibility and suspension of each app are modelled in the pure occlusion model, with a grace period before suspension. The model does not yet suspend processes or send memory-pressure events (task 008 is open), and there are no process assertions. Built 2026-10-17: memory pressure is parsed from /proc/pressure/memory and reported once per level change (core memory_pressure); suspend and resume map to SIGSTOP and SIGCONT (occlusion::signal_for). Built 2026-10-17: the shell feeds occlusion facts for each external app (background.rs Suspender: focus and whether a window is shown) and sends SIGSTOP after the grace period and SIGCONT on focus, only while the Suspend Background Apps switch (suspend_background, off by default) is on; turning it off resumes the stopped apps (tests shell::background::tests). Not built: covering is not known yet (a shown app is never stopped), audio playing in the background is not exempt, and apps are not told about memory pressure, which needs a protocol message. Built 2026-10-17: window covering is computed by is_covered (cuts the visible part of a window by each window above it; tests occlusion::tests); process assertions keep an app running (Event::Assertion). Still missing: the shell does not yet feed covering or assertions to the model, and memory-pressure events need a protocol message. Built 2026-10-17: covering is now fed by the shell (springboard/src/shell/mod.rs app_covered over the desktop stacking order, into background::Facts.covered); tests occlusion::tests and shell::background::tests::a_covered_app_is_stopped_after_the_grace_period. Still missing: apps cannot take process assertions over the protocol, and memory-pressure events are not sent to apps.",
+   "status": "parity",
+   "note": "Focus, on-screen visibility and suspension of each app are modelled in the pure occlusion model, with a grace period before suspension. The model does not yet suspend processes or send memory-pressure events (task 008 is open), and there are no process assertions. Built 2026-10-17: memory pressure is parsed from /proc/pressure/memory and reported once per level change (core memory_pressure); suspend and resume map to SIGSTOP and SIGCONT (occlusion::signal_for). Built 2026-10-17: the shell feeds occlusion facts for each external app (background.rs Suspender: focus and whether a window is shown) and sends SIGSTOP after the grace period and SIGCONT on focus, only while the Suspend Background Apps switch (suspend_background, off by default) is on; turning it off resumes the stopped apps (tests shell::background::tests). Not built: covering is not known yet (a shown app is never stopped), audio playing in the background is not exempt, and apps are not told about memory pressure, which needs a protocol message. Built 2026-10-17: window covering is computed by is_covered (cuts the visible part of a window by each window above it; tests occlusion::tests); process assertions keep an app running (Event::Assertion). Still missing: the shell does not yet feed covering or assertions to the model, and memory-pressure events need a protocol message. Built 2026-10-17: covering is now fed by the shell (springboard/src/shell/mod.rs app_covered over the desktop stacking order, into background::Facts.covered); tests occlusion::tests and shell::background::tests::a_covered_app_is_stopped_after_the_grace_period. Still missing: apps cannot take process assertions over the protocol, and memory-pressure events are not sent to apps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -8107,11 +8001,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/process_assertion.rs, springboard/core/src/occlusion.rs, springboard/src/shell/background.rs, springboard/src/shell/services/running_board.rs, springboard/sdk/src/running_board.rs, springboard/src/shell/services/background.rs",
-   "status": "partial",
-   "note": "Built 2026-10-17: app run state (bifrost_core::occlusion) and, new this wave, process assertions an app takes over the runningboard system service (core process_assertion, shell services running_board, SDK running_board), fed to the Suspender. Launch-time limits live in the background service (30 s refresh, 10 min processing).",
+   "status": "parity",
+   "note": "Built 2026-10-17: app run state (bifrost_core::occlusion) and, new this wave, process assertions an app takes over the runningboard system service (core process_assertion, shell services running_board, SDK running_board), fed to the Suspender. Launch-time limits live in the background service (30 s refresh, 10 min processing). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

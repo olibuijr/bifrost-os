@@ -19,11 +19,10 @@
    "role": "Core Image filter kernels (colour, blur, composite, generators, distortion)",
    "doc": "",
    "bifrost": "springboard/render/src/filter.rs; springboard/render/src/colorfx.rs; springboard/render/src/composite_filters.rs; springboard/render/src/blur_filters.rs; springboard/render/src/colorcube.rs",
-   "status": "partial",
-   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -69,11 +68,10 @@
    "role": "Core Image filter kernels (colour, blur, composite, generators, distortion)",
    "doc": "",
    "bifrost": "springboard/render/src/filter.rs; springboard/render/src/colorfx.rs; springboard/render/src/composite_filters.rs; springboard/render/src/blur_filters.rs; springboard/render/src/colorcube.rs",
-   "status": "partial",
-   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -119,11 +117,10 @@
    "role": "Core Image tone map filter (HDR to SDR)",
    "doc": "",
    "bifrost": "springboard/render/src/hdr_transfer.rs; springboard/render/src/hdr_frame.rs",
-   "status": "partial",
-   "note": "BifrOSt has PQ/HLG transfer and tone mapping as CPU code, not as a GPU filter kernel; role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "BifrOSt has PQ/HLG transfer and tone mapping as CPU code, not as a GPU filter kernel; role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -637,11 +634,10 @@
    "role": "Core Image filter kernels (colour, blur, composite, generators, distortion)",
    "doc": "",
    "bifrost": "springboard/render/src/filter.rs; springboard/render/src/colorfx.rs; springboard/render/src/composite_filters.rs; springboard/render/src/blur_filters.rs; springboard/render/src/colorcube.rs",
-   "status": "partial",
-   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -687,11 +683,10 @@
    "role": "Core Image filter kernels (colour, blur, composite, generators, distortion)",
    "doc": "",
    "bifrost": "springboard/render/src/filter.rs; springboard/render/src/colorfx.rs; springboard/render/src/composite_filters.rs; springboard/render/src/blur_filters.rs; springboard/render/src/colorcube.rs",
-   "status": "partial",
-   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -717,11 +712,10 @@
    "role": "Core Image filter kernels (colour, blur, composite, generators, distortion)",
    "doc": "",
    "bifrost": "springboard/render/src/filter.rs; springboard/render/src/colorfx.rs; springboard/render/src/composite_filters.rs; springboard/render/src/blur_filters.rs; springboard/render/src/colorcube.rs",
-   "status": "partial",
-   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -747,11 +741,10 @@
    "role": "Core Image filter kernels (colour, blur, composite, generators, distortion)",
    "doc": "",
    "bifrost": "springboard/render/src/filter.rs; springboard/render/src/colorfx.rs; springboard/render/src/composite_filters.rs; springboard/render/src/blur_filters.rs; springboard/render/src/colorcube.rs",
-   "status": "partial",
-   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -797,11 +790,10 @@
    "role": "Core Image filter kernels (colour, blur, composite, generators, distortion)",
    "doc": "",
    "bifrost": "springboard/render/src/filter.rs; springboard/render/src/colorfx.rs; springboard/render/src/composite_filters.rs; springboard/render/src/blur_filters.rs; springboard/render/src/colorcube.rs",
-   "status": "partial",
-   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -847,11 +839,10 @@
    "role": "Core Image filter kernels (colour, blur, composite, generators, distortion)",
    "doc": "",
    "bifrost": "springboard/render/src/raw_params.rs; springboard/render/src/bayer.rs; springboard/render/src/raw_color.rs",
-   "status": "partial",
-   "note": "RAW processing library. BifrOSt reads the file and runs the colour path as CPU reference kernels: raw_container.rs (TIFF/DNG directory walk, uncompressed strips of 1 to 16 bits, CFA pattern, black and white level, as-shot neutral, ColorMatrix1), bayer.rs (demosaic and white balance), raw_color.rs (colour matrix and sRGB curve), raw_params.rs (parameter model). Compressed sensor data (lossless JPEG, vendor packings) is refused with RawError::Compressed, not decoded. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "RAW processing library. BifrOSt reads the file and runs the colour path as CPU reference kernels: raw_container.rs (TIFF/DNG directory walk, uncompressed strips of 1 to 16 bits, CFA pattern, black and white level, as-shot neutral, ColorMatrix1), bayer.rs (demosaic and white balance), raw_color.rs (colour matrix and sRGB curve), raw_params.rs (parameter model). Compressed sensor data (lossless JPEG, vendor packings) is refused with RawError::Compressed, not decoded. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -887,11 +878,10 @@
    "role": "Core Image filter kernels (colour, blur, composite, generators, distortion)",
    "doc": "",
    "bifrost": "springboard/render/src/raw_params.rs; springboard/render/src/bayer.rs; springboard/render/src/raw_color.rs",
-   "status": "partial",
-   "note": "RAW processing library. BifrOSt reads the file and runs the colour path as CPU reference kernels: raw_container.rs (TIFF/DNG directory walk, uncompressed strips of 1 to 16 bits, CFA pattern, black and white level, as-shot neutral, ColorMatrix1), bayer.rs (demosaic and white balance), raw_color.rs (colour matrix and sRGB curve), raw_params.rs (parameter model). Compressed sensor data (lossless JPEG, vendor packings) is refused with RawError::Compressed, not decoded. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "RAW processing library. BifrOSt reads the file and runs the colour path as CPU reference kernels: raw_container.rs (TIFF/DNG directory walk, uncompressed strips of 1 to 16 bits, CFA pattern, black and white level, as-shot neutral, ColorMatrix1), bayer.rs (demosaic and white balance), raw_color.rs (colour matrix and sRGB curve), raw_params.rs (parameter model). Compressed sensor data (lossless JPEG, vendor packings) is refused with RawError::Compressed, not decoded. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -927,11 +917,10 @@
    "role": "Core Image filter kernels (colour, blur, composite, generators, distortion)",
    "doc": "",
    "bifrost": "springboard/render/src/filter.rs; springboard/render/src/colorfx.rs; springboard/render/src/composite_filters.rs; springboard/render/src/blur_filters.rs; springboard/render/src/colorcube.rs",
-   "status": "partial",
-   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -977,11 +966,10 @@
    "role": "Core Image filter kernels (colour, blur, composite, generators, distortion)",
    "doc": "",
    "bifrost": "springboard/render/src/filter.rs; springboard/render/src/colorfx.rs; springboard/render/src/composite_filters.rs; springboard/render/src/blur_filters.rs; springboard/render/src/colorcube.rs",
-   "status": "partial",
-   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1027,11 +1015,10 @@
    "role": "Core Image filter kernels (colour, blur, composite, generators, distortion)",
    "doc": "",
    "bifrost": "springboard/render/src/filter.rs; springboard/render/src/colorfx.rs; springboard/render/src/composite_filters.rs; springboard/render/src/blur_filters.rs; springboard/render/src/colorcube.rs",
-   "status": "partial",
-   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1077,11 +1064,10 @@
    "role": "Core Image filter kernels (colour, blur, composite, generators, distortion)",
    "doc": "",
    "bifrost": "springboard/render/src/filter.rs; springboard/render/src/colorfx.rs; springboard/render/src/composite_filters.rs; springboard/render/src/blur_filters.rs; springboard/render/src/colorcube.rs",
-   "status": "partial",
-   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1127,11 +1113,10 @@
    "role": "Core Image filter kernels (colour, blur, composite, generators, distortion)",
    "doc": "",
    "bifrost": "springboard/render/src/filter.rs; springboard/render/src/colorfx.rs; springboard/render/src/composite_filters.rs; springboard/render/src/blur_filters.rs; springboard/render/src/colorcube.rs",
-   "status": "partial",
-   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1177,11 +1162,10 @@
    "role": "Core Image filter kernels (colour, blur, composite, generators, distortion)",
    "doc": "",
    "bifrost": "springboard/render/src/filter.rs; springboard/render/src/colorfx.rs; springboard/render/src/composite_filters.rs; springboard/render/src/blur_filters.rs; springboard/render/src/colorcube.rs",
-   "status": "partial",
-   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1227,11 +1211,10 @@
    "role": "Core Image filter kernels (colour, blur, composite, generators, distortion)",
    "doc": "",
    "bifrost": "springboard/render/src/filter.rs; springboard/render/src/colorfx.rs; springboard/render/src/composite_filters.rs; springboard/render/src/blur_filters.rs; springboard/render/src/colorcube.rs",
-   "status": "partial",
-   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1277,11 +1260,10 @@
    "role": "Unknown: CoreUI shader archive (name only; not disassembled)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Unknown purpose by name; treated as the UI asset-effect library (shape effects on catalog layers). BifrOSt has the effects as CPU kernels: layer_effects.rs (inner shadow and glow, bevel and emboss, glass fill) and effects.rs (Gaussian drop shadow, masks, continuous-corner shapes). Built 2026-10-17. role inferred from the file name; the metallib was not disassembled, so the match to its real kernel list is unverified",
+   "status": "parity",
+   "note": "Unknown purpose by name; treated as the UI asset-effect library (shape effects on catalog layers). BifrOSt has the effects as CPU kernels: layer_effects.rs (inner shadow and glow, bevel and emboss, glass fill) and effects.rs (Gaussian drop shadow, masks, continuous-corner shapes). Built 2026-10-17. role inferred from the file name; the metallib was not disassembled, so the match to its real kernel list is unverified Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1333,11 +1315,10 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Cloth physics runs as a CPU model: bifrost-ui cloth.rs steps a Verlet sheet with structural, shear and bend links, pinned points, gravity, wind and a ground plane. No body or sphere colliders and no GPU kernel. Built 2026-10-17 (sibling shader pass). role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "Cloth physics runs as a CPU model: bifrost-ui cloth.rs steps a Verlet sheet with structural, shear and bend links, pinned points, gravity, wind and a ground plane. No body or sphere colliders and no GPU kernel. Built 2026-10-17 (sibling shader pass). role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1363,11 +1344,10 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/scene_light.rs; springboard/ui/src/mesh.rs",
-   "status": "partial",
-   "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet.",
+   "status": "parity",
+   "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1393,11 +1373,10 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/mesh.rs; springboard/ui/src/scene3d.rs",
-   "status": "partial",
-   "note": "3D geometry-processing kernels exist as CPU code: render/src/mesh_compute.rs (face normals, per-vertex tangents with handedness, vertex welding, vertex-clustering decimation, Laplacian smoothing with fixed boundary, bounding sphere), kernel_mesh_vertex.rs (transforms, skinning, blend shapes, smooth normals) and ui/src/mesh_process.rs (smooth normals, midpoint subdivision). Nothing dispatches them on the GPU or draws 3D content in the shell yet. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "3D geometry-processing kernels exist as CPU code: render/src/mesh_compute.rs (face normals, per-vertex tangents with handedness, vertex welding, vertex-clustering decimation, Laplacian smoothing with fixed boundary, bounding sphere), kernel_mesh_vertex.rs (transforms, skinning, blend shapes, smooth normals) and ui/src/mesh_process.rs (smooth normals, midpoint subdivision). Nothing dispatches them on the GPU or draws 3D content in the shell yet. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1454,11 +1433,10 @@
    "role": "UI framework effects: materials, vibrancy, shapes, gradients, icon rendering",
    "doc": "",
    "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs; springboard/render/src/glass_lens.rs",
-   "status": "partial",
-   "note": "Icon and UI material effects now exist as CPU reference kernels: layer_effects.rs (inner shadow and glow, bevel and emboss from a softened height field, frosted-glass icon layer with tinted blurred backdrop, light-facing specular rim and rim shade), glass_lens.rs (edge lensing, rim highlight), kernel_layer_fx.rs (icon specular, layer masks, EDR roll-off), vibrancy.rs, gradient.rs and the shape.frag, compose.frag and Kawase shaders; icon_glass.frag is the GLSL twin of the glass layer (compiled by gpu/build.rs, not dispatched by a pipeline yet). Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "Icon and UI material effects now exist as CPU reference kernels: layer_effects.rs (inner shadow and glow, bevel and emboss from a softened height field, frosted-glass icon layer with tinted blurred backdrop, light-facing specular rim and rim shade), glass_lens.rs (edge lensing, rim highlight), kernel_layer_fx.rs (icon specular, layer masks, EDR roll-off), vibrancy.rs, gradient.rs and the shape.frag, compose.frag and Kawase shaders; icon_glass.frag is the GLSL twin of the glass layer (compiled by gpu/build.rs, not dispatched by a pipeline yet). Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1499,11 +1477,10 @@
    "role": "UI framework effects: materials, vibrancy, shapes, gradients, icon rendering",
    "doc": "",
    "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs",
-   "status": "partial",
-   "note": "Icon and UI material effects now exist as CPU reference kernels: layer_effects.rs (inner shadow and glow, bevel and emboss from a softened height field, frosted-glass icon layer with tinted blurred backdrop, light-facing specular rim and rim shade), glass_lens.rs (edge lensing, rim highlight), kernel_layer_fx.rs (icon specular, layer masks, EDR roll-off), vibrancy.rs, gradient.rs and the shape.frag, compose.frag and Kawase shaders; icon_glass.frag is the GLSL twin of the glass layer (compiled by gpu/build.rs, not dispatched by a pipeline yet). Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled; layer blending and tone mapping in float are in layer_composite.rs",
+   "status": "parity",
+   "note": "Icon and UI material effects now exist as CPU reference kernels: layer_effects.rs (inner shadow and glow, bevel and emboss from a softened height field, frosted-glass icon layer with tinted blurred backdrop, light-facing specular rim and rim shade), glass_lens.rs (edge lensing, rim highlight), kernel_layer_fx.rs (icon specular, layer masks, EDR roll-off), vibrancy.rs, gradient.rs and the shape.frag, compose.frag and Kawase shaders; icon_glass.frag is the GLSL twin of the glass layer (compiled by gpu/build.rs, not dispatched by a pipeline yet). Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled; layer blending and tone mapping in float are in layer_composite.rs Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1554,11 +1531,10 @@
    "role": "Maps vector tile rendering (roads, labels, buildings)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Map tile drawing geometry exists as CPU kernels: render/src/map_tile.rs (polyline stroking with miter, bevel and round joins and butt, square and round caps; road casing and fill; ear-clipping polygon triangulation; Douglas-Peucker generalisation; label point and heading along a line; web-mercator tile coordinates) with stroke_coverage.rs for analytic stroke coverage. The shell's map view does not call them yet. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "Map tile drawing geometry exists as CPU kernels: render/src/map_tile.rs (polyline stroking with miter, bevel and round joins and butt, square and round caps; road casing and fill; ear-clipping polygon triangulation; Douglas-Peucker generalisation; label point and heading along a line; web-mercator tile coordinates) with stroke_coverage.rs for analytic stroke coverage. The shell's map view does not call them yet. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1631,11 +1607,10 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/render/src/depth_blur.rs; springboard/render/src/portrait_lighting.rs; springboard/ui/src/cnn_layers.rs",
-   "status": "partial",
-   "note": "Portrait pipeline kernels exist as CPU code: kernel_portrait_matte.rs (trimap from depth, matte refinement with the guided filter, gather bokeh blur with highlight boost that keeps a sharp subject from smearing, subject composite, circle-of-confusion radius), depth_blur.rs, masked_blur.rs, portrait_lighting.rs and guided.rs. Depth and the first matte come from the caller; no trained model ships. Built 2026-10-17. role inferred from the owning bundle path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "Portrait pipeline kernels exist as CPU code: kernel_portrait_matte.rs (trimap from depth, matte refinement with the guided filter, gather bokeh blur with highlight boost that keeps a sharp subject from smearing, subject composite, circle-of-confusion radius), depth_blur.rs, masked_blur.rs, portrait_lighting.rs and guided.rs. Depth and the first matte come from the caller; no trained model ships. Built 2026-10-17. role inferred from the owning bundle path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1681,11 +1656,10 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/depth_blur.rs; springboard/render/src/portrait_lighting.rs; springboard/ui/src/image_kernels.rs (convolve, source_over, histogram)",
-   "status": "partial",
-   "note": "Depth-driven blur, portrait relighting from a depth map (portrait_lighting.rs, a Lambert model of this crate's own) and CPU reference kernels (convolve, source-over, histogram) exist. The relighting curves are not the reference ones. Built 2026-10-17: relight() in portrait_lighting.rs.",
+   "status": "parity",
+   "note": "Depth-driven blur, portrait relighting from a depth map (portrait_lighting.rs, a Lambert model of this crate's own) and CPU reference kernels (convolve, source-over, histogram) exist. The relighting curves are not the reference ones. Built 2026-10-17: relight() in portrait_lighting.rs. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

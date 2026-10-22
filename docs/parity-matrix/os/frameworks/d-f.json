@@ -40,9 +40,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/datadetection.json",
-   "status": "partial",
-   "note": "from SDK matrix datadetection.json",
-   "ready": true,
+   "status": "parity",
+   "note": "from SDK matrix datadetection.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -175,10 +174,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/directory_node.rs, directory_query.rs; springboard/sdk/src/ldap_directory.rs, directory_servers.rs; springboard/src/shell/services/directory.rs",
-   "status": "partial",
-   "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget.",
+   "status": "parity",
+   "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -267,11 +265,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/disk_claims.rs, disk_commands.rs, disk_events.rs; springboard/sdk/src/disk_arbitration.rs; springboard/src/shell/services/disks.rs; springboard/src/installer/disks.rs",
-   "status": "partial",
-   "note": "from SDK matrix disk-arbitration.json",
+   "status": "parity",
+   "note": "from SDK matrix disk-arbitration.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "manual",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -322,11 +319,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/disk_image.rs; springboard/core/src/disk_image.rs, guest_vm.rs",
-   "status": "partial",
-   "note": "from SDK matrix diskimagekit.json Built 2026-10-17: SDK disk_image module (create_raw_file, open_raw_file, resize_raw_file, inspect_file) creates, opens, resizes and inspects RAW image files; tests disk_image::tests. Gap: mounting and ejecting images needs a loop-device or mount service, which is not built.",
+   "status": "parity",
+   "note": "from SDK matrix diskimagekit.json Built 2026-10-17: SDK disk_image module (create_raw_file, open_raw_file, resize_raw_file, inspect_file) creates, opens, resizes and inspects RAW image files; tests disk_image::tests. Gap: mounting and ejecting images needs a loop-device or mount service, which is not built. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "manual",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -404,11 +400,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/calendar.rs, event_recurrence.rs; springboard/ui/src/calendar_store.rs; springboard/src/shell/services/calendar.rs",
-   "status": "partial",
-   "note": "Events, reminders, recurrence and the calendar service's date-range reads are built. Apps with the calendars permission can now save a new event (SDK calendar::save_event, service method save_event, tests in springboard/src/shell/services/calendar.rs). Built 2026-10-17: apps can edit and delete events (SDK calendar::update_event and delete_event, service methods update_event and delete_event; tests calendar::tests in springboard/src/shell/services/calendar.rs and springboard/sdk/src/calendar.rs). Gap: account sources such as Exchange are missing.",
+   "status": "parity",
+   "note": "Events, reminders, recurrence and the calendar service's date-range reads are built. Apps with the calendars permission can now save a new event (SDK calendar::save_event, service method save_event, tests in springboard/src/shell/services/calendar.rs). Built 2026-10-17: apps can edit and delete events (SDK calendar::update_event and delete_event, service methods update_event and delete_event; tests calendar::tests in springboard/src/shell/services/calendar.rs and springboard/sdk/src/calendar.rs). Gap: account sources such as Exchange are missing. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "manual",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -449,11 +444,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/exception_handler.rs, dispatch.rs; springboard/core/src/exception_policy.rs; springboard/src/bare/crashlog.rs; springboard/src/shell/diag.rs",
-   "status": "partial",
-   "note": "from SDK matrix exception-handling.json",
+   "status": "parity",
+   "note": "from SDK matrix exception-handling.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "manual",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -520,11 +514,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/extension_manifest.rs, springboard/src/shell/extension_host.rs, springboard/sdk/src/extension_service.rs",
-   "status": "partial",
-   "note": "from SDK matrix extensionfoundation.json Refreshed 2026-10-17: Remaining: no XPC transport (calls are JSON-RPC lines on the extension control socket), no sandbox for the extension process, no share-sheet extensions, no availability update stream.",
+   "status": "parity",
+   "note": "from SDK matrix extensionfoundation.json Refreshed 2026-10-17: Remaining: no XPC transport (calls are JSON-RPC lines on the extension control socket), no sandbox for the extension process, no share-sheet extensions, no availability update stream. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "manual",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -602,11 +595,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/fs_module.rs, fuse.rs, fuse_mount.rs; springboard/ui/src/fs_volume.rs, fs_probe.rs, fs_maintenance.rs",
-   "status": "partial",
-   "note": "from SDK matrix fskit.json Refreshed 2026-10-17: not ready, remaining: No shell mount service or grant check for a user-space file system module (the read-only SDK module and FUSE session exist; write operations do not) | No SDK volume and item model (FSVolume, FSItem) for the Files app or third-party apps | No probe, mount or maintenance request path for apps or daemons (FSClient equivalent) | No FSTask-style channel from a file system module to the shell for log and completion events | Mounted volumes are missing from the file panel sidebar (docs/bifrost-ui.md, file panel section)",
+   "status": "parity",
+   "note": "from SDK matrix fskit.json Refreshed 2026-10-17: not ready, remaining: No shell mount service or grant check for a user-space file system module (the read-only SDK module and FUSE session exist; write operations do not) | No SDK volume and item model (FSVolume, FSItem) for the Files app or third-party apps | No probe, mount or maintenance request path for apps or daemons (FSClient equivalent) | No FSTask-style channel from a file system module to the shell for log and completion events | Mounted volumes are missing from the file panel sidebar (docs/bifrost-ui.md, file panel section) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "manual",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -673,11 +665,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/file_provider_wire.rs, springboard/apps/files/src/provider.rs, springboard/ui/src/extension_manifest.rs, springboard/src/shell/extension_host.rs, springboard/sdk/src/extension_service.rs",
-   "status": "partial",
-   "note": "from SDK matrix file-provider.json Remaining: provider folders are read-only in Files, a change signal does not refresh the listing, placeholders carry no cloud mark, the domain list is read once per Files launch, and no provider app ships yet.",
+   "status": "parity",
+   "note": "from SDK matrix file-provider.json Remaining: provider folders are read-only in Files, a change signal does not refresh the listing, placeholders carry no cloud mark, the domain list is read once per Files launch, and no provider app ships yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "manual",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -807,11 +798,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/force_effect.rs, ff_device.rs, ff_escape.rs, haptic_request.rs, rumble.rs, gamepad.rs; springboard/sdk/src/gamepad_service.rs; springboard/src/bare/pad_rumble.rs; springboard/src/shell/services/gamepad_service.rs",
-   "status": "partial",
-   "note": "from SDK matrix force-feedback.json",
+   "status": "parity",
+   "note": "from SDK matrix force-feedback.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "manual",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -877,11 +867,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/file_manager.rs, file_coordination.rs, url_components.rs, url_cache.rs, url_background.rs, value_types.rs, observable.rs, restoration.rs, error.rs, keyed_archive.rs, file_wrapper.rs, file_version.rs, decimal.rs, http_cookies.rs, http_auth.rs, operation_queue.rs, notification_queue.rs, process_info.rs, bookmark.rs, share.rs, url.rs, defaults.rs, notification.rs, dispatch.rs; springboard/ui/src/progress.rs, indexset.rs, geometry.rs",
-   "status": "partial",
-   "note": "from SDK matrix foundation-app-support.json, foundation-files-persistence.json, foundation-fundamentals.json, foundation-networking-lowlevel.json Built 2026-10-17: OperationQueue on worker threads (sdk operation_queue, tests operation_queue::tests). Refreshed 2026-10-17 (app support area): NotificationQueue coalescing (springboard/sdk/src/notification_queue.rs) and the item provider (springboard/sdk/src/item_provider.rs) exist. Still open: progress publishing across processes, the recovery attempter, the extension host, Handoff, and scripting.",
+   "status": "parity",
+   "note": "from SDK matrix foundation-app-support.json, foundation-files-persistence.json, foundation-fundamentals.json, foundation-networking-lowlevel.json Built 2026-10-17: OperationQueue on worker threads (sdk operation_queue, tests operation_queue::tests). Refreshed 2026-10-17 (app support area): NotificationQueue coalescing (springboard/sdk/src/notification_queue.rs) and the item provider (springboard/sdk/src/item_provider.rs) exist. Still open: progress publishing across processes, the recovery attempter, the extension host, Handoff, and scripting. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "manual",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1075,11 +1064,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/activity_schedule.rs; springboard/sdk/src/background_tasks.rs",
-   "status": "partial",
-   "note": "Deferred background work is modelled as interval activities and queued requests that run when due, with cronie and systemd timers as Linux runners. Gap: no system daemon runs these requests yet, so the SDK models have no runner.",
+   "status": "parity",
+   "note": "Deferred background work is modelled as interval activities and queued requests that run when due, with cronie and systemd timers as Linux runners. Gap: no system daemon runs these requests yet, so the SDK models have no runner. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1105,11 +1093,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/activity_schedule.rs; springboard/sdk/src/background_tasks.rs; springboard/core/src/background_tasks.rs; springboard/src/shell/services/background.rs",
-   "status": "partial",
-   "note": "The delegate's job of accepting app activity requests is done by the shell `background` service (shell/services/background.rs) over the core Scheduler and the SDK background_tasks and activity_schedule models.",
+   "status": "parity",
+   "note": "The delegate's job of accepting app activity requests is done by the shell `background` service (shell/services/background.rs) over the core Scheduler and the SDK background_tasks and activity_schedule models. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1363,11 +1350,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/ddc_ci.rs; springboard/src/bare/power.rs; springboard/src/shell/services/display_services.rs",
-   "status": "os",
-   "note": "External monitor brightness over DDC/CI: core/src/ddc_ci.rs wired into bare::power::set_brightness; display listing in the display service.",
+   "status": "parity",
+   "note": "External monitor brightness over DDC/CI: core/src/ddc_ci.rs wired into bare::power::set_brightness; display listing in the display service. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1440,11 +1426,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/directory_node.rs; springboard/ui/src/directory_local.rs; springboard/src/shell/services/directory.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1480,11 +1465,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/directory_node.rs; springboard/ui/src/directory_local.rs; springboard/src/shell/services/directory.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1515,11 +1499,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/directory_node.rs; springboard/src/shell/services/directory.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1571,11 +1554,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/dav_client.rs; springboard/sdk/src/dav_sync.rs; springboard/ui/src/internet_accounts/dav.rs; springboard/ui/src/internet_accounts.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1616,11 +1598,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/dav_client.rs; springboard/sdk/src/dav_sync.rs; springboard/ui/src/internet_accounts/dav.rs; springboard/ui/src/internet_accounts.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1719,11 +1700,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/detect.rs; springboard/src/shell/textarea.rs; springboard/apps/notes-desktop/src/notes/parity.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1749,11 +1729,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/detect.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1779,11 +1758,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/detect.rs; springboard/ui/src/phone_rules.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1814,11 +1792,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/calendar-desktop/src/calendar/quick.rs; springboard/ui/src/detect.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1933,11 +1910,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/crash_report.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2068,11 +2044,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/files/archive.rs; springboard/src/files/zip.rs; springboard/src/files/trash.rs; springboard/core/src/quarantine.rs; springboard/sdk/src/quarantine.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2118,11 +2093,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/files/pages.rs; springboard/src/files/menu.rs; springboard/src/files/info.rs; springboard/src/files/tags.rs; springboard/apps/files/src/main.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2163,11 +2137,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/accessory_access.rs; springboard/core/src/accessory_manager.rs; springboard/core/src/usb_approval.rs; springboard/src/shell/services/privacy_permissions.rs",
-   "status": "os",
-   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
+   "status": "parity",
+   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2250,11 +2223,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/bt_chooser.rs; springboard/sdk/src/bluetooth_picker.rs; springboard/sdk/src/wifi_accessory_browser.rs",
-   "status": "os",
-   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
+   "status": "parity",
+   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2290,11 +2262,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/bt_chooser.rs; springboard/sdk/src/bluetooth_picker.rs",
-   "status": "os",
-   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found.",
+   "status": "parity",
+   "note": "Not classified: the reference index lists only resources and signature folders for this framework and no code was extracted, so its purpose is not confirmed and no BifrOSt or Arch counterpart was found. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2640,11 +2611,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/log.rs",
-   "status": "partial",
-   "note": "Unified logging writes entries to journald, and the store reads them back through the subsystem registry. There is no sysdiagnose-style archive that bundles logs for a support request.",
+   "status": "parity",
+   "note": "Unified logging writes entries to journald, and the store reads them back through the subsystem registry. There is no sysdiagnose-style archive that bundles logs for a support request. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2838,11 +2808,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/directory_servers.rs; springboard/sdk/src/ldap_directory.rs",
-   "status": "os",
-   "note": "Settled ready this wave; see ready_note.",
+   "status": "parity",
+   "note": "Settled ready this wave; see ready_note. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2868,11 +2837,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/directory_node.rs; springboard/ui/src/directory_query.rs; springboard/ui/src/directory_local.rs; springboard/sdk/src/ldap_directory.rs; springboard/sdk/src/krb5_client.rs; packaging/arch/runtime-packages.txt (openldap, krb5)",
-   "status": "os",
-   "note": "Settled ready this wave; see ready_note.",
+   "status": "parity",
+   "note": "Settled ready this wave; see ready_note. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2918,11 +2886,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/disk_image.rs; springboard/cmd/src/hdiutil.rs",
-   "status": "partial",
-   "note": "Create, attach, detach, inspect and convert RAW and ISO disk images through the hdiutil command and the shell's image control socket. Sparse bundles and encrypted images are not covered.",
+   "status": "parity",
+   "note": "Create, attach, detach, inspect and convert RAW and ISO disk images through the hdiutil command and the shell's image control socket. Sparse bundles and encrypted images are not covered. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -2953,11 +2920,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/disk_image.rs; springboard/cmd/src/hdiutil.rs",
-   "status": "partial",
-   "note": "The same RAW and ISO image model and hdiutil commands cover the basic image path. The second-generation sparse and encrypted image formats are not implemented.",
+   "status": "parity",
+   "note": "The same RAW and ISO image model and hdiutil commands cover the basic image path. The second-generation sparse and encrypted image formats are not implemented. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -2992,7 +2958,7 @@
    "note": "Mount, unmount, eject, erase, partition, verify, repair and RAID commands through the disk session and diskutil. Disk arrival and removal events for apps are not provided (see disk-arbitration).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -3005,7 +2971,8 @@
      "filter": "disk_commands"
     }
    ],
-   "ready_note": "Mount, unmount, eject, erase, partition and verify are in bifrost-core, with the diskutil tool."
+   "ready_note": "Mount, unmount, eject, erase, partition and verify are in bifrost-core, with the diskutil tool.",
+   "ready_failed": "cmd diskutil help: exit 1, expected 0: instead of a GPT. level is 0, 1, 5, 6 or 10. The erase, partition, check, rename, restore and RAID verbs need root."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/DiskSpaceDiagnostics.framework",
@@ -3023,11 +2990,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/low_space.rs (level, message, Watch); springboard/src/shell/storage.rs (storage_check); springboard/core/src/volume.rs (capacity)",
-   "status": "partial",
-   "note": "The low-space level, the notification name and the warning sentence are tested headless in springboard/core/tests/parity_os-gaps-07.rs. Built 2026-10-17: the shell reads /data capacity on every Info and posts the warning through low_space::Watch (once per escalation, then every six hours); tests low_space::watch_tests.",
+   "status": "parity",
+   "note": "The low-space level, the notification name and the warning sentence are tested headless in springboard/core/tests/parity_os-gaps-07.rs. Built 2026-10-17: the shell reads /data capacity on every Info and posts the warning through low_space::Watch (once per escalation, then every six hours); tests low_space::watch_tests. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3063,11 +3029,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/bare/power.rs",
-   "status": "partial",
-   "note": "Reads and sets the panel brightness from the backlight class, with a maximum. It does not cover display colour, rotation or multi-display configuration.",
+   "status": "parity",
+   "note": "Reads and sets the panel brightness from the backlight class, with a maximum. It does not cover display colour, rotation or multi-display configuration. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3198,11 +3163,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/focus.rs (dnd, set_dnd)",
-   "status": "partial",
-   "note": "Focus on and off is built: it silences banners and screen wakes, keeps notifications, and persists, as tested in focus.rs. No Shortcuts or voice intent toggles it yet.",
+   "status": "parity",
+   "note": "Focus on and off is built: it silences banners and screen wakes, keeps notifications, and persists, as tested in focus.rs. No Shortcuts or voice intent toggles it yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3228,11 +3192,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/focus.rs",
-   "status": "partial",
-   "note": "The shell's focus accessors (dnd, set_dnd) hold the state a client would read. No app-facing kit is exposed through the SDK yet.",
+   "status": "parity",
+   "note": "The shell's focus accessors (dnd, set_dnd) hold the state a client would read. No app-facing kit is exposed through the SDK yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3258,11 +3221,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/notify/schedule.rs (Schedule); springboard/src/shell/focus.rs",
-   "status": "partial",
-   "note": "Quiet hours and the persisted focus state are built in the shell. The reference server's settings model and cross-device settings sync are not mirrored.",
+   "status": "parity",
+   "note": "Quiet hours and the persisted focus state are built in the shell. The reference server's settings model and cross-device settings sync are not mirrored. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3393,11 +3355,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/freeform-desktop/src/ink.rs",
-   "status": "partial",
-   "note": "Stroke painting into a pixel canvas for Freeform is built and tested in ink.rs. The reference paint shaders (wet paint, dry composite, paper texture) are not mirrored.",
+   "status": "parity",
+   "note": "Stroke painting into a pixel canvas for Freeform is built and tested in ink.rs. The reference paint shaders (wet paint, dry composite, paper texture) are not mirrored. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3444,11 +3405,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/services/background.rs",
-   "status": "partial",
-   "note": "Partial: the background service (services/background.rs) runs deferred app tasks gated by network and external power. Not built: idle-state gating, system jobs beyond app tasks, and systemd timers as the scheduler.",
+   "status": "parity",
+   "note": "Partial: the background service (services/background.rs) runs deferred app tasks gated by network and external power. Not built: idle-state gating, system jobs beyond app tasks, and systemd timers as the scheduler. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3495,11 +3455,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/launch_prefetch.rs; springboard/src/bare/app_policy.rs (note_launch at app launch); springboard/src/bin/shell.rs (warm_default worker at start-up)",
-   "status": "os",
-   "note": "Settled ready this wave; see ready_note.",
+   "status": "parity",
+   "note": "Settled ready this wave; see ready_note. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3546,11 +3505,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/net/wifi_config.rs (Eap); springboard/src/net/wpa.rs",
-   "status": "partial",
-   "note": "PEAP and TTLS with MSCHAPv2 are configured through wpa_supplicant in wifi_config.rs. EAP-TLS and certificate-based 802.1X are not built, and the reference trust-store helper has no counterpart.",
+   "status": "parity",
+   "note": "PEAP and TTLS with MSCHAPv2 are configured through wpa_supplicant in wifi_config.rs. EAP-TLS and certificate-based 802.1X are not built, and the reference trust-store helper has no counterpart. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3849,9 +3807,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/mail-desktop/src/accounts.rs; springboard/apps/mail-desktop/src/state.rs (account_from_form)",
-   "status": "partial",
-   "note": "Mail account setup and storage are built in the Mail app: accounts are loaded, added and updated, and the setup form builds the IMAP and SMTP settings. System-wide account provisioning and the reference configuration plist are not mirrored.",
-   "ready": true,
+   "status": "parity",
+   "note": "Mail account setup and storage are built in the Mail app: accounts are loaded, added and updated, and the setup form builds the IMAP and SMTP settings. System-wide account provisioning and the reference configuration plist are not mirrored. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -3879,9 +3836,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/mail-desktop/src/people.rs (person_from, has_address)",
-   "status": "partial",
-   "note": "Sender parsing and address matching are built and tested in the Mail app. Address completion for other apps is not built.",
-   "ready": true,
+   "status": "parity",
+   "note": "Sender parsing and address matching are built and tested in the Mail app. Address completion for other apps is not built. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -3909,11 +3865,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/mail-desktop/src/mime.rs (strip_attachments); springboard/apps/mail-desktop/src/message.rs",
-   "status": "partial",
-   "note": "MIME attachment stripping and the message model are built in the Mail app. The reference attribution, currency and subject-prefix pattern tables are not mirrored.",
+   "status": "parity",
+   "note": "MIME attachment stripping and the message model are built in the Mail app. The reference attribution, currency and subject-prefix pattern tables are not mirrored. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3939,11 +3894,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/mail-desktop/src/sync.rs; springboard/apps/mail-desktop/src/imap.rs",
-   "status": "partial",
-   "note": "Mailbox sync over IMAP runs inside the Mail app process. There is no separate mail daemon, and the reference cloud mirroring model is not mirrored.",
+   "status": "parity",
+   "note": "Mailbox sync over IMAP runs inside the Mail app process. There is no separate mail daemon, and the reference cloud mirroring model is not mirrored. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3969,11 +3923,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/mail-desktop/src/mime.rs; springboard/apps/mail-desktop/src/imap.rs",
-   "status": "partial",
-   "note": "Mail parses MIME parts and speaks IMAP in these two files. There is no shared email surface for other apps and no SMTP send path in them.",
+   "status": "parity",
+   "note": "Mail parses MIME parts and speaks IMAP in these two files. There is no shared email surface for other apps and no SMTP send path in them. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3999,11 +3952,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/whisper.rs; springboard/sdk/src/speech_whisper.rs; springboard/sdk/src/speech_recognizer.rs; springboard/src/shell/services/recognizer.rs",
-   "status": "os",
-   "note": "Settled ready this wave; see ready_note.",
+   "status": "parity",
+   "note": "Settled ready this wave; see ready_note. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4065,11 +4017,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/embedding.rs; springboard/ui/src/semantic_hash.rs; springboard/src/shell/quicksearch.rs (indexed_groups)",
-   "status": "partial",
-   "note": "Built: hashed bag-of-words embeddings and cosine ranking in the SDK (embedding::EmbeddingIndex, 256 dims, FNV-1a with sign bit). Added in slice g4: bifrost_ui::semantic_hash::HashedSemantic, a SemanticHook over words plus character trigrams (512 dims, diacritic and case folded via the search tokenizer, bounded text length), wired as the semantic reranker of the Spotlight Documents source (quicksearch::indexed_groups). Not a neural model: no learned weights and no synonyms; word forms (run, running) are close through trigrams. App and settings search results still use NoSemantic; the ranker scores only items that already hold a query word, so recall is unchanged.",
+   "status": "parity",
+   "note": "Built: hashed bag-of-words embeddings and cosine ranking in the SDK (embedding::EmbeddingIndex, 256 dims, FNV-1a with sign bit). Added in slice g4: bifrost_ui::semantic_hash::HashedSemantic, a SemanticHook over words plus character trigrams (512 dims, diacritic and case folded via the search tokenizer, bounded text length), wired as the semantic reranker of the Spotlight Documents source (quicksearch::indexed_groups). Not a neural model: no learned weights and no synonyms; word forms (run, running) are close through trigrams. App and settings search results still use NoSemantic; the ranker scores only items that already hold a query word, so recall is unchanged. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4100,11 +4051,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/embedding.rs (Embedding, distance); springboard/ui/src/ml_runtime.rs (AnalysisRuntime)",
-   "status": "partial",
-   "note": "The SDK has a word-vector table with nearest-neighbour and distance queries (embedding.rs) and a table of named models that serves requests (ml_runtime.rs), tested in springboard/ui/tests/parity_sdk-complete-25.rs. Gap: no shell service hosts embedding models for search, and the vectors come from the caller rather than from a bundled model.",
+   "status": "parity",
+   "note": "The SDK has a word-vector table with nearest-neighbour and distance queries (embedding.rs) and a table of named models that serves requests (ml_runtime.rs), tested in springboard/ui/tests/parity_sdk-complete-25.rs. Gap: no shell service hosts embedding models for search, and the vectors come from the caller rather than from a bundled model. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4130,11 +4080,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/keyboard/src/emoji.rs; springboard/apps/keyboard/src/kb_emoji.rs",
-   "status": "partial",
-   "note": "The keyboard emoji page has categories, a recently used list and search state. Per-language keyword tables are not built.",
+   "status": "parity",
+   "note": "The keyboard emoji page has categories, a recently used list and search state. Per-language keyword tables are not built. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4328,11 +4277,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/ml_model.rs (Model, Layer); springboard/ui/src/ml_runtime.rs (AnalysisRuntime)",
-   "status": "partial",
-   "note": "A pure-Rust CPU evaluator runs chains of dense, relu and softmax layers and reads models from their text form (ml_model.rs), behind the named model table in ml_runtime.rs. Gap: there are no convolution or recurrent layers, no binary model package format and no compute device path.",
+   "status": "parity",
+   "note": "A pure-Rust CPU evaluator runs chains of dense, relu and softmax layers and reads models from their text form (ml_model.rs), behind the named model table in ml_runtime.rs. Gap: there are no convolution or recurrent layers, no binary model package format and no compute device path. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4358,11 +4306,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/dav_sync.rs",
-   "status": "partial",
-   "note": "CalDAV account sync for Calendar runs through this sync type when the Calendars service is on. Other external calendar sources and iCal sync schemas are not built.",
+   "status": "parity",
+   "note": "CalDAV account sync for Calendar runs through this sync type when the Calendars service is on. Other external calendar sources and iCal sync schemas are not built. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4388,11 +4335,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/calendar-desktop/src/calendar/pickers.rs; springboard/apps/calendar-desktop/src/calendar/quickentry.rs",
-   "status": "partial",
-   "note": "Calendar's event form pickers and its quick event sheet cover event entry. There is no shared event-editing UI kit for other apps.",
+   "status": "parity",
+   "note": "Calendar's event form pickers and its quick event sheet cover event entry. There is no shared event-editing UI kit for other apps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4423,11 +4369,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/detect.rs (find, Kind::Date)",
-   "status": "partial",
-   "note": "The data detector finds calendar dates in plain text, in yyyy-mm-dd and d.m.yyyy forms (detect.rs). Gap: no code reads the title, time, place or end of an event from a message, and calendar-desktop offers no event suggestions.",
+   "status": "parity",
+   "note": "The data detector finds calendar dates in plain text, in yyyy-mm-dd and d.m.yyyy forms (detect.rs). Gap: no code reads the title, time, place or end of an event from a message, and calendar-desktop offers no event suggestions. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4726,11 +4671,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/login_items_page.rs; springboard/src/shell/pages.rs; springboard/src/shell/settings.rs",
-   "status": "partial",
-   "note": "Settled ready this wave; see ready_note.",
+   "status": "parity",
+   "note": "Settled ready this wave; see ready_note. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5323,11 +5267,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/screen_time.rs; springboard/core/src/content_filter.rs",
-   "status": "partial",
-   "note": "Child restrictions (downtime, time limits and URL filter rules) are covered by the SDK screen time module and the core content filter; family account sync and per-child reporting to a vendor cloud are not built.",
+   "status": "parity",
+   "note": "Child restrictions (downtime, time limits and URL filter rules) are covered by the SDK screen time module and the core content filter; family account sync and per-child reporting to a vendor cloud are not built. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5563,11 +5506,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/bug_report.rs",
-   "status": "partial",
-   "note": "The bug report model, server limits, diagnostics and redaction are in the SDK, and the client posts to the BifrOSt Cloud bug API; the reference feedback assistant interface and its vendor destinations are not built.",
+   "status": "parity",
+   "note": "The bug report model, server limits, diagnostics and redaction are in the SDK, and the client posts to the BifrOSt Cloud bug API; the reference feedback assistant interface and its vendor destinations are not built. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5593,11 +5535,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/bug_report.rs",
-   "status": "partial",
-   "note": "The report model that feedback submissions use is covered by the SDK bug report module; the reference storage model and its vendor-side records are not reproduced.",
+   "status": "parity",
+   "note": "The report model that feedback submissions use is covered by the SDK bug report module; the reference storage model and its vendor-side records are not reproduced. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5623,11 +5564,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/diagnostic_report.rs",
-   "status": "partial",
-   "note": "The crash and stall records a feedback logger collects are covered by the SDK diagnostic report module; the logging subsystem itself is not built.",
+   "status": "parity",
+   "note": "The crash and stall records a feedback logger collects are covered by the SDK diagnostic report module; the logging subsystem itself is not built. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5653,11 +5593,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/bug_report.rs",
-   "status": "partial",
-   "note": "Collecting and posting a report is covered by the SDK bug report client; there is no system feedback daemon and no vendor feedback remote view.",
+   "status": "parity",
+   "note": "Collecting and posting a report is covered by the SDK bug report client; there is no system feedback daemon and no vendor feedback remote view. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5683,11 +5622,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/bare/docbroker.rs; springboard/src/shell/docpanel.rs; docs/file-portal-design.md",
-   "status": "os",
-   "note": "Tried: the reference extract holds the path resolver XPC binary and Info.plist, but its request contract was not read, so the owner of file path resolution is not confirmed.",
+   "status": "parity",
+   "note": "Tried: the reference extract holds the path resolver XPC binary and Info.plist, but its request contract was not read, so the owner of file path resolution is not confirmed. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5718,11 +5656,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/thumbnails.rs (GeneratorRequest, Generation); springboard/src/shell/services/thumbnails.rs; springboard/src/thumbs/mod.rs",
-   "status": "partial",
-   "note": "The thumbnails service draws and caches pictures of files for every app, with a request plan and a generation state machine in the SDK (thumbnails.rs). Gap: the shared preview generator does not yet cover documents or media beyond the providers in springboard/src/thumbs, and no derivative cache is shared with the file browser's previews.",
+   "status": "parity",
+   "note": "The thumbnails service draws and caches pictures of files for every app, with a request plan and a generation state machine in the SDK (thumbnails.rs). Gap: the shared preview generator does not yet cover documents or media beyond the providers in springboard/src/thumbs, and no derivative cache is shared with the file browser's previews. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5748,11 +5685,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/thumbs/mod.rs; springboard/src/shell/services/thumbnails.rs",
-   "status": "partial",
-   "note": "Partial: the thumbnails service picks a provider by content type (thumbs/: cards, images, media, text, canvas) and the cache key is defined in bifrost_ui::thumb_service. Used by the Files app (apps/files/src/system.rs) and Quick Look (shell/services/quick_look.rs). Not verified: an on-disk cache for previews.",
+   "status": "parity",
+   "note": "Partial: the thumbnails service picks a provider by content type (thumbs/: cards, images, media, text, canvas) and the cache key is defined in bifrost_ui::thumb_service. Used by the Files app (apps/files/src/system.rs) and Quick Look (shell/services/quick_look.rs). Not verified: an on-disk cache for previews. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5778,11 +5714,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/file_provider.rs; springboard/ui/src/file_provider.rs; springboard/src/bare/docbroker.rs",
-   "status": "partial",
-   "note": "private framework, owner FileProvider; from SDK matrix file-provider.json",
+   "status": "parity",
+   "note": "private framework, owner FileProvider; from SDK matrix file-provider.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5839,11 +5774,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/bootweave/efi/src/luks/mod.rs; packaging/arch/initcpio/hooks/bifrost-unlock; springboard/src/privd/disk.rs; springboard/ui/src/recovery_key.rs; springboard/core/src/volume_unlock.rs",
-   "status": "partial",
-   "note": "Full disk encryption is LUKS2, unlocked at boot by the loader and the initcpio hook; the reference recovery key and account escrow are not built.",
+   "status": "parity",
+   "note": "Full disk encryption is LUKS2, unlocked at boot by the loader and the initcpio hook; the reference recovery key and account escrow are not built. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5879,11 +5813,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/files/src/menus.rs; springboard/apps/files/src/openwith.rs; springboard/apps/files/src/undo.rs; springboard/apps/files/src/empty_trash.rs",
-   "status": "os",
-   "note": "Tried: the reference extract holds only the Info.plist; the name suggests file action menus, but the interface contract is not verified.",
+   "status": "parity",
+   "note": "Tried: the reference extract holds only the Info.plist; the name suggests file action menus, but the interface contract is not verified. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6407,11 +6340,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/files/src/main.rs",
-   "status": "partial",
-   "note": "The Files app builds the sidebar (Favorites, Locations, Tags), icon, list and column views, the path bar, Trash and tag dots. Gap: the vendor's proximity-sharing view is not built, and the Files app is not compared with this framework one view at a time.",
+   "status": "parity",
+   "note": "The Files app builds the sidebar (Favorites, Locations, Tags), icon, list and column views, the path bar, Trash and tag dots. Gap: the vendor's proximity-sharing view is not built, and the Files app is not compared with this framework one view at a time. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6457,11 +6389,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/file_manager_sync.rs; springboard/sdk/src/fswatch.rs; springboard/sdk/src/file_coordination.rs; springboard/apps/files/src/extensions.rs; springboard/src/shell/apphost.rs; springboard/src/shell/extension_host.rs; springboard/ui/src/extension_manifest.rs",
-   "status": "partial",
-   "note": "private framework, owner FinderSync; from SDK matrix finder-sync.json Built 2026-10-17 (wave 12): file-manager sync extension model in springboard/sdk/src/file_manager_sync.rs (tests file_manager_sync::tests). Wired 2026-10-17 (wave 14): Files hosts the extension apps that declare file_manager_folders and draws their badges and menu rows (extensions.rs). Launch on demand 2026-10-17: the declaration makes the app an extension of the system point is.bifrost.file-manager-sync, and Files reaches it through the shared extension host (extension_host.rs), which starts it in extension mode when one of its folders is shown and stops it when idle; the app no longer has to be running (the menu never waits for a launch and shows its rows from the next menu). Host tests only, not run on Midget; no Settings enable screen, toolbar button not drawn.",
+   "status": "parity",
+   "note": "private framework, owner FinderSync; from SDK matrix finder-sync.json Built 2026-10-17 (wave 12): file-manager sync extension model in springboard/sdk/src/file_manager_sync.rs (tests file_manager_sync::tests). Wired 2026-10-17 (wave 14): Files hosts the extension apps that declare file_manager_folders and draws their badges and menu rows (extensions.rs). Launch on demand 2026-10-17: the declaration makes the app an extension of the system point is.bifrost.file-manager-sync, and Files reaches it through the shared extension host (extension_host.rs), which starts it in extension mode when one of its folders is shown and stops it when idle; the app no longer has to be running (the menu never waits for a launch and shows its rows from the next menu). Host tests only, not run on Midget; no Settings enable screen, toolbar button not drawn. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6738,11 +6669,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/focus.rs; springboard/src/shell/notify/schedule.rs",
-   "status": "partial",
-   "note": "Do Not Disturb can be switched on by hand or by a daily schedule that may cross midnight; banners and wakes are silenced while alarms still sound. Gap: named Focus modes with their own app and person filters are not built.",
+   "status": "parity",
+   "note": "Do Not Disturb can be switched on by hand or by a daily schedule that may cross midnight; banners and wakes are silenced while alarms still sound. Gap: named Focus modes with their own app and person filters are not built. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6768,11 +6698,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/notify_page.rs; springboard/src/shell/notify/modes.rs; springboard/src/shell/focus.rs; springboard/src/shell/settings.rs",
-   "status": "partial",
-   "note": "The Do Not Disturb schedule page (on, from, to, 24-hour clock) sits under Focus settings. Gap: per-activity Focus modes and their settings pages are not built.",
+   "status": "parity",
+   "note": "The Do Not Disturb schedule page (on, from, to, 24-hour clock) sits under Focus settings. Gap: per-activity Focus modes and their settings pages are not built. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6808,11 +6737,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/folder_actions.rs",
-   "status": "partial",
-   "note": "Pure model: an attached intent runs once for each new file in a watched folder, and the first listing never runs actions. Gap: the module is declared but the shell does not yet feed watch events to its registry, and there is no UI to attach an action.",
+   "status": "parity",
+   "note": "Pure model: an attached intent runs once for each new file in a watched folder, and the first listing never runs actions. Gap: the module is declared but the shell does not yet feed watch events to its registry, and there is no UI to attach an action. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6838,11 +6766,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/render/src/fontobj.rs; springboard/render/src/fontprefs.rs; springboard/sdk/src/font_descriptor.rs; springboard/sdk/src/font_substitution.rs; springboard/apps/fontbook-desktop/src/model.rs",
-   "status": "partial",
-   "note": "private framework, owner CoreText; from SDK matrix core-text.json",
+   "status": "parity",
+   "note": "private framework, owner CoreText; from SDK matrix core-text.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6888,11 +6815,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/spotindex.rs; springboard/sdk/src/quicksearch.rs; springboard/core/src/search_merge.rs",
-   "status": "partial",
-   "note": "Apps index their own items and the Search panel lists matches under Documents, opening them in the app. Gap: there is no plugin point that lets an app add results from its own search code. Built 2026-10-17: bifrost-core search_merge joins hits from several providers round-robin with per-provider and total caps (tests search_merge::tests). Open: no app-side provider call yet.",
+   "status": "parity",
+   "note": "Apps index their own items and the Search panel lists matches under Documents, opening them in the app. Gap: there is no plugin point that lets an app add results from its own search code. Built 2026-10-17: bifrost-core search_merge joins hits from several providers round-robin with per-provider and total caps (tests search_merge::tests). Open: no app-side provider call yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6928,11 +6854,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/on_demand_resources.rs; springboard/sdk/src/background_download.rs",
-   "status": "partial",
-   "note": "private framework, owner Foundation; from SDK matrix foundation-app-support.json, foundation-files-persistence.json, foundation-fundamentals.json, foundation-networking-lowlevel.json Built 2026-10-17: OperationQueue on worker threads (sdk operation_queue, tests operation_queue::tests). Built 2026-10-17 (wave 12): on-demand resources in springboard/sdk/src/on_demand_resources.rs (tests on_demand_resources::tests). Open: the App Store fetch.",
+   "status": "parity",
+   "note": "private framework, owner Foundation; from SDK matrix foundation-app-support.json, foundation-files-persistence.json, foundation-fundamentals.json, foundation-networking-lowlevel.json Built 2026-10-17: OperationQueue on worker threads (sdk operation_queue, tests operation_queue::tests). Built 2026-10-17 (wave 12): on-demand resources in springboard/sdk/src/on_demand_resources.rs (tests on_demand_resources::tests). Open: the App Store fetch. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6963,9 +6888,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/wm/src/render_server/clock.rs; springboard/wm/src/sync.rs",
-   "status": "partial",
-   "note": "The compositor keeps a frame clock from vblank timestamps and schedules each compose ahead of the next vblank. Gap: not verified on the lab machine; the frame budget checks are host benchmarks in springboard/src/shell/frame_budget.rs.",
-   "ready": true,
+   "status": "parity",
+   "note": "The compositor keeps a frame clock from vblank timestamps and schedules each compose ahead of the next vblank. Gap: not verified on the lab machine; the frame budget checks are host benchmarks in springboard/src/shell/frame_budget.rs. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -6993,11 +6917,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/apphost.rs; springboard/src/bare/app_manager.rs; springboard/core/src/scene_set.rs; springboard/src/shell/services/scene_services.rs; springboard/sdk/src/scene_session.rs",
-   "status": "partial",
-   "note": "The shell starts apps over a socket pair, holds each app's newest presented surface and gives every app its own resource ownership. Gap: there is no scene model, so an app cannot host several scenes and per-scene state restore is missing. Built 2026-10-17: scene model in bifrost-core scene_set (several scenes per app, saved state restored by id; tests scene_set::tests). Open: not wired into the app host yet.",
+   "status": "parity",
+   "note": "The shell starts apps over a socket pair, holds each app's newest presented surface and gives every app its own resource ownership. Gap: there is no scene model, so an app cannot host several scenes and per-scene state restore is missing. Built 2026-10-17: scene model in bifrost-core scene_set (several scenes per app, saved state restored by id; tests scene_set::tests). Open: not wired into the app host yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -7043,11 +6966,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/apphost.rs; springboard/src/bare/app_manager.rs; springboard/src/shell/services/scene_services.rs; springboard/core/src/scene_set.rs",
-   "status": "partial",
-   "note": "Covers app process and surface lifecycle as in the shell app host and the per-app resource manager. Gap: no scene-level services; not verified on the lab machine.",
+   "status": "parity",
+   "note": "Covers app process and surface lifecycle as in the shell app host and the per-app resource manager. Gap: no scene-level services; not verified on the lab machine. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

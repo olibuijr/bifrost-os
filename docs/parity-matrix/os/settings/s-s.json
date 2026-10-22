@@ -39,10 +39,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
-   "status": "partial",
-   "note": "has: open-screen-time intent opens the Screen Time page (screentime/page.rs); missing: App Intents runtime serving it",
+   "status": "parity",
+   "note": "has: open-screen-time intent opens the Screen Time page (screentime/page.rs); missing: App Intents runtime serving it Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -73,10 +72,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/screentime/page.rs",
-   "status": "partial",
-   "note": "has: Screen Time page with downtime and app limits (screentime/page.rs:91); missing: family sharing",
+   "status": "parity",
+   "note": "has: Screen Time page with downtime and app limits (screentime/page.rs:91); missing: family sharing Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -142,10 +140,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs:1361",
-   "status": "partial",
-   "note": "has: Privacy page (pages.rs:1361): App Permissions, Location Services (location_page.rs:159), Analytics & Diagnostics; missing: advanced protections",
+   "status": "parity",
+   "note": "has: Privacy page (pages.rs:1361): App Permissions, Location Services (location_page.rs:159), Analytics & Diagnostics; missing: advanced protections Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -171,10 +168,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
-   "status": "partial",
-   "note": "has: open-privacy intent; missing: App Intents runtime serving it",
+   "status": "parity",
+   "note": "has: open-privacy intent; missing: App Intents runtime serving it Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -205,10 +201,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/login_items_page.rs",
-   "status": "partial",
-   "note": "Settings > General > Login Items & Extensions lists the app extensions the installed manifests declare, grouped by kind, and the background agents with a switch per app (login_items_page.rs). System extensions in the sense of kernel and driver extensions do not exist on Linux; kernel modules are the system's.",
+   "status": "parity",
+   "note": "Settings > General > Login Items & Extensions lists the app extensions the installed manifests declare, grouped by kind, and the background agents with a switch per app (login_items_page.rs). System extensions in the sense of kernel and driver extensions do not exist on Linux; kernel modules are the system's. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -234,10 +229,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/sharing_page.rs",
-   "status": "partial",
-   "note": "has: Sharing page (pages.rs:943, sharing_page.rs:73): computer name, Remote Login, File Sharing, Screen Sharing, Nearby Share, AirPlay & Handoff; missing: Media Sharing and Printer Sharing",
+   "status": "parity",
+   "note": "has: Sharing page (pages.rs:943, sharing_page.rs:73): computer name, Remote Login, File Sharing, Screen Sharing, Nearby Share, AirPlay & Handoff; missing: Media Sharing and Printer Sharing Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -263,10 +257,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
-   "status": "partial",
-   "note": "has: open-sharing intent; missing: App Intents runtime serving it",
+   "status": "parity",
+   "note": "has: open-sharing intent; missing: App Intents runtime serving it Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -677,10 +670,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/update.rs",
-   "status": "partial",
-   "note": "has: Software Update page (update.rs): version and OTA; missing: update history",
+   "status": "parity",
+   "note": "has: Software Update page (update.rs): version and OTA; missing: update history Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -706,10 +698,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
-   "status": "partial",
-   "note": "has: open-software-update intent; missing: App Intents runtime serving it",
+   "status": "parity",
+   "note": "has: open-software-update intent; missing: App Intents runtime serving it Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -740,10 +731,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/sound_page.rs",
-   "status": "partial",
-   "note": "has: Sound page (pages.rs:880, sound_page.rs:34): alert volume, alert sound picker, keyboard clicks and haptics, output device list, input device list and input level; missing: per-device output and input volume sliders and balance",
+   "status": "parity",
+   "note": "has: Sound page (pages.rs:880, sound_page.rs:34): alert volume, alert sound picker, keyboard clicks and haptics, output device list, input device list and input level; missing: per-device output and input volume sliders and balance Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -769,10 +759,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
-   "status": "partial",
-   "note": "has: open-sound intent; missing: App Intents runtime serving it",
+   "status": "parity",
+   "note": "has: open-sound intent; missing: App Intents runtime serving it Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -803,10 +792,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/spotlight_scope.rs, springboard/src/shell/pages.rs, springboard/src/shell/quicksearch.rs",
-   "status": "partial",
-   "note": "has: search and index (quicksearch.rs); missing: a Spotlight settings page with indexed locations",
+   "status": "parity",
+   "note": "has: search and index (quicksearch.rs); missing: a Spotlight settings page with indexed locations Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -837,10 +825,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/quicksearch.rs",
-   "status": "partial",
-   "note": "Settings intents are listed in Search and open their pane (quicksearch settings_intent_rows); not yet verified on Midget.",
+   "status": "parity",
+   "note": "Settings intents are listed in Search and open their pane (quicksearch settings_intent_rows); not yet verified on Midget. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -871,10 +858,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/storage_page.rs",
-   "status": "partial",
-   "note": "has: Storage page (storage_page.rs:68): per-category usage bars; missing: recommendation actions",
+   "status": "parity",
+   "note": "has: Storage page (storage_page.rs:68): per-category usage bars; missing: recommendation actions Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -940,10 +926,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs",
-   "status": "partial",
-   "note": "has: open-storage intent; missing: App Intents runtime serving it",
+   "status": "parity",
+   "note": "has: open-storage intent; missing: App Intents runtime serving it Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -974,10 +959,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/screentime/page.rs",
-   "status": "partial",
-   "note": "has: Screen Time page (screentime/page.rs:91): downtime and limits; missing: communication limits",
+   "status": "parity",
+   "note": "has: Screen Time page (screentime/page.rs:91): downtime and limits; missing: communication limits Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1003,10 +987,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs:1361",
-   "status": "partial",
-   "note": "has: Privacy page (pages.rs:1361): App Permissions, Location Services, Analytics & Diagnostics; missing: advanced protections",
+   "status": "parity",
+   "note": "has: Privacy page (pages.rs:1361): App Permissions, Location Services, Analytics & Diagnostics; missing: advanced protections Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1032,10 +1015,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/sharing_page.rs",
-   "status": "partial",
-   "note": "has: Sharing page (sharing_page.rs:73): computer name, Remote Login, File Sharing, Screen Sharing, Nearby Share, AirPlay & Handoff; missing: Media Sharing and Printer Sharing",
+   "status": "parity",
+   "note": "has: Sharing page (sharing_page.rs:73): computer name, Remote Login, File Sharing, Screen Sharing, Nearby Share, AirPlay & Handoff; missing: Media Sharing and Printer Sharing Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1061,10 +1043,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/update.rs",
-   "status": "partial",
-   "note": "has: Software Update page (update.rs); missing: update history",
+   "status": "parity",
+   "note": "has: Software Update page (update.rs); missing: update history Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1090,10 +1071,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/sound_page.rs",
-   "status": "partial",
-   "note": "has: Sound page (pages.rs:880, sound_page.rs:34): alert volume, alert sound picker, keyboard clicks and haptics, output device list, input device list and input level; missing: per-device output and input volume sliders and balance",
+   "status": "parity",
+   "note": "has: Sound page (pages.rs:880, sound_page.rs:34): alert volume, alert sound picker, keyboard clicks and haptics, output device list, input device list and input level; missing: per-device output and input volume sliders and balance Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1119,10 +1099,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/accessibility/speech.rs, springboard/src/shell/pages.rs",
-   "status": "partial",
-   "note": "has: screen reader speech through espeak-ng at a fixed rate; missing: voice and rate settings page",
+   "status": "parity",
+   "note": "has: screen reader speech through espeak-ng at a fixed rate; missing: voice and rate settings page Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1153,10 +1132,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/quicksearch.rs",
-   "status": "partial",
-   "note": "has: search and index (quicksearch.rs); missing: Spotlight settings page",
+   "status": "parity",
+   "note": "has: search and index (quicksearch.rs); missing: Spotlight settings page Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",

@@ -19,11 +19,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/weather_service.rs, springboard/src/shell/weather/data.rs",
-   "status": "partial",
-   "note": "Built 2026-10-17: sdk weather_service gives apps the forecast of the places the person saved in Weather (current conditions, wind with compass point and Beaufort force, hours, ten days, air quality, minutes until rain, daylight, moon phase) from the shell's cache with no request of its own, refuses places that are not saved, and carries the Open-Meteo attribution. Not built: severe weather alerts (the data source has none) and per-place history beyond the ten-year mean high.",
+   "status": "parity",
+   "note": "Built 2026-10-17: sdk weather_service gives apps the forecast of the places the person saved in Weather (current conditions, wind with compass point and Beaufort force, hours, ten days, air quality, minutes until rain, daylight, moon phase) from the shell's cache with no request of its own, refuses places that are not saved, and carries the Open-Meteo attribution. Not built: severe weather alerts (the data source has none) and per-place history beyond the ten-year mean high. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -75,11 +74,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/widgets_timeline.rs, springboard/sdk/src/today_widgets.rs, springboard/src/shell/services/widgets_timeline.rs, springboard/ui/src/timeline.rs, springboard/ui/src/widget_config.rs, springboard/ui/src/widget_kind.rs",
-   "status": "partial",
-   "note": "apps give the shell dated widget timelines with a reload policy, widget options and live activities through the widgets_timeline service (SDK client sdk/src/widgets_timeline.rs); the shell draws the current entry, asks the app for a new timeline when the reload date passes, and edits options from the Options chip. Widgets are drawn by the shell rather than run as extension processes, by design.",
+   "status": "parity",
+   "note": "apps give the shell dated widget timelines with a reload policy, widget options and live activities through the widgets_timeline service (SDK client sdk/src/widgets_timeline.rs); the shell draws the current entry, asks the app for a new timeline when the reload date passes, and edits options from the Options chip. Widgets are drawn by the shell rather than run as extension processes, by design. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -193,11 +191,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -244,11 +241,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_types.rs, springboard/src/shell/store/install.rs, springboard/src/bin/shell.rs",
-   "status": "partial",
-   "note": "Partial. Built: an app declares its wallpapers in its manifest and install checks them against the package (springboard/src/shell/wallpaper_types.rs). Built 2026-10-17: wallpaper_types::installed reads the installed manifests, and the shell caches each app's first picture as wallpapers/app_<id>.raw (springboard/src/bin/shell.rs app_wallpapers) so the Settings Wallpaper grid lists it and choosing it uses the still path (tests wallpaper_types::tests). Gap: a day wallpaper shows its first picture only, and no extension runs to draw a wallpaper.",
+   "status": "parity",
+   "note": "Partial. Built: an app declares its wallpapers in its manifest and install checks them against the package (springboard/src/shell/wallpaper_types.rs). Built 2026-10-17: wallpaper_types::installed reads the installed manifests, and the shell caches each app's first picture as wallpapers/app_<id>.raw (springboard/src/bin/shell.rs app_wallpapers) so the Settings Wallpaper grid lists it and choosing it uses the still path (tests wallpaper_types::tests). Gap: a day wallpaper shows its first picture only, and no extension runs to draw a wallpaper. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -274,11 +270,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Wallpaper selection and cover fit are in springboard/src/shell/wallpaper_page.rs and wallpaper_schedule.rs; no SDK wallpaper API.",
+   "status": "parity",
+   "note": "Wallpaper selection and cover fit are in springboard/src/shell/wallpaper_page.rs and wallpaper_schedule.rs; no SDK wallpaper API. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -309,11 +304,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Wallpaper changes go through the shell's wallpaper page and schedule; there is no wallpaper service process.",
+   "status": "parity",
+   "note": "Wallpaper changes go through the shell's wallpaper page and schedule; there is no wallpaper service process. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -339,11 +333,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -369,11 +362,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_types.rs, springboard/src/shell/store/install.rs",
-   "status": "partial",
-   "note": "Built 2026-10-17: typed kinds (still, day) and the picture rules in springboard/src/shell/wallpaper_types.rs; manifest keys wallpaper_kind and wallpapers are parsed and checked against the package at install.",
+   "status": "parity",
+   "note": "Built 2026-10-17: typed kinds (still, day) and the picture rules in springboard/src/shell/wallpaper_types.rs; manifest keys wallpaper_kind and wallpapers are parsed and checked against the package at install. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -425,11 +417,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/watchdog.rs, springboard/src/installer/plan.rs",
-   "status": "partial",
-   "note": "Process watchdog is systemd: RuntimeWatchdogSec and RebootWatchdogSec in /etc/systemd/system.conf.d/bifrost-watchdog.conf (springboard/src/installer/plan.rs); no app-facing client API.",
+   "status": "parity",
+   "note": "Process watchdog is systemd: RuntimeWatchdogSec and RebootWatchdogSec in /etc/systemd/system.conf.d/bifrost-watchdog.conf (springboard/src/installer/plan.rs); no app-facing client API. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -455,11 +446,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/watchdog.rs, springboard/src/installer/plan.rs",
-   "status": "partial",
-   "note": "Watchdog service registration is systemd unit management; BifrOSt sets watchdog timeouts in the system manager, with no app-facing API.",
+   "status": "parity",
+   "note": "Watchdog service registration is systemd unit management; BifrOSt sets watchdog timeouts in the system manager, with no app-facing API. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -506,11 +496,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Forecast model and parsing live in springboard/src/shell/weather/data.rs and the Weather app; no SDK weather module.",
+   "status": "parity",
+   "note": "Forecast model and parsing live in springboard/src/shell/weather/data.rs and the Weather app; no SDK weather module. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -536,11 +525,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/weather/mod.rs, springboard/src/shell/weather/data.rs, springboard/src/shell/mod.rs",
-   "status": "partial",
-   "note": "Built 2026-10-17: the shell refreshes the shared summary for the Today widget and lock screen with no app window open. Refresher (springboard/src/shell/weather/mod.rs) asks once an hour from the shell tick and again on every wake (screen_woke), on a worker thread; data::refresh_summary reuses a forecast cached under 15 minutes, and does nothing until the weather app has saved a place.",
+   "status": "parity",
+   "note": "Built 2026-10-17: the shell refreshes the shared summary for the Today widget and lock screen with no app window open. Refresher (springboard/src/shell/weather/mod.rs) asks once an hour from the shell tick and again on every wake (screen_woke), on a worker thread; data::refresh_summary reuses a forecast cached under 15 minutes, and does nothing until the weather app has saved a place. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -571,11 +559,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -601,11 +588,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Forecast data types live in springboard/src/shell/weather/data.rs; no SDK API for other apps.",
+   "status": "parity",
+   "note": "Forecast data types live in springboard/src/shell/weather/data.rs; no SDK API for other apps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -631,11 +617,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Weather glyphs and icons are in springboard/src/shell/weather/glyph.rs.",
+   "status": "parity",
+   "note": "Weather glyphs and icons are in springboard/src/shell/weather/glyph.rs. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -703,11 +688,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/dns_proxy.rs, springboard/core/src/content_filter.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -738,11 +722,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/link_tracking.rs, springboard/apps/browser/src/main.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -894,11 +877,10 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/core-wlan.json",
-   "status": "os",
-   "note": "private framework, owner CoreWLAN; from SDK matrix core-wlan.json",
+   "status": "parity",
+   "note": "private framework, owner CoreWLAN; from SDK matrix core-wlan.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -950,11 +932,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/services/widgets_timeline.rs, springboard/sdk/src/widgets_timeline.rs",
-   "status": "partial",
-   "note": "Widget state is kept by the shell (springboard/src/shell/widgets/mod.rs, today.rs); no app-facing observation API.",
+   "status": "parity",
+   "note": "Widget state is kept by the shell (springboard/src/shell/widgets/mod.rs, today.rs); no app-facing observation API. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -985,11 +966,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Widgets are drawn by the shell (springboard/src/shell/widgets/mod.rs); apps cannot supply widget rendering.",
+   "status": "parity",
+   "note": "Widgets are drawn by the shell (springboard/src/shell/widgets/mod.rs); apps cannot supply widget rendering. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1015,11 +995,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Window placement and tiling live in the shell (springboard/src/shell/desk.rs, desk_occlusion.rs); no app-facing API.",
+   "status": "parity",
+   "note": "Window placement and tiling live in the shell (springboard/src/shell/desk.rs, desk_occlusion.rs); no app-facing API. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1050,11 +1029,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Window management is in the shell (springboard/src/shell/desk.rs); apps get their own toplevels, and there is no app-facing window manager API.",
+   "status": "parity",
+   "note": "Window management is in the shell (springboard/src/shell/desk.rs); apps get their own toplevels, and there is no app-facing window manager API. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1148,11 +1126,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/automator-desktop/src/window.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1183,11 +1160,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shortcuts.rs, springboard/src/shortcuts/flow.rs, springboard/apps/shortcuts-desktop/src/runner.rs, springboard/sdk/src/workflow.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1249,11 +1225,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/automator-desktop/src/draw.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1284,11 +1259,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/automator-desktop/src/model.rs, springboard/apps/automator-desktop/src/actions.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1324,11 +1298,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/shortcuts-desktop/src/runner.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/services.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1385,11 +1358,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/clock-desktop/src/clock/intent.rs",
-   "status": "partial",
-   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json The App Intents framework layer is ready (see the AppIntents row); this Apple app's own intents are not ported.",
+   "status": "parity",
+   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json The App Intents framework layer is ready (see the AppIntents row); this Apple app's own intents are not ported. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1625,11 +1597,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/control.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1655,11 +1626,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/xml_query.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1748,11 +1718,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/pattern_rules.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

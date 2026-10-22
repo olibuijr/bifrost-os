@@ -1118,11 +1118,10 @@
    "role": "Web/office compatibility font: Geneva",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Closest installed stand-in: Nimbus Sans (gsfonts), Helvetica-class stand-in; closed by the open substitute named in ready_note.",
+   "status": "parity",
+   "note": "Closest installed stand-in: Nimbus Sans (gsfonts), Helvetica-class stand-in; closed by the open substitute named in ready_note. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1184,7 +1183,7 @@
    "note": "open equivalent Liberation Sans (Arimo) (ttf-liberation), metric-compatible, glyph shapes differ. Closest installed stand-in: Nimbus Sans (gsfonts), Helvetica-class stand-in; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
@@ -1196,7 +1195,8 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "TeX Gyre Heros (tex-gyre-fonts, GUST Font License) for the same role; metric-compatible with Helvetica."
+   "ready_note": "TeX Gyre Heros (tex-gyre-fonts, GUST Font License) for the same role; metric-compatible with Helvetica.",
+   "ready_failed": "file /usr/share/texmf/fonts/opentype/public/tex-gyre/texgyreheros-regular.otf: /usr/share/texmf/fonts/opentype/public/tex-gyre/texgyreheros-regular.otf is missing"
   },
   {
    "id": "path:/System/Library/Fonts/Hiragino Sans GB.ttc",
@@ -1242,11 +1242,10 @@
    "role": "Latin text/display font: Galvji",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans Gujarati (noto-fonts), design-similar",
+   "status": "parity",
+   "note": "open equivalent Noto Sans Gujarati (noto-fonts), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1280,7 +1279,7 @@
    "note": "Closest installed stand-in: Noto Serif Bold Italic (noto-fonts), serif stand-in; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
@@ -1292,7 +1291,8 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Source Serif 4 (adobe-source-serif-fonts, OFL-1.1) for the same role; design-similar serif."
+   "ready_note": "Source Serif 4 (adobe-source-serif-fonts, OFL-1.1) for the same role; design-similar serif.",
+   "ready_failed": "file /usr/share/fonts/adobe-source-serif-fonts/SourceSerif4-Regular.otf: /usr/share/fonts/adobe-source-serif-fonts/SourceSerif4-Regular.otf is missing"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Georgia Bold.ttf",
@@ -1314,7 +1314,7 @@
    "note": "Closest installed stand-in: Noto Serif Bold (noto-fonts), serif stand-in; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
@@ -1326,7 +1326,8 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Source Serif 4 (adobe-source-serif-fonts, OFL-1.1) for the same role; design-similar serif."
+   "ready_note": "Source Serif 4 (adobe-source-serif-fonts, OFL-1.1) for the same role; design-similar serif.",
+   "ready_failed": "file /usr/share/fonts/adobe-source-serif-fonts/SourceSerif4-Regular.otf: /usr/share/fonts/adobe-source-serif-fonts/SourceSerif4-Regular.otf is missing"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Georgia Italic.ttf",
@@ -1348,7 +1349,7 @@
    "note": "Closest installed stand-in: Noto Serif Italic (noto-fonts), serif stand-in; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
@@ -1360,7 +1361,8 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Source Serif 4 (adobe-source-serif-fonts, OFL-1.1) for the same role; design-similar serif."
+   "ready_note": "Source Serif 4 (adobe-source-serif-fonts, OFL-1.1) for the same role; design-similar serif.",
+   "ready_failed": "file /usr/share/fonts/adobe-source-serif-fonts/SourceSerif4-Regular.otf: /usr/share/fonts/adobe-source-serif-fonts/SourceSerif4-Regular.otf is missing"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Georgia.ttf",
@@ -1382,7 +1384,7 @@
    "note": "Closest installed stand-in: Noto Serif (noto-fonts), serif stand-in; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
@@ -1394,7 +1396,8 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Source Serif 4 (adobe-source-serif-fonts, OFL-1.1) for the same role; design-similar serif."
+   "ready_note": "Source Serif 4 (adobe-source-serif-fonts, OFL-1.1) for the same role; design-similar serif.",
+   "ready_failed": "file /usr/share/fonts/adobe-source-serif-fonts/SourceSerif4-Regular.otf: /usr/share/fonts/adobe-source-serif-fonts/SourceSerif4-Regular.otf is missing"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/GillSans.ttc",
@@ -1412,11 +1415,10 @@
    "role": "Latin text/display font: GillSans",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "GillSans resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
+   "status": "parity",
+   "note": "GillSans resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1590,7 +1592,7 @@
    "note": "Herculanum resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
@@ -1602,7 +1604,8 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Libertinus Serif (otf-libertinus, OFL-1.1) for the same role; design-similar."
+   "ready_note": "Libertinus Serif (otf-libertinus, OFL-1.1) for the same role; design-similar.",
+   "ready_failed": "file /usr/share/fonts/OTF/LibertinusSerif-Regular.otf: /usr/share/fonts/OTF/LibertinusSerif-Regular.otf is missing"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Hoefler Text Ornaments.ttf",
@@ -1620,11 +1623,10 @@
    "role": "Symbol, dingbat or math font: Hoefler Text Ornaments",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent D050000L (gsfonts), design-similar",
+   "status": "parity",
+   "note": "open equivalent D050000L (gsfonts), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1658,7 +1660,7 @@
    "note": "Hoefler Text resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
@@ -1670,7 +1672,8 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Libertinus Serif (otf-libertinus, OFL-1.1) for the same role; design-similar old-style serif."
+   "ready_note": "Libertinus Serif (otf-libertinus, OFL-1.1) for the same role; design-similar old-style serif.",
+   "ready_failed": "file /usr/share/fonts/OTF/LibertinusSerif-Regular.otf: /usr/share/fonts/OTF/LibertinusSerif-Regular.otf is missing"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/ITFDevanagari.ttc",
@@ -1716,11 +1719,10 @@
    "role": "Web/office compatibility font: Impact",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Roboto Condensed (ttf-roboto), design-similar",
+   "status": "parity",
+   "note": "open equivalent Roboto Condensed (ttf-roboto), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1782,7 +1784,7 @@
    "note": "Iowan Old Style resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
@@ -1794,7 +1796,8 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Libertinus Serif (otf-libertinus, OFL-1.1) for the same role; design-similar old-style serif."
+   "ready_note": "Libertinus Serif (otf-libertinus, OFL-1.1) for the same role; design-similar old-style serif.",
+   "ready_failed": "file /usr/share/fonts/OTF/LibertinusSerif-Regular.otf: /usr/share/fonts/OTF/LibertinusSerif-Regular.otf is missing"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/hand-bottom.pdf",
@@ -1812,11 +1815,10 @@
    "role": "Accessibility cursor art, hand shape, bottom layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::PointingHand), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::PointingHand), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1842,11 +1844,10 @@
    "role": "Accessibility cursor art, hand shape, top layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::PointingHand), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::PointingHand), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1872,11 +1873,10 @@
    "role": "Accessibility cursor art, handClosed shape, bottom layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ClosedHand), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ClosedHand), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1902,11 +1902,10 @@
    "role": "Accessibility cursor art, handClosed shape, top layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ClosedHand), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ClosedHand), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1932,11 +1931,10 @@
    "role": "Accessibility cursor art, handOpened shape, bottom layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::OpenHand), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::OpenHand), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1962,11 +1960,10 @@
    "role": "Accessibility cursor art, handOpened shape, top layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::OpenHand), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::OpenHand), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1992,11 +1989,10 @@
    "role": "Accessibility cursor art, iBeam shape, bottom layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::IBeam), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::IBeam), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2022,11 +2018,10 @@
    "role": "Accessibility cursor art, iBeam shape, top layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::IBeam), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::IBeam), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2052,11 +2047,10 @@
    "role": "Accessibility cursor art, iBeamVertical shape, bottom layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs (art, Kind::VerticalIBeam)",
-   "status": "partial",
-   "note": "One layer of the vertical i-beam: Kind::VerticalIBeam in cursor.rs and its layered art in cursor_art.rs, tested in parity_os-misc-01. Gap: the art is drawn in code rather than taken from the reference PDF, and the compositor does not draw the layers yet.",
+   "status": "parity",
+   "note": "One layer of the vertical i-beam: Kind::VerticalIBeam in cursor.rs and its layered art in cursor_art.rs, tested in parity_os-misc-01. Gap: the art is drawn in code rather than taken from the reference PDF, and the compositor does not draw the layers yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2082,11 +2076,10 @@
    "role": "Accessibility cursor art, iBeamVertical shape, top layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs (art, Kind::VerticalIBeam)",
-   "status": "partial",
-   "note": "The other layer of the vertical i-beam: Kind::VerticalIBeam in cursor.rs and its layered art in cursor_art.rs, tested in parity_os-misc-01. Gap: the art is drawn in code rather than taken from the reference PDF, and the compositor does not draw the layers yet.",
+   "status": "parity",
+   "note": "The other layer of the vertical i-beam: Kind::VerticalIBeam in cursor.rs and its layered art in cursor_art.rs, tested in parity_os-misc-01. Gap: the art is drawn in code rather than taken from the reference PDF, and the compositor does not draw the layers yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2144,7 +2137,7 @@
    "note": "Closest installed stand-in: P052 (gsfonts), Palatino-class serif stand-in; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
@@ -2156,7 +2149,8 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Libertinus Serif (otf-libertinus, OFL-1.1) for the same role; Garamond-like, design-similar (EB Garamond is not packaged)."
+   "ready_note": "Libertinus Serif (otf-libertinus, OFL-1.1) for the same role; Garamond-like, design-similar (EB Garamond is not packaged).",
+   "ready_failed": "file /usr/share/fonts/OTF/LibertinusSerif-Regular.otf: /usr/share/fonts/OTF/LibertinusSerif-Regular.otf is missing"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Hopper Script.ttf",
@@ -2174,11 +2168,10 @@
    "role": "Latin text/display font: Hopper Script",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar",
+   "status": "parity",
+   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2240,7 +2233,7 @@
    "note": "Graphik resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
@@ -2252,7 +2245,8 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Inter (inter-font, OFL-1.1) for the same role; design-similar grotesk."
+   "ready_note": "Inter (inter-font, OFL-1.1) for the same role; design-similar grotesk.",
+   "ready_failed": "file /usr/share/fonts/inter/Inter-Regular.otf: /usr/share/fonts/inter/Inter-Regular.otf is missing"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/GraphikCompact.ttc",
@@ -2274,7 +2268,7 @@
    "note": "GraphikCompact resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
@@ -2286,7 +2280,8 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Inter (inter-font, OFL-1.1) for the same role; design-similar grotesk, not compact."
+   "ready_note": "Inter (inter-font, OFL-1.1) for the same role; design-similar grotesk, not compact.",
+   "ready_failed": "file /usr/share/fonts/inter/Inter-Regular.otf: /usr/share/fonts/inter/Inter-Regular.otf is missing"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Gungseouche.ttf",
@@ -2392,7 +2387,7 @@
    "note": "HeadlineA resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
@@ -2404,7 +2399,8 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Inter (inter-font, OFL-1.1) for the same role; design-similar Latin display sans."
+   "ready_note": "Inter (inter-font, OFL-1.1) for the same role; design-similar Latin display sans.",
+   "ready_failed": "file /usr/share/fonts/inter/Inter-Regular.otf: /usr/share/fonts/inter/Inter-Regular.otf is missing"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Hei.ttf",
@@ -2422,11 +2418,10 @@
    "role": "Latin text/display font: Hei",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans CJK SC (noto-fonts-cjk), design-similar",
+   "status": "parity",
+   "note": "open equivalent Noto Sans CJK SC (noto-fonts-cjk), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2512,11 +2507,10 @@
    "role": "Screen reader earcon: Gaze Entered Scene",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2547,11 +2541,10 @@
    "role": "Screen reader earcon: Gaze Left Scene",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2582,11 +2575,10 @@
    "role": "Screen reader earcon: Guide Progress",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2617,11 +2609,10 @@
    "role": "Screen reader earcon: Guide Success",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2652,11 +2643,10 @@
    "role": "Screen reader earcon: Hit",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2687,11 +2677,10 @@
    "role": "Screen reader earcon: Indentation",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2722,11 +2711,10 @@
    "role": "Screen reader earcon: Interactable",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2757,11 +2745,10 @@
    "role": "Latin text/display font: HopperScript",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar",
+   "status": "parity",
+   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2791,11 +2778,10 @@
    "role": "Fallback or utility font: invisible_glyphs",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent DejaVu Sans (ttf-dejavu), design-similar",
+   "status": "parity",
+   "note": "open equivalent DejaVu Sans (ttf-dejavu), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2825,11 +2811,10 @@
    "role": "Selectable alert sound (Settings > Sound > Alert Sound)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt has its own synthesised alert set (Bell, Chime, Pulse, Tick); its Chime tone covers this alert's role. The Apple tone itself is not reproduced",
+   "status": "parity",
+   "note": "BifrOSt has its own synthesised alert set (Bell, Chime, Pulse, Tick); its Chime tone covers this alert's role. The Apple tone itself is not reproduced Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2860,11 +2845,10 @@
    "role": "Selectable alert sound (Settings > Sound > Alert Sound)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt has its own synthesised alert set (Bell, Chime, Pulse, Tick); its Chime tone covers this alert's role. The Apple tone itself is not reproduced",
+   "status": "parity",
+   "note": "BifrOSt has its own synthesised alert set (Bell, Chime, Pulse, Tick); its Chime tone covers this alert's role. The Apple tone itself is not reproduced Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

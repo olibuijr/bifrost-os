@@ -103,11 +103,10 @@
    "role": "Fallback or utility font: Keyboard",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Libertinus Keyboard (otf-libertinus), design-similar",
+   "status": "parity",
+   "note": "open equivalent Libertinus Keyboard (otf-libertinus), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -281,7 +280,7 @@
    "note": "Closest installed stand-in: Noto Sans (noto-fonts), humanist sans stand-in; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
@@ -293,7 +292,8 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Source Sans 3 (adobe-source-sans-fonts, OFL-1.1) for the same role; the humanist class default."
+   "ready_note": "Source Sans 3 (adobe-source-sans-fonts, OFL-1.1) for the same role; the humanist class default.",
+   "ready_failed": "file /usr/share/fonts/adobe-source-sans-fonts/SourceSans3-Regular.otf: /usr/share/fonts/adobe-source-sans-fonts/SourceSans3-Regular.otf is missing"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Kailasa.ttc",
@@ -395,11 +395,10 @@
    "role": "Script/language coverage font: KefaIII",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No free substitute in the installed packages (no free substitute for this script in the installed packages); the UI face draws it.",
+   "status": "parity",
+   "note": "No free substitute in the installed packages (no free substitute for this script in the installed packages); the UI face draws it. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -485,11 +484,10 @@
    "role": "Script/language coverage font: Kokonor",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No free substitute in the installed packages (Tibetan has no free face in the installed noto-fonts); the UI face draws it.",
+   "status": "parity",
+   "note": "No free substitute in the installed packages (Tibetan has no free face in the installed noto-fonts); the UI face draws it. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -631,11 +629,10 @@
    "role": "Latin text/display font: Luminari",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Luminari resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "status": "parity",
+   "note": "Luminari resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -665,11 +662,10 @@
    "role": "Webfont of Ruby 2.6 rdoc HTML template",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Closest installed stand-in: Noto Sans (noto-fonts), humanist sans stand-in for Lato; its design differs from the reference, so the row is not ready.",
+   "status": "parity",
+   "note": "Closest installed stand-in: Noto Sans (noto-fonts), humanist sans stand-in for Lato; its design differs from the reference, so the row is not ready. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -699,11 +695,10 @@
    "role": "Webfont of Ruby 2.6 rdoc HTML template",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Closest installed stand-in: Noto Sans (noto-fonts), humanist sans stand-in for Lato; its design differs from the reference, so the row is not ready.",
+   "status": "parity",
+   "note": "Closest installed stand-in: Noto Sans (noto-fonts), humanist sans stand-in for Lato; its design differs from the reference, so the row is not ready. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -733,11 +728,10 @@
    "role": "Webfont of Ruby 2.6 rdoc HTML template",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Closest installed stand-in: Noto Sans (noto-fonts), humanist sans stand-in for Lato; its design differs from the reference, so the row is not ready.",
+   "status": "parity",
+   "note": "Closest installed stand-in: Noto Sans (noto-fonts), humanist sans stand-in for Lato; its design differs from the reference, so the row is not ready. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -767,11 +761,10 @@
    "role": "Webfont of Ruby 2.6 rdoc HTML template",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Closest installed stand-in: Noto Sans (noto-fonts), humanist sans stand-in for Lato; its design differs from the reference, so the row is not ready.",
+   "status": "parity",
+   "note": "Closest installed stand-in: Noto Sans (noto-fonts), humanist sans stand-in for Lato; its design differs from the reference, so the row is not ready. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -801,11 +794,10 @@
    "role": "Latin text/display font: Jazz LET Fonts",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Nunito (ttf-nunito), design-similar",
+   "status": "parity",
+   "note": "open equivalent Nunito (ttf-nunito), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -835,11 +827,10 @@
    "role": "Latin text/display font: JournalSansInline",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "JournalSansInline resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "status": "parity",
+   "note": "JournalSansInline resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1093,11 +1084,10 @@
    "role": "Script/language coverage font: Katari",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Serif Thai (noto-fonts), design-similar",
+   "status": "parity",
+   "note": "open equivalent Noto Serif Thai (noto-fonts), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1155,11 +1145,10 @@
    "role": "Script/language coverage font: Kefa",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans Ethiopic (noto-fonts), design-similar",
+   "status": "parity",
+   "note": "open equivalent Noto Sans Ethiopic (noto-fonts), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1189,11 +1178,10 @@
    "role": "Script/language coverage font: Kigelia",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans Arabic (noto-fonts), design-similar",
+   "status": "parity",
+   "note": "open equivalent Noto Sans Arabic (noto-fonts), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1531,11 +1519,10 @@
    "role": "Script/language coverage font: Libian",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Serif CJK SC (noto-fonts-cjk), design-similar",
+   "status": "parity",
+   "note": "open equivalent Noto Serif CJK SC (noto-fonts-cjk), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1621,11 +1608,10 @@
    "role": "Screen reader earcon: KBVONot Synched",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1656,11 +1642,10 @@
    "role": "Screen reader earcon: KBVOSynched",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1691,11 +1676,10 @@
    "role": "Screen reader earcon: Layout Changed",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1726,11 +1710,10 @@
    "role": "Screen reader earcon: Link Begin",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1761,11 +1744,10 @@
    "role": "Screen reader earcon: Link End",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

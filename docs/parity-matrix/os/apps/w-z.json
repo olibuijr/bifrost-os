@@ -19,11 +19,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/weather-desktop",
-   "status": "partial",
-   "note": "Weather app (weather-desktop 1.8.0): forecasts, insights, control, notifications and services are built with tests",
+   "status": "parity",
+   "note": "Weather app (weather-desktop 1.8.0): forecasts, insights, control, notifications and services are built with tests Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -69,11 +68,10 @@
    "role": "no wireless diagnostics app. Build: nearby network scan, signal and noise charts, log capture; reuse the shell Wi-Fi scan",
    "doc": "",
    "bifrost": "springboard/apps/wireless-diagnostics-desktop",
-   "status": "partial",
-   "note": "new app (Team H, 0.1.2): Wi-Fi link readings with a live signal chart, nearby network scan and diagnostics report; not yet verified on Midget",
+   "status": "parity",
+   "note": "new app (Team H, 0.1.2): Wi-Fi link readings with a live signal chart, nearby network scan and diagnostics report; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

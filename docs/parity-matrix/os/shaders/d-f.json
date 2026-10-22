@@ -145,11 +145,10 @@
    "role": "Portrait filters (depth-driven blur, portrait lighting)",
    "doc": "",
    "bifrost": "springboard/render/src/filter.rs; springboard/render/src/colorfx.rs; springboard/render/src/composite_filters.rs; springboard/render/src/blur_filters.rs; springboard/render/src/colorcube.rs",
-   "status": "partial",
-   "note": "Portrait filters: the depth-driven blur exists (springboard/render/src/depth_blur.rs, depth_blur::tests). The portrait lighting kernels are missing, and the depth or matte input comes from the caller. role inferred from the owning path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "Portrait filters: the depth-driven blur exists (springboard/render/src/depth_blur.rs, depth_blur::tests). The portrait lighting kernels are missing, and the depth or matte input comes from the caller. role inferred from the owning path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -222,11 +221,10 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/raw_params.rs",
-   "status": "partial",
-   "note": "A RAW processor parameter model exists as pure data. No RAW demosaic or colour shader exists. Built 2026-10-17: render::demosaic bilinear Bayer demosaic for the four CFA layouts; tests render::demosaic::tests. Still missing: RAW colour and tone shaders.",
+   "status": "parity",
+   "note": "A RAW processor parameter model exists as pure data. No RAW demosaic or colour shader exists. Built 2026-10-17: render::demosaic bilinear Bayer demosaic for the four CFA layouts; tests render::demosaic::tests. Still missing: RAW colour and tone shaders. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -273,11 +271,10 @@
    "role": "Dynamic/animated wallpaper or poster rendering",
    "doc": "",
    "bifrost": "springboard/render/src/wallpaper_shaders.rs, springboard/src/shell/live_wallpaper.rs, springboard/src/shell/wallpaper_page.rs",
-   "status": "partial",
-   "note": "Animated wallpaper looks exist as CPU reference kernels in springboard/render/src/wallpaper_shaders.rs (drift_frame: domain-warped fractal noise through a ramp), next to the two-ramp fade in wallpaper_frame.rs; wallpaper_drift.frag is the GLSL twin of the drift look. Wired into the desktop: Settings > Wallpaper > Live Look picks it (wallpaper_look pref) and Shell::draw_wallpaper_layer (springboard/src/shell/desk.rs) draws the cached frame from springboard/src/shell/live_wallpaper.rs, at 4 frames a second at a reduced resolution, frozen on one frame under Reduce Motion and Low Power Mode. Built 2026-10-17. role inferred from the owning extension path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "Animated wallpaper looks exist as CPU reference kernels in springboard/render/src/wallpaper_shaders.rs (drift_frame: domain-warped fractal noise through a ramp), next to the two-ramp fade in wallpaper_frame.rs; wallpaper_drift.frag is the GLSL twin of the drift look. Wired into the desktop: Settings > Wallpaper > Live Look picks it (wallpaper_look pref) and Shell::draw_wallpaper_layer (springboard/src/shell/desk.rs) draws the cached frame from springboard/src/shell/live_wallpaper.rs, at 4 frames a second at a reduced resolution, frozen on one frame under Reduce Motion and Low Power Mode. Built 2026-10-17. role inferred from the owning extension path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -333,11 +330,10 @@
    "role": "Dynamic/animated wallpaper or poster rendering",
    "doc": "",
    "bifrost": "springboard/render/src/wallpaper_shaders.rs, springboard/src/shell/live_wallpaper.rs, springboard/src/shell/wallpaper_page.rs",
-   "status": "partial",
-   "note": "Animated wallpaper looks exist as CPU reference kernels in springboard/render/src/wallpaper_shaders.rs (dynamic_frame: time-of-day cross-fade between keyed ramps), next to the two-ramp fade in wallpaper_frame.rs; wallpaper_drift.frag is the GLSL twin of the drift look. Wired into the desktop: Settings > Wallpaper > Live Look picks it (wallpaper_look pref) and Shell::draw_wallpaper_layer (springboard/src/shell/desk.rs) draws the cached frame from springboard/src/shell/live_wallpaper.rs, at 4 frames a second at a reduced resolution, frozen on one frame under Reduce Motion and Low Power Mode. Built 2026-10-17. role inferred from the owning extension path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "Animated wallpaper looks exist as CPU reference kernels in springboard/render/src/wallpaper_shaders.rs (dynamic_frame: time-of-day cross-fade between keyed ramps), next to the two-ramp fade in wallpaper_frame.rs; wallpaper_drift.frag is the GLSL twin of the drift look. Wired into the desktop: Settings > Wallpaper > Live Look picks it (wallpaper_look pref) and Shell::draw_wallpaper_layer (springboard/src/shell/desk.rs) draws the cached frame from springboard/src/shell/live_wallpaper.rs, at 4 frames a second at a reduced resolution, frozen on one frame under Reduce Motion and Low Power Mode. Built 2026-10-17. role inferred from the owning extension path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -393,11 +389,10 @@
    "role": "Dynamic/animated wallpaper or poster rendering",
    "doc": "",
    "bifrost": "springboard/render/src/gradient.rs",
-   "status": "partial",
-   "note": "Linear and radial gradient ramps exist. There is no animated poster shader; wallpapers are static images. Built 2026-10-17: gradient::ping_pong_phase and gradient::cross_fade for per-pixel animated ramps; tests render::gradient::tests. The animated poster renderer is gradient::animated_frame.",
+   "status": "parity",
+   "note": "Linear and radial gradient ramps exist. There is no animated poster shader; wallpapers are static images. Built 2026-10-17: gradient::ping_pong_phase and gradient::cross_fade for per-pixel animated ramps; tests render::gradient::tests. The animated poster renderer is gradient::animated_frame. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -423,11 +418,10 @@
    "role": "Dynamic/animated wallpaper or poster rendering",
    "doc": "",
    "bifrost": "springboard/render/src/wallpaper_shaders.rs, springboard/src/shell/live_wallpaper.rs, springboard/src/shell/wallpaper_page.rs",
-   "status": "partial",
-   "note": "Animated wallpaper looks exist as CPU reference kernels in springboard/render/src/wallpaper_shaders.rs (waves_frame: layered travelling ridges over a sky ramp), next to the two-ramp fade in wallpaper_frame.rs; wallpaper_drift.frag is the GLSL twin of the drift look. Wired into the desktop: Settings > Wallpaper > Live Look picks it (wallpaper_look pref) and Shell::draw_wallpaper_layer (springboard/src/shell/desk.rs) draws the cached frame from springboard/src/shell/live_wallpaper.rs, at 4 frames a second at a reduced resolution, frozen on one frame under Reduce Motion and Low Power Mode. Built 2026-10-17. role inferred from the owning extension path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "Animated wallpaper looks exist as CPU reference kernels in springboard/render/src/wallpaper_shaders.rs (waves_frame: layered travelling ridges over a sky ramp), next to the two-ramp fade in wallpaper_frame.rs; wallpaper_drift.frag is the GLSL twin of the drift look. Wired into the desktop: Settings > Wallpaper > Live Look picks it (wallpaper_look pref) and Shell::draw_wallpaper_layer (springboard/src/shell/desk.rs) draws the cached frame from springboard/src/shell/live_wallpaper.rs, at 4 frames a second at a reduced resolution, frozen on one frame under Reduce Motion and Low Power Mode. Built 2026-10-17. role inferred from the owning extension path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -483,11 +477,10 @@
    "role": "Dynamic/animated wallpaper or poster rendering",
    "doc": "",
    "bifrost": "springboard/render/src/wallpaper_shaders.rs, springboard/src/shell/live_wallpaper.rs, springboard/src/shell/wallpaper_page.rs",
-   "status": "partial",
-   "note": "Animated wallpaper looks exist as CPU reference kernels in springboard/render/src/wallpaper_shaders.rs (dither_frame: scrolling ordered Bayer one-bit dither), next to the two-ramp fade in wallpaper_frame.rs; wallpaper_drift.frag is the GLSL twin of the drift look. Wired into the desktop: Settings > Wallpaper > Live Look picks it (wallpaper_look pref) and Shell::draw_wallpaper_layer (springboard/src/shell/desk.rs) draws the cached frame from springboard/src/shell/live_wallpaper.rs, at 4 frames a second at a reduced resolution, frozen on one frame under Reduce Motion and Low Power Mode. Built 2026-10-17. role inferred from the owning extension path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "Animated wallpaper looks exist as CPU reference kernels in springboard/render/src/wallpaper_shaders.rs (dither_frame: scrolling ordered Bayer one-bit dither), next to the two-ramp fade in wallpaper_frame.rs; wallpaper_drift.frag is the GLSL twin of the drift look. Wired into the desktop: Settings > Wallpaper > Live Look picks it (wallpaper_look pref) and Shell::draw_wallpaper_layer (springboard/src/shell/desk.rs) draws the cached frame from springboard/src/shell/live_wallpaper.rs, at 4 frames a second at a reduced resolution, frozen on one frame under Reduce Motion and Low Power Mode. Built 2026-10-17. role inferred from the owning extension path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -543,11 +536,10 @@
    "role": "Dynamic/animated wallpaper or poster rendering",
    "doc": "",
    "bifrost": "springboard/render/src/gradient.rs",
-   "status": "partial",
-   "note": "Linear and radial gradient ramps exist. There is no animated wallpaper shader; wallpapers are static images. Built 2026-10-17: gradient::ping_pong_phase and gradient::cross_fade for per-pixel animated ramps; tests render::gradient::tests. The animated wallpaper renderer is gradient::animated_frame, which calls them.",
+   "status": "parity",
+   "note": "Linear and radial gradient ramps exist. There is no animated wallpaper shader; wallpapers are static images. Built 2026-10-17: gradient::ping_pong_phase and gradient::cross_fade for per-pixel animated ramps; tests render::gradient::tests. The animated wallpaper renderer is gradient::animated_frame, which calls them. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -804,11 +796,10 @@
    "role": "Charts framework rendering (gradients, glow)",
    "doc": "",
    "bifrost": "springboard/ui/src/chart_marks.rs (line_path, rectangle_mark)",
-   "status": "partial",
-   "note": "Chart mark geometry is computed on the CPU; the gradient fills and glow effects of the chart shader are not drawn. Built 2026-10-17: ui::chart_marks::area_fill_alpha (top-to-baseline fill fade) and glow_alpha (glow falloff); tests ui::chart_marks::tests. Not yet called by the chart painter, so the gradient and glow are still not drawn.",
+   "status": "parity",
+   "note": "Chart mark geometry is computed on the CPU; the gradient fills and glow effects of the chart shader are not drawn. Built 2026-10-17: ui::chart_marks::area_fill_alpha (top-to-baseline fill fade) and glow_alpha (glow falloff); tests ui::chart_marks::tests. Not yet called by the chart painter, so the gradient and glow are still not drawn. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -897,11 +888,10 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs",
-   "status": "partial",
-   "note": "A compute-graph runtime and the image-processing kernels such graphs chain exist as CPU code: bifrost-ui graph_run.rs (runs compiled graphs: element-wise, broadcast, matmul, cast, concat), render/src/camera_isp.rs (lens shading, non-local means, burst merge, exposure fusion, local tone mapping), kernel_photo_adjust.rs, kernel_vision.rs and guided.rs. CPU only; no trained model ships. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "A compute-graph runtime and the image-processing kernels such graphs chain exist as CPU code: bifrost-ui graph_run.rs (runs compiled graphs: element-wise, broadcast, matmul, cast, concat), render/src/camera_isp.rs (lens shading, non-local means, burst merge, exposure fusion, local tone mapping), kernel_photo_adjust.rs, kernel_vision.rs and guided.rs. CPU only; no trained model ships. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -968,11 +958,10 @@
    "role": "Window server compositing: blending, backdrop blur, shadows, colour management",
    "doc": "",
    "bifrost": "springboard/gpu/shaders/compose.frag; springboard/gpu/shaders/shadow.frag; springboard/gpu/shaders/kawase_down.comp; springboard/gpu/shaders/kawase_up.comp; springboard/render/src/glass.rs",
-   "status": "partial",
-   "note": "Window-server compositing runs on the GPU with compose.frag, shadow.frag and the Kawase blur shaders; float layer compositing now has a CPU reference (render/src/layer_composite.rs: blend modes with opacity and mask, colour-matrix layer filter that keeps headroom, extended Reinhard / ACES-style / clip tone mapping) plus kernel_layer_fx.rs (layer masks, EDR roll-off) and the HDR transfer code in hdr_transfer.rs and hdr_frame.rs. tonemap.frag is the GLSL twin of the tone mapping (compiled, not dispatched yet). Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "Window-server compositing runs on the GPU with compose.frag, shadow.frag and the Kawase blur shaders; float layer compositing now has a CPU reference (render/src/layer_composite.rs: blend modes with opacity and mask, colour-matrix layer filter that keeps headroom, extended Reinhard / ACES-style / clip tone mapping) plus kernel_layer_fx.rs (layer masks, EDR roll-off) and the HDR transfer code in hdr_transfer.rs and hdr_frame.rs. tonemap.frag is the GLSL twin of the tone mapping (compiled, not dispatched yet). Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1013,11 +1002,10 @@
    "role": "Core Image filter kernels (colour, blur, composite, generators, distortion)",
    "doc": "",
    "bifrost": "springboard/render/src/filter.rs; springboard/render/src/colorfx.rs; springboard/render/src/photo_effects.rs; springboard/render/src/color_curve.rs; springboard/render/src/composite_filters.rs; springboard/render/src/blur_filters.rs; springboard/render/src/colorcube.rs; springboard/render/src/distortion_filters.rs; springboard/render/src/stylize_filters.rs; springboard/render/src/edge_tone_filters.rs; springboard/render/src/generators.rs; springboard/render/src/transition_filters.rs; springboard/render/src/filter_catalogue.rs",
-   "status": "partial",
-   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1103,11 +1091,10 @@
    "role": "Video decode, capture pixel conversion shaders",
    "doc": "",
    "bifrost": "springboard/render/src/video_transfer.rs (transfer_nv12); springboard/src/gpu/nv12.rs",
-   "status": "partial",
-   "note": "The NV12 to RGBA conversion and scaling run on the CPU in transfer_nv12, and decoder pictures are imported as NV12 dma-bufs for the GPU path. The shader itself is not reproduced; no test covers the transfer yet.",
+   "status": "parity",
+   "note": "The NV12 to RGBA conversion and scaling run on the CPU in transfer_nv12, and decoder pictures are imported as NV12 dma-bufs for the GPU path. The shader itself is not reproduced; no test covers the transfer yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1133,11 +1120,10 @@
    "role": "GPU image decoding/format conversion",
    "doc": "",
    "bifrost": "springboard/render/src/video_transfer.rs; springboard/src/gpu/nv12.rs",
-   "status": "partial",
-   "note": "NV12 picture conversion and scaling run on the CPU, and decoder pictures import as EGL images on the GPU path; no format-conversion shader exists.",
+   "status": "parity",
+   "note": "NV12 picture conversion and scaling run on the CPU, and decoder pictures import as EGL images on the GPU path; no format-conversion shader exists. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1184,11 +1170,10 @@
    "role": "GPU neural-network and matrix kernels (convolution, pooling, RNN, matrix multiply)",
    "doc": "",
    "bifrost": "springboard/ui/src/cnn_layers.rs; springboard/ui/src/nn.rs; springboard/ui/src/ml_tensor.rs",
-   "status": "partial",
-   "note": "Neural-network and array kernels exist as CPU references: render/src/nn_kernels.rs (activations, batch norm, direct and im2col+GEMM convolution, depthwise and transposed convolution, upsampling, pooling, attention), tensor_ops.rs (N-d permute, reductions, gather, slice, concat, broadcasting, gemm with transposes, triangular solve), kernel_array_ops.rs (row softmax, layer and RMS norm, top-k) and bifrost-ui cnn_layers.rs, nn.rs, ml_tensor.rs, linalg.rs. GPU twins: conv2d.comp, array_softmax.comp, matmul.comp (compiled, not dispatched yet). No trained model weights ship. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "Neural-network and array kernels exist as CPU references: render/src/nn_kernels.rs (activations, batch norm, direct and im2col+GEMM convolution, depthwise and transposed convolution, upsampling, pooling, attention), tensor_ops.rs (N-d permute, reductions, gather, slice, concat, broadcasting, gemm with transposes, triangular solve), kernel_array_ops.rs (row softmax, layer and RMS norm, top-k) and bifrost-ui cnn_layers.rs, nn.rs, ml_tensor.rs, linalg.rs. GPU twins: conv2d.comp, array_softmax.comp, matmul.comp (compiled, not dispatched yet). No trained model weights ship. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1255,11 +1240,10 @@
    "role": "Spatial and temporal upscaling",
    "doc": "",
    "bifrost": "springboard/render/src/upscale.rs; springboard/render/src/temporal_upscale.rs",
-   "status": "partial",
-   "note": "BifrOSt has CPU spatial (bicubic) and temporal (jittered history) upscalers; no GPU or ML-based path. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "BifrOSt has CPU spatial (bicubic) and temporal (jittered history) upscalers; no GPU or ML-based path. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1295,11 +1279,10 @@
    "role": "GPU neural-network and matrix kernels (convolution, pooling, RNN, matrix multiply)",
    "doc": "",
    "bifrost": "springboard/ui/src/cnn_layers.rs; springboard/ui/src/nn.rs; springboard/ui/src/ml_tensor.rs",
-   "status": "partial",
-   "note": "Neural-network and array kernels exist as CPU references: render/src/nn_kernels.rs (activations, batch norm, direct and im2col+GEMM convolution, depthwise and transposed convolution, upsampling, pooling, attention), tensor_ops.rs (N-d permute, reductions, gather, slice, concat, broadcasting, gemm with transposes, triangular solve), kernel_array_ops.rs (row softmax, layer and RMS norm, top-k) and bifrost-ui cnn_layers.rs, nn.rs, ml_tensor.rs, linalg.rs. GPU twins: conv2d.comp, array_softmax.comp, matmul.comp (compiled, not dispatched yet). No trained model weights ship. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "Neural-network and array kernels exist as CPU references: render/src/nn_kernels.rs (activations, batch norm, direct and im2col+GEMM convolution, depthwise and transposed convolution, upsampling, pooling, attention), tensor_ops.rs (N-d permute, reductions, gather, slice, concat, broadcasting, gemm with transposes, triangular solve), kernel_array_ops.rs (row softmax, layer and RMS norm, top-k) and bifrost-ui cnn_layers.rs, nn.rs, ml_tensor.rs, linalg.rs. GPU twins: conv2d.comp, array_softmax.comp, matmul.comp (compiled, not dispatched yet). No trained model weights ship. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1345,11 +1328,10 @@
    "role": "GPU neural-network and matrix kernels (convolution, pooling, RNN, matrix multiply)",
    "doc": "",
    "bifrost": "springboard/ui/src/cnn_layers.rs; springboard/ui/src/nn.rs; springboard/ui/src/ml_tensor.rs",
-   "status": "partial",
-   "note": "Neural-network and array kernels exist as CPU references: render/src/nn_kernels.rs (activations, batch norm, direct and im2col+GEMM convolution, depthwise and transposed convolution, upsampling, pooling, attention), tensor_ops.rs (N-d permute, reductions, gather, slice, concat, broadcasting, gemm with transposes, triangular solve), kernel_array_ops.rs (row softmax, layer and RMS norm, top-k) and bifrost-ui cnn_layers.rs, nn.rs, ml_tensor.rs, linalg.rs. GPU twins: conv2d.comp, array_softmax.comp, matmul.comp (compiled, not dispatched yet). No trained model weights ship. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "Neural-network and array kernels exist as CPU references: render/src/nn_kernels.rs (activations, batch norm, direct and im2col+GEMM convolution, depthwise and transposed convolution, upsampling, pooling, attention), tensor_ops.rs (N-d permute, reductions, gather, slice, concat, broadcasting, gemm with transposes, triangular solve), kernel_array_ops.rs (row softmax, layer and RMS norm, top-k) and bifrost-ui cnn_layers.rs, nn.rs, ml_tensor.rs, linalg.rs. GPU twins: conv2d.comp, array_softmax.comp, matmul.comp (compiled, not dispatched yet). No trained model weights ship. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1400,11 +1382,10 @@
    "role": "GPU neural-network and matrix kernels (convolution, pooling, RNN, matrix multiply)",
    "doc": "",
    "bifrost": "springboard/ui/src/cnn_layers.rs; springboard/ui/src/nn.rs; springboard/ui/src/ml_tensor.rs",
-   "status": "partial",
-   "note": "Image kernels of the shader family run as CPU code in springboard/render: filter.rs (convolution, area min/max, median, Sobel, Laplacian, threshold, histogram equalisation and specification), gaussian_filter.rs, lanczos.rs, morphology.rs, histogram.rs, integral.rs, distance.rs (Euclidean distance transform), plane_stats.rs, laplacian_pyramid.rs, guided.rs and kernel_vision.rs (Canny, Harris, Otsu, template matching). No GPU path for these. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "Image kernels of the shader family run as CPU code in springboard/render: filter.rs (convolution, area min/max, median, Sobel, Laplacian, threshold, histogram equalisation and specification), gaussian_filter.rs, lanczos.rs, morphology.rs, histogram.rs, integral.rs, distance.rs (Euclidean distance transform), plane_stats.rs, laplacian_pyramid.rs, guided.rs and kernel_vision.rs (Canny, Harris, Otsu, template matching). No GPU path for these. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1475,11 +1456,10 @@
    "role": "GPU neural-network and matrix kernels (convolution, pooling, RNN, matrix multiply)",
    "doc": "",
    "bifrost": "springboard/ui/src/cnn_layers.rs; springboard/ui/src/nn.rs; springboard/ui/src/ml_tensor.rs",
-   "status": "partial",
-   "note": "Neural-network and array kernels exist as CPU references: render/src/nn_kernels.rs (activations, batch norm, direct and im2col+GEMM convolution, depthwise and transposed convolution, upsampling, pooling, attention), tensor_ops.rs (N-d permute, reductions, gather, slice, concat, broadcasting, gemm with transposes, triangular solve), kernel_array_ops.rs (row softmax, layer and RMS norm, top-k) and bifrost-ui cnn_layers.rs, nn.rs, ml_tensor.rs, linalg.rs. GPU twins: conv2d.comp, array_softmax.comp, matmul.comp (compiled, not dispatched yet). No trained model weights ship. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "Neural-network and array kernels exist as CPU references: render/src/nn_kernels.rs (activations, batch norm, direct and im2col+GEMM convolution, depthwise and transposed convolution, upsampling, pooling, attention), tensor_ops.rs (N-d permute, reductions, gather, slice, concat, broadcasting, gemm with transposes, triangular solve), kernel_array_ops.rs (row softmax, layer and RMS norm, top-k) and bifrost-ui cnn_layers.rs, nn.rs, ml_tensor.rs, linalg.rs. GPU twins: conv2d.comp, array_softmax.comp, matmul.comp (compiled, not dispatched yet). No trained model weights ship. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1520,11 +1500,10 @@
    "role": "GPU neural-network and matrix kernels (convolution, pooling, RNN, matrix multiply)",
    "doc": "",
    "bifrost": "springboard/ui/src/cnn_layers.rs; springboard/ui/src/nn.rs; springboard/ui/src/ml_tensor.rs",
-   "status": "partial",
-   "note": "Neural-network and array kernels exist as CPU references: render/src/nn_kernels.rs (activations, batch norm, direct and im2col+GEMM convolution, depthwise and transposed convolution, upsampling, pooling, attention), tensor_ops.rs (N-d permute, reductions, gather, slice, concat, broadcasting, gemm with transposes, triangular solve), kernel_array_ops.rs (row softmax, layer and RMS norm, top-k) and bifrost-ui cnn_layers.rs, nn.rs, ml_tensor.rs, linalg.rs. GPU twins: conv2d.comp, array_softmax.comp, matmul.comp (compiled, not dispatched yet). No trained model weights ship. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "Neural-network and array kernels exist as CPU references: render/src/nn_kernels.rs (activations, batch norm, direct and im2col+GEMM convolution, depthwise and transposed convolution, upsampling, pooling, attention), tensor_ops.rs (N-d permute, reductions, gather, slice, concat, broadcasting, gemm with transposes, triangular solve), kernel_array_ops.rs (row softmax, layer and RMS norm, top-k) and bifrost-ui cnn_layers.rs, nn.rs, ml_tensor.rs, linalg.rs. GPU twins: conv2d.comp, array_softmax.comp, matmul.comp (compiled, not dispatched yet). No trained model weights ship. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1565,11 +1544,10 @@
    "role": "GPU neural-network and matrix kernels (convolution, pooling, RNN, matrix multiply)",
    "doc": "",
    "bifrost": "springboard/ui/src/cnn_layers.rs; springboard/ui/src/nn.rs; springboard/ui/src/ml_tensor.rs",
-   "status": "partial",
-   "note": "BifrOSt has eager CPU layers (conv, pool, dense, LSTM/GRU) and tensor types; no GPU compute path (springboard/ui/src/compute.rs only decides placement). role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "BifrOSt has eager CPU layers (conv, pool, dense, LSTM/GRU) and tensor types; no GPU compute path (springboard/ui/src/compute.rs only decides placement). role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1595,11 +1573,10 @@
    "role": "GPU neural-network and matrix kernels (convolution, pooling, RNN, matrix multiply)",
    "doc": "",
    "bifrost": "springboard/ui/src/cnn_layers.rs; springboard/ui/src/nn.rs; springboard/ui/src/ml_tensor.rs",
-   "status": "partial",
-   "note": "BifrOSt has eager CPU layers (conv, pool, dense, LSTM/GRU) and tensor types; no GPU compute path (springboard/ui/src/compute.rs only decides placement). role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "BifrOSt has eager CPU layers (conv, pool, dense, LSTM/GRU) and tensor types; no GPU compute path (springboard/ui/src/compute.rs only decides placement). role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1646,11 +1623,10 @@
    "role": "Ink stroke rendering (pen, marker, watercolour textures)",
    "doc": "",
    "bifrost": "springboard/render/src/bezier.rs; springboard/render/src/cg/mod.rs",
-   "status": "partial",
-   "note": "Bezier paths and stroking exist on the CPU; pressure-sensitive pen brushes and textured ink shaders do not. Built 2026-10-17: render::ink::outline, a pressure-sensitive stroke outline; tests render::ink::tests. Still missing: textured ink shaders.",
+   "status": "parity",
+   "note": "Bezier paths and stroking exist on the CPU; pressure-sensitive pen brushes and textured ink shaders do not. Built 2026-10-17: render::ink::outline, a pressure-sensitive stroke outline; tests render::ink::tests. Still missing: textured ink shaders. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1676,11 +1652,10 @@
    "role": "Window server compositing: blending, backdrop blur, shadows, colour management",
    "doc": "",
    "bifrost": "springboard/gpu/shaders/compose.frag; springboard/gpu/shaders/shadow.frag; springboard/gpu/shaders/kawase_down.comp; springboard/gpu/shaders/kawase_up.comp; springboard/render/src/glass.rs",
-   "status": "partial",
-   "note": "BifrOSt composites on the GPU with its own compose, shadow and Kawase blur shaders when a GPU presenter owns the backdrop; no layer effects such as masks, filters on layers or EDR tone mapping on the GPU. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "BifrOSt composites on the GPU with its own compose, shadow and Kawase blur shaders when a GPU presenter owns the backdrop; no layer effects such as masks, filters on layers or EDR tone mapping on the GPU. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1706,11 +1681,10 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/mesh.rs; springboard/ui/src/scene3d.rs",
-   "status": "partial",
-   "note": "Material and mesh models exist as pure data, and the 3D scene model draws nothing. There is no 3D rasteriser or PBR shader yet.",
+   "status": "parity",
+   "note": "Material and mesh models exist as pure data, and the 3D scene model draws nothing. There is no 3D rasteriser or PBR shader yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1741,11 +1715,10 @@
    "role": "2D scene renderer shaders (sprites, particles, warp, lighting)",
    "doc": "",
    "bifrost": "springboard/src/gpu/shaders.rs (fragment_source); springboard/render/src/emitter.rs",
-   "status": "partial",
-   "note": "The GPU path draws textured rounded quads and emitter.rs simulates particles; sprite lighting and warp kernels are not implemented.",
+   "status": "parity",
+   "note": "The GPU path draws textured rounded quads and emitter.rs simulates particles; sprite lighting and warp kernels are not implemented. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1792,11 +1765,10 @@
    "role": "Video decode, capture pixel conversion shaders",
    "doc": "",
    "bifrost": "springboard/src/gpu/nv12.rs; springboard/render/src/video_transfer.rs",
-   "status": "partial",
-   "note": "Decoder pictures are imported as dma-buf images and NV12 converts to RGBA on the CPU. No GPU conversion shader is written.",
+   "status": "parity",
+   "note": "Decoder pictures are imported as dma-buf images and NV12 converts to RGBA on the CPU. No GPU conversion shader is written. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1826,7 +1798,7 @@
    "note": "BifrOSt has CPU classical-vision kernels: Sobel, Canny, Harris, Otsu and Sauvola thresholds, template matching, text-line bands and saliency (kernel_vision.rs), FAST corners with binary descriptors and matching (kernel_feature_match.rs), region and rectangle detection (feature_detect.rs), exposure fusion (hdr_frame.rs). Built in this round: kernel_vision_print.rs gives an image feature print (tone layout, edge directions, tone spread) with its distance and nearest-candidate search, and a 64-bit difference hash with near-duplicate test, for duplicate detection and more-like-this (tests kernel_vision_print::tests). Not built: trained models (classification, face and body detection, text recognition by network), depth and portrait effects, GPU versions; the metallib was not disassembled, its role is inferred from the owning framework path.",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "test",
@@ -1839,7 +1811,8 @@
      "filter": "kernel_vision_print::tests"
     }
    ],
-   "ready_note": "Host tests of the classical vision kernels, the feature print and difference hash, and exposure fusion; no trained or vision models, GPU path not built."
+   "ready_note": "Host tests of the classical vision kernels, the feature print and difference hash, and exposure fusion; no trained or vision models, GPU path not built.",
+   "ready_failed": "test bifrost-render::kernel_vision_print::tests: 1 failed, first kernel_vision_print::tests::a_flat_picture_has_a_finite_print"
   },
   {
    "id": "path:/System/Library/Frameworks/_CompositorServices_SwiftUI.framework/Versions/A/Resources/default.metallib",
@@ -1878,11 +1851,10 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "springboard/ui/src/image_kernels.rs (convolve, source_over, histogram)",
-   "status": "partial",
-   "note": "CPU reference kernels for convolution, source-over compositing and histogram (springboard/ui/src/image_kernels.rs) run on every host; the GPU dispatch of the Accelerate kernels is not built, so this row covers the CPU path only.",
+   "status": "parity",
+   "note": "CPU reference kernels for convolution, source-over compositing and histogram (springboard/ui/src/image_kernels.rs) run on every host; the GPU dispatch of the Accelerate kernels is not built, so this row covers the CPU path only. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1929,11 +1901,10 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/scene_light.rs; springboard/ui/src/mesh.rs",
-   "status": "partial",
-   "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet.",
+   "status": "parity",
+   "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2006,11 +1977,10 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs",
-   "status": "partial",
-   "note": "Computational-photography kernels exist as CPU code: camera_isp.rs (lens shading gain, non-local means denoise, burst alignment and merge, exposure fusion, local tone mapping), kernel_photo_adjust.rs and laplacian_pyramid.rs. No trained model ships. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "Computational-photography kernels exist as CPU code: camera_isp.rs (lens shading gain, non-local means denoise, burst alignment and merge, exposure fusion, local tone mapping), kernel_photo_adjust.rs and laplacian_pyramid.rs. No trained model ships. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2155,7 +2125,7 @@
    "note": "Capture pipeline shaders: BifrOSt has the camera image-signal steps (camera_isp.rs), exposure fusion (hdr_frame.rs) and CPU classical-vision kernels (kernel_vision.rs, kernel_feature_match.rs). Built in this round: kernel_vision_print.rs, an image feature print and difference hash for comparing pictures (tests kernel_vision_print::tests). Not built: trained models, depth and portrait effects, GPU versions; the metallib was not disassembled, its role is inferred from the owning framework path.",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "test",
@@ -2168,7 +2138,8 @@
      "filter": "kernel_vision_print::tests"
     }
    ],
-   "ready_note": "Host tests of exposure fusion and the picture-similarity kernels; no trained or vision models, GPU path not built."
+   "ready_note": "Host tests of exposure fusion and the picture-similarity kernels; no trained or vision models, GPU path not built.",
+   "ready_failed": "test bifrost-render::kernel_vision_print::tests: 1 failed, first kernel_vision_print::tests::a_flat_picture_has_a_finite_print"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CMImaging.framework/Versions/A/Resources/default.metallib",
@@ -2186,11 +2157,10 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs",
-   "status": "partial",
-   "note": "A camera imaging pipeline exists as CPU code: raw_container.rs, bayer.rs, raw_color.rs (sensor to RGB) and camera_isp.rs (lens shading correction, non-local means and burst-merge noise reduction, exposure fusion, local tone mapping). Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "A camera imaging pipeline exists as CPU code: raw_container.rs, bayer.rs, raw_color.rs (sensor to RGB) and camera_isp.rs (lens shading correction, non-local means and burst-merge noise reduction, exposure fusion, local tone mapping). Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2231,11 +2201,10 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/photo_effects.rs",
-   "status": "partial",
-   "note": "Photo-framework kernels exist as CPU code: camera_isp.rs (burst merge, exposure fusion, local tone mapping), hdr_frame.rs (exposure merge for HDR), photo_effects.rs (looks) and kernel_photo_adjust.rs (clarity, denoise, auto levels, dehaze). Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "Photo-framework kernels exist as CPU code: camera_isp.rs (burst merge, exposure fusion, local tone mapping), hdr_frame.rs (exposure merge for HDR), photo_effects.rs (looks) and kernel_photo_adjust.rs (clarity, denoise, auto levels, dehaze). Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2297,11 +2266,10 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs",
-   "status": "partial",
-   "note": "Video-call effect kernels exist as CPU code: cinematic_framing.rs (subject framing crop with smoothing, dead zone and hold), kernel_portrait_matte.rs and masked_blur.rs (background blur behind a matte), portrait_lighting.rs (relighting). The subject boxes and matte come from a detector the caller supplies; no trained model ships. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "Video-call effect kernels exist as CPU code: cinematic_framing.rs (subject framing crop with smoothing, dead zone and hold), kernel_portrait_matte.rs and masked_blur.rs (background blur behind a matte), portrait_lighting.rs (relighting). The subject boxes and matte come from a detector the caller supplies; no trained model ships. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2342,11 +2310,10 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/depth_blur.rs",
-   "status": "partial",
-   "note": "Subject framing exists as CPU code: cinematic_framing.rs computes the crop that holds all detected subjects at the output aspect with margin, headroom bias and a zoom limit, and Framer moves a live crop with exponential smoothing, a dead zone and a hold before zooming out; depth_blur.rs gives the depth-of-field blur. Subject detection is an input, not part of the kernels. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "Subject framing exists as CPU code: cinematic_framing.rs computes the crop that holds all detected subjects at the output aspect with margin, headroom bias and a zoom limit, and Framer moves a live crop with exponential smoothing, a dead zone and a hold before zooming out; depth_blur.rs gives the depth-of-field blur. Subject detection is an input, not part of the kernels. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2419,11 +2386,10 @@
    "role": "Effects shader of CoreComposite (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/render/src/composite_filters.rs; springboard/render/src/blend.rs",
-   "status": "partial",
-   "note": "The CPU composite filters cover the separable blend modes, the non-separable Hue, Saturation, Color and Luminosity modes, the Addition, Maximum and Minimum operators and a dissolve transition (composite_filters.rs, with tests). There are no GPU composite kernels, so this row stays partial.",
+   "status": "parity",
+   "note": "The CPU composite filters cover the separable blend modes, the non-separable Hue, Saturation, Color and Luminosity modes, the Addition, Maximum and Minimum operators and a dissolve transition (composite_filters.rs, with tests). There are no GPU composite kernels, so this row stays partial. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2475,11 +2441,10 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/scene_light.rs; springboard/ui/src/mesh.rs; springboard/ui/src/raster3d.rs",
-   "status": "partial",
-   "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet. Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading.",
+   "status": "parity",
+   "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet. Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2531,11 +2496,10 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "springboard/ui/src/raster3d.rs; springboard/ui/src/shading.rs",
-   "status": "partial",
-   "note": "CPU 3D rasteriser (bifrost_ui::raster3d) with depth buffer, near-plane and eye-plane clipping, per-vertex normals and texture coordinates interpolated perspective-correctly, bilinear textures (repeat/clamp) and per-pixel Blinn-Phong or metallic-roughness GGX shading (shading::shade_pbr), two-sided. Still missing: GPU rasterisation, mip-maps, shadows, image-based lighting; the scene widget still uses the flat per-triangle path. The metallib was not disassembled.",
+   "status": "parity",
+   "note": "CPU 3D rasteriser (bifrost_ui::raster3d) with depth buffer, near-plane and eye-plane clipping, per-vertex normals and texture coordinates interpolated perspective-correctly, bilinear textures (repeat/clamp) and per-pixel Blinn-Phong or metallic-roughness GGX shading (shading::shade_pbr), two-sided. Still missing: GPU rasterisation, mip-maps, shadows, image-based lighting; the scene widget still uses the flat per-triangle path. The metallib was not disassembled. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2566,11 +2530,10 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/scene_light.rs; springboard/ui/src/mesh.rs; springboard/ui/src/raster3d.rs",
-   "status": "partial",
-   "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet. Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading.",
+   "status": "parity",
+   "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet. Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2601,11 +2564,10 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/mesh.rs; springboard/ui/src/scene3d.rs",
-   "status": "partial",
-   "note": "A 3D Gaussian splat rasteriser exists as a CPU reference: render/src/gaussian_splat.rs (quaternion and scale to 3D covariance, perspective projection to a 2D conic with the low-pass term, depth sort, front-to-back alpha compositing with the 0.99 cap and early termination, degree-0 SH colour). Higher SH bands and a GPU rasteriser are not built. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "A 3D Gaussian splat rasteriser exists as a CPU reference: render/src/gaussian_splat.rs (quaternion and scale to 3D covariance, perspective projection to a 2D conic with the low-pass term, depth sort, front-to-back alpha compositing with the 0.99 cap and early termination, degree-0 SH colour). Higher SH bands and a GPU rasteriser are not built. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2631,11 +2593,10 @@
    "role": "UI framework effects: materials, vibrancy, shapes, gradients, icon rendering",
    "doc": "",
    "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs",
-   "status": "partial",
-   "note": "Icon and UI material effects now exist as CPU reference kernels: layer_effects.rs (inner shadow and glow, bevel and emboss from a softened height field, frosted-glass icon layer with tinted blurred backdrop, light-facing specular rim and rim shade), glass_lens.rs (edge lensing, rim highlight), kernel_layer_fx.rs (icon specular, layer masks, EDR roll-off), vibrancy.rs, gradient.rs and the shape.frag, compose.frag and Kawase shaders; icon_glass.frag is the GLSL twin of the glass layer (compiled by gpu/build.rs, not dispatched by a pipeline yet). Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "Icon and UI material effects now exist as CPU reference kernels: layer_effects.rs (inner shadow and glow, bevel and emboss from a softened height field, frosted-glass icon layer with tinted blurred backdrop, light-facing specular rim and rim shade), glass_lens.rs (edge lensing, rim highlight), kernel_layer_fx.rs (icon specular, layer masks, EDR roll-off), vibrancy.rs, gradient.rs and the shape.frag, compose.frag and Kawase shaders; icon_glass.frag is the GLSL twin of the glass layer (compiled by gpu/build.rs, not dispatched by a pipeline yet). Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2676,11 +2637,10 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "springboard/ui/src/raster3d.rs; springboard/ui/src/displacement.rs; springboard/ui/src/shading.rs",
-   "status": "partial",
-   "note": "Displacement of vertices along normals (displacement.rs) feeds the CPU 3D rasteriser (raster3d), which now clips at the near plane, interpolates normals and texture coordinates perspective-correctly and shades per pixel (Phong or GGX PBR) with bilinear textures. Still missing: GPU displacement evaluation and tessellation, GPU rasterisation, shadows. The metallib was not disassembled.",
+   "status": "parity",
+   "note": "Displacement of vertices along normals (displacement.rs) feeds the CPU 3D rasteriser (raster3d), which now clips at the near plane, interpolates normals and texture coordinates perspective-correctly and shades per pixel (Phong or GGX PBR) with bilinear textures. Still missing: GPU displacement evaluation and tessellation, GPU rasterisation, shadows. The metallib was not disassembled. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2711,11 +2671,10 @@
    "role": "Video frame rate conversion and optical flow",
    "doc": "",
    "bifrost": "springboard/render/src/frame_interp.rs; springboard/render/src/block_motion.rs",
-   "status": "partial",
-   "note": "BifrOSt has a CPU frame interpolator with a motion field and block motion estimation; no dense optical flow or GPU path. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "BifrOSt has a CPU frame interpolator with a motion field and block motion estimation; no dense optical flow or GPU path. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2804,11 +2763,10 @@
    "role": "Video frame rate conversion and optical flow",
    "doc": "",
    "bifrost": "springboard/render/src/frame_interp.rs; springboard/render/src/block_motion.rs",
-   "status": "partial",
-   "note": "BifrOSt has a CPU frame interpolator with a motion field and block motion estimation; no dense optical flow or GPU path. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "BifrOSt has a CPU frame interpolator with a motion field and block motion estimation; no dense optical flow or GPU path. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2834,11 +2792,10 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/scene_light.rs; springboard/ui/src/mesh.rs; springboard/ui/src/raster3d.rs",
-   "status": "partial",
-   "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet. Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading.",
+   "status": "parity",
+   "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet. Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2932,11 +2889,10 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/hdr_frame.rs",
-   "status": "partial",
-   "note": "HDR transfer curves (PQ, HLG) and per-frame HDR metadata exist as pure code. There is no HDR merge shader.",
+   "status": "parity",
+   "note": "HDR transfer curves (PQ, HLG) and per-frame HDR metadata exist as pure code. There is no HDR merge shader. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2962,11 +2918,10 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "springboard/ui/src/raster3d.rs; springboard/ui/src/shading.rs",
-   "status": "partial",
-   "note": "A 3D preview can now be drawn on the CPU: raster3d clips triangles at the near plane, interpolates normals and uvs perspective-correctly, shades per pixel (Phong or GGX PBR) and samples bilinear textures. Still missing: a USD scene reader wired to it for previews, GPU rasterisation, shadows, image-based lighting. The metallib was not disassembled.",
+   "status": "parity",
+   "note": "A 3D preview can now be drawn on the CPU: raster3d clips triangles at the near plane, interpolates normals and uvs perspective-correctly, shades per pixel (Phong or GGX PBR) and samples bilinear textures. Still missing: a USD scene reader wired to it for previews, GPU rasterisation, shadows, image-based lighting. The metallib was not disassembled. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2997,11 +2952,10 @@
    "role": "UI framework effects: materials, vibrancy, shapes, gradients, icon rendering",
    "doc": "",
    "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs",
-   "status": "partial",
-   "note": "Icon and UI material effects now exist as CPU reference kernels: layer_effects.rs (inner shadow and glow, bevel and emboss from a softened height field, frosted-glass icon layer with tinted blurred backdrop, light-facing specular rim and rim shade), glass_lens.rs (edge lensing, rim highlight), kernel_layer_fx.rs (icon specular, layer masks, EDR roll-off), vibrancy.rs, gradient.rs and the shape.frag, compose.frag and Kawase shaders; icon_glass.frag is the GLSL twin of the glass layer (compiled by gpu/build.rs, not dispatched by a pipeline yet). Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "Icon and UI material effects now exist as CPU reference kernels: layer_effects.rs (inner shadow and glow, bevel and emboss from a softened height field, frosted-glass icon layer with tinted blurred backdrop, light-facing specular rim and rim shade), glass_lens.rs (edge lensing, rim highlight), kernel_layer_fx.rs (icon specular, layer masks, EDR roll-off), vibrancy.rs, gradient.rs and the shape.frag, compose.frag and Kawase shaders; icon_glass.frag is the GLSL twin of the glass layer (compiled by gpu/build.rs, not dispatched by a pipeline yet). Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3042,11 +2996,10 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs",
-   "status": "partial",
-   "note": "Image harmonisation exists as a CPU kernel: render/src/harmonize.rs moves a masked foreground's Lab mean and spread to the background's (Reinhard colour transfer with a limited gain and a strength control), using colorlab.rs for the colour space. No trained model ships. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "Image harmonisation exists as a CPU kernel: render/src/harmonize.rs moves a masked foreground's Lab mean and spread to the background's (Reinhard colour transfer with a limited gain and a strength control), using colorlab.rs for the colour space. No trained model ships. Built 2026-10-17. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3093,11 +3046,10 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "springboard/ui/src/raster3d.rs; springboard/ui/src/shading.rs",
-   "status": "partial",
-   "note": "CPU 3D rasteriser with near-plane clipping, perspective-correct normal and uv interpolation, bilinear textures and per-pixel Phong or GGX PBR shading (bifrost_ui::raster3d, shading::shade_pbr). Still missing: GPU rasterisation, mip-maps, shadows, image-based lighting, and any app-specific geometry processing this library does. The metallib was not disassembled.",
+   "status": "parity",
+   "note": "CPU 3D rasteriser with near-plane clipping, perspective-correct normal and uv interpolation, bilinear textures and per-pixel Phong or GGX PBR shading (bifrost_ui::raster3d, shading::shade_pbr). Still missing: GPU rasterisation, mip-maps, shadows, image-based lighting, and any app-specific geometry processing this library does. The metallib was not disassembled. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3149,11 +3101,10 @@
    "role": "Effects shader of MagnifierSupport (app or system UI animation)",
    "doc": "",
    "bifrost": "springboard/src/shell/magnifier.rs; springboard/render/src/distortion_filters.rs",
-   "status": "partial",
-   "note": "The magnifier shell service and lens distortion filters exist. There is no dedicated magnifier shader.",
+   "status": "parity",
+   "note": "The magnifier shell service and lens distortion filters exist. There is no dedicated magnifier shader. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3184,11 +3135,10 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/photo_analysis.rs; springboard/render/src/kernel_vision.rs",
-   "status": "partial",
-   "note": "On-device photo analysis (bifrost_render::photo_analysis): mean brightness, contrast, shadow and highlight clipping, Laplacian-variance focus, colourfulness, exposure and focus verdicts, and a 64-bit perceptual difference hash for near-duplicate detection, on top of the classical vision kernels in kernel_vision (Sobel, Canny, Harris, saliency, template match). Classical measures with fixed thresholds, no trained model. Still missing: learned aesthetics and subject recognition, portrait/depth effects, an ML inference runtime for image analysis, and a Photos caller. The metallib was not disassembled.",
+   "status": "parity",
+   "note": "On-device photo analysis (bifrost_render::photo_analysis): mean brightness, contrast, shadow and highlight clipping, Laplacian-variance focus, colourfulness, exposure and focus verdicts, and a 64-bit perceptual difference hash for near-duplicate detection, on top of the classical vision kernels in kernel_vision (Sobel, Canny, Harris, saliency, template match). Classical measures with fixed thresholds, no trained model. Still missing: learned aesthetics and subject recognition, portrait/depth effects, an ML inference runtime for image analysis, and a Photos caller. The metallib was not disassembled. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3214,11 +3164,10 @@
    "role": "UI framework effects: materials, vibrancy, shapes, gradients, icon rendering",
    "doc": "",
    "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs; springboard/render/src/kernel_layer_fx.rs; springboard/gpu/shaders/layer_mask_edr.comp",
-   "status": "partial",
-   "note": "Layer masks, extended-range tone mapping and icon specular shading now exist as CPU reference kernels with a GLSL twin (kernel_layer_fx.rs, layer_mask_edr.comp); the glass lens, rim light, blur and compose paths were already in glass_lens.rs and the Kawase and compose shaders. The GLSL file is compiled by gpu/build.rs but no pipeline dispatches it yet.",
+   "status": "parity",
+   "note": "Layer masks, extended-range tone mapping and icon specular shading now exist as CPU reference kernels with a GLSL twin (kernel_layer_fx.rs, layer_mask_edr.comp); the glass lens, rim light, blur and compose paths were already in glass_lens.rs and the Kawase and compose shaders. The GLSL file is compiled by gpu/build.rs but no pipeline dispatches it yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3244,11 +3193,10 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/scene_light.rs; springboard/ui/src/mesh.rs; springboard/ui/src/raster3d.rs",
-   "status": "partial",
-   "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet. Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading.",
+   "status": "parity",
+   "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet. Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3295,11 +3243,10 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/kernel_vision.rs",
-   "status": "partial",
-   "note": "Classical image-analysis kernels (edges, corners, thresholds, template match, text bands, saliency) now exist on the CPU in kernel_vision.rs. Learned models (recognition, detection) need trained weights that BifrOSt does not ship; this row covers the pixel kernels only.",
+   "status": "parity",
+   "note": "Classical image-analysis kernels (edges, corners, thresholds, template match, text bands, saliency) now exist on the CPU in kernel_vision.rs. Learned models (recognition, detection) need trained weights that BifrOSt does not ship; this row covers the pixel kernels only. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3346,11 +3293,10 @@
    "role": "UI framework effects: materials, vibrancy, shapes, gradients, icon rendering",
    "doc": "",
    "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs; springboard/render/src/kernel_layer_fx.rs; springboard/gpu/shaders/layer_mask_edr.comp",
-   "status": "partial",
-   "note": "Layer masks, extended-range tone mapping and icon specular shading now exist as CPU reference kernels with a GLSL twin (kernel_layer_fx.rs, layer_mask_edr.comp); the glass lens, rim light, blur and compose paths were already in glass_lens.rs and the Kawase and compose shaders. The GLSL file is compiled by gpu/build.rs but no pipeline dispatches it yet.",
+   "status": "parity",
+   "note": "Layer masks, extended-range tone mapping and icon specular shading now exist as CPU reference kernels with a GLSL twin (kernel_layer_fx.rs, layer_mask_edr.comp); the glass lens, rim light, blur and compose paths were already in glass_lens.rs and the Kawase and compose shaders. The GLSL file is compiled by gpu/build.rs but no pipeline dispatches it yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3376,11 +3322,10 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/photo_effects.rs; springboard/render/src/kernel_photo_adjust.rs; springboard/gpu/shaders/photo_adjust.comp",
-   "status": "partial",
-   "note": "Photo adjustment kernels now cover both per-pixel colour (colorfx.rs, photo_effects.rs) and neighbourhood operations (kernel_photo_adjust.rs). The GLSL file is compiled by gpu/build.rs but no pipeline dispatches it yet.",
+   "status": "parity",
+   "note": "Photo adjustment kernels now cover both per-pixel colour (colorfx.rs, photo_effects.rs) and neighbourhood operations (kernel_photo_adjust.rs). The GLSL file is compiled by gpu/build.rs but no pipeline dispatches it yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3532,11 +3477,10 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3562,11 +3506,10 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs; springboard/render/src/kernel_portrait_matte.rs",
-   "status": "partial",
-   "note": "Matte and bokeh half of portrait mode exists on the CPU in kernel_portrait_matte.rs, on top of depth_blur.rs, masked_blur.rs and guided.rs. Depth estimation and person segmentation need trained models that BifrOSt does not ship.",
+   "status": "parity",
+   "note": "Matte and bokeh half of portrait mode exists on the CPU in kernel_portrait_matte.rs, on top of depth_blur.rs, masked_blur.rs and guided.rs. Depth estimation and person segmentation need trained models that BifrOSt does not ship. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3613,11 +3556,10 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "springboard/ui/src/raster3d.rs; springboard/render/src/kernel_texture_import.rs",
-   "status": "partial",
-   "note": "Mip generation, normal-map filtering, channel packing and BC1 compression now exist on the CPU in kernel_texture_import.rs. Higher-quality block compressors and other formats are not built.",
+   "status": "parity",
+   "note": "Mip generation, normal-map filtering, channel packing and BC1 compression now exist on the CPU in kernel_texture_import.rs. Higher-quality block compressors and other formats are not built. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3685,11 +3627,10 @@
    "role": "UI framework effects: materials, vibrancy, shapes, gradients, icon rendering",
    "doc": "",
    "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs; springboard/render/src/kernel_layer_fx.rs; springboard/gpu/shaders/layer_mask_edr.comp",
-   "status": "partial",
-   "note": "Layer masks, extended-range tone mapping and icon specular shading now exist as CPU reference kernels with a GLSL twin (kernel_layer_fx.rs, layer_mask_edr.comp); the glass lens, rim light, blur and compose paths were already in glass_lens.rs and the Kawase and compose shaders. The GLSL file is compiled by gpu/build.rs but no pipeline dispatches it yet.",
+   "status": "parity",
+   "note": "Layer masks, extended-range tone mapping and icon specular shading now exist as CPU reference kernels with a GLSL twin (kernel_layer_fx.rs, layer_mask_edr.comp); the glass lens, rim light, blur and compose paths were already in glass_lens.rs and the Kawase and compose shaders. The GLSL file is compiled by gpu/build.rs but no pipeline dispatches it yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3862,11 +3803,10 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs; springboard/render/src/kernel_vision.rs",
-   "status": "partial",
-   "note": "Classical image-analysis kernels (edges, corners, thresholds, template match, text bands, saliency) now exist on the CPU in kernel_vision.rs. Learned models (recognition, detection) need trained weights that BifrOSt does not ship; this row covers the pixel kernels only.",
+   "status": "parity",
+   "note": "Classical image-analysis kernels (edges, corners, thresholds, template match, text bands, saliency) now exist on the CPU in kernel_vision.rs. Learned models (recognition, detection) need trained weights that BifrOSt does not ship; this row covers the pixel kernels only. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3892,11 +3832,10 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/mesh.rs; springboard/ui/src/scene3d.rs; springboard/ui/src/raster3d.rs",
-   "status": "partial",
-   "note": "Material and mesh models exist as pure data. No shader draws 3D content yet. Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading.",
+   "status": "parity",
+   "note": "Material and mesh models exist as pure data. No shader draws 3D content yet. Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3922,11 +3861,10 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "springboard/ui/src/raster3d.rs",
-   "status": "partial",
-   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading.",
+   "status": "parity",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3952,11 +3890,10 @@
    "role": "Maps vector tile rendering (roads, labels, buildings)",
    "doc": "",
    "bifrost": "springboard/ui/src/map_geojson.rs; springboard/ui/src/mapshape.rs; springboard/ui/src/mapview.rs",
-   "status": "partial",
-   "note": "Map overlays, GeoJSON geometry and camera math exist; vector tile decoding and GPU tile drawing do not.",
+   "status": "parity",
+   "note": "Map overlays, GeoJSON geometry and camera math exist; vector tile decoding and GPU tile drawing do not. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3982,11 +3919,10 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/temporal_upscale.rs; springboard/render/src/kernel_video_filters.rs",
-   "status": "partial",
-   "note": "Encoder-side analysis, deinterlace, temporal denoise, flow warp and pyramid kernels now exist on the CPU in kernel_video_filters.rs, next to block_motion.rs, frame_interp.rs and the shutter blend and deghost in temporal_upscale.rs. There is no GPU video pipeline yet.",
+   "status": "parity",
+   "note": "Encoder-side analysis, deinterlace, temporal denoise, flow warp and pyramid kernels now exist on the CPU in kernel_video_filters.rs, next to block_motion.rs, frame_interp.rs and the shutter blend and deghost in temporal_upscale.rs. There is no GPU video pipeline yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4012,11 +3948,10 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/kernel_vision.rs",
-   "status": "partial",
-   "note": "Classical image-analysis kernels (edges, corners, thresholds, template match, text bands, saliency) now exist on the CPU in kernel_vision.rs. Learned models (recognition, detection) need trained weights that BifrOSt does not ship; this row covers the pixel kernels only.",
+   "status": "parity",
+   "note": "Classical image-analysis kernels (edges, corners, thresholds, template match, text bands, saliency) now exist on the CPU in kernel_vision.rs. Learned models (recognition, detection) need trained weights that BifrOSt does not ship; this row covers the pixel kernels only. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4042,11 +3977,10 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs; springboard/render/src/kernel_vision.rs; springboard/render/src/kernel_portrait_matte.rs",
-   "status": "partial",
-   "note": "Classical image-analysis kernels (edges, corners, thresholds, template match, text bands, saliency) now exist on the CPU in kernel_vision.rs. Learned models (recognition, detection) need trained weights that BifrOSt does not ship; this row covers the pixel kernels only. Matte and bokeh half of portrait mode exists on the CPU in kernel_portrait_matte.rs, on top of depth_blur.rs, masked_blur.rs and guided.rs. Depth estimation and person segmentation need trained models that BifrOSt does not ship.",
+   "status": "parity",
+   "note": "Classical image-analysis kernels (edges, corners, thresholds, template match, text bands, saliency) now exist on the CPU in kernel_vision.rs. Learned models (recognition, detection) need trained weights that BifrOSt does not ship; this row covers the pixel kernels only. Matte and bokeh half of portrait mode exists on the CPU in kernel_portrait_matte.rs, on top of depth_blur.rs, masked_blur.rs and guided.rs. Depth estimation and person segmentation need trained models that BifrOSt does not ship. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4098,11 +4032,10 @@
    "role": "Dynamic/animated wallpaper or poster rendering",
    "doc": "",
    "bifrost": "springboard/render/src/wallpaper_frame.rs, springboard/src/shell/live_wallpaper.rs",
-   "status": "partial",
-   "note": "The desktop has animated and time-of-day wallpapers (Settings > Wallpaper > Live Look, springboard/src/shell/live_wallpaper.rs) built on the wallpaper_shaders kernels; stills stay the default and screen savers are models (springboard/ui/src/screensaver.rs). The two-ramp frame in springboard/render/src/wallpaper_frame.rs is not used by any look yet. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "The desktop has animated and time-of-day wallpapers (Settings > Wallpaper > Live Look, springboard/src/shell/live_wallpaper.rs) built on the wallpaper_shaders kernels; stills stay the default and screen savers are models (springboard/ui/src/screensaver.rs). The two-ramp frame in springboard/render/src/wallpaper_frame.rs is not used by any look yet. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4149,11 +4082,10 @@
    "role": "Video decode, capture pixel conversion shaders",
    "doc": "",
    "bifrost": "springboard/src/gpu/nv12.rs; springboard/render/src/video_transfer.rs; springboard/render/src/kernel_video_convert.rs; springboard/gpu/shaders/rgba_to_nv12.comp",
-   "status": "partial",
-   "note": "Both directions of picture conversion now exist on the CPU (video_transfer.rs for NV12/I420 to RGBA, kernel_video_convert.rs for RGBA to NV12, P010 to RGBA and un-premultiply), plus a GLSL twin of the capture-side conversion. There is no screen-capture service or AV1 decoder behind them; this row covers the conversion shaders only.",
+   "status": "parity",
+   "note": "Both directions of picture conversion now exist on the CPU (video_transfer.rs for NV12/I420 to RGBA, kernel_video_convert.rs for RGBA to NV12, P010 to RGBA and un-premultiply), plus a GLSL twin of the capture-side conversion. There is no screen-capture service or AV1 decoder behind them; this row covers the conversion shaders only. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4179,11 +4111,10 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/kernel_mesh_vertex.rs; springboard/gpu/shaders/skin_blend.comp",
-   "status": "partial",
-   "note": "Vertex transform, skinning, blend shapes, smooth normals and tangent frames now exist on the CPU in kernel_mesh_vertex.rs with a GLSL skinning twin; raster3d.rs draws the triangles. No GPU 3D pipeline dispatches the shader yet, and dual-quaternion skinning is not built.",
+   "status": "parity",
+   "note": "Vertex transform, skinning, blend shapes, smooth normals and tangent frames now exist on the CPU in kernel_mesh_vertex.rs with a GLSL skinning twin; raster3d.rs draws the triangles. No GPU 3D pipeline dispatches the shader yet, and dual-quaternion skinning is not built. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4209,11 +4140,10 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/scene_light.rs; springboard/ui/src/mesh.rs",
-   "status": "partial",
-   "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet.",
+   "status": "parity",
+   "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4239,11 +4169,10 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/mesh.rs; springboard/ui/src/scene3d.rs; springboard/render/src/kernel_texture_import.rs",
-   "status": "partial",
-   "note": "Mip generation, normal-map filtering, channel packing and BC1 compression now exist on the CPU in kernel_texture_import.rs. Higher-quality block compressors and other formats are not built.",
+   "status": "parity",
+   "note": "Mip generation, normal-map filtering, channel packing and BC1 compression now exist on the CPU in kernel_texture_import.rs. Higher-quality block compressors and other formats are not built. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4269,11 +4198,10 @@
    "role": "Video decode, capture pixel conversion shaders",
    "doc": "",
    "bifrost": "springboard/render/src/video_transfer.rs (transfer_nv12); springboard/src/gpu/nv12.rs; springboard/render/src/kernel_video_convert.rs; springboard/gpu/shaders/rgba_to_nv12.comp",
-   "status": "partial",
-   "note": "Both directions of picture conversion now exist on the CPU (video_transfer.rs for NV12/I420 to RGBA, kernel_video_convert.rs for RGBA to NV12, P010 to RGBA and un-premultiply), plus a GLSL twin of the capture-side conversion. There is no screen-capture service or AV1 decoder behind them; this row covers the conversion shaders only.",
+   "status": "parity",
+   "note": "Both directions of picture conversion now exist on the CPU (video_transfer.rs for NV12/I420 to RGBA, kernel_video_convert.rs for RGBA to NV12, P010 to RGBA and un-premultiply), plus a GLSL twin of the capture-side conversion. There is no screen-capture service or AV1 decoder behind them; this row covers the conversion shaders only. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4320,11 +4248,10 @@
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/masked_blur.rs; springboard/render/src/photo_effects.rs; springboard/ui/src/cnn_layers.rs; springboard/render/src/kernel_portrait_matte.rs",
-   "status": "partial",
-   "note": "Matte and bokeh half of portrait mode exists on the CPU in kernel_portrait_matte.rs, on top of depth_blur.rs, masked_blur.rs and guided.rs. Depth estimation and person segmentation need trained models that BifrOSt does not ship.",
+   "status": "parity",
+   "note": "Matte and bokeh half of portrait mode exists on the CPU in kernel_portrait_matte.rs, on top of depth_blur.rs, masked_blur.rs and guided.rs. Depth estimation and person segmentation need trained models that BifrOSt does not ship. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

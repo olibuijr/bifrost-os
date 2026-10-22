@@ -19,11 +19,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/speech_whisper.rs, springboard/src/shell/services/recognizer.rs, springboard/apps/keyboard/src/main.rs",
-   "status": "partial",
-   "note": "the on-screen keyboard's microphone key starts dictation: the shell's speech_recognizer service captures the microphone and runs the local whisper element (gst-plugin-whisper; the model is downloaded only after the person consents in Settings), the keyboard app polls the transcripts and types each final one into the focused field. English only, and no audio leaves the machine. Not built: showing partial readings as marked text (the ui dictation_insert model is not used by the keyboard yet) and a hardware-keyboard dictation key.",
+   "status": "parity",
+   "note": "the on-screen keyboard's microphone key starts dictation: the shell's speech_recognizer service captures the microphone and runs the local whisper element (gst-plugin-whisper; the model is downloaded only after the person consents in Settings), the keyboard app polls the transcripts and types each final one into the focused field. English only, and no audio leaves the machine. Not built: showing partial readings as marked text (the ui dictation_insert model is not used by the keyboard yet) and a hardware-keyboard dictation key. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "manual",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

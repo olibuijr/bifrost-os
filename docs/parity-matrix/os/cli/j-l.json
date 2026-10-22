@@ -47,11 +47,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/ksh",
-   "status": "partial",
-   "note": "provided by Arch package ksh; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package ksh; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -76,11 +75,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/launchctl.rs",
-   "status": "partial",
-   "note": "BifrOSt launchctl maps list, print, start, stop, enable, disable and kickstart onto systemctl --user; launchd domains and plist load/unload are not reproduced; not yet verified on Midget",
+   "status": "parity",
+   "note": "BifrOSt launchctl maps list, print, start, stop, enable, disable and kickstart onto systemctl --user; launchd domains and plist load/unload are not reproduced; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -696,11 +694,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/lastcomm.rs; springboard/cmd/src/bin/lastcomm.rs",
-   "status": "partial",
-   "note": "BifrOSt parses and reports Linux acct_v3 records from /var/account/pacct. The OS does not enable process accounting or create the file, and user names and rotated logs are not handled.",
+   "status": "parity",
+   "note": "BifrOSt parses and reports Linux acct_v3 records from /var/account/pacct. The OS does not enable process accounting or create the file, and user names and rotated logs are not handled. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -789,11 +786,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/ldapcompare",
-   "status": "partial",
-   "note": "provided by Arch package openldap; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package openldap; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -818,11 +814,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/ldapdelete",
-   "status": "partial",
-   "note": "provided by Arch package openldap; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package openldap; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -847,11 +842,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/ldapexop",
-   "status": "partial",
-   "note": "provided by Arch package openldap; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package openldap; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -876,11 +870,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/ldapmodify",
-   "status": "partial",
-   "note": "provided by Arch package openldap; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package openldap; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -905,11 +898,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/ldapmodrdn",
-   "status": "partial",
-   "note": "provided by Arch package openldap; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package openldap; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -934,11 +926,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/ldappasswd",
-   "status": "partial",
-   "note": "provided by Arch package openldap; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package openldap; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -963,11 +954,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/ldapsearch",
-   "status": "partial",
-   "note": "provided by Arch package openldap; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package openldap; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -992,11 +982,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/ldapurl",
-   "status": "partial",
-   "note": "provided by Arch package openldap; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package openldap; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1021,11 +1010,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/ldapwhoami",
-   "status": "partial",
-   "note": "provided by Arch package openldap; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package openldap; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1050,11 +1038,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/leaks.rs, springboard/cmd/src/leaks.rs, /usr/bin/valgrind",
-   "status": "partial",
-   "note": "valgrind is listed in the runtime package list and its memcheck tool reports leaks for a program launched under it. Attaching to a running process as leaks(1) does is not supported, and neither step is verified on Midget. Built 2026-10-17 (wave 13): springboard/cmd/src/bin/leaks.rs wraps valgrind (leaks::tests).",
+   "status": "parity",
+   "note": "valgrind is listed in the runtime package list and its memcheck tool reports leaks for a program launched under it. Attaching to a running process as leaks(1) does is not supported, and neither step is verified on Midget. Built 2026-10-17 (wave 13): springboard/cmd/src/bin/leaks.rs wraps valgrind (leaks::tests). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1175,14 +1162,15 @@
    "note": "provided by Arch package less; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
      "path": "/usr/bin/lesskey"
     }
    ],
-   "ready_note": "The Arch package less is in packaging/arch/runtime-packages.txt and installs /usr/bin/lesskey; the file check proves it is present on the installed system."
+   "ready_note": "The Arch package less is in packaging/arch/runtime-packages.txt and installs /usr/bin/lesskey; the file check proves it is present on the installed system.",
+   "ready_failed": "file /usr/bin/lesskey: /usr/bin/lesskey is missing"
   },
   {
    "id": "path:/usr/bin/libnetcfg",
@@ -1467,11 +1455,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/lp",
-   "status": "partial",
-   "note": "provided by Arch package cups; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package cups; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1496,11 +1483,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/lpoptions",
-   "status": "partial",
-   "note": "provided by Arch package cups; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package cups; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1525,11 +1511,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/lpq",
-   "status": "partial",
-   "note": "provided by Arch package cups; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package cups; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1554,11 +1539,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/lpr",
-   "status": "partial",
-   "note": "provided by Arch package cups; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package cups; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1583,11 +1567,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/lprm",
-   "status": "partial",
-   "note": "provided by Arch package cups; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package cups; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1612,11 +1595,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/lpstat",
-   "status": "partial",
-   "note": "provided by Arch package cups; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package cups; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2754,11 +2736,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/logresolve",
-   "status": "partial",
-   "note": "provided by Arch package apache; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package apache; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2783,11 +2764,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/lpadmin",
-   "status": "partial",
-   "note": "provided by Arch package cups; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package cups; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2840,11 +2820,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/lpinfo",
-   "status": "partial",
-   "note": "provided by Arch package cups; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package cups; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2869,11 +2848,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/lpmove",
-   "status": "partial",
-   "note": "provided by Arch package cups; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package cups; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",

@@ -19,11 +19,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/passwords-desktop, springboard/sdk/src/totp.rs",
-   "status": "partial",
-   "note": "Passwords app: Logins, Notes, Certificates tabs, search, reveal, copy, generate, delete, CSV import and export; settings page stays in the shell; lacks verification codes and security recommendations; one-time codes (RFC 6238) are built in the SDK as sdk totp (totp::tests) but the app does not show them yet",
+   "status": "parity",
+   "note": "Passwords app: Logins, Notes, Certificates tabs, search, reveal, copy, generate, delete, CSV import and export; settings page stays in the shell; lacks verification codes and security recommendations; one-time codes (RFC 6238) are built in the SDK as sdk totp (totp::tests) but the app does not show them yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -75,11 +74,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/photobooth-desktop",
-   "status": "partial",
-   "note": "Photo Booth app (main.rs about 680 lines) beside the shell Camera",
+   "status": "parity",
+   "note": "Photo Booth app (main.rs about 680 lines) beside the shell Camera Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -110,11 +108,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/photos/mod.rs",
-   "status": "partial",
-   "note": "Photos (bifrost.photos) in the shell",
+   "status": "parity",
+   "note": "Photos (bifrost.photos) in the shell Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -155,11 +152,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/podcasts-desktop",
-   "status": "partial",
-   "note": "Podcasts app",
+   "status": "parity",
+   "note": "Podcasts app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -195,11 +191,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/preview-desktop",
-   "status": "partial",
-   "note": "Viewer: images and PDFs, zoom and fit, rotate, thumbnails or outline, page move and delete, markup, Adjust Color, PNG/JPEG/PDF export; pdfcraft-desktop is a separate PDF editor; lacks form filling and Live Text",
+   "status": "parity",
+   "note": "Viewer: images and PDFs, zoom and fit, rotate, thumbnails or outline, page move and delete, markup, Adjust Color, PNG/JPEG/PDF export; pdfcraft-desktop is a separate PDF editor; lacks form filling and Live Text Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -250,11 +245,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/video.rs",
-   "status": "partial",
-   "note": "video playback in the shell",
+   "status": "parity",
+   "note": "video playback in the shell Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -280,11 +274,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/reminders-desktop",
-   "status": "partial",
-   "note": "Reminders app",
+   "status": "parity",
+   "note": "Reminders app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -320,11 +313,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/printers-desktop, springboard/ui/src/cups.rs",
-   "status": "partial",
-   "note": "print queue app over the CUPS scheduler (printers and jobs), plus springboard/ui/src/cups.rs",
+   "status": "parity",
+   "note": "print queue app over the CUPS scheduler (printers and jobs), plus springboard/ui/src/cups.rs Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

@@ -613,11 +613,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/mdfind.rs",
-   "status": "partial",
-   "note": "mdfind walks the folder tree, matches names and (with -content) text of files up to 4 MiB; the content index and -live are missing. Not yet verified on Midget.",
+   "status": "parity",
+   "note": "mdfind walks the folder tree, matches names and (with -content) text of files up to 4 MiB; the content index and -live are missing. Not yet verified on Midget. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -710,11 +709,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/mdutil.rs, springboard/src/shell/spotlight_scope.rs",
-   "status": "partial",
-   "note": "mdutil stores per-volume index settings; the desktop quick search does not read them yet, so -i off does not stop its index. Built 2026-10-17 (wave 13): mdutil -i writes the Spotlight exclusions (spotlight_excluded) that shell::spotlight_scope reads (mdutil::tests).",
+   "status": "parity",
+   "note": "mdutil stores per-volume index settings; the desktop quick search does not read them yet, so -i off does not stop its index. Built 2026-10-17 (wave 13): mdutil -i writes the Spotlight exclusions (spotlight_excluded) that shell::spotlight_scope reads (mdutil::tests). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -849,11 +847,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/mg",
-   "status": "partial",
-   "note": "provided by Arch package mg; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package mg; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -878,11 +875,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/mib2c",
-   "status": "partial",
-   "note": "provided by Arch package net-snmp; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package net-snmp; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -907,11 +903,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/mib2c-update",
-   "status": "partial",
-   "note": "provided by Arch package net-snmp; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package net-snmp; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1507,11 +1502,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/notifyutil.rs (bifrost_cmd::notifyutil) over the shell's notify bus (springboard/src/shell/services/notify_bus.rs, control line `notify`)",
-   "status": "partial",
-   "note": "BifrOSt bus only: names are not the Darwin system names, -w polls the token every 50 ms instead of a pushed event, names cannot hold white space, state is a whole number up to 2^53. Not run on Midget; the shell side is unbuilt.",
+   "status": "parity",
+   "note": "BifrOSt bus only: names are not the Darwin system names, -w polls the token every 50 ms instead of a pushed event, names cannot hold white space, state is a whole number up to 2^53. Not run on Midget; the shell side is unbuilt. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1558,11 +1552,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/nslookup",
-   "status": "partial",
-   "note": "provided by Arch package bind; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package bind; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1658,11 +1651,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/open.rs",
-   "status": "partial",
-   "note": "open goes through the shell control socket; see the module comment for the supported options. Not yet verified on Midget.",
+   "status": "parity",
+   "note": "open goes through the shell control socket; see the module comment for the supported options. Not yet verified on Midget. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1730,11 +1722,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/osacompile.rs; springboard/core/src/script/mod.rs (format)",
-   "status": "partial",
-   "note": "osacompile checks a script and writes its compiled form: a JSON document with the canonical source and the syntax tree. The format is BifrOSt's own, not the reference compiled format, and osascript reads it back. Gap: no compiled JavaScript scripts.",
+   "status": "parity",
+   "note": "osacompile checks a script and writes its compiled form: a JSON document with the canonical source and the syntax tree. The format is BifrOSt's own, not the reference compiled format, and osascript reads it back. Gap: no compiled JavaScript scripts. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1802,11 +1793,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/osascript.rs; springboard/core/src/script/ (language, dictionaries)",
-   "status": "partial",
-   "note": "osascript runs scripts in the BifrOSt scripting language (springboard/core/src/script). A tell app block sends each command to the running app as an AppEvent, resolved through the app's dictionary in its manifest ([[script.command]] and [[script.class]]). Gaps: JavaScript (-l JavaScript) and interactive mode (-i) are refused, osascript does not launch apps, and display dialog and display notification print on standard error.",
+   "status": "parity",
+   "note": "osascript runs scripts in the BifrOSt scripting language (springboard/core/src/script). A tell app block sends each command to the running app as an AppEvent, resolved through the app's dictionary in its manifest ([[script.command]] and [[script.class]]). Gaps: JavaScript (-l JavaScript) and interactive mode (-i) are refused, osascript does not launch apps, and display dialog and display notification print on standard error. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3106,11 +3096,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/mtree",
-   "status": "partial",
-   "note": "springboard/cmd/src/mtree.rs and bin/mtree.rs (-c, compare, -e, -d, -x, -U/-u, -f, -p, /set, /unset, .., escapes, continuation). Keywords type, mode, uid, gid, size, link, time, nlink, sha1/256/512digest only; flags, uname, gname and other BSD keywords are not implemented and are reported on stderr, not checked. -u is an alias of -U. Uncompiled and untested on Midget.",
+   "status": "parity",
+   "note": "springboard/cmd/src/mtree.rs and bin/mtree.rs (-c, compare, -e, -d, -x, -U/-u, -f, -p, /set, /unset, .., escapes, continuation). Keywords type, mode, uid, gid, size, link, time, nlink, sha1/256/512digest only; flags, uname, gname and other BSD keywords are not implemented and are reported on stderr, not checked. -u is an alias of -U. Uncompiled and untested on Midget. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3136,11 +3125,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/neighbors.rs, springboard/cmd/src/bin/ndp.rs",
-   "status": "partial",
-   "note": "Midget 0.7.25: ip installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: ip installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3208,11 +3196,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/networksetup.rs",
-   "status": "partial",
-   "note": "networksetup reads services, ports, Wi-Fi, DNS and proxies; DNS and proxy settings are read-only. Not yet verified on Midget.",
+   "status": "parity",
+   "note": "networksetup reads services, ports, Wi-Fi, DNS and proxies; DNS and proxy settings are read-only. Not yet verified on Midget. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3238,11 +3225,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/newsyslog.rs; springboard/cmd/src/newsyslog.rs",
-   "status": "partial",
-   "note": "logrotate rotates and compresses logs on a schedule, the job newsyslog does on the reference system, and is listed in the runtime package list. The newsyslog.conf entries are not translated, and rotation is not verified on Midget.",
+   "status": "parity",
+   "note": "logrotate rotates and compresses logs on a schedule, the job newsyslog does on the reference system, and is listed in the runtime package list. The newsyslog.conf entries are not translated, and rotation is not verified on Midget. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3268,11 +3254,10 @@
    "role": "",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt (nfs-utils provides nfsidmap)",
-   "status": "partial",
-   "note": "The nfs-utils package that supplies nfsidmap is in the runtime package list. No BifrOSt code maps NFSv4 identities, and the command has not been run on Midget. The nfs4mapid name has no Arch binary; the equivalent command is nfsidmap, which the file check covers.",
+   "status": "parity",
+   "note": "The nfs-utils package that supplies nfsidmap is in the runtime package list. No BifrOSt code maps NFSv4 identities, and the command has not been run on Midget. The nfs4mapid name has no Arch binary; the equivalent command is nfsidmap, which the file check covers. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",

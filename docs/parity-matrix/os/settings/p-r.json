@@ -19,10 +19,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/passwords_page.rs; springboard/src/shell/settings_intents.rs",
-   "status": "partial",
-   "note": "has: Passwords page (passwords_page.rs:46) and the SDK (sdk/src/passwords.rs); missing: App Intents declarations",
+   "status": "parity",
+   "note": "has: Passwords page (passwords_page.rs:46) and the SDK (sdk/src/passwords.rs); missing: App Intents declarations Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -53,10 +52,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/passwords_page.rs; springboard/src/shell/settings_intents.rs",
-   "status": "partial",
-   "note": "has: Settings Passwords page (passwords_page.rs:46); missing: App Intents declarations",
+   "status": "parity",
+   "note": "has: Settings Passwords page (passwords_page.rs:46); missing: App Intents declarations Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -87,10 +85,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_search.rs; springboard/src/shell/quicksearch.rs; springboard/src/shell/settings_intents.rs",
-   "status": "partial",
-   "note": "has: settings search over pane titles and keywords; missing: the Apple search-term intents",
+   "status": "parity",
+   "note": "has: settings search over pane titles and keywords; missing: the Apple search-term intents Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -121,10 +118,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs:1253",
-   "status": "partial",
-   "note": "has: Energy page (pages.rs:1240) and Battery page (pages.rs:1253): power mode, low power, battery percentage; missing: power adapter versus battery split",
+   "status": "parity",
+   "note": "has: Energy page (pages.rs:1240) and Battery page (pages.rs:1253): power mode, low power, battery percentage; missing: power adapter versus battery split Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -150,10 +146,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_search.rs; springboard/src/shell/quicksearch.rs",
-   "status": "partial",
-   "note": "has: settings search; missing: intent listing in Search",
+   "status": "parity",
+   "note": "has: settings search; missing: intent listing in Search Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -184,10 +179,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/print_scan_page.rs",
-   "status": "partial",
-   "note": "has: Print & Scan page (print_scan_page.rs:114): printers, default printer, add by address, scanners; missing: printer options and supplies",
+   "status": "parity",
+   "note": "has: Print & Scan page (print_scan_page.rs:114): printers, default printer, add by address, scanners; missing: printer options and supplies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -253,10 +247,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/passwords_page.rs",
-   "status": "partial",
-   "note": "has: passwords page (passwords_page.rs:46): list and detail; missing: import and export",
+   "status": "parity",
+   "note": "has: passwords page (passwords_page.rs:46): list and detail; missing: import and export Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -302,10 +295,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/print_scan_page.rs",
-   "status": "partial",
-   "note": "has: Print & Scan page (print_scan_page.rs:114): printers from the local scheduler, default printer, add by address, scanners listed; missing: printer options and supplies, sharing a printer",
+   "status": "parity",
+   "note": "has: Print & Scan page (print_scan_page.rs:114): printers from the local scheduler, default printer, add by address, scanners listed; missing: printer options and supplies, sharing a printer Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",

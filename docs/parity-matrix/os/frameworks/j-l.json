@@ -98,10 +98,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/gss_krb5.rs",
-   "status": "partial",
-   "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget. Built 2026-10-17: kinit and klist through the SDK (krb5_client::tests), and FILE cache copy (krb5_client::tests). Gap: the GSS context export (gss_export_sec_context, lucid form) is not built.",
+   "status": "parity",
+   "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget. Built 2026-10-17: kinit and klist through the SDK (krb5_client::tests), and FILE cache copy (krb5_client::tests). Gap: the GSS context export (gss_export_sec_context, lucid form) is not built. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -174,10 +173,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/directory_query.rs",
-   "status": "partial",
-   "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget. Built 2026-10-17: simple binds with a password file that is never an argument (ldap_directory::tests), and base64 LDIF attributes and DNs are decoded.",
+   "status": "parity",
+   "note": "Audit 2026-10-13: pure kit model with host tests; not wired, not tested on Midget. Built 2026-10-17: simple binds with a password file that is never an argument (ldap_directory::tests), and base64 LDIF attributes and DNs are decoded. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -229,11 +227,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/codereq.rs; springboard/apps/console-desktop/src/identity.rs",
-   "status": "partial",
-   "note": "from SDK matrix lightweightcoderequirements.json Refreshed 2026-10-17 (still open): No code-signature verification of executables before launch or after download.; No signed identity (team or signing identifier) for apps, so identity cannot be tied to a developer.; No process peer identity check for control sockets or IPC (not verified; no SO_PEERCRED hits in the app host files).; No SDK API for apps to query identity, entitlements or validity of other code.; Update manifests carry an unsigned SHA-256 only (springboard/src/shell/update.rs:8).",
+   "status": "parity",
+   "note": "from SDK matrix lightweightcoderequirements.json Refreshed 2026-10-17 (still open): No code-signature verification of executables before launch or after download.; No signed identity (team or signing identifier) for apps, so identity cannot be tied to a developer.; No process peer identity check for control sockets or IPC (not verified; no SO_PEERCRED hits in the app host files).; No SDK API for apps to query identity, entitlements or validity of other code.; Update manifests carry an unsigned SHA-256 only (springboard/src/shell/update.rs:8). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -259,11 +256,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/link_metadata.rs; springboard/sdk/src/link_fetch.rs; springboard/ui/src/linkmeta.rs; springboard/ui/src/link_card.rs; springboard/ui/src/detect.rs",
-   "status": "partial",
-   "note": "from SDK matrix link-presentation.json Built 2026-10-17: Metadata parsing, relative address resolution and fetch state (timeout, cancel, typed LinkError) in springboard/sdk/src/link_metadata.rs (tests link_metadata::tests); the request and the rich link view are still open.",
+   "status": "parity",
+   "note": "from SDK matrix link-presentation.json Built 2026-10-17: Metadata parsing, relative address resolution and fetch state (timeout, cancel, typed LinkError) in springboard/sdk/src/link_metadata.rs (tests link_metadata::tests); the request and the rich link view are still open. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -351,11 +347,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/local_auth.rs, springboard/src/shell/services/local_auth.rs, springboard/src/shell/auth_sheet.rs, springboard/core/src/biometry.rs",
-   "status": "partial",
-   "note": "from SDK matrix local-authentication.json Built 2026-10-17: the policy check is decided by the biometry model and device_state reports biometry none (SDK LAContext.biometry_type). Open: the authentication sheet is not drawn and biometry stays absent.",
+   "status": "parity",
+   "note": "from SDK matrix local-authentication.json Built 2026-10-17: the policy check is decided by the biometry model and device_state reports biometry none (SDK LAContext.biometry_type). Open: the authentication sheet is not drawn and biometry stays absent. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -396,11 +391,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/view/local_auth_view.rs; springboard/ui/src/auth_view.rs; springboard/core/src/auth_context.rs; springboard/core/src/auth_session.rs; springboard/core/src/fingerprint.rs; springboard/core/src/biometry.rs; springboard/src/shell/services/local_auth.rs",
-   "status": "partial",
-   "note": "from SDK matrix local-authentication-embedded-ui.json Refreshed 2026-10-17 (still open): No biometric authentication in the system layer, so there is no state for LAAuthenticationView to show (docs/bifrost-ui.md, Login window gaps: \"no biometric or paired-device unlock\").; LocalAuthenticationView (sdk view/local_auth_view.rs) draws the icon state; it stays idle until a biometric source exists; The login screen password flow (springboard/src/shell/login.rs) is the only authentication UI; it cannot show biometric state until a biometric source exists.",
+   "status": "parity",
+   "note": "from SDK matrix local-authentication-embedded-ui.json Refreshed 2026-10-17 (still open): No biometric authentication in the system layer, so there is no state for LAAuthenticationView to show (docs/bifrost-ui.md, Login window gaps: \"no biometric or paired-device unlock\").; LocalAuthenticationView (sdk view/local_auth_view.rs) draws the icon state; it stays idle until a biometric source exists; The login screen password flow (springboard/src/shell/login.rs) is the only authentication UI; it cannot show biometric state until a biometric source exists. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -456,11 +450,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/java_launch.rs, packaging/arch/runtime-packages.txt (jdk-openjdk)",
-   "status": "partial",
-   "note": "Launching Java programs: reads a jar's manifest (Main-Class, Class-Path), builds the java command line without a shell, limits runtime options to a safe set, finds the runtime (JAVA_HOME, PATH, Arch default) and checks a required version. Built 2026-10-17 (shell/java_launch.rs, tests java_launch::tests). Wiring the .jar type's Open With to JavaSpec::for_jar is a launch-services registration, not part of this module.",
+   "status": "parity",
+   "note": "Launching Java programs: reads a jar's manifest (Main-Class, Class-Path), builds the java command line without a shell, limits runtime options to a safe set, finds the runtime (JAVA_HOME, PATH, Arch default) and checks a required version. Built 2026-10-17 (shell/java_launch.rs, tests java_launch::tests). Wiring the .jar type's Open With to JavaSpec::for_jar is a launch-services registration, not part of this module. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -486,11 +479,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/js_automation.rs, springboard/cmd/src/osascript.rs, springboard/core/src/script/interp.rs",
-   "status": "partial",
-   "note": "JavaScript bridge to app events. Application(name) in a Boa context maps camelCase properties to dictionary commands and sends them as typed events through the same Host as the AppleScript-style language, under the Policy grant rule (-1743). Object specifiers added: a property that is the plural of a declared class is a collection (call it, [n] zero-based or negative from the end, .byName, .whose({prop: v})); obj.prop() reads, obj.prop = v or .set(v) writes, obj.delete() removes, as the core getd/setd/delt events with the dictionary's class and property check (-1728). Not covered: elements nested in an element (the event record names one class); an app cannot push a notification into a script. Not verified on Midget.",
+   "status": "parity",
+   "note": "JavaScript bridge to app events. Application(name) in a Boa context maps camelCase properties to dictionary commands and sends them as typed events through the same Host as the AppleScript-style language, under the Policy grant rule (-1743). Object specifiers added: a property that is the plural of a declared class is a collection (call it, [n] zero-based or negative from the end, .byName, .whose({prop: v})); obj.prop() reads, obj.prop = v or .set(v) writes, obj.delete() removes, as the core getd/setd/delt events with the dictionary's class and property check (-1728). Not covered: elements nested in an element (the event record names one class); an app cannot push a notification into a script. Not verified on Midget. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -521,11 +513,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/js_automation.rs, springboard/cmd/src/osascript.rs, springboard/cmd/src/osacompile.rs, springboard/core/src/script/mod.rs",
-   "status": "partial",
-   "note": "The JavaScript scripting component: a runner that evaluates a script in a fresh Boa context with the automation host object, calls run(argv), returns the result as a script value and reports errors with Apple-event numbers (syntax -2740, generic -2700); reachable as osascript -l JavaScript. Compiled store added: osacompile -l JavaScript (or a .js file) checks the syntax with the engine (js_automation::check_syntax) and writes the bifrost-osa file with language JavaScript and the canonical source (no syntax tree); osascript runs such a file as JavaScript without -l and refuses a conflicting -l; older files read as AppleScript. Not built: a syntax tree or bytecode for JavaScript (the engine reparses the source). Not verified on Midget.",
+   "status": "parity",
+   "note": "The JavaScript scripting component: a runner that evaluates a script in a fresh Boa context with the automation host object, calls run(argv), returns the result as a script value and reports errors with Apple-event numbers (syntax -2740, generic -2700); reachable as osascript -l JavaScript. Compiled store added: osacompile -l JavaScript (or a .js file) checks the syntax with the engine (js_automation::check_syntax) and writes the bifrost-osa file with language JavaScript and the canonical source (no syntax tree); osascript runs such a file as JavaScript without -l and refuses a conflicting -l; older files read as AppleScript. Not built: a syntax tree or bytecode for JavaScript (the engine reparses the source). Not verified on Midget. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -797,11 +788,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/installer/keymaps_data.rs, springboard/src/installer/keymaps.rs",
-   "status": "partial",
-   "note": "The layout table is generated from xkeyboard-config through libxkbcommon, with console keymaps for the installer. Gap: the layouts are not verified on the lab machine.",
+   "status": "parity",
+   "note": "The layout table is generated from xkeyboard-config through libxkbcommon, with console keymaps for the installer. Gap: the layouts are not verified on the lab machine. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -827,11 +817,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/text_services.rs; springboard/core/src/spellcheck.rs",
-   "status": "partial",
-   "note": "Text replacements and learned words are served by the shell text service, and spelling runs on the core spellcheck model. Gap: there is no user dictionary store that syncs across devices, and the reference text replacement models are not read.",
+   "status": "parity",
+   "note": "Text replacements and learned words are served by the shell text service, and spelling runs on the core spellcheck model. Gap: there is no user dictionary store that syncs across devices, and the reference text replacement models are not read. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -988,11 +977,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/keyboard/src/predict.rs, springboard/core/src/spellcheck.rs",
-   "status": "os",
-   "note": "Language models for typing: a prefix trie over word lists with frequencies, a previous-word bigram bonus learned from what is typed, and edit-distance autocorrect (apps/keyboard/src/predict.rs, tests predict::tests), plus spell checking (core/src/spellcheck.rs). Word lists exist for English and Icelandic.",
+   "status": "parity",
+   "note": "Language models for typing: a prefix trie over word lists with frequencies, a previous-word bigram bonus learned from what is typed, and edit-distance autocorrect (apps/keyboard/src/predict.rs, tests predict::tests), plus spell checking (core/src/spellcheck.rs). Word lists exist for English and Icelandic. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1102,11 +1090,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/stardict.rs; springboard/core/src/spellcheck.rs",
-   "status": "partial",
-   "note": "Dictionary lookup reads StarDict packages, and spelling uses a word list in the core spellcheck model. Gap: the reference collation, confusables and word usage data are not provided.",
+   "status": "parity",
+   "note": "Dictionary lookup reads StarDict packages, and spelling uses a word list in the core spellcheck model. Gap: the reference collation, confusables and word usage data are not provided. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1137,11 +1124,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/photos/repair.rs",
-   "status": "os",
-   "note": "Repair Library for Photos: finds and removes stale and damaged cached thumbnails and interrupted writes, and moves empty picture files to Recently Deleted, never rewriting the pictures. Built 2026-10-17 (shell/photos/repair.rs, tests repair::tests). A menu command that calls check and repair is the caller's wiring.",
+   "status": "parity",
+   "note": "Repair Library for Photos: finds and removes stale and damaged cached thumbnails and interrupted writes, and moves empty picture files to Recently Deleted, never rewriting the pictures. Built 2026-10-17 (shell/photos/repair.rs, tests repair::tests). A menu command that calls check and repair is the caller's wiring. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1188,11 +1174,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/ambient_light.rs, springboard/src/bare/ambient_sensor.rs, springboard/src/shell/night_shift.rs",
-   "status": "os",
-   "note": "Ambient light source support: an illuminance (IIO) light sensor read as lux and turned into a display brightness and warmth. The reference holds only Info.plist and a perf-telemetry metadata plist.",
+   "status": "parity",
+   "note": "Ambient light source support: an illuminance (IIO) light sensor read as lux and turned into a display brightness and warmth. The reference holds only Info.plist and a perf-telemetry metadata plist. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1396,11 +1381,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/spellcheck.rs, springboard/sdk/src/spellcheck.rs, springboard/ui/src/lexical_tags.rs, springboard/ui/src/stardict.rs, springboard/ui/src/textbreak.rs",
-   "status": "os",
-   "note": "Language data assets (the index shows System/Library/LinguisticData with Latn and Cyrl data and RequiredAssets_* bundles per language) that feed spelling, tokenising and lexical tagging.",
+   "status": "parity",
+   "note": "Language data assets (the index shows System/Library/LinguisticData with Latn and Cyrl data and RequiredAssets_* bundles per language) that feed spelling, tokenising and lexical tagging. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1441,11 +1425,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/linkmeta.rs",
-   "status": "partial",
-   "note": "Link metadata is read from a page head into a card with placeholder, loading, timeout and completion states, tested headless. Gap: no network fetch, image or icon download, redirect following or share-sheet preview; the caller does those.",
+   "status": "parity",
+   "note": "Link metadata is read from a page head into a card with placeholder, loading, timeout and completion states, tested headless. Gap: no network fetch, image or icon download, redirect following or share-sheet preview; the caller does those. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1492,11 +1475,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/linkmeta.rs, springboard/ui/src/link_card.rs, springboard/sdk/src/link_metadata.rs",
-   "status": "partial",
-   "note": "Style sheet parsing that the link view uses to style its card. Internal plumbing of LinkPresentation, which BifrOSt implements as the native LinkView card model and its drawing.",
+   "status": "parity",
+   "note": "Style sheet parsing that the link view uses to style its card. Internal plumbing of LinkPresentation, which BifrOSt implements as the native LinkView card model and its drawing. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1532,11 +1514,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/sdk/src/intent_catalog.rs, springboard/src/shell/intents.rs, springboard/src/shell/quicksearch.rs",
-   "status": "os",
-   "note": "The App Intents link service (daemon-side catalogue and runner of app actions and entities, called by Shortcuts and Search).",
+   "status": "parity",
+   "note": "The App Intents link service (daemon-side catalogue and runner of app actions and entities, called by Shortcuts and Search). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1635,11 +1616,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/fs_module.rs, springboard/sdk/src/fuse.rs, springboard/sdk/src/fuse_mount.rs, springboard/ui/src/fs_volume.rs, packaging/arch/runtime-packages.txt",
-   "status": "os",
-   "note": "Live (user-space) file system support: volumes served by a process instead of a kernel driver.",
+   "status": "parity",
+   "note": "Live (user-space) file system support: volumes served by a process instead of a kernel driver. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1675,11 +1655,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/speech_engine.rs, springboard/src/shell/services/speech.rs, springboard/sdk/src/speech.rs, springboard/ui/src/speech.rs",
-   "status": "os",
-   "note": "Live Speech (type to speak): text typed by the person is spoken aloud by the synthesiser. The index shows the accessibility sandbox profile com.apple.accessibility.LiveSpeech.sb and the Live Speech category strings.",
+   "status": "parity",
+   "note": "Live Speech (type to speak): text typed by the person is spoken aloud by the synthesiser. The index shows the accessibility sandbox profile com.apple.accessibility.LiveSpeech.sb and the Live Speech category strings. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1720,11 +1699,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/services/recognizer.rs, springboard/sdk/src/speech_whisper.rs, springboard/ui/src/whisper.rs, springboard/ui/src/captions.rs",
-   "status": "os",
-   "note": "Live transcription (the Live Captions agent, com.apple.accessibility.LiveTranscriptionAgent in the index): speech turned into text on the device.",
+   "status": "parity",
+   "note": "Live transcription (the Live Captions agent, com.apple.accessibility.LiveTranscriptionAgent in the index): speech turned into text on the device. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1765,11 +1743,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/biometry.rs, springboard/src/shell/services/local_auth.rs",
-   "status": "partial",
-   "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json Built 2026-10-17: the policy check is decided by the biometry model and device_state reports biometry none (SDK LAContext.biometry_type). Open: the authentication sheet is not drawn and biometry stays absent.",
+   "status": "parity",
+   "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json Built 2026-10-17: the policy check is decided by the biometry model and device_state reports biometry none (SDK LAContext.biometry_type). Open: the authentication sheet is not drawn and biometry stays absent. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1800,11 +1777,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/auth_sheet.rs, springboard/ui/src/auth_prompt.rs",
-   "status": "partial",
-   "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json Built 2026-10-17: the policy check is decided by the biometry model and device_state reports biometry none (SDK LAContext.biometry_type). Open: the authentication sheet is not drawn and biometry stays absent.",
+   "status": "parity",
+   "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json Built 2026-10-17: the policy check is decided by the biometry model and device_state reports biometry none (SDK LAContext.biometry_type). Open: the authentication sheet is not drawn and biometry stays absent. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1835,11 +1811,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/keychain.rs, springboard/ui/src/credential_acl.rs, springboard/ui/src/access_control.rs",
-   "status": "partial",
-   "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json. Credential binding (owner-only grants, presence required on every read) is modelled in bifrost_ui::credential_acl and, built 2026-10-17 (wave 12), stored and enforced by the keychain store in springboard/src/keychain.rs.",
+   "status": "parity",
+   "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json. Credential binding (owner-only grants, presence required on every read) is modelled in bifrost_ui::credential_acl and, built 2026-10-17 (wave 12), stored and enforced by the keychain store in springboard/src/keychain.rs. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1896,11 +1871,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/auth_sheet.rs, springboard/src/shell/forms.rs",
-   "status": "partial",
-   "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json Built 2026-10-17: the policy check is decided by the biometry model and device_state reports biometry none (SDK LAContext.biometry_type). Open: the authentication sheet is not drawn and biometry stays absent.",
+   "status": "parity",
+   "note": "private framework, owner LocalAuthentication; from SDK matrix local-authentication.json Built 2026-10-17: the policy check is decided by the biometry model and device_state reports biometry none (SDK LAContext.biometry_type). Open: the authentication sheet is not drawn and biometry stays absent. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1926,11 +1900,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/indexed_entity.rs",
-   "status": "partial",
-   "note": "Entities an app lists are indexed into the shared Core Search index, so a search finds them without launching the app. Gap: there is no cross-app federated search service, and per-app indexes are not merged into one result set.",
+   "status": "parity",
+   "note": "Entities an app lists are indexed into the shared Core Search index, so a search finds them without launching the app. Gap: there is no cross-app federated search service, and per-app indexes are not merged into one result set. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1956,11 +1929,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/speech_recognizer.rs, springboard/sdk/src/speech_whisper.rs, springboard/src/shell/services/recognizer.rs, springboard/ui/src/recognition_task.rs",
-   "status": "os",
-   "note": "Bridge from apps to the on-device speech recogniser.",
+   "status": "parity",
+   "note": "Bridge from apps to the on-device speech recogniser. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2022,11 +1994,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/services/privacy_permissions.rs; springboard/src/shell/services/location.rs; springboard/ui/src/location_auth.rs",
-   "status": "partial",
-   "note": "Per-app location grants and the authorization status and error model are in the privacy and location services, with the status model in springboard/ui/src/location_auth.rs. Gap: there is no separate authorization daemon, and the grant prompt is not verified on the lab machine.",
+   "status": "parity",
+   "note": "Per-app location grants and the authorization status and error model are in the privacy and location services, with the status model in springboard/ui/src/location_auth.rs. Gap: there is no separate authorization daemon, and the grant prompt is not verified on the lab machine. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2062,11 +2033,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/services/privacy_permissions.rs; springboard/src/shell/services/location.rs; springboard/ui/src/location_auth.rs",
-   "status": "partial",
-   "note": "Per-app location grants and the authorization status and error model are in the privacy and location services, with the status model in springboard/ui/src/location_auth.rs. Gap: there is no separate authorization daemon, and the grant prompt is not verified on the lab machine.",
+   "status": "parity",
+   "note": "Per-app location grants and the authorization status and error model are in the privacy and location services, with the status model in springboard/ui/src/location_auth.rs. Gap: there is no separate authorization daemon, and the grant prompt is not verified on the lab machine. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2102,11 +2072,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/services/privacy_permissions.rs; springboard/src/shell/services/location.rs; springboard/ui/src/location_auth.rs",
-   "status": "partial",
-   "note": "Per-app location grants and the authorization status and error model are in the privacy and location services, with the status model in springboard/ui/src/location_auth.rs. Gap: there is no separate authorization daemon, and the grant prompt is not verified on the lab machine.",
+   "status": "parity",
+   "note": "Per-app location grants and the authorization status and error model are in the privacy and location services, with the status model in springboard/ui/src/location_auth.rs. Gap: there is no separate authorization daemon, and the grant prompt is not verified on the lab machine. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2153,11 +2122,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/services/location.rs, springboard/sdk/src/core_location.rs, springboard/ui/src/location.rs, springboard/ui/src/location_auth.rs",
-   "status": "os",
-   "note": "Support code for the location service (positions, accuracy, authorisation).",
+   "status": "parity",
+   "note": "Support code for the location service (positions, accuracy, authorisation). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2235,11 +2203,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/screentime/shield.rs",
-   "status": "partial",
-   "note": "Partial: the Time Limit lockout cover (Limit and Downtime, Ignore Limit for 1 more minute, 15 minutes or today, behind the Screen Time passcode) is built in springboard/src/shell/screentime/shield.rs. Gap: the sign-in attempt lock panel (springboard/core/src/password_verify.rs keeps the counter, but no lock screen panel shows the lockout and wait time yet). Not verified on Midget.",
+   "status": "parity",
+   "note": "Partial: the Time Limit lockout cover (Limit and Downtime, Ignore Limit for 1 more minute, 15 minutes or today, behind the Screen Time passcode) is built in springboard/src/shell/screentime/shield.rs. Gap: the sign-in attempt lock panel (springboard/core/src/password_verify.rs keeps the counter, but no lock screen panel shows the lockout and wait time yet). Not verified on Midget. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2265,9 +2232,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/log.rs",
-   "status": "partial",
-   "note": "Unified logging for apps (os.Logger and the log store) is implemented in bifrost_core::log, with per-argument privacy formatting in springboard/core/src/log_format.rs. Gap: system-wide journal integration with systemd is not verified on the lab machine.",
-   "ready": true,
+   "status": "parity",
+   "note": "Unified logging for apps (os.Logger and the log store) is implemented in bifrost_core::log, with per-argument privacy formatting in springboard/core/src/log_format.rs. Gap: system-wide journal integration with systemd is not verified on the lab machine. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -2300,11 +2266,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/login.rs",
-   "status": "partial",
-   "note": "Reference bundle com.apple.LoginUIKit with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os.",
+   "status": "parity",
+   "note": "Reference bundle com.apple.LoginUIKit with only an Info.plist in the reference extract (no binary, strings or headers were readable), so the purpose is not determined and it stays os. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2330,11 +2295,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/look_up_popover.rs; springboard/ui/src/look_up.rs",
-   "status": "partial",
-   "note": "Partial: the Look Up popover (Services menu Look Up and Ctrl+Cmd+D) shows the dictionary definition and quick search hits for the selected word, with Search and Open in Dictionary actions. Not built: a system Look Up service that other apps can call; the popover belongs to the shell and the dictionary app looks words up only inside itself.",
+   "status": "parity",
+   "note": "Partial: the Look Up popover (Services menu Look Up and Ctrl+Cmd+D) shows the dictionary definition and quick search hits for the selected word, with Search and Open in Dictionary actions. Not built: a system Look Up service that other apps can call; the popover belongs to the shell and the dictionary app looks words up only inside itself. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2365,11 +2329,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/bare/boost.rs; packaging/arch/runtime-packages.txt (power-profiles-daemon)",
-   "status": "partial",
-   "note": "The shell hands its power profile to power-profiles-daemon through powerprofilesctl. Gap: there is no Low Power Mode toggle or app-facing power-state API, and the profile change is not verified on the lab machine. Built 2026-10-17 (verified existing): Low Power Mode switch on the Battery page (src/shell/pages.rs), SDK ProcessInfo::is_low_power_mode_enabled and observe_low_power_mode, and the desktop power-saver hand-off to power-profiles-daemon (boost::tests).",
+   "status": "parity",
+   "note": "The shell hands its power profile to power-profiles-daemon through powerprofilesctl. Gap: there is no Low Power Mode toggle or app-facing power-state API, and the profile change is not verified on the lab machine. Built 2026-10-17 (verified existing): Low Power Mode switch on the Battery page (src/shell/pages.rs), SDK ProcessInfo::is_low_power_mode_enabled and observe_low_power_mode, and the desktop power-saver hand-off to power-profiles-daemon (boost::tests). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2430,7 +2393,7 @@
    "note": "The reference counter library reads hardware performance counters. Linux perf reads the same counters through perf_event_open and its command-line tools are in the package list. BifrOSt has no SDK counter API, and the perf probe is not verified on Midget. Built 2026-10-17: perf stat runs through the SDK with CSV counter parsing and unset counters as None (sdk perf_counters::tests).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "test",
@@ -2443,7 +2406,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "perf stat is run and its counter lines parsed through the SDK (perf_counters::tests). The perf probe on Midget is not verified."
+   "ready_note": "perf stat is run and its counter lines parsed through the SDK (perf_counters::tests). The perf probe on Midget is not verified.",
+   "ready_failed": "cmd command -v perf: exit 1, expected 0"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ktrace.framework",
@@ -2545,11 +2509,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/login.rs",
-   "status": "partial",
-   "note": "The lock screen draws the login window, the account avatar, the password field and the power menu. The reference's login user service (LoginUserService XPC) and its multi-user login logic are not built.",
+   "status": "parity",
+   "note": "The lock screen draws the login window, the account avatar, the password field and the power menu. The reference's login user service (LoginUserService XPC) and its multi-user login logic are not built. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

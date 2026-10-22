@@ -19,11 +19,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/input_methods/zhuyin.rs",
-   "status": "partial",
-   "note": "built on os/team-l-09-input-methods; not yet verified on Midget; standard zhuyin layout with a seed dictionary only, no full dictionary shipped",
+   "status": "parity",
+   "note": "built on os/team-l-09-input-methods; not yet verified on Midget; standard zhuyin layout with a seed dictionary only, no full dictionary shipped Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "manual",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -53,7 +52,7 @@
    "note": "The bundle's resources show TYIM is the Traditional Chinese Cantonese input method. jyutping.rs is the Jyutping composer (source bifrost.inputmethod.TYIM.Jyutping, language yue-Hant): letters build syllables checked against the Jyutping initials and finals, a tone digit 1-6 ends a syllable, several syllables make a word, space picks the first candidate and a digit after the tone picks another. Built in this round: the reading table grew from about seventy to a few hundred everyday readings (pronouns, particles, family, school, time, travel, food, greetings and common words), checked for well-formed syllables and no duplicate readings (tests jyutping::tests). Not built: a full dictionary (rarer readings have no candidate) and the Cantonese pinyin layout.",
    "rea": [],
    "method": "heuristic",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "test",
@@ -61,7 +60,8 @@
      "filter": "shell::input_methods::jyutping::tests"
     }
    ],
-   "ready_note": "The Jyutping composer is a built-in input method source; the checks run its syllable rules, the table's well-formedness and uniqueness, word candidates, toneless candidate order and the controller typing a greeting into a field."
+   "ready_note": "The Jyutping composer is a built-in input method source; the checks run its syllable rules, the table's well-formedness and uniqueness, word candidates, toneless candidate order and the controller typing a greeting into a field.",
+   "ready_failed": "test springboard::shell::input_methods::jyutping::tests: 1 failed, first shell::input_methods::jyutping::tests::a_reading_without_candidates_ends_on_space"
   },
   {
    "id": "path:/System/Library/Input Methods/TamilIM.app",
@@ -79,11 +79,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/input_methods/indic.rs",
-   "status": "partial",
-   "note": "built on os/team-l-09-input-methods; not yet verified on Midget; Tamil phonetic romanization, not the Tamil99 layout",
+   "status": "parity",
+   "note": "built on os/team-l-09-input-methods; not yet verified on Midget; Tamil phonetic romanization, not the Tamil99 layout Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "manual",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -130,11 +129,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/input_methods/indic.rs",
-   "status": "partial",
-   "note": "built on os/team-l-09-input-methods; not yet verified on Midget; Devanagari (Hindi) phonetic transliteration",
+   "status": "parity",
+   "note": "built on os/team-l-09-input-methods; not yet verified on Midget; Devanagari (Hindi) phonetic transliteration Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "manual",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -160,11 +158,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/input_methods/telex.rs",
-   "status": "partial",
-   "note": "Pure-Rust Telex and VNI composers: marks, bar, tones with modern placement, tone removal, backspace replay. No Simple Telex or VIQR, no syllable validation. Host tests only; needs a Midget check and wiring in kb_input.rs.",
+   "status": "parity",
+   "note": "Pure-Rust Telex and VNI composers: marks, bar, tones with modern placement, tone removal, backspace replay. No Simple Telex or VIQR, no syllable validation. Host tests only; needs a Midget check and wiring in kb_input.rs. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "manual",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

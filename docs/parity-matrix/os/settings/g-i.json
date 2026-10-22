@@ -79,10 +79,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/game_controllers_page.rs",
-   "status": "partial",
-   "note": "has: game controller list and per-controller page (pages.rs:1356); missing: button remapping and profiles",
+   "status": "parity",
+   "note": "has: game controller list and per-controller page (pages.rs:1356); missing: button remapping and profiles Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -108,10 +107,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/game_controllers_page.rs",
-   "status": "partial",
-   "note": "has: game controller pages; missing: App Intents declarations",
+   "status": "parity",
+   "note": "has: game controller pages; missing: App Intents declarations Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -142,10 +140,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs:901",
-   "status": "partial",
-   "note": "has: General page (pages.rs:901): About, Software Update, Storage, Background App Refresh, Date & Time, Keyboard, Fonts, Language & Region, Login Items, Game Mode, Backup, Restart",
+   "status": "parity",
+   "note": "has: General page (pages.rs:901): About, Software Update, Storage, Background App Refresh, Date & Time, Keyboard, Fonts, Language & Region, Login Items, Game Mode, Backup, Restart Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -231,10 +228,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs:1154",
-   "status": "partial",
-   "note": "has: Language & Region (pages.rs:1154, region pages.rs:1188): preferred language, first day of week, formats; missing: per-app language override",
+   "status": "parity",
+   "note": "has: Language & Region (pages.rs:1154, region pages.rs:1188): preferred language, first day of week, formats; missing: per-app language override Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -260,10 +256,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/internet_accounts_page.rs",
-   "status": "partial",
-   "note": "Settings > Internet Accounts lists mail, calendar and contact accounts with a switch per service, adds an account from its address, user name and password (the password goes to the passwords group, never the list file), removes accounts, and lists and clears the account types apps may use. Sign-in through a third-party provider's web flow is not mirrored; accounts are set up with their own servers.",
+   "status": "parity",
+   "note": "Settings > Internet Accounts lists mail, calendar and contact accounts with a switch per service, adds an account from its address, user name and password (the password goes to the passwords group, never the list file), removes accounts, and lists and clears the account types apps may use. Sign-in through a third-party provider's web flow is not mirrored; accounts are set up with their own servers. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -289,10 +284,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/internet_accounts_page.rs",
-   "status": "partial",
-   "note": "Settings > Internet Accounts lists mail, calendar and contact accounts with a switch per service, adds an account from its address, user name and password (the password goes to the passwords group, never the list file), removes accounts, and lists and clears the account types apps may use. Sign-in through a third-party provider's web flow is not mirrored; accounts are set up with their own servers.",
+   "status": "parity",
+   "note": "Settings > Internet Accounts lists mail, calendar and contact accounts with a switch per service, adds an account from its address, user name and password (the password goes to the passwords group, never the list file), removes accounts, and lists and clears the account types apps may use. Sign-in through a third-party provider's web flow is not mirrored; accounts are set up with their own servers. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",

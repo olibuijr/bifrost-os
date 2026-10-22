@@ -59,10 +59,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/accessibility/reader.rs",
-   "status": "partial",
-   "note": "reader view",
+   "status": "parity",
+   "note": "reader view Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -88,10 +87,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/accessibility/mod.rs",
-   "status": "partial",
-   "note": "accessibility tree and actions",
+   "status": "parity",
+   "note": "accessibility tree and actions Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -117,10 +115,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/printers-desktop/src/discover.rs, springboard/apps/printers-desktop/src/window.rs",
-   "status": "partial",
-   "note": "the Printers app has an Add Printer pane that browses the network for printers, lists them with model and location, adds the one chosen under its own name, and adds a printer from the address on the clipboard (discover.rs, window.rs).",
+   "status": "parity",
+   "note": "the Printers app has an Add Printer pane that browses the network for printers, lists them with model and location, adds the one chosen under its own name, and adds a printer from the address on the clipboard (discover.rs, window.rs). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -251,10 +248,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/permission_sheet.rs",
-   "status": "partial",
-   "note": "permission sheet in the shell",
+   "status": "parity",
+   "note": "permission sheet in the shell Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -320,10 +316,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/battery.rs",
-   "status": "partial",
-   "note": "battery status",
+   "status": "parity",
+   "note": "battery status Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -349,10 +344,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/bare/bluetooth.rs, springboard/src/shell/pages.rs (Bluetooth pages), springboard/sdk/src/bluetooth_picker.rs",
-   "status": "partial",
-   "note": "Settings > Bluetooth scans, lists nearby devices, pairs the one tapped (the PIN or passkey the device asks for is typed in a prompt and sent), connects, disconnects and forgets it; apps get the same chooser through the SDK picker (bluetooth_picker.rs).",
+   "status": "parity",
+   "note": "Settings > Bluetooth scans, lists nearby devices, pairs the one tapped (the PIN or passkey the device asks for is typed in a prompt and sent), connects, disconnects and forgets it; apps get the same chooser through the SDK picker (bluetooth_picker.rs). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -383,10 +377,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/services/bluetooth_service.rs",
-   "status": "partial",
-   "note": "Bluetooth service",
+   "status": "parity",
+   "note": "Bluetooth service Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -412,10 +405,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/services/bluetooth_service.rs",
-   "status": "partial",
-   "note": "Bluetooth service",
+   "status": "parity",
+   "note": "Bluetooth service Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -441,10 +433,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/calendar-desktop/src/calendar/ics.rs, springboard/apps/calendar-desktop/src/calendar/archive.rs, springboard/apps/calendar-desktop/src/main.rs",
-   "status": "partial",
-   "note": "the Calendar app declares public.calendar-event, so an .ics file the shell opens reaches the app's document handler, which imports its events (Calendar::import_file); a file that is not a calendar is reported.",
+   "status": "parity",
+   "note": "the Calendar app declares public.calendar-event, so an .ics file the shell opens reaches the app's document handler, which imports its events (Calendar::import_file); a file that is not a calendar is reported. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -480,10 +471,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/net/captive.rs",
-   "status": "partial",
-   "note": "captive portal probe and sign-in offer exist; built on os/team-l-01-system-ui; not yet verified on Midget",
+   "status": "parity",
+   "note": "captive portal probe and sign-in offer exist; built on os/team-l-01-system-ui; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -509,10 +499,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/certificate_assistant.rs, springboard/sdk/src/trust.rs, springboard/cmd/src/certassist.rs",
-   "status": "partial",
-   "note": "Built 2026-10-17: sdk certificate_assistant makes self-signed certificates, certificate authorities and signing requests (checked request, keys made by the system openssl with owner-only permissions, never overwritten), reads a certificate back and judges it against anchors and a host (the trust rules plus the signature, checked with openssl verify); the certassist command (create, show, verify) is the front end. Not built: a windowed wizard.",
+   "status": "parity",
+   "note": "Built 2026-10-17: sdk certificate_assistant makes self-signed certificates, certificate authorities and signing requests (checked request, keys made by the system openssl with owner-only permissions, never overwritten), reads a certificate back and judges it against anchors and a host (the trust rules plus the signature, checked with openssl verify); the certassist command (create, show, verify) is the front end. Not built: a windowed wizard. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -548,10 +537,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/screensaver.rs",
-   "status": "partial",
-   "note": "Clock screen saver exists; built on os/team-l-01-system-ui; not yet verified on Midget",
+   "status": "parity",
+   "note": "Clock screen saver exists; built on os/team-l-01-system-ui; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -577,10 +565,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/control_center.rs",
-   "status": "partial",
-   "note": "Control Centre",
+   "status": "parity",
+   "note": "Control Centre Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -626,10 +613,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/location_auth.rs",
-   "status": "partial",
-   "note": "location authorisation",
+   "status": "parity",
+   "note": "location authorisation Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -655,10 +641,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/permission_sheet.rs, springboard/src/shell/auth_sheet.rs, springboard/src/shell/guardian_sheet.rs, springboard/src/shell/crash_alert.rs",
-   "status": "partial",
-   "note": "the shell shows the system's question sheets: the permission sheet for location, camera, microphone and screen recording, the password sheet for an app's local-authentication request, the guardian's sheet for a PermissionKit question, and the quit-unexpectedly alert.",
+   "status": "parity",
+   "note": "the shell shows the system's question sheets: the permission sheet for location, camera, microphone and screen recording, the password sheet for an app's local-authentication request, the guardian's sheet for a PermissionKit question, and the quit-unexpectedly alert. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -799,10 +784,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/clock-desktop/src/clock/intent.rs, springboard/apps/clock-desktop/src/clock/mod.rs, springboard/apps/clock-desktop/src/main.rs, springboard/src/shell/clock/alarm.rs",
-   "status": "partial",
-   "note": "the Clock app declares the next-alarm intent (when the next alarm rings) and, built 2026-10-17, set-alarm (hour, minute, optional label and repeat: once, daily, weekdays, weekends). set-alarm adds the alarm and writes the alarm file; the shell's headless Clock service reads the change, arms the RTC wake and rings it with the app closed.",
+   "status": "parity",
+   "note": "the Clock app declares the next-alarm intent (when the next alarm rings) and, built 2026-10-17, set-alarm (hour, minute, optional label and repeat: once, daily, weekdays, weekends). set-alarm adds the alarm and writes the alarm file; the shell's headless Clock service reads the change, arms the RTC wake and rings it with the app closed. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -833,10 +817,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/music-desktop/src/music.rs",
-   "status": "partial",
-   "note": "artwork decoding and album cover display exist; built on os/team-l-01-system-ui; not yet verified on Midget",
+   "status": "parity",
+   "note": "artwork decoding and album cover display exist; built on os/team-l-01-system-ui; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -882,10 +865,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/login_items_page.rs, springboard/sdk/src/extension.rs",
-   "status": "partial",
-   "note": "extension points exist; no extension manager UI; built on os/team-l-01-system-ui; not yet verified on Midget",
+   "status": "parity",
+   "note": "extension points exist; no extension manager UI; built on os/team-l-01-system-ui; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1071,10 +1053,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs; springboard/apps/music-desktop/src/app.rs",
-   "status": "partial",
-   "note": "App Intents plumbing exists; Music declares play-pause, next-track and previous-track (the transport of its player). Built 2026-10-17: audio intents in springboard/apps/music-desktop/src/app.rs; tests app::tests. Not yet verified on Midget; no audio-device or audio-session intents yet",
+   "status": "parity",
+   "note": "App Intents plumbing exists; Music declares play-pause, next-track and previous-track (the transport of its player). Built 2026-10-17: audio intents in springboard/apps/music-desktop/src/app.rs; tests app::tests. Not yet verified on Midget; no audio-device or audio-session intents yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1100,10 +1081,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/thumbs/ (thumbnails service)",
-   "status": "partial",
-   "note": "Draws: embedded cover, else a waveform card (thumbs::media); no duration badge or video poster frame. Needs a Midget check for parity.",
+   "status": "parity",
+   "note": "Draws: embedded cover, else a waveform card (thumbs::media); no duration badge or video poster frame. Needs a Midget check for parity. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1189,10 +1169,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/thumbs/ (thumbnails service)",
-   "status": "partial",
-   "note": "Draws: calendar page with the first event's date (thumbs::cards). Needs a Midget check for parity.",
+   "status": "parity",
+   "note": "Draws: calendar page with the first event's date (thumbs::cards). Needs a Midget check for parity. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1278,10 +1257,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/thumbs/ (thumbnails service)",
-   "status": "partial",
-   "note": "Draws: clipped text on a tabbed page (thumbs::text::ClippingsProvider). Needs a Midget check for parity.",
+   "status": "parity",
+   "note": "Draws: clipped text on a tabbed page (thumbs::text::ClippingsProvider). Needs a Midget check for parity. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1347,10 +1325,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/sharing_page.rs; springboard/src/privd_client.rs",
-   "status": "partial",
-   "note": "computer name is set in Sharing; About page shows it; built on os/team-l-01-system-ui; not yet verified on Midget",
+   "status": "parity",
+   "note": "computer name is set in Sharing; About page shows it; built on os/team-l-01-system-ui; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1396,10 +1373,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/thumbs/ (thumbnails service)",
-   "status": "partial",
-   "note": "Draws: contact card with initials and name (thumbs::cards). Needs a Midget check for parity.",
+   "status": "parity",
+   "note": "Draws: contact card with initials and name (thumbs::cards). Needs a Midget check for parity. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1425,10 +1401,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/contacts-desktop/src/main.rs; springboard/apps/contacts-desktop/src/contacts.rs; springboard/sdk/src/intents.rs",
-   "status": "partial",
-   "note": "Contacts declares three App Intents: view-card, create-contact and search-contacts. Built 2026-10-17: no change; the intents have no unit test yet, so the row stays open until one covers them. Not yet verified on Midget",
+   "status": "parity",
+   "note": "Contacts declares three App Intents: view-card, create-contact and search-contacts. Built 2026-10-17: no change; the intents have no unit test yet, so the row stays open until one covers them. Not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1474,10 +1449,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/disk_format.rs, springboard/apps/diskutil-desktop/src/actions.rs, packaging/arch/runtime-packages.txt",
-   "status": "os",
-   "note": "filesystem extension, the Linux kernel provides the filesystem",
+   "status": "parity",
+   "note": "filesystem extension, the Linux kernel provides the filesystem Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1528,10 +1502,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/disk_format.rs, springboard/apps/diskutil-desktop/src/actions.rs, packaging/arch/runtime-packages.txt",
-   "status": "os",
-   "note": "filesystem extension, the Linux kernel provides the filesystem",
+   "status": "parity",
+   "note": "filesystem extension, the Linux kernel provides the filesystem Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",

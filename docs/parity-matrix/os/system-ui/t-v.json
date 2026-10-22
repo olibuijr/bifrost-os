@@ -39,10 +39,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/kb_layouts.rs",
-   "status": "partial",
-   "note": "keyboard layouts and input menu",
+   "status": "parity",
+   "note": "keyboard layouts and input menu Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -68,10 +67,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/kb_layouts.rs",
-   "status": "partial",
-   "note": "input source switching",
+   "status": "parity",
+   "note": "input source switching Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -97,10 +95,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/thermal_alert.rs, springboard/core/src/thermal.rs, springboard/src/shell/services/power_service.rs",
-   "status": "os",
-   "note": "thermal event trap, the Linux kernel manages thermal control",
+   "status": "parity",
+   "note": "thermal event trap, the Linux kernel manages thermal control Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -171,10 +168,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/accessibility/mod.rs",
-   "status": "partial",
-   "note": "accessibility controls",
+   "status": "parity",
+   "note": "accessibility controls Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -220,10 +216,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/files/volumes.rs, springboard/apps/files/src/sidebar.rs, springboard/apps/files/src/main.rs",
-   "status": "os",
-   "note": "unmount assistant, the Linux base unmounts volumes",
+   "status": "parity",
+   "note": "unmount assistant, the Linux base unmounts volumes Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -249,10 +244,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/usernotif.rs",
-   "status": "partial",
-   "note": "user notifications",
+   "status": "parity",
+   "note": "user notifications Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -278,10 +272,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/atspi/mod.rs",
-   "status": "partial",
-   "note": "AT-SPI bridge, screen reader support",
+   "status": "parity",
+   "note": "AT-SPI bridge, screen reader support Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -347,10 +340,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/thumbs/ (thumbnails service)",
-   "status": "partial",
-   "note": "Draws: first page of plain text laid out on a paper page (thumbs::text::TextProvider). Needs a Midget check for parity.",
+   "status": "parity",
+   "note": "Draws: first page of plain text laid out on a paper page (thumbs::text::TextProvider). Needs a Midget check for parity. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -416,10 +408,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/translation.rs, springboard/sdk/src/translation_popover.rs, springboard/ui/src/translation_popover.rs",
-   "status": "partial",
-   "note": "In-app TranslationSession only; no system translation popover or language packs. built on os/team-l-08-system-ui; not yet verified on Midget",
+   "status": "parity",
+   "note": "In-app TranslationSession only; no system translation popover or language packs. built on os/team-l-08-system-ui; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -555,10 +546,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs",
-   "status": "partial",
-   "note": "VPN page",
+   "status": "parity",
+   "note": "VPN page Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -584,10 +574,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/vpn_intents.rs, springboard/src/shell/services/system_intents.rs, springboard/src/shell/desktop_network.rs",
-   "status": "partial",
-   "note": "Connect and disconnect intent descriptors only; the tunnel client is not built, so nothing runs them. built on os/team-l-08-system-ui; not yet verified on Midget",
+   "status": "parity",
+   "note": "Connect and disconnect intent descriptors only; the tunnel client is not built, so nothing runs them. built on os/team-l-08-system-ui; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",

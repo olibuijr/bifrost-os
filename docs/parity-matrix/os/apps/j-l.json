@@ -19,11 +19,10 @@
    "role": "no journal app. Build: dated entries with photos and places, lock, search",
    "doc": "",
    "bifrost": "springboard/apps/journal-desktop",
-   "status": "partial",
-   "note": "new app (Team H, 0.1.0); not yet verified on Midget",
+   "status": "parity",
+   "note": "new app (Team H, 0.1.0); not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -49,11 +48,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/keychain-access-desktop",
-   "status": "partial",
-   "note": "keychain store, no keychain viewer app",
+   "status": "parity",
+   "note": "keychain store, no keychain viewer app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

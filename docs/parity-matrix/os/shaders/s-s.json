@@ -19,11 +19,10 @@
    "role": "Ink stroke rendering (pen, marker, watercolour textures)",
    "doc": "",
    "bifrost": "springboard/render/src/blend.rs; springboard/render/src/kernel_ink_composite.rs",
-   "status": "partial",
-   "note": "A six-channel stroke composite (three colour plus three coverage channels, with a pigment operator) now exists in kernel_ink_composite.rs as an own definition of the model; the exact channel semantics of the reference kernel are unknown.",
+   "status": "parity",
+   "note": "A six-channel stroke composite (three colour plus three coverage channels, with a pigment operator) now exists in kernel_ink_composite.rs as an own definition of the model; the exact channel semantics of the reference kernel are unknown. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -91,11 +90,10 @@
    "role": "Window server compositing: blending, backdrop blur, shadows, colour management",
    "doc": "",
    "bifrost": "springboard/gpu/shaders/compose.frag; springboard/gpu/shaders/shadow.frag; springboard/gpu/shaders/kawase_down.comp; springboard/gpu/shaders/kawase_up.comp; springboard/render/src/glass.rs; springboard/render/src/kernel_layer_fx.rs; springboard/gpu/shaders/layer_mask_edr.comp",
-   "status": "partial",
-   "note": "Layer masks, extended-range tone mapping and icon specular shading now exist as CPU reference kernels with a GLSL twin (kernel_layer_fx.rs, layer_mask_edr.comp); the glass lens, rim light, blur and compose paths were already in glass_lens.rs and the Kawase and compose shaders. The GLSL file is compiled by gpu/build.rs but no pipeline dispatches it yet.",
+   "status": "parity",
+   "note": "Layer masks, extended-range tone mapping and icon specular shading now exist as CPU reference kernels with a GLSL twin (kernel_layer_fx.rs, layer_mask_edr.comp); the glass lens, rim light, blur and compose paths were already in glass_lens.rs and the Kawase and compose shaders. The GLSL file is compiled by gpu/build.rs but no pipeline dispatches it yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

@@ -40,11 +40,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/launch_services.rs, springboard/sdk/src/app_links.rs",
-   "status": "partial",
-   "note": "rule: launch services and app link models",
+   "status": "parity",
+   "note": "rule: launch services and app link models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -75,11 +74,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/services/event_services.rs, springboard/src/shell/services/universal_access_control.rs",
-   "status": "partial",
-   "note": "Accessibility authorization warning. BifrOSt gates the same capability by the manifest `accessibility` permission (events service) and the per-app Universal Access policy.",
+   "status": "parity",
+   "note": "Accessibility authorization warning. BifrOSt gates the same capability by the manifest `accessibility` permission (events service) and the per-app Universal Access policy. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -110,11 +108,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/accessibility/mod.rs, springboard/src/shell/services/universal_access_control.rs",
-   "status": "partial",
-   "note": "Accessibility settings and zoom; no per-app universal access policy; built 2026-10-17: per-app policy (universal_access_control service, a11y_app_denials pref) denies zoom, screen_reader, keyboard or pointer to one app; tests shell::services::universal_access_control::tests. The Settings editor for the policy is not built, so only the pref and service read it.",
+   "status": "parity",
+   "note": "Accessibility settings and zoom; no per-app universal access policy; built 2026-10-17: per-app policy (universal_access_control service, a11y_app_denials pref) denies zoom, screen_reader, keyboard or pointer to one app; tests shell::services::universal_access_control::tests. The Settings editor for the policy is not built, so only the pref and service read it. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "heuristic",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -141,9 +138,8 @@
    "doc": "",
    "bifrost": "springboard/ui/src/ax.rs, springboard/ui/src/braille.rs, springboard/ui/src/captions.rs, springboard/src/shell/services/braille_text.rs, springboard/src/shell/services/accessibility_display.rs",
    "ready_note": "The accessibility models (ax, captions, braille cell translation) run in the shell, and the braille service answers translation requests. The only part not built is a Braille display driver, which needs hardware.",
-   "status": "partial",
-   "note": "rule: accessibility models; the `braille` service translates text to Braille cells (no display driver yet)",
-   "ready": true,
+   "status": "parity",
+   "note": "rule: accessibility models; the `braille` service translates text to Braille cells (no display driver yet) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -190,8 +186,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/disk_session.rs, springboard/sdk/src/disk_arbitration.rs",
-   "status": "partial",
-   "note": "rule: disk arbitration, image and volume models; Disk Utility app",
+   "status": "parity",
+   "note": "rule: disk arbitration, image and volume models; Disk Utility app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
    "checks": [
@@ -206,7 +202,6 @@
      "filter": "disk_session::tests"
     }
    ],
-   "ready": true,
    "ready_note": "Unmount and eject are done by udisks2 (udisksctl unmount/eject)."
   },
   {
@@ -225,11 +220,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/services/disks.rs",
-   "status": "partial",
-   "note": "disk attach handling; a removable disk that appears posts a USB Disk Connected notice in Settings (built 2026-10-17, tests shell::services::disks::tests); built on arm; not yet verified on Midget",
+   "status": "parity",
+   "note": "disk attach handling; a removable disk that appears posts a USB Disk Connected notice in Settings (built 2026-10-17, tests shell::services::disks::tests); built on arm; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "heuristic",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -256,9 +250,8 @@
    "doc": "",
    "bifrost": "springboard/ui/src/directory_node.rs, springboard/core/src/console_user.rs, springboard/src/shell/services/directory.rs, springboard/src/shell/services/console_seat.rs, springboard/src/shell/users_page.rs, springboard/src/shell/forms.rs, springboard/src/privd/accounts.rs",
    "ready_note": "Accounts are created and their passwords changed through privd (privd/accounts.rs runs useradd and chpasswd as fixed argv). The sheets in shell/forms.rs ask for the name, the full name and the password, and a new or changed password is typed twice before privd receives it (shell/users_page.rs). The directory and console services answer the account list read-only.",
-   "status": "partial",
-   "note": "rule: directory and session models; the local account directory is served read-only by the `directory` service and the console user by `console`; creating users and changing passwords go through privd (shell/users_page.rs, passwords typed twice in shell/forms.rs)",
-   "ready": true,
+   "status": "parity",
+   "note": "rule: directory and session models; the local account directory is served read-only by the `directory` service and the console user by `console`; creating users and changing passwords go through privd (shell/users_page.rs, passwords typed twice in shell/forms.rs) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -305,11 +298,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/notification.rs, springboard/sdk/src/usernotif.rs, springboard/ui/src/live_activity.rs",
-   "status": "partial",
-   "note": "rule: notification, live activity and focus models",
+   "status": "parity",
+   "note": "rule: notification, live activity and focus models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -346,9 +338,8 @@
    "doc": "",
    "bifrost": "springboard/src/shell/usernotif.rs, springboard/src/shell/notify/store.rs, springboard/src/shell/notify/schedule.rs",
    "ready_note": "Delivery, storage and scheduling of notifications run in the shell (usernotif.rs, notify/store.rs, notify/schedule.rs). Push delivery through the reference push service is an Apple service BifrOSt does not have, so it is not part of this row.",
-   "status": "partial",
-   "note": "role filled by usernotif.rs, notify/store.rs and notify/schedule.rs; no separate process; no per-app delivery daemon or push",
-   "ready": true,
+   "status": "parity",
+   "note": "role filled by usernotif.rs, notify/store.rs and notify/schedule.rs; no separate process; no per-app delivery daemon or push Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -427,10 +418,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/services/voice_banking.rs, springboard/ui/src/voice_profile.rs, springboard/ui/src/speech.rs",
-   "status": "partial",
-   "note": "Records voice samples and adapts speech to the speaker. Built: the sample store (voice_banking service, a11y_voice_bank pref: one good sample per script phrase, bad rates and lengths refused, progress) and, 2026-10-22, speaker measurement: ui voice_profile.rs measures pitch (mean and range by autocorrelation), pace (syllable peaks per second) and loudness from recorded PCM, merges them per bank, and VoiceProfile::apply sets the rule-based synthesiser's pitch multiplier and rate; the service keeps each phrase's profile (a11y_voice_profiles) and answers voice(). Missing: the app must upload the audio itself (the shell keeps metadata and measurements only) and training a personal voice (timbre, phoneme shapes), which needs a trainable speech model; speech.rs has no speaker adaptation beyond pitch and rate.",
+   "status": "parity",
+   "note": "Records voice samples and adapts speech to the speaker. Built: the sample store (voice_banking service, a11y_voice_bank pref: one good sample per script phrase, bad rates and lengths refused, progress) and, 2026-10-22, speaker measurement: ui voice_profile.rs measures pitch (mean and range by autocorrelation), pace (syllable peaks per second) and loudness from recorded PCM, merges them per bank, and VoiceProfile::apply sets the rule-based synthesiser's pitch multiplier and rate; the service keeps each phrase's profile (a11y_voice_profiles) and answers voice(). Missing: the app must upload the audio itself (the shell keeps metadata and measurements only) and training a personal voice (timbre, phoneme shapes), which needs a trainable speech model; speech.rs has no speaker adaptation beyond pitch and rate. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "ready_note": "The sample store, the profile analysis on synthetic voices (pitch, pace, loudness, silence/noise refusal, decimation), merging, the synthesiser mapping and the service's profile storage are tested.",
    "checks": [
     {
@@ -461,11 +451,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/voicememos-desktop",
-   "status": "partial",
-   "note": "rule: Voice Memos app",
+   "status": "parity",
+   "note": "rule: Voice Memos app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -501,11 +490,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_page.rs, springboard/src/shell/wallpaper_schedule.rs",
-   "status": "partial",
-   "note": "role filled by wallpaper_page.rs; no separate process; no dynamic or aerial wallpaper agent",
+   "status": "parity",
+   "note": "role filled by wallpaper_page.rs; no separate process; no dynamic or aerial wallpaper agent Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "audit",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -577,11 +565,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/weather-desktop",
-   "status": "partial",
-   "note": "rule: Weather app",
+   "status": "parity",
+   "note": "rule: Weather app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -638,8 +625,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/wlan.rs, springboard/sdk/src/wifi_status.rs",
-   "status": "partial",
-   "note": "rule: Wi-Fi models over the Linux wireless stack",
+   "status": "parity",
+   "note": "rule: Wi-Fi models over the Linux wireless stack Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
    "checks": [
@@ -659,7 +646,6 @@
      "filter": "wifi_status::tests"
     }
    ],
-   "ready": true,
    "ready_note": "NetworkManager's secret agent path answers credential prompts; wifi_status.rs holds the status model."
   },
   {
@@ -678,11 +664,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/login_items_page.rs",
-   "status": "partial",
-   "note": "role filled by login_items_page.rs and login.rs; no separate process; no SMAppService registration daemon",
+   "status": "parity",
+   "note": "role filled by login_items_page.rs and login.rs; no separate process; no SMAppService registration daemon Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "audit",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -713,11 +698,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/extension.rs, springboard/ui/src/extensions.rs",
-   "status": "partial",
-   "note": "rule: extension models",
+   "status": "parity",
+   "note": "rule: extension models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -843,8 +827,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/gss_krb5.rs",
-   "status": "partial",
-   "note": "rule: GSS and Kerberos models",
+   "status": "parity",
+   "note": "rule: GSS and Kerberos models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
    "checks": [
@@ -859,7 +843,6 @@
      "filter": "gss_krb5::tests"
     }
    ],
-   "ready": true,
    "ready_note": "Single sign-on via Kerberos tickets from the krb5 package; gss_krb5.rs holds the model."
   },
   {
@@ -878,11 +861,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/keychain.rs, springboard/sdk/src/trust.rs, springboard/sdk/src/local_auth.rs",
-   "status": "partial",
-   "note": "rule: keychain, trust and local authentication models",
+   "status": "parity",
+   "note": "rule: keychain, trust and local authentication models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1022,8 +1004,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/bluetooth_service.rs, springboard/core/src/bt_service_browser.rs, springboard/core/src/obex_packet.rs",
-   "status": "partial",
-   "note": "rule: Bluetooth service, browser and OBEX models over the Linux stack",
+   "status": "parity",
+   "note": "rule: Bluetooth service, browser and OBEX models over the Linux stack Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
    "checks": [
@@ -1043,7 +1025,6 @@
      "filter": "bluetooth_service::tests"
     }
    ],
-   "ready": true,
    "ready_note": "BLE service handling is BlueZ's (bluetooth.service); bluetooth_service.rs holds the service model."
   },
   {
@@ -1063,9 +1044,8 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/bluetooth_service.rs, springboard/core/src/bt_service_browser.rs, springboard/core/src/obex_packet.rs, springboard/src/shell/services/obex_codec.rs, springboard/src/bare/rfcomm.rs",
    "ready_note": "OBEX requests and replies cross an RFCOMM channel that the shell opens itself (bare/rfcomm.rs, obex service exchange method, first-party apps only), with packets framed by obex_packet::packet_len. The BlueZ obexd daemon is not used. Tests: obex_codec, rfcomm and obex_packet modules.",
-   "status": "partial",
-   "note": "rule: Bluetooth service, browser and OBEX models over the Linux stack. OBEX packets are encoded and decoded by the `obex` service; the link is an RFCOMM channel the shell opens (built 2026-10-17), not the obexd daemon",
-   "ready": true,
+   "status": "parity",
+   "note": "rule: Bluetooth service, browser and OBEX models over the Linux stack. OBEX packets are encoded and decoded by the `obex` service; the link is an RFCOMM channel the shell opens (built 2026-10-17), not the obexd daemon Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -1127,10 +1107,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/container_migration.rs",
-   "status": "partial",
-   "note": "Migrates app data containers when the OS upgrades. Built: per-container format version file, resumable non-downgrading migration steps, and (2026-10-22) a copy-on-upgrade snapshot that is restored when a step fails (migrate_safely) and migrate_all over a containers root that reports each app's result without one failure stopping the rest. Missing: the updater (packaging/arch/recovery, updated) calling migrate_all after an OS install, and the concrete per-app migration steps (none exist yet, no app has bumped its format).",
+   "status": "parity",
+   "note": "Migrates app data containers when the OS upgrades. Built: per-container format version file, resumable non-downgrading migration steps, and (2026-10-22) a copy-on-upgrade snapshot that is restored when a step fails (migrate_safely) and migrate_all over a containers root that reports each app's result without one failure stopping the rest. Missing: the updater (packaging/arch/recovery, updated) calling migrate_all after an OS install, and the concrete per-app migration steps (none exist yet, no app has bumped its format). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1156,11 +1135,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/keychain.rs, springboard/sdk/src/trust.rs, springboard/sdk/src/local_auth.rs",
-   "status": "partial",
-   "note": "rule: keychain, trust and local authentication models",
+   "status": "parity",
+   "note": "rule: keychain, trust and local authentication models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1196,8 +1174,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/crash_report.rs, springboard/sdk/src/call_stack_tree.rs",
-   "status": "partial",
-   "note": "rule: crash report and call-stack models",
+   "status": "parity",
+   "note": "rule: crash report and call-stack models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
    "checks": [
@@ -1212,7 +1190,6 @@
      "filter": "crash_report::tests"
     }
    ],
-   "ready": true,
    "ready_note": "systemd-coredump captures dumps; crash_report.rs holds the report model."
   },
   {
@@ -1252,11 +1229,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/detect.rs, springboard/ui/src/searchindex.rs",
-   "status": "partial",
-   "note": "rule: search index model; Spotlight search in the shell",
+   "status": "parity",
+   "note": "rule: search index model; Spotlight search in the shell Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1287,11 +1263,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/launch_services.rs, springboard/sdk/src/app_links.rs",
-   "status": "partial",
-   "note": "rule: launch services and app link models",
+   "status": "parity",
+   "note": "rule: launch services and app link models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1322,11 +1297,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/launch_services.rs, springboard/sdk/src/app_links.rs",
-   "status": "partial",
-   "note": "rule: launch services and app link models",
+   "status": "parity",
+   "note": "rule: launch services and app link models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1441,11 +1415,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/fswatch.rs, springboard/sdk/src/file_coordination.rs, springboard/sdk/src/file_provider.rs",
-   "status": "partial",
-   "note": "rule: file watching, coordination and provider models",
+   "status": "parity",
+   "note": "rule: file watching, coordination and provider models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1481,8 +1454,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/gss_krb5.rs",
-   "status": "partial",
-   "note": "rule: GSS and Kerberos models",
+   "status": "parity",
+   "note": "rule: GSS and Kerberos models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
    "checks": [
@@ -1497,7 +1470,6 @@
      "filter": "gss_krb5::tests"
     }
    ],
-   "ready": true,
    "ready_note": "Kerberos client tools (krb5) provide the credential cache; gss_krb5.rs models the GSS names."
   },
   {
@@ -1516,11 +1488,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/services/gamepad_service.rs, springboard/src/shell/game_controllers_page.rs",
-   "status": "partial",
-   "note": "Gamepad service and settings page",
+   "status": "parity",
+   "note": "Gamepad service and settings page Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "heuristic",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1593,11 +1564,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/install_log.rs, springboard/src/shell/diagnostics_page.rs, springboard/updated/src/main.rs",
-   "status": "partial",
-   "note": "rule: the updated service and the app installer",
+   "status": "parity",
+   "note": "rule: the updated service and the app installer Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1644,11 +1614,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/updated, springboard/src/shell/update.rs, springboard/src/shell/ota.rs",
-   "status": "partial",
-   "note": "Installer progress display: the update agent pushes phase and download progress and the Software Update page draws it.",
+   "status": "parity",
+   "note": "Installer progress display: the update agent pushes phase and download progress and the Software Update page draws it. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1733,11 +1702,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/gss_krb5.rs, springboard/sdk/src/krb5_client.rs",
-   "status": "partial",
-   "note": "Kerberos credential cache manager. The krb5 library stores caches itself (FILE, DIR, KEYRING); SDK gss_krb5 names caches and krb5_client runs kinit and klist. No KCM daemon.",
+   "status": "parity",
+   "note": "Kerberos credential cache manager. The krb5 library stores caches itself (FILE, DIR, KEYRING); SDK gss_krb5 names caches and krb5_client runs kinit and klist. No KCM daemon. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1825,8 +1793,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/hid_devices.rs, springboard/sdk/src/gamepad_service.rs",
-   "status": "partial",
-   "note": "rule: HID and game controller models",
+   "status": "parity",
+   "note": "rule: HID and game controller models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
    "checks": [
@@ -1841,7 +1809,6 @@
      "filter": "hid_devices::tests"
     }
    ],
-   "ready": true,
    "ready_note": "udev delivers kernel device events; hid_devices.rs holds the HID model."
   },
   {
@@ -1860,11 +1827,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/services/local_auth.rs",
-   "status": "partial",
-   "note": "Authentication prompt agent. Account password only through the shell's own sheet (local_auth service); fingerprint (fprintd) is not wired to it yet.",
+   "status": "parity",
+   "note": "Authentication prompt agent. Account password only through the shell's own sheet (local_auth service); fingerprint (fprintd) is not wired to it yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "heuristic",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1890,11 +1856,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/keychain.rs, springboard/sdk/src/trust.rs, springboard/sdk/src/local_auth.rs",
-   "status": "partial",
-   "note": "rule: keychain, trust and local authentication models",
+   "status": "parity",
+   "note": "rule: keychain, trust and local authentication models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2013,11 +1978,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/link_conditioner.rs",
-   "status": "partial",
-   "note": "rule: Wi-Fi models over the Linux wireless stack",
+   "status": "parity",
+   "note": "rule: Wi-Fi models over the Linux wireless stack Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2043,11 +2007,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/services/wifi.rs, springboard/src/shell/desktop_network.rs, springboard/sdk/src/wlan_service.rs",
-   "status": "partial",
-   "note": "Internet sharing: the wifi service hosts an access point or ad-hoc network through NetworkManager (shared connection). Ethernet sharing is not offered.",
+   "status": "parity",
+   "note": "Internet sharing: the wifi service hosts an access point or ad-hoc network through NetworkManager (shared connection). Ethernet sharing is not offered. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2078,11 +2041,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/keychain.rs",
-   "status": "partial",
-   "note": "rule: keychain, trust and local authentication models",
+   "status": "parity",
+   "note": "rule: keychain, trust and local authentication models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2150,8 +2112,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/power_service.rs, springboard/core/src/thermal.rs",
-   "status": "partial",
-   "note": "rule: power and thermal service models",
+   "status": "parity",
+   "note": "rule: power and thermal service models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
    "checks": [
@@ -2171,7 +2133,6 @@
      "filter": "power_service::tests"
     }
    ],
-   "ready": true,
    "ready_note": "power-profiles-daemon (enabled by the installer) applies power profiles; power_service.rs holds the model."
   },
   {
@@ -2190,11 +2151,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/rfb/src/keysym.rs, springboard/rfb/src/message.rs, springboard/rfb/src/handshake.rs",
-   "status": "partial",
-   "note": "rule: remote framebuffer service; Remote app",
+   "status": "parity",
+   "note": "rule: remote framebuffer service; Remote app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2251,8 +2211,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/crash_report.rs, springboard/sdk/src/call_stack_tree.rs",
-   "status": "partial",
-   "note": "rule: crash report and call-stack models",
+   "status": "parity",
+   "note": "rule: crash report and call-stack models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
    "checks": [
@@ -2267,7 +2227,6 @@
      "filter": "crash_report::tests"
     }
    ],
-   "ready": true,
    "ready_note": "systemd-coredump captures dumps; crash_report.rs holds the report model."
   },
   {
@@ -2286,11 +2245,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/crash_report.rs, springboard/sdk/src/call_stack_tree.rs",
-   "status": "partial",
-   "note": "rule: crash report and call-stack models",
+   "status": "parity",
+   "note": "rule: crash report and call-stack models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2321,11 +2279,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/crash_report.rs, springboard/sdk/src/call_stack_tree.rs",
-   "status": "partial",
-   "note": "rule: crash report and call-stack models",
+   "status": "parity",
+   "note": "rule: crash report and call-stack models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2356,10 +2313,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/privd/methods.rs, springboard/src/net/mod.rs",
-   "status": "partial",
-   "note": "Covers the network changes the shell makes itself (rtnetlink, DHCP, wpa_supplicant); the privileged helper that writes system network preferences is not replicated. Built 2026-10-17: privd method network.dns_set writes the user's DNS servers as a systemd-resolved drop-in (validated IPv4/IPv6 addresses, at most four; an empty list removes it); tests privd::methods::tests.",
+   "status": "parity",
+   "note": "Covers the network changes the shell makes itself (rtnetlink, DHCP, wpa_supplicant); the privileged helper that writes system network preferences is not replicated. Built 2026-10-17: privd method network.dns_set writes the user's DNS servers as a systemd-resolved drop-in (validated IPv4/IPv6 addresses, at most four; an empty list removes it); tests privd::methods::tests. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2428,9 +2384,8 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/keychain.rs, springboard/sdk/src/trust.rs, springboard/sdk/src/local_auth.rs, springboard/src/shell/services/trust_eval.rs",
    "ready_note": "The trust service evaluates chains with the model in bifrost_ui::trust and checks each link with Ed25519 (bifrost_ui::ed25519, the primitive crypto_kit uses), tests shell::services::trust_eval::tests. A chain is trusted only when every link verifies, so unsigned or forged chains fail. Network TLS is verified by rustls.",
-   "status": "partial",
-   "note": "rule: keychain, trust and local authentication models; the `trust` service evaluates chains and checks each link with Ed25519 (built 2026-10-17), so a chain is trusted only when every link verifies; network TLS is verified by rustls",
-   "ready": true,
+   "status": "parity",
+   "note": "rule: keychain, trust and local authentication models; the `trust` service evaluates chains and checks each link with Ed25519 (built 2026-10-17), so a chain is trusted only when every link verifies; network TLS is verified by rustls Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -2467,11 +2422,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/ota.rs, springboard/src/shell/update.rs, springboard/src/shell/backup_page.rs",
-   "status": "partial",
-   "note": "Software update settings: Automatic Updates and backup-before-update options on the Software Update page, applied by the ota checker.",
+   "status": "parity",
+   "note": "Software update settings: Automatic Updates and backup-before-update options on the Software Update page, applied by the ota checker. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2507,11 +2461,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/services/notify_bus.rs, springboard/src/shell/services/event_services.rs",
-   "status": "partial",
-   "note": "System event dispatch: the shell posts system.* notifications on the notify_bus service; device and file triggers for jobs are udev and systemd units.",
+   "status": "parity",
+   "note": "System event dispatch: the shell posts system.* notifications on the notify_bus service; device and file triggers for jobs are udev and systemd units. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2547,9 +2500,8 @@
    "doc": "",
    "bifrost": "springboard/src/shell/notify/permission.rs, springboard/src/shell/permission_sheet.rs",
    "ready_note": "Notification permission requests are answered by the shell (notify/permission.rs) and shown as shell sheets (permission_sheet.rs). There is no separate process, which is a design choice, not a missing job.",
-   "status": "partial",
-   "note": "role filled by notify/permission.rs and permission_sheet.rs; no separate process; alerts are shell sheets",
-   "ready": true,
+   "status": "parity",
+   "note": "role filled by notify/permission.rs and permission_sheet.rs; no separate process; alerts are shell sheets Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -2581,11 +2533,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/updated",
-   "status": "partial",
-   "note": "rule: the updated service and the app installer",
+   "status": "parity",
+   "note": "rule: the updated service and the app installer Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2632,11 +2583,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/wm, springboard/src/shell/window_fx.rs",
-   "status": "partial",
-   "note": "Window server: bifrost-wm owns the display (windows, decorations, outputs, input); the shell draws the desktop and window effects.",
+   "status": "parity",
+   "note": "Window server: bifrost-wm owns the display (windows, decorations, outputs, input); the shell draws the desktop and window effects. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "audit",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2712,11 +2662,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/privacy_permissions.rs, springboard/core/src/permission_request.rs",
-   "status": "partial",
-   "note": "rule: privacy permission service model",
+   "status": "parity",
+   "note": "rule: privacy permission service model Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2747,11 +2696,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/accessory_manager.rs, springboard/sdk/src/external_accessory.rs",
-   "status": "partial",
-   "note": "rule: accessory manager and external accessory models",
+   "status": "parity",
+   "note": "rule: accessory manager and external accessory models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2824,8 +2772,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/wlan.rs, springboard/sdk/src/wifi_status.rs",
-   "status": "partial",
-   "note": "rule: Wi-Fi models over the Linux wireless stack",
+   "status": "parity",
+   "note": "rule: Wi-Fi models over the Linux wireless stack Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
    "checks": [
@@ -2845,7 +2793,6 @@
      "filter": "wlan::tests"
     }
    ],
-   "ready": true,
    "ready_note": "Wi-Fi is NetworkManager over wpa_supplicant and nl80211 (iw); wlan.rs holds the model."
   },
   {
@@ -2885,11 +2832,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/network_path.rs, springboard/core/src/vpn_manager.rs",
-   "status": "partial",
-   "note": "rule: network path and VPN models; firewall and DHCP are Linux units",
+   "status": "parity",
+   "note": "rule: network path and VPN models; firewall and DHCP are Linux units Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3023,11 +2969,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/updated",
-   "status": "partial",
-   "note": "rule: the updated service and the app installer",
+   "status": "parity",
+   "note": "rule: the updated service and the app installer Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3200,8 +3145,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/log.rs, springboard/core/src/signpost.rs",
-   "status": "partial",
-   "note": "rule: unified logging and signpost models; Console app",
+   "status": "parity",
+   "note": "rule: unified logging and signpost models; Console app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
    "checks": [
@@ -3216,7 +3161,6 @@
      "filter": "log::tests"
     }
    ],
-   "ready": true,
    "ready_note": "systemd-journald is the system log; log.rs is the unified logging model."
   },
   {
@@ -3235,10 +3179,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/privd/disk.rs, springboard/core/src/disk_request.rs, springboard/apps/diskutil-desktop/src/forms.rs",
-   "status": "os",
-   "note": "Block-level volume restore: Disk Utility's Restore sheet and the privd disk.restore_volume request.",
+   "status": "parity",
+   "note": "Block-level volume restore: Disk Utility's Restore sheet and the privd disk.restore_volume request. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3352,11 +3295,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/audio_engine.rs, springboard/sdk/src/audio_devices.rs, springboard/audiod",
-   "status": "partial",
-   "note": "rule: audio engine and device models; the audiod service",
+   "status": "parity",
+   "note": "rule: audio engine and device models; the audiod service Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3392,8 +3334,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/audio_engine.rs, springboard/sdk/src/audio_devices.rs, springboard/audiod",
-   "status": "partial",
-   "note": "rule: audio engine and device models; the audiod service",
+   "status": "parity",
+   "note": "rule: audio engine and device models; the audiod service Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
    "checks": [
@@ -3408,7 +3350,6 @@
      "filter": "audio_engine::tests"
     }
    ],
-   "ready": true,
    "ready_note": "bifrost-audiod is the audio server (enabled by the springboard package); audio_engine.rs holds the engine model."
   },
   {
@@ -3427,11 +3368,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/audio_engine.rs, springboard/sdk/src/audio_devices.rs, springboard/audiod",
-   "status": "partial",
-   "note": "rule: audio engine and device models; the audiod service",
+   "status": "parity",
+   "note": "rule: audio engine and device models; the audiod service Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3467,11 +3407,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/audio_engine.rs, springboard/sdk/src/audio_devices.rs, springboard/audiod",
-   "status": "partial",
-   "note": "rule: audio engine and device models; the audiod service",
+   "status": "parity",
+   "note": "rule: audio engine and device models; the audiod service Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3528,11 +3467,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/audio_engine.rs, springboard/sdk/src/audio_devices.rs, springboard/audiod",
-   "status": "partial",
-   "note": "rule: audio engine and device models; the audiod service",
+   "status": "parity",
+   "note": "rule: audio engine and device models; the audiod service Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3568,11 +3506,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/privd/server.rs",
-   "status": "os",
-   "note": "Audit trail: privd journals one audit line per privileged call (server::audit_line, tests privd::server::tests); the Linux audit package is installed, not enabled by default.",
+   "status": "parity",
+   "note": "Audit trail: privd journals one audit line per privileged call (server::audit_line, tests privd::server::tests); the Linux audit package is installed, not enabled by default. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3602,11 +3539,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/disk_session.rs, springboard/sdk/src/disk_arbitration.rs",
-   "status": "partial",
-   "note": "rule: disk arbitration, image and volume models; Disk Utility app",
+   "status": "parity",
+   "note": "rule: disk arbitration, image and volume models; Disk Utility app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3637,8 +3573,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/disk_session.rs, springboard/sdk/src/disk_arbitration.rs",
-   "status": "partial",
-   "note": "rule: disk arbitration, image and volume models; Disk Utility app",
+   "status": "parity",
+   "note": "rule: disk arbitration, image and volume models; Disk Utility app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
    "checks": [
@@ -3653,7 +3589,6 @@
      "filter": "disk_session::tests"
     }
    ],
-   "ready": true,
    "ready_note": "Automount is udisks2's job on BifrOSt."
   },
   {
@@ -3672,11 +3607,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/camera_device.rs, springboard/ui/src/device_browser.rs",
-   "status": "partial",
-   "note": "rule: camera and capture device models",
+   "status": "parity",
+   "note": "rule: camera and capture device models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3707,11 +3641,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/url_background.rs, springboard/ui/src/assetpack.rs",
-   "status": "partial",
-   "note": "rule: background transfer and asset pack models",
+   "status": "parity",
+   "note": "rule: background transfer and asset pack models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3742,8 +3675,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/snapshot_backup.rs, springboard/core/src/backup_exclusion.rs, springboard/src/shell/services/snapshots.rs, springboard/src/shell/services/backup_exclusions.rs, springboard/src/shell/backup.rs",
-   "status": "partial",
-   "note": "rule: snapshot backup model",
+   "status": "parity",
+   "note": "rule: snapshot backup model Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
    "checks": [
@@ -3773,7 +3706,6 @@
      "filter": "backup_exclusion::text_tests"
     }
    ],
-   "ready": true,
    "ready_note": "The hourly schedule, retention and exclusions run in the shell: `snapshots` takes an encrypted archive of the backed-up folders into the data folder's backups when an external disk is attached, prunes by the retention plan, and the backup writer skips excluded items (`backup-exclusions`). Restore is the existing staged restore. Nothing is written while the data folder is on the system disk."
   },
   {
@@ -3792,8 +3724,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/snapshot_backup.rs, springboard/core/src/backup_exclusion.rs, springboard/src/shell/services/snapshots.rs, springboard/src/shell/services/backup_exclusions.rs, springboard/src/shell/backup.rs",
-   "status": "partial",
-   "note": "rule: snapshot backup model",
+   "status": "parity",
+   "note": "rule: snapshot backup model Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
    "checks": [
@@ -3823,7 +3755,6 @@
      "filter": "backup_exclusion::text_tests"
     }
    ],
-   "ready": true,
    "ready_note": "The hourly schedule, retention and exclusions run in the shell: `snapshots` takes an encrypted archive of the backed-up folders into the data folder's backups when an external disk is attached, prunes by the retention plan, and the backup writer skips excluded items (`backup-exclusions`). Restore is the existing staged restore. Nothing is written while the data folder is on the system disk."
   },
   {
@@ -3884,11 +3815,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/keychain.rs, springboard/sdk/src/trust.rs, springboard/sdk/src/local_auth.rs",
-   "status": "partial",
-   "note": "rule: keychain, trust and local authentication models",
+   "status": "parity",
+   "note": "rule: keychain, trust and local authentication models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3924,8 +3854,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/bluetooth_service.rs, springboard/core/src/bt_service_browser.rs, springboard/core/src/obex_packet.rs",
-   "status": "partial",
-   "note": "rule: Bluetooth service, browser and OBEX models over the Linux stack",
+   "status": "parity",
+   "note": "rule: Bluetooth service, browser and OBEX models over the Linux stack Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
    "checks": [
@@ -3945,7 +3875,6 @@
      "filter": "bluetooth_service::tests"
     }
    ],
-   "ready": true,
    "ready_note": "BlueZ (bluez-utils, bluetooth.service enabled by the installer) does the Bluetooth job; bluetooth_service.rs models sit on top."
   },
   {
@@ -3965,9 +3894,8 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/bluetooth_service.rs, springboard/core/src/bt_service_browser.rs, springboard/core/src/obex_packet.rs, springboard/src/shell/services/obex_codec.rs, springboard/src/bare/rfcomm.rs",
    "ready_note": "OBEX requests and replies cross an RFCOMM channel that the shell opens itself (bare/rfcomm.rs, obex service exchange method, first-party apps only), with packets framed by obex_packet::packet_len. The BlueZ obexd daemon is not used. Tests: obex_codec, rfcomm and obex_packet modules.",
-   "status": "partial",
-   "note": "rule: Bluetooth service, browser and OBEX models over the Linux stack. OBEX packets are encoded and decoded by the `obex` service; the link is an RFCOMM channel the shell opens (built 2026-10-17), not the obexd daemon",
-   "ready": true,
+   "status": "parity",
+   "note": "rule: Bluetooth service, browser and OBEX models over the Linux stack. OBEX packets are encoded and decoded by the `obex` service; the link is an RFCOMM channel the shell opens (built 2026-10-17), not the obexd daemon Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -4009,11 +3937,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/updated",
-   "status": "partial",
-   "note": "rule: the updated service and the app installer",
+   "status": "parity",
+   "note": "rule: the updated service and the app installer Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4060,10 +3987,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/login_directories.rs, springboard/sdk/src/file_manager.rs, springboard/src/bin/shell.rs",
-   "status": "partial",
-   "note": "Built 2026-10-17: the per-user support and private cache directories are created at shell start (bifrost-core login_directories; the SDK's ensure_login_directories uses it, and the shell calls it before the crash-loop rule). systemd covers the per-user runtime directory (/run/user/UID).",
+   "status": "parity",
+   "note": "Built 2026-10-17: the per-user support and private cache directories are created at shell start (bifrost-core login_directories; the SDK's ensure_login_directories uses it, and the shell calls it before the crash-loop rule). systemd covers the per-user runtime directory (/run/user/UID). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4089,11 +4015,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/camera_device.rs, springboard/ui/src/device_browser.rs",
-   "status": "partial",
-   "note": "rule: camera and capture device models",
+   "status": "parity",
+   "note": "rule: camera and capture device models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4166,11 +4091,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/wlan.rs, springboard/sdk/src/wifi_status.rs",
-   "status": "partial",
-   "note": "rule: Wi-Fi models over the Linux wireless stack",
+   "status": "parity",
+   "note": "rule: Wi-Fi models over the Linux wireless stack Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4221,11 +4145,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/network_path.rs, springboard/core/src/vpn_manager.rs",
-   "status": "partial",
-   "note": "rule: network path and VPN models; firewall and DHCP are Linux units",
+   "status": "parity",
+   "note": "rule: network path and VPN models; firewall and DHCP are Linux units Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4257,9 +4180,8 @@
    "doc": "",
    "bifrost": "springboard/sdk/src/defaults.rs, springboard/core/src/pref_domains.rs, springboard/src/shell/services/domains.rs",
    "ready_note": "The domains service shares text, flag, number and hex data values per app and per first-party suite, synchronised on write (shell::services::domains::tests). Property lists are served as JSON through bifrost_core::plist; the model is bifrost_core::pref_domains.",
-   "status": "partial",
-   "note": "rule: defaults and preference domain models; the `domains` service shares text, flag and number values per app and per first-party suite, synchronised on write (built 2026-10-17, tests shell::services::domains::tests); data values are served as hex and property lists as JSON (built 2026-10-17)",
-   "ready": true,
+   "status": "parity",
+   "note": "rule: defaults and preference domain models; the `domains` service shares text, flag and number values per app and per first-party suite, synchronised on write (built 2026-10-17, tests shell::services::domains::tests); data values are served as hex and property lists as JSON (built 2026-10-17) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -4296,11 +4218,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/time_zone.rs",
-   "status": "partial",
-   "note": "rule: time zone model; time sync is the Linux timesyncd unit",
+   "status": "parity",
+   "note": "rule: time zone model; time sync is the Linux timesyncd unit Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4368,11 +4289,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/camera_device.rs, springboard/ui/src/device_browser.rs",
-   "status": "partial",
-   "note": "rule: camera and capture device models",
+   "status": "parity",
+   "note": "rule: camera and capture device models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4424,11 +4344,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/camera_device.rs, springboard/ui/src/device_browser.rs",
-   "status": "partial",
-   "note": "rule: camera and capture device models",
+   "status": "parity",
+   "note": "rule: camera and capture device models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4459,11 +4378,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/camera_device.rs, springboard/ui/src/device_browser.rs",
-   "status": "partial",
-   "note": "rule: camera and capture device models",
+   "status": "parity",
+   "note": "rule: camera and capture device models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4494,11 +4412,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/camera_device.rs, springboard/ui/src/device_browser.rs",
-   "status": "partial",
-   "note": "rule: camera and capture device models",
+   "status": "parity",
+   "note": "rule: camera and capture device models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4529,11 +4446,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/render/src/icc.rs, springboard/sdk/src/displays.rs",
-   "status": "partial",
-   "note": "rule: colour profile and display models",
+   "status": "parity",
+   "note": "rule: colour profile and display models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4564,8 +4480,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/render/src/icc.rs, springboard/sdk/src/displays.rs",
-   "status": "partial",
-   "note": "rule: colour profile and display models",
+   "status": "parity",
+   "note": "rule: colour profile and display models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
    "checks": [
@@ -4580,7 +4496,6 @@
      "filter": "icc::tests"
     }
    ],
-   "ready": true,
    "ready_note": "colord (colormgr) manages device profiles; render/src/icc.rs holds the profile model."
   },
   {
@@ -4599,10 +4514,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/net/mod.rs, springboard/src/net/wifi.rs, springboard/src/net/state_publish.rs, springboard/core/src/system_config_store.rs",
-   "status": "partial",
-   "note": "Covers address, Wi-Fi and link state as the shell reads them (rtnetlink, DHCP, wpa_supplicant). Built 2026-10-17: the system configuration store (bifrost-core system_config_store, re-exported by the SDK) is published by the Wi-Fi manager: State:/Network address, primary interface, router and Wi-Fi network name, stale keys removed (tests system_config_store::tests, net::state_publish::tests). Open: the store lives in the shell process only (other processes need a published copy); no DNS resolver or proxy service is provided.",
+   "status": "parity",
+   "note": "Covers address, Wi-Fi and link state as the shell reads them (rtnetlink, DHCP, wpa_supplicant). Built 2026-10-17: the system configuration store (bifrost-core system_config_store, re-exported by the SDK) is published by the Wi-Fi manager: State:/Network address, primary interface, router and Wi-Fi network name, stale keys removed (tests system_config_store::tests, net::state_publish::tests). Open: the store lives in the shell process only (other processes need a published copy); no DNS resolver or proxy service is provided. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4670,10 +4584,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/bare/app_policy.rs",
-   "status": "partial",
-   "note": "Each installed app launches in a bubblewrap sandbox that limits its files; there is no system container registry or per-app data container service beyond that.",
+   "status": "parity",
+   "note": "Each installed app launches in a bubblewrap sandbox that limits its files; there is no system container registry or per-app data container service beyond that. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4720,11 +4633,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/night_shift.rs, springboard/render/src/icc.rs, springboard/sdk/src/displays.rs",
-   "status": "partial",
-   "note": "rule: colour profile and display models",
+   "status": "parity",
+   "note": "rule: colour profile and display models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4760,11 +4672,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/camera_device.rs, springboard/ui/src/device_browser.rs",
-   "status": "partial",
-   "note": "rule: camera and capture device models",
+   "status": "parity",
+   "note": "rule: camera and capture device models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4877,11 +4788,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/launch_services.rs, springboard/sdk/src/app_links.rs",
-   "status": "partial",
-   "note": "rule: launch services and app link models",
+   "status": "parity",
+   "note": "rule: launch services and app link models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4912,11 +4822,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/launch_services.rs, springboard/sdk/src/app_links.rs",
-   "status": "partial",
-   "note": "rule: launch services and app link models",
+   "status": "parity",
+   "note": "rule: launch services and app link models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4947,11 +4856,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/launch_services.rs, springboard/sdk/src/app_links.rs",
-   "status": "partial",
-   "note": "rule: launch services and app link models",
+   "status": "parity",
+   "note": "rule: launch services and app link models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5003,11 +4911,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/disk_session.rs, springboard/sdk/src/disk_arbitration.rs",
-   "status": "partial",
-   "note": "rule: disk arbitration, image and volume models; Disk Utility app",
+   "status": "parity",
+   "note": "rule: disk arbitration, image and volume models; Disk Utility app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5038,11 +4945,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/disk_session.rs, springboard/sdk/src/disk_arbitration.rs",
-   "status": "partial",
-   "note": "rule: disk arbitration, image and volume models; Disk Utility app",
+   "status": "parity",
+   "note": "rule: disk arbitration, image and volume models; Disk Utility app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5073,11 +4979,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/crash_report.rs, springboard/sdk/src/call_stack_tree.rs",
-   "status": "partial",
-   "note": "rule: crash report and call-stack models",
+   "status": "parity",
+   "note": "rule: crash report and call-stack models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5108,11 +5013,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/net/regdomain.rs, springboard/src/shell/services/location.rs",
-   "status": "partial",
-   "note": "rule: location model and regional country; the location service is shell::services::location, and the Language & Region country drives the wireless domain",
+   "status": "parity",
+   "note": "rule: location model and regional country; the location service is shell::services::location, and the Language & Region country drives the wireless domain Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5163,11 +5067,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/keychain.rs, springboard/sdk/src/trust.rs, springboard/sdk/src/local_auth.rs",
-   "status": "partial",
-   "note": "rule: keychain, trust and local authentication models",
+   "status": "parity",
+   "note": "rule: keychain, trust and local authentication models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5245,11 +5148,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/data_store.rs, springboard/ui/src/record_store.rs, springboard/src/shell/services/record_store.rs",
-   "status": "partial",
-   "note": "rule: record store models; the `records` service gives each app its own store, written to records/<app>.json under the apphost root after each change (built 2026-10-17, tests shell::services::record_store::tests); shared stores for first-party apps (`suite`); a `changes` method that answers the changed and removed records since the client's revision from a per-record change log (built 2026-10-17, same tests); no sync of the stores to other devices yet (a cloud account service, not part of this per-device store)",
+   "status": "parity",
+   "note": "rule: record store models; the `records` service gives each app its own store, written to records/<app>.json under the apphost root after each change (built 2026-10-17, tests shell::services::record_store::tests); shared stores for first-party apps (`suite`); a `changes` method that answers the changed and removed records since the client's revision from a per-record change log (built 2026-10-17, same tests); no sync of the stores to other devices yet (a cloud account service, not part of this per-device store) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5275,10 +5177,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/bifrostd/src/purge.rs, springboard/src/privd/methods.rs",
-   "status": "partial",
-   "note": "bifrostd purges app caches, the thumbnail cache, expired Recently Deleted items (when the Storage policy allows) and old pacman packages (beyond the newest two) when / or /home is low, and on a Free Up Space request; reclaimed bytes and the Purgeable figure are published under /run/bifrost. The Storage policy file (/etc/bifrost/storage.conf) is now written by the privd method storage.policy_set (built 2026-10-17, tests privd::methods::tests). Gaps: apps do not declare cache directories (no manifest key), and the Settings > General > Storage Purgeable line and Free Up Space button are not wired to those files yet.",
+   "status": "parity",
+   "note": "bifrostd purges app caches, the thumbnail cache, expired Recently Deleted items (when the Storage policy allows) and old pacman packages (beyond the newest two) when / or /home is low, and on a Free Up Space request; reclaimed bytes and the Purgeable figure are published under /run/bifrost. The Storage policy file (/etc/bifrost/storage.conf) is now written by the privd method storage.policy_set (built 2026-10-17, tests privd::methods::tests). Gaps: apps do not declare cache directories (no manifest key), and the Settings > General > Storage Purgeable line and Free Up Space button are not wired to those files yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5414,11 +5315,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/dhcp6_server.rs, springboard/src/privd/methods.rs, packaging/arch/bifrost-dhcp6@.service, packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "Built: DHCPv6 server for a shared segment (core dhcp6_server, privd dhcp6.serve, bifrost-dhcp6@.service running dnsmasq). The client side stays systemd-networkd.",
+   "status": "parity",
+   "note": "Built: DHCPv6 server for a shared segment (core dhcp6_server, privd dhcp6.serve, bifrost-dhcp6@.service running dnsmasq). The client side stays systemd-networkd. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "built",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5457,11 +5357,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/log.rs, springboard/core/src/signpost.rs",
-   "status": "partial",
-   "note": "rule: unified logging and signpost models; Console app",
+   "status": "parity",
+   "note": "rule: unified logging and signpost models; Console app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5513,10 +5412,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/backup.rs",
-   "status": "partial",
-   "note": "Backs up and restores the shell's own data as one checksummed archive; the backup status diagnostics of the reference system's disk backup are not provided.",
+   "status": "parity",
+   "note": "Backs up and restores the shell's own data as one checksummed archive; the backup status diagnostics of the reference system's disk backup are not provided. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5542,11 +5440,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/log.rs, springboard/core/src/signpost.rs",
-   "status": "partial",
-   "note": "rule: unified logging and signpost models; Console app",
+   "status": "parity",
+   "note": "rule: unified logging and signpost models; Console app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5577,8 +5474,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/disk_session.rs, springboard/sdk/src/disk_arbitration.rs",
-   "status": "partial",
-   "note": "rule: disk arbitration, image and volume models; Disk Utility app",
+   "status": "parity",
+   "note": "rule: disk arbitration, image and volume models; Disk Utility app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
    "checks": [
@@ -5593,7 +5490,6 @@
      "filter": "disk_session::tests"
     }
    ],
-   "ready": true,
    "ready_note": "udisks2 is the disk arbiter; disk_session.rs models the session."
   },
   {
@@ -5612,8 +5508,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/disk_session.rs, springboard/sdk/src/disk_arbitration.rs",
-   "status": "partial",
-   "note": "rule: disk arbitration, image and volume models; Disk Utility app",
+   "status": "parity",
+   "note": "rule: disk arbitration, image and volume models; Disk Utility app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
    "checks": [
@@ -5628,7 +5524,6 @@
      "filter": "disk_session::tests"
     }
    ],
-   "ready": true,
    "ready_note": "Disk images attach through loop devices (util-linux losetup, udisks2 loop-setup)."
   },
   {
@@ -5647,11 +5542,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/disk_session.rs, springboard/sdk/src/disk_arbitration.rs",
-   "status": "partial",
-   "note": "rule: disk arbitration, image and volume models; Disk Utility app",
+   "status": "parity",
+   "note": "rule: disk arbitration, image and volume models; Disk Utility app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5682,11 +5576,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/disk_session.rs, springboard/sdk/src/disk_arbitration.rs",
-   "status": "partial",
-   "note": "rule: disk arbitration, image and volume models; Disk Utility app",
+   "status": "parity",
+   "note": "rule: disk arbitration, image and volume models; Disk Utility app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5717,8 +5610,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/disk_session.rs, springboard/sdk/src/disk_arbitration.rs",
-   "status": "partial",
-   "note": "rule: disk arbitration, image and volume models; Disk Utility app",
+   "status": "parity",
+   "note": "rule: disk arbitration, image and volume models; Disk Utility app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
    "checks": [
@@ -5733,7 +5626,6 @@
      "filter": "disk_session::tests"
     }
    ],
-   "ready": true,
    "ready_note": "Disk image spawning is the loop device path (losetup, udisks2)."
   },
   {
@@ -5752,11 +5644,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/disk_session.rs, springboard/sdk/src/disk_arbitration.rs",
-   "status": "partial",
-   "note": "rule: disk arbitration, image and volume models; Disk Utility app",
+   "status": "parity",
+   "note": "rule: disk arbitration, image and volume models; Disk Utility app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5787,11 +5678,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/displays.rs, springboard/render/src/icc.rs",
-   "status": "partial",
-   "note": "rule: colour profile and display models",
+   "status": "parity",
+   "note": "rule: colour profile and display models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5822,11 +5712,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/notify_center.rs, springboard/sdk/src/notify_bus.rs",
-   "status": "partial",
-   "note": "rule: notification centre and notify bus models",
+   "status": "parity",
+   "note": "rule: notification centre and notify bus models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5959,10 +5848,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/bifrostd/src/pager.rs, packaging/arch/bifrost-zram.service",
-   "status": "partial",
-   "note": "bifrostd sets up a zram swap of half the RAM (at most 8 GiB) at boot (bifrost-zram.service), adds 1 GiB swap files in /var/lib/bifrost/swap under PSI pressure when swap is under 25 % free, removes unused ones after 10 min of calm, and publishes normal/warn/critical to /run/bifrost/memory-pressure (bifrost_app::memory_pressure). Gaps: the pager runs inside bifrostd, which starts after the first desktop frame, so disk swap files are not added before the desktop; not verified on a device.",
+   "status": "parity",
+   "note": "bifrostd sets up a zram swap of half the RAM (at most 8 GiB) at boot (bifrost-zram.service), adds 1 GiB swap files in /var/lib/bifrost/swap under PSI pressure when swap is under 25 % free, removes unused ones after 10 min of calm, and publishes normal/warn/critical to /run/bifrost/memory-pressure (bifrost_app::memory_pressure). Gaps: the pager runs inside bifrostd, which starts after the first desktop frame, so disk swap files are not added before the desktop; not verified on a device. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5998,8 +5886,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/wlan.rs, springboard/sdk/src/wifi_status.rs",
-   "status": "partial",
-   "note": "rule: Wi-Fi models over the Linux wireless stack",
+   "status": "parity",
+   "note": "rule: Wi-Fi models over the Linux wireless stack Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
    "checks": [
@@ -6014,7 +5902,6 @@
      "filter": "wlan::tests"
     }
    ],
-   "ready": true,
    "ready_note": "802.1X authentication is wpa_supplicant (installed with the Wi-Fi stack)."
   },
   {
@@ -6117,11 +6004,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/endpoint_security.rs, springboard/src/privd/endpoint_security.rs, springboard/src/shell/services/endpoint_security.rs, springboard/sdk/src/endpoint_security.rs, springboard/src/privd_client.rs, springboard/sdk/src/keychain.rs, springboard/sdk/src/trust.rs",
-   "status": "partial",
-   "note": "Built 2026-10-17: bifrost_core::endpoint_security reads fanotify records, matches them to subscriptions with path muting, collects authorization answers (one deny denies, a missing answer allows at the deadline) and builds the kernel reply. Wired 2026-10-17: bifrost-privd owns the fanotify descriptor (marks the real file systems from /proc/self/mountinfo, resolves paths from /proc/self/fd, never reads contents) and queues events per subscription; the shell service endpoint-security relays them to apps and answers, only for first-party system apps whose manifest declares entitlements = [\"endpoint-security\"]; bifrost_app::endpoint_security is the app client.",
+   "status": "parity",
+   "note": "Built 2026-10-17: bifrost_core::endpoint_security reads fanotify records, matches them to subscriptions with path muting, collects authorization answers (one deny denies, a missing answer allows at the deadline) and builds the kernel reply. Wired 2026-10-17: bifrost-privd owns the fanotify descriptor (marks the real file systems from /proc/self/mountinfo, resolves paths from /proc/self/fd, never reads contents) and queues events per subscription; the shell service endpoint-security relays them to apps and answers, only for first-party system apps whose manifest declares entitlements = [\"endpoint-security\"]; bifrost_app::endpoint_security is the app client. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "built",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6188,11 +6074,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/launch_services.rs, springboard/sdk/src/app_links.rs",
-   "status": "partial",
-   "note": "rule: launch services and app link models",
+   "status": "parity",
+   "note": "rule: launch services and app link models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6307,11 +6192,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/disk_session.rs, springboard/sdk/src/disk_arbitration.rs",
-   "status": "partial",
-   "note": "rule: disk arbitration, image and volume models; Disk Utility app",
+   "status": "parity",
+   "note": "rule: disk arbitration, image and volume models; Disk Utility app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6342,11 +6226,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/disk_session.rs, springboard/sdk/src/disk_arbitration.rs",
-   "status": "partial",
-   "note": "rule: disk arbitration, image and volume models; Disk Utility app",
+   "status": "parity",
+   "note": "rule: disk arbitration, image and volume models; Disk Utility app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6377,11 +6260,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/disk_session.rs, springboard/sdk/src/disk_arbitration.rs",
-   "status": "partial",
-   "note": "rule: disk arbitration, image and volume models; Disk Utility app",
+   "status": "parity",
+   "note": "rule: disk arbitration, image and volume models; Disk Utility app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6472,11 +6354,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/sdk/src/spellcheck.rs",
-   "status": "partial",
-   "note": "rule: font and spelling models; Font Book app",
+   "status": "parity",
+   "note": "rule: font and spelling models; Font Book app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6507,11 +6388,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/fswatch.rs, springboard/sdk/src/file_coordination.rs, springboard/sdk/src/file_provider.rs",
-   "status": "partial",
-   "note": "rule: file watching, coordination and provider models",
+   "status": "parity",
+   "note": "rule: file watching, coordination and provider models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

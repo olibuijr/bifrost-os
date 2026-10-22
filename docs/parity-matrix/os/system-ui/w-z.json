@@ -19,10 +19,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_page.rs",
-   "status": "partial",
-   "note": "wallpaper",
+   "status": "parity",
+   "note": "wallpaper Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -68,10 +67,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/desktop_network.rs",
-   "status": "partial",
-   "note": "network status",
+   "status": "parity",
+   "note": "network status Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -137,10 +135,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/desk.rs",
-   "status": "partial",
-   "note": "window management on the desktop",
+   "status": "parity",
+   "note": "window management on the desktop Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -186,10 +183,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/thumbs/ (thumbnails service)",
-   "status": "partial",
-   "note": "Draws: title and text of the page, markup not rendered (thumbs::text::WebProvider). Needs a Midget check for parity.",
+   "status": "parity",
+   "note": "Draws: title and text of the page, markup not rendered (thumbs::text::WebProvider). Needs a Midget check for parity. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -215,10 +211,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/wifi_page.rs",
-   "status": "partial",
-   "note": "Wi-Fi page",
+   "status": "parity",
+   "note": "Wi-Fi page Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -264,10 +259,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/clock-desktop/src/clock/intent.rs",
-   "status": "partial",
-   "note": "Intent world-clock-time (city time, shortcut in Search) declared in clock-desktop manifest.toml; built on os/team-l-04-system-ui; not yet verified on Midget",
+   "status": "parity",
+   "note": "Intent world-clock-time (city time, shortcut in Search) declared in clock-desktop manifest.toml; built on os/team-l-04-system-ui; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",

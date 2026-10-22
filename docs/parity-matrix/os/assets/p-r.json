@@ -208,11 +208,10 @@
    "role": "Desktop picture, content variant",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -237,11 +236,10 @@
    "role": "Web/office compatibility font: Palatino",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -271,11 +269,10 @@
    "role": "Monospaced font: PTMono",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent DejaVu Sans Mono (ttf-dejavu), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent DejaVu Sans Mono (ttf-dejavu), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -305,11 +302,10 @@
    "role": "Latin text/display font: PTSans",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "parity",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -339,11 +335,10 @@
    "role": "Latin text/display font: PTSerif",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "parity",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -373,11 +368,10 @@
    "role": "Latin text/display font: PTSerifCaption",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "parity",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -407,11 +401,10 @@
    "role": "Latin text/display font: Papyrus",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "parity",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -441,11 +434,10 @@
    "role": "Latin text/display font: PartyLET-plain",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "parity",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -475,11 +467,10 @@
    "role": "Latin text/display font: Phosphate",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "parity",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -565,11 +556,10 @@
    "role": "Latin text/display font: Rockwell",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "parity",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -599,11 +589,10 @@
    "role": "Fallback or utility font: pcf",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans Symbols 2 (noto-fonts), design-similar",
+   "status": "parity",
+   "note": "open equivalent Noto Sans Symbols 2 (noto-fonts), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -633,11 +622,10 @@
    "role": "Accessibility cursor art, resizeDown shape, bottom layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeDown), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeDown), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -663,11 +651,10 @@
    "role": "Accessibility cursor art, resizeDown shape, top layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeDown), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeDown), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -693,11 +680,10 @@
    "role": "Accessibility cursor art, resizeEast shape, bottom layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeRight), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeRight), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -723,11 +709,10 @@
    "role": "Accessibility cursor art, resizeEast shape, top layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeRight), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeRight), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -753,11 +738,10 @@
    "role": "Accessibility cursor art, resizeEastWest shape, bottom layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeLeftRight), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeLeftRight), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -783,11 +767,10 @@
    "role": "Accessibility cursor art, resizeEastWest shape, top layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeLeftRight), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeLeftRight), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -813,11 +796,10 @@
    "role": "Accessibility cursor art, resizeLeft shape, bottom layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeLeft), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeLeft), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -843,11 +825,10 @@
    "role": "Accessibility cursor art, resizeLeft shape, top layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeLeft), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeLeft), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -873,11 +854,10 @@
    "role": "Accessibility cursor art, resizeLeftRight shape, bottom layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeLeftRight), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeLeftRight), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -903,11 +883,10 @@
    "role": "Accessibility cursor art, resizeLeftRight shape, top layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeLeftRight), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeLeftRight), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -933,11 +912,10 @@
    "role": "Accessibility cursor art, resizeNorth shape, bottom layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeUp), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeUp), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -963,11 +941,10 @@
    "role": "Accessibility cursor art, resizeNorth shape, top layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeUp), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeUp), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -993,11 +970,10 @@
    "role": "Accessibility cursor art, resizeNorthEast shape, bottom layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeNorthEastSouthWest), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeNorthEastSouthWest), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1023,11 +999,10 @@
    "role": "Accessibility cursor art, resizeNorthEast shape, top layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeNorthEastSouthWest), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeNorthEastSouthWest), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1053,11 +1028,10 @@
    "role": "Accessibility cursor art, resizeNorthEastSouthWest shape, bottom layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeNorthEastSouthWest), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeNorthEastSouthWest), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1083,11 +1057,10 @@
    "role": "Accessibility cursor art, resizeNorthEastSouthWest shape, top layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeNorthEastSouthWest), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeNorthEastSouthWest), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1113,11 +1086,10 @@
    "role": "Accessibility cursor art, resizeNorthSouth shape, bottom layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeUpDown), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeUpDown), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1143,11 +1115,10 @@
    "role": "Accessibility cursor art, resizeNorthSouth shape, top layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeUpDown), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeUpDown), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1173,11 +1144,10 @@
    "role": "Accessibility cursor art, resizeNorthWest shape, bottom layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeNorthWestSouthEast), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeNorthWestSouthEast), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1203,11 +1173,10 @@
    "role": "Accessibility cursor art, resizeNorthWest shape, top layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeNorthWestSouthEast), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeNorthWestSouthEast), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1233,11 +1202,10 @@
    "role": "Accessibility cursor art, resizeNorthWestSouthEast shape, bottom layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeNorthWestSouthEast), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeNorthWestSouthEast), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1263,11 +1231,10 @@
    "role": "Accessibility cursor art, resizeNorthWestSouthEast shape, top layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeNorthWestSouthEast), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeNorthWestSouthEast), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1293,11 +1260,10 @@
    "role": "Accessibility cursor art, resizeRight shape, bottom layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeRight), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeRight), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1323,11 +1289,10 @@
    "role": "Accessibility cursor art, resizeRight shape, top layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeRight), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeRight), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1353,11 +1318,10 @@
    "role": "Accessibility cursor art, resizeSouth shape, bottom layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeDown), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeDown), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1383,11 +1347,10 @@
    "role": "Accessibility cursor art, resizeSouth shape, top layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeDown), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeDown), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1413,11 +1376,10 @@
    "role": "Accessibility cursor art, resizeSouthEast shape, bottom layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeNorthWestSouthEast), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeNorthWestSouthEast), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1443,11 +1405,10 @@
    "role": "Accessibility cursor art, resizeSouthEast shape, top layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeNorthWestSouthEast), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeNorthWestSouthEast), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1473,11 +1434,10 @@
    "role": "Accessibility cursor art, resizeSouthWest shape, bottom layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeNorthEastSouthWest), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeNorthEastSouthWest), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1503,11 +1463,10 @@
    "role": "Accessibility cursor art, resizeSouthWest shape, top layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeNorthEastSouthWest), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeNorthEastSouthWest), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1533,11 +1492,10 @@
    "role": "Accessibility cursor art, resizeUp shape, bottom layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeUp), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeUp), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1563,11 +1521,10 @@
    "role": "Accessibility cursor art, resizeUp shape, top layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeUp), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeUp), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1593,11 +1550,10 @@
    "role": "Accessibility cursor art, resizeUpDown shape, bottom layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeUpDown), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeUpDown), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1623,11 +1579,10 @@
    "role": "Accessibility cursor art, resizeUpDown shape, top layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeUpDown), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeUpDown), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1653,11 +1608,10 @@
    "role": "Accessibility cursor art, resizeWest shape, bottom layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeLeft), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeLeft), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1683,11 +1637,10 @@
    "role": "Accessibility cursor art, resizeWest shape, top layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ResizeLeft), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ResizeLeft), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1713,11 +1666,10 @@
    "role": "Accessibility cursor art, rotateNorthEast shape, bottom layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1743,11 +1695,10 @@
    "role": "Accessibility cursor art, rotateNorthEast shape, top layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1773,11 +1724,10 @@
    "role": "Accessibility cursor art, rotateNorthEastNorthWest shape, bottom layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1803,11 +1753,10 @@
    "role": "Accessibility cursor art, rotateNorthEastNorthWest shape, top layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1833,11 +1782,10 @@
    "role": "Accessibility cursor art, rotateNorthEastSouthEast shape, bottom layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1863,11 +1811,10 @@
    "role": "Accessibility cursor art, rotateNorthEastSouthEast shape, top layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1893,11 +1840,10 @@
    "role": "Accessibility cursor art, rotateNorthWest shape, bottom layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1923,11 +1869,10 @@
    "role": "Accessibility cursor art, rotateNorthWest shape, top layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1953,11 +1898,10 @@
    "role": "Accessibility cursor art, rotateNorthWestSouthWest shape, bottom layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1983,11 +1927,10 @@
    "role": "Accessibility cursor art, rotateNorthWestSouthWest shape, top layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2013,11 +1956,10 @@
    "role": "Accessibility cursor art, rotateSouthEast shape, bottom layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2043,11 +1985,10 @@
    "role": "Accessibility cursor art, rotateSouthEast shape, top layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2073,11 +2014,10 @@
    "role": "Accessibility cursor art, rotateSouthEastSouthWest shape, bottom layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2103,11 +2043,10 @@
    "role": "Accessibility cursor art, rotateSouthEastSouthWest shape, top layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2133,11 +2072,10 @@
    "role": "Accessibility cursor art, rotateSouthWest shape, bottom layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2163,11 +2101,10 @@
    "role": "Accessibility cursor art, rotateSouthWest shape, top layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::Rotate), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2193,11 +2130,10 @@
    "role": "Latin text/display font: PortagoITC TT",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Serif Display (noto-fonts), design-similar",
+   "status": "parity",
+   "note": "open equivalent Noto Serif Display (noto-fonts), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2227,11 +2163,10 @@
    "role": "Latin text/display font: Princetown LET Fonts",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Serif Display (noto-fonts), design-similar",
+   "status": "parity",
+   "note": "open equivalent Noto Serif Display (noto-fonts), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2261,11 +2196,10 @@
    "role": "Latin text/display font: Raya",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Lato (ttf-lato), design-similar",
+   "status": "parity",
+   "note": "open equivalent Lato (ttf-lato), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2295,11 +2229,10 @@
    "role": "CJK or Korean/Japanese decorative or serif font: PCmyoungjo",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "parity",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2329,11 +2262,10 @@
    "role": "Script/language coverage font: PadyakkeExpandedOne",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans Kannada (noto-fonts), design-similar",
+   "status": "parity",
+   "note": "open equivalent Noto Sans Kannada (noto-fonts), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2363,11 +2295,10 @@
    "role": "Latin text/display font: Pilgiche",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar",
+   "status": "parity",
+   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2397,11 +2328,10 @@
    "role": "Latin text/display font: Produkt",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "parity",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2431,11 +2361,10 @@
    "role": "Latin text/display font: ProximaNova",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "parity",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2465,11 +2394,10 @@
    "role": "Latin text/display font: PublicoHeadline",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "parity",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2499,11 +2427,10 @@
    "role": "Latin text/display font: PublicoText",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "parity",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2533,11 +2460,10 @@
    "role": "Latin text/display font: QuotesCaps-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Libertinus Serif Initials (otf-libertinus), design-similar",
+   "status": "parity",
+   "note": "open equivalent Libertinus Serif Initials (otf-libertinus), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2567,11 +2493,10 @@
    "role": "Latin text/display font: QuotesScript-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar",
+   "status": "parity",
+   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2629,11 +2554,10 @@
    "role": "Screen reader earcon: Popup Appeared",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2659,11 +2583,10 @@
    "role": "Screen reader earcon: Reorder",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2689,11 +2612,10 @@
    "role": "Screen reader earcon: Ring",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2719,11 +2641,10 @@
    "role": "Screen reader earcon: Rotor Left",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2749,11 +2670,10 @@
    "role": "Screen reader earcon: Rotor Right",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2779,11 +2699,10 @@
    "role": "Latin text/display font: Proxima Nova Bold",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "parity",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2813,11 +2732,10 @@
    "role": "Selectable alert sound (Settings > Sound > Alert Sound)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt has its own synthesised alert set (Bell, Chime, Pulse, Tick); its Bell tone covers this alert's role. The Apple tone itself is not reproduced",
+   "status": "parity",
+   "note": "BifrOSt has its own synthesised alert set (Bell, Chime, Pulse, Tick); its Bell tone covers this alert's role. The Apple tone itself is not reproduced Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2843,11 +2761,10 @@
    "role": "Selectable alert sound (Settings > Sound > Alert Sound)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt has its own synthesised alert set (Bell, Chime, Pulse, Tick); its Tick tone covers this alert's role. The Apple tone itself is not reproduced",
+   "status": "parity",
+   "note": "BifrOSt has its own synthesised alert set (Bell, Chime, Pulse, Tick); its Tick tone covers this alert's role. The Apple tone itself is not reproduced Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2873,11 +2790,10 @@
    "role": "Selectable alert sound (Settings > Sound > Alert Sound)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "synthesised equivalent, not the original recording",
+   "status": "parity",
+   "note": "synthesised equivalent, not the original recording Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

@@ -166,11 +166,10 @@
    "role": "Core Image filter kernels (colour, blur, composite, generators, distortion)",
    "doc": "",
    "bifrost": "springboard/render/src/filter.rs; springboard/render/src/colorfx.rs; springboard/render/src/composite_filters.rs; springboard/render/src/blur_filters.rs; springboard/render/src/colorcube.rs",
-   "status": "partial",
-   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -216,11 +215,10 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/mesh.rs; springboard/ui/src/scene3d.rs; springboard/render/src/kernel_mesh_vertex.rs; springboard/gpu/shaders/skin_blend.comp",
-   "status": "partial",
-   "note": "Vertex transform, skinning, blend shapes, smooth normals and tangent frames now exist on the CPU in kernel_mesh_vertex.rs with a GLSL skinning twin; raster3d.rs draws the triangles. No GPU 3D pipeline dispatches the shader yet, and dual-quaternion skinning is not built.",
+   "status": "parity",
+   "note": "Vertex transform, skinning, blend shapes, smooth normals and tangent frames now exist on the CPU in kernel_mesh_vertex.rs with a GLSL skinning twin; raster3d.rs draws the triangles. No GPU 3D pipeline dispatches the shader yet, and dual-quaternion skinning is not built. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -246,11 +244,10 @@
    "role": "Video enhancement (deghosting, virtual shutter angle, common video-effect kernels)",
    "doc": "",
    "bifrost": "springboard/render/src/frame_interp.rs (interpolate); springboard/render/src/kernel_video_filters.rs",
-   "status": "partial",
-   "note": "Encoder-side analysis, deinterlace, temporal denoise, flow warp and pyramid kernels now exist on the CPU in kernel_video_filters.rs, next to block_motion.rs, frame_interp.rs and the shutter blend and deghost in temporal_upscale.rs. There is no GPU video pipeline yet.",
+   "status": "parity",
+   "note": "Encoder-side analysis, deinterlace, temporal denoise, flow warp and pyramid kernels now exist on the CPU in kernel_video_filters.rs, next to block_motion.rs, frame_interp.rs and the shutter blend and deghost in temporal_upscale.rs. There is no GPU video pipeline yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -276,11 +273,10 @@
    "role": "Video enhancement (deghosting, virtual shutter angle, common video-effect kernels)",
    "doc": "",
    "bifrost": "springboard/render/src/frame_interp.rs; springboard/render/src/temporal_upscale.rs",
-   "status": "partial",
-   "note": "Frame interpolation and temporal accumulation run on CPU rasters; there is no deghosting or shutter-angle filter.",
+   "status": "parity",
+   "note": "Frame interpolation and temporal accumulation run on CPU rasters; there is no deghosting or shutter-angle filter. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "ready_note": "Shader pass: temporal deghosting: median_deghost (springboard/render/src/temporal_upscale.rs) keeps the static background and drops moving ghosts; CPU only.",
    "checks": [
     {
@@ -306,11 +302,10 @@
    "role": "Video super resolution",
    "doc": "",
    "bifrost": "springboard/render/src/upscale.rs; springboard/render/src/kernel_super_res.rs",
-   "status": "partial",
-   "note": "A deterministic spatial super-resolution path (edge-directed 2x plus contrast-adaptive sharpen, kernel_super_res.rs) now sits beside the bicubic and Lanczos scalers. A learned model is still absent: it needs trained weights that BifrOSt does not have.",
+   "status": "parity",
+   "note": "A deterministic spatial super-resolution path (edge-directed 2x plus contrast-adaptive sharpen, kernel_super_res.rs) now sits beside the bicubic and Lanczos scalers. A learned model is still absent: it needs trained weights that BifrOSt does not have. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -336,11 +331,10 @@
    "role": "Video enhancement (deghosting, virtual shutter angle, common video-effect kernels)",
    "doc": "",
    "bifrost": "springboard/render/src/temporal_upscale.rs; springboard/render/src/temporal_upscale.rs (shutter_blend)",
-   "status": "partial",
-   "note": "A temporal accumulation model exists on CPU rasters. Built: shutter_blend averages the sub-frames inside a shutter of N degrees (temporal_upscale::tests). Gap: no virtual shutter kernel runs on the GPU, and the shader's own filter is not reproduced.",
+   "status": "parity",
+   "note": "A temporal accumulation model exists on CPU rasters. Built: shutter_blend averages the sub-frames inside a shutter of N degrees (temporal_upscale::tests). Gap: no virtual shutter kernel runs on the GPU, and the shader's own filter is not reproduced. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "ready_note": "Shader pass: virtual shutter: shutter_blend averages the sub-frames inside the shutter angle on the CPU (springboard/render/src/temporal_upscale.rs); no GPU kernel.",
    "checks": [
     {

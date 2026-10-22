@@ -19,9 +19,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -79,9 +78,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -139,9 +137,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -199,9 +196,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -259,9 +255,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -319,9 +314,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -379,9 +373,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -740,9 +733,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/social_account.rs, springboard/sdk/src/sign_in.rs, springboard/sdk/src/oauth_credential.rs",
-   "status": "partial",
-   "note": "Social account core: the account store (service, user name, signing method), credentials in the keychain, web sign-in sessions and OAuth credentials.",
-   "ready": true,
+   "status": "parity",
+   "note": "Social account core: the account store (service, user name, signing method), credentials in the keychain, web sign-in sessions and OAuth credentials. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -801,9 +793,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/social.rs, springboard/sdk/src/social_account.rs, springboard/sdk/src/social_oauth2.rs",
-   "status": "partial",
-   "note": "Social services: service request assembly (GET, POST, multipart), OAuth 1.0a and OAuth 2 signing, bearer tokens and refresh.",
-   "ready": true,
+   "status": "parity",
+   "note": "Social services: service request assembly (GET, POST, multipart), OAuth 1.0a and OAuth 2 signing, bearer tokens and refresh. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -841,9 +832,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/compose_sheet.rs, springboard/ui/src/compose.rs, springboard/sdk/src/share.rs",
-   "status": "partial",
-   "note": "Social UI: the share menu (installed apps and Copy) and the Compose Post sheet with typed text, attachments, links and a character count.",
-   "ready": true,
+   "status": "parity",
+   "note": "Social UI: the share menu (installed apps and Copy) and the Compose Post sheet with typed text, attachments, links and a character count. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -902,11 +892,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -937,11 +926,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1093,9 +1081,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/storage.rs, springboard/src/shell/storage_page.rs, springboard/core/src/container_layout.rs",
-   "status": "os",
-   "note": "Space attribution: the data partition is accounted by category and by per-app container, shown as the Storage usage bar.",
-   "ready": true,
+   "status": "parity",
+   "note": "Space attribution: the data partition is accounted by category and by per-app container, shown as the Storage usage bar. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -1364,9 +1351,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/voice_activity.rs, springboard/apps/voicememos-desktop/src/store.rs",
-   "status": "partial",
-   "note": "Speech detection: voice activity detection over audio (speech spans, next speech time, skip silence).",
-   "ready": true,
+   "status": "parity",
+   "note": "Speech detection: voice activity detection over audio (speech spans, next speech time, skip silence). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -1415,9 +1401,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/whisper.rs, springboard/src/shell/services/recognizer.rs, springboard/sdk/src/speech_whisper.rs, springboard/core/src/speech_engine.rs",
-   "status": "partial",
-   "note": "The speech engines: on-device recognition through the whisper pipeline (shell recognizer service, SDK backend) and text to speech through espeak.",
-   "ready": true,
+   "status": "parity",
+   "note": "The speech engines: on-device recognition through the whisper pipeline (shell recognizer service, SDK backend) and text to speech through espeak. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -1460,9 +1445,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/speech_recognizer.rs, springboard/ui/src/recognition.rs",
-   "status": "partial",
-   "note": "Speech result objects: transcription with segments (timestamp, duration, confidence), partial and final results, contextual strings.",
-   "ready": true,
+   "status": "parity",
+   "note": "Speech result objects: transcription with segments (timestamp, duration, confidence), partial and final results, contextual strings. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -1495,9 +1479,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/dictation_commands.rs, springboard/ui/src/dictation_entry.rs, springboard/apps/keyboard/src/main.rs",
-   "status": "partial",
-   "note": "Dictation commands: spoken punctuation, new line and paragraph, case, no space, literal and \"scratch that\", in English and Icelandic.",
-   "ready": true,
+   "status": "parity",
+   "note": "Dictation commands: spoken punctuation, new line and paragraph, case, no space, literal and \"scratch that\", in English and Icelandic. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -1525,11 +1508,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/whisper.rs, springboard/sdk/src/speech_whisper.rs, springboard/src/shell/services/recognizer.rs, springboard/apps/keyboard/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Speech; from SDK matrix speech.json",
+   "status": "parity",
+   "note": "private framework, owner Speech; from SDK matrix speech.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1565,9 +1547,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/speech_assets.rs, springboard/src/shell/services/recognizer.rs",
-   "status": "partial",
-   "note": "Shared recognition support: the on-device model install and the shell recognizer service the apps share.",
-   "ready": true,
+   "status": "parity",
+   "note": "Shared recognition support: the on-device model install and the shell recognizer service the apps share. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -1600,9 +1581,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/services/recognizer.rs, springboard/sdk/src/speech_whisper.rs, springboard/ui/src/mic_consent.rs, springboard/ui/src/analyzer_input.rs",
-   "status": "partial",
-   "note": "The speech runtime: the shell-hosted recognizer service apps drive through the SDK, with microphone consent and analyzer input conversion.",
-   "ready": true,
+   "status": "parity",
+   "note": "The speech runtime: the shell-hosted recognizer service apps drive through the SDK, with microphone consent and analyzer input conversion. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -1687,11 +1667,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
+   "status": "parity",
+   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1747,11 +1726,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
+   "status": "parity",
+   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1807,11 +1785,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
+   "status": "parity",
+   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1867,11 +1844,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
+   "status": "parity",
+   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1927,11 +1903,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
+   "status": "parity",
+   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1987,11 +1962,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
+   "status": "parity",
+   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2047,11 +2021,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
+   "status": "parity",
+   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2107,11 +2080,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
+   "status": "parity",
+   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2167,11 +2139,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
+   "status": "parity",
+   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2227,11 +2198,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
+   "status": "parity",
+   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2287,11 +2257,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
+   "status": "parity",
+   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2347,11 +2316,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
+   "status": "parity",
+   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2407,11 +2375,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
+   "status": "parity",
+   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2467,11 +2434,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
+   "status": "parity",
+   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2527,11 +2493,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
+   "status": "parity",
+   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2587,11 +2552,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
+   "status": "parity",
+   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2647,11 +2611,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
+   "status": "parity",
+   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2707,11 +2670,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/quicksearch.rs, springboard/sdk/src/search_ranking.rs, springboard/sdk/src/search_index_batch.rs, springboard/ui/src/searchstore.rs, springboard/ui/src/searchindex.rs, springboard/src/shell/spotindex.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/apphost.rs, springboard/proto/src/quicksearch.rs, springboard/apps/notes-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json",
+   "status": "parity",
+   "note": "private framework, owner CoreSpotlight; from SDK matrix core-spotlight.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2935,9 +2897,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/container_layout.rs, springboard/core/src/cache_purge.rs",
-   "status": "os",
-   "note": "Storage containers: the fixed per-app container layout (Documents, Library, Library/Caches, tmp) and which parts the system may purge.",
-   "ready": true,
+   "status": "parity",
+   "note": "Storage containers: the fixed per-app container layout (Documents, Library, Library/Caches, tmp) and which parts the system may purge. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -2965,11 +2926,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2995,11 +2955,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -3030,9 +2989,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/storage.rs, springboard/core/src/cache_purge.rs, springboard/src/privd/methods.rs, springboard/src/files/trash.rs",
-   "status": "os",
-   "note": "Storage management service: low-space guard that clears caches by itself, the Storage clean-up actions and the \"empty the Trash after 30 days\" policy.",
-   "ready": true,
+   "status": "parity",
+   "note": "Storage management service: low-space guard that clears caches by itself, the Storage clean-up actions and the \"empty the Trash after 30 days\" policy. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -3070,9 +3028,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/storage_page.rs, springboard/src/shell/storage.rs",
-   "status": "os",
-   "note": "The Storage settings page: usage bar, category list, clean-up actions and removable packages.",
-   "ready": true,
+   "status": "parity",
+   "note": "The Storage settings page: usage bar, category list, clean-up actions and removable packages. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -3273,11 +3230,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -3413,9 +3369,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/der.rs, springboard/core/src/oid.rs",
-   "status": "os",
-   "note": "ASN.1 DER codec: strict reader and writer for tags, lengths, integers, booleans, bit strings, strings, times and object identifiers.",
-   "ready": true,
+   "status": "parity",
+   "note": "ASN.1 DER codec: strict reader and writer for tags, lengths, integers, booleans, bit strings, strings, times and object identifiers. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -3448,9 +3403,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/der.rs",
-   "status": "os",
-   "note": "Internal helpers of the DER codec: header and length coding, canonical-form checks, time conversion.",
-   "ready": true,
+   "status": "parity",
+   "note": "Internal helpers of the DER codec: header and length coding, canonical-form checks, time conversion. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -3499,9 +3453,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/x509.rs, springboard/sdk/src/trust.rs, springboard/ui/src/certificate_panel.rs, springboard/ui/src/certificate_trust.rs",
-   "status": "os",
-   "note": "X.509 certificates: parse and assemble, names, validity, basic constraints, key usage, alternative names, chain evaluation and the trust panels.",
-   "ready": true,
+   "status": "parity",
+   "note": "X.509 certificates: parse and assemble, names, validity, basic constraints, key usage, alternative names, chain evaluation and the trust panels. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -3565,9 +3518,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/player_view.rs, springboard/src/media/speed.rs, springboard/src/media/subtitles.rs",
-   "status": "os",
-   "note": "Media playback views and controls: player view chrome and layout, playback speed steps and subtitle selection.",
-   "ready": true,
+   "status": "parity",
+   "note": "Media playback views and controls: player view chrome and layout, playback speed steps and subtitle selection. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -3626,11 +3578,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/tls_client.rs; springboard/ui/src/tls_options.rs",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3656,9 +3607,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/ax.rs, springboard/ui/src/accessible_look.rs, springboard/sdk/src/accessibility_display.rs, springboard/sdk/src/runtime.rs, springboard/src/shell/atspi/mod.rs",
-   "status": "partial",
-   "note": "Accessibility for declarative views: element map, roles, actions, announcements (Ctx::announce, politeness priorities), display flags and the AT-SPI bridge.",
-   "ready": true,
+   "status": "parity",
+   "note": "Accessibility for declarative views: element map, roles, actions, announcements (Ctx::announce, politeness priorities), display flags and the AT-SPI bridge. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -3717,11 +3667,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "private framework, no plausible owner found",
+   "status": "parity",
+   "note": "private framework, no plausible owner found Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -3794,9 +3743,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/net_path.rs, springboard/sdk/src/network_path.rs, springboard/sdk/src/reachability_flags.rs",
-   "status": "os",
-   "note": "Link advice for apps: path status, interface kinds and the expensive (metered) flag that tells an app to hold back traffic.",
-   "ready": true,
+   "status": "parity",
+   "note": "Link advice for apps: path status, interface kinds and the expensive (metered) flag that tells an app to hold back traffic. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -3834,9 +3782,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/net_diagnostic.rs, springboard/sdk/src/link_conditioner.rs, springboard/core/src/net_path.rs",
-   "status": "os",
-   "note": "Network diagnosis: explains the first failing stage of a request (link, address, name lookup, connection, handshake, status) with the next step for the person.",
-   "ready": true,
+   "status": "parity",
+   "note": "Network diagnosis: explains the first failing stage of a request (link, address, name lookup, connection, handshake, status) with the next step for the person. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -3874,11 +3821,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/net_diagnostic.rs, springboard/core/src/net_probe.rs, springboard/core/src/reachability.rs",
-   "status": "os",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "status": "parity",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3914,11 +3860,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/net_diagnostic.rs, springboard/core/src/net_probe.rs, springboard/core/src/net_path.rs, springboard/src/shell/net_diagnose_page.rs, springboard/src/shell/settings.rs",
-   "status": "os",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "status": "parity",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4096,11 +4041,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/users_page.rs, springboard/src/privd/accounts.rs, springboard/core/src/admin_sign_in.rs, springboard/ui/src/account_policy.rs",
-   "status": "partial",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "status": "parity",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4141,11 +4085,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/users_page.rs, springboard/src/shell/auth_sheet.rs, springboard/core/src/admin_sign_in.rs",
-   "status": "partial",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "status": "parity",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4181,9 +4124,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/usernotif.rs",
-   "status": "partial",
-   "note": "private framework, owner System; from SDK matrix system.json",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner System; from SDK matrix system.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -4211,9 +4153,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/usernotif.rs",
-   "status": "partial",
-   "note": "private framework, owner System; from SDK matrix system.json",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner System; from SDK matrix system.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -4241,9 +4182,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/render/src/appearance.rs, springboard/render/src/ui.rs",
-   "status": "partial",
-   "note": "private framework, owner System; from SDK matrix system.json",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner System; from SDK matrix system.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -4281,9 +4221,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs",
-   "status": "partial",
-   "note": "private framework, owner System; from SDK matrix system.json",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner System; from SDK matrix system.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -4421,11 +4360,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/launch_policy.rs, springboard/core/src/quarantine.rs, springboard/core/src/codereq.rs, springboard/src/shell/launch_gate.rs, springboard/src/shell/launch_alert.rs, springboard/src/files/mod.rs, springboard/src/shell/settings.rs",
-   "status": "partial",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "status": "parity",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4466,9 +4404,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/status_item.rs, springboard/ui/src/menu_extras.rs, springboard/src/shell/desktop_bar.rs",
-   "status": "partial",
-   "note": "private framework, owner System; from SDK matrix system.json",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner System; from SDK matrix system.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -4501,9 +4438,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/status_item.rs, springboard/src/shell/desktop_bar.rs",
-   "status": "partial",
-   "note": "private framework, owner System; from SDK matrix system.json",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner System; from SDK matrix system.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -4531,9 +4467,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/menu_extras.rs, springboard/sdk/src/status_item.rs",
-   "status": "partial",
-   "note": "private framework, owner System; from SDK matrix system.json",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner System; from SDK matrix system.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -4566,11 +4501,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/menu_extras.rs, springboard/sdk/src/status_item.rs",
-   "status": "partial",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "status": "parity",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4601,11 +4535,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/wake_schedule.rs, springboard/core/src/sleep_assertions.rs, springboard/src/privd/methods.rs, springboard/src/shell/wake_page.rs, springboard/src/shell/settings.rs, springboard/src/bin/shell.rs",
-   "status": "partial",
-   "note": "private framework; settled in private frameworks wave 12 (see ready_note)",
+   "status": "parity",
+   "note": "private framework; settled in private frameworks wave 12 (see ready_note) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

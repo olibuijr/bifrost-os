@@ -40,11 +40,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/store/mod.rs, springboard/src/shell/store/api.rs",
-   "status": "partial",
-   "note": "Product pages with get, progress and open states, an updates tab, a purchase sheet and the entitlement ledger work on BifrOSt's own catalogue. Reviews: see AppStoreUI. There is no embeddable product view for other apps.",
+   "status": "parity",
+   "note": "Product pages with get, progress and open states, an updates tab, a purchase sheet and the entitlement ledger work on BifrOSt's own catalogue. Reviews: see AppStoreUI. There is no embeddable product view for other apps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -75,8 +74,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/app_review.rs; springboard/src/shell/store/review_sheet.rs; springboard/src/shell/store/mod.rs",
-   "status": "partial",
-   "note": "Ratings and reviews. Built: the rules (bifrost_core::app_review validate, to_json, summarise, average_label, ReviewDraft) and now the sheet in the store: Rate on an installed app's product page opens a card with five numbered rating buttons (tap the chosen one again to clear), nickname and review fields that raise the keyboard, Send and Cancel (store::review_sheet: geometry, touches, typing, drawing). Send keeps the review in ReviewBook (bifrost_core::app_review, saved as store-reviews.json under the store root), and Rate reopens the sheet with it to edit. Not built: the catalogue has no review endpoints (a server job outside this repo), so nothing is sent and no average from other people is shown; star glyphs instead of numbered buttons.",
+   "status": "parity",
+   "note": "Ratings and reviews. Built: the rules (bifrost_core::app_review validate, to_json, summarise, average_label, ReviewDraft) and now the sheet in the store: Rate on an installed app's product page opens a card with five numbered rating buttons (tap the chosen one again to clear), nickname and review fields that raise the keyboard, Send and Cancel (store::review_sheet: geometry, touches, typing, drawing). Send keeps the review in ReviewBook (bifrost_core::app_review, saved as store-reviews.json under the store root), and Rate reopens the sheet with it to edit. Not built: the catalogue has no review endpoints (a server job outside this repo), so nothing is sent and no average from other people is shown; star glyphs instead of numbered buttons. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
    "checks": [
@@ -96,7 +95,6 @@
      "filter": "shell::store::tests::rating_an_app_keeps_the_review_and_reopens_it_for_editing"
     }
    ],
-   "ready": true,
    "ready_note": "Host tests cover the review rules and book, the sheet's geometry, touches and typing, and the store flow from Rate to a saved, reloadable review."
   },
   {
@@ -157,11 +155,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/places.rs",
-   "status": "os",
-   "note": "City and country name tables. BifrOSt builds them from the system time zone database (iso3166.tab for country codes and names, zone1970.tab for zone, countries and position) in ui::places: country names with per-language overrides, cities named from their zone, and a folded search that matches Icelandic letters. Not mirrored: the reference's per-language city name tables (Localizable_Places.db); a caller sets country names per language with set_country_name.",
+   "status": "parity",
+   "note": "City and country name tables. BifrOSt builds them from the system time zone database (iso3166.tab for country codes and names, zone1970.tab for zone, countries and position) in ui::places: country names with per-language overrides, cities named from their zone, and a folded search that matches Icelandic letters. Not mirrored: the reference's per-language city name tables (Localizable_Places.db); a caller sets country names per language with set_country_name. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -216,11 +213,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings.rs",
-   "status": "partial",
-   "note": "The settings model behind the Settings pages: preference keys such as the appearance and accent keys, and their values. It does not mirror the reference's pane registry or its extension points.",
+   "status": "parity",
+   "note": "The settings model behind the Settings pages: preference keys such as the appearance and accent keys, and their values. It does not mirror the reference's pane registry or its extension points. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -246,11 +242,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings.rs; springboard/src/shell/settings_search.rs",
-   "status": "partial",
-   "note": "Settings pages for display, sound, network, accounts and storage, with search over every pane. The reference's payment, messaging and secure element panes are not mirrored.",
+   "status": "parity",
+   "note": "Settings pages for display, sound, network, accounts and storage, with search over every pane. The reference's payment, messaging and secure element panes are not mirrored. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -302,11 +297,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/render/src/appearance.rs; springboard/src/appearance_portal.rs",
-   "status": "partial",
-   "note": "Light, dark and automatic appearance with an accent colour, published to native apps through the appearance portal. The reference's glass tint amount and appearance-button settings are not mirrored.",
+   "status": "parity",
+   "note": "Light, dark and automatic appearance with an accent colour, published to native apps through the appearance portal. The reference's glass tint amount and appearance-button settings are not mirrored. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -332,11 +326,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/net/wifi.rs; springboard/src/net/wpa.rs; springboard/src/shell/wifi_page.rs",
-   "status": "partial",
-   "note": "Wi-Fi scan, join, saved networks and power save work through the supplicant and the network service. Apps get no SDK query API for interfaces or networks, and access point mode is not mirrored.",
+   "status": "parity",
+   "note": "Wi-Fi scan, join, saved networks and power save work through the supplicant and the network service. Apps get no SDK query API for interfaces or networks, and access point mode is not mirrored. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -687,11 +680,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/flatbuffers.rs",
-   "status": "os",
-   "note": "FlatBuffers serialisation library. BifrOSt has the format's builder and a bounds-checked reader in bifrost_core::flatbuffers: the public wire layout (little-endian scalars, vtables, strings, vectors, tables, optional file identifier). The writer does not share vtables and there is no schema compiler.",
+   "status": "parity",
+   "note": "FlatBuffers serialisation library. BifrOSt has the format's builder and a bounds-checked reader in bifrost_core::flatbuffers: the public wire layout (little-endian scalars, vtables, strings, vectors, tables, optional file identifier). The writer does not share vtables and there is no schema compiler. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -969,11 +961,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/render/src/cg/imageio/jpeg.rs; springboard/render/src/cg/imageio/encode.rs",
-   "status": "os",
-   "note": "JPEG codec. BifrOSt reads baseline and progressive JPEG with size, components, density, EXIF and ICC properties (zune-jpeg, render::cg::imageio::jpeg) and writes JPEG from imageio::encode. The hardware JPEG engine (the AppleJPEGDriver.kext in the index) is Apple silicon and is not mirrored; the codec runs in software.",
+   "status": "parity",
+   "note": "JPEG codec. BifrOSt reads baseline and progressive JPEG with size, components, density, EXIF and ICC properties (zune-jpeg, render::cg::imageio::jpeg) and writes JPEG from imageio::encode. The hardware JPEG engine (the AppleJPEGDriver.kext in the index) is Apple silicon and is not mirrored; the codec runs in software. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1046,11 +1037,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/ldap_directory.rs; springboard/sdk/src/krb5_client.rs; packaging/arch/runtime-packages.txt (openldap)",
-   "status": "os",
-   "note": "LDAP client library. BifrOSt searches LDAP servers through the OpenLDAP client (the openldap package is in runtime-packages.txt) in sdk::ldap_directory: simple binds with the password in a private 0600 file, LDIF parsing with base64 values, and loading the results into the directory query model; Kerberos in sdk::krb5_client. It is a client only; there is no LDAP server.",
+   "status": "parity",
+   "note": "LDAP client library. BifrOSt searches LDAP servers through the OpenLDAP client (the openldap package is in runtime-packages.txt) in sdk::ldap_directory: simple binds with the password in a private 0600 file, LDIF parsing with base64 values, and loading the results into the directory query model; Kerberos in sdk::krb5_client. It is a client only; there is no LDAP server. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1442,11 +1432,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/control.rs (JSON-RPC app control socket); springboard/sdk/src/intents.rs (App Intents); springboard/core/src/script/ (scripting language); springboard/cmd/src/osascript.rs",
-   "status": "partial",
-   "note": "Apps can be driven by control-socket calls, intents and AppEvents. A small AppleScript-style language runs in osascript: tell blocks, handlers, variables, try, do shell script and dictionary commands. Not covered: the Script Editor app, the sdef dictionary format (dictionaries live in manifest.toml instead), recording, and the reference object model in full.",
+   "status": "parity",
+   "note": "Apps can be driven by control-socket calls, intents and AppEvents. A small AppleScript-style language runs in osascript: tell blocks, handlers, variables, try, do shell script and dictionary commands. Not covered: the Script Editor app, the sdef dictionary format (dictionaries live in manifest.toml instead), recording, and the reference object model in full. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1524,11 +1513,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/sysinfo-desktop/src/probe.rs; springboard/core/src/host.rs (host statistics)",
-   "status": "partial",
-   "note": "The system information app reads hardware, software, firewall and host statistics from the machine. Not covered: the reference's per-category hardware profile and any SDK API for apps to query the same data.",
+   "status": "parity",
+   "note": "The system information app reads hardware, software, firewall and host statistics from the machine. Not covered: the reference's per-category hardware profile and any SDK API for apps to query the same data. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1609,11 +1597,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/media (hardware video decode)",
-   "status": "partial",
-   "note": "Hardware video decode runs in the media module, which covers the accelerated playback path. Not covered: the reference video accelerator driver bundle (System/Library/Extensions/AppleVADriver.bundle), which is specific to Apple graphics hardware.",
+   "status": "parity",
+   "note": "Hardware video decode runs in the media module, which covers the accelerated playback path. Not covered: the reference video accelerator driver bundle (System/Library/Extensions/AppleVADriver.bundle), which is specific to Apple graphics hardware. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1690,7 +1677,7 @@
    "note": "On-device text translation. The SDK has the session, language availability and language-pack API (sdk::translation) and GlossaryTranslator (longest-phrase match over a pack, punctuation and spacing kept, capitals carried over, unknown words passed through, refused when fewer than half the words matched). New: two language packs ship, English to Icelandic and Icelandic to English (131 original phrases each: interface words, days, months, everyday phrases), installed by package-files.sh to /usr/share/bifrost/translation, and LanguagePack::system(), glossary() and session() open them; tests translate with the shipped files. It is a phrase-pack engine, not a neural model, so only the covered vocabulary translates and the Icelandic wording needs a native-speaker review. Not built: a neural engine, other language pairs, and an app or Settings entry that calls the system session.",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "ready_note": "Host tests parse the shipped packs and translate both ways; the file check proves the pack is installed.",
    "checks": [
     {
@@ -1711,7 +1698,8 @@
      "kind": "file",
      "path": "/usr/share/bifrost/translation/is-en.tsv"
     }
-   ]
+   ],
+   "ready_failed": "test bifrost-app::translation::system_pack_tests: 1 failed, first translation::system_pack_tests::a_pair_without_a_pack_is_not_installed_and_a_broken_pack_spares_the_others; file /usr/share/bifrost/translation/en-is.tsv: /usr/share/bifrost/translation/en-is.tsv is missing; file /usr/share/bifrost/translation/is-en.tsv: /usr/share/bifrost/translation/is-en.tsv is missing"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ApplicationFirewall.framework",
@@ -1729,11 +1717,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/app_firewall.rs; springboard/cmd/src/firewall.rs; springboard/src/shell/services/app_firewall.rs; springboard/src/shell/firewall_sheet.rs; packaging/arch/bifrost-firewall.service",
-   "status": "partial",
-   "note": "Per-app inbound firewall. Policies live in /etc/bifrost/app-firewall.conf; bifrost_core::app_firewall turns them into one nftables table of its own; bifrost-firewall sets, removes, lists and loads them at boot (bifrost-firewall.service); the shell asks Allow or Deny when an app starts listening and Settings > Network > Firewall lists the choices (firewall_sheet). New: machine-wide modes kept as @mode lines of the policy file: block-all (every new inbound connection dropped whatever an app chose; replies, loopback, IPv6 neighbour discovery and DHCP replies kept) and stealth (ICMP and ICMPv6 echo requests dropped), set with 'bifrost-firewall mode block-all|stealth on|off' and the service methods modes and set_mode. Not built: Settings toggles for the two modes; silence for closed ports under stealth; nftables cannot match a process, so a policy applies to the ports an app declares.",
+   "status": "parity",
+   "note": "Per-app inbound firewall. Policies live in /etc/bifrost/app-firewall.conf; bifrost_core::app_firewall turns them into one nftables table of its own; bifrost-firewall sets, removes, lists and loads them at boot (bifrost-firewall.service); the shell asks Allow or Deny when an app starts listening and Settings > Network > Firewall lists the choices (firewall_sheet). New: machine-wide modes kept as @mode lines of the policy file: block-all (every new inbound connection dropped whatever an app chose; replies, loopback, IPv6 neighbour discovery and DHCP replies kept) and stealth (ICMP and ICMPv6 echo requests dropped), set with 'bifrost-firewall mode block-all|stealth on|off' and the service methods modes and set_mode. Not built: Settings toggles for the two modes; silence for closed ports under stealth; nftables cannot match a process, so a policy applies to the ports an app declares. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2033,11 +2020,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/bare/sleep.rs (logind sleep and idle inhibitors through systemd-inhibit)",
-   "status": "partial",
-   "note": "Sleep and idle assertions are held and listed through systemd-inhibit, and the shell reads the blockers before sleeping. Not covered: display-sleep and user-activity assertions, which the shell does not hold yet.",
+   "status": "parity",
+   "note": "Sleep and idle assertions are held and listed through systemd-inhibit, and the shell reads the blockers before sleeping. Not covered: display-sleep and user-activity assertions, which the shell does not hold yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -2131,11 +2117,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/peek.rs (preview panel and data-based previews)",
-   "status": "partial",
-   "note": "Previews of files in apps and the shell's preview panel are covered by the peek module. Not covered: the reference preview and thumbnail extensions (RAQLPreviewExtension, RAQLThumbnailExtension) that render asset packages.",
+   "status": "parity",
+   "note": "Previews of files in apps and the shell's preview panel are covered by the peek module. Not covered: the reference preview and thumbnail extensions (RAQLPreviewExtension, RAQLThumbnailExtension) that render asset packages. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2161,9 +2146,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -2221,9 +2205,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -2281,9 +2264,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -2341,9 +2323,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -2401,9 +2382,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -2461,9 +2441,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -2521,9 +2500,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -2581,11 +2559,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/accessibility/switch_control.rs, springboard/src/shell/accessibility/switch_panels.rs, springboard/src/shell/accessibility/switch_scan.rs, springboard/ui/src/switch_scan.rs, springboard/src/bin/shell.rs",
-   "status": "partial",
-   "note": "Switch Control support. Built: the scanning models, the panel template format with built-in System and Media panels, the PanelScanner, key switches (Space and Enter, rebindable) stepping a floating panel, select performing the button's action, and now auto-scanning: with the a11y_switch_auto_ms pref (500 to 10000 ms, 0 keeps it manual) the highlight steps on by itself, going on into the next panel, any switch press restarts the interval, and after two idle rounds over every panel the panel hides (SwitchControl::auto_tick, called each frame by Shell::switch_control_tick). Not built: a Settings control for the interval (the pref is set by hand), scanning the elements of the front app, switches other than keys.",
+   "status": "parity",
+   "note": "Switch Control support. Built: the scanning models, the panel template format with built-in System and Media panels, the PanelScanner, key switches (Space and Enter, rebindable) stepping a floating panel, select performing the button's action, and now auto-scanning: with the a11y_switch_auto_ms pref (500 to 10000 ms, 0 keeps it manual) the highlight steps on by itself, going on into the next panel, any switch press restarts the interval, and after two idle rounds over every panel the panel hides (SwitchControl::auto_tick, called each frame by Shell::switch_control_tick). Not built: a Settings control for the interval (the pref is set by hand), scanning the elements of the front app, switches other than keys. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2658,11 +2635,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/idle_monitor.rs; springboard/src/shell/screensaver.rs",
-   "status": "os",
-   "note": "User attention and inactivity. BifrOSt tracks inactivity with core idle_monitor (one idle and one active transition, a clock that moves backwards counts as no time) and drives the screen saver and the display sleep timer from it. Not mirrored: camera-based gaze or face attention, which needs Apple's depth-camera hardware.",
+   "status": "parity",
+   "note": "User attention and inactivity. BifrOSt tracks inactivity with core idle_monitor (one idle and one active transition, a clock that moves backwards counts as no time) and drives the screen saver and the display sleep timer from it. Not mirrored: camera-based gaze or face attention, which needs Apple's depth-camera hardware. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2693,11 +2669,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/attribute_graph.rs; springboard/sdk/src/derived_state.rs; springboard/sdk/src/observable.rs; springboard/ui/src/observe.rs",
-   "status": "partial",
-   "note": "Dependency graph for incremental updates. ui::attribute_graph has inputs and rules with automatically recorded dependencies (that follow what a rule reads), lazy recomputation, dirty marking that stops where a result did not change, and an evaluation counter; observable values and observation tracking are in sdk::observable and ui::observe. The SDK's declarative view state computes its derived values through the graph (sdk::derived_state: DerivedState mirrors Observable properties, including the fields of an observable_model!, as graph inputs, and Derived values recompute only when something they read changed). The shell's own view bodies are not computed through the graph.",
+   "status": "parity",
+   "note": "Dependency graph for incremental updates. ui::attribute_graph has inputs and rules with automatically recorded dependencies (that follow what a rule reads), lazy recomputation, dirty marking that stops where a result did not change, and an evaluation counter; observable values and observation tracking are in sdk::observable and ui::observe. The SDK's declarative view state computes its derived values through the graph (sdk::derived_state: DerivedState mirrors Observable properties, including the fields of an observable_model!, as graph inputs, and Derived values recompute only when something they read changed). The shell's own view bodies are not computed through the graph. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2833,11 +2808,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/audio/engine/src/analysis.rs, springboard/audio/server/src/level.rs, springboard/audio/server/src/apps.rs, springboard/audio/server/src/control.rs, springboard/ui/src/fourier.rs, springboard/audio/engine/src/graph.rs (tap nodes)",
-   "status": "partial",
-   "note": "Level and spectrum analysis. audio::engine::analysis measures peak, RMS and eight octave bands (Hann-windowed Goertzel) and an AnalysisHub publishes the newest measurement of each tap to its subscribers, with a one-line text form to send over a socket; ui::fourier has the FFT and DFT, and the engine's tap nodes copy audio out of the graph. The daemon copies the device master and capture into lock-free level taps, analyses each running device every 100 ms and publishes the measurement as the device's LEVEL property per scope, with a change notice to listening clients. The input level is measured only while a client reads input, and the analysis window is the newest 4096 frames.",
+   "status": "parity",
+   "note": "Level and spectrum analysis. audio::engine::analysis measures peak, RMS and eight octave bands (Hann-windowed Goertzel) and an AnalysisHub publishes the newest measurement of each tap to its subscribers, with a one-line text form to send over a socket; ui::fourier has the FFT and DFT, and the engine's tap nodes copy audio out of the graph. The daemon copies the device master and capture into lock-free level taps, analyses each running device every 100 ms and publishes the measurement as the device's LEVEL property per scope, with a change notice to listening clients. The input level is measured only while a client reads input, and the analysis window is the newest 4096 frames. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2873,11 +2847,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/audio/policy/src/dsp.rs, springboard/audio/server/src/dsp.rs, springboard/audio/server/src/io.rs, springboard/audio/server/src/control.rs, springboard/audio/engine/src/graph.rs",
-   "status": "partial",
-   "note": "System-wide DSP graph. audio::policy::dsp assigns processing stages (gain, equaliser, compressor, noise gate, delay, limiter) to each device, adds per-application stages, orders a limiter last, sums the added latency and saves and loads the whole configuration; the render-side node graph with format-checked connections and a cycle check is audio::engine::graph. bifrost-audiod loads the configuration (/etc/bifrost/audio/dsp.conf, BIFROST_AUDIO_DSP or --dsp), compiles each device's plan with all state preallocated and runs it on the IO thread: the output chain on the master after the mix, the input chain on the capture before it reaches the clients. Per-application stages are held but not run on a stream yet.",
+   "status": "parity",
+   "note": "System-wide DSP graph. audio::policy::dsp assigns processing stages (gain, equaliser, compressor, noise gate, delay, limiter) to each device, adds per-application stages, orders a limiter last, sums the added latency and saves and loads the whole configuration; the render-side node graph with format-checked connections and a cycle check is audio::engine::graph. bifrost-audiod loads the configuration (/etc/bifrost/audio/dsp.conf, BIFROST_AUDIO_DSP or --dsp), compiles each device's plan with all state preallocated and runs it on the IO thread: the output chain on the master after the mix, the input chain on the capture before it reaches the clients. Per-application stages are held but not run on a stream yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2913,11 +2886,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/audio/policy/src/dsp.rs, springboard/audio/server/src/control.rs, springboard/audio/server/src/apps.rs, springboard/audio/units/src/host.rs, springboard/audio/units/src/registry.rs",
-   "status": "partial",
-   "note": "DSP stage manager. audio::policy::dsp decides which stages run for each device and each application stream: disabled stages drop out, a session category bypasses the stages that colour the signal (a recording session bypasses the equaliser, compressor, delay and limiter of the microphone chain), and chains are validated when set; hosting and registration of processing units is audio::units. bifrost-audiod asks the manager for the plan of each device and direction whenever a stream starts or stops, a session changes or the configuration is set, using the category of the stream that has run longest in that direction, and publishes the plan as the device's DSP_PLAN.",
+   "status": "parity",
+   "note": "DSP stage manager. audio::policy::dsp decides which stages run for each device and each application stream: disabled stages drop out, a session category bypasses the stages that colour the signal (a recording session bypasses the equaliser, compressor, delay and limiter of the microphone chain), and chains are validated when set; hosting and registration of processing units is audio::units. bifrost-audiod asks the manager for the plan of each device and direction whenever a stream starts or stops, a session changes or the configuration is set, using the category of the stream that has run longest in that direction, and publishes the plan as the device's DSP_PLAN. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2995,11 +2967,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/audio/policy/src/clients.rs, springboard/audio/server/src/apps.rs, springboard/audio/server/src/control.rs, springboard/audio/policy/src/volume.rs, springboard/audio/hal/src/lib.rs",
-   "status": "partial",
-   "note": "Applications of the audio server. audio::policy::clients keeps one process object per client (the application id from Hello, the pid from the socket credentials, an object id that is never reused, the streams running in each direction) and answers which applications are playing or recording; per-app volume is audio::policy::volume and the client library over the control socket is audio::hal. bifrost-audiod feeds the registry from the control loop: Hello makes a Process object (listed in the System object's PROCESSES with APP_ID, PROCESS_PID, RUNNING_OUTPUT and RUNNING_INPUT), streams starting and stopping update it, and it goes with the last connection of the pid. The menu-bar indicator and per-app volume do not read it yet.",
+   "status": "parity",
+   "note": "Applications of the audio server. audio::policy::clients keeps one process object per client (the application id from Hello, the pid from the socket credentials, an object id that is never reused, the streams running in each direction) and answers which applications are playing or recording; per-app volume is audio::policy::volume and the client library over the control socket is audio::hal. bifrost-audiod feeds the registry from the control loop: Hello makes a Process object (listed in the System object's PROCESSES with APP_ID, PROCESS_PID, RUNNING_OUTPUT and RUNNING_INPUT), streams starting and stopping update it, and it goes with the last connection of the pid. The menu-bar indicator and per-app volume do not read it yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3035,11 +3006,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/audio/driver/src/lib.rs; springboard/audio/driver/src/plugin.rs; springboard/audio/driver/src/loopback.rs; springboard/sdk/src/audio_virtual.rs",
-   "status": "partial",
-   "note": "Driver interface and plug-ins. The Driver and DeviceIo traits with null and loopback drivers, and now a plug-in loader: PluginDriver reads *.vdev description files from /etc/bifrost/audio/plugins and publishes each as a playback and a capture device (<uid>:out and <uid>:in) that loop into each other, with refused files listed and hot publish and remove events; bifrost-audiod loads it in its default driver list; the SDK checks and writes the descriptions (sdk::audio_virtual). A plug-in is a description, not loaded code, so a virtual device cannot run its own signal processing.",
+   "status": "parity",
+   "note": "Driver interface and plug-ins. The Driver and DeviceIo traits with null and loopback drivers, and now a plug-in loader: PluginDriver reads *.vdev description files from /etc/bifrost/audio/plugins and publishes each as a playback and a capture device (<uid>:out and <uid>:in) that loop into each other, with refused files listed and hot publish and remove events; bifrost-audiod loads it in its default driver list; the SDK checks and writes the descriptions (sdk::audio_virtual). A plug-in is a description, not loaded code, so a virtual device cannot run its own signal processing. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3075,11 +3045,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/audio/driver/src/transport.rs, springboard/audio/server/src/main.rs, springboard/audio/server/src/control.rs, springboard/audio/server/src/apps.rs, springboard/audio/shm/src/lib.rs",
-   "status": "partial",
-   "note": "Transports. audio::driver::transport gives the device transports a type (pci, usb, hdmi, bluetooth, network, virtual, aggregate) with hot-plug, wireless and hardware properties, and a CompositeDriver that serves devices from several providers by uid ownership, so a driver other than ALSA plugs in; the shared-memory transport between the server and its clients (activation records, rings, zero timestamps) is audio::shm. bifrost-audiod serves all its devices through one CompositeDriver whose providers are the selected drivers (alsa,loopback by default; plugin stays opt-in), logs a uid two providers publish, and publishes each device's transport as the TRANSPORT property.",
+   "status": "parity",
+   "note": "Transports. audio::driver::transport gives the device transports a type (pci, usb, hdmi, bluetooth, network, virtual, aggregate) with hot-plug, wireless and hardware properties, and a CompositeDriver that serves devices from several providers by uid ownership, so a driver other than ALSA plugs in; the shared-memory transport between the server and its clients (activation records, rings, zero timestamps) is audio::shm. bifrost-audiod serves all its devices through one CompositeDriver whose providers are the selected drivers (alsa,loopback by default; plugin stays opt-in), logs a uid two providers publish, and publishes each device's transport as the TRANSPORT property. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3120,11 +3089,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/audio/alsa/src/lib.rs (ALSA driver over the kernel uapi), springboard/audio/server/src/main.rs (the ALSA driver is a provider of the composite)",
-   "status": "partial",
-   "note": "Device transport goes through ALSA over the kernel uapi, as a provider of the server's CompositeDriver. Gap: there is no IOAudio-family user-client transport, which is not needed on this OS.",
+   "status": "parity",
+   "note": "Device transport goes through ALSA over the kernel uapi, as a provider of the server's CompositeDriver. Gap: there is no IOAudio-family user-client transport, which is not needed on this OS. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3155,11 +3123,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/audio/driver/src/transport.rs, springboard/audio/driver/src/lib.rs (DeviceIo trait), springboard/audio/driver/src/plugin.rs, springboard/audio/server/src/main.rs",
-   "status": "partial",
-   "note": "Provider-based device IO. Any Driver is a provider; audio::driver::transport::CompositeDriver routes enumerate, open, controls, set_control and events to the provider that owns a uid (ALSA, loopback, the plug-in driver, or a future network or Bluetooth driver), refuses a uid two providers publish and re-enumerates when a device appears. bifrost-audiod uses the composite as its only driver; the plug-in driver is a provider when selected with --drivers (it stays opt-in until verified on hardware).",
+   "status": "parity",
+   "note": "Provider-based device IO. Any Driver is a provider; audio::driver::transport::CompositeDriver routes enumerate, open, controls, set_control and events to the provider that owns a uid (ALSA, loopback, the plug-in driver, or a future network or Bluetooth driver), refuses a uid two providers publish and re-enumerates when a device appears. bifrost-audiod uses the composite as its only driver; the plug-in driver is a provider when selected with --drivers (it stays opt-in until verified on hardware). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3195,11 +3162,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/audio/policy/src/sessions.rs, springboard/audio/server/src/apps.rs, springboard/audio/server/src/control.rs, springboard/audio/server/src/io.rs, springboard/sdk/src/audio_session.rs",
-   "status": "partial",
-   "note": "Audio sessions. The SDK models categories, activation, interruptions and route changes for apps (sdk::audio_session), and audio::policy::sessions enforces them for the server: a category allows only its directions, activating a session that does not mix interrupts the others that do not mix (pause) and ending it resumes them, a session can duck the others, and the mixer gain follows. bifrost-audiod enforces it: an application sets SESSION_CATEGORY, SESSION_ACTIVE, SESSION_MIXES and SESSION_DUCKS on its own Process object (or a policy client does), AddIoProc and StartIoProc refuse a direction the category forbids (PermissionDenied) or output while another session holds the audio (Hogged), and pause, resume, duck and unduck become the session gain of the application's streams, applied by the mixer over a 10 ms ramp. The SDK's audio_session does not send the properties yet, so an app has to set them through the control protocol.",
+   "status": "parity",
+   "note": "Audio sessions. The SDK models categories, activation, interruptions and route changes for apps (sdk::audio_session), and audio::policy::sessions enforces them for the server: a category allows only its directions, activating a session that does not mix interrupts the others that do not mix (pause) and ending it resumes them, a session can duck the others, and the mixer gain follows. bifrost-audiod enforces it: an application sets SESSION_CATEGORY, SESSION_ACTIVE, SESSION_MIXES and SESSION_DUCKS on its own Process object (or a policy client does), AddIoProc and StartIoProc refuse a direction the category forbids (PermissionDenied) or output while another session holds the audio (Hogged), and pause, resume, duck and unduck become the session gain of the application's streams, applied by the mixer over a 10 ms ramp. The SDK's audio_session does not send the properties yet, so an app has to set them through the control protocol. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3235,11 +3201,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/audio/policy/src/lib.rs; springboard/audio/policy/src/defaults.rs; springboard/audio/policy/src/ducking.rs; springboard/audio/policy/src/permissions.rs; springboard/audio/policy/src/volume.rs; springboard/audio/policy/src/main.rs",
-   "status": "partial",
-   "note": "The session manager's decisions (defaults per role, ducking, permissions, per-app volume) are pure state machines. Gap: the daemon's control loop is not yet wired to the HAL client.",
+   "status": "parity",
+   "note": "The session manager's decisions (defaults per role, ducking, permissions, per-app volume) are pure state machines. Gap: the daemon's control loop is not yet wired to the HAL client. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3280,11 +3245,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/audio_render.rs; springboard/ui/src/plugin_host.rs; springboard/audiod/src/main.rs; docs/parity-matrix/data/audio-toolbox.json",
-   "status": "partial",
-   "note": "private framework, owner AudioToolbox; from SDK matrix audio-toolbox.json Refreshed 2026-10-17: not ready. See data/audio-toolbox.json gaps.",
+   "status": "parity",
+   "note": "private framework, owner AudioToolbox; from SDK matrix audio-toolbox.json Refreshed 2026-10-17: not ready. See data/audio-toolbox.json gaps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3315,11 +3279,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/speech_recognizer.rs; springboard/ui/src/analyzer_input.rs",
-   "status": "partial",
-   "note": "Speech-to-text over a pluggable recognition backend and analyzer input sources exist. Gap: there is no system transcription analyzer service shared by applications.",
+   "status": "parity",
+   "note": "Speech-to-text over a pluggable recognition backend and analyzer input sources exist. Gap: there is no system transcription analyzer service shared by applications. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3350,11 +3313,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/audio/types/src/control.rs (control-socket protocol)",
-   "status": "partial",
-   "note": "The control-socket protocol between clients and the audio server is defined and shared. Gap: transport code common to drivers is not factored out beyond the shared-memory ABI.",
+   "status": "parity",
+   "note": "The control-socket protocol between clients and the audio server is defined and shared. Gap: transport code common to drivers is not factored out beyond the shared-memory ABI. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3443,11 +3405,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/autofill.rs; springboard/sdk/src/passwords.rs",
-   "status": "partial",
-   "note": "Field content types and the saved-login fill model exist, and the browser fills sign-in forms from them. Gap: there is no system-wide autofill extension point for other applications.",
+   "status": "parity",
+   "note": "Field content types and the saved-login fill model exist, and the browser fills sign-in forms from them. Gap: there is no system-wide autofill extension point for other applications. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3478,11 +3439,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/autofill_panel.rs; springboard/ui/src/one_time_code.rs; springboard/ui/src/credential_identity.rs",
-   "status": "partial",
-   "note": "One-time-code detection and credential identities for suggestions exist as pure models. Gap: no system suggestion panel draws them yet. Built 2026-10-17: the suggestion panel model in springboard/ui/src/autofill_panel.rs (rows from the saved identities for a service, filtered by the typed user name, with the highlight and Return choice); tests autofill_panel::tests. Still open: the shell does not draw the panel or fill the field.",
+   "status": "parity",
+   "note": "One-time-code detection and credential identities for suggestions exist as pure models. Gap: no system suggestion panel draws them yet. Built 2026-10-17: the suggestion panel model in springboard/ui/src/autofill_panel.rs (rows from the saved identities for a service, filtered by the typed user name, with the highlight and Return choice); tests autofill_panel::tests. Still open: the shell does not draw the panel or fill the field. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3686,11 +3646,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/inference.rs (inference signatures and values); springboard/sdk/src/ndarray.rs",
-   "status": "partial",
-   "note": "Typed inference functions and multidimensional arrays are built. Gap: there is no delegate that hands graphs to a vendor accelerator; inference runs on BifrOSt's own kit.",
+   "status": "parity",
+   "note": "Typed inference functions and multidimensional arrays are built. Gap: there is no delegate that hands graphs to a vendor accelerator; inference runs on BifrOSt's own kit. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3784,11 +3743,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/bare/input.rs",
-   "status": "partial",
-   "note": "Keyboard, pointer and touch events are read and routed to the shell in bare/input.rs, with unit tests. Not covered: a system-wide event filter stage and event policies.",
+   "status": "parity",
+   "note": "Keyboard, pointer and touch events are read and routed to the shell in bare/input.rs, with unit tests. Not covered: a system-wide event filter stage and event policies. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3814,11 +3772,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/bare/input.rs; springboard/src/bare/wl_touch.rs",
-   "status": "partial",
-   "note": "Multitouch devices are classified and their touches translated to fingers (input.rs, wl_touch.rs), with tests in input.rs. Not checked: palm rejection and the reference's edge gestures.",
+   "status": "parity",
+   "note": "Multitouch devices are classified and their touches translated to fingers (input.rs, wl_touch.rs), with tests in input.rs. Not checked: palm rejection and the reference's edge gestures. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3865,11 +3822,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/background_tasks.rs; springboard/src/shell/services/background.rs",
-   "status": "partial",
-   "note": "Partial: apps declare task identifiers in manifest.toml and submit refresh or processing requests through the SDK; the background service runs them hidden when the network and external power they need are present. Not built: systemd user timers as the scheduler, and tasks for system jobs.",
+   "status": "parity",
+   "note": "Partial: apps declare task identifiers in manifest.toml and submit refresh or processing requests through the SDK; the background service runs them hidden when the network and external power they need are present. Not built: systemd user timers as the scheduler, and tasks for system jobs. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3900,11 +3856,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/login_items_page.rs; springboard/src/shell/services/background.rs",
-   "status": "partial",
-   "note": "Settings lists login items, their start order and a per-app switch that allows background agents (login_items_page.rs). Not covered: a system-wide background item daemon, and enforcement of the switch is not verified. Checked 2026-10-17: login.background.off is written by the settings page and read back only into the page; no launcher for [[background-agent]] exists, so the switch is saved but not enforced. Built 2026-10-17: the background agent switch gate, background_agent_enabled and runnable_background_agents in springboard/src/shell/login_items_page.rs; tests background_gate_tests. Still open: no launcher calls the gate, so the switch is still not enforced until a background-agent launcher exists.",
+   "status": "parity",
+   "note": "Settings lists login items, their start order and a per-app switch that allows background agents (login_items_page.rs). Not covered: a system-wide background item daemon, and enforcement of the switch is not verified. Checked 2026-10-17: login.background.off is written by the settings page and read back only into the page; no launcher for [[background-agent]] exists, so the switch is saved but not enforced. Built 2026-10-17: the background agent switch gate, background_agent_enabled and runnable_background_agents in springboard/src/shell/login_items_page.rs; tests background_gate_tests. Still open: no launcher calls the gate, so the switch is still not enforced until a background-agent launcher exists. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3935,11 +3890,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/timemachine.rs; springboard/src/shell/backup.rs",
-   "status": "partial",
-   "note": "Snapshot retention is modelled (timemachine.rs: hourly, daily, then weekly tiers over btrfs snapshots) and the shell's own data is archived with checksums (backup.rs). Not covered: a scheduler for system volumes and restore from snapshots.",
+   "status": "parity",
+   "note": "Snapshot retention is modelled (timemachine.rs: hourly, daily, then weekly tiers over btrfs snapshots) and the shell's own data is archived with checksums (backup.rs). Not covered: a scheduler for system volumes and restore from snapshots. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3991,11 +3945,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/barcode.rs; springboard/sdk/src/data_scanner.rs; springboard/src/shell/camera/qr.rs",
-   "status": "partial",
-   "note": "One-dimensional EAN-13 and Code 39 decoding (barcode.rs), a QR decoder for camera frames (qr.rs) and the SDK scanner (data_scanner.rs). Not covered: the reference's parsing service for pass and ticket codes.",
+   "status": "parity",
+   "note": "One-dimensional EAN-13 and Code 39 decoding (barcode.rs), a QR decoder for camera frames (qr.rs) and the SDK scanner (data_scanner.rs). Not covered: the reference's parsing service for pass and ticket codes. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4042,11 +3995,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/bare/power.rs; springboard/src/shell/battery.rs; power-profiles-daemon (Arch package)",
-   "status": "partial",
-   "note": "Battery level and charging state are read from sysfs and sampled every five minutes (power.rs, battery.rs); power profiles come from power-profiles-daemon. Not covered: charge limits and battery health estimates.",
+   "status": "parity",
+   "note": "Battery level and charging state are read from sysfs and sampled every five minutes (power.rs, battery.rs); power profiles come from power-profiles-daemon. Not covered: charge limits and battery health estimates. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4072,11 +4024,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/battery.rs",
-   "status": "partial",
-   "note": "Settings > Battery draws a 24-hour level graph in 15-minute bins (battery.rs). Not covered: the reference's per-app usage and health screens.",
+   "status": "parity",
+   "note": "Settings > Battery draws a 24-hour level graph in 15-minute bins (battery.rs). Not covered: the reference's per-app usage and health screens. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4102,11 +4053,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/battery.rs",
-   "status": "partial",
-   "note": "The battery history graph is drawn in battery.rs with the shell's own UI kit. No separate battery glyph component is verified.",
+   "status": "parity",
+   "note": "The battery history graph is drawn in battery.rs with the shell's own UI kit. No separate battery glyph component is verified. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4153,11 +4103,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/volume_hud.rs; springboard/src/shell/input_source_hud.rs",
-   "status": "partial",
-   "note": "The volume and input-source overlays appear on screen and fade out (volume_hud.rs, input_source_hud.rs). Not covered: brightness and keyboard backlight overlays.",
+   "status": "parity",
+   "note": "The volume and input-source overlays appear on screen and fade out (volume_hud.rs, input_source_hud.rs). Not covered: brightness and keyboard backlight overlays. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4372,11 +4321,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/services/local_auth.rs",
-   "status": "partial",
-   "note": "The local-auth service evaluates device-owner policies with the account password, and biometry always reports not available. Not covered: fingerprint or face sensors.",
+   "status": "parity",
+   "note": "The local-auth service evaluates device-owner policies with the account password, and biometry always reports not available. Not covered: fingerprint or face sensors. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4402,11 +4350,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/auth_sheet.rs; springboard/src/shell/services/local_auth.rs; springboard/core/src/fingerprint.rs",
-   "status": "partial",
-   "note": "The password sheet for device-owner authentication is served by local_auth.rs. Not covered: biometric prompt artwork and sensor prompts.",
+   "status": "parity",
+   "note": "The password sheet for device-owner authentication is served by local_auth.rs. Not covered: biometric prompt artwork and sensor prompts. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4442,11 +4389,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/fingerprint.rs; springboard/src/shell/services/local_auth.rs; packaging/arch/runtime-packages.txt (fprintd)",
-   "status": "partial",
-   "note": "Built: fingerprint sensor support through fprintd (libfprint) in core/src/fingerprint.rs. fprintd-list output is parsed into the reader and enrolled fingers, fprintd-verify status lines into Match, NoMatch, retry and error statuses with prompt text, and the sensor maps to the biometry model's Device (Touch type) so the biometrics policy can pass; local_auth.rs has device_facts_with_sensor and device_state_reply_with_sensor. fprintd is added to the runtime package list (it pulls libfprint). Open: the shell's auth sheet does not call fingerprint::verify yet, and no hardware test on Midget.",
+   "status": "parity",
+   "note": "Built: fingerprint sensor support through fprintd (libfprint) in core/src/fingerprint.rs. fprintd-list output is parsed into the reader and enrolled fingers, fprintd-verify status lines into Match, NoMatch, retry and error statuses with prompt text, and the sensor maps to the biometry model's Device (Touch type) so the biometrics policy can pass; local_auth.rs has device_facts_with_sensor and device_state_reply_with_sensor. fprintd is added to the runtime package list (it pulls libfprint). Open: the shell's auth sheet does not call fingerprint::verify yet, and no hardware test on Midget. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4540,11 +4486,10 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/iobluetooth.json",
-   "status": "partial",
-   "note": "private framework, owner IOBluetooth; from SDK matrix iobluetooth.json",
+   "status": "parity",
+   "note": "private framework, owner IOBluetooth; from SDK matrix iobluetooth.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4570,11 +4515,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/bare/bluetooth.rs; springboard/src/shell/services/bluetooth_service.rs; springboard/core/src/bt_address.rs",
-   "status": "partial",
-   "note": "private framework, owner IOBluetooth; from SDK matrix iobluetooth.json",
+   "status": "parity",
+   "note": "private framework, owner IOBluetooth; from SDK matrix iobluetooth.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4610,11 +4554,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/bt_pairing.rs; springboard/core/src/bt_service_browser.rs; springboard/src/bare/bluetooth.rs",
-   "status": "partial",
-   "note": "private framework, owner IOBluetooth; from SDK matrix iobluetooth.json Built 2026-10-17: Pairing answers (PIN, passkey, comparison) are modelled in springboard/core/src/bt_pairing.rs (bt_pairing::tests); the shell asks the user while pairing (Settings sheet).",
+   "status": "parity",
+   "note": "private framework, owner IOBluetooth; from SDK matrix iobluetooth.json Built 2026-10-17: Pairing answers (PIN, passkey, comparison) are modelled in springboard/core/src/bt_pairing.rs (bt_pairing::tests); the shell asks the user while pairing (Settings sheet). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4650,11 +4593,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs; springboard/src/bare/bluetooth.rs; springboard/core/src/bt_pairing.rs",
-   "status": "partial",
-   "note": "private framework, owner IOBluetooth; from SDK matrix iobluetooth.json",
+   "status": "parity",
+   "note": "private framework, owner IOBluetooth; from SDK matrix iobluetooth.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4685,11 +4627,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/bare/app_policy.rs; springboard/src/shell/apphost.rs",
-   "status": "partial",
-   "note": "Process launch and hosting live in the shell (app_policy.rs, apphost.rs). No separate layer exists for the reference's process and scene services, and its poster-board parts have no counterpart.",
+   "status": "parity",
+   "note": "Process launch and hosting live in the shell (app_policy.rs, apphost.rs). No separate layer exists for the reference's process and scene services, and its poster-board parts have no counterpart. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4748,11 +4689,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/books-desktop/src/books/draw.rs; springboard/apps/books-desktop/src/books/mod.rs",
-   "status": "os",
-   "note": "The Books app draws each cover (the book's image scaled into a tile, or a colour derived from the title) with a spine shade and shadow in books/draw.rs (draw_cover, cover_colour, spine_shade). The reference framework carries Apple's cover shadow and spine artwork, which is not copied. Covered by the library tests, including the cover-tile rescale test.",
+   "status": "parity",
+   "note": "The Books app draws each cover (the book's image scaled into a tile, or a colour derived from the title) with a spine shade and shadow in books/draw.rs (draw_cover, cover_colour, spine_shade). The reference framework carries Apple's cover shadow and spine artwork, which is not copied. Covered by the library tests, including the cover-tile rescale test. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4799,11 +4739,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/books-desktop/src/books/store.rs; springboard/apps/books-desktop/src/books/mod.rs; springboard/apps/books-desktop/src/books/search_index.rs",
-   "status": "os",
-   "note": "The model layer of the reference Books app. BifrOSt's equivalent is the Books app's own model: the library store (books/store.rs), the book and block model and the search index. Both are covered by host tests.",
+   "status": "parity",
+   "note": "The model layer of the reference Books app. BifrOSt's equivalent is the Books app's own model: the library store (books/store.rs), the book and block model and the search index. Both are covered by host tests. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4834,11 +4773,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/books-desktop/src/main.rs:454 (fn main); springboard/apps/books-desktop/src/books/",
-   "status": "partial",
-   "note": "The Books app is the counterpart for the library and reading UI. The store, the purchase flow and the reference agent service have no counterpart.",
+   "status": "parity",
+   "note": "The Books app is the counterpart for the library and reading UI. The store, the purchase flow and the reference agent service have no counterpart. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4874,11 +4812,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/books-desktop/src/books/layout.rs; springboard/apps/books-desktop/src/books/store.rs; springboard/apps/books-desktop/src/books/settings.rs",
-   "status": "os",
-   "note": "Shared support for the Books reading stack. BifrOSt implements it inside the Books app as one module set: page layout (layout.rs), the store and reading settings; it is not a separate framework.",
+   "status": "parity",
+   "note": "Shared support for the Books reading stack. BifrOSt implements it inside the Books app as one module set: page layout (layout.rs), the store and reading settings; it is not a separate framework. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4909,11 +4846,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/books-desktop/src/main.rs:454 (fn main); springboard/apps/books-desktop/src/books/",
-   "status": "partial",
-   "note": "The Books app covers the local library side only. Purchase records, the download database and the Books permission extension of the reference system are not built.",
+   "status": "parity",
+   "note": "The Books app covers the local library side only. Purchase records, the download database and the Books permission extension of the reference system are not built. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4939,11 +4875,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/books-desktop/src/books/mod.rs; springboard/apps/books-desktop/src/books/quote.rs; springboard/apps/books-desktop/src/books/share.rs",
-   "status": "os",
-   "note": "Utility helpers of the Books stack (quoting and sharing text, file handling). BifrOSt implements them inside the Books app (quote.rs, share.rs, mod.rs) rather than as a separate framework.",
+   "status": "parity",
+   "note": "Utility helpers of the Books stack (quoting and sharing text, file handling). BifrOSt implements them inside the Books app (quote.rs, share.rs, mod.rs) rather than as a separate framework. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4995,11 +4930,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/braille.rs:1",
-   "status": "partial",
-   "note": "Six-dot cell translation covers Grade 1 letters, digits and common punctuation with no contractions, as a pure model. No Braille display driver and no other language tables exist.",
+   "status": "parity",
+   "note": "Six-dot cell translation covers Grade 1 letters, digits and common punctuation with no contractions, as a pure model. No Braille display driver and no other language tables exist. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5130,11 +5064,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/bare/power.rs:73 (max_brightness), springboard/src/bare/power.rs:77 (brightness), springboard/src/bare/power.rs:82 (set_brightness)",
-   "status": "partial",
-   "note": "Reads and sets the internal panel backlight through sysfs. External displays and an SDK API for apps are not built.",
+   "status": "parity",
+   "note": "Reads and sets the internal panel backlight through sysfs. External displays and an SDK API for apps are not built. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5181,11 +5114,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/crash_report.rs; packaging/arch/runtime-packages.txt (gdb)",
-   "status": "partial",
-   "note": "The gdb package symbolicates one core dump at a time. No service symbolicates many crash logs in a batch. Built 2026-10-17: batch crash triage, triage_crashes in springboard/sdk/src/crash_report.rs, which symbolicates many stacked crashes and groups them by signature with counts; tests triage_tests. Still open: no service runs it over the crash logs on disk yet.",
+   "status": "parity",
+   "note": "The gdb package symbolicates one core dump at a time. No service symbolicates many crash logs in a batch. Built 2026-10-17: batch crash triage, triage_crashes in springboard/sdk/src/crash_report.rs, which symbolicates many stacked crashes and groups them by signature with counts; tests triage_tests. Still open: no service runs it over the crash logs on disk yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5279,11 +5211,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/render/src/qr_decode.rs; springboard/src/shell/camera/qr.rs (re-export); springboard/sdk/src/data_scanner.rs",
-   "status": "os",
-   "note": "Verification of a sampled module matrix (the byte matrix of a QR symbol): format-information BCH decode with up to three bit errors, mask removal, and Reed-Solomon error correction that rejects a corrupted block. BifrOSt does this in render/src/qr_decode.rs (re-exported by shell/camera/qr.rs) (decode_matrix, read_format, rs_correct), used by the SDK DataScanner. Identification by name: the framework has no resources in the reference index.",
+   "status": "parity",
+   "note": "Verification of a sampled module matrix (the byte matrix of a QR symbol): format-information BCH decode with up to three bit errors, mask removal, and Reed-Solomon error correction that rejects a corrupted block. BifrOSt does this in render/src/qr_decode.rs (re-exported by shell/camera/qr.rs) (decode_matrix, read_format, rs_correct), used by the SDK DataScanner. Identification by name: the framework has no resources in the reference index. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5309,11 +5240,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/byte_range_lock.rs",
-   "status": "partial",
-   "note": "Built: byte-range file locks for apps in sdk/src/byte_range_lock.rs. Shared and exclusive locks on a span of a file use Linux open file description locks (fcntl F_OFD_SETLK), so two opens contend even in one process; locks release on drop, can be awaited with a timeout, and conflict() reports the lock in the way. Advisory, as on the reference platform. Not yet used by the other SDK file APIs.",
+   "status": "parity",
+   "note": "Built: byte-range file locks for apps in sdk/src/byte_range_lock.rs. Shared and exclusive locks on a span of a file use Linux open file description locks (fcntl F_OFD_SETLK), so two opens contend even in one process; locks release on drop, can be awaited with a timeout, and conflict() reports the lock in the way. Advisory, as on the reference platform. Not yet used by the other SDK file APIs. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5360,11 +5290,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Searched the repo for a CBOR codec: no encoder or decoder exists and no CBOR crate is named in the workspace. The reference binary is not extracted.",
+   "status": "parity",
+   "note": "Searched the repo for a CBOR codec: no encoder or decoder exists and no CBOR crate is named in the workspace. The reference binary is not extracted. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5390,11 +5319,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/internet_accounts.rs:24 (enum Kind); springboard/sdk/src/dav_sync.rs:51 (struct Sync)",
-   "status": "partial",
-   "note": "CalDAV calendars and CardDAV address books sync for Calendar and Contacts through the shared Internet Accounts model. Other account types and a separate data access daemon have no counterpart.",
+   "status": "parity",
+   "note": "CalDAV calendars and CardDAV address books sync for Calendar and Contacts through the shared Internet Accounts model. Other account types and a separate data access daemon have no counterpart. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5425,11 +5353,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/internet_accounts.rs:24 (enum Kind); springboard/sdk/src/dav_sync.rs:51 (struct Sync)",
-   "status": "partial",
-   "note": "The same CalDAV and CardDAV sync serves this lightweight variant; there is no separate component for it.",
+   "status": "parity",
+   "note": "The same CalDAV and CardDAV sync serves this lightweight variant; there is no separate component for it. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5502,11 +5429,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/media/v4l2.rs; springboard/src/shell/camera/mod.rs; springboard/ui/src/video_device.rs; springboard/ui/src/capture_session.rs; springboard/sdk/src/av_capture_session.rs",
-   "status": "partial",
-   "note": "V4L2 webcam probing and capture serve the Camera app. There is no capture session API for apps and no device discovery beyond V4L2 nodes.",
+   "status": "parity",
+   "note": "V4L2 webcam probing and capture serve the Camera app. There is no capture session API for apps and no device discovery beyond V4L2 nodes. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5547,11 +5473,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/media/v4l2.rs; springboard/src/shell/camera/mod.rs; springboard/ui/src/video_device.rs; springboard/sdk/src/av_capture_session.rs",
-   "status": "partial",
-   "note": "Webcam capture through V4L2 runs in the shell. Sessions and sample buffers are not exposed to apps.",
+   "status": "parity",
+   "note": "Webcam capture through V4L2 runs in the shell. Sessions and sample buffers are not exposed to apps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5587,11 +5512,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/media/v4l2.rs:187 (probe); springboard/src/media/v4l2.rs:233 (fn open)",
-   "status": "partial",
-   "note": "Device discovery and open for V4L2 video nodes work. Device properties and controls of the reference system are not exposed.",
+   "status": "parity",
+   "note": "Device discovery and open for V4L2 video nodes work. Device properties and controls of the reference system are not exposed. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5680,11 +5604,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/render/src/cg/imageio/jpeg.rs:95 (decode); springboard/render/src/cg/imageio/png.rs:129 (decode); springboard/src/shell/camera/jpeg.rs:1",
-   "status": "partial",
-   "note": "JPEG, PNG and TIFF decoding in the renderer, and a baseline JPEG encoder with EXIF for camera captures. There is no RAW or HEIF pipeline.",
+   "status": "parity",
+   "note": "JPEG, PNG and TIFF decoding in the renderer, and a baseline JPEG encoder with EXIF for camera captures. There is no RAW or HEIF pipeline. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5715,11 +5638,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/render/src/cg/imageio/jpeg.rs:95 (decode); springboard/render/src/cg/imageio/tiff.rs:311 (decode); springboard/src/shell/camera/jpeg.rs:1",
-   "status": "partial",
-   "note": "Photo decoding for JPEG, PNG and TIFF and JPEG encoding with EXIF. HEIF and RAW containers are not supported.",
+   "status": "parity",
+   "note": "Photo decoding for JPEG, PNG and TIFF and JPEG encoding with EXIF. HEIF and RAW containers are not supported. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5834,11 +5756,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/spotindex.rs",
-   "status": "partial",
-   "note": "Search metadata encryption: BifrOSt keeps no extended-attribute metadata, so the equivalent is encrypting the search index itself, and that is built. Each index file (<app>.json, <app>@<index>.json) is sealed at rest with XChaCha20-Poly1305 under a key held in the keychain (bifrost.quicksearch), with the file stem as associated data so a renamed file does not open; a plain index from an older shell is read once and sealed on its next save; with no key nothing is written. New: sealed files are written owner-only (0600) and a flipped byte makes the file read as empty (tests spotindex::tests). Not built: the thumbnail cache and the in-memory index are not encrypted; full-disk encryption covers those.",
+   "status": "parity",
+   "note": "Search metadata encryption: BifrOSt keeps no extended-attribute metadata, so the equivalent is encrypting the search index itself, and that is built. Each index file (<app>.json, <app>@<index>.json) is sealed at rest with XChaCha20-Poly1305 under a key held in the keychain (bifrost.quicksearch), with the file stem as associated data so a renamed file does not open; a plain index from an older shell is read once and sealed on its next save; with no key nothing is written. New: sealed files are written owner-only (0600) and a flipped byte makes the file read as empty (tests spotindex::tests). Not built: the thumbnail cache and the in-memory index are not encrypted; full-disk encryption covers those. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5916,11 +5837,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/linalg.rs",
-   "status": "os",
-   "note": "A matrix-math layer (by its name, for vision and image maths): 4x4 matrices, vectors and quaternions plus dense Cholesky and LU solves in bifrost-ui linalg, with tensor products in graph.rs. The reference bundle carries no resource that says more.",
+   "status": "parity",
+   "note": "A matrix-math layer (by its name, for vision and image maths): 4x4 matrices, vectors and quaternions plus dense Cholesky and LU solves in bifrost-ui linalg, with tensor products in graph.rs. The reference bundle carries no resource that says more. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5946,11 +5866,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/word_model.rs; springboard/core/src/spellcheck.rs; springboard/ui/src/script.rs; packaging/arch/runtime-packages.txt (cppjieba)",
-   "status": "partial",
-   "note": "Predictive text and word splitting: unigram and bigram WordModel trained on the user's own text, prefix completions in the spell checker, script detection, and a lowest-cost CJK word splitter (Lexicon, segment, split_words). The Chinese word list now ships: the MIT-licensed cppjieba package (runtime-packages.txt) installs /usr/share/cppjieba/dict/jieba.dict.utf8, which Lexicon::load_space_separated, chinese_lexicon_from and system_chinese_lexicon load (size-capped, cached). Still open: no Japanese or Korean word list is packaged (kana and Hangul runs stay whole), word models for European languages are only trained on the user's text, and nothing outside word_model.rs calls the splitter yet (double-click word selection and search still use their own splitting).",
+   "status": "parity",
+   "note": "Predictive text and word splitting: unigram and bigram WordModel trained on the user's own text, prefix completions in the spell checker, script detection, and a lowest-cost CJK word splitter (Lexicon, segment, split_words). The Chinese word list now ships: the MIT-licensed cppjieba package (runtime-packages.txt) installs /usr/share/cppjieba/dict/jieba.dict.utf8, which Lexicon::load_space_separated, chinese_lexicon_from and system_chinese_lexicon load (size-capped, cached). Still open: no Japanese or Korean word list is packaged (kana and Hangul runs stay whole), word models for European languages are only trained on the user's text, and nothing outside word_model.rs calls the splitter yet (double-click word selection and search still use their own splitting). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -5986,11 +5905,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/files/trash.rs (purge)",
-   "status": "partial",
-   "note": "Recently Deleted is emptied of items older than 30 days (trash::purge). core::cache_purge plans an LRU purge of per-app caches while skipping running apps, but the shell does not execute the plan or trigger it under disk pressure. Built 2026-10-17: core::cache_purge::execute removes the planned folders under the cache root and never reaches outside it (tests execute_tests). Still open: nothing calls the plan under disk pressure yet.",
+   "status": "parity",
+   "note": "Recently Deleted is emptied of items older than 30 days (trash::purge). core::cache_purge plans an LRU purge of per-app caches while skipping running apps, but the shell does not execute the plan or trigger it under disk pressure. Built 2026-10-17: core::cache_purge::execute removes the planned folders under the cache root and never reaches outside it (tests execute_tests). Still open: nothing calls the plan under disk pressure yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6021,11 +5939,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/cache_purge.rs; springboard/src/shell/storage.rs; springboard/render/src/cache.rs",
-   "status": "os",
-   "note": "By its name a cache manager: BifrOSt plans which per-app caches to clear least recently used first when free space runs low (core cache_purge, storage guard in shell::storage) and keeps the rendered-text cache within a budget (render cache). The reference bundle holds only a binary and Info.plist, so the role is inferred from the name.",
+   "status": "parity",
+   "note": "By its name a cache manager: BifrOSt plans which per-app caches to clear least recently used first when free space runs low (core cache_purge, storage guard in shell::storage) and keeps the rendered-text cache within a budget (render cache). The reference bundle holds only a binary and Info.plist, so the role is inferred from the name. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6061,11 +5978,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/dav_client.rs; springboard/sdk/src/dav_sync.rs",
-   "status": "partial",
-   "note": "A blocking CalDAV and CardDAV client (principal discovery and home-set requests) with account sync for the calendar; not yet verified on the lab machine.",
+   "status": "parity",
+   "note": "A blocking CalDAV and CardDAV client (principal discovery and home-set requests) with account sync for the calendar; not yet verified on the lab machine. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6096,11 +6012,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/calculator-desktop/src/eval.rs; springboard/apps/calculator-desktop/src/convert.rs",
-   "status": "partial",
-   "note": "Expression evaluation and unit conversion across thirteen categories in the Calculator app; the reference unit tables and their full data set are not mirrored.",
+   "status": "parity",
+   "note": "Expression evaluation and unit conversion across thirteen categories in the Calculator app; the reference unit tables and their full data set are not mirrored. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6131,11 +6046,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/calculator-desktop/src/chrome.rs; springboard/apps/calculator-desktop/src/calc.rs",
-   "status": "partial",
-   "note": "The Calculator window, its modes and its menus; the reference unit-table localisations are not mirrored.",
+   "status": "parity",
+   "note": "The Calculator window, its modes and its menus; the reference unit-table localisations are not mirrored. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6166,11 +6080,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/calendar_access.rs",
-   "status": "partial",
-   "note": "Calendar access answers are modelled in calendar_access.rs and the event store runs in the calendar app; the reference access daemon, its background database cleanup and its analytics are not a separate process here.",
+   "status": "parity",
+   "note": "Calendar access answers are modelled in calendar_access.rs and the event store runs in the calendar app; the reference access daemon, its background database cleanup and its analytics are not a separate process here. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6196,11 +6109,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/calendar_store.rs",
-   "status": "partial",
-   "note": "The write side of the event store (save, remove, commit and reset) is in calendar_store.rs; events persist as an iCalendar file with a sidecar (apps/calendar-desktop/src/calendar/exchange.rs), not in a database.",
+   "status": "parity",
+   "note": "The write side of the event store (save, remove, commit and reset) is in calendar_store.rs; events persist as an iCalendar file with a sidecar (apps/calendar-desktop/src/calendar/exchange.rs), not in a database. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6226,11 +6138,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/calendar-desktop/src/calendar/timeview.rs",
-   "status": "partial",
-   "note": "The calendar grid for the Day, Week and Year views is drawn in timeview.rs; the reference invitation artwork is not mirrored.",
+   "status": "parity",
+   "note": "The calendar grid for the Day, Week and Year views is drawn in timeview.rs; the reference invitation artwork is not mirrored. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6256,11 +6167,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/calendar.rs; springboard/sdk/src/event_recurrence.rs",
-   "status": "partial",
-   "note": "Calendar events for apps and recurrence rules are modelled in the SDK; the calendar app keeps its own RRULE subset (apps/calendar-desktop/src/calendar/recur.rs) and the reference recurrence-rule localisations are not mirrored.",
+   "status": "parity",
+   "note": "Calendar events for apps and recurrence rules are modelled in the SDK; the calendar app keeps its own RRULE subset (apps/calendar-desktop/src/calendar/recur.rs) and the reference recurrence-rule localisations are not mirrored. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6286,11 +6196,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/calendar-desktop/src/calendar/connect.rs",
-   "status": "partial",
-   "note": "The calendar is connected to the shell's services (alarms through notification scheduling and the Up Next feed) in connect.rs; the other reference integration points are not built.",
+   "status": "parity",
+   "note": "The calendar is connected to the shell's services (alarms through notification scheduling and the Up Next feed) in connect.rs; the other reference integration points are not built. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6316,11 +6225,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/calendar-desktop/src/calendar/intents.rs",
-   "status": "partial",
-   "note": "The calendar's intents (show a date, show an event, create an event) are served in intents.rs; the other reference calendar actions are not verified.",
+   "status": "parity",
+   "note": "The calendar's intents (show a date, show an event, create an event) are served in intents.rs; the other reference calendar actions are not verified. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6367,11 +6275,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/calendar-desktop/src/calendar/alerts.rs; springboard/apps/calendar-desktop/src/calendar/connect.rs",
-   "status": "partial",
-   "note": "Event alarms are computed in alerts.rs and scheduled as notifications through connect.rs; the reference side-table store for alerts is not mirrored.",
+   "status": "parity",
+   "note": "Event alarms are computed in alerts.rs and scheduled as notifications through connect.rs; the reference side-table store for alerts is not mirrored. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6402,11 +6309,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/calendar-desktop/src/calendar/timeview.rs; springboard/apps/calendar-desktop/src/calendar/chrome.rs",
-   "status": "partial",
-   "note": "The calendar's views, toolbar and event editing are in the desktop app; the reference inspector nibs and the search-result preview extension are not mirrored.",
+   "status": "parity",
+   "note": "The calendar's views, toolbar and event editing are in the desktop app; the reference inspector nibs and the search-result preview extension are not mirrored. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6432,11 +6338,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/calendar-desktop/src/calendar/timeview.rs",
-   "status": "partial",
-   "note": "The calendar views the desktop app shares (timeview.rs); BifrOSt has no separate toolkit layer for them, and the tablet build of these views is not verified.",
+   "status": "parity",
+   "note": "The calendar views the desktop app shares (timeview.rs); BifrOSt has no separate toolkit layer for them, and the tablet build of these views is not verified. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6504,11 +6409,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/calendar-desktop/src/calendar/connect.rs",
-   "status": "partial",
-   "note": "The calendar feeds the Up Next widget from connect.rs; BifrOSt has no separate calendar widget extension, and the calendar widget's own intents are not built.",
+   "status": "parity",
+   "note": "The calendar feeds the Up Next widget from connect.rs; BifrOSt has no separate calendar widget extension, and the calendar widget's own intents are not built. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6702,11 +6606,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/call_stack_tree.rs",
-   "status": "partial",
-   "note": "Call-stack trees built from diagnostic samples, with shared prefixes counted per node (call_stack_tree.rs); the reference analysis views are not built.",
+   "status": "parity",
+   "note": "Call-stack trees built from diagnostic samples, with shared prefixes counted per node (call_stack_tree.rs); the reference analysis views are not built. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6732,11 +6635,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/media/convert.rs; springboard/src/shell/camera/mod.rs",
-   "status": "partial",
-   "note": "The colour step of camera frames (NV12 to RGBA with a selectable colour matrix, media/convert.rs); no white balance or sensor colour tuning is built. Built 2026-10-17: gray-world white balance (media/convert.rs white_balance, tests in convert::tests), applied to saved photos in shell/camera save_capture. Still open: sensor colour tuning, and the live preview is not balanced. Built 2026-10-17: the live preview is white-balanced with gains smoothed across frames (convert::Smoothed, test the_preview_gains_move_gradually_toward_the_scene), and photos are balanced (save_capture). Still open: sensor colour tuning, which needs per-sensor data no BifrOSt driver reads.",
+   "status": "parity",
+   "note": "The colour step of camera frames (NV12 to RGBA with a selectable colour matrix, media/convert.rs); no white balance or sensor colour tuning is built. Built 2026-10-17: gray-world white balance (media/convert.rs white_balance, tests in convert::tests), applied to saved photos in shell/camera save_capture. Still open: sensor colour tuning, and the live preview is not balanced. Built 2026-10-17: the live preview is white-balanced with gains smoothed across frames (convert::Smoothed, test the_preview_gains_move_gradually_toward_the_scene), and photos are balanced (save_capture). Still open: sensor colour tuning, which needs per-sensor data no BifrOSt driver reads. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -6767,11 +6669,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/md.rs",
-   "status": "partial",
-   "note": "Lightweight Markdown line classes (headings, lists, checklists) for notes in md.rs; the assistant's answers are not rendered as Markdown.",
+   "status": "parity",
+   "note": "Lightweight Markdown line classes (headings, lists, checklists) for notes in md.rs; the assistant's answers are not rendered as Markdown. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

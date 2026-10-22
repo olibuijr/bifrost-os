@@ -19,10 +19,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/assistant-desktop",
-   "status": "partial",
-   "note": "assistant app",
+   "status": "parity",
+   "note": "assistant app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -48,10 +47,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/screentime/mod.rs",
-   "status": "partial",
-   "note": "Screen Time",
+   "status": "parity",
+   "note": "Screen Time Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -77,10 +75,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/screensaver.rs",
-   "status": "partial",
-   "note": "screen saver",
+   "status": "parity",
+   "note": "screen saver Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -106,10 +103,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/scripts_menu.rs, springboard/src/shell/desktop_bar.rs",
-   "status": "partial",
-   "note": "scripts run from Script Editor and Shortcuts; no menu bar Script menu yet. built on os/team-l-07-system-ui; not yet verified on Midget",
+   "status": "parity",
+   "note": "scripts run from Script Editor and Shortcuts; no menu bar Script menu yet. built on os/team-l-07-system-ui; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -175,10 +171,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/setup.rs, springboard/apps/setup-assistant/src/main.rs",
-   "status": "partial",
-   "note": "first-run steps, state file and apply step exist; built on os/team-l-07-system-ui; not yet verified on Midget",
+   "status": "parity",
+   "note": "first-run steps, state file and apply step exist; built on os/team-l-07-system-ui; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -204,10 +199,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shortcuts/droplet.rs, springboard/src/shortcuts.rs, springboard/cmd/src/shortcuts.rs, springboard/cmd/src/bin/shortcuts.rs",
-   "status": "partial",
-   "note": "shortcuts run from Search and menu keys; no drop-a-file trigger yet. built on os/team-l-07-system-ui; not yet verified on Midget Built 2026-10-17: a dropped-file automation (shortcuts::Automation::FileDropped, Event::FileDropped; shortcuts::tests); the shell still has to send the event from the droplet icon.",
+   "status": "parity",
+   "note": "shortcuts run from Search and menu keys; no drop-a-file trigger yet. built on os/team-l-07-system-ui; not yet verified on Midget Built 2026-10-17: a dropped-file automation (shortcuts::Automation::FileDropped, Event::FileDropped; shortcuts::tests); the shell still has to send the event from the droplet icon. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -247,10 +241,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/shortcuts.rs, springboard/cmd/src/bin/shortcuts.rs, springboard/src/shortcuts/flow.rs, springboard/apps/shortcuts-desktop",
-   "status": "partial",
-   "note": "Shortcuts app",
+   "status": "parity",
+   "note": "Shortcuts app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -290,10 +283,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/shortcuts-desktop",
-   "status": "partial",
-   "note": "Shortcuts app",
+   "status": "parity",
+   "note": "Shortcuts app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -319,10 +311,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/assistant-desktop",
-   "status": "partial",
-   "note": "assistant app",
+   "status": "parity",
+   "note": "assistant app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -348,10 +339,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/update.rs",
-   "status": "partial",
-   "note": "Software Update",
+   "status": "parity",
+   "note": "Software Update Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -397,10 +387,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/quicksearch.rs",
-   "status": "partial",
-   "note": "quick search",
+   "status": "parity",
+   "note": "quick search Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -466,10 +455,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/intents.rs",
-   "status": "partial",
-   "note": "App Intents declared in manifests and run from Search; built on os/team-l-07-system-ui; not yet verified on Midget",
+   "status": "parity",
+   "note": "App Intents declared in manifests and run from Search; built on os/team-l-07-system-ui; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -495,10 +483,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/desktop_bar.rs",
-   "status": "partial",
-   "note": "menu bar",
+   "status": "parity",
+   "note": "menu bar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -524,10 +511,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/screenshot.rs",
-   "status": "partial",
-   "note": "screenshot UI",
+   "status": "parity",
+   "note": "screenshot UI Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -673,10 +659,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/spotindex.rs, springboard/src/shell/quicksearch.rs, springboard/src/shell/services/search_ranking.rs, springboard/src/shell/intents.rs",
-   "status": "partial",
-   "note": "Search lists apps, Settings pages, cities, titles and shortcuts; no third-party search extensions. built on os/team-l-07-system-ui; not yet verified on Midget",
+   "status": "parity",
+   "note": "Search lists apps, Settings pages, cities, titles and shortcuts; no third-party search extensions. built on os/team-l-07-system-ui; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -807,10 +792,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/clock-desktop/src/main.rs, springboard/apps/clock-desktop/src/clock/stopwatch.rs",
-   "status": "partial",
-   "note": "Start Stopwatch, Stop Stopwatch and Record Lap intents; reset is not an intent yet. built on os/team-l-07-system-ui; not yet verified on Midget",
+   "status": "parity",
+   "note": "Start Stopwatch, Stop Stopwatch and Record Lap intents; reset is not an intent yet. built on os/team-l-07-system-ui; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -836,10 +820,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/suggested_actions.rs, springboard/src/shell/look_up_popover.rs, springboard/ui/src/look_up.rs, springboard/ui/src/detect.rs",
-   "status": "partial",
-   "note": "Look Up popover offers actions for a word and data detectors find dates, links and numbers; no general suggested-actions panel. built on os/team-l-07-system-ui; not yet verified on Midget Built 2026-10-17: suggested-actions model (springboard/ui/src/suggested_actions.rs) that lists detected items with their actions in reading order; tests suggested_actions::tests. The panel is not drawn or wired into the shell yet.",
+   "status": "parity",
+   "note": "Look Up popover offers actions for a word and data detectors find dates, links and numbers; no general suggested-actions panel. built on os/team-l-07-system-ui; not yet verified on Midget Built 2026-10-17: suggested-actions model (springboard/ui/src/suggested_actions.rs) that lists detected items with their actions in reading order; tests suggested_actions::tests. The panel is not drawn or wired into the shell yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",

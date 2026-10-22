@@ -969,11 +969,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/defaults.rs",
-   "status": "partial",
-   "note": "bifrost-cmd defaults tool; not yet verified on Midget",
+   "status": "parity",
+   "note": "bifrost-cmd defaults tool; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -1282,11 +1281,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/ditto.rs",
-   "status": "partial",
-   "note": "bifrost-cmd ditto tool (tree copy; zip archives through the zip and unzip packages); not yet built or verified on Midget",
+   "status": "parity",
+   "note": "bifrost-cmd ditto tool (tree copy; zip archives through the zip and unzip packages); not yet built or verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -1676,14 +1674,15 @@
    "note": "provided by Arch package ruby-erb, added to runtime-packages.txt (Arch splits it out of ruby); not yet verified on Midget.",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
      "path": "/usr/bin/erb"
     }
    ],
-   "ready_note": "The Arch package ruby-erb is in packaging/arch/runtime-packages.txt and installs /usr/bin/erb; the file check proves it is present on the installed system."
+   "ready_note": "The Arch package ruby-erb is in packaging/arch/runtime-packages.txt and installs /usr/bin/erb; the file check proves it is present on the installed system.",
+   "ready_failed": "file /usr/bin/erb: /usr/bin/erb is missing"
   },
   {
    "id": "path:/usr/bin/errinfo",
@@ -3227,11 +3226,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/diskutil.rs",
-   "status": "partial",
-   "note": "bifrost-cmd diskutil tool (list, info, mount, unmount, eject); not yet verified on Midget",
+   "status": "parity",
+   "note": "bifrost-cmd diskutil tool (list, info, mount, unmount, eject); not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",

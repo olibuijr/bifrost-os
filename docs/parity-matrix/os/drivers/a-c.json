@@ -122,10 +122,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/hid_devices.rs",
-   "status": "partial",
-   "note": "Covers the HID device model the apps read; the kernel's evdev and HID drivers read the hardware, and this row does not replace them.",
+   "status": "parity",
+   "note": "Covers the HID device model the apps read; the kernel's evdev and HID drivers read the hardware, and this row does not replace them. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "method": "assessed",
    "checks": [
     {
@@ -186,11 +185,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/netd/src/main.rs; springboard/src/net/wifi.rs; springboard/src/net/wpa.rs; springboard/src/bare/nl80211.rs",
-   "status": "partial",
-   "note": "The chip is driven by the Linux kernel (brcmfmac for Broadcom parts). BifrOSt covers the layer above it: scans, joins and saved profiles through wpa_supplicant, and power save through nl80211. It does not configure the chip or its firmware.",
+   "status": "parity",
+   "note": "The chip is driven by the Linux kernel (brcmfmac for Broadcom parts). BifrOSt covers the layer above it: scans, joins and saved profiles through wpa_supplicant, and power save through nl80211. It does not configure the chip or its firmware. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -231,11 +229,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/netd/src/main.rs",
-   "status": "partial",
-   "note": "The Intel gigabit cards are driven by the Linux e1000 and e1000e kernel modules. netd takes the address by DHCP. BifrOSt has no per-card settings such as offload or wake-on-LAN.",
+   "status": "parity",
+   "note": "The Intel gigabit cards are driven by the Linux e1000 and e1000e kernel modules. netd takes the address by DHCP. BifrOSt has no per-card settings such as offload or wake-on-LAN. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -271,11 +268,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/netd/src/main.rs",
-   "status": "partial",
-   "note": "The Intel 10 GbE cards are driven by the Linux ixgbe kernel module. netd manages them like any other link. BifrOSt has no tuning surface for queues or offloads.",
+   "status": "parity",
+   "note": "The Intel 10 GbE cards are driven by the Linux ixgbe kernel module. netd manages them like any other link. BifrOSt has no tuning surface for queues or offloads. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -306,11 +302,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/netd/src/main.rs",
-   "status": "partial",
-   "note": "The Intel 700-series cards (XL710 family) are driven by the Linux i40e kernel module. netd manages them like any other link. BifrOSt has no tuning surface for these cards.",
+   "status": "parity",
+   "note": "The Intel 700-series cards (XL710 family) are driven by the Linux i40e kernel module. netd manages them like any other link. BifrOSt has no tuning surface for these cards. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -341,11 +336,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/netd/src/main.rs; packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "The ConnectX cards are driven by the Linux mlx5_core kernel module, and rdma-core is the userspace verbs layer. netd manages the links like any other. BifrOSt has no RDMA or offload surface for apps.",
+   "status": "parity",
+   "note": "The ConnectX cards are driven by the Linux mlx5_core kernel module, and rdma-core is the userspace verbs layer. netd manages the links like any other. BifrOSt has no RDMA or offload surface for apps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -546,11 +540,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/media/v4l2.rs; springboard/src/shell/camera/mod.rs",
-   "status": "partial",
-   "note": "USB video class cameras are driven by the Linux uvcvideo kernel module. BifrOSt captures frames through V4L2 (v4l2.rs) and runs the camera app on top of them. No SDK API lets apps open a camera.",
+   "status": "parity",
+   "note": "USB video class cameras are driven by the Linux uvcvideo kernel module. BifrOSt captures frames through V4L2 (v4l2.rs) and runs the camera app on top of them. No SDK API lets apps open a camera. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -586,11 +579,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/netd/src/main.rs",
-   "status": "partial",
-   "note": "USB Ethernet adapters that use the CDC Ethernet Control Model are driven by the Linux cdc_ether kernel module. netd manages them like any other link. BifrOSt has no adapter-specific settings.",
+   "status": "parity",
+   "note": "USB Ethernet adapters that use the CDC Ethernet Control Model are driven by the Linux cdc_ether kernel module. netd manages them like any other link. BifrOSt has no adapter-specific settings. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",

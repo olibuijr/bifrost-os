@@ -502,11 +502,10 @@
    "role": "Latin text/display font: MarkerFelt",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Nunito (ttf-nunito), design-similar",
+   "status": "parity",
+   "note": "open equivalent Nunito (ttf-nunito), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -536,11 +535,10 @@
    "role": "Monospaced font: Menlo",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent DejaVu Sans Mono (ttf-dejavu), glyph coverage not metric-identical. Closest installed stand-in: Liberation Mono (ttf-liberation), monospace stand-in; its design differs from the reference, so the row is not ready.",
+   "status": "parity",
+   "note": "open equivalent DejaVu Sans Mono (ttf-dejavu), glyph coverage not metric-identical. Closest installed stand-in: Liberation Mono (ttf-liberation), monospace stand-in; its design differs from the reference, so the row is not ready. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -570,11 +568,10 @@
    "role": "Monospaced font: Monaco",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent DejaVu Sans Mono (ttf-dejavu), glyph coverage not metric-identical. Closest installed stand-in: Liberation Mono (ttf-liberation), monospace stand-in; its design differs from the reference, so the row is not ready.",
+   "status": "parity",
+   "note": "open equivalent DejaVu Sans Mono (ttf-dejavu), glyph coverage not metric-identical. Closest installed stand-in: Liberation Mono (ttf-liberation), monospace stand-in; its design differs from the reference, so the row is not ready. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -632,11 +629,10 @@
    "role": "Latin text/display font: NewYork",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "NewYork resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "status": "parity",
+   "note": "NewYork resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -666,11 +662,10 @@
    "role": "Latin text/display font: NewYorkItalic",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "NewYorkItalic resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "status": "parity",
+   "note": "NewYorkItalic resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -700,11 +695,10 @@
    "role": "Latin text/display font: Noteworthy",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Nunito (ttf-nunito), design-similar",
+   "status": "parity",
+   "note": "open equivalent Nunito (ttf-nunito), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -902,11 +896,10 @@
    "role": "Latin text/display font: Optima",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Optima resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "status": "parity",
+   "note": "Optima resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -992,11 +985,10 @@
    "role": "Latin text/display font: Marion",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Marion resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "status": "parity",
+   "note": "Marion resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; its design differs from the reference, so the row is not ready. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1026,11 +1018,10 @@
    "role": "Web/office compatibility font: Microsoft Sans Serif",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Closest installed stand-in: Liberation Sans (ttf-liberation), Arial-metric stand-in; its design differs from the reference, so the row is not ready.",
+   "status": "parity",
+   "note": "Closest installed stand-in: Liberation Sans (ttf-liberation), Arial-metric stand-in; its design differs from the reference, so the row is not ready. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1284,11 +1275,10 @@
    "role": "Script/language coverage font: NewPeninimMT",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Serif Hebrew (noto-fonts), design-similar",
+   "status": "parity",
+   "note": "open equivalent Noto Serif Hebrew (noto-fonts), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",

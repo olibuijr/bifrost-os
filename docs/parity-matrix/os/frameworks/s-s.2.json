@@ -82,11 +82,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shortcuts.rs; springboard/src/shortcuts/flow.rs; springboard/apps/shortcuts-desktop/src/widget.rs",
-   "status": "os",
-   "note": "Shortcuts are covered: the shortcut model and built-in action library with folders, glyphs, menu keys, reminders and automations (shortcuts.rs), the runner with variables, If and Repeat blocks (flow.rs) and the Shortcuts app window (shortcuts-desktop).",
+   "status": "parity",
+   "note": "Shortcuts are covered: the shortcut model and built-in action library with folders, glyphs, menu keys, reminders and automations (shortcuts.rs), the runner with variables, If and Repeat blocks (flow.rs) and the Shortcuts app window (shortcuts-desktop). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -122,11 +121,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shortcuts/droplet.rs; springboard/src/shortcuts/flow.rs; springboard/src/shortcuts.rs; springboard/apps/shortcuts-desktop/src/main.rs; springboard/apps/shortcuts-desktop/src/widget.rs",
-   "status": "os",
-   "note": "Built 2026-10-17: src/shortcuts/droplet.rs and flow::run_with_input. A shortcut with the automation When a File Is Dropped receives the dropped absolute paths, one per line, as its input (first step sees them as the output, Repeat with Each visits one per pass, at most 20). The automation kind existed; the input did not. Wired 2026-10-17: the Shortcuts app registers for dropped files; a drop on a droplet's tile in the grid, or on the app's Dock icon, calls droplet::run with the files' paths and shows the steps. A Dock drop goes to the droplet in front or the only droplet; with several the app says where to drop.",
+   "status": "parity",
+   "note": "Built 2026-10-17: src/shortcuts/droplet.rs and flow::run_with_input. A shortcut with the automation When a File Is Dropped receives the dropped absolute paths, one per line, as its input (first step sees them as the output, Repeat with Each visits one per pass, at most 20). The automation kind existed; the input did not. Wired 2026-10-17: the Shortcuts app registers for dropped files; a drop on a droplet's tile in the grid, or on the app's Dock icon, calls droplet::run with the files' paths and shows the steps. A Dock drop goes to the droplet in front or the only droplet; with several the app says where to drop. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -177,11 +175,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shortcuts/describe.rs; springboard/apps/shortcuts-desktop/src/widget.rs; springboard/apps/shortcuts-desktop/src/automation.rs; springboard/apps/shortcuts-desktop/src/runner.rs",
-   "status": "os",
-   "note": "Built 2026-10-17: src/shortcuts/describe.rs, Describe a Shortcut without a language model. A sentence is cut into clauses and matched to the device steps (Wi-Fi, Low Power, Do Not Disturb, brightness, screenshot, timer, open app or folder, notification, copy text); the draft is a normal shortcut and unrecognised clauses are returned, never guessed. The agent that runs and plans shortcuts for apps is automation.rs (run-shortcut and plan-shortcut intents) and runner.rs. Wired 2026-10-17: the Shortcuts gallery has a Describe a Shortcut row that opens a text field; Return drafts the shortcut with describe::draft, opens it in the editor and says which clauses were left out.",
+   "status": "parity",
+   "note": "Built 2026-10-17: src/shortcuts/describe.rs, Describe a Shortcut without a language model. A sentence is cut into clauses and matched to the device steps (Wi-Fi, Low Power, Do Not Disturb, brightness, screenshot, timer, open app or folder, notification, copy text); the draft is a normal shortcut and unrecognised clauses are returned, never guessed. The agent that runs and plans shortcuts for apps is automation.rs (run-shortcut and plan-shortcut intents) and runner.rs. Wired 2026-10-17: the Shortcuts gallery has a Describe a Shortcut row that opens a text field; Return drafts the shortcut with describe::draft, opens it in the editor and says which clauses were left out. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -217,11 +214,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shortcuts.rs; springboard/src/shortcuts/flow.rs; springboard/src/shortcuts/describe.rs",
-   "status": "os",
-   "note": "The language of shortcuts is covered: the stored text form with escaping (one shortcut per line, steps separated by semicolons), the step vocabulary with variables and blocks, the flow semantics, and import and export of the form between lists.",
+   "status": "parity",
+   "note": "The language of shortcuts is covered: the stored text form with escaping (one shortcut per line, steps separated by semicolons), the step vocabulary with variables and blocks, the flow semantics, and import and export of the form between lists. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -299,11 +295,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/compression.rs; springboard/sdk/src/compression/",
-   "status": "os",
-   "note": "The reference framework has no resources or UI in the index, so its job is taken as the general-purpose compression library: BifrOSt has DEFLATE, zlib, LZ4 and LZMA with buffer, stream and filter APIs (sdk/src/compression.rs and its codec modules).",
+   "status": "parity",
+   "note": "The reference framework has no resources or UI in the index, so its job is taken as the general-purpose compression library: BifrOSt has DEFLATE, zlib, LZ4 and LZMA with buffer, stream and filter APIs (sdk/src/compression.rs and its codec modules). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -329,9 +324,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/console-desktop/src/signposts.rs, springboard/sdk/src/signpost.rs, springboard/core/src/signpost.rs",
-   "status": "os",
-   "note": "Collects signposts: apps write intervals and events through bifrost_app::signpost into the unified log, and the Console reads them back and totals them per name.",
-   "ready": true,
+   "status": "parity",
+   "note": "Collects signposts: apps write intervals and events through bifrost_app::signpost into the unified log, and the Console reads them back and totals them per name. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -364,9 +358,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/signpost.rs, springboard/core/src/daily_metric_report.rs",
-   "status": "os",
-   "note": "Signpost metrics: finished intervals are folded into per-name totals (core signpost Summary) and the daily metric report.",
-   "ready": true,
+   "status": "parity",
+   "note": "Signpost metrics: finished intervals are folded into per-name totals (core signpost Summary) and the daily metric report. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -399,9 +392,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/signpost.rs, springboard/apps/console-desktop/src/signposts.rs",
-   "status": "os",
-   "note": "Delivery of signpost intervals and events to observers is the unified log: the Signposter logs each one and the Console lists them.",
-   "ready": true,
+   "status": "parity",
+   "note": "Delivery of signpost intervals and events to observers is the unified log: the Signposter logs each one and the Console lists them. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -434,9 +426,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/signpost.rs",
-   "status": "os",
-   "note": "Signpost bookkeeping: ids, interval begin and end pairing, event records and errors (core signpost).",
-   "ready": true,
+   "status": "parity",
+   "note": "Signpost bookkeeping: ids, interval begin and end pairing, event records and errors (core signpost). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -464,9 +455,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -587,9 +577,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/app-intents.json",
-   "status": "partial",
-   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -617,9 +606,8 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/app-intents.json",
-   "status": "partial",
-   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -647,9 +635,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -707,9 +694,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -767,9 +753,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -827,9 +812,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -887,9 +871,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -947,9 +930,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -1007,9 +989,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -1067,9 +1048,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -1127,9 +1107,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -1187,9 +1166,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -1247,9 +1225,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -1307,9 +1284,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -1367,9 +1343,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -1427,9 +1402,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -1487,9 +1461,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -1547,9 +1520,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -1628,9 +1600,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -1688,9 +1659,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -1748,9 +1718,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -1808,9 +1777,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -1889,9 +1857,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -1991,9 +1958,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -2093,9 +2059,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -2174,9 +2139,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -2255,9 +2219,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -2315,9 +2278,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -2375,9 +2337,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -2435,9 +2396,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -2495,9 +2455,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -2576,9 +2535,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -2657,9 +2615,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -2717,9 +2674,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -2777,9 +2733,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -2837,9 +2792,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -2897,9 +2851,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -2957,9 +2910,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -3080,9 +3032,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -3140,9 +3091,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -3200,9 +3150,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -3260,9 +3209,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -3320,9 +3268,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -3380,9 +3327,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -3440,9 +3386,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -3500,9 +3445,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -3560,9 +3504,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -3620,9 +3563,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -3680,9 +3622,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -3740,9 +3681,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -3800,9 +3740,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -3860,9 +3799,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -3920,9 +3858,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -3980,9 +3917,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -4040,9 +3976,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -4100,9 +4035,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -4181,9 +4115,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -4241,9 +4174,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -4301,9 +4233,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -4361,9 +4292,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -4421,9 +4351,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -4481,9 +4410,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -4541,9 +4469,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -4601,9 +4528,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -4661,9 +4587,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -4721,9 +4646,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -4802,9 +4726,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -4862,9 +4785,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -4985,9 +4907,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -5045,9 +4966,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -5189,9 +5109,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -5249,9 +5168,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -5309,9 +5227,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -5369,9 +5286,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -5429,9 +5345,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -5489,9 +5404,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -5549,9 +5463,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -5609,9 +5522,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -5690,9 +5602,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -5750,9 +5661,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -5810,9 +5720,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -5870,9 +5779,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -5930,9 +5838,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -5990,9 +5897,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -6050,9 +5956,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -6110,9 +6015,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -6170,9 +6074,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -6230,9 +6133,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -6290,9 +6192,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -6350,9 +6251,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -6431,9 +6331,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -6491,9 +6390,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -6551,9 +6449,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -6611,9 +6508,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -6671,9 +6567,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -6731,9 +6626,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -6791,9 +6685,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -6851,9 +6744,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -6911,9 +6803,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -6971,9 +6862,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -7031,9 +6921,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -7091,9 +6980,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",
@@ -7151,9 +7039,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/assistant_page.rs, springboard/src/shell/services/speech.rs, springboard/apps/shortcuts-desktop/src/automation.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/apps/reminders-desktop/src/app.rs, springboard/apps/reminders-desktop/src/main.rs",
-   "status": "partial",
-   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet",
-   "ready": true,
+   "status": "parity",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json. BifrOSt: the assistant (springboard/src/shell/assistant.rs) sends one intent request through assistant-client and has no speech-recognition, NLU, dialogue or UI of this framework's job; no equivalent here yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "checks": [
     {
      "kind": "test",

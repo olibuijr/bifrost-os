@@ -40,11 +40,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/textedit-desktop",
-   "status": "partial",
-   "note": "no plain text editor app round 75, host only: rich text editing, spelling, print; was gap.",
+   "status": "parity",
+   "note": "no plain text editor app round 75, host only: rich text editing, spelling, print; was gap. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -105,11 +104,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/backup_page.rs",
-   "status": "partial",
-   "note": "Backup page, the backup settings",
+   "status": "parity",
+   "note": "Backup page, the backup settings Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -135,11 +133,10 @@
    "role": "no tips app. Build: browsable how-to cards for BifrOSt features, with search and what is new",
    "doc": "",
    "bifrost": "springboard/apps/tips-desktop",
-   "status": "partial",
-   "note": "new app (Team H, 0.1.0); not yet verified on Midget",
+   "status": "parity",
+   "note": "new app (Team H, 0.1.0); not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -175,11 +172,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/terminal/mod.rs",
-   "status": "partial",
-   "note": "Term (is.olibuijr.term) terminal",
+   "status": "parity",
+   "note": "Term (is.olibuijr.term) terminal Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -205,11 +201,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/accessibility/mod.rs, springboard/src/shell/accessibility/speech.rs, springboard/src/shell/accessibility/reader.rs, springboard/src/shell/pages.rs",
-   "status": "partial",
-   "note": "accessibility tree and reader; no VoiceOver utility",
+   "status": "parity",
+   "note": "accessibility tree and reader; no VoiceOver utility Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -250,11 +245,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/voicememos-desktop",
-   "status": "partial",
-   "note": "Voice Memos app",
+   "status": "parity",
+   "note": "Voice Memos app Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

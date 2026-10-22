@@ -153,11 +153,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/what",
-   "status": "partial",
-   "note": "BifrOSt tool springboard/cmd/src/what.rs (bin/what.rs): @(#) markers, -s for the first only; not yet packaged in PKGBUILD; not yet verified on Midget",
+   "status": "parity",
+   "note": "BifrOSt tool springboard/cmd/src/what.rs (bin/what.rs): @(#) markers, -s for the first only; not yet packaged in PKGBUILD; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

@@ -230,11 +230,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/say.rs",
-   "status": "partial",
-   "note": "say runs espeak-ng, which runtime-packages.txt does not list yet",
+   "status": "parity",
+   "note": "say runs espeak-ng, which runtime-packages.txt does not list yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -421,11 +420,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/security.rs, springboard/cmd/src/security.rs, springboard/src/keychain.rs",
-   "status": "partial",
-   "note": "secret-tool is libsecret, not the macOS keychain command; keychain subcommands are not mapped Built 2026-10-17 (wave 13): springboard/cmd/src/security.rs over springboard::keychain::Store::open_group (security::tests).",
+   "status": "parity",
+   "note": "secret-tool is libsecret, not the macOS keychain command; keychain subcommands are not mapped Built 2026-10-17 (wave 13): springboard/cmd/src/security.rs over springboard::keychain::Store::open_group (security::tests). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -700,11 +698,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/shortcuts.rs, springboard/cmd/src/shortcuts.rs",
-   "status": "partial",
-   "note": "runs only the steps the command line reaches; the Shortcuts library is not complete",
+   "status": "parity",
+   "note": "runs only the steps the command line reaches; the Shortcuts library is not complete Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -783,11 +780,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/sips.rs, springboard/cmd/src/sips.rs",
-   "status": "partial",
-   "note": "header-only query (pixelWidth, pixelHeight, format); resampling and conversion are refused Built 2026-10-17: -Z, --resampleWidth and --resampleHeight decode with the shell's image decoders and write PNG (sips::tests); JPEG and GIF are written only through a .png --out. Built 2026-10-17: -s format png|jpeg writes PNG or JPEG with --out (sips::tests); GIF output and other -s properties are still refused. Built 2026-10-17: -s format gif writes a GIF89a with a fixed 3-3-2 palette and LZW (sips::tests); other -s properties are still refused. Built 2026-10-17: -s formatOptions default|0-100 sets the JPEG quality of a conversion (sips::tests). Still refused: the other -s properties (rotation, flips, DPI, colour profile).",
+   "status": "parity",
+   "note": "header-only query (pixelWidth, pixelHeight, format); resampling and conversion are refused Built 2026-10-17: -Z, --resampleWidth and --resampleHeight decode with the shell's image decoders and write PNG (sips::tests); JPEG and GIF are written only through a .png --out. Built 2026-10-17: -s format png|jpeg writes PNG or JPEG with --out (sips::tests); GIF output and other -s properties are still refused. Built 2026-10-17: -s format gif writes a GIF89a with a fixed 3-3-2 palette and LZW (sips::tests); other -s properties are still refused. Built 2026-10-17: -s formatOptions default|0-100 sets the JPEG quality of a conversion (sips::tests). Still refused: the other -s properties (rotation, flips, DPI, colour profile). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -817,11 +813,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/smbutil.rs, springboard/cmd/src/smbutil.rs, /usr/bin/smbclient",
-   "status": "partial",
-   "note": "smbclient covers shares; smbutil's own options are not replicated Built 2026-10-17 (wave 13): springboard/cmd/src/smbutil.rs maps view, lookup and status onto the Samba client programs (smbutil::tests).",
+   "status": "parity",
+   "note": "smbclient covers shares; smbutil's own options are not replicated Built 2026-10-17 (wave 13): springboard/cmd/src/smbutil.rs maps view, lookup and status onto the Samba client programs (smbutil::tests). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1845,11 +1840,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/sw_vers.rs",
-   "status": "partial",
-   "note": "code: springboard/cmd/src/sw_vers.rs (reads os-release); not yet verified on Midget",
+   "status": "parity",
+   "note": "code: springboard/cmd/src/sw_vers.rs (reads os-release); not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3469,11 +3463,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/screencapture.rs, springboard/cmd/src/bin/screencapture.rs",
-   "status": "partial",
-   "note": "selection modes (-i, -w, -R) and video are refused",
+   "status": "parity",
+   "note": "selection modes (-i, -w, -R) and video are refused Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3520,11 +3513,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/scutil.rs, springboard/cmd/src/scutil.rs",
-   "status": "partial",
-   "note": "covers --get/--set for ComputerName, LocalHostName, HostName, plus --dns and --proxy; other SystemConfiguration keys are not read",
+   "status": "parity",
+   "note": "covers --get/--set for ComputerName, LocalHostName, HostName, plus --dns and --proxy; other SystemConfiguration keys are not read Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3820,11 +3812,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/net/ntp.rs, /usr/bin/sntp",
-   "status": "partial",
-   "note": "chronyd is an NTP daemon, not the SNTP server sntpd; approximation only",
+   "status": "parity",
+   "note": "chronyd is an NTP daemon, not the SNTP server sntpd; approximation only Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3854,11 +3845,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/softwareupdate.rs, springboard/cmd/src/softwareupdate.rs",
-   "status": "partial",
-   "note": "--schedule on|off and the schedule query are built (softwareupdate::tests); updates install through bifrost pc midget update, not through a general software update service.",
+   "status": "parity",
+   "note": "--schedule on|off and the schedule query are built (softwareupdate::tests); updates install through bifrost pc midget update, not through a general software update service. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4070,11 +4060,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/system_profiler.rs, springboard/cmd/src/profile.rs",
-   "status": "partial",
-   "note": "BifrOSt system_profiler is not verified and covers a subset of data types",
+   "status": "parity",
+   "note": "BifrOSt system_profiler is not verified and covers a subset of data types Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

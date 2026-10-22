@@ -19,11 +19,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/bare/pad_rumble.rs; springboard/src/shell/game_controllers_page.rs",
-   "status": "partial",
-   "note": "Gamepads that speak the xpad protocol are driven by the Linux xpad kernel module and appear as evdev input nodes. The shell's game controller page lists them and pad_rumble.rs drives their motors. No app-facing controller API exists.",
+   "status": "parity",
+   "note": "Gamepads that speak the xpad protocol are driven by the Linux xpad kernel module and appear as evdev input nodes. The shell's game controller page lists them and pad_rumble.rs drives their motors. No app-facing controller API exists. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",

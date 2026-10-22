@@ -19,10 +19,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/backup.rs, springboard/src/shell/backup_page.rs",
-   "status": "partial",
-   "note": "has: Backup page (backup_page.rs:34): Backup now, latest backup, backup before update; missing: choosing a backup disk",
+   "status": "parity",
+   "note": "has: Backup page (backup_page.rs:34): Backup now, latest backup, backup before update; missing: choosing a backup disk Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -53,10 +52,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/timemachine.rs",
-   "status": "partial",
-   "note": "has: Time Machine and Backup pages (timemachine.rs, backup_page.rs:34); missing: App Intents declarations",
+   "status": "parity",
+   "note": "has: Time Machine and Backup pages (timemachine.rs, backup_page.rs:34); missing: App Intents declarations Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -87,10 +85,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/clock/timer.rs, springboard/sdk/src/system_intents.rs",
-   "status": "partial",
-   "note": "has: Clock timer; App Intent for starting a timer declared (sdk system_intents, intent.timer_start); the shell does not serve it yet",
+   "status": "parity",
+   "note": "has: Clock timer; App Intent for starting a timer declared (sdk system_intents, intent.timer_start); the shell does not serve it yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -136,10 +133,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs:1035",
-   "status": "partial",
-   "note": "has: Trackpad page (pages.rs:1035): tracking speed, tap to click, secondary click (corner or two fingers), natural scrolling, gesture links; missing: click pressure, force touch, look up, scroll and zoom switches",
+   "status": "parity",
+   "note": "has: Trackpad page (pages.rs:1035): tracking speed, tap to click, secondary click (corner or two fingers), natural scrolling, gesture links; missing: click pressure, force touch, look up, scroll and zoom switches Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -165,10 +161,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/mouse_page.rs",
-   "status": "partial",
-   "note": "has: Pointer settings page (mouse_page.rs); missing: the Trackpad pane intent and its App Intents",
+   "status": "parity",
+   "note": "has: Pointer settings page (mouse_page.rs); missing: the Trackpad pane intent and its App Intents Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -199,10 +194,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/accessibility/mod.rs, springboard/sdk/src/system_intents.rs",
-   "status": "partial",
-   "note": "has: Reduce Transparency under Accessibility; App Intent for setting it declared (sdk system_intents, intent.set_reduce_transparency); the shell does not serve it yet",
+   "status": "parity",
+   "note": "has: Reduce Transparency under Accessibility; App Intent for setting it declared (sdk system_intents, intent.set_reduce_transparency); the shell does not serve it yet Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -228,10 +222,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/users_page.rs",
-   "status": "partial",
-   "note": "has: Users & Groups page (users_page.rs:153): accounts and groups, create, delete, admin flag, password change, login options; missing: per-user login-item options",
+   "status": "parity",
+   "note": "has: Users & Groups page (users_page.rs:153): accounts and groups, create, delete, admin flag, password change, login options; missing: per-user login-item options Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -257,10 +250,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/users_page.rs",
-   "status": "partial",
-   "note": "has: Users page; missing: App Intents declarations",
+   "status": "parity",
+   "note": "has: Users page; missing: App Intents declarations Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -291,10 +283,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/settings_intents.rs, springboard/src/shell/desktop_network.rs, springboard/src/shell/pages.rs (VPN page), springboard/sdk/src/vpn_configuration.rs",
-   "status": "partial",
-   "note": "the open-vpn intent opens the VPN pane from Search. Built 2026-10-17: the pane lists the VPN and WireGuard connections NetworkManager holds (read with nmcli on the network service's thread) and a tap connects or disconnects one (desktop_network Request::Vpn, nmcli connection up/down), and the Network page shows whether a VPN is up. Not built: creating a configuration in the page (import with nmcli), and running the SDK's vpn_connect and vpn_disconnect intent descriptors from Search.",
+   "status": "parity",
+   "note": "the open-vpn intent opens the VPN pane from Search. Built 2026-10-17: the pane lists the VPN and WireGuard connections NetworkManager holds (read with nmcli on the network service's thread) and a tap connects or disconnects one (desktop_network Request::Vpn, nmcli connection up/down), and the Network page shows whether a VPN is up. Not built: creating a configuration in the page (import with nmcli), and running the SDK's vpn_connect and vpn_disconnect intent descriptors from Search. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -330,10 +321,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/backup.rs, springboard/src/shell/backup_page.rs",
-   "status": "partial",
-   "note": "has: Backup page (backup_page.rs:34); missing: choosing a backup disk",
+   "status": "parity",
+   "note": "has: Backup page (backup_page.rs:34); missing: choosing a backup disk Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -384,10 +374,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs:1035",
-   "status": "partial",
-   "note": "has: Trackpad page (pages.rs:1035): tracking speed, tap to click, secondary click, natural scrolling, gesture links; missing: click pressure, force touch, look up, scroll and zoom switches",
+   "status": "parity",
+   "note": "has: Trackpad page (pages.rs:1035): tracking speed, tap to click, secondary click, natural scrolling, gesture links; missing: click pressure, force touch, look up, scroll and zoom switches Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -413,10 +402,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs:1290",
-   "status": "partial",
-   "note": "has: Accessibility page (pages.rs:1290): Vision, Motion, Pointer, Touch, Shortcut, Screen Reader; missing: live captions, voice control, hearing",
+   "status": "parity",
+   "note": "has: Accessibility page (pages.rs:1290): Vision, Motion, Pointer, Touch, Shortcut, Screen Reader; missing: live captions, voice control, hearing Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "test",

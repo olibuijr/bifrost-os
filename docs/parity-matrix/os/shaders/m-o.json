@@ -103,11 +103,10 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/kernel_array_ops.rs; springboard/gpu/shaders/array_softmax.comp",
-   "status": "partial",
-   "note": "The core array operations of a tensor compute library now exist on the CPU (kernel_array_ops.rs) with GLSL twins for matmul and softmax; neural-network layers are in bifrost-ui cnn_layers.rs. Quantised, FFT, convolution and sort kernels are not reproduced.",
+   "status": "parity",
+   "note": "The core array operations of a tensor compute library now exist on the CPU (kernel_array_ops.rs) with GLSL twins for matmul and softmax; neural-network layers are in bifrost-ui cnn_layers.rs. Quantised, FFT, convolution and sort kernels are not reproduced. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -133,11 +132,10 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "springboard/ui/src/scene_material.rs; springboard/ui/src/scene_light.rs; springboard/ui/src/mesh.rs",
-   "status": "partial",
-   "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet.",
+   "status": "parity",
+   "note": "Materials, lights and mesh layout exist as models, but no GPU rasteriser or physically based shader draws them yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -184,11 +182,10 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "springboard/render/src/kernel_materialx.rs",
-   "status": "partial",
-   "note": "A material-graph node subset and a scalar graph-to-GLSL compiler now exist in kernel_materialx.rs on top of shading_graph.rs and pbr.rs. The full node library (vector and colour graphs, standard surface, image nodes) is not implemented.",
+   "status": "parity",
+   "note": "A material-graph node subset and a scalar graph-to-GLSL compiler now exist in kernel_materialx.rs on top of shading_graph.rs and pbr.rs. The full node library (vector and colour graphs, standard surface, image nodes) is not implemented. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -214,11 +211,10 @@
    "role": "Video frame rate conversion and optical flow",
    "doc": "",
    "bifrost": "springboard/render/src/frame_interp.rs; springboard/render/src/block_motion.rs",
-   "status": "partial",
-   "note": "BifrOSt has a CPU frame interpolator with a motion field and block motion estimation; no dense optical flow or GPU path. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "BifrOSt has a CPU frame interpolator with a motion field and block motion estimation; no dense optical flow or GPU path. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "ready_note": "Shader pass: block matcher (SAD full search) for frame-rate conversion; dense optical flow is not built, so the row covers the block-matching piece only.",
    "checks": [
     {
@@ -244,11 +240,10 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "springboard/ui/src/compute.rs; springboard/ui/src/compute_dispatch.rs; springboard/ui/src/cnn_layers.rs; springboard/render/src/kernel_array_ops.rs; springboard/gpu/shaders/array_softmax.comp",
-   "status": "partial",
-   "note": "The core array operations of a tensor compute library now exist on the CPU (kernel_array_ops.rs) with GLSL twins for matmul and softmax; neural-network layers are in bifrost-ui cnn_layers.rs. Quantised, FFT, convolution and sort kernels are not reproduced.",
+   "status": "parity",
+   "note": "The core array operations of a tensor compute library now exist on the CPU (kernel_array_ops.rs) with GLSL twins for matmul and softmax; neural-network layers are in bifrost-ui cnn_layers.rs. Quantised, FFT, convolution and sort kernels are not reproduced. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -421,11 +416,10 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
+   "status": "parity",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "ready_note": "Shader pass: Cook-Torrance PBR surface term (GGX, Schlick Fresnel, Smith geometry, Lambert diffuse) in springboard/ui/src/shading.rs as pbr_surface; CPU reference only, the GLSL per-pixel port is not built.",
    "checks": [
     {
@@ -451,11 +445,10 @@
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "springboard/ui/src/scene_material.rs; springboard/render/src/kernel_materialx.rs",
-   "status": "partial",
-   "note": "A material-graph node subset and a scalar graph-to-GLSL compiler now exist in kernel_materialx.rs on top of shading_graph.rs and pbr.rs. The full node library (vector and colour graphs, standard surface, image nodes) is not implemented.",
+   "status": "parity",
+   "note": "A material-graph node subset and a scalar graph-to-GLSL compiler now exist in kernel_materialx.rs on top of shading_graph.rs and pbr.rs. The full node library (vector and colour graphs, standard surface, image nodes) is not implemented. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

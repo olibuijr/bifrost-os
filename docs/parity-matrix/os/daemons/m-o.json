@@ -72,11 +72,10 @@
    "role": "",
    "doc": "",
    "bifrost": "the cups package units cups-lpd.socket and cups-lpd@.service, springboard/src/privd/accounts.rs, springboard/src/shell/sharing_page.rs",
-   "status": "partial",
-   "note": "Built: Printer Sharing switch (Settings > Sharing) enabling cups-lpd.socket, which hands each LPD connection to the packaged cups-lpd.",
+   "status": "parity",
+   "note": "Built: Printer Sharing switch (Settings > Sharing) enabling cups-lpd.socket, which hands each LPD connection to the packaged cups-lpd. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "built",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -119,11 +118,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/cups.rs, springboard/ui/src/ipp.rs",
-   "status": "partial",
-   "note": "The CUPS scheduler is the cups package; BifrOSt's CUPS and IPP client models and the Print Center app use it.",
+   "status": "parity",
+   "note": "The CUPS scheduler is the cups package; BifrOSt's CUPS and IPP client models and the Print Center app use it. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",

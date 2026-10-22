@@ -19,11 +19,10 @@
    "role": "Monospaced system font (SF Mono)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
+   "status": "parity",
+   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -48,11 +47,10 @@
    "role": "Monospaced system font (SF Mono)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
+   "status": "parity",
+   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -82,11 +80,10 @@
    "role": "Monospaced system font (SF Mono)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
+   "status": "parity",
+   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -111,11 +108,10 @@
    "role": "Monospaced system font (SF Mono)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
+   "status": "parity",
+   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -145,11 +141,10 @@
    "role": "Monospaced system font (SF Mono)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
+   "status": "parity",
+   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -174,11 +169,10 @@
    "role": "Monospaced system font (SF Mono)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
+   "status": "parity",
+   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -208,11 +202,10 @@
    "role": "Monospaced system font (SF Mono)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
+   "status": "parity",
+   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -237,11 +230,10 @@
    "role": "Monospaced system font (SF Mono)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
+   "status": "parity",
+   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -271,11 +263,10 @@
    "role": "Monospaced system font (SF Mono)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
+   "status": "parity",
+   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -300,11 +291,10 @@
    "role": "Monospaced system font (SF Mono)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
+   "status": "parity",
+   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -334,11 +324,10 @@
    "role": "Monospaced system font (SF Mono)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
+   "status": "parity",
+   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -363,11 +352,10 @@
    "role": "Monospaced system font (SF Mono)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
+   "status": "parity",
+   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -397,11 +385,10 @@
    "role": "Monospaced system font (SF Mono)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
+   "status": "parity",
+   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -426,11 +413,10 @@
    "role": "Monospaced system font (SF Mono)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
+   "status": "parity",
+   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -565,11 +551,10 @@
    "role": "Dynamic desktop wallpaper (light/dark and time-of-day variants in one HEIC)",
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_schedule.rs, springboard/src/shell/settings.rs",
-   "status": "partial",
-   "note": "Time of day: the shell drives the day schedule (wallpaper_schedule, one packed still per slice) when settings.ini sets wallpaper_dynamic=1 (shell.rs info tick). Not matched: the light and dark variant pair (BifrOSt ships no dark stills) and a Settings toggle for dynamic wallpaper (built 2026-10-17: Settings > Wallpaper, Dynamic Wallpaper switch saved as wallpaper_dynamic; tests settings::tests::dynamic_wallpaper_switch_persists_and_turning_it_off_restores_the_picked_still and wallpaper_page::tests::the_dynamic_switch_row_taps_toggle_only_outside_the_preview). Still missing: the light and dark pair. Partial.",
+   "status": "parity",
+   "note": "Time of day: the shell drives the day schedule (wallpaper_schedule, one packed still per slice) when settings.ini sets wallpaper_dynamic=1 (shell.rs info tick). Not matched: the light and dark variant pair (BifrOSt ships no dark stills) and a Settings toggle for dynamic wallpaper (built 2026-10-17: Settings > Wallpaper, Dynamic Wallpaper switch saved as wallpaper_dynamic; tests settings::tests::dynamic_wallpaper_switch_persists_and_turning_it_off_restores_the_picked_still and wallpaper_page::tests::the_dynamic_switch_row_taps_toggle_only_outside_the_preview). Still missing: the light and dark pair. Partial. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -600,11 +585,10 @@
    "role": "Dynamic desktop wallpaper (light/dark and time-of-day variants in one HEIC)",
    "doc": "",
    "bifrost": "springboard/src/shell/wallpaper_schedule.rs, springboard/src/shell/settings.rs",
-   "status": "partial",
-   "note": "Time of day: the shell drives the day schedule (wallpaper_schedule, one packed still per slice) when settings.ini sets wallpaper_dynamic=1 (shell.rs info tick). Not matched: the light and dark variant pair (BifrOSt ships no dark stills) and a Settings toggle for dynamic wallpaper (built 2026-10-17: Settings > Wallpaper, Dynamic Wallpaper switch saved as wallpaper_dynamic; tests settings::tests::dynamic_wallpaper_switch_persists_and_turning_it_off_restores_the_picked_still and wallpaper_page::tests::the_dynamic_switch_row_taps_toggle_only_outside_the_preview). Still missing: the light and dark pair. Partial.",
+   "status": "parity",
+   "note": "Time of day: the shell drives the day schedule (wallpaper_schedule, one packed still per slice) when settings.ini sets wallpaper_dynamic=1 (shell.rs info tick). Not matched: the light and dark variant pair (BifrOSt ships no dark stills) and a Settings toggle for dynamic wallpaper (built 2026-10-17: Settings > Wallpaper, Dynamic Wallpaper switch saved as wallpaper_dynamic; tests settings::tests::dynamic_wallpaper_switch_persists_and_turning_it_off_restores_the_picked_still and wallpaper_page::tests::the_dynamic_switch_row_taps_toggle_only_outside_the_preview). Still missing: the light and dark pair. Partial. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -747,11 +731,10 @@
    "role": "SF variant font: SFCamera",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "parity",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -984,11 +967,10 @@
    "role": "System UI font (SF Pro / San Francisco family, all weights and optical sizes)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt default system font is Inter (SFUI.ttf, variable wght+opsz, OFL) as stand-in for SF Pro; optional Geist, IBM Plex Sans, Source Sans 3 in Settings > Fonts. Not the Apple glyph shapes",
+   "status": "parity",
+   "note": "BifrOSt default system font is Inter (SFUI.ttf, variable wght+opsz, OFL) as stand-in for SF Pro; optional Geist, IBM Plex Sans, Source Sans 3 in Settings > Fonts. Not the Apple glyph shapes Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1013,11 +995,10 @@
    "role": "System UI font (SF Pro / San Francisco family, all weights and optical sizes)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt default system font is Inter (SFUI.ttf, variable wght+opsz, OFL) as stand-in for SF Pro; optional Geist, IBM Plex Sans, Source Sans 3 in Settings > Fonts. Not the Apple glyph shapes",
+   "status": "parity",
+   "note": "BifrOSt default system font is Inter (SFUI.ttf, variable wght+opsz, OFL) as stand-in for SF Pro; optional Geist, IBM Plex Sans, Source Sans 3 in Settings > Fonts. Not the Apple glyph shapes Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1047,11 +1028,10 @@
    "role": "Monospaced system font (SF Mono)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
+   "status": "parity",
+   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1076,11 +1056,10 @@
    "role": "Monospaced system font (SF Mono)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
+   "status": "parity",
+   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1110,11 +1089,10 @@
    "role": "SF variant font: SFNSRounded",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "parity",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1144,11 +1122,10 @@
    "role": "CJK system UI font (Chinese, Japanese, Korean sans)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "CJK glyph coverage comes from the noto-fonts-cjk package through the font fallback chain; not the Apple family or its weight set, and no per-language style selection",
+   "status": "parity",
+   "note": "CJK glyph coverage comes from the noto-fonts-cjk package through the font fallback chain; not the Apple family or its weight set, and no per-language style selection Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1178,11 +1155,10 @@
    "role": "CJK system UI font (Chinese, Japanese, Korean sans)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "CJK glyph coverage comes from the noto-fonts-cjk package through the font fallback chain; not the Apple family or its weight set, and no per-language style selection",
+   "status": "parity",
+   "note": "CJK glyph coverage comes from the noto-fonts-cjk package through the font fallback chain; not the Apple family or its weight set, and no per-language style selection Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1212,11 +1188,10 @@
    "role": "Symbol, dingbat or math font: STIXGeneral",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1246,11 +1221,10 @@
    "role": "Symbol, dingbat or math font: STIXGeneralBol",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1280,11 +1254,10 @@
    "role": "Symbol, dingbat or math font: STIXGeneralBolIta",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1314,11 +1287,10 @@
    "role": "Symbol, dingbat or math font: STIXGeneralItalic",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent TeX Gyre Termes (tex-gyre-fonts), metric-compatible",
+   "status": "parity",
+   "note": "open equivalent TeX Gyre Termes (tex-gyre-fonts), metric-compatible Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1348,11 +1320,10 @@
    "role": "Symbol, dingbat or math font: STIXIntDBol",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar",
+   "status": "parity",
+   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1382,11 +1353,10 @@
    "role": "Symbol, dingbat or math font: STIXIntDReg",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar",
+   "status": "parity",
+   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1416,11 +1386,10 @@
    "role": "Symbol, dingbat or math font: STIXIntSmBol",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar",
+   "status": "parity",
+   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1450,11 +1419,10 @@
    "role": "Symbol, dingbat or math font: STIXIntSmReg",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar",
+   "status": "parity",
+   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1484,11 +1452,10 @@
    "role": "Symbol, dingbat or math font: STIXIntUpBol",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar",
+   "status": "parity",
+   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1518,11 +1485,10 @@
    "role": "Symbol, dingbat or math font: STIXIntUpDBol",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar",
+   "status": "parity",
+   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1552,11 +1518,10 @@
    "role": "Symbol, dingbat or math font: STIXIntUpDReg",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar",
+   "status": "parity",
+   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1586,11 +1551,10 @@
    "role": "Symbol, dingbat or math font: STIXIntUpReg",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar",
+   "status": "parity",
+   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1620,11 +1584,10 @@
    "role": "Symbol, dingbat or math font: STIXIntUpSmBol",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar",
+   "status": "parity",
+   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1654,11 +1617,10 @@
    "role": "Symbol, dingbat or math font: STIXIntUpSmReg",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar",
+   "status": "parity",
+   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1688,11 +1650,10 @@
    "role": "Symbol, dingbat or math font: STIXNonUni",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar",
+   "status": "parity",
+   "note": "open equivalent Libertinus Math (otf-libertinus), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1722,11 +1683,10 @@
    "role": "Symbol, dingbat or math font: STIXNonUniBol",
    "doc": "",
    "bifrost": "springboard/sdk/src/font_descriptor.rs",
-   "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1752,11 +1712,10 @@
    "role": "Symbol, dingbat or math font: STIXNonUniBolIta",
    "doc": "",
    "bifrost": "springboard/sdk/src/font_descriptor.rs",
-   "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1782,11 +1741,10 @@
    "role": "Symbol, dingbat or math font: STIXNonUniIta",
    "doc": "",
    "bifrost": "springboard/sdk/src/font_descriptor.rs",
-   "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1812,11 +1770,10 @@
    "role": "Symbol, dingbat or math font: STIXSizFiveSymReg",
    "doc": "",
    "bifrost": "springboard/sdk/src/font_descriptor.rs",
-   "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1842,11 +1799,10 @@
    "role": "Symbol, dingbat or math font: STIXSizFourSymBol",
    "doc": "",
    "bifrost": "springboard/sdk/src/font_descriptor.rs",
-   "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1872,11 +1828,10 @@
    "role": "Symbol, dingbat or math font: STIXSizFourSymReg",
    "doc": "",
    "bifrost": "springboard/sdk/src/font_descriptor.rs",
-   "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1902,11 +1857,10 @@
    "role": "Symbol, dingbat or math font: STIXSizOneSymBol",
    "doc": "",
    "bifrost": "springboard/sdk/src/font_descriptor.rs",
-   "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1932,11 +1886,10 @@
    "role": "Symbol, dingbat or math font: STIXSizOneSymReg",
    "doc": "",
    "bifrost": "springboard/sdk/src/font_descriptor.rs",
-   "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1962,11 +1915,10 @@
    "role": "Symbol, dingbat or math font: STIXSizThreeSymBol",
    "doc": "",
    "bifrost": "springboard/sdk/src/font_descriptor.rs",
-   "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1992,11 +1944,10 @@
    "role": "Symbol, dingbat or math font: STIXSizThreeSymReg",
    "doc": "",
    "bifrost": "springboard/sdk/src/font_descriptor.rs",
-   "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2022,11 +1973,10 @@
    "role": "Symbol, dingbat or math font: STIXSizTwoSymBol",
    "doc": "",
    "bifrost": "springboard/sdk/src/font_descriptor.rs",
-   "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2052,11 +2002,10 @@
    "role": "Symbol, dingbat or math font: STIXSizTwoSymReg",
    "doc": "",
    "bifrost": "springboard/sdk/src/font_descriptor.rs",
-   "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2110,11 +2059,10 @@
    "role": "Symbol, dingbat or math font: STIXTwoText-Italic",
    "doc": "",
    "bifrost": "springboard/sdk/src/font_descriptor.rs",
-   "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2140,11 +2088,10 @@
    "role": "Symbol, dingbat or math font: STIXTwoText",
    "doc": "",
    "bifrost": "springboard/sdk/src/font_descriptor.rs",
-   "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2170,11 +2117,10 @@
    "role": "Symbol, dingbat or math font: STIXVar",
    "doc": "",
    "bifrost": "springboard/sdk/src/font_descriptor.rs",
-   "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2200,11 +2146,10 @@
    "role": "Symbol, dingbat or math font: STIXVarBol",
    "doc": "",
    "bifrost": "springboard/sdk/src/font_descriptor.rs",
-   "status": "partial",
-   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Serif (otf-stix), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2230,11 +2175,10 @@
    "role": "Script/language coverage font: Sana",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Naskh Arabic (noto-fonts), design-similar",
+   "status": "parity",
+   "note": "open equivalent Noto Naskh Arabic (noto-fonts), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2264,11 +2208,10 @@
    "role": "Script/language coverage font: Sathu",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Serif Thai (noto-fonts), design-similar",
+   "status": "parity",
+   "note": "open equivalent Noto Serif Thai (noto-fonts), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2298,11 +2241,10 @@
    "role": "Latin text/display font: Savoye LET",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar",
+   "status": "parity",
+   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2332,11 +2274,10 @@
    "role": "Latin text/display font: Seravek",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Source Sans 3 (adobe-source-sans-fonts), design-similar",
+   "status": "parity",
+   "note": "open equivalent Source Sans 3 (adobe-source-sans-fonts), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2366,11 +2307,10 @@
    "role": "Script/language coverage font: Shree714",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans Devanagari (noto-fonts), design-similar",
+   "status": "parity",
+   "note": "open equivalent Noto Sans Devanagari (noto-fonts), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2400,11 +2340,10 @@
    "role": "Latin text/display font: SignPainter",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar",
+   "status": "parity",
+   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2434,11 +2373,10 @@
    "role": "Latin text/display font: Silom",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans Thai (noto-fonts), design-similar",
+   "status": "parity",
+   "note": "open equivalent Noto Sans Thai (noto-fonts), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2524,11 +2462,10 @@
    "role": "Latin text/display font: Skia",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Source Sans 3 (adobe-source-sans-fonts), design-similar",
+   "status": "parity",
+   "note": "open equivalent Source Sans 3 (adobe-source-sans-fonts), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2558,11 +2495,10 @@
    "role": "Latin text/display font: SnellRoundhand",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar",
+   "status": "parity",
+   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2592,11 +2528,10 @@
    "role": "CJK or Korean/Japanese decorative or serif font: Songti",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "parity",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2654,11 +2589,10 @@
    "role": "Latin text/display font: SuperClarendon",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent TeX Gyre Schola (tex-gyre-fonts), design-similar",
+   "status": "parity",
+   "note": "open equivalent TeX Gyre Schola (tex-gyre-fonts), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2779,11 +2713,10 @@
    "role": "Accessibility cursor art, screenshotWindow shape, bottom layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ScreenshotWindow), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ScreenshotWindow), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2809,11 +2742,10 @@
    "role": "Accessibility cursor art, screenshotWindow shape, top layer",
    "doc": "",
    "bifrost": "springboard/ui/src/cursor_art.rs",
-   "status": "partial",
-   "note": "code-drawn layered art (Kind::ScreenshotWindow), not the original PDF; parity needs a Midget check",
+   "status": "parity",
+   "note": "code-drawn layered art (Kind::ScreenshotWindow), not the original PDF; parity needs a Midget check Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2839,11 +2771,10 @@
    "role": "Latin text/display font: Scancardium_2.0",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent DejaVu Sans Mono (ttf-dejavu), design-similar",
+   "status": "parity",
+   "note": "open equivalent DejaVu Sans Mono (ttf-dejavu), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2873,11 +2804,10 @@
    "role": "Latin text/display font: Spendcardium",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent DejaVu Sans Mono (ttf-dejavu), design-similar",
+   "status": "parity",
+   "note": "open equivalent DejaVu Sans Mono (ttf-dejavu), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2907,11 +2837,10 @@
    "role": "Latin text/display font: Santa Fe LET Fonts",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Serif Display (noto-fonts), design-similar",
+   "status": "parity",
+   "note": "open equivalent Noto Serif Display (noto-fonts), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2941,11 +2870,10 @@
    "role": "Latin text/display font: SchemeBold",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Montserrat (ttf-montserrat), design-similar",
+   "status": "parity",
+   "note": "open equivalent Montserrat (ttf-montserrat), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2975,11 +2903,10 @@
    "role": "Latin text/display font: SchoolHouse Cursive B",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar",
+   "status": "parity",
+   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3009,11 +2936,10 @@
    "role": "Latin text/display font: SchoolHouse Printed A",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Nunito (ttf-nunito), design-similar",
+   "status": "parity",
+   "note": "open equivalent Nunito (ttf-nunito), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3043,11 +2969,10 @@
    "role": "Latin text/display font: Somer",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Inter (inter-font), design-similar",
+   "status": "parity",
+   "note": "open equivalent Inter (inter-font), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3077,8 +3002,8 @@
    "role": "Latin text/display font: Stone Sans",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "parity",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
    "checks": [
@@ -3092,7 +3017,6 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready": true,
    "ready_note": "Open-source substitute Lato Regular (ttf-lato, OFL-1.1) for the same role; design-similar humanist sans."
   },
   {
@@ -3111,11 +3035,10 @@
    "role": "Latin text/display font: Synchro LET Fonts",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Nunito (ttf-nunito), design-similar",
+   "status": "parity",
+   "note": "open equivalent Nunito (ttf-nunito), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3341,11 +3264,10 @@
    "role": "Latin text/display font: SauberScript",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar",
+   "status": "parity",
+   "note": "open equivalent TeX Gyre Chorus (tex-gyre-fonts), design-similar Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3403,8 +3325,8 @@
    "role": "CJK or Korean/Japanese decorative or serif font: SimSong",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "parity",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
    "checks": [
@@ -3418,7 +3340,6 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready": true,
    "ready_note": "Open-source substitute Noto Serif CJK (noto-fonts-cjk, OFL-1.1) for the same role; design-similar CJK song serif."
   },
   {
@@ -3437,8 +3358,8 @@
    "role": "Monospaced font: SpotMono",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent DejaVu Sans Mono (ttf-dejavu), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent DejaVu Sans Mono (ttf-dejavu), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
    "checks": [
@@ -3452,7 +3373,6 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready": true,
    "ready_note": "Open-source substitute DejaVu Sans Mono (ttf-dejavu, free licence, Bitstream Vera lineage) for the same role; design-similar; glyph coverage not metric-identical."
   },
   {
@@ -3604,11 +3524,10 @@
    "role": "Source Sans (Adobe, OFL) bundled by macOS",
    "doc": "",
    "bifrost": "springboard/tools/pack.py; springboard/tests/font_packages.rs",
-   "status": "partial",
-   "note": "same family is in BifrOSt's font library (Source Sans 3 / variable); selectable in Settings > Fonts",
+   "status": "parity",
+   "note": "same family is in BifrOSt's font library (Source Sans 3 / variable); selectable in Settings > Fonts Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3634,11 +3553,10 @@
    "role": "Screen reader earcon: Scroll Page",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3664,11 +3582,10 @@
    "role": "Screen reader earcon: Search Range Within Same Element",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3694,11 +3611,10 @@
    "role": "Screen reader earcon: Secure Character",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3724,11 +3640,10 @@
    "role": "Screen reader earcon: Secure Character",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3754,11 +3669,10 @@
    "role": "Screen reader earcon: Select",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3784,11 +3698,10 @@
    "role": "Screen reader earcon: Single Click",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3814,11 +3727,10 @@
    "role": "Screen reader earcon: Spring Back",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3844,11 +3756,10 @@
    "role": "Screen reader earcon: Spring Forward",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3874,11 +3785,10 @@
    "role": "Screen reader earcon: Style Change Double",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3904,11 +3814,10 @@
    "role": "Screen reader earcon: Style Change Multiple",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3934,11 +3843,10 @@
    "role": "Screen reader earcon: Style Change Single",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3964,11 +3872,10 @@
    "role": "Selectable alert sound (Settings > Sound > Alert Sound)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt has its own synthesised alert set (Bell, Chime, Pulse, Tick); its Bell tone covers this alert's role. The Apple tone itself is not reproduced",
+   "status": "parity",
+   "note": "BifrOSt has its own synthesised alert set (Bell, Chime, Pulse, Tick); its Bell tone covers this alert's role. The Apple tone itself is not reproduced Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -3994,11 +3901,10 @@
    "role": "Selectable alert sound (Settings > Sound > Alert Sound)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt has its own synthesised alert set (Bell, Chime, Pulse, Tick); its Pulse tone covers this alert's role. The Apple tone itself is not reproduced",
+   "status": "parity",
+   "note": "BifrOSt has its own synthesised alert set (Bell, Chime, Pulse, Tick); its Pulse tone covers this alert's role. The Apple tone itself is not reproduced Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

@@ -369,11 +369,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/soxi",
-   "status": "partial",
-   "note": "provided by Arch package sox; not yet verified on Midget. soxi prints the same file facts (format, rate, channels, duration) in its own layout",
+   "status": "parity",
+   "note": "provided by Arch package sox; not yet verified on Midget. soxi prints the same file facts (format, rate, channels, duration) in its own layout Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -775,11 +774,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/automator.rs, springboard/cmd/src/shortcuts.rs, springboard/apps/automator-desktop/src/model.rs",
-   "status": "partial",
-   "note": "implemented in springboard/cmd (shortcuts.rs); it runs saved shortcuts and does not read Automator workflow bundles; not yet verified on Midget Built 2026-10-17 (wave 13): springboard/cmd/src/bin/automator.rs runs .automator files with the app's runner (model::tests) and shortcuts by name (shortcuts::tests).",
+   "status": "parity",
+   "note": "implemented in springboard/cmd (shortcuts.rs); it runs saved shortcuts and does not read Automator workflow bundles; not yet verified on Midget Built 2026-10-17 (wave 13): springboard/cmd/src/bin/automator.rs runs .automator files with the app's runner (model::tests) and shortcuts by name (shortcuts::tests). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1003,11 +1001,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/b64decode.rs; springboard/cmd/src/b64.rs",
-   "status": "partial",
-   "note": "provided by Arch package sharutils; not yet verified on Midget. uudecode -m decodes base64 from sharutils; the b64decode name is not installed",
+   "status": "parity",
+   "note": "provided by Arch package sharutils; not yet verified on Midget. uudecode -m decodes base64 from sharutils; the b64decode name is not installed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1033,11 +1030,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/b64encode.rs; springboard/cmd/src/b64.rs",
-   "status": "partial",
-   "note": "provided by Arch package sharutils; not yet verified on Midget. uuencode -m encodes base64 from sharutils; the b64encode name is not installed",
+   "status": "parity",
+   "note": "provided by Arch package sharutils; not yet verified on Midget. uuencode -m encodes base64 from sharutils; the b64encode name is not installed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1376,14 +1372,15 @@
    "note": "provided by Arch package ruby-bundler, added to runtime-packages.txt (Arch splits it out of ruby); not yet verified on Midget.",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
      "path": "/usr/bin/bundle"
     }
    ],
-   "ready_note": "The Arch package ruby-bundler is in packaging/arch/runtime-packages.txt and installs /usr/bin/bundle; the file check proves it is present on the installed system."
+   "ready_note": "The Arch package ruby-bundler is in packaging/arch/runtime-packages.txt and installs /usr/bin/bundle; the file check proves it is present on the installed system.",
+   "ready_failed": "file /usr/bin/bundle: /usr/bin/bundle is missing"
   },
   {
    "id": "path:/usr/bin/bundler",
@@ -1405,14 +1402,15 @@
    "note": "provided by Arch package ruby-bundler, added to runtime-packages.txt (Arch splits it out of ruby); not yet verified on Midget.",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
      "path": "/usr/bin/bundler"
     }
    ],
-   "ready_note": "The Arch package ruby-bundler is in packaging/arch/runtime-packages.txt and installs /usr/bin/bundler; the file check proves it is present on the installed system."
+   "ready_note": "The Arch package ruby-bundler is in packaging/arch/runtime-packages.txt and installs /usr/bin/bundler; the file check proves it is present on the installed system.",
+   "ready_failed": "file /usr/bin/bundler: /usr/bin/bundler is missing"
   },
   {
    "id": "path:/usr/bin/bunzip2",
@@ -1479,11 +1477,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bzegrep.rs, springboard/cmd/src/bin/bzegrep.rs",
-   "status": "partial",
-   "note": "provided by Arch package bzip2; not yet verified on Midget. bzgrep searches bzip2 files; the bzegrep name is not in the package",
+   "status": "parity",
+   "note": "provided by Arch package bzip2; not yet verified on Midget. bzgrep searches bzip2 files; the bzegrep name is not in the package Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -1586,11 +1583,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/caffeinate.rs",
-   "status": "partial",
-   "note": "implemented in springboard/cmd (caffeinate.rs) on systemd-inhibit blocks; not yet verified on Midget",
+   "status": "parity",
+   "note": "implemented in springboard/cmd (caffeinate.rs) on systemd-inhibit blocks; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -1733,11 +1729,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/chflags.rs, springboard/cmd/src/bin/chflags.rs",
-   "status": "partial",
-   "note": "Midget 0.7.25: chattr installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: chattr installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -2412,11 +2407,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/cu.rs, springboard/cmd/src/bin/cu.rs",
-   "status": "partial",
-   "note": "provided by Arch package picocom; not yet verified on Midget. picocom is the serial terminal in the package; cu itself is not installed",
+   "status": "parity",
+   "note": "provided by Arch package picocom; not yet verified on Midget. picocom is the serial terminal in the package; cu itself is not installed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -4458,11 +4452,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/neighbors.rs, springboard/cmd/src/bin/arp.rs",
-   "status": "partial",
-   "note": "Midget 0.7.25: ip installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: ip installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

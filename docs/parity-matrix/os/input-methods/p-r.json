@@ -19,11 +19,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/input_methods/plugins.rs",
-   "status": "partial",
-   "note": "built on os/team-l-09-input-methods; not yet verified on Midget; plugin descriptors bound to built-in engines, no third-party code loaded",
+   "status": "parity",
+   "note": "built on os/team-l-09-input-methods; not yet verified on Midget; plugin descriptors bound to built-in engines, no third-party code loaded Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "manual",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
@@ -49,11 +48,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/hwkeys.rs (KeyRepeat::accent_hold), springboard/src/shell/compose_window.rs, springboard/apps/keyboard/src/keyboard.rs",
-   "status": "partial",
-   "note": "a letter held on a hardware keyboard opens its accent list instead of repeating (KeyRepeat::accent_hold, wired in the input loop in src/bin/shell.rs) in the Search field and in a focused app text field, and a digit picks an accent (compose_window.rs); the on-screen keyboard slides out the accents of a held letter (apps/keyboard).",
+   "status": "parity",
+   "note": "a letter held on a hardware keyboard opens its accent list instead of repeating (KeyRepeat::accent_hold, wired in the input loop in src/bin/shell.rs) in the Search field and in a focused app text field, and a digit picks an accent (compose_window.rs); the on-screen keyboard slides out the accents of a held letter (apps/keyboard). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "heuristic",
-   "ready": true,
    "checks": [
     {
      "kind": "test",
