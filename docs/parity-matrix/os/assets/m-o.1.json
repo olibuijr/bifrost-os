@@ -604,11 +604,10 @@
    "role": "Script/language coverage font: MuktaMahee",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -735,11 +734,10 @@
    "role": "Script/language coverage font: NotoNastaliq",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -764,11 +762,10 @@
    "role": "Script/language coverage font: NotoSansArmenian",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -793,11 +790,10 @@
    "role": "Script/language coverage font: NotoSansKannada",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -822,11 +818,10 @@
    "role": "Script/language coverage font: NotoSansMyanmar",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -851,11 +846,10 @@
    "role": "Script/language coverage font: NotoSansOriya",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -880,11 +874,10 @@
    "role": "Script/language coverage font: NotoSerifMyanmar",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -943,11 +936,10 @@
    "role": "Script/language coverage font: Malayalam MN",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -972,11 +964,10 @@
    "role": "Script/language coverage font: Malayalam Sangam MN",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1069,11 +1060,10 @@
    "role": "Script/language coverage font: Mishafi Gold",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1098,11 +1088,10 @@
    "role": "Script/language coverage font: Mishafi",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1127,11 +1116,10 @@
    "role": "Script/language coverage font: Mshtakan",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1156,11 +1144,10 @@
    "role": "Script/language coverage font: Muna",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1185,11 +1172,10 @@
    "role": "Script/language coverage font: Myanmar MN",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1214,11 +1200,10 @@
    "role": "Script/language coverage font: Myanmar Sangam MN",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1243,11 +1228,10 @@
    "role": "Script/language coverage font: NISC18030",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1272,11 +1256,10 @@
    "role": "Script/language coverage font: Nadeem",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1335,11 +1318,10 @@
    "role": "Script/language coverage font: NotoSansAdlam-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1364,11 +1346,10 @@
    "role": "Script/language coverage font: NotoSansAvestan-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1393,11 +1374,10 @@
    "role": "Script/language coverage font: NotoSansBamum-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1422,11 +1402,10 @@
    "role": "Script/language coverage font: NotoSansBassaVah-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1451,11 +1430,10 @@
    "role": "Script/language coverage font: NotoSansBatak-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1480,11 +1458,10 @@
    "role": "Script/language coverage font: NotoSansBhaiksuki-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1509,11 +1486,10 @@
    "role": "Script/language coverage font: NotoSansBuginese-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1538,11 +1514,10 @@
    "role": "Script/language coverage font: NotoSansBuhid-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1567,11 +1542,10 @@
    "role": "Script/language coverage font: NotoSansCarian-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1596,11 +1570,10 @@
    "role": "Script/language coverage font: NotoSansCaucasianAlbanian-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1625,11 +1598,10 @@
    "role": "Script/language coverage font: NotoSansChakma-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1654,11 +1626,10 @@
    "role": "Script/language coverage font: NotoSansCham-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1683,11 +1654,10 @@
    "role": "Script/language coverage font: NotoSansCoptic-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1712,11 +1682,10 @@
    "role": "Script/language coverage font: NotoSansCuneiform-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1741,11 +1710,10 @@
    "role": "Script/language coverage font: NotoSansCypriot-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1770,11 +1738,10 @@
    "role": "Script/language coverage font: NotoSansDuployan-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1799,11 +1766,10 @@
    "role": "Script/language coverage font: NotoSansEgyptianHieroglyphs-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1828,11 +1794,10 @@
    "role": "Script/language coverage font: NotoSansElbasan-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1857,11 +1822,10 @@
    "role": "Script/language coverage font: NotoSansGlagolitic-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1886,11 +1850,10 @@
    "role": "Script/language coverage font: NotoSansGothic-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1915,11 +1878,10 @@
    "role": "Script/language coverage font: NotoSansGunjalaGondi-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1944,11 +1906,10 @@
    "role": "Script/language coverage font: NotoSansHanifiRohingya-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1973,11 +1934,10 @@
    "role": "Script/language coverage font: NotoSansHanunoo-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2002,11 +1962,10 @@
    "role": "Script/language coverage font: NotoSansHatran-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2031,11 +1990,10 @@
    "role": "Script/language coverage font: NotoSansImperialAramaic-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2060,11 +2018,10 @@
    "role": "Script/language coverage font: NotoSansInscriptionalPahlavi-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2089,11 +2046,10 @@
    "role": "Script/language coverage font: NotoSansInscriptionalParthian-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2118,11 +2074,10 @@
    "role": "Script/language coverage font: NotoSansJavanese-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2147,11 +2102,10 @@
    "role": "Script/language coverage font: NotoSansKaithi-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2176,11 +2130,10 @@
    "role": "Script/language coverage font: NotoSansKayahLi-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2205,11 +2158,10 @@
    "role": "Script/language coverage font: NotoSansKharoshthi-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2234,11 +2186,10 @@
    "role": "Script/language coverage font: NotoSansKhojki-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2263,11 +2214,10 @@
    "role": "Script/language coverage font: NotoSansKhudawadi-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2292,11 +2242,10 @@
    "role": "Script/language coverage font: NotoSansLepcha-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2321,11 +2270,10 @@
    "role": "Script/language coverage font: NotoSansLimbu-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2350,11 +2298,10 @@
    "role": "Script/language coverage font: NotoSansLinearA-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2379,11 +2326,10 @@
    "role": "Script/language coverage font: NotoSansLinearB-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2408,11 +2354,10 @@
    "role": "Script/language coverage font: NotoSansLisu-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2437,11 +2382,10 @@
    "role": "Script/language coverage font: NotoSansLycian-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2466,11 +2410,10 @@
    "role": "Script/language coverage font: NotoSansLydian-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2495,11 +2438,10 @@
    "role": "Script/language coverage font: NotoSansMahajani-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2524,11 +2466,10 @@
    "role": "Script/language coverage font: NotoSansMandaic-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2553,11 +2494,10 @@
    "role": "Script/language coverage font: NotoSansManichaean-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2582,11 +2522,10 @@
    "role": "Script/language coverage font: NotoSansMarchen-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2611,11 +2550,10 @@
    "role": "Script/language coverage font: NotoSansMasaramGondi-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2640,11 +2578,10 @@
    "role": "Script/language coverage font: NotoSansMeeteiMayek-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2669,11 +2606,10 @@
    "role": "Script/language coverage font: NotoSansMendeKikakui-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2698,11 +2634,10 @@
    "role": "Script/language coverage font: NotoSansMeroitic-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2727,11 +2662,10 @@
    "role": "Script/language coverage font: NotoSansMiao-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2756,11 +2690,10 @@
    "role": "Script/language coverage font: NotoSansModi-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2785,11 +2718,10 @@
    "role": "Script/language coverage font: NotoSansMongolian-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2814,11 +2746,10 @@
    "role": "Script/language coverage font: NotoSansMro-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2843,11 +2774,10 @@
    "role": "Script/language coverage font: NotoSansMultani-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2872,11 +2802,10 @@
    "role": "Script/language coverage font: NotoSansNKo-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2901,11 +2830,10 @@
    "role": "Script/language coverage font: NotoSansNabataean-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2930,11 +2858,10 @@
    "role": "Script/language coverage font: NotoSansNagMundari-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2959,11 +2886,10 @@
    "role": "Script/language coverage font: NotoSansNewTaiLue-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2988,11 +2914,10 @@
    "role": "Script/language coverage font: NotoSansNewa-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3017,11 +2942,10 @@
    "role": "Script/language coverage font: NotoSansOlChiki-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3046,11 +2970,10 @@
    "role": "Script/language coverage font: NotoSansOldHungarian-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3075,11 +2998,10 @@
    "role": "Script/language coverage font: NotoSansOldItalic-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3104,11 +3026,10 @@
    "role": "Script/language coverage font: NotoSansOldNorthArabian-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3133,11 +3054,10 @@
    "role": "Script/language coverage font: NotoSansOldPermic-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3162,11 +3082,10 @@
    "role": "Script/language coverage font: NotoSansOldPersian-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",

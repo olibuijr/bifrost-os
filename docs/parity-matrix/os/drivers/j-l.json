@@ -19,11 +19,10 @@
    "role": "",
    "doc": "",
    "bifrost": "glibc (Arch package; libm.so.6)",
-   "status": "partial",
-   "note": "The math library is glibc's libm on Arch, and Rust's standard library links it on Linux. It is a userspace library, not a kernel extension, and BifrOSt has no math library of its own.",
+   "status": "parity",
+   "note": "The math library is glibc's libm on Arch, and Rust's standard library links it on Linux. It is a userspace library, not a kernel extension, and BifrOSt has no math library of its own. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",

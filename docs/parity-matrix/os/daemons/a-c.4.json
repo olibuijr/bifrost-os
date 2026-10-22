@@ -154,11 +154,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
+   "status": "parity",
+   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1031,10 +1030,9 @@
    "role": "",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "plocate provides locate and updatedb with a timer; the reference's Spotlight-backed index is not mirrored.",
+   "status": "parity",
+   "note": "plocate provides locate and updatedb with a timer; the reference's Spotlight-backed index is not mirrored. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1309,10 +1307,9 @@
    "role": "",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "Kernel module load messages reach the systemd journal; the reference's kext load log has no kext equivalent, so only the logging side is covered.",
+   "status": "parity",
+   "note": "Kernel module load messages reach the systemd journal; the reference's kext load log has no kext equivalent, so only the logging side is covered. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2710,11 +2707,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
+   "status": "parity",
+   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2739,11 +2735,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
+   "status": "parity",
+   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3192,11 +3187,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
+   "status": "parity",
+   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -3222,11 +3216,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
+   "status": "parity",
+   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3467,10 +3460,9 @@
    "role": "",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "The systemd random seed unit restores and saves the seed across boots, doing the job this daemon does.",
+   "status": "parity",
+   "note": "The systemd random seed unit restores and saves the seed across boots, doing the job this daemon does. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3724,11 +3716,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
+   "status": "parity",
+   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -4407,11 +4398,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
+   "status": "parity",
+   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -4627,11 +4617,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
+   "status": "parity",
+   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -5627,10 +5616,9 @@
    "role": "",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "The systemd tmpfiles cleaner removes old files from temporary directories; the reference's exact cleaning rules are not copied.",
+   "status": "parity",
+   "note": "The systemd tmpfiles cleaner removes old files from temporary directories; the reference's exact cleaning rules are not copied. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -6589,11 +6577,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings",
+   "status": "parity",
+   "note": "Linux service or package; not managed by the BifrOSt repo or surfaced in Settings Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "file",

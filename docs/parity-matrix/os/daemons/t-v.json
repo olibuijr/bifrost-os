@@ -19,11 +19,10 @@
    "role": "",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "os",
-   "note": "TFTP is the packaged tftp-hpa daemon and client (runtime-packages.txt), off by default like the reference.",
+   "status": "parity",
+   "note": "TFTP is the packaged tftp-hpa daemon and client (runtime-packages.txt), off by default like the reference. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",

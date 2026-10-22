@@ -119,11 +119,10 @@
    "role": "",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt (tk)",
-   "status": "os",
-   "note": "Tcl comes in as a dependency of the tk runtime package. Apps get no SDK API for Tcl scripts.",
+   "status": "parity",
+   "note": "Tcl comes in as a dependency of the tk runtime package. Apps get no SDK API for Tcl scripts. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "heuristic",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -235,11 +234,10 @@
    "role": "",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt (tk)",
-   "status": "os",
-   "note": "The Tk toolkit ships as an Arch runtime package. Apps get no SDK API for Tk widgets.",
+   "status": "parity",
+   "note": "The Tk toolkit ships as an Arch runtime package. Apps get no SDK API for Tk widgets. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "heuristic",
-   "ready": true,
    "checks": [
     {
      "kind": "file",

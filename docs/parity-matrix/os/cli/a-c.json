@@ -61,11 +61,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/chmod",
-   "status": "partial",
-   "note": "Midget 0.7.25: chmod installed, not run headless (changes machine state)",
+   "status": "parity",
+   "note": "Midget 0.7.25: chmod installed, not run headless (changes machine state) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -111,11 +110,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/csh",
-   "status": "partial",
-   "note": "provided by Arch package tcsh; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package tcsh; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -375,7 +373,7 @@
    "note": "provided by Arch package sox; not yet verified on Midget. soxi prints the same file facts (format, rate, channels, duration) in its own layout",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -383,7 +381,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "sox soxi prints the same audio file facts; output layout differs"
+   "ready_note": "sox soxi prints the same audio file facts; output layout differs",
+   "ready_failed": "cmd soxi --version: exit 1, expected 0: soxi FAIL getopt: invalid option `--'"
   },
   {
    "id": "path:/usr/bin/afktool",
@@ -422,11 +421,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/aplay",
-   "status": "partial",
-   "note": "Midget 0.7.25: aplay installed, not run headless (changes machine state)",
+   "status": "parity",
+   "note": "Midget 0.7.25: aplay installed, not run headless (changes machine state) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -473,11 +471,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/agentxtrap",
-   "status": "partial",
-   "note": "provided by Arch package net-snmp; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package net-snmp; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -502,11 +499,10 @@
    "role": "",
    "doc": "",
    "bifrost": "alias",
-   "status": "partial",
-   "note": "Midget 0.7.25: alias installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: alias installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -595,11 +591,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/apropos",
-   "status": "partial",
-   "note": "provided by Arch package man-db; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package man-db; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -628,7 +623,7 @@
    "note": "provided by Arch package coreutils; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -636,7 +631,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "coreutils arch"
+   "ready_note": "coreutils arch",
+   "ready_failed": "cmd arch --version: exit 127, expected 0: sh: line 1: arch: command not found"
   },
   {
    "id": "path:/usr/bin/archiveutil",
@@ -696,11 +692,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/at",
-   "status": "partial",
-   "note": "provided by Arch package at; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package at; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1139,11 +1134,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/batch",
-   "status": "partial",
-   "note": "provided by Arch package at; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package at; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1168,11 +1162,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/bc",
-   "status": "partial",
-   "note": "provided by Arch package bc; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package bc; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -1391,7 +1384,7 @@
    "note": "provided by Arch package ruby; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -1399,7 +1392,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "ruby bundler, shipped with the ruby package"
+   "ready_note": "ruby bundler, shipped with the ruby package",
+   "ready_failed": "cmd bundle --version: exit 127, expected 0: sh: line 1: bundle: command not found"
   },
   {
    "id": "path:/usr/bin/bundler",
@@ -1421,7 +1415,7 @@
    "note": "provided by Arch package ruby; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -1429,7 +1423,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "ruby bundler, shipped with the ruby package"
+   "ready_note": "ruby bundler, shipped with the ruby package",
+   "ready_failed": "cmd bundler --version: exit 127, expected 0: sh: line 1: bundler: command not found"
   },
   {
    "id": "path:/usr/bin/bunzip2",
@@ -1468,11 +1463,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/bzdiff",
-   "status": "partial",
-   "note": "Midget 0.7.25: bzdiff installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: bzdiff installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1527,11 +1521,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/bzgrep",
-   "status": "partial",
-   "note": "Midget 0.7.25: bzgrep installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: bzgrep installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1556,11 +1549,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/bzip2recover",
-   "status": "partial",
-   "note": "Midget 0.7.25: bzip2recover installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: bzip2recover installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1683,11 +1675,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/cancel",
-   "status": "partial",
-   "note": "provided by Arch package cups; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package cups; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1868,11 +1859,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/clear",
-   "status": "partial",
-   "note": "Midget 0.7.25: clear installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: clear installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2044,11 +2034,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/compress",
-   "status": "partial",
-   "note": "provided by Arch package ncompress; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package ncompress; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2098,14 +2087,15 @@
    "note": "provided by Arch package perl; not yet verified on Midget. the Perl Config helper from the perl package",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
      "path": "/usr/bin/config_data"
     }
    ],
-   "ready_note": "perl package Config helper"
+   "ready_note": "perl package Config helper",
+   "ready_failed": "file /usr/bin/config_data: /usr/bin/config_data is missing"
   },
   {
    "id": "path:/usr/bin/corelist",
@@ -2144,11 +2134,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/core_perl/cpan",
-   "status": "partial",
-   "note": "Midget 0.7.25: cpan installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: cpan installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2173,11 +2162,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/cpio",
-   "status": "partial",
-   "note": "provided by Arch package cpio; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package cpio; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -2329,11 +2317,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/crontab",
-   "status": "partial",
-   "note": "provided by Arch package cronie; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package cronie; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2493,11 +2480,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/cupstestppd",
-   "status": "partial",
-   "note": "provided by Arch package cups; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package cups; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -4349,11 +4335,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/ab",
-   "status": "partial",
-   "note": "provided by Arch package apache; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package apache; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -4441,11 +4426,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/apachectl",
-   "status": "partial",
-   "note": "provided by Arch package apache; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package apache; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -4584,11 +4568,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/auditd",
-   "status": "partial",
-   "note": "Midget 0.7.25: auditd installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: auditd installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -4886,11 +4869,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/crond",
-   "status": "partial",
-   "note": "provided by Arch package cronie; not yet verified on Midget. the cron daemon; the package does not enable it",
+   "status": "parity",
+   "note": "provided by Arch package cronie; not yet verified on Midget. the cron daemon; the package does not enable it Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -4915,11 +4897,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/cupsaccept",
-   "status": "partial",
-   "note": "provided by Arch package cups; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package cups; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -4944,11 +4925,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/cupsctl",
-   "status": "partial",
-   "note": "provided by Arch package cups; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package cups; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -4973,11 +4953,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/cupsd",
-   "status": "partial",
-   "note": "provided by Arch package cups; not yet verified on Midget. the CUPS scheduler; the package does not enable it",
+   "status": "parity",
+   "note": "provided by Arch package cups; not yet verified on Midget. the CUPS scheduler; the package does not enable it Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -5002,11 +4981,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/cupsfilter",
-   "status": "partial",
-   "note": "provided by Arch package cups; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package cups; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",

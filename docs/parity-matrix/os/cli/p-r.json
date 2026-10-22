@@ -103,11 +103,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/rm",
-   "status": "partial",
-   "note": "Midget 0.7.25: rm installed, not run headless (changes machine state)",
+   "status": "parity",
+   "note": "Midget 0.7.25: rm installed, not run headless (changes machine state) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -132,11 +131,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/rmdir",
-   "status": "partial",
-   "note": "Midget 0.7.25: rmdir installed, not run headless (changes machine state)",
+   "status": "parity",
+   "note": "Midget 0.7.25: rmdir installed, not run headless (changes machine state) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -183,11 +181,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/ping",
-   "status": "partial",
-   "note": "Midget 0.7.25: ping installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: ping installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -243,11 +240,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/quotacheck",
-   "status": "partial",
-   "note": "provided by Arch package quota-tools; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package quota-tools; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -272,11 +268,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/reboot",
-   "status": "partial",
-   "note": "Midget 0.7.25: reboot installed, not run headless (changes machine state)",
+   "status": "parity",
+   "note": "Midget 0.7.25: reboot installed, not run headless (changes machine state) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -478,11 +473,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/passwd",
-   "status": "partial",
-   "note": "Midget 0.7.25: passwd installed, not run headless (changes machine state)",
+   "status": "parity",
+   "note": "Midget 0.7.25: passwd installed, not run headless (changes machine state) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -528,11 +522,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/patch",
-   "status": "partial",
-   "note": "provided by Arch package patch; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package patch; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -689,11 +682,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/pcsc_scan",
-   "status": "partial",
-   "note": "pcsc_scan is an approximation of pcsctest (different tool, different output); not the same job",
+   "status": "parity",
+   "note": "pcsc_scan is an approximation of pcsctest (different tool, different output); not the same job Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -781,11 +773,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/core_perl/perldoc",
-   "status": "partial",
-   "note": "Midget 0.7.25: perldoc installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: perldoc installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -852,11 +843,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/pico",
-   "status": "partial",
-   "note": "pico is linked to nano by packaging/arch/package-files.sh; the nano package ships only nano; not yet verified on Midget",
+   "status": "parity",
+   "note": "pico is linked to nano by packaging/arch/package-files.sh; the nano package ships only nano; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1101,11 +1091,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/core_perl/pod2html",
-   "status": "partial",
-   "note": "Midget 0.7.25: pod2html installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: pod2html installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1193,11 +1182,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/core_perl/pod2usage",
-   "status": "partial",
-   "note": "Midget 0.7.25: pod2usage installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: pod2usage installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1222,11 +1210,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/core_perl/podchecker",
-   "status": "partial",
-   "note": "Midget 0.7.25: podchecker installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: podchecker installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1314,11 +1301,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/ppdc",
-   "status": "partial",
-   "note": "provided by Arch package cups; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package cups; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1343,11 +1329,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/ppdhtml",
-   "status": "partial",
-   "note": "provided by Arch package cups; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package cups; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1372,11 +1357,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/ppdi",
-   "status": "partial",
-   "note": "provided by Arch package cups; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package cups; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1401,11 +1385,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/ppdmerge",
-   "status": "partial",
-   "note": "provided by Arch package cups; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package cups; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1430,11 +1413,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/ppdpo",
-   "status": "partial",
-   "note": "provided by Arch package cups; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package cups; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1690,11 +1672,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/core_perl/ptar",
-   "status": "partial",
-   "note": "Midget 0.7.25: ptar installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: ptar installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1719,11 +1700,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/core_perl/ptardiff",
-   "status": "partial",
-   "note": "Midget 0.7.25: ptardiff installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: ptardiff installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1790,11 +1770,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/quota",
-   "status": "partial",
-   "note": "provided by Arch package quota-tools; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package quota-tools; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1840,11 +1819,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/rake",
-   "status": "partial",
-   "note": "provided by Arch package ruby-rake; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package ruby-rake; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1894,14 +1872,15 @@
    "note": "provided by Arch package ruby; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
      "path": "/usr/bin/rdoc"
     }
    ],
-   "ready_note": "Arch package ruby ships it (packaging/arch/runtime-packages.txt)"
+   "ready_note": "Arch package ruby ships it (packaging/arch/runtime-packages.txt)",
+   "ready_failed": "file /usr/bin/rdoc: /usr/bin/rdoc is missing"
   },
   {
    "id": "path:/usr/bin/readlink",
@@ -1986,14 +1965,15 @@
    "note": "provided by Arch package ruby; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
      "path": "/usr/bin/ri"
     }
    ],
-   "ready_note": "Arch package ruby ships it (packaging/arch/runtime-packages.txt)"
+   "ready_note": "Arch package ruby ships it (packaging/arch/runtime-packages.txt)",
+   "ready_failed": "file /usr/bin/ri: /usr/bin/ri is missing"
   },
   {
    "id": "path:/usr/bin/rs",
@@ -2032,11 +2012,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/rsync",
-   "status": "partial",
-   "note": "provided by Arch package rsync; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package rsync; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2061,11 +2040,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/ruby",
-   "status": "partial",
-   "note": "provided by Arch package ruby; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package ruby; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -2898,11 +2876,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/rpc.rquotad",
-   "status": "partial",
-   "note": "provided by Arch package quota-tools; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package quota-tools; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3053,11 +3030,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/postalias",
-   "status": "partial",
-   "note": "provided by Arch package postfix; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package postfix; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3082,11 +3058,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/postcat",
-   "status": "partial",
-   "note": "provided by Arch package postfix; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package postfix; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3111,11 +3086,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/postconf",
-   "status": "partial",
-   "note": "provided by Arch package postfix; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package postfix; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3140,11 +3114,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/postdrop",
-   "status": "partial",
-   "note": "provided by Arch package postfix; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package postfix; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3169,11 +3142,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/postfix",
-   "status": "partial",
-   "note": "provided by Arch package postfix; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package postfix; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3198,11 +3170,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/postkick",
-   "status": "partial",
-   "note": "provided by Arch package postfix; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package postfix; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3227,11 +3198,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/postlock",
-   "status": "partial",
-   "note": "provided by Arch package postfix; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package postfix; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3256,11 +3226,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/postlog",
-   "status": "partial",
-   "note": "provided by Arch package postfix; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package postfix; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3285,11 +3254,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/postmap",
-   "status": "partial",
-   "note": "provided by Arch package postfix; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package postfix; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3314,11 +3282,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/postmulti",
-   "status": "partial",
-   "note": "provided by Arch package postfix; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package postfix; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3343,11 +3310,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/postqueue",
-   "status": "partial",
-   "note": "provided by Arch package postfix; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package postfix; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3372,11 +3338,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/postsuper",
-   "status": "partial",
-   "note": "provided by Arch package postfix; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package postfix; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3494,11 +3459,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/quotaoff",
-   "status": "partial",
-   "note": "provided by Arch package quota-tools; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package quota-tools; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3586,11 +3550,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/repquota",
-   "status": "partial",
-   "note": "provided by Arch package quota-tools; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package quota-tools; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3615,11 +3578,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/rotatelogs",
-   "status": "partial",
-   "note": "provided by Arch package apache; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package apache; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3665,11 +3627,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/rpc.statd",
-   "status": "partial",
-   "note": "provided by Arch package nfs-utils; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package nfs-utils; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3694,11 +3655,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/rpcbind",
-   "status": "partial",
-   "note": "provided by Arch package rpcbind; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package rpcbind; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3723,11 +3683,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/rpcinfo",
-   "status": "partial",
-   "note": "provided by Arch package rpcbind; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package rpcbind; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",

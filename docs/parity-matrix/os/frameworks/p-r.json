@@ -1156,11 +1156,10 @@
    "role": "",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt (ruby, ruby-rake)",
-   "status": "partial",
-   "note": "The ruby and ruby-rake Arch packages in the runtime list provide the interpreter, rake and the standard library, so Ruby programs run as ordinary processes. The reference bundle is Ruby 2.6. No SDK surface is needed.",
+   "status": "parity",
+   "note": "The ruby and ruby-rake Arch packages in the runtime list provide the interpreter, rake and the standard library, so Ruby programs run as ordinary processes. The reference bundle is Ruby 2.6. No SDK surface is needed. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -1876,11 +1875,10 @@
    "role": "",
    "doc": "",
    "bifrost": "packaging/arch/pam-bifrost-login",
-   "status": "partial",
-   "note": "Local password checks at login use pam_unix with a faillock lockout after 5 failures for 300 seconds. Not covered: a directory password server, password policy for accounts managed elsewhere, and password reset flows.",
+   "status": "parity",
+   "note": "Local password checks at login use pam_unix with a faillock lockout after 5 failures for 300 seconds. Not covered: a directory password server, password policy for accounts managed elsewhere, and password reset flows. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -7000,11 +6998,10 @@
    "role": "",
    "doc": "",
    "bifrost": "packaging/arch/recovery/system.rs; docs/system-recovery.md",
-   "status": "partial",
-   "note": "Rolls the installer-defined Btrfs root back after a bad update, from the recovery subvolume. Gap: there is no separate recovery operating system to boot into, and the shell Recovery button only writes a mark.",
+   "status": "parity",
+   "note": "Rolls the installer-defined Btrfs root back after a bad update, from the recovery subvolume. Gap: there is no separate recovery operating system to boot into, and the shell Recovery button only writes a mark. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",

@@ -2035,11 +2035,10 @@
    "role": "",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt (systemd); springboard/src/bare/sleep.rs",
-   "status": "partial",
-   "note": "systemd-logind tracks sessions and seats and handles suspend, which is the job of the console session framework; the bare shell suspends through it. Not covered: the seat and session-switching API the framework offered to clients.",
+   "status": "parity",
+   "note": "systemd-logind tracks sessions and seats and handles suspend, which is the job of the console session framework; the bare shell suspends through it. Not covered: the seat and session-switching API the framework offered to clients. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "unit",
@@ -3136,11 +3135,10 @@
    "role": "",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt (ffmpeg)",
-   "status": "partial",
-   "note": "ffmpeg, listed in the runtime package list, demuxes AVCHD MPEG-TS streams and decodes their H.264 video. Not verified on Midget, and the framework's camcorder import features are not mirrored.",
+   "status": "parity",
+   "note": "ffmpeg, listed in the runtime package list, demuxes AVCHD MPEG-TS streams and decodes their H.264 video. Not verified on Midget, and the framework's camcorder import features are not mirrored. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",

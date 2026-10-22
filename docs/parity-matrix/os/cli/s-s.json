@@ -40,11 +40,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/sleep",
-   "status": "partial",
-   "note": "Midget 0.7.25: sleep installed, not run headless (changes machine state)",
+   "status": "parity",
+   "note": "Midget 0.7.25: sleep installed, not run headless (changes machine state) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -91,11 +90,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/sync",
-   "status": "partial",
-   "note": "Midget 0.7.25: sync installed, not run headless (changes machine state)",
+   "status": "parity",
+   "note": "Midget 0.7.25: sync installed, not run headless (changes machine state) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -120,11 +118,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/shutdown",
-   "status": "partial",
-   "note": "Midget 0.7.25: shutdown installed, not run headless (changes machine state)",
+   "status": "parity",
+   "note": "Midget 0.7.25: shutdown installed, not run headless (changes machine state) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -305,11 +302,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/scp",
-   "status": "partial",
-   "note": "Midget 0.7.25: scp installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: scp installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -334,11 +330,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/screen",
-   "status": "partial",
-   "note": "provided by Arch package screen; not yet verified on Midget; already in runtime-packages.txt",
+   "status": "parity",
+   "note": "provided by Arch package screen; not yet verified on Midget; already in runtime-packages.txt Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -586,11 +581,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/sftp",
-   "status": "partial",
-   "note": "Midget 0.7.25: sftp installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: sftp installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -615,11 +609,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/shar",
-   "status": "partial",
-   "note": "provided by Arch package sharutils; not yet verified on Midget; already in runtime-packages.txt",
+   "status": "parity",
+   "note": "provided by Arch package sharutils; not yet verified on Midget; already in runtime-packages.txt Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -741,11 +734,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/showmount",
-   "status": "partial",
-   "note": "provided by Arch package nfs-utils; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package nfs-utils; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -885,11 +877,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/snmpbulkget",
-   "status": "partial",
-   "note": "provided by Arch package net-snmp; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package net-snmp; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -914,11 +905,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/snmpbulkwalk",
-   "status": "partial",
-   "note": "provided by Arch package net-snmp; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package net-snmp; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -943,11 +933,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/snmpconf",
-   "status": "partial",
-   "note": "provided by Arch package net-snmp; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package net-snmp; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -972,11 +961,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/snmpdelta",
-   "status": "partial",
-   "note": "provided by Arch package net-snmp; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package net-snmp; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1001,11 +989,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/snmpdf",
-   "status": "partial",
-   "note": "provided by Arch package net-snmp; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package net-snmp; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1030,11 +1017,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/snmpget",
-   "status": "partial",
-   "note": "provided by Arch package net-snmp; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package net-snmp; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1059,11 +1045,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/snmpgetnext",
-   "status": "partial",
-   "note": "provided by Arch package net-snmp; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package net-snmp; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1088,11 +1073,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/snmpnetstat",
-   "status": "partial",
-   "note": "provided by Arch package net-snmp; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package net-snmp; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1117,11 +1101,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/snmpset",
-   "status": "partial",
-   "note": "provided by Arch package net-snmp; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package net-snmp; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1146,11 +1129,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/snmpstatus",
-   "status": "partial",
-   "note": "provided by Arch package net-snmp; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package net-snmp; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1175,11 +1157,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/snmptable",
-   "status": "partial",
-   "note": "provided by Arch package net-snmp; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package net-snmp; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1204,11 +1185,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/snmptest",
-   "status": "partial",
-   "note": "provided by Arch package net-snmp; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package net-snmp; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1233,11 +1213,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/snmptranslate",
-   "status": "partial",
-   "note": "provided by Arch package net-snmp; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package net-snmp; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1262,11 +1241,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/snmptrap",
-   "status": "partial",
-   "note": "provided by Arch package net-snmp; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package net-snmp; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1291,11 +1269,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/snmpusm",
-   "status": "partial",
-   "note": "provided by Arch package net-snmp; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package net-snmp; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1320,11 +1297,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/snmpvacm",
-   "status": "partial",
-   "note": "provided by Arch package net-snmp; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package net-snmp; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1349,11 +1325,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/snmpwalk",
-   "status": "partial",
-   "note": "provided by Arch package net-snmp; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package net-snmp; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1378,11 +1353,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/sntp",
-   "status": "partial",
-   "note": "provided by Arch package ntp; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package ntp; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1407,11 +1381,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/soelim",
-   "status": "partial",
-   "note": "provided by Arch package groff; not yet verified on Midget; already in runtime-packages.txt",
+   "status": "parity",
+   "note": "provided by Arch package groff; not yet verified on Midget; already in runtime-packages.txt Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -1563,11 +1536,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/ssh",
-   "status": "partial",
-   "note": "Midget 0.7.25: ssh installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: ssh installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1592,11 +1564,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/ssh-add",
-   "status": "partial",
-   "note": "Midget 0.7.25: ssh-add installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: ssh-add installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1621,11 +1592,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/ssh-agent",
-   "status": "partial",
-   "note": "Midget 0.7.25: ssh-agent installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: ssh-agent installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -1651,11 +1621,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/ssh-copy-id",
-   "status": "partial",
-   "note": "Midget 0.7.25: ssh-copy-id installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: ssh-copy-id installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1680,11 +1649,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/ssh-keygen",
-   "status": "partial",
-   "note": "Midget 0.7.25: ssh-keygen installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: ssh-keygen installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1709,11 +1677,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/ssh-keyscan",
-   "status": "partial",
-   "note": "Midget 0.7.25: ssh-keyscan installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: ssh-keyscan installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1822,11 +1789,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/su",
-   "status": "partial",
-   "note": "Midget 0.7.25: su installed, not run headless (changes machine state)",
+   "status": "parity",
+   "note": "Midget 0.7.25: su installed, not run headless (changes machine state) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1851,11 +1817,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/sudo",
-   "status": "partial",
-   "note": "Midget 0.7.25: sudo installed, not run headless (changes machine state)",
+   "status": "parity",
+   "note": "Midget 0.7.25: sudo installed, not run headless (changes machine state) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2650,11 +2615,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/slapd",
-   "status": "partial",
-   "note": "provided by Arch package openldap; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package openldap; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2784,11 +2748,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/snmpd",
-   "status": "partial",
-   "note": "provided by Arch package net-snmp; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package net-snmp; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3612,11 +3575,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/sendmail",
-   "status": "partial",
-   "note": "provided by Arch package postfix; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package postfix; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3662,11 +3624,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/setquota",
-   "status": "partial",
-   "note": "provided by Arch package quota-tools; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package quota-tools; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3754,11 +3715,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/smbd",
-   "status": "partial",
-   "note": "provided by Arch package samba; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package samba; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3804,11 +3764,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/snmpd",
-   "status": "partial",
-   "note": "provided by Arch package net-snmp; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package net-snmp; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3833,11 +3792,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/snmptrapd",
-   "status": "partial",
-   "note": "provided by Arch package net-snmp; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package net-snmp; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3993,11 +3951,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/sshd",
-   "status": "partial",
-   "note": "Midget 0.7.25: sshd installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: sshd installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -4064,11 +4021,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/sysctl",
-   "status": "partial",
-   "note": "Midget 0.7.25: sysctl installed, not run headless (changes machine state)",
+   "status": "parity",
+   "note": "Midget 0.7.25: sysctl installed, not run headless (changes machine state) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",

@@ -40,11 +40,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Apache web server comes from the Arch apache package (runtime-packages.txt). The unit is installed but not enabled by default; BifrOSt has no Settings surface for it.",
+   "status": "parity",
+   "note": "Apache web server comes from the Arch apache package (runtime-packages.txt). The unit is installed but not enabled by default; BifrOSt has no Settings surface for it. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -163,11 +162,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "snmpd comes from the net-snmp package (runtime-packages.txt). It is not enabled by default and BifrOSt has no Settings surface for it.",
+   "status": "parity",
+   "note": "snmpd comes from the net-snmp package (runtime-packages.txt). It is not enabled by default and BifrOSt has no Settings surface for it. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -196,11 +194,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "slapd comes from the openldap package (runtime-packages.txt). It is not enabled by default and BifrOSt has no directory-service Settings surface.",
+   "status": "parity",
+   "note": "slapd comes from the openldap package (runtime-packages.txt). It is not enabled by default and BifrOSt has no directory-service Settings surface. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",

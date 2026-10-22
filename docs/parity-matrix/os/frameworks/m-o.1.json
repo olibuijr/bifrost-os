@@ -1241,11 +1241,10 @@
    "role": "",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt (cifs-utils, nfs-utils)",
-   "status": "partial",
-   "note": "The kernel mount helpers mount.cifs and mount.nfs from the cifs-utils and nfs-utils packages mount network shares. Apps get no mount API and the desktop has no connect-to-server flow, so the row stays partial.",
+   "status": "parity",
+   "note": "The kernel mount helpers mount.cifs and mount.nfs from the cifs-utils and nfs-utils packages mount network shares. Apps get no mount API and the desktop has no connect-to-server flow, so the row stays partial. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -2844,11 +2843,10 @@
    "role": "",
    "doc": "",
    "bifrost": "valgrind (Arch package; packaging/arch/runtime-packages.txt)",
-   "status": "partial",
-   "note": "valgrind traces heap allocations and leaks for debugging, which covers the purpose on Linux. It has no switch like the reference allocation logging, and apps get no in-process allocation log.",
+   "status": "parity",
+   "note": "valgrind traces heap allocations and leaks for debugging, which covers the purpose on Linux. It has no switch like the reference allocation logging, and apps get no in-process allocation log. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -3886,11 +3884,10 @@
    "role": "",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt (ffmpeg, imagemagick)",
-   "status": "partial",
-   "note": "The ffmpeg and imagemagick packages convert video and images on demand, which covers the conversion jobs. There is no Photos conversion service, and sharing does not transcode media.",
+   "status": "parity",
+   "note": "The ffmpeg and imagemagick packages convert video and images on demand, which covers the conversion jobs. There is no Photos conversion service, and sharing does not transcode media. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",

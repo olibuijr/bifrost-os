@@ -40,11 +40,10 @@
    "role": "",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt (jdk-openjdk)",
-   "status": "partial",
-   "note": "The jdk-openjdk Arch package provides the Java runtime that Java programs run on. Gap: the Cocoa Java bridge and its bridge-support metadata are not provided.",
+   "status": "parity",
+   "note": "The jdk-openjdk Arch package provides the Java runtime that Java programs run on. Gap: the Cocoa Java bridge and its bridge-support metadata are not provided. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "heuristic",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -70,11 +69,10 @@
    "role": "",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt (jdk-openjdk)",
-   "status": "partial",
-   "note": "jdk-openjdk provides the OpenJDK virtual machine as an ordinary process. Gap: there is no embedding API that lets an app start a Java VM in process.",
+   "status": "parity",
+   "note": "jdk-openjdk provides the OpenJDK virtual machine as an ordinary process. Gap: there is no embedding API that lets an app start a Java VM in process. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",

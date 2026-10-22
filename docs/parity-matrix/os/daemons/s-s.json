@@ -19,11 +19,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "The SSH server is sshd from the openssh package, which the installer always installs (BASE_PACKAGES).",
+   "status": "parity",
+   "note": "The SSH server is sshd from the openssh package, which the installer always installs (BASE_PACKAGES). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",

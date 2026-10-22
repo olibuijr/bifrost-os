@@ -1145,11 +1145,10 @@
    "role": "",
    "doc": "",
    "bifrost": "samba (rpcclient and smbclient, packaging/arch/runtime-packages.txt)",
-   "status": "partial",
-   "note": "Samba's client tools make DCE/RPC calls to Windows-style servers from the command line. Gap: there is no DCE/RPC client API for apps.",
+   "status": "parity",
+   "note": "Samba's client tools make DCE/RPC calls to Windows-style servers from the command line. Gap: there is no DCE/RPC client API for apps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",

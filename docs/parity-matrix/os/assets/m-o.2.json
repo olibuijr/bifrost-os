@@ -19,11 +19,10 @@
    "role": "Script/language coverage font: NotoSansOldSouthArabian-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -48,11 +47,10 @@
    "role": "Script/language coverage font: NotoSansOldTurkic-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -77,11 +75,10 @@
    "role": "Script/language coverage font: NotoSansOsage-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -106,11 +103,10 @@
    "role": "Script/language coverage font: NotoSansOsmanya-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -135,11 +131,10 @@
    "role": "Script/language coverage font: NotoSansPahawhHmong-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -164,11 +159,10 @@
    "role": "Script/language coverage font: NotoSansPalmyrene-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -193,11 +187,10 @@
    "role": "Script/language coverage font: NotoSansPauCinHau-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -222,11 +215,10 @@
    "role": "Script/language coverage font: NotoSansPhagsPa-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -251,11 +243,10 @@
    "role": "Script/language coverage font: NotoSansPhoenician-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -280,11 +271,10 @@
    "role": "Script/language coverage font: NotoSansPsalterPahlavi-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -309,11 +299,10 @@
    "role": "Script/language coverage font: NotoSansRejang-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -338,11 +327,10 @@
    "role": "Script/language coverage font: NotoSansSamaritan-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -367,11 +355,10 @@
    "role": "Script/language coverage font: NotoSansSaurashtra-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -396,11 +383,10 @@
    "role": "Script/language coverage font: NotoSansSharada-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -425,11 +411,10 @@
    "role": "Script/language coverage font: NotoSansSiddham-Regular",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -454,11 +439,10 @@
    "role": "Script/language coverage font: NotoSansSoraSompeng-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -483,11 +467,10 @@
    "role": "Script/language coverage font: NotoSansSundanese-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -512,11 +495,10 @@
    "role": "Script/language coverage font: NotoSansSunuwar-Regular",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -541,11 +523,10 @@
    "role": "Script/language coverage font: NotoSansSylotiNagri-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -570,11 +551,10 @@
    "role": "Script/language coverage font: NotoSansSyriac-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -599,11 +579,10 @@
    "role": "Script/language coverage font: NotoSansTagalog-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -628,11 +607,10 @@
    "role": "Script/language coverage font: NotoSansTagbanwa-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -657,11 +635,10 @@
    "role": "Script/language coverage font: NotoSansTaiLe-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -686,11 +663,10 @@
    "role": "Script/language coverage font: NotoSansTaiTham-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -715,11 +691,10 @@
    "role": "Script/language coverage font: NotoSansTaiViet-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -744,11 +719,10 @@
    "role": "Script/language coverage font: NotoSansTakri-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -773,11 +747,10 @@
    "role": "Script/language coverage font: NotoSansThaana-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -802,11 +775,10 @@
    "role": "Script/language coverage font: NotoSansTifinagh-Regular",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -831,11 +803,10 @@
    "role": "Script/language coverage font: NotoSansTirhuta-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -860,11 +831,10 @@
    "role": "Script/language coverage font: NotoSansUgaritic-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -889,11 +859,10 @@
    "role": "Script/language coverage font: NotoSansVai-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -918,11 +887,10 @@
    "role": "Script/language coverage font: NotoSansWancho-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -947,11 +915,10 @@
    "role": "Script/language coverage font: NotoSansWarangCiti-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -976,11 +943,10 @@
    "role": "Script/language coverage font: NotoSansYi-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1005,11 +971,10 @@
    "role": "Script/language coverage font: NotoSerifAhom-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1034,11 +999,10 @@
    "role": "Script/language coverage font: NotoSerifBalinese-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1063,11 +1027,10 @@
    "role": "Script/language coverage font: NotoSerifNyiakengPuachueHmong-Regular",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1092,11 +1055,10 @@
    "role": "Script/language coverage font: NotoSerifYezidi-Regular",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1121,11 +1083,10 @@
    "role": "Script/language coverage font: Oriya MN",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1150,11 +1111,10 @@
    "role": "Script/language coverage font: Oriya Sangam MN",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1663,11 +1623,10 @@
    "role": "Script/language coverage font: Nisan",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1692,11 +1651,10 @@
    "role": "Script/language coverage font: Maku-Devanagari",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1755,11 +1713,10 @@
    "role": "Script/language coverage font: Modak-Devanagari",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1784,11 +1741,10 @@
    "role": "Script/language coverage font: Mukta-Devanagari",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1813,11 +1769,10 @@
    "role": "Script/language coverage font: MuktaMalar-Tamil",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1842,11 +1797,10 @@
    "role": "Script/language coverage font: MuktaVaani-Gujarati",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1871,11 +1825,10 @@
    "role": "Script/language coverage font: MyriadArabic",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2002,11 +1955,10 @@
    "role": "Script/language coverage font: Niramit",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2065,11 +2017,10 @@
    "role": "Script/language coverage font: NotoSerifKannada",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans/Serif script set (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2094,11 +2045,10 @@
    "role": "Script/language coverage font: NovemberBanglaTraditional",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2157,11 +2107,10 @@
    "role": "Script/language coverage font: OctoberCompressedDevanagari",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2186,11 +2135,10 @@
    "role": "Script/language coverage font: OctoberCompressedGujarati",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2215,11 +2163,10 @@
    "role": "Script/language coverage font: OctoberCompressedGurmukhi",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2244,11 +2191,10 @@
    "role": "Script/language coverage font: OctoberCompressedKannada",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2273,11 +2219,10 @@
    "role": "Script/language coverage font: OctoberCompressedMeeteiMayek",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2302,11 +2247,10 @@
    "role": "Script/language coverage font: OctoberCompressedOdia",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2331,11 +2275,10 @@
    "role": "Script/language coverage font: OctoberCompressedOlChiki",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2360,11 +2303,10 @@
    "role": "Script/language coverage font: OctoberCompressedTamil",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2389,11 +2331,10 @@
    "role": "Script/language coverage font: OctoberCompressedTelugu",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2418,11 +2359,10 @@
    "role": "Script/language coverage font: OctoberCondensedDevanagari",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2447,11 +2387,10 @@
    "role": "Script/language coverage font: OctoberCondensedGujarati",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2476,11 +2415,10 @@
    "role": "Script/language coverage font: OctoberCondensedGurmukhi",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2505,11 +2443,10 @@
    "role": "Script/language coverage font: OctoberCondensedKannada",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2534,11 +2471,10 @@
    "role": "Script/language coverage font: OctoberCondensedMeeteiMayek",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2563,11 +2499,10 @@
    "role": "Script/language coverage font: OctoberCondensedOdia",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2592,11 +2527,10 @@
    "role": "Script/language coverage font: OctoberCondensedOlChiki",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2621,11 +2555,10 @@
    "role": "Script/language coverage font: OctoberCondensedTamil",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2650,11 +2583,10 @@
    "role": "Script/language coverage font: OctoberCondensedTelugu",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2679,11 +2611,10 @@
    "role": "Script/language coverage font: OctoberDevanagari",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2708,11 +2639,10 @@
    "role": "Script/language coverage font: OctoberGujarati",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2737,11 +2667,10 @@
    "role": "Script/language coverage font: OctoberGurmukhi",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2800,11 +2729,10 @@
    "role": "Script/language coverage font: OctoberKannada",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2829,11 +2757,10 @@
    "role": "Script/language coverage font: OctoberMeeteiMayek",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2858,11 +2785,10 @@
    "role": "Script/language coverage font: OctoberOdia",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2887,11 +2813,10 @@
    "role": "Script/language coverage font: OctoberOlChiki",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2916,11 +2841,10 @@
    "role": "Script/language coverage font: OctoberTamil",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2945,11 +2869,10 @@
    "role": "Script/language coverage font: OctoberTelugu",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",

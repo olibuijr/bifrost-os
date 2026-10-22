@@ -1090,11 +1090,10 @@
    "role": "Script/language coverage font: GeezaPro",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1153,11 +1152,10 @@
    "role": "Web/office compatibility font: Helvetica",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Liberation Sans (Arimo) (ttf-liberation), metric-compatible, glyph shapes differ",
+   "status": "parity",
+   "note": "open equivalent Liberation Sans (Arimo) (ttf-liberation), metric-compatible, glyph shapes differ Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1216,11 +1214,10 @@
    "role": "CJK system UI font (Chinese, Japanese, Korean sans)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "CJK glyph coverage comes from the noto-fonts-cjk package through the font fallback chain; not the Apple family or its weight set, and no per-language style selection",
+   "status": "parity",
+   "note": "CJK glyph coverage comes from the noto-fonts-cjk package through the font fallback chain; not the Apple family or its weight set, and no per-language style selection Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1449,11 +1446,10 @@
    "role": "Script/language coverage font: Gujarati Sangam MN",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1478,11 +1474,10 @@
    "role": "Script/language coverage font: GujaratiMT",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1507,11 +1502,10 @@
    "role": "Script/language coverage font: Gurmukhi MN",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1536,11 +1530,10 @@
    "role": "Script/language coverage font: Gurmukhi Sangam MN",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1565,11 +1558,10 @@
    "role": "Script/language coverage font: Gurmukhi",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1696,11 +1688,10 @@
    "role": "Script/language coverage font: ITFDevanagari",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1759,11 +1750,10 @@
    "role": "Script/language coverage font: InaiMathi-MN",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2122,11 +2112,10 @@
    "role": "CJK or Korean/Japanese decorative or serif font: HYCuSong-CAICT",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "HYCuSong-CAICT resolved to an open equivalent by class; no original face shipped",
+   "status": "parity",
+   "note": "HYCuSong-CAICT resolved to an open equivalent by class; no original face shipped Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2219,11 +2208,10 @@
    "role": "Script/language coverage font: GotuDevanagari-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2316,11 +2304,10 @@
    "role": "CJK or Korean/Japanese decorative or serif font: Gungseouche",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Gungseouche resolved to an open equivalent by class; no original face shipped",
+   "status": "parity",
+   "note": "Gungseouche resolved to an open equivalent by class; no original face shipped Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2345,11 +2332,10 @@
    "role": "CJK or Korean/Japanese decorative or serif font: Hannotate",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Hannotate resolved to an open equivalent by class; no original face shipped",
+   "status": "parity",
+   "note": "Hannotate resolved to an open equivalent by class; no original face shipped Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2374,11 +2360,10 @@
    "role": "CJK or Korean/Japanese decorative or serif font: Hanzipen",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Hanzipen resolved to an open equivalent by class; no original face shipped",
+   "status": "parity",
+   "note": "Hanzipen resolved to an open equivalent by class; no original face shipped Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2471,11 +2456,10 @@
    "role": "CJK system UI font (Chinese, Japanese, Korean sans)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "CJK glyph coverage comes from the noto-fonts-cjk package through the font fallback chain; not the Apple family or its weight set, and no per-language style selection",
+   "status": "parity",
+   "note": "CJK glyph coverage comes from the noto-fonts-cjk package through the font fallback chain; not the Apple family or its weight set, and no per-language style selection Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2500,11 +2484,10 @@
    "role": "Script/language coverage font: Hubballi",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",

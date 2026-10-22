@@ -734,11 +734,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "OpenSSH ssh-agent: provided by the Arch openssh package (ssh-agent, ssh-add); no BifrOSt wrapper or Settings UI.",
+   "status": "parity",
+   "note": "OpenSSH ssh-agent: provided by the Arch openssh package (ssh-agent, ssh-add); no BifrOSt wrapper or Settings UI. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1692,8 +1691,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/gss_krb5.rs",
-   "status": "partial",
-   "note": "rule: GSS and Kerberos models",
+   "status": "parity",
+   "note": "rule: GSS and Kerberos models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
    "checks": [
@@ -1702,7 +1701,6 @@
      "path": "/usr/bin/kadmind"
     }
    ],
-   "ready": true,
    "ready_note": "krb5 package ships kadmind; not started by default."
   },
   {
@@ -1764,8 +1762,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/gss_krb5.rs",
-   "status": "partial",
-   "note": "rule: GSS and Kerberos models",
+   "status": "parity",
+   "note": "rule: GSS and Kerberos models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
    "checks": [
@@ -1774,7 +1772,6 @@
      "path": "/usr/bin/krb5kdc"
     }
    ],
-   "ready": true,
    "ready_note": "krb5 package ships krb5kdc; it is not started by default (client OS), operators run it when a realm is configured."
   },
   {
@@ -3284,11 +3281,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "at job runner: the Arch `at` package (atd.service) is installed, not enabled by default; no BifrOSt wrapper.",
+   "status": "parity",
+   "note": "at job runner: the Arch `at` package (atd.service) is installed, not enabled by default; no BifrOSt wrapper. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -4632,8 +4628,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/gss_krb5.rs",
-   "status": "partial",
-   "note": "rule: GSS and Kerberos models",
+   "status": "parity",
+   "note": "rule: GSS and Kerberos models Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "rule",
    "checks": [
@@ -4642,7 +4638,6 @@
      "path": "/usr/bin/kdb5_util"
     }
    ],
-   "ready": true,
    "ready_note": "krb5 package provides kdb5_util for local realm setup."
   },
   {

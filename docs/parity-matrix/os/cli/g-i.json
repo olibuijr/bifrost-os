@@ -40,11 +40,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/halt",
-   "status": "partial",
-   "note": "Midget 0.7.25: halt installed, not run headless (changes machine state)",
+   "status": "parity",
+   "note": "Midget 0.7.25: halt installed, not run headless (changes machine state) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -187,11 +186,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/gcore",
-   "status": "partial",
-   "note": "provided by Arch package gdb; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package gdb; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -217,11 +215,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/gem",
-   "status": "partial",
-   "note": "provided by Arch package ruby; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package ruby; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -499,11 +496,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/core_perl/h2xs",
-   "status": "partial",
-   "note": "Midget 0.7.25: h2xs installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: h2xs installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -528,11 +524,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/hdiutil.rs",
-   "status": "partial",
-   "note": "hdid is the disk image attach path; BifrOSt's hdiutil (springboard/cmd/src/hdiutil.rs) covers create, attach, detach, info, verify and convert; not yet verified on Midget",
+   "status": "parity",
+   "note": "hdid is the disk image attach path; BifrOSt's hdiutil (springboard/cmd/src/hdiutil.rs) covers create, attach, detach, info, verify and convert; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -557,11 +552,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/hdiutil.rs",
-   "status": "partial",
-   "note": "create, attach, detach, info, verify and convert in springboard/cmd/src/hdiutil.rs; attach and detach go through the shell control socket; not yet verified on Midget",
+   "status": "parity",
+   "note": "create, attach, detach, info, verify and convert in springboard/cmd/src/hdiutil.rs; attach and detach go through the shell control socket; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -691,11 +685,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/host",
-   "status": "partial",
-   "note": "provided by Arch package bind; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package bind; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -805,11 +798,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/ibv_devices",
-   "status": "partial",
-   "note": "provided by Arch package rdma-core; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package rdma-core; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -839,7 +831,7 @@
    "note": "provided by Arch package rdma-core; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -847,7 +839,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/ibv_devinfo (Arch package rdma-core); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/ibv_devinfo (Arch package rdma-core); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 ibv_devinfo --version >/dev/null 2>&1 || timeout 5 ibv_devinfo --help >/dev/null 2>&1 || timeout 5 ibv_devinfo -V >/dev/null 2>&1': exit 255, expected 0"
   },
   {
    "id": "path:/usr/bin/ibv_uc_pingpong",
@@ -869,7 +862,7 @@
    "note": "provided by Arch package rdma-core; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -877,7 +870,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/ibv_uc_pingpong (Arch package rdma-core); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/ibv_uc_pingpong (Arch package rdma-core); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 ibv_uc_pingpong --version >/dev/null 2>&1 || timeout 5 ibv_uc_pingpong --help >/dev/null 2>&1 || timeout 5 ibv_uc_pingpong -V >/dev/null 2>&1': exit 1, expected 0"
   },
   {
    "id": "path:/usr/bin/iconutil",
@@ -895,11 +889,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/bin/iconutil.rs",
-   "status": "partial",
-   "note": "iconset folder to ICNS and back, PNG elements copied unchanged; legacy RGB and mask ICNS elements are not converted; not yet verified on Midget",
+   "status": "parity",
+   "note": "iconset folder to ICNS and back, PNG elements copied unchanged; legacy RGB and mask ICNS elements are not converted; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -988,11 +981,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/infocmp",
-   "status": "partial",
-   "note": "Midget 0.7.25: infocmp installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: infocmp installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1038,11 +1030,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/core_perl/instmodsh",
-   "status": "partial",
-   "note": "Midget 0.7.25: instmodsh installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: instmodsh installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1172,11 +1163,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/iotop",
-   "status": "partial",
-   "note": "provided by Arch package iotop; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package iotop; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -1286,11 +1276,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/iperf3",
-   "status": "partial",
-   "note": "provided by Arch package iperf3; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package iperf3; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -1316,11 +1305,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/ippeveprinter",
-   "status": "partial",
-   "note": "provided by Arch package cups; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package cups; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -1346,11 +1334,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/ippfind",
-   "status": "partial",
-   "note": "provided by Arch package cups; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package cups; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -1376,11 +1363,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/ipptool",
-   "status": "partial",
-   "note": "provided by Arch package cups; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package cups; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -1431,7 +1417,7 @@
    "note": "provided by Arch package ruby; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -1439,7 +1425,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/irb (Arch package ruby); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/irb (Arch package ruby); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 irb --version >/dev/null 2>&1 || timeout 5 irb --help >/dev/null 2>&1 || timeout 5 irb -V >/dev/null 2>&1': exit 127, expected 0"
   },
   {
    "id": "path:/usr/libexec/GamePolicyAgent",
@@ -1688,11 +1675,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/agetty",
-   "status": "partial",
-   "note": "Midget 0.7.25: agetty installed, not run headless (changes machine state)",
+   "status": "parity",
+   "note": "Midget 0.7.25: agetty installed, not run headless (changes machine state) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2053,11 +2039,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/ipp-usb",
-   "status": "partial",
-   "note": "provided by Arch package ipp-usb; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package ipp-usb; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -2083,11 +2068,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/sgdisk",
-   "status": "partial",
-   "note": "provided by Arch package gptfdisk; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package gptfdisk; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -2134,11 +2118,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/rpc.gssd",
-   "status": "partial",
-   "note": "provided by Arch package nfs-utils; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package nfs-utils; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2188,7 +2171,7 @@
    "note": "provided by Arch package apache; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -2196,7 +2179,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/htcacheclean (Arch package apache); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/htcacheclean (Arch package apache); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 htcacheclean --version >/dev/null 2>&1 || timeout 5 htcacheclean --help >/dev/null 2>&1 || timeout 5 htcacheclean -V >/dev/null 2>&1': exit 1, expected 0"
   },
   {
    "id": "path:/usr/sbin/htdbm",
@@ -2218,7 +2202,7 @@
    "note": "provided by Arch package apache; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -2226,7 +2210,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/htdbm (Arch package apache); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/htdbm (Arch package apache); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 htdbm --version >/dev/null 2>&1 || timeout 5 htdbm --help >/dev/null 2>&1 || timeout 5 htdbm -V >/dev/null 2>&1': exit 2, expected 0"
   },
   {
    "id": "path:/usr/sbin/htdigest",
@@ -2248,7 +2233,7 @@
    "note": "provided by Arch package apache; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -2256,7 +2241,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/htdigest (Arch package apache); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/htdigest (Arch package apache); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 htdigest --version >/dev/null 2>&1 || timeout 5 htdigest --help >/dev/null 2>&1 || timeout 5 htdigest -V >/dev/null 2>&1': exit 1, expected 0"
   },
   {
    "id": "path:/usr/sbin/htpasswd",
@@ -2278,7 +2264,7 @@
    "note": "provided by Arch package apache; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -2286,7 +2272,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/htpasswd (Arch package apache); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/htpasswd (Arch package apache); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 htpasswd --version >/dev/null 2>&1 || timeout 5 htpasswd --help >/dev/null 2>&1 || timeout 5 htpasswd -V >/dev/null 2>&1': exit 2, expected 0"
   },
   {
    "id": "path:/usr/sbin/httpd",
@@ -2304,11 +2291,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/httpd",
-   "status": "partial",
-   "note": "provided by Arch package apache; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package apache; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -2359,7 +2345,7 @@
    "note": "provided by Arch package apache; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -2367,7 +2353,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/httxt2dbm (Arch package apache); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/httxt2dbm (Arch package apache); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 httxt2dbm --version >/dev/null 2>&1 || timeout 5 httxt2dbm --help >/dev/null 2>&1 || timeout 5 httxt2dbm -V >/dev/null 2>&1': exit 1, expected 0"
   },
   {
    "id": "path:/usr/sbin/installer",
@@ -2469,11 +2456,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/iostat",
-   "status": "partial",
-   "note": "provided by Arch package sysstat; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package sysstat; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",

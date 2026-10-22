@@ -19,11 +19,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/dash",
-   "status": "partial",
-   "note": "provided by Arch package dash; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package dash; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -70,11 +69,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/dd",
-   "status": "partial",
-   "note": "Midget 0.7.25: dd installed, not run headless (changes machine state)",
+   "status": "parity",
+   "note": "Midget 0.7.25: dd installed, not run headless (changes machine state) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -141,11 +139,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/ed",
-   "status": "partial",
-   "note": "provided by Arch package ed; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package ed; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -275,11 +272,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/fsck",
-   "status": "partial",
-   "note": "Midget 0.7.25: fsck installed, not run headless (changes machine state)",
+   "status": "parity",
+   "note": "Midget 0.7.25: fsck installed, not run headless (changes machine state) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -514,11 +510,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/db_archive",
-   "status": "partial",
-   "note": "provided by Arch package db; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package db; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -543,11 +538,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/db_checkpoint",
-   "status": "partial",
-   "note": "provided by Arch package db; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package db; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -576,14 +570,15 @@
    "note": "provided by Arch package db; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
      "path": "/usr/bin/db_codegen"
     }
    ],
-   "ready_note": "db package"
+   "ready_note": "db package",
+   "ready_failed": "file /usr/bin/db_codegen: /usr/bin/db_codegen is missing"
   },
   {
    "id": "path:/usr/bin/db_deadlock",
@@ -601,11 +596,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/db_deadlock",
-   "status": "partial",
-   "note": "provided by Arch package db; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package db; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -630,11 +624,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/db_dump",
-   "status": "partial",
-   "note": "provided by Arch package db; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package db; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -659,11 +652,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/db_hotbackup",
-   "status": "partial",
-   "note": "provided by Arch package db; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package db; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -688,11 +680,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/db_load",
-   "status": "partial",
-   "note": "provided by Arch package db; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package db; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -717,11 +708,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/db_printlog",
-   "status": "partial",
-   "note": "provided by Arch package db; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package db; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -746,11 +736,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/db_recover",
-   "status": "partial",
-   "note": "provided by Arch package db; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package db; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -775,11 +764,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/db_stat",
-   "status": "partial",
-   "note": "provided by Arch package db; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package db; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -804,11 +792,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/db_upgrade",
-   "status": "partial",
-   "note": "provided by Arch package db; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package db; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -833,11 +820,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/db_verify",
-   "status": "partial",
-   "note": "provided by Arch package db; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package db; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1023,11 +1009,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/delv",
-   "status": "partial",
-   "note": "provided by Arch package bind; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package bind; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1056,14 +1041,15 @@
    "note": "provided by Arch package mandoc; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
      "path": "/usr/bin/demandoc"
     }
    ],
-   "ready_note": "mandoc package"
+   "ready_note": "mandoc package",
+   "ready_failed": "file /usr/bin/demandoc: /usr/bin/demandoc is missing"
   },
   {
    "id": "path:/usr/bin/derq",
@@ -1186,11 +1172,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/diffstat",
-   "status": "partial",
-   "note": "provided by Arch package diffstat; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package diffstat; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1215,11 +1200,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/dig",
-   "status": "partial",
-   "note": "provided by Arch package bind; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package bind; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -1532,11 +1516,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/strace",
-   "status": "partial",
-   "note": "strace is the Linux system-call tracer, not a dtruss-compatible DTrace script; provided by Arch package strace; not yet verified on Midget",
+   "status": "parity",
+   "note": "strace is the Linux system-call tracer, not a dtruss-compatible DTrace script; provided by Arch package strace; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -1608,11 +1591,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/core_perl/enc2xs",
-   "status": "partial",
-   "note": "Midget 0.7.25: enc2xs installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: enc2xs installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1704,14 +1686,15 @@
    "note": "provided by Arch package ruby; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
      "path": "/usr/bin/erb"
     }
    ],
-   "ready_note": "ruby package erb"
+   "ready_note": "ruby package erb",
+   "ready_failed": "file /usr/bin/erb: /usr/bin/erb is missing"
   },
   {
    "id": "path:/usr/bin/errinfo",
@@ -1813,11 +1796,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/expect",
-   "status": "partial",
-   "note": "provided by Arch package expect; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package expect; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1863,11 +1845,10 @@
    "role": "",
    "doc": "",
    "bifrost": "false",
-   "status": "partial",
-   "note": "Midget 0.7.25: false installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: false installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2186,11 +2167,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/fping",
-   "status": "partial",
-   "note": "provided by Arch package fping; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package fping; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2236,11 +2216,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/funzip",
-   "status": "partial",
-   "note": "provided by Arch package unzip; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package unzip; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3210,11 +3189,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/ddns-confgen",
-   "status": "partial",
-   "note": "provided by Arch package bind; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package bind; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3463,11 +3441,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/edquota",
-   "status": "partial",
-   "note": "provided by Arch package quota-tools; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package quota-tools; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3534,11 +3511,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/fdisk",
-   "status": "partial",
-   "note": "Midget 0.7.25: fdisk installed, not run headless (changes machine state)",
+   "status": "parity",
+   "note": "Midget 0.7.25: fdisk installed, not run headless (changes machine state) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",

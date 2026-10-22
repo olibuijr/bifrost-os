@@ -23,14 +23,15 @@
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
      "path": "/usr/share/springboard/assets/SFUIMono.ttf"
     }
    ],
-   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes."
+   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes.",
+   "ready_failed": "file /usr/share/springboard/assets/SFUIMono.ttf: /usr/share/springboard/assets/SFUIMono.ttf is missing"
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-BoldItalic.otf",
@@ -86,14 +87,15 @@
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
      "path": "/usr/share/springboard/assets/SFUIMono.ttf"
     }
    ],
-   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes."
+   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes.",
+   "ready_failed": "file /usr/share/springboard/assets/SFUIMono.ttf: /usr/share/springboard/assets/SFUIMono.ttf is missing"
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-HeavyItalic.otf",
@@ -149,14 +151,15 @@
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
      "path": "/usr/share/springboard/assets/SFUIMono.ttf"
     }
    ],
-   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes."
+   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes.",
+   "ready_failed": "file /usr/share/springboard/assets/SFUIMono.ttf: /usr/share/springboard/assets/SFUIMono.ttf is missing"
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-LightItalic.otf",
@@ -212,14 +215,15 @@
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
      "path": "/usr/share/springboard/assets/SFUIMono.ttf"
     }
    ],
-   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes."
+   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes.",
+   "ready_failed": "file /usr/share/springboard/assets/SFUIMono.ttf: /usr/share/springboard/assets/SFUIMono.ttf is missing"
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-MediumItalic.otf",
@@ -275,14 +279,15 @@
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
      "path": "/usr/share/springboard/assets/SFUIMono.ttf"
     }
    ],
-   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes."
+   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes.",
+   "ready_failed": "file /usr/share/springboard/assets/SFUIMono.ttf: /usr/share/springboard/assets/SFUIMono.ttf is missing"
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-RegularItalic.otf",
@@ -338,14 +343,15 @@
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
      "path": "/usr/share/springboard/assets/SFUIMono.ttf"
     }
    ],
-   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes."
+   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes.",
+   "ready_failed": "file /usr/share/springboard/assets/SFUIMono.ttf: /usr/share/springboard/assets/SFUIMono.ttf is missing"
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-SemiboldItalic.otf",
@@ -401,14 +407,15 @@
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
      "path": "/usr/share/springboard/assets/SFUIMono.ttf"
     }
    ],
-   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes."
+   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes.",
+   "ready_failed": "file /usr/share/springboard/assets/SFUIMono.ttf: /usr/share/springboard/assets/SFUIMono.ttf is missing"
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SFMonoItalic-Terminal.ttf",
@@ -635,11 +642,10 @@
    "role": "Script/language coverage font: SFArabic",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -664,11 +670,10 @@
    "role": "Script/language coverage font: SFArabicRounded",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -693,11 +698,10 @@
    "role": "Script/language coverage font: SFArmenian",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -722,11 +726,10 @@
    "role": "Script/language coverage font: SFArmenianRounded",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -848,11 +851,10 @@
    "role": "Script/language coverage font: SFGeorgian",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -877,11 +879,10 @@
    "role": "Script/language coverage font: SFGeorgianRounded",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -906,11 +907,10 @@
    "role": "Script/language coverage font: SFHebrew",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -935,11 +935,10 @@
    "role": "Script/language coverage font: SFHebrewRounded",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -964,11 +963,10 @@
    "role": "Script/language coverage font: SFIndia",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -997,14 +995,15 @@
    "note": "BifrOSt default system font is Inter (SFUI.ttf, variable wght+opsz, OFL) as stand-in for SF Pro; optional Geist, IBM Plex Sans, Source Sans 3 in Settings > Fonts. Not the Apple glyph shapes",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
      "path": "/usr/share/springboard/assets/SFUI.ttf"
     }
    ],
-   "ready_note": "BifrOSt's system UI font SFUI.ttf (Inter, variable wght and opsz, OFL) is required by the ISO build as the default system font. Not the Apple glyph shapes."
+   "ready_note": "BifrOSt's system UI font SFUI.ttf (Inter, variable wght and opsz, OFL) is required by the ISO build as the default system font. Not the Apple glyph shapes.",
+   "ready_failed": "file /usr/share/springboard/assets/SFUI.ttf: /usr/share/springboard/assets/SFUI.ttf is missing"
   },
   {
    "id": "path:/System/Library/Fonts/SFNSItalic.ttf",
@@ -1060,14 +1059,15 @@
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
      "path": "/usr/share/springboard/assets/SFUIMono.ttf"
     }
    ],
-   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes."
+   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes.",
+   "ready_failed": "file /usr/share/springboard/assets/SFUIMono.ttf: /usr/share/springboard/assets/SFUIMono.ttf is missing"
   },
   {
    "id": "path:/System/Library/Fonts/SFNSMonoItalic.ttf",
@@ -2091,11 +2091,10 @@
    "role": "Symbol, dingbat or math font: STIXTwoMath",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "open equivalent Noto Sans Math (otf-stix), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans Math (otf-stix), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2478,11 +2477,10 @@
    "role": "Script/language coverage font: Sinhala MN",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2507,11 +2505,10 @@
    "role": "Script/language coverage font: Sinhala Sangam MN",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2638,11 +2635,10 @@
    "role": "Script/language coverage font: SukhumvitSet",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2701,11 +2697,10 @@
    "role": "Symbol, dingbat or math font: Symbol",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "open equivalent Standard Symbols PS (gsfonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Standard Symbols PS (gsfonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3159,11 +3154,10 @@
    "role": "Script/language coverage font: SamaDevanagari",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3188,11 +3182,10 @@
    "role": "Script/language coverage font: SamaGujarati",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3217,11 +3210,10 @@
    "role": "Script/language coverage font: SamaGurmukhi",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3246,11 +3238,10 @@
    "role": "Script/language coverage font: SamaKannada",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3275,11 +3266,10 @@
    "role": "Script/language coverage font: SamaMalayalam",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3304,11 +3294,10 @@
    "role": "Script/language coverage font: SamaTamil",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3333,11 +3322,10 @@
    "role": "Script/language coverage font: Sarabun",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3396,11 +3384,10 @@
    "role": "Script/language coverage font: Shobhika-Devanagari",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3493,11 +3480,10 @@
    "role": "Script/language coverage font: Srisakdi",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",

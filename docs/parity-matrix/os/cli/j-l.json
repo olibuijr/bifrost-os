@@ -19,11 +19,10 @@
    "role": "",
    "doc": "",
    "bifrost": "kill",
-   "status": "partial",
-   "note": "Midget 0.7.25: kill installed, not run headless (changes machine state)",
+   "status": "parity",
+   "note": "Midget 0.7.25: kill installed, not run headless (changes machine state) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -52,7 +51,7 @@
    "note": "provided by Arch package ksh; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -60,7 +59,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/ksh (Arch package ksh); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/ksh (Arch package ksh); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 ksh --version >/dev/null 2>&1 || timeout 5 ksh --help >/dev/null 2>&1 || timeout 5 ksh -V >/dev/null 2>&1': exit 2, expected 0"
   },
   {
    "id": "path:/bin/launchctl",
@@ -213,11 +213,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/jar",
-   "status": "partial",
-   "note": "provided by Arch package jdk-openjdk; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package jdk-openjdk; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -285,11 +284,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/jq",
-   "status": "partial",
-   "note": "provided by Arch package jq; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package jq; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -315,11 +313,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/core_perl/json_pp",
-   "status": "partial",
-   "note": "Midget 0.7.25: json_pp installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: json_pp installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -365,11 +362,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/klist",
-   "status": "partial",
-   "note": "Midget 0.7.25: klist installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: klist installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -394,11 +390,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/kdestroy",
-   "status": "partial",
-   "note": "Midget 0.7.25: kdestroy installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: kdestroy installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -465,11 +460,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/kvno",
-   "status": "partial",
-   "note": "Midget 0.7.25: kvno installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: kvno installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -515,11 +509,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/killall",
-   "status": "partial",
-   "note": "Midget 0.7.25: killall installed, not run headless (changes machine state)",
+   "status": "parity",
+   "note": "Midget 0.7.25: killall installed, not run headless (changes machine state) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -544,11 +537,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/kinit",
-   "status": "partial",
-   "note": "Midget 0.7.25: kinit installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: kinit installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -594,11 +586,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/kpasswd",
-   "status": "partial",
-   "note": "Midget 0.7.25: kpasswd installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: kpasswd installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -804,7 +795,7 @@
    "note": "provided by Arch package openldap; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -812,7 +803,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/ldapcompare (Arch package openldap); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/ldapcompare (Arch package openldap); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 ldapcompare --version >/dev/null 2>&1 || timeout 5 ldapcompare --help >/dev/null 2>&1 || timeout 5 ldapcompare -V >/dev/null 2>&1': exit 1, expected 0"
   },
   {
    "id": "path:/usr/bin/ldapdelete",
@@ -834,7 +826,7 @@
    "note": "provided by Arch package openldap; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -842,7 +834,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/ldapdelete (Arch package openldap); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/ldapdelete (Arch package openldap); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 ldapdelete --version >/dev/null 2>&1 || timeout 5 ldapdelete --help >/dev/null 2>&1 || timeout 5 ldapdelete -V >/dev/null 2>&1': exit 1, expected 0"
   },
   {
    "id": "path:/usr/bin/ldapexop",
@@ -864,7 +857,7 @@
    "note": "provided by Arch package openldap; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -872,7 +865,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/ldapexop (Arch package openldap); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/ldapexop (Arch package openldap); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 ldapexop --version >/dev/null 2>&1 || timeout 5 ldapexop --help >/dev/null 2>&1 || timeout 5 ldapexop -V >/dev/null 2>&1': exit 1, expected 0"
   },
   {
    "id": "path:/usr/bin/ldapmodify",
@@ -894,7 +888,7 @@
    "note": "provided by Arch package openldap; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -902,7 +896,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/ldapmodify (Arch package openldap); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/ldapmodify (Arch package openldap); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 ldapmodify --version >/dev/null 2>&1 || timeout 5 ldapmodify --help >/dev/null 2>&1 || timeout 5 ldapmodify -V >/dev/null 2>&1': exit 1, expected 0"
   },
   {
    "id": "path:/usr/bin/ldapmodrdn",
@@ -924,7 +919,7 @@
    "note": "provided by Arch package openldap; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -932,7 +927,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/ldapmodrdn (Arch package openldap); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/ldapmodrdn (Arch package openldap); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 ldapmodrdn --version >/dev/null 2>&1 || timeout 5 ldapmodrdn --help >/dev/null 2>&1 || timeout 5 ldapmodrdn -V >/dev/null 2>&1': exit 1, expected 0"
   },
   {
    "id": "path:/usr/bin/ldappasswd",
@@ -954,7 +950,7 @@
    "note": "provided by Arch package openldap; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -962,7 +958,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/ldappasswd (Arch package openldap); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/ldappasswd (Arch package openldap); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 ldappasswd --version >/dev/null 2>&1 || timeout 5 ldappasswd --help >/dev/null 2>&1 || timeout 5 ldappasswd -V >/dev/null 2>&1': exit 1, expected 0"
   },
   {
    "id": "path:/usr/bin/ldapsearch",
@@ -984,7 +981,7 @@
    "note": "provided by Arch package openldap; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -992,7 +989,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/ldapsearch (Arch package openldap); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/ldapsearch (Arch package openldap); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 ldapsearch --version >/dev/null 2>&1 || timeout 5 ldapsearch --help >/dev/null 2>&1 || timeout 5 ldapsearch -V >/dev/null 2>&1': exit 1, expected 0"
   },
   {
    "id": "path:/usr/bin/ldapurl",
@@ -1014,7 +1012,7 @@
    "note": "provided by Arch package openldap; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -1022,7 +1020,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/ldapurl (Arch package openldap); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/ldapurl (Arch package openldap); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 ldapurl --version >/dev/null 2>&1 || timeout 5 ldapurl --help >/dev/null 2>&1 || timeout 5 ldapurl -V >/dev/null 2>&1': exit 1, expected 0"
   },
   {
    "id": "path:/usr/bin/ldapwhoami",
@@ -1044,7 +1043,7 @@
    "note": "provided by Arch package openldap; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -1052,7 +1051,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/ldapwhoami (Arch package openldap); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/ldapwhoami (Arch package openldap); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 ldapwhoami --version >/dev/null 2>&1 || timeout 5 ldapwhoami --help >/dev/null 2>&1 || timeout 5 ldapwhoami -V >/dev/null 2>&1': exit 1, expected 0"
   },
   {
    "id": "path:/usr/bin/leaks",
@@ -1109,11 +1109,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/cmd/src/leave.rs",
-   "status": "partial",
-   "note": "BifrOSt leave waits for hhmm or +hhmm and prints a reminder in the terminal it runs in; no utmp broadcast and no prompt; not yet verified on Midget",
+   "status": "parity",
+   "note": "BifrOSt leave waits for hhmm or +hhmm and prints a reminder in the terminal it runs in; no utmp broadcast and no prompt; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1138,11 +1137,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/less",
-   "status": "partial",
-   "note": "provided by Arch package less; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package less; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -1172,7 +1170,7 @@
    "note": "provided by Arch package less; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -1180,7 +1178,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/lessecho (Arch package less); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/lessecho (Arch package less); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 lessecho --version >/dev/null 2>&1 || timeout 5 lessecho --help >/dev/null 2>&1 || timeout 5 lessecho -V >/dev/null 2>&1': exit 127, expected 0"
   },
   {
    "id": "path:/usr/bin/lesskey",
@@ -1202,7 +1201,7 @@
    "note": "provided by Arch package less; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -1210,7 +1209,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/lesskey (Arch package less); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/lesskey (Arch package less); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 lesskey --version >/dev/null 2>&1 || timeout 5 lesskey --help >/dev/null 2>&1 || timeout 5 lesskey -V >/dev/null 2>&1': exit 127, expected 0"
   },
   {
    "id": "path:/usr/bin/libnetcfg",
@@ -1312,11 +1312,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/locate",
-   "status": "partial",
-   "note": "provided by Arch package plocate; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package plocate; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -1426,11 +1425,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/login",
-   "status": "partial",
-   "note": "Midget 0.7.25: login installed, not run headless (changes machine state)",
+   "status": "parity",
+   "note": "Midget 0.7.25: login installed, not run headless (changes machine state) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1501,7 +1499,7 @@
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -1509,7 +1507,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/lp (Arch package cups); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/lp (Arch package cups); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 lp --version >/dev/null 2>&1 || timeout 5 lp --help >/dev/null 2>&1 || timeout 5 lp -V >/dev/null 2>&1': exit 1, expected 0"
   },
   {
    "id": "path:/usr/bin/lpoptions",
@@ -1531,7 +1530,7 @@
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -1539,7 +1538,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/lpoptions (Arch package cups); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/lpoptions (Arch package cups); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 lpoptions --version >/dev/null 2>&1 || timeout 5 lpoptions --help >/dev/null 2>&1 || timeout 5 lpoptions -V >/dev/null 2>&1': exit 1, expected 0"
   },
   {
    "id": "path:/usr/bin/lpq",
@@ -1561,7 +1561,7 @@
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -1569,7 +1569,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/lpq (Arch package cups); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/lpq (Arch package cups); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 lpq --version >/dev/null 2>&1 || timeout 5 lpq --help >/dev/null 2>&1 || timeout 5 lpq -V >/dev/null 2>&1': exit 1, expected 0"
   },
   {
    "id": "path:/usr/bin/lpr",
@@ -1591,7 +1592,7 @@
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -1599,7 +1600,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/lpr (Arch package cups); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/lpr (Arch package cups); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 lpr --version >/dev/null 2>&1 || timeout 5 lpr --help >/dev/null 2>&1 || timeout 5 lpr -V >/dev/null 2>&1': exit 1, expected 0"
   },
   {
    "id": "path:/usr/bin/lprm",
@@ -1621,7 +1623,7 @@
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -1629,7 +1631,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/lprm (Arch package cups); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/lprm (Arch package cups); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 lprm --version >/dev/null 2>&1 || timeout 5 lprm --help >/dev/null 2>&1 || timeout 5 lprm -V >/dev/null 2>&1': exit 1, expected 0"
   },
   {
    "id": "path:/usr/bin/lpstat",
@@ -1651,7 +1654,7 @@
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -1659,7 +1662,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/lpstat (Arch package cups); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/lpstat (Arch package cups); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 lpstat --version >/dev/null 2>&1 || timeout 5 lpstat --help >/dev/null 2>&1 || timeout 5 lpstat -V >/dev/null 2>&1': exit 1, expected 0"
   },
   {
    "id": "path:/usr/bin/lsappinfo",
@@ -2286,11 +2290,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/updatedb",
-   "status": "partial",
-   "note": "provided by Arch package plocate; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package plocate; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2504,11 +2507,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/kadmin",
-   "status": "partial",
-   "note": "Midget 0.7.25: kadmin installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: kadmin installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2533,11 +2535,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/kadmin.local",
-   "status": "partial",
-   "note": "Midget 0.7.25: kadmin.local installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: kadmin.local installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2797,7 +2798,7 @@
    "note": "provided by Arch package apache; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -2805,7 +2806,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/logresolve (Arch package apache); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/logresolve (Arch package apache); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 logresolve --version >/dev/null 2>&1 || timeout 5 logresolve --help >/dev/null 2>&1 || timeout 5 logresolve -V >/dev/null 2>&1': timed out after 10 s"
   },
   {
    "id": "path:/usr/sbin/lpadmin",
@@ -2827,7 +2829,7 @@
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -2835,7 +2837,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/lpadmin (Arch package cups); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/lpadmin (Arch package cups); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 lpadmin --version >/dev/null 2>&1 || timeout 5 lpadmin --help >/dev/null 2>&1 || timeout 5 lpadmin -V >/dev/null 2>&1': exit 1, expected 0"
   },
   {
    "id": "path:/usr/sbin/lpc",
@@ -2853,11 +2856,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/lpc",
-   "status": "partial",
-   "note": "provided by Arch package cups; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package cups; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2886,7 +2888,7 @@
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -2894,7 +2896,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/lpinfo (Arch package cups); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/lpinfo (Arch package cups); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 lpinfo --version >/dev/null 2>&1 || timeout 5 lpinfo --help >/dev/null 2>&1 || timeout 5 lpinfo -V >/dev/null 2>&1': exit 1, expected 0"
   },
   {
    "id": "path:/usr/sbin/lpmove",
@@ -2916,7 +2919,7 @@
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -2924,7 +2927,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/lpmove (Arch package cups); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/lpmove (Arch package cups); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 lpmove --version >/dev/null 2>&1 || timeout 5 lpmove --help >/dev/null 2>&1 || timeout 5 lpmove -V >/dev/null 2>&1': exit 1, expected 0"
   },
   {
    "id": "path:/usr/sbin/lsof",
@@ -2942,11 +2946,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/lsof",
-   "status": "partial",
-   "note": "provided by Arch package lsof; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package lsof; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",

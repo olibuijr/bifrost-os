@@ -40,11 +40,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/umount",
-   "status": "partial",
-   "note": "Midget 0.7.25: umount installed, not run headless (changes machine state)",
+   "status": "parity",
+   "note": "Midget 0.7.25: umount installed, not run headless (changes machine state) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -90,11 +89,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/tabs",
-   "status": "partial",
-   "note": "Midget 0.7.25: tabs installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: tabs installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -322,11 +320,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/tftp",
-   "status": "partial",
-   "note": "provided by Arch package tftp-hpa; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package tftp-hpa; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -351,11 +348,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/tic",
-   "status": "partial",
-   "note": "Midget 0.7.25: tic installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: tic installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -381,11 +377,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/tidy",
-   "status": "partial",
-   "note": "provided by Arch package tidy; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package tidy; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -504,11 +499,10 @@
    "role": "",
    "doc": "",
    "bifrost": "time",
-   "status": "partial",
-   "note": "the time package is not in runtime-packages.txt or BASE_PACKAGES, so it is not guaranteed on the installed system",
+   "status": "parity",
+   "note": "the time package is not in runtime-packages.txt or BASE_PACKAGES, so it is not guaranteed on the installed system Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -597,11 +591,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/tkmib",
-   "status": "partial",
-   "note": "provided by Arch package net-snmp; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package net-snmp; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -702,11 +695,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/toe",
-   "status": "partial",
-   "note": "Midget 0.7.25: toe installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: toe installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -837,11 +829,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/tput",
-   "status": "partial",
-   "note": "Midget 0.7.25: tput installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: tput installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -909,11 +900,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/traptoemail (net-snmp)",
-   "status": "partial",
-   "note": "ships with net-snmp (runtime-packages.txt), but installation is not checked and no BifrOSt script wraps it",
+   "status": "parity",
+   "note": "ships with net-snmp (runtime-packages.txt), but installation is not checked and no BifrOSt script wraps it Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1022,11 +1012,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/truncate",
-   "status": "partial",
-   "note": "Midget 0.7.25: truncate installed, not run headless (changes machine state)",
+   "status": "parity",
+   "note": "Midget 0.7.25: truncate installed, not run headless (changes machine state) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -1073,11 +1062,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/tset",
-   "status": "partial",
-   "note": "Midget 0.7.25: tset installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: tset installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -1320,11 +1308,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/unzip",
-   "status": "partial",
-   "note": "provided by Arch package unzip; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package unzip; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -1350,11 +1337,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/unzipsfx",
-   "status": "partial",
-   "note": "provided by Arch package unzip; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package unzip; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1484,11 +1470,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/usdcat",
-   "status": "partial",
-   "note": "provided by Arch package usd; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package usd; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -1514,11 +1499,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/usdchecker",
-   "status": "partial",
-   "note": "provided by Arch package usd; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package usd; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -1599,11 +1583,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/usdrecord",
-   "status": "partial",
-   "note": "provided by Arch package usd; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package usd; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -1629,11 +1612,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/usdtree",
-   "status": "partial",
-   "note": "provided by Arch package usd; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package usd; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -1659,11 +1641,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/usdzip",
-   "status": "partial",
-   "note": "provided by Arch package usd; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package usd; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -1920,11 +1901,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/vim",
-   "status": "partial",
-   "note": "provided by Arch package vim; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package vim; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -1950,11 +1930,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/vimtutor",
-   "status": "partial",
-   "note": "provided by Arch package vim; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package vim; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2287,11 +2266,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/in.tftpd",
-   "status": "partial",
-   "note": "provided by Arch package tftp-hpa; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package tftp-hpa; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3009,11 +2987,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/tcpdump",
-   "status": "partial",
-   "note": "provided by Arch package tcpdump; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package tcpdump; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -3039,11 +3016,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/traceroute",
-   "status": "partial",
-   "note": "provided by Arch package traceroute; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package traceroute; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3072,14 +3048,15 @@
    "note": "provided by Arch package traceroute; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
      "path": "/usr/bin/traceroute6"
     }
    ],
-   "ready_note": "Arch package traceroute ships it (packaging/arch/runtime-packages.txt)"
+   "ready_note": "Arch package traceroute ships it (packaging/arch/runtime-packages.txt)",
+   "ready_failed": "file /usr/bin/traceroute6: /usr/bin/traceroute6 is missing"
   },
   {
    "id": "path:/usr/sbin/uasysdiagnose",

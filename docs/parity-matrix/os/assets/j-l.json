@@ -137,11 +137,10 @@
    "role": "Script/language coverage font: Kohinoor",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -166,11 +165,10 @@
    "role": "Script/language coverage font: KohinoorBangla",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -195,11 +193,10 @@
    "role": "Script/language coverage font: KohinoorGujarati",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -224,11 +221,10 @@
    "role": "Script/language coverage font: KohinoorTelugu",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -253,11 +249,10 @@
    "role": "Fallback or utility font: LastResort",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Noto Sans Symbols 2 (noto-fonts), glyph coverage not metric-identical",
+   "status": "parity",
+   "note": "open equivalent Noto Sans Symbols 2 (noto-fonts), glyph coverage not metric-identical Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -316,11 +311,10 @@
    "role": "Script/language coverage font: Kailasa",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -345,11 +339,10 @@
    "role": "Script/language coverage font: Kannada MN",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -374,11 +367,10 @@
    "role": "Script/language coverage font: Kannada Sangam MN",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -437,11 +429,10 @@
    "role": "Script/language coverage font: Khmer MN",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -466,11 +457,10 @@
    "role": "Script/language coverage font: Khmer Sangam MN",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -529,11 +519,10 @@
    "role": "Script/language coverage font: Krungthep",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -558,11 +547,10 @@
    "role": "Script/language coverage font: KufiStandardGK",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -587,11 +575,10 @@
    "role": "Script/language coverage font: Lao MN",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -616,11 +603,10 @@
    "role": "Script/language coverage font: Lao Sangam MN",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -883,11 +869,10 @@
    "role": "Script/language coverage font: KoufiAbjadi",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -912,11 +897,10 @@
    "role": "Script/language coverage font: Laimoon",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -941,11 +925,10 @@
    "role": "CJK or Korean/Japanese decorative or serif font: LantingheiTC-Extralight",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "LantingheiTC-Extralight resolved to an open equivalent by class; no original face shipped",
+   "status": "parity",
+   "note": "LantingheiTC-Extralight resolved to an open equivalent by class; no original face shipped Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -970,11 +953,10 @@
    "role": "Script/language coverage font: JainiDevanagari-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -999,11 +981,10 @@
    "role": "Script/language coverage font: JainiPurvaDevanagari-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1028,11 +1009,10 @@
    "role": "Script/language coverage font: K2D",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1057,11 +1037,10 @@
    "role": "CJK or Korean/Japanese decorative or serif font: Kai",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Kai resolved to an open equivalent by class; no original face shipped",
+   "status": "parity",
+   "note": "Kai resolved to an open equivalent by class; no original face shipped Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1086,11 +1065,10 @@
    "role": "CJK or Korean/Japanese decorative or serif font: Kaiti",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Kaiti resolved to an open equivalent by class; no original face shipped",
+   "status": "parity",
+   "note": "Kaiti resolved to an open equivalent by class; no original face shipped Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1149,11 +1127,10 @@
    "role": "Script/language coverage font: Kavivanar",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1246,11 +1223,10 @@
    "role": "Script/language coverage font: KigeliaArabic",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1275,11 +1251,10 @@
    "role": "CJK or Korean/Japanese decorative or serif font: Klee",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Klee resolved to an open equivalent by class; no original face shipped",
+   "status": "parity",
+   "note": "Klee resolved to an open equivalent by class; no original face shipped Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1304,11 +1279,10 @@
    "role": "Script/language coverage font: KoHo",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1333,11 +1307,10 @@
    "role": "Script/language coverage font: Kodchasan",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1362,11 +1335,10 @@
    "role": "Script/language coverage font: Krub",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1391,11 +1363,10 @@
    "role": "CJK or Korean/Japanese decorative or serif font: Kyokasho",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Kyokasho resolved to an open equivalent by class; no original face shipped",
+   "status": "parity",
+   "note": "Kyokasho resolved to an open equivalent by class; no original face shipped Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1420,11 +1391,10 @@
    "role": "Script/language coverage font: LahoreGurmukhi",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1449,11 +1419,10 @@
    "role": "CJK or Korean/Japanese decorative or serif font: Lantinghei",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Lantinghei resolved to an open equivalent by class; no original face shipped",
+   "status": "parity",
+   "note": "Lantinghei resolved to an open equivalent by class; no original face shipped Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1478,11 +1447,10 @@
    "role": "Script/language coverage font: LavaDevanagari",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1507,11 +1475,10 @@
    "role": "Script/language coverage font: LavaKannada",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1536,11 +1503,10 @@
    "role": "Script/language coverage font: LavaTelugu",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1599,11 +1565,10 @@
    "role": "CJK or Korean/Japanese decorative or serif font: LingWaiSC-Medium",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "LingWaiSC-Medium resolved to an open equivalent by class; no original face shipped",
+   "status": "parity",
+   "note": "LingWaiSC-Medium resolved to an open equivalent by class; no original face shipped Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1628,11 +1593,10 @@
    "role": "CJK or Korean/Japanese decorative or serif font: LingWaiTC-Medium",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "LingWaiTC-Medium resolved to an open equivalent by class; no original face shipped",
+   "status": "parity",
+   "note": "LingWaiTC-Medium resolved to an open equivalent by class; no original face shipped Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",

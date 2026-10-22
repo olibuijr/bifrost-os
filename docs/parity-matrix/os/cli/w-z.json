@@ -40,11 +40,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/zsh",
-   "status": "partial",
-   "note": "provided by Arch package zsh; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package zsh; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -210,11 +209,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/which",
-   "status": "partial",
-   "note": "provided by Arch package which; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package which; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -261,11 +259,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/whois",
-   "status": "partial",
-   "note": "provided by Arch package whois; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package whois; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -291,11 +288,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/wish8.6",
-   "status": "partial",
-   "note": "The Arch tk package (packaging/arch/runtime-packages.txt) ships the Tk windowing shell as wish8.6 with a wish symlink; the reference wish8.5 is the same tool one release older.",
+   "status": "parity",
+   "note": "The Arch tk package (packaging/arch/runtime-packages.txt) ships the Tk windowing shell as wish8.6 with a wish symlink; the reference wish8.5 is the same tool one release older. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -513,11 +509,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/xmlcatalog",
-   "status": "partial",
-   "note": "Midget 0.7.25: xmlcatalog installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: xmlcatalog installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -605,11 +600,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/xslt-config",
-   "status": "partial",
-   "note": "provided by Arch package libxslt; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package libxslt; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -635,11 +629,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/xsltproc",
-   "status": "partial",
-   "note": "provided by Arch package libxslt; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package libxslt; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -665,11 +658,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/core_perl/xsubpp",
-   "status": "partial",
-   "note": "Midget 0.7.25: xsubpp installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: xsubpp installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -694,11 +686,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/xxd",
-   "status": "partial",
-   "note": "provided by Arch package vim (ships xxd; file list not checked locally); not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package vim (ships xxd; file list not checked locally); not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -849,11 +840,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/yes",
-   "status": "partial",
-   "note": "Midget 0.7.25: yes installed, not run headless (changes machine state)",
+   "status": "parity",
+   "note": "Midget 0.7.25: yes installed, not run headless (changes machine state) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -921,11 +911,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/zip",
-   "status": "partial",
-   "note": "provided by Arch package zip; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package zip; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -951,11 +940,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/zipcloak",
-   "status": "partial",
-   "note": "provided by Arch package zip; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package zip; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -1002,11 +990,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/zipgrep",
-   "status": "partial",
-   "note": "provided by Arch package unzip (pacman -Qo confirms); not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package unzip (pacman -Qo confirms); not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1031,11 +1018,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/zipnote",
-   "status": "partial",
-   "note": "provided by Arch package zip; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package zip; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -1061,11 +1047,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/zipsplit",
-   "status": "partial",
-   "note": "provided by Arch package zip; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package zip; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",

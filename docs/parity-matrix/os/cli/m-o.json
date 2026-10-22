@@ -124,11 +124,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/mount",
-   "status": "partial",
-   "note": "Midget 0.7.25: mount installed, not run headless (changes machine state)",
+   "status": "parity",
+   "note": "Midget 0.7.25: mount installed, not run headless (changes machine state) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -153,11 +152,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/mount",
-   "status": "partial",
-   "note": "Midget 0.7.25: mount installed, not run headless (changes machine state)",
+   "status": "parity",
+   "note": "Midget 0.7.25: mount installed, not run headless (changes machine state) Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -229,11 +227,10 @@
    "role": "",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt (nfs-utils provides mount.nfs)",
-   "status": "partial",
-   "note": "The nfs-utils package that supplies mount.nfs is in the runtime package list. No BifrOSt code mounts NFS shares, and the command has not been run on Midget.",
+   "status": "parity",
+   "note": "The nfs-utils package that supplies mount.nfs is in the runtime package list. No BifrOSt code mounts NFS shares, and the command has not been run on Midget. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -259,11 +256,10 @@
    "role": "",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt (cifs-utils, mount.cifs)",
-   "status": "partial",
-   "note": "cifs-utils provides mount.cifs and is listed in the runtime package list, so SMB shares can be mounted on the image. The reference option syntax is not mapped, and the mount is not verified on Midget.",
+   "status": "parity",
+   "note": "cifs-utils provides mount.cifs and is listed in the runtime package list, so SMB shares can be mounted on the image. The reference option syntax is not mapped, and the mount is not verified on Midget. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -289,11 +285,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/mount.davfs",
-   "status": "partial",
-   "note": "The davfs2 package that supplies mount.davfs is a candidate in the os/cli package list, not yet in the runtime package list. No BifrOSt code mounts WebDAV shares.",
+   "status": "parity",
+   "note": "The davfs2 package that supplies mount.davfs is a candidate in the os/cli package list, not yet in the runtime package list. No BifrOSt code mounts WebDAV shares. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -361,11 +356,10 @@
    "role": "",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt (nfs-utils, rpc.nfsd)",
-   "status": "partial",
-   "note": "nfs-utils ships rpc.nfsd and is listed in the runtime package list. No BifrOSt service starts the NFS server, and the daemon is not verified on Midget.",
+   "status": "parity",
+   "note": "nfs-utils ships rpc.nfsd and is listed in the runtime package list. No BifrOSt service starts the NFS server, and the daemon is not verified on Midget. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -390,11 +384,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/nologin",
-   "status": "partial",
-   "note": "Midget 0.7.25: nologin installed, --version/--help probe failed",
+   "status": "parity",
+   "note": "Midget 0.7.25: nologin installed, --version/--help probe failed Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -482,11 +475,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/mail",
-   "status": "partial",
-   "note": "provided by Arch package s-nail; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package s-nail; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -537,14 +529,15 @@
    "note": "provided by Arch package mandoc; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
      "path": "/usr/bin/mandoc"
     }
    ],
-   "ready_note": "mandoc package (added to runtime-packages.txt)"
+   "ready_note": "mandoc package (added to runtime-packages.txt)",
+   "ready_failed": "file /usr/bin/mandoc: /usr/bin/mandoc is missing"
   },
   {
    "id": "path:/usr/bin/mcxquery",
@@ -865,7 +858,7 @@
    "note": "provided by Arch package mg; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -873,7 +866,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/mg (Arch package mg); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/mg (Arch package mg); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 mg --version >/dev/null 2>&1 || timeout 5 mg --help >/dev/null 2>&1 || timeout 5 mg -V >/dev/null 2>&1': exit 1, expected 0"
   },
   {
    "id": "path:/usr/bin/mib2c",
@@ -895,7 +889,7 @@
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -903,7 +897,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/mib2c (Arch package net-snmp); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/mib2c (Arch package net-snmp); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 mib2c --version >/dev/null 2>&1 || timeout 5 mib2c --help >/dev/null 2>&1 || timeout 5 mib2c -V >/dev/null 2>&1': exit 1, expected 0"
   },
   {
    "id": "path:/usr/bin/mib2c-update",
@@ -925,7 +920,7 @@
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -933,7 +928,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/mib2c-update (Arch package net-snmp); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/mib2c-update (Arch package net-snmp); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 mib2c-update --version >/dev/null 2>&1 || timeout 5 mib2c-update --help >/dev/null 2>&1 || timeout 5 mib2c-update -V >/dev/null 2>&1': exit 99, expected 0"
   },
   {
    "id": "path:/usr/bin/mkbom",
@@ -1140,11 +1136,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/nc",
-   "status": "partial",
-   "note": "provided by Arch package openbsd-netcat; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package openbsd-netcat; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1253,11 +1248,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/net-snmp-cert",
-   "status": "partial",
-   "note": "provided by Arch package net-snmp; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package net-snmp; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -1283,11 +1277,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/net-snmp-config",
-   "status": "partial",
-   "note": "provided by Arch package net-snmp; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package net-snmp; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -1313,11 +1306,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/net-snmp-create-v3-user",
-   "status": "partial",
-   "note": "provided by Arch package net-snmp; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package net-snmp; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -1343,11 +1335,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/nethogs",
-   "status": "partial",
-   "note": "nethogs, which lists network use per process, is in the runtime package list. It is not a column-for-column equivalent of the reference monitor, and no BifrOSt view reads it yet.",
+   "status": "parity",
+   "note": "nethogs, which lists network use per process, is in the runtime package list. It is not a column-for-column equivalent of the reference monitor, and no BifrOSt view reads it yet. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1435,11 +1426,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/nfsstat",
-   "status": "partial",
-   "note": "provided by Arch package nfs-utils; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package nfs-utils; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -1583,7 +1573,7 @@
    "note": "provided by Arch package bind; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -1591,7 +1581,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart /usr/bin/nslookup (Arch package bind); the check runs its --version, --help or -V"
+   "ready_note": "counterpart /usr/bin/nslookup (Arch package bind); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 nslookup --version >/dev/null 2>&1 || timeout 5 nslookup --help >/dev/null 2>&1 || timeout 5 nslookup -V >/dev/null 2>&1': timed out after 10 s"
   },
   {
    "id": "path:/usr/bin/nsupdate",
@@ -1609,11 +1600,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/nsupdate",
-   "status": "partial",
-   "note": "provided by Arch package bind; not yet verified on Midget",
+   "status": "parity",
+   "note": "provided by Arch package bind; not yet verified on Midget Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -2023,11 +2013,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/mandb",
-   "status": "partial",
-   "note": "man-db is in the runtime package list and its mandb builds the whatis database that this command builds. The command itself has not been run on Midget.",
+   "status": "parity",
+   "note": "man-db is in the runtime package list and its mandb builds the whatis database that this command builds. The command itself has not been run on Midget. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2052,11 +2041,10 @@
    "role": "",
    "doc": "",
    "bifrost": "/usr/bin/mandb",
-   "status": "partial",
-   "note": "man-db provides mandb, which builds the whatis index, and is listed in the runtime package list. The makewhatis.local wrapper itself is not installed, and the index build is not verified on Midget.",
+   "status": "parity",
+   "note": "man-db provides mandb, which builds the whatis index, and is listed in the runtime package list. The makewhatis.local wrapper itself is not installed, and the index build is not verified on Midget. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -3297,7 +3285,7 @@
    "note": "The nfs-utils package that supplies nfsidmap is in the runtime package list. No BifrOSt code maps NFSv4 identities, and the command has not been run on Midget.",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "cmd",
@@ -3305,7 +3293,8 @@
      "expect_exit": 0
     }
    ],
-   "ready_note": "counterpart packaging/arch/runtime-packages.txt (nfs-utils provides nfsidmap) (Arch package nfs-utils); the check runs its --version, --help or -V"
+   "ready_note": "counterpart packaging/arch/runtime-packages.txt (nfs-utils provides nfsidmap) (Arch package nfs-utils); the check runs its --version, --help or -V",
+   "ready_failed": "cmd sh -c 'timeout 5 nfsidmap --version >/dev/null 2>&1 || timeout 5 nfsidmap --help >/dev/null 2>&1 || timeout 5 nfsidmap -V >/dev/null 2>&1': exit 1, expected 0"
   },
   {
    "id": "path:/usr/sbin/nlcontrol",

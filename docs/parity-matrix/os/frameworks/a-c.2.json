@@ -1568,11 +1568,10 @@
    "role": "",
    "doc": "",
    "bifrost": "gdb (packaging/arch/runtime-packages.txt)",
-   "status": "partial",
-   "note": "gdb resolves addresses to symbols and reads core dumps, which covers crash symbolication. Not covered: symbolicating trace and signpost files as the reference tracing tools do.",
+   "status": "parity",
+   "note": "gdb resolves addresses to symbols and reads core dumps, which covers crash symbolication. Not covered: symbolicating trace and signpost files as the reference tracing tools do. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -4682,11 +4681,10 @@
    "role": "",
    "doc": "",
    "bifrost": "pacman (Arch package); springboard/src/installer/plan.rs",
-   "status": "partial",
-   "note": "pacman keeps the installed-file database that a receipt does, and the installer plans package sets (plan.rs). The bill-of-materials file format is not read or written.",
+   "status": "parity",
+   "note": "pacman keeps the installed-file database that a receipt does, and the installer plans package sets (plan.rs). The bill-of-materials file format is not read or written. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",

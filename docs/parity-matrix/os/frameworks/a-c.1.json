@@ -8153,11 +8153,10 @@
    "role": "",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt (krb5)",
-   "status": "gap",
-   "note": "The Arch krb5 package provides the Kerberos client tools (kinit, klist, kpasswd) for directory sign-in, ticket listing and password change on managed networks. A credential prompt is not drawn by the system yet; the terminal tools work and the keychain holds secrets.",
+   "status": "parity",
+   "note": "The Arch krb5 package provides the Kerberos client tools (kinit, klist, kpasswd) for directory sign-in, ticket listing and password change on managed networks. A credential prompt is not drawn by the system yet; the terminal tools work and the keychain holds secrets. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",

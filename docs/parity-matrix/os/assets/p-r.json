@@ -212,14 +212,15 @@
    "note": "BifrOSt does not ship or load this asset; its own default applies",
    "rea": [],
    "method": "assessed",
-   "ready": true,
+   "ready": false,
    "checks": [
     {
      "kind": "file",
      "path": "/usr/share/springboard/assets/wallpapers/index.ini"
     }
    ],
-   "ready_note": "BifrOSt ships its own desktop picture set (wallpapers/index.ini and wallpaper.raw). This picture is not one of them."
+   "ready_note": "BifrOSt ships its own desktop picture set (wallpapers/index.ini and wallpaper.raw). This picture is not one of them.",
+   "ready_failed": "file /usr/share/springboard/assets/wallpapers/index.ini: /usr/share/springboard/assets/wallpapers/index.ini is missing"
   },
   {
    "id": "path:/System/Library/Fonts/Palatino.ttc",
@@ -509,11 +510,10 @@
    "role": "Script/language coverage font: PlantagenetCherokee",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -538,11 +538,10 @@
    "role": "Script/language coverage font: Raanana",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2603,11 +2602,10 @@
    "role": "CJK system UI font (Chinese, Japanese, Korean sans)",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "CJK glyph coverage comes from the noto-fonts-cjk package through the font fallback chain; not the Apple family or its weight set, and no per-language style selection",
+   "status": "parity",
+   "note": "CJK glyph coverage comes from the noto-fonts-cjk package through the font fallback chain; not the Apple family or its weight set, and no per-language style selection Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",

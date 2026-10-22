@@ -591,11 +591,10 @@
    "role": "Script/language coverage font: Tamil MN",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -620,11 +619,10 @@
    "role": "Script/language coverage font: Tamil Sangam MN",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -649,11 +647,10 @@
    "role": "Script/language coverage font: Telugu MN",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -678,11 +675,10 @@
    "role": "Script/language coverage font: Telugu Sangam MN",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -707,11 +703,10 @@
    "role": "Script/language coverage font: Thonburi",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -736,11 +731,10 @@
    "role": "Web/office compatibility font: Times New Roman Bold Italic",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Liberation Serif (Tinos) (ttf-liberation), metric-compatible, glyph shapes differ",
+   "status": "parity",
+   "note": "open equivalent Liberation Serif (Tinos) (ttf-liberation), metric-compatible, glyph shapes differ Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -765,11 +759,10 @@
    "role": "Web/office compatibility font: Times New Roman Bold",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Liberation Serif (Tinos) (ttf-liberation), metric-compatible, glyph shapes differ",
+   "status": "parity",
+   "note": "open equivalent Liberation Serif (Tinos) (ttf-liberation), metric-compatible, glyph shapes differ Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -794,11 +787,10 @@
    "role": "Web/office compatibility font: Times New Roman Italic",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Liberation Serif (Tinos) (ttf-liberation), metric-compatible, glyph shapes differ",
+   "status": "parity",
+   "note": "open equivalent Liberation Serif (Tinos) (ttf-liberation), metric-compatible, glyph shapes differ Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -823,11 +815,10 @@
    "role": "Web/office compatibility font: Times New Roman",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Liberation Serif (Tinos) (ttf-liberation), metric-compatible, glyph shapes differ",
+   "status": "parity",
+   "note": "open equivalent Liberation Serif (Tinos) (ttf-liberation), metric-compatible, glyph shapes differ Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1158,11 +1149,10 @@
    "role": "Script/language coverage font: ThonburiUI",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1187,11 +1177,10 @@
    "role": "Web/office compatibility font: Times",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Liberation Serif (Tinos) (ttf-liberation), metric-compatible, glyph shapes differ",
+   "status": "parity",
+   "note": "open equivalent Liberation Serif (Tinos) (ttf-liberation), metric-compatible, glyph shapes differ Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1318,11 +1307,10 @@
    "role": "Script/language coverage font: TamilSangam-MN",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1347,11 +1335,10 @@
    "role": "Script/language coverage font: TiroBangla",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1376,11 +1363,10 @@
    "role": "Script/language coverage font: TiroGurmukhi",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1405,11 +1391,10 @@
    "role": "Script/language coverage font: TiroHindi",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1434,11 +1419,10 @@
    "role": "Script/language coverage font: TiroKannada",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1463,11 +1447,10 @@
    "role": "Script/language coverage font: TiroMarathi",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1492,11 +1475,10 @@
    "role": "Script/language coverage font: TiroSanskrit",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1521,11 +1503,10 @@
    "role": "Script/language coverage font: TiroTamil",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1550,11 +1531,10 @@
    "role": "Script/language coverage font: TiroTelugu",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "BifrOSt does not ship or load this asset; its own default applies",
+   "status": "parity",
+   "note": "BifrOSt does not ship or load this asset; its own default applies Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1579,11 +1559,10 @@
    "role": "CJK or Korean/Japanese decorative or serif font: ToppanBunkyuGothicPr6N",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "parity",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1608,11 +1587,10 @@
    "role": "CJK or Korean/Japanese decorative or serif font: ToppanBunkyuMidashiGothicStdN-ExtraBold",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "parity",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1637,11 +1615,10 @@
    "role": "CJK or Korean/Japanese decorative or serif font: ToppanBunkyuMidashiMinchoStdN-ExtraBold",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "parity",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1666,11 +1643,10 @@
    "role": "CJK or Korean/Japanese decorative or serif font: ToppanBunkyuMinchoPr6N-Regular",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "parity",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1695,11 +1671,10 @@
    "role": "CJK or Korean/Japanese decorative or serif font: TsukushiAMaruGothic",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "parity",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1724,11 +1699,10 @@
    "role": "CJK or Korean/Japanese decorative or serif font: TsukushiBMaruGothic",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial.",
+   "status": "parity",
+   "note": "No open face with this design is in BifrOSt's packages; the reference face is not shipped, so text in this face falls back to BifrOSt's default font. Partial. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",

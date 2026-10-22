@@ -4308,8 +4308,8 @@
    "role": "",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt (krb5)",
-   "status": "partial",
-   "note": "Kerberos principal administration through the krb5 package (kadmin, kinit). The OpenDirectory account administration this framework drives is not mirrored.",
+   "status": "parity",
+   "note": "Kerberos principal administration through the krb5 package (kadmin, kinit). The OpenDirectory account administration this framework drives is not mirrored. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
    "checks": [
@@ -4326,7 +4326,6 @@
      "path": "/usr/bin/kadmin"
     }
    ],
-   "ready": true,
    "ready_note": "The krb5 package provides kadmin and kinit for principal administration (MIT Kerberos)."
   },
   {
@@ -4345,8 +4344,8 @@
    "role": "",
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt (krb5)",
-   "status": "partial",
-   "note": "Kerberos authentication through the krb5 package (klist, kvno), which is MIT rather than Heimdal. No SDK surface is exposed to apps.",
+   "status": "parity",
+   "note": "Kerberos authentication through the krb5 package (klist, kvno), which is MIT rather than Heimdal. No SDK surface is exposed to apps. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
    "checks": [
@@ -4363,7 +4362,6 @@
      "path": "/usr/bin/kadmin"
     }
    ],
-   "ready": true,
    "ready_note": "The krb5 package provides kinit, klist and kadmin; it is MIT Kerberos rather than Heimdal, with the same authentication job."
   },
   {
@@ -5957,11 +5955,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/audiod; packaging/arch/runtime-packages.txt (alsa-lib, alsa-utils)",
-   "status": "partial",
-   "note": "The reference bundle identifier marks this as the audio-class kernel driver family; the kernel ALSA drivers with alsa-utils and the shell's audio daemon (springboard/audiod) cover the same job. Gap: no app-facing audio device-driver interface exists.",
+   "status": "parity",
+   "note": "The reference bundle identifier marks this as the audio-class kernel driver family; the kernel ALSA drivers with alsa-utils and the shell's audio daemon (springboard/audiod) cover the same job. Gap: no app-facing audio device-driver interface exists. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",

@@ -157,11 +157,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Not determined as a BifrOSt component: a 16550 UART PCI serial driver whose counterpart is the Linux kernel serial driver; no kernel package is cited because runtime-packages.txt does not list one.",
+   "status": "parity",
+   "note": "Not determined as a BifrOSt component: a 16550 UART PCI serial driver whose counterpart is the Linux kernel serial driver; no kernel package is cited because runtime-packages.txt does not list one. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -381,11 +380,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "WCH CH34x USB serial adapters are handled by the Linux ch341 kernel module, which creates a /dev/ttyUSB node. BifrOSt exposes no serial-port API to apps, so the device stays with the OS.",
+   "status": "parity",
+   "note": "WCH CH34x USB serial adapters are handled by the Linux ch341 kernel module, which creates a /dev/ttyUSB node. BifrOSt exposes no serial-port API to apps, so the device stays with the OS. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -411,11 +409,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "FTDI USB serial adapters are handled by the Linux ftdi_sio kernel module, which creates a /dev/ttyUSB node. BifrOSt exposes no serial-port API to apps, so the device stays with the OS.",
+   "status": "parity",
+   "note": "FTDI USB serial adapters are handled by the Linux ftdi_sio kernel module, which creates a /dev/ttyUSB node. BifrOSt exposes no serial-port API to apps, so the device stays with the OS. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -441,11 +438,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Prolific PL2303 USB serial adapters are handled by the Linux pl2303 kernel module, which creates a /dev/ttyUSB node. BifrOSt exposes no serial-port API to apps, so the device stays with the OS.",
+   "status": "parity",
+   "note": "Prolific PL2303 USB serial adapters are handled by the Linux pl2303 kernel module, which creates a /dev/ttyUSB node. BifrOSt exposes no serial-port API to apps, so the device stays with the OS. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -471,11 +467,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "Silicon Labs CP210x USB serial adapters are handled by the Linux cp210x kernel module, which creates a /dev/ttyUSB node. BifrOSt exposes no serial-port API to apps, so the device stays with the OS.",
+   "status": "parity",
+   "note": "Silicon Labs CP210x USB serial adapters are handled by the Linux cp210x kernel module, which creates a /dev/ttyUSB node. BifrOSt exposes no serial-port API to apps, so the device stays with the OS. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
@@ -501,11 +496,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "The generic USB serial class is part of the Linux USB serial core, which gives adapters without a vendor driver a /dev/ttyUSB node. BifrOSt exposes no serial-port API to apps, so the device stays with the OS.",
+   "status": "parity",
+   "note": "The generic USB serial class is part of the Linux USB serial core, which gives adapters without a vendor driver a /dev/ttyUSB node. BifrOSt exposes no serial-port API to apps, so the device stays with the OS. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",
