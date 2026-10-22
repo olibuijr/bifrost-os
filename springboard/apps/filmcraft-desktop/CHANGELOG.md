@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.10.0
+
+- Upstream filmcraft v0.10.0.
+  > [!NOTE]
+  > **FreeBSD aarch64 is dropped from this release.** We had to cut releases, and we cannot build this target within the 5-hour CI limit for any of the Craft apps, so we are dropping it for now. This is a known blocker, flagged for a future fix in storytold/craft-common-actions#39. FreeBSD x86_64 and every other platform are included.
+  ## What's Changed
+  * Skip GPU goldens when Rgba32Float is not renderable by @vbasky in https://github.com/storytold/filmcraft/pull/1315
+  * [agent] Dialog buttons show the pointing hand on hover by @alexng353 in https://github.com/storytold/filmcraft/pull/1777
+
 ## 0.9.0
 
 - Upstream filmcraft v0.9.0.
