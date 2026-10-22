@@ -12,6 +12,7 @@ pub mod json;
 pub mod net;
 /// In-app products listed from the catalogue, with price, ownership and what the store can offer.
 pub mod products;
+mod review_sheet;
 mod sheet;
 
 use super::cache::TextCache;
@@ -27,6 +28,7 @@ use crate::scene::STATUS_PT;
 use api::StoreApp;
 use bifrost_ui::entitlement::Ledger;
 use bifrost_ui::purchase::Outcome;
+use review_sheet::{ReviewOut, ReviewSheet};
 use sheet::{sheet_buttons, Sheet, SheetOut};
 use install::InstalledApp;
 use std::collections::{HashMap, HashSet};
@@ -64,6 +66,9 @@ const TODAY_MARGIN: f32 = 34.0;
 const LIST_ROW: f32 = 71.0;
 const LIST_TOP: f32 = 119.0;
 fn bg() -> u32 { CONTENT_BG.now() }
+/// Where the reviews written on this PC are kept, under the store root.
+const REVIEWS_FILE: &str = "store-reviews.json";
+
 fn cell() -> u32 { CARD_BG.now() }
 fn fill() -> u32 { FIELD_BG.now() }
 fn sep() -> u32 { SEPARATOR_C.now() }
@@ -101,6 +106,8 @@ enum Target {
     SearchField,
     /// "Remove" on an installed app's page: the first tap asks, the second removes
     Remove(String),
+    /// "Rate" on an installed app's page: opens the rating sheet
+    Rate(String),
 }
 
 /// A Today card built from the catalogue.
@@ -253,6 +260,10 @@ pub struct AppStore {
     bought: Ledger,
     /// the open purchase sheet of a paid app
     sheet: Option<Sheet>,
+    /// the open rating sheet of an installed app
+    review: Option<ReviewSheet>,
+    /// the reviews written on this PC, kept in `store-reviews.json` (`bifrost_core::app_review::ReviewBook`)
+    reviews: bifrost_core::app_review::ReviewBook,
     /// the result line under Restore Purchases
     restored: Option<String>,
     /// the Search tab's query, typed from the on-screen or a hardware keyboard
@@ -302,6 +313,7 @@ impl AppStore {
     pub fn new(ui: &Ui, w: i32, h: i32, root: PathBuf) -> Self {
         let catalog = api::load_cache(&root.join("store-cache.json")).unwrap_or_default();
         let installed = install::installed_in(&root);
+        let reviews = bifrost_core::app_review::ReviewBook::from_text(&std::fs::read_to_string(root.join(REVIEWS_FILE)).unwrap_or_default());
         let desktop = true;
         let sidebar = if desktop { (ui.pt(200.0) as i32).min(w / 3) } else { 0 };
         AppStore {
@@ -340,6 +352,8 @@ impl AppStore {
             dirty: true,
             bought: Ledger::new(),
             sheet: None,
+            review: None,
+            reviews,
             restored: None,
             query: String::new(),
             keyboard_wanted: false,
@@ -849,6 +863,22 @@ impl AppStore {
 
     /// Typed text for the Search tab (from the on-screen keyboard or a hardware keyboard); other keys are ignored.
     pub fn key(&mut self, out: Out) {
+        if let Some(r) = self.review.as_mut() {
+            match out {
+                Out::Text(s) => {
+                    r.type_text(&s);
+                }
+                Out::Backspace => {
+                    r.backspace();
+                }
+                Out::Enter => {
+                    r.type_text("\n");
+                }
+                _ => return,
+            }
+            self.dirty = true;
+            return;
+        }
         if self.tab != Tab::Search || self.page.is_some() || self.sheet.is_some() {
             return;
         }
@@ -941,6 +971,12 @@ impl AppStore {
         (self.w as f32 - ui.pt(MARGIN) - bw, self.top(ui) - self.scroll.offset() + ui.pt(100.0), bw, bh)
     }
 
+    /// Rect (px) of the Rate button: beside the Get or Open button of an installed app's page.
+    fn rate_btn_rect(&self, ui: &Ui) -> (f32, f32, f32, f32) {
+        let (x, y, w, h) = self.page_btn_rect(ui);
+        (x + w + ui.pt(12.0), y, w, h)
+    }
+
     fn whatsnew_height(&self) -> f32 {
         match self.page.as_ref() {
             Some(p) if !p.hist.is_empty() => 16.0 + 78.0 + 22.0 * p.whatsnew.len() as f32 + 8.0 + 44.0,
@@ -1018,6 +1054,12 @@ impl AppStore {
                 let (rx, ry, rw, rh) = self.remove_btn_rect(ui);
                 if x >= rx && x < rx + rw && y >= ry && y < ry + rh {
                     return Some(Target::Remove(p.id.clone()));
+                }
+            }
+            if self.installed_version(&p.id).is_some() {
+                let (rx, ry, rw, rh) = self.rate_btn_rect(ui);
+                if x >= rx && x < rx + rw && y >= ry && y < ry + rh {
+                    return Some(Target::Rate(p.id.clone()));
                 }
             }
             let (bx, by, bw, bh) = self.page_btn_rect(ui);
@@ -1166,6 +1208,7 @@ impl AppStore {
             Target::Rollback(id) => self.rollback(&id),
             Target::Restore => self.restore_purchases(),
             Target::SearchField => self.keyboard_wanted = true,
+            Target::Rate(id) => self.open_review(&id),
             Target::Remove(id) => {
                 if remove_step(&mut self.confirm_remove, &id) {
                     self.remove(&id);
@@ -1202,7 +1245,57 @@ impl AppStore {
         }
     }
 
+    /// Opens the rating sheet for an installed app, with the review kept before to edit.
+    fn open_review(&mut self, id: &str) {
+        let Some(a) = self.find(id).cloned() else { return };
+        self.review = Some(ReviewSheet::open(&a.id, &a.name, self.reviews.get(&a.id)));
+        self.dirty = true;
+    }
+
+    /// While the rating sheet is up it takes every touch; a tap on a field asks the shell for the keyboard.
+    fn touch_review(&mut self, ui: &Ui, ev: Event) {
+        let dx = if self.desktop { self.sidebar as f32 } else { 0.0 };
+        let ev = match ev {
+            Event::Down(x, y) => Event::Down(x - dx, y),
+            Event::Move(x, y) => Event::Move(x - dx, y),
+            Event::Up(x, y) => Event::Up(x - dx, y),
+            other => other,
+        };
+        let (w, h) = (self.w, self.h);
+        let before = self.review.as_ref().and_then(ReviewSheet::focus);
+        let out = self.review.as_mut().and_then(|r| r.touch(ui, w, h, ev));
+        self.dirty = true;
+        match out {
+            Some(ReviewOut::Send(review)) => {
+                if let Some(open) = self.review.take() {
+                    self.keep_review(&open.id, &review);
+                }
+            }
+            Some(ReviewOut::Cancelled) => self.review = None,
+            None => {
+                let now = self.review.as_ref().and_then(ReviewSheet::focus);
+                if now.is_some() && now != before {
+                    self.keyboard_wanted = true;
+                }
+            }
+        }
+    }
+
+    /// Keeps a sent review in the book and writes the book. Nothing is sent anywhere: the catalogue takes no reviews yet.
+    fn keep_review(&mut self, id: &str, review: &bifrost_core::app_review::Review) {
+        if self.reviews.set(id, review).is_ok() {
+            let _ = std::fs::create_dir_all(&self.root);
+            if let Err(e) = std::fs::write(self.root.join(REVIEWS_FILE), self.reviews.to_text()) {
+                eprintln!("springboard: {REVIEWS_FILE}: {e}");
+            }
+        }
+    }
+
     pub fn touch(&mut self, ui: &Ui, ev: Event, t: f64) {
+        if self.review.is_some() {
+            self.touch_review(ui, ev);
+            return;
+        }
         if self.sheet.is_some() {
             self.touch_sheet(ui, ev, t);
             return;
@@ -1563,6 +1656,12 @@ impl AppStore {
         let b = self.button(&a);
         let r = self.page_btn_rect(ui);
         self.draw_button(&mut c, ui, r, b);
+        if self.installed_version(&a.id).is_some() {
+            let (rx, ry, rw, rh) = self.rate_btn_rect(ui);
+            c.fill_rrect(rx, ry, rw, rh, CAPSULE_RADIUS, fill());
+            let lw = ui.measure("Rate", 15.0, Weight::Bold);
+            self.put(&mut c, ui, "Rate", 15.0, Weight::Bold, TINT, false, rx + (rw - lw) / 2.0, ry + rh / 2.0);
+        }
         if self.can_remove(&a.id) {
             let (rx, ry, rw, rh) = self.remove_btn_rect(ui);
             let text = if self.confirm_remove.as_deref() == Some(a.id.as_str()) { "Confirm" } else { "Remove" };
@@ -1759,6 +1858,9 @@ impl AppStore {
         self.draw_bars(s, ui);
         if self.sheet.is_some() {
             self.draw_sheet(s, ui);
+        }
+        if self.review.is_some() {
+            self.draw_review(s, ui);
         }
     }
 
@@ -2129,6 +2231,40 @@ mod tests {
         let open = s.sheet.as_ref().expect("the sheet is up");
         assert_eq!((open.id.as_str(), open.purchase.price.display()), ("is.o.chess", "990 ISK".to_string()));
         assert_eq!(s.button(&chess), Btn::Get);
+    }
+
+    #[test]
+    fn rating_an_app_keeps_the_review_and_reopens_it_for_editing() {
+        let ui = crate::shell::tests::ui();
+        let mut s = store();
+        let _ = std::fs::remove_file(s.root.join(REVIEWS_FILE));
+        s.reviews = bifrost_core::app_review::ReviewBook::new();
+        let sidebar = s.sidebar as f32;
+        let to_window = |r: (f32, f32, f32, f32)| (r.0 + r.2 / 2.0 + sidebar, r.1 + r.3 / 2.0);
+        s.activate(&ui, Target::Rate("is.o.chess".into()));
+        assert_eq!(s.review.as_ref().map(|r| r.id.as_str()), Some("is.o.chess"));
+        let (x, y) = to_window(review_sheet::rating_rects(&ui, s.w, s.h)[3]);
+        s.touch(&ui, Event::Up(x, y), 0.0);
+        let (x, y) = to_window(review_sheet::body_rect(&ui, s.w, s.h));
+        s.touch(&ui, Event::Up(x, y), 0.0);
+        assert!(s.take_keyboard_request(), "a tap on a field raises the keyboard");
+        s.key(Out::Text("Fun to play".into()));
+        let (x, y) = to_window(review_sheet::buttons(&ui, s.w, s.h).0);
+        s.touch(&ui, Event::Up(x, y), 0.0);
+        assert!(s.review.is_none(), "Send closes the sheet");
+        let kept = s.reviews.get("is.o.chess").expect("the review is in the book");
+        assert_eq!((kept.stars, kept.body.as_str()), (4, "Fun to play"));
+        // the book is on disk, so a new store opens the sheet with the review to edit
+        let again = AppStore::new(&ui, 1000, 1400, s.root.clone());
+        assert_eq!(again.reviews.get("is.o.chess"), s.reviews.get("is.o.chess"));
+        s.activate(&ui, Target::Rate("is.o.chess".into()));
+        assert_eq!(s.review.as_ref().map(|r| (r.stars(), r.body().to_string())), Some((4, "Fun to play".to_string())));
+        let (x, y) = to_window(review_sheet::buttons(&ui, s.w, s.h).1);
+        s.touch(&ui, Event::Up(x, y), 0.0);
+        assert!(s.review.is_none(), "Cancel closes it and keeps the earlier review");
+        assert_eq!(s.reviews.get("is.o.chess").map(|r| r.stars), Some(4));
+        s.activate(&ui, Target::Rate("is.o.nothing".into()));
+        assert!(s.review.is_none(), "an app the catalogue does not list has no sheet");
     }
 
     #[test]
