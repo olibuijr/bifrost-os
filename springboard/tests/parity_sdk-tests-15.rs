@@ -96,8 +96,8 @@ fn updates_list_newer_user_apps_and_system_packages_but_never_services() {
 fn an_app_built_for_another_sdk_protocol_is_no_update_for_this_shell() {
     let cat = catalog(&[entry("app.new-protocol", "2.0.0", "app", "0.1.0", 7), entry("app.any", "2.0.0", "app", "0.1.0", 0)]);
     let have = [installed("app.new-protocol", "1.0.0", "app"), installed("app.any", "1.0.0", "app")];
-    assert_eq!(ids(&updates_for(&cat, &have, 1)), ["app.any"]);
-    assert_eq!(ids(&updates_for(&cat, &have, 7)), ["app.new-protocol", "app.any"]);
+    assert_eq!(ids(&updates_for(&cat, &have, 1, "x86_64-linux")), ["app.any"]);
+    assert_eq!(ids(&updates_for(&cat, &have, 7, "x86_64-linux")), ["app.new-protocol", "app.any"]);
 }
 
 // --- managed app checks: timing and banner identity ---------------------------------------------------------------
