@@ -25,6 +25,58 @@ import pc_mirror
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 POOL = os.path.join(REPO, "out/pc-repo/bifrost/x86_64")
 PIDF = os.path.join(REPO, "out/pc-repo/server.pid")
+PC_CATALOG = "https://bifrost.olibuijr.com/api/v1/pc/apps.json"
+APPS_DIR = os.path.join(REPO, "springboard/apps")
+
+
+def version_key(v):
+    """A version as a comparable list: numeric parts compare as numbers ('0.16.2' > '0.9.10')."""
+    return [int(x) if x.isdigit() else 0 for x in re.split(r"[.\-+]", str(v))]
+
+
+def outdated_apps(store, manifests):
+    """App directory names whose manifest version is newer than the store's (or that the store lacks). `store` maps id
+    to the store's newest version; `manifests` is [(dir name, id, version, architecture)]. Only x86_64-linux apps."""
+    return [d for d, i, v, arch in manifests if arch == "x86_64-linux" and (i not in store or version_key(v) > version_key(store[i]))]
+
+
+def app_manifests(apps_dir=APPS_DIR):
+    """(dir name, id, version, architecture) of every app manifest under springboard/apps."""
+    out = []
+    for m in sorted(glob.glob(os.path.join(apps_dir, "*", "manifest.toml"))):
+        t = open(m, encoding="utf-8").read()
+        f = {k: re.search(rf'^{k}\s*=\s*"([^"]+)"', t, re.M) for k in ("id", "version", "architecture")}
+        if f["id"] and f["version"]:
+            out.append((os.path.basename(os.path.dirname(m)), f["id"].group(1), f["version"].group(1), f["architecture"].group(1) if f["architecture"] else ""))
+    return out
+
+
+def store_versions(url=PC_CATALOG):
+    """The PC store's newest version of each app id, as devices see it."""
+    import json, urllib.request
+    with urllib.request.urlopen(url, timeout=30) as r:
+        apps = json.load(r)["apps"]
+    best = {}
+    for a in apps:
+        if a["id"] not in best or version_key(a["version"]) > version_key(best[a["id"]]):
+            best[a["id"]] = a["version"]
+    return best
+
+
+def publish_outdated_apps():
+    """Publishes every app whose repo version is newer than the store's, so a system release also brings the apps:
+    devices install store updates in the background (`shell::ota`, Automatic Updates), right after the update reboot.
+    A failing app is reported and the others still go out."""
+    todo = outdated_apps(store_versions(), app_manifests())
+    failed = []
+    for name in todo:
+        print(f"pc-publish: publishing app {name} (newer than the store)", flush=True)
+        if subprocess.run([sys.executable, os.path.join(REPO, "tools/pc-app.py"), "publish", name]).returncode:
+            failed.append(name)
+    print(f"pc-publish: {len(todo) - len(failed)} of {len(todo)} newer apps published" + (f"; FAILED: {', '.join(failed)}" if failed else ""))
+    return failed
+
+
 PUBLIC_SITE = os.path.abspath(os.path.expanduser(os.environ.get(
     "BIFROST_PUBLIC_SITE", "~/Projects/bifrost-site/site")))
 ASSETS_SRC = os.path.join(REPO, "springboard/assets")
@@ -216,6 +268,7 @@ def main():
     ap.add_argument("--skip-build", action="store_true")
     ap.add_argument("--no-serve", action="store_true")
     ap.add_argument("--skip-mirror-sync", action="store_true", help="only check the 8079 mirror, do not download")
+    ap.add_argument("--skip-apps", action="store_true", help="do not publish the apps that are newer than the store")
     a = ap.parse_args()
     prof = "release" if a.release else "fast"
     t0 = time.time()
@@ -309,6 +362,9 @@ def main():
           + (f"; repo served at http://{BIND[0]}:{BIND[1]}/bifrost/x86_64 (pid {pid})" if pid else "")
           + f"; public repo exported to {public_dir} ({len(public_files)} files)"
           + (f"; signed with {sign['key']}" if sign else "; UNSIGNED"))
+    # a system release also brings the apps: the ones bumped in the repo but not in the store yet
+    if not a.skip_apps and publish_outdated_apps():
+        sys.exit("pc-publish: the system is published, some apps failed (see above)")
 
 
 if __name__ == "__main__":
