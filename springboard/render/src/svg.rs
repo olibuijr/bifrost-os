@@ -71,6 +71,38 @@ pub fn rasterize(doc: &str, out_w: u32, out_h: u32) -> Option<SvgImage> {
     Some(img)
 }
 
+/// The largest SVG document [`decode_image`] reads, in bytes.
+const MAX_DOCUMENT_BYTES: usize = 4 * 1024 * 1024;
+
+impl SvgImage {
+    /// The pixels as a renderer image (premultiplied RGBA, R in the low byte).
+    pub fn to_image(&self) -> crate::gfx::Image {
+        let mut img = crate::gfx::Image::new(self.width as usize, self.height as usize);
+        for (out, p) in img.px.iter_mut().zip(&self.pixels) {
+            *out = crate::gfx::rgba((p >> 16) as u8, (p >> 8) as u8, *p as u8, (p >> 24) as u8);
+        }
+        img
+    }
+}
+
+/// Rasterises SVG `bytes` at their intrinsic size (the root `width` and `height`, else the `viewBox`), scaled down
+/// to fit `max_side` pixels on the longer side. `None` when the bytes are not UTF-8 text with a sized root `svg`
+/// element, are over four megabytes, or the image would be empty. This is what the image decoders fall back to, so a
+/// page or a file that holds an SVG shows as a picture.
+pub fn decode_image(bytes: &[u8], max_side: usize) -> Option<crate::gfx::Image> {
+    if bytes.len() > MAX_DOCUMENT_BYTES || max_side == 0 {
+        return None;
+    }
+    let doc = std::str::from_utf8(bytes).ok()?;
+    if !doc.contains("<svg") {
+        return None;
+    }
+    let (w, h) = intrinsic_size(doc)?;
+    let k = (max_side as f32 / w.max(h)).min(1.0);
+    let (pw, ph) = (((w * k).round() as u32).max(1), ((h * k).round() as u32).max(1));
+    Some(rasterize(doc, pw, ph)?.to_image())
+}
+
 /// A 2D affine transform: `x' = a x + c y + e`, `y' = b x + d y + f`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Affine {
@@ -1220,6 +1252,27 @@ mod tests {
         assert_eq!(at(&img, 2, 2), 0xff000000);
         let butt = rasterize(r##"<svg viewBox="0 0 4 4"><path d="M2 2 L2 2" stroke="#000" stroke-width="2"/></svg>"##, 4, 4).unwrap();
         assert!(butt.pixels.iter().all(|p| *p == 0));
+    }
+
+    #[test]
+    fn an_svg_file_decodes_to_a_premultiplied_image_at_its_intrinsic_size() {
+        let doc = br##"<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" width="4" height="2"><rect width="2" height="2" fill="#ff0000" fill-opacity="0.5"/></svg>"##;
+        let img = decode_image(doc, 100).unwrap();
+        assert_eq!((img.w, img.h), (4, 2));
+        assert_eq!(img.px[0], crate::gfx::rgba(255, 0, 0, 128));
+        assert_eq!(img.px[3], 0, "outside the rect stays clear");
+    }
+
+    #[test]
+    fn a_large_svg_is_scaled_to_the_side_limit_and_garbage_is_refused() {
+        let doc = br#"<svg viewBox="0 0 400 200"><rect width="400" height="200"/></svg>"#;
+        let img = decode_image(doc, 40).unwrap();
+        assert_eq!((img.w, img.h), (40, 20));
+        assert_eq!(img.px[0], crate::gfx::rgba(0, 0, 0, 255));
+        assert!(decode_image(doc, 0).is_none());
+        assert!(decode_image(b"not an image", 40).is_none());
+        assert!(decode_image(&[0xff, 0xfe, 0xfd], 40).is_none(), "not UTF-8");
+        assert!(decode_image(b"<svg></svg>", 40).is_none(), "no size to draw at");
     }
 
     #[test]
