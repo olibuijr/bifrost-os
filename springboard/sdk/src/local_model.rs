@@ -10,8 +10,11 @@
 //! This provider adds one line saying how to call one: reply with only `{"tool_calls":[{"name":...,"arguments":{...}}]}`.
 //! A reply of that shape, or the engine's own `tool_calls` field, becomes [`Reply::Call`]; anything else is the answer.
 //!
-//! Gaps: replies are not streamed token by token (`ModelProvider` has one request and one reply), attachments are
-//! passed as a text placeholder because the provider accepts no media, and the engine itself is not started from here.
+//! Streaming: `generate` is one request and one reply; the token-by-token path is `StreamingModelProvider` in
+//! `local_model_stream` (server-sent events from the same endpoint).
+//!
+//! Gaps: attachments are passed as a text placeholder because the provider accepts no media, and the engine itself is
+//! not started from here.
 
 use bifrost_core::json::{self, Json};
 use std::io::{Read, Write};
@@ -127,13 +130,30 @@ impl LocalModelProvider {
 
     /// The request body for a transcript.
     pub fn request_body(&self, request: &Transcript) -> String {
+        self.body(request, false)
+    }
+
+    /// The request body asking the engine to stream its reply as server-sent events.
+    pub fn streaming_request_body(&self, request: &Transcript) -> String {
+        self.body(request, true)
+    }
+
+    pub(crate) fn endpoint(&self) -> &LocalEndpoint {
+        &self.endpoint
+    }
+
+    pub(crate) fn timeout(&self) -> Duration {
+        self.timeout
+    }
+
+    fn body(&self, request: &Transcript, stream: bool) -> String {
         let messages = messages_for(request);
         Json::Obj(vec![
             ("model".into(), Json::Str(self.model.clone())),
             ("messages".into(), Json::Arr(messages)),
             ("temperature".into(), Json::Num(f64::from(self.temperature))),
             ("max_tokens".into(), Json::Num(f64::from(self.max_tokens))),
-            ("stream".into(), Json::Bool(false)),
+            ("stream".into(), Json::Bool(stream)),
         ])
         .encode()
     }
@@ -209,12 +229,12 @@ fn messages_for(request: &Transcript) -> Vec<Json> {
     out
 }
 
-fn error_message(j: &Json) -> Option<String> {
+pub(crate) fn error_message(j: &Json) -> Option<String> {
     let e = j.get("error")?;
     e.as_str().map(str::to_string).or_else(|| e.str_field("message"))
 }
 
-fn call_from(item: &Json) -> Option<ToolCall> {
+pub(crate) fn call_from(item: &Json) -> Option<ToolCall> {
     // the engine's own shape nests the call under "function"; the prompted shape is flat
     let f = item.get("function").unwrap_or(item);
     let name = f.str_field("name").filter(|n| !n.is_empty())?;
@@ -226,7 +246,7 @@ fn call_from(item: &Json) -> Option<ToolCall> {
     Some(ToolCall { name, arguments })
 }
 
-fn strip_fence(text: &str) -> &str {
+pub(crate) fn strip_fence(text: &str) -> &str {
     let t = text.trim();
     let Some(inner) = t.strip_prefix("```") else { return t };
     let inner = inner.strip_prefix("json").unwrap_or(inner);
@@ -251,7 +271,12 @@ pub fn parse_reply(body: &str) -> Result<Reply, ProviderError> {
             return Ok(Reply::Call(calls));
         }
     }
-    let content = msg.get("content").and_then(Json::as_str).unwrap_or("");
+    reply_from_text(msg.get("content").and_then(Json::as_str).unwrap_or(""))
+}
+
+/// Reads the model's whole answer text: a prompted tool call (also inside a code fence) is a [`Reply::Call`], anything
+/// else is the answer.
+pub(crate) fn reply_from_text(content: &str) -> Result<Reply, ProviderError> {
     let candidate = strip_fence(content);
     if candidate.starts_with('{') {
         if let Some(list) = json::parse(candidate).ok().and_then(|o| o.get("tool_calls").and_then(Json::as_array).map(|a| a.to_vec())) {
@@ -290,14 +315,25 @@ pub fn decode_chunked(mut data: &[u8]) -> Result<Vec<u8>, String> {
     }
 }
 
-/// Splits a complete HTTP/1.1 response into its status and body.
-fn split_response(raw: &[u8]) -> Result<(u16, Vec<u8>), String> {
-    let end = raw.windows(4).position(|w| w == b"\r\n\r\n").ok_or("the engine closed the connection before the headers ended")?;
+/// What the status line and headers of a response say.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Head {
+    pub status: u16,
+    pub chunked: bool,
+    pub length: Option<usize>,
+    /// the content type is `text/event-stream`
+    pub event_stream: bool,
+    /// bytes the head took, including the blank line
+    pub size: usize,
+}
+
+/// Reads a response head from the start of `raw`; `Ok(None)` while the blank line has not arrived yet.
+pub(crate) fn parse_head(raw: &[u8]) -> Result<Option<Head>, String> {
+    let Some(end) = raw.windows(4).position(|w| w == b"\r\n\r\n") else { return Ok(None) };
     let head = std::str::from_utf8(&raw[..end]).map_err(|_| "the response headers are not text")?;
     let mut lines = head.split("\r\n");
     let status: u16 = lines.next().and_then(|l| l.split_whitespace().nth(1)).and_then(|s| s.parse().ok()).ok_or("the status line is malformed")?;
-    let mut chunked = false;
-    let mut length: Option<usize> = None;
+    let (mut chunked, mut length, mut event_stream) = (false, None, false);
     for line in lines {
         let Some((name, value)) = line.split_once(':') else { continue };
         let (name, value) = (name.trim().to_ascii_lowercase(), value.trim());
@@ -305,9 +341,18 @@ fn split_response(raw: &[u8]) -> Result<(u16, Vec<u8>), String> {
             chunked = true;
         } else if name == "content-length" {
             length = value.parse().ok();
+        } else if name == "content-type" && value.to_ascii_lowercase().starts_with("text/event-stream") {
+            event_stream = true;
         }
     }
-    let body = &raw[end + 4..];
+    Ok(Some(Head { status, chunked, length, event_stream, size: end + 4 }))
+}
+
+/// Splits a complete HTTP/1.1 response into its status and body.
+pub(crate) fn split_response(raw: &[u8]) -> Result<(u16, Vec<u8>), String> {
+    let head = parse_head(raw)?.ok_or("the engine closed the connection before the headers ended")?;
+    let (status, chunked, length) = (head.status, head.chunked, head.length);
+    let body = &raw[head.size..];
     let body = if chunked {
         decode_chunked(body)?
     } else if let Some(n) = length {
