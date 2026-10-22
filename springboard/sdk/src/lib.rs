@@ -389,6 +389,8 @@ pub mod layer_tree {
 pub mod document;
 pub mod document_package;
 pub mod revisions;
+/// The Versions browser model: saved versions of a document, change summary, preview and Restore.
+pub mod versions_browser;
 pub mod markup;
 pub mod log;
 pub mod signpost;

@@ -365,6 +365,48 @@ impl<D: Document> DocumentController<D> {
         }
     }
 
+    // ---- versions ----
+
+    /// The saved versions of a document, newest first (`GenerationalStorage`). A package keeps none.
+    pub fn versions(&self, id: DocId) -> Vec<&crate::revisions::Revision> {
+        self.revisions.list(&revision_key(id))
+    }
+
+    /// The Versions browser for a document, comparing every saved version with the content in the window. `now` is Unix
+    /// seconds and `utc_offset` the viewer's offset from UTC in seconds, for the date labels. `None` when the document is
+    /// unknown or cannot be written to bytes.
+    pub fn open_versions(&self, id: DocId, now: i64, utc_offset: i64) -> Option<crate::versions_browser::VersionsBrowser> {
+        let e = self.entry(id)?;
+        let current = e.doc.write(&e.uttype).ok()?;
+        Some(crate::versions_browser::VersionsBrowser::open(&self.revisions, &revision_key(id), &current, now, utc_offset))
+    }
+
+    /// Browse > Restore: replaces the document's content with the saved version `seq`. The document counts as edited, so
+    /// the next save writes the restored content, and the replaced content stays in the history as a version. Answered
+    /// with `Notice::Reverted` (reset the app's undo manager and views), or `Notice::Failed` when the version is unknown or
+    /// no longer reads.
+    pub fn restore_version(&mut self, id: DocId, seq: u64) -> Notice {
+        let key = revision_key(id);
+        let Some(uttype) = self.entry(id).map(|e| e.uttype.clone()) else { return failed(Some(id), None, "no such document") };
+        let Some(bytes) = self.revisions.get(&key, seq).map(|r| r.bytes.clone()) else { return failed(Some(id), None, "no such version") };
+        match D::read(&bytes, &uttype) {
+            Ok(doc) => {
+                // keep what is being replaced, so the restore can be undone from the list
+                if let Some(old) = self.entry(id).and_then(|e| e.doc.write(&e.uttype).ok()) {
+                    self.revisions.record(&key, unix_now(), &old);
+                }
+                self.revisions.restore(&key, seq, unix_now());
+                if let Some(e) = self.entry_mut(id) {
+                    e.doc = doc;
+                    e.now.touch += 1;
+                    e.edit_since = None;
+                }
+                Notice::Reverted(id)
+            }
+            Err(DocumentError(m)) => failed(Some(id), None, &m),
+        }
+    }
+
     // ---- new, open, recents ----
 
     /// `File > New`.
@@ -771,7 +813,7 @@ impl<D: Document> DocumentController<D> {
             let mut bytes = Vec::new();
             let mut reader = &file.file;
             if std::io::Seek::seek(&mut reader, std::io::SeekFrom::Start(0)).is_ok() && reader.read_to_end(&mut bytes).is_ok() {
-                self.revisions.record(&format!("document-{}", doc.0), unix_now(), &bytes);
+                self.revisions.record(&revision_key(doc), unix_now(), &bytes);
             }
         }
         if let Some(n) = untitled {
@@ -1008,6 +1050,11 @@ fn package_path(file: &std::fs::File) -> Option<PathBuf> {
 
 fn autosave_path(data_dir: &Path, n: u32) -> PathBuf {
     data_dir.join(AUTOSAVE_DIR).join(format!("untitled-{n}.autosave"))
+}
+
+/// The key a document's versions are kept under in the revision store.
+fn revision_key(id: DocId) -> String {
+    format!("document-{}", id.0)
 }
 
 /// Seconds since the epoch, for the revision store's `saved_at`. Zero when the clock is before the epoch.
@@ -1538,6 +1585,31 @@ mod tests {
         assert_eq!(revisions.len(), 1);
         assert_eq!(revisions[0].bytes, b"a".to_vec());
         assert_eq!(c.revisions.get(&key, revisions[0].seq).map(|r| r.bytes.clone()), Some(b"a".to_vec()));
+    }
+
+    #[test]
+    fn a_saved_version_can_be_browsed_and_restored_into_the_document() {
+        let m = Mock::new("versions");
+        let mut c = DocumentController::<Text>::new();
+        let id = open(&mut c, &m, "a.txt", 6, "first");
+        let save = |c: &mut DocumentController<Text>, text: &str| {
+            c.save(&m, id);
+            let req = m.next.get();
+            c.handle(&m, DocumentEvent::SaveTo(m.file(req, "a.txt", 6, ""))).unwrap();
+            c.handle(&m, DocumentEvent::Saved(m.file(req, "a.txt", 6, text))).unwrap();
+        };
+        save(&mut c, "first");
+        save(&mut c, "second");
+        assert_eq!(c.versions(id).len(), 2);
+        let first = c.versions(id)[1].seq;
+        let browser = c.open_versions(id, unix_now(), 0).unwrap();
+        assert_eq!(browser.rows().len(), 2);
+        assert_eq!(c.restore_version(id, first), Notice::Reverted(id));
+        assert_eq!(c.get(id).map(|d| d.0.clone()), Some("first".to_string()));
+        assert!(c.is_edited(id), "the restored content is unsaved until the next save");
+        assert!(c.versions(id).iter().any(|r| r.bytes == b"second".to_vec()), "the replaced content is still a version");
+        assert!(matches!(c.restore_version(id, 9999), Notice::Failed { .. }));
+        assert!(c.open_versions(DocId(777), 0, 0).is_none());
     }
 
     #[test]
