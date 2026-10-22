@@ -21,13 +21,22 @@
 //! gave that app. An event to an app outside the grants is refused with error -1743 before it is sent, and so is
 //! `doShellScript` without the shell grant.
 //!
-//! Not covered: object specifiers (reading properties and elements such as `app.notes[0].name()`); the commands of a
-//! dictionary are the whole surface. The event direction is request and reply, as in the reference: an app cannot
-//! push a notification into a running script.
+//! - Object specifiers: a property of `Application` that is not a command but the plural of a class the dictionary
+//!   declares (`[[script.class]]`) is a collection of that class. `app.notes()` reads every note, `app.notes[0]` is the
+//!   first (the index is zero-based, a negative one counts from the end), `app.notes.byName("x")` and
+//!   `app.notes.whose({name: "x"})` select by name or by one property. A specifier is read by calling it
+//!   (`app.notes[0]()`), a property of it by calling the property (`app.notes[0].name()`), set by assignment
+//!   (`app.notes[0].name = "x"`) or `.set(value)`, and the object is removed by `.delete()`. Each one goes as the core
+//!   events `getd`, `setd` and `delt`, the same records the AppleScript-style language sends, after the same grant check
+//!   and the same check of the dictionary's classes and properties (`-1728` for one it does not declare).
+//!
+//! Not covered: elements nested in an element (`app.windows[0].tabs[1]`): the event record names one class and one
+//! selector, so a specifier reaches the app's own top-level classes only. The event direction is request and reply, as
+//! in the reference: an app cannot push a notification into a running script.
 
 use bifrost_core::json::{self, Json};
 use bifrost_core::script::dictionary::{command_params, normalize_name, Dictionary};
-use bifrost_core::script::interp::{Host, ScriptError, Value, ERR_COERCION, ERR_GENERIC, ERR_NOT_HANDLED};
+use bifrost_core::script::interp::{Host, ScriptError, Value, ERR_COERCION, ERR_GENERIC, ERR_NOT_HANDLED, ERR_NO_SUCH_OBJECT};
 use boa_engine::{Context, JsResult, JsString, JsValue, NativeFunction, Source};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -164,6 +173,89 @@ impl Env {
     }
 }
 
+/// The class a plural property name (`notes`, `note folders`, `categories`) stands for, when the dictionary declares it.
+/// A singular spelling that is itself a class name is taken as well. `None` when the dictionary declares no such class.
+fn element_class(dict: &Dictionary, words: &str) -> Option<String> {
+    let words = normalize_name(words);
+    let mut candidates = vec![words.clone()];
+    if let Some(stem) = words.strip_suffix("ies") {
+        candidates.push(format!("{stem}y"));
+    }
+    if let Some(stem) = words.strip_suffix("es") {
+        candidates.push(stem.to_string());
+    }
+    if let Some(stem) = words.strip_suffix('s') {
+        candidates.push(stem.to_string());
+    }
+    candidates.into_iter().find_map(|c| dict.class(&c).map(|k| k.name.clone()))
+}
+
+impl Env {
+    /// What a property of `Application(app)` means: a dictionary command, or a collection of a declared class (with the
+    /// class's properties, empty when the class lists none). Anything else is taken as a command, so the error for an
+    /// unknown name is the one a call gives (`-1708`).
+    fn resolve(&self, app: &str, words: &str) -> Result<Json, ScriptError> {
+        self.authorize(app)?;
+        let dict = self.dictionary(app)?;
+        let kind = |k: &str| ("kind".to_string(), Json::Str(k.into()));
+        if dict.command(words).is_some() {
+            return Ok(Json::Obj(vec![kind("command")]));
+        }
+        Ok(match element_class(&dict, words) {
+            Some(class) => {
+                let props: Vec<Json> = dict.class(&class).map(|c| c.properties.iter().map(|p| Json::Str(normalize_name(p))).collect()).unwrap_or_default();
+                Json::Obj(vec![kind("elements"), ("class".into(), Json::Str(class)), ("properties".into(), Json::Arr(props))])
+            }
+            None => Json::Obj(vec![kind("command")]),
+        })
+    }
+
+    /// One core event on an object: `verb` is `getd`, `setd` or `delt`, `object` the specifier record, `property` the
+    /// property to read or write (empty for the object itself), `value` the JSON to set. The class and the property must
+    /// be declared when the dictionary declares any, as in the AppleScript-style language.
+    fn object_event(&self, app: &str, verb: &str, object: &str, property: &str, value: &str) -> Result<Json, ScriptError> {
+        self.authorize(app)?;
+        let dict = self.dictionary(app)?;
+        let mut object = json::parse(object).map_err(|e| ScriptError::new(ERR_COERCION, format!("Can't read the object: {e}")))?;
+        let class = object.str_field("class").unwrap_or_default();
+        let what = match verb {
+            "setd" => "set",
+            "delt" => "delete",
+            _ => "get",
+        };
+        if !dict.classes.is_empty() && dict.class(&class).is_none() {
+            return Err(ScriptError::new(ERR_NO_SUCH_OBJECT, format!("Can't {what} {class}.")));
+        }
+        let property = normalize_name(property);
+        if !property.is_empty() {
+            if let Some(c) = dict.class(&class) {
+                if !c.properties.is_empty() && !c.properties.iter().any(|p| normalize_name(p) == property) {
+                    return Err(ScriptError::new(ERR_NO_SUCH_OBJECT, format!("Can't {what} {property} of {class}.")));
+                }
+            }
+            if let Json::Obj(fields) = &mut object {
+                fields.push(("property".into(), Json::Str(property)));
+            }
+        }
+        let mut params = vec![("object".to_string(), object)];
+        if verb == "setd" {
+            params.push(("to".into(), json::parse(value).map_err(|e| ScriptError::new(ERR_COERCION, format!("Can't read the value: {e}")))?));
+        }
+        self.host.borrow_mut().send_event(app, "core", verb, &Json::Obj(params), EVENT_TIMEOUT_SECS)
+    }
+}
+
+fn native_resolve(_: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsResult<JsValue> {
+    let app = arg(args, 0, ctx)?;
+    let words = arg(args, 1, ctx)?;
+    reply(env(ctx).resolve(&app, &words))
+}
+
+fn native_object(_: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsResult<JsValue> {
+    let (app, verb, object, property, value) = (arg(args, 0, ctx)?, arg(args, 1, ctx)?, arg(args, 2, ctx)?, arg(args, 3, ctx)?, arg(args, 4, ctx)?);
+    reply(env(ctx).object_event(&app, &verb, &object, &property, &value))
+}
+
 fn js_string(s: &str) -> JsValue {
     JsValue::from(JsString::from(s))
 }
@@ -254,12 +346,50 @@ function call(name,...args){
   return r.result;
 }
 function words(prop){return prop.replace(/([A-Z])/g,' $1').toLowerCase().trim();}
+function reference(app,cls,props,sel,collection){
+  const object=()=>JSON.stringify(Object.assign({class:cls},sel));
+  const get=(property)=>call('object',app,'getd',object(),property,'null');
+  const target=()=>get('');
+  return new Proxy(target,{
+    get(t,prop){
+      if(typeof prop!=='string'||prop==='then'||prop==='toJSON'){return undefined;}
+      if(prop==='toString'){return function(){return 'Application('+JSON.stringify(app)+').'+cls+'['+JSON.stringify(sel)+']';};}
+      if(prop==='delete'){return function(){return call('object',app,'delt',object(),'','null');};}
+      if(collection){
+        if(prop==='byName'){return function(n){return reference(app,cls,props,{name:String(n)},false);};}
+        if(prop==='whose'){
+          return function(c){
+            const keys=c===null||typeof c!=='object'?[]:Object.keys(c);
+            if(keys.length!==1){throw new AutomationError('whose takes an object with one property.',-1700);}
+            return reference(app,cls,props,{whose:{property:words(keys[0]),value:c[keys[0]]}},true);
+          };
+        }
+        if(/^-?\d+$/.test(prop)){
+          const n=Number(prop);
+          return reference(app,cls,props,{index:n>=0?n+1:n},false);
+        }
+      }
+      const property=words(prop);
+      if(props.length>0&&props.indexOf(property)<0){throw new AutomationError("Can't get "+property+" of "+cls+'.',-1728);}
+      const read=function(){return get(property);};
+      read.set=function(v){return call('object',app,'setd',object(),property,JSON.stringify(v===undefined?null:v));};
+      return read;
+    },
+    set(t,prop,value){
+      if(typeof prop!=='string'){return false;}
+      call('object',app,'setd',object(),words(prop),JSON.stringify(value===undefined?null:value));
+      return true;
+    }
+  });
+}
 globalThis.Application=function(name){
   if(typeof name!=='string'||name===''){throw new AutomationError('Application needs the name of an app.',-1700);}
   return new Proxy({},{
     get(target,prop){
       if(typeof prop!=='string'||prop==='then'||prop==='toJSON'){return undefined;}
       if(prop==='toString'){return function(){return 'Application('+JSON.stringify(name)+')';};}
+      const r=call('resolve',name,words(prop));
+      if(r.kind==='elements'){return reference(name,r.class,r.properties,{all:true},true);}
       return function(direct,params){
         const hasDirect=arguments.length>0&&direct!==undefined;
         return call('send',name,words(prop),hasDirect?'1':'0',hasDirect?JSON.stringify(direct):'null',JSON.stringify(params===undefined?{}:params));
@@ -300,7 +430,9 @@ pub fn run(source: &str, argv: &[String], host: Box<dyn Host>, policy: Policy) -
     let e = Rc::new(Env { host: RefCell::new(host), policy, source: source.to_string(), argv: argv.to_vec(), dicts: RefCell::new(Vec::new()), log: RefCell::new(Vec::new()) });
     let mut ctx = Context::default();
     ctx.insert_data(e.clone());
-    let natives: [(&str, fn(&JsValue, &[JsValue], &mut Context) -> JsResult<JsValue>); 7] = [
+    let natives: [(&str, fn(&JsValue, &[JsValue], &mut Context) -> JsResult<JsValue>); 9] = [
+        ("resolve", native_resolve),
+        ("object", native_object),
         ("send", native_send),
         ("dialog", native_dialog),
         ("notify", native_notify),
@@ -366,6 +498,8 @@ mod tests {
             match id {
                 "make" => Ok(Json::Str("note-1".into())),
                 "fail" => Err(ScriptError::new(-128, "The note could not be made.")),
+                "getd" if class == "core" && params.get("object").and_then(|o| o.get("all")).is_some() => Ok(Json::Arr(vec![Json::Str("n1".into()), Json::Str("n2".into())])),
+                "getd" => Ok(Json::Str("a value".into())),
                 _ => Ok(Json::Null),
             }
         }
@@ -374,7 +508,11 @@ mod tests {
                 return Err(ScriptError::new(-600, format!("{app} isn't running.")));
             }
             let cmd = |name: &str, id: &str, params: &[&str]| Command { name: name.into(), class: "notes".into(), id: id.into(), params: params.iter().map(|p| p.to_string()).collect(), result: String::new() };
-            Ok(Dictionary { commands: vec![cmd("make new note", "make", &["title", "body"]), cmd("count notes", "count", &[]), cmd("fail now", "fail", &[])], classes: vec![] })
+            let class = |name: &str, props: &[&str]| bifrost_core::script::dictionary::Class { name: name.into(), properties: props.iter().map(|p| p.to_string()).collect(), elements: vec![] };
+            Ok(Dictionary {
+                commands: vec![cmd("make new note", "make", &["title", "body"]), cmd("count notes", "count", &[]), cmd("fail now", "fail", &[])],
+                classes: vec![class("note", &["name", "body", "creation date"]), class("category", &[])],
+            })
         }
         fn display_dialog(&mut self, text: &str, title: Option<&str>) -> Result<String, ScriptError> {
             self.shell_out.borrow_mut().push(format!("dialog:{}:{text}", title.unwrap_or("")));
@@ -507,5 +645,94 @@ mod tests {
         assert!(all.allows("Anything", None) && !all.allows_shell());
         assert_eq!(Policy::from_text(""), Policy::none());
         assert!(!Policy::none().allows("Notes", Some("is.example.notes")));
+    }
+
+    fn object_of(sent: &Sent, i: usize) -> Json {
+        sent.borrow()[i].3.get("object").cloned().expect("a core event carries an object")
+    }
+
+    #[test]
+    fn a_collection_reads_every_object_with_a_getd_event() {
+        let (r, sent, _, _) = go(r#"Application("Notes").notes()"#, &[], Policy::allow_all());
+        assert_eq!(r.result, Ok(Value::List(vec![Value::Str("n1".into()), Value::Str("n2".into())])));
+        let sent = sent.borrow();
+        assert_eq!((sent[0].0.as_str(), sent[0].1.as_str(), sent[0].2.as_str()), ("Notes", "core", "getd"));
+        let object = sent[0].3.get("object").unwrap();
+        assert_eq!(object.str_field("class").as_deref(), Some("note"));
+        assert_eq!(object.get("all"), Some(&Json::Bool(true)));
+    }
+
+    #[test]
+    fn an_index_is_zero_based_and_a_negative_one_counts_from_the_end() {
+        let (r, sent, _, _) = go(r#"[Application("Notes").notes[0](), Application("Notes").notes[2].name(), Application("Notes").notes[-1]()]"#, &[], Policy::allow_all());
+        assert_eq!(r.result, Ok(Value::List(vec![Value::Str("a value".into()); 3])));
+        assert_eq!(object_of(&sent, 0).get("index"), Some(&Json::Num(1.0)));
+        let second = object_of(&sent, 1);
+        assert_eq!((second.get("index"), second.str_field("property").as_deref()), (Some(&Json::Num(3.0)), Some("name")));
+        assert_eq!(object_of(&sent, 2).get("index"), Some(&Json::Num(-1.0)));
+    }
+
+    #[test]
+    fn selection_by_name_and_by_property_builds_the_specifier_record() {
+        let (r, sent, _, _) = go(r#"Application("Notes").notes.byName("Shopping").body(); Application("Notes").notes.whose({creationDate: "today"})()"#, &[], Policy::allow_all());
+        assert!(r.result.is_ok());
+        let by_name = object_of(&sent, 0);
+        assert_eq!((by_name.str_field("name").as_deref(), by_name.str_field("property").as_deref()), (Some("Shopping"), Some("body")));
+        let whose = object_of(&sent, 1);
+        let w = whose.get("whose").unwrap();
+        assert_eq!((w.str_field("property").as_deref(), w.str_field("value").as_deref()), (Some("creation date"), Some("today")));
+        let (r, _, _, _) = go(r#"Application("Notes").notes.whose({a: 1, b: 2})"#, &[], Policy::allow_all());
+        assert_eq!(r.result.unwrap_err().number, ERR_COERCION);
+    }
+
+    #[test]
+    fn assigning_a_property_sends_setd_and_delete_sends_delt() {
+        let (r, sent, _, _) = go(r#"const n = Application("Notes").notes.byName("x"); n.body = "hi"; n.name.set({a: [1]}); n.delete()"#, &[], Policy::allow_all());
+        assert!(r.result.is_ok(), "{:?}", r.result);
+        let sent = sent.borrow();
+        assert_eq!(sent.iter().map(|s| s.2.as_str()).collect::<Vec<_>>(), ["setd", "setd", "delt"]);
+        assert_eq!(sent[0].3.str_field("to").as_deref(), Some("hi"));
+        assert_eq!(sent[0].3.get("object").unwrap().str_field("property").as_deref(), Some("body"));
+        assert_eq!(sent[1].3.get("to").unwrap().encode(), r#"{"a":[1]}"#);
+        assert!(sent[2].3.get("object").unwrap().get("property").is_none() && sent[2].3.get("to").is_none());
+    }
+
+    #[test]
+    fn a_property_the_class_does_not_declare_is_no_such_object_and_nothing_is_sent() {
+        let (r, sent, _, _) = go(r#"Application("Notes").notes[0].colour()"#, &[], Policy::allow_all());
+        let e = r.result.unwrap_err();
+        assert_eq!(e.number, ERR_NO_SUCH_OBJECT);
+        assert!(e.message.contains("colour") && e.message.contains("note"));
+        let (r, _, _, _) = go(r#"Application("Notes").notes[0].colour = "red""#, &[], Policy::allow_all());
+        assert_eq!(r.result.unwrap_err().number, ERR_NO_SUCH_OBJECT);
+        // a class that lists no properties accepts any, as the AppleScript-style language does
+        let (r, sent2, _, _) = go(r#"Application("Notes").categories[0].anything()"#, &[], Policy::allow_all());
+        assert!(r.result.is_ok());
+        assert_eq!(sent2.borrow().len(), 1);
+        assert!(sent.borrow().is_empty());
+    }
+
+    #[test]
+    fn specifiers_obey_the_grants_and_a_name_that_is_no_class_stays_a_command() {
+        let (r, sent, _, _) = go(r#"Application("Notes").notes()"#, &[], Policy::none());
+        assert_eq!(r.result.unwrap_err().number, ERR_NOT_PERMITTED);
+        assert!(sent.borrow().is_empty());
+        let (r, _, _, _) = go(r#"Application("Notes").folders()"#, &[], Policy::allow_all());
+        assert_eq!(r.result.unwrap_err().number, ERR_NOT_HANDLED, "folders is neither a command nor a class");
+        let (r, _, _, _) = go(r#"Application("Notes").notes[0].name()"#, &[], Policy::for_apps(&["is.example.notes"]));
+        assert_eq!(r.result, Ok(Value::Str("a value".into())));
+    }
+
+    #[test]
+    fn plural_names_find_their_declared_class() {
+        let class = |n: &str| bifrost_core::script::dictionary::Class { name: n.into(), properties: vec![], elements: vec![] };
+        let dict = Dictionary { commands: vec![], classes: vec![class("category"), class("note folder"), class("box"), class("note"), class("news")] };
+        assert_eq!(element_class(&dict, "notes").as_deref(), Some("note"));
+        assert_eq!(element_class(&dict, "categories").as_deref(), Some("category"));
+        assert_eq!(element_class(&dict, "note folders").as_deref(), Some("note folder"));
+        assert_eq!(element_class(&dict, "boxes").as_deref(), Some("box"));
+        assert_eq!(element_class(&dict, "news").as_deref(), Some("news"), "an exact class name wins over a stripped plural");
+        assert_eq!(element_class(&dict, "Note  Folders").as_deref(), Some("note folder"));
+        assert_eq!(element_class(&dict, "windows"), None);
     }
 }
