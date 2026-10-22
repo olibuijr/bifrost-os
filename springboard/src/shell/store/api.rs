@@ -32,6 +32,8 @@ pub struct StoreApp {
     pub kind: String,
     /// the SDK protocol the package was built against (`sdk_protocol` in the catalogue); 0 when the entry does not say
     pub sdk_protocol: u32,
+    /// the package's target (`architecture` in the catalogue, such as `x86_64-linux`); empty when the entry does not say
+    pub architecture: String,
     /// release notes, newest first (empty for entries the server has no notes for)
     pub changelog: Vec<Release>,
     /// the price in the store's currency; `None` for a free app (and for an entry that gives no currency)
@@ -96,6 +98,12 @@ impl StoreApp {
         self.sdk_protocol == 0 || self.sdk_protocol == shell
     }
 
+    /// Whether the package's `architecture` can run on `host` (`x86_64-linux`, see `host_architecture`). Unstated is given
+    /// the benefit of the doubt, and a preinstalled package (data such as the keyboard) is left to the install-time CPU check.
+    pub fn runs_on_arch(&self, host: &str) -> bool {
+        self.architecture.is_empty() || self.is_preinstalled() || self.architecture == host
+    }
+
     /// A paid app: the store's price is above zero. The shell has no way to buy one yet, so it is never installed.
     pub fn is_paid(&self) -> bool {
         self.price.as_ref().is_some_and(|p| p.minor > 0)
@@ -155,6 +163,7 @@ pub fn parse_catalog(text: &str) -> Result<Vec<StoreApp>, String> {
             min_shell: a.str_field("min_shell").unwrap_or_else(|| "0.0.0".into()),
             kind: a.str_field("kind").unwrap_or_else(|| "app".into()),
             sdk_protocol: a.get("sdk_protocol").and_then(|p| p.as_u64()).and_then(|p| u32::try_from(p).ok()).unwrap_or(0),
+            architecture: a.str_field("architecture").unwrap_or_default(),
             changelog: parse_changelog(a.get("changelog")),
             price: parse_price(a),
             age_rating: age_rating_of(&a.str_field("age_rating").unwrap_or_default()),
@@ -191,14 +200,20 @@ pub fn update_available(installed: &str, store: &str) -> bool {
     matches!((parse_semver(installed), parse_semver(store)), (Some(i), Some(s)) if s > i)
 }
 
-/// The installed apps that have a newer store version this shell can run; services update silently and are left out.
-pub fn updates<'a>(catalog: &'a [StoreApp], installed: &[InstalledApp]) -> Vec<&'a StoreApp> {
-    updates_for(catalog, installed, bifrost_proto::SDK_VERSION)
+/// The catalogue's name for this machine's target (`<cpu>-linux`), as the PC catalogue's `architecture` spells it.
+pub fn host_architecture() -> String {
+    format!("{}-linux", std::env::consts::ARCH)
 }
 
-/// `updates` for a shell speaking SDK protocol `shell`: a newer version built for another protocol is no update.
-pub fn updates_for<'a>(catalog: &'a [StoreApp], installed: &[InstalledApp], shell: u32) -> Vec<&'a StoreApp> {
-    catalog.iter().filter(|s| !s.is_service() && s.runs_on(shell) && installed.iter().any(|i| i.id == s.id && update_available(&i.version, &s.version))).collect()
+/// The installed apps that have a newer store version this shell can run; services update silently and are left out.
+pub fn updates<'a>(catalog: &'a [StoreApp], installed: &[InstalledApp]) -> Vec<&'a StoreApp> {
+    updates_for(catalog, installed, bifrost_proto::SDK_VERSION, &host_architecture())
+}
+
+/// `updates` for a shell speaking SDK protocol `shell` on `host`: a newer version built for another protocol or another
+/// CPU is no update (a tablet never downloads an x86 package or shows it in a badge).
+pub fn updates_for<'a>(catalog: &'a [StoreApp], installed: &[InstalledApp], shell: u32, host: &str) -> Vec<&'a StoreApp> {
+    catalog.iter().filter(|s| !s.is_service() && s.runs_on(shell) && s.runs_on_arch(host) && installed.iter().any(|i| i.id == s.id && update_available(&i.version, &s.version))).collect()
 }
 
 /// The packages to install or update in the background: every `kind = "system"`, `"system-app"` or `"service"` entry
@@ -356,8 +371,23 @@ mod tests {
     fn updates_skip_versions_built_for_another_protocol() {
         let mk = |p: u32| StoreApp { id: "a".into(), version: "2.0.0".into(), sdk_protocol: p, ..Default::default() };
         let have = [InstalledApp { id: "a".into(), version: "1.0.0".into(), ..Default::default() }];
-        assert!(updates_for(&[mk(1)], &have, 2).is_empty());
-        assert_eq!(updates_for(&[mk(2)], &have, 2).len(), 1);
+        assert!(updates_for(&[mk(1)], &have, 2, "x86_64-linux").is_empty());
+        assert_eq!(updates_for(&[mk(2)], &have, 2, "x86_64-linux").len(), 1);
+    }
+
+    #[test]
+    fn updates_skip_packages_built_for_another_architecture() {
+        let mk = |arch: &str, kind: &str| StoreApp { id: "a".into(), version: "2.0.0".into(), architecture: arch.into(), kind: kind.into(), ..Default::default() };
+        let have = [InstalledApp { id: "a".into(), version: "1.0.0".into(), ..Default::default() }];
+        let n = |app: StoreApp, host: &str| updates_for(&[app], &have, 0, host).len();
+        assert_eq!(n(mk("x86_64-linux", "app"), "aarch64-linux"), 0, "a tablet ignores an x86 update");
+        assert_eq!(n(mk("x86_64-linux", "app"), "x86_64-linux"), 1, "a PC keeps it");
+        assert_eq!(n(mk("aarch64-linux", "app"), "aarch64-linux"), 1);
+        assert_eq!(n(mk("", "app"), "aarch64-linux"), 1, "an entry that names no architecture is given the benefit of the doubt");
+        assert_eq!(n(mk("x86_64-linux", "system"), "aarch64-linux"), 1, "a system package is left to the install-time CPU check");
+        let text = format!(r#"{{"apps":[{{"id":"a","name":"A","version":"1.0.0","sha256":"{SUM}","package":"/p","architecture":"x86_64-linux"}}]}}"#);
+        assert_eq!(parse_catalog(&text).unwrap()[0].architecture, "x86_64-linux");
+        assert!(host_architecture().ends_with("-linux"));
     }
 
     #[test]

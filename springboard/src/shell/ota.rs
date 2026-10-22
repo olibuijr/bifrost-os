@@ -517,6 +517,19 @@ mod system_tests {
     }
 
     #[test]
+    fn the_background_plan_ignores_updates_built_for_another_cpu() {
+        let x86 = api::StoreApp { id: "is.o.calc".into(), version: "2.0.0".into(), architecture: "x86_64-linux".into(), ..Default::default() };
+        let installed = vec![install::InstalledApp { id: "is.o.calc".into(), version: "1.0.0".into(), dir: PathBuf::from("/var/lib/springboard/apps/is.o.calc/current"), ..Default::default() }];
+        let plan = |host: &str| {
+            let catalog = [x86.clone()];
+            let ups = api::updates_for(&catalog, &installed, 0, host);
+            app_plan(&ups, &installed, &[]).len()
+        };
+        assert_eq!(plan("aarch64-linux"), 0, "a tablet never downloads the x86 package");
+        assert_eq!(plan("x86_64-linux"), 1, "a PC still updates");
+    }
+
+    #[test]
     fn system_updates_count_in_the_badge_but_never_get_a_banner() {
         let mut o = ota();
         let found = Found { apps: Some(vec![("is.o.kb".into(), "1.1.0".into())]), system: vec!["is.o.kb".into()], ..Default::default() };
