@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+## 0.10.18 — 2026-10-22
+
+Window corners, a monitor that is off at start, and an OS parity round.
+
+- Windows: an app's background blur was drawn as a square, so a dark square of blurred wallpaper showed past every
+  rounded window corner. The window server's GLES path now masks each material region to its rounded rectangle (the
+  window radius the shell sends), like the Vulkan path.
+- Display: a session started with the monitor off, asleep or on another input ended ("no connected display", and the
+  shell was killed waiting on a socket nobody answered). The window server now waits for a display before it opens its
+  socket, and the session waits with it; the desktop comes up when the monitor does.
+- Wi-Fi: the wireless regulatory domain follows Language & Region (the saved region, else the page's default) from
+  bifrost-privd at boot; it stayed at the world default because netd only starts on demand. `wireless-regdb` ships.
+- New system pieces, each with tests: SVG drawing (arcs, smooth curves, strokes, transforms, groups) for images and
+  icons; the per-app firewall's policies in the shell service; packaged publisher keys for store package signatures;
+  switch-control auto scanning; on-device glossary translation packs (English and Icelandic); streamed local model
+  output; document version browsing; USB accessory approval answers; 802.1X sign-in reuse; package install progress;
+  Cantonese (Jyutping) input; container migration, voice banking samples, family controls and others.
+- Packages: `ruby-bundler`, `ruby-erb`, `ruby-irb`, `ruby-rdoc` and `cppjieba`.
+- Build: the git commit is no longer compiled into springboard (each commit recompiled it and everything above it);
+  the update package writes `/usr/share/springboard/build-info` and About reads it.
+
 ## 0.10.17 — 2026-10-20
 
 Keyboard, clipboard and Mail, from the owner's reports and the Mail test with a real account.
