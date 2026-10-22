@@ -1,7 +1,8 @@
 //! Live glass: the blurred backdrop behind a surface's `ext-background-effect-v1` region, built every frame from what is
 //! composited below it (wallpaper, windows, layers), the way a window server does it. The client draws its own tint
 //! over the region with alpha. Dual-Kawase blur on a quarter-size copy, with a saturation lift like the shell's
-//! materials (`bifrost_render::glass`).
+//! materials (`bifrost_render::glass`). Each region is masked to its rounded rectangle (the window's corner radius the
+//! client sends), so the blur never shows past a window's rounded corners.
 
 use std::collections::HashMap;
 
@@ -15,12 +16,12 @@ use smithay::{
                 texture::{TextureRenderBuffer, TextureRenderElement},
                 Element, Id, Kind, RenderElement,
             },
-            gles::{element::PixelShaderElement, GlesError, GlesPixelProgram, GlesRenderer, GlesTexProgram, GlesTexture, Uniform, UniformName, UniformType},
-            utils::{draw_render_elements, CommitCounter},
+            gles::{element::PixelShaderElement, GlesError, GlesFrame, GlesPixelProgram, GlesRenderer, GlesTexProgram, GlesTexture, Uniform, UniformName, UniformType},
+            utils::{draw_render_elements, CommitCounter, DamageSet, OpaqueRegions},
             Bind, Color32F, Frame, Offscreen, Renderer,
         },
     },
-    utils::{Buffer, Logical, Physical, Point, Rectangle, Size, Transform},
+    utils::{Buffer, Logical, Physical, Point, Rectangle, Scale, Size, Transform},
 };
 
 /// The backdrop is rendered at 1/DIV of the output (the recipes' `backdropScale` 0.25 for every desktop material), then
@@ -96,6 +97,39 @@ void main() {
     gl_FragColor = c * alpha;
 }"#;
 
+/// The blurred backdrop of one region, masked to the region's rounded rectangle. `v_coords` is the texture coordinate
+/// (the blur covers the whole output, so `v_coords * out_size` is the position in region space, flipped back when the
+/// texture is upside down); `rect` is the region and `radius` its corner radius in the same units.
+const MASK: &str = r#"#version 100
+//_DEFINES_
+#if defined(EXTERNAL)
+#extension GL_OES_EGL_image_external : require
+#endif
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+#if defined(EXTERNAL)
+uniform samplerExternalOES tex;
+#else
+uniform sampler2D tex;
+#endif
+uniform float alpha;
+uniform vec2 out_size;
+uniform vec4 rect;
+uniform float radius;
+uniform float flip;
+varying vec2 v_coords;
+void main() {
+    vec2 t = vec2(v_coords.x, mix(v_coords.y, 1.0 - v_coords.y, flip));
+    vec2 extent = rect.zw * 0.5;
+    float r = min(radius, min(extent.x, extent.y));
+    vec2 q = abs(t * out_size - rect.xy - extent) - (extent - vec2(r));
+    float d = length(max(q, vec2(0.0))) + min(max(q.x, q.y), 0.0) - r;
+    gl_FragColor = texture2D(tex, v_coords) * (clamp(0.5 - d, 0.0, 1.0) * alpha);
+}"#;
+
 /// The flat plate of a material region that shows no blur (an inactive window's sidebar and toolbar): the recipe's
 /// opaque colour (premultiplied, so the anti-aliased rim of a rounded corner blends) in a rounded rectangle. A pixel
 /// shader of the element's own size: `v_coords` runs 0..1 over it and `size` is its size in logical px.
@@ -125,6 +159,71 @@ pub struct Plate {
     pub rect: Rectangle<i32, Logical>,
     pub color: [f32; 4],
     pub radius: f32,
+}
+
+/// One blur region on the output (logical px) and the radius of its corners (0 for square ones).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Region {
+    pub rect: Rectangle<i32, Logical>,
+    pub radius: f32,
+}
+
+/// One region's part of the blurred backdrop, drawn through the `MASK` shader. Its id is kept per surface and region
+/// index between frames (`Entry::ids`), so an unchanged backdrop adds no damage, unlike smithay's
+/// `TextureShaderElement`, which takes a new id each time it is made.
+pub struct GlassElement {
+    inner: TextureRenderElement<GlesTexture>,
+    texture: GlesTexture,
+    program: GlesTexProgram,
+    id: Id,
+    uniforms: Vec<Uniform<'static>>,
+}
+
+impl Element for GlassElement {
+    fn id(&self) -> &Id {
+        &self.id
+    }
+    fn current_commit(&self) -> CommitCounter {
+        self.inner.current_commit()
+    }
+    fn geometry(&self, scale: Scale<f64>) -> Rectangle<i32, Physical> {
+        self.inner.geometry(scale)
+    }
+    fn transform(&self) -> Transform {
+        self.inner.transform()
+    }
+    fn src(&self) -> Rectangle<f64, Buffer> {
+        self.inner.src()
+    }
+    fn damage_since(&self, scale: Scale<f64>, commit: Option<CommitCounter>) -> DamageSet<i32, Physical> {
+        self.inner.damage_since(scale, commit)
+    }
+    fn opaque_regions(&self, _scale: Scale<f64>) -> OpaqueRegions<i32, Physical> {
+        // the rounded corners are see-through
+        OpaqueRegions::default()
+    }
+    fn alpha(&self) -> f32 {
+        self.inner.alpha()
+    }
+    fn kind(&self) -> Kind {
+        self.inner.kind()
+    }
+    fn location(&self, scale: Scale<f64>) -> Point<i32, Physical> {
+        self.inner.location(scale)
+    }
+}
+
+impl RenderElement<GlesRenderer> for GlassElement {
+    fn draw(
+        &self,
+        frame: &mut GlesFrame<'_, '_>,
+        src: Rectangle<f64, Buffer>,
+        dst: Rectangle<i32, Physical>,
+        damage: &[Rectangle<i32, Physical>],
+        opaque_regions: &[Rectangle<i32, Physical>],
+    ) -> Result<(), GlesError> {
+        frame.render_texture_from_to(&self.texture, src, dst, damage, opaque_regions, self.transform(), self.alpha(), Some(&self.program), &self.uniforms)
+    }
 }
 
 /// A plate's element, kept between frames so its id stays, and the colour and radius it was last given (as bits).
@@ -157,6 +256,10 @@ pub fn source_in_texture(rect: Rectangle<i32, Logical>, tex: (i32, i32), out: (i
 
 struct Entry {
     buffer: TextureRenderBuffer<GlesTexture>,
+    /// The blurred texture the buffer holds, for the masked draw.
+    texture: GlesTexture,
+    /// One element id per region index, kept between frames.
+    ids: Vec<Id>,
     /// What the blur was built from; while it is unchanged the cached texture is reused (WM-1), so the buffer's damage
     /// stays empty on an idle frame and no page flip is queued.
     sig: Signature,
@@ -193,6 +296,8 @@ fn signature<E: Element>(output: Size<i32, Physical>, below: &[E], saturation: f
 pub struct Glass {
     down: GlesTexProgram,
     up: GlesTexProgram,
+    /// The rounded-rect mask over each region's blur.
+    mask: GlesTexProgram,
     /// The plate shader; `None` when it did not compile (the plates are then not drawn, and the log says so).
     plate: Option<GlesPixelProgram>,
     /// The last backdrop of each blurred surface (keyed by the caller), so its element keeps its id between frames.
@@ -216,6 +321,15 @@ impl Glass {
                 UniformName::new("lum_values", UniformType::_4f),
             ],
         )?;
+        let mask = renderer.compile_custom_texture_shader(
+            MASK,
+            &[
+                UniformName::new("out_size", UniformType::_2f),
+                UniformName::new("rect", UniformType::_4f),
+                UniformName::new("radius", UniformType::_1f),
+                UniformName::new("flip", UniformType::_1f),
+            ],
+        )?;
         // a shader that fails to compile must not stop the window server: the plates are left out instead
         let plate = match renderer.compile_custom_pixel_shader(
             PLATE,
@@ -227,7 +341,7 @@ impl Glass {
                 None
             }
         };
-        Ok(Glass { down, up, plate, entries: HashMap::new(), plates: HashMap::new(), plates_seen: Vec::new() })
+        Ok(Glass { down, up, mask, plate, entries: HashMap::new(), plates: HashMap::new(), plates_seen: Vec::new() })
     }
 
     /// One element per plate of surface `key`, to be drawn right under the surface (next to its `backdrop`). The
@@ -274,26 +388,27 @@ impl Glass {
     }
 
     /// The blurred backdrop for surface `key` whose blur `regions` (output logical px) lie over `below` (front-to-back
-    /// render elements under the surface). One texture element per region rectangle, to be drawn right under the surface.
+    /// render elements under the surface). One element per region, masked to its rounded rectangle, to be drawn right
+    /// under the surface.
     pub fn backdrop<E: RenderElement<GlesRenderer>>(
         &mut self,
         renderer: &mut GlesRenderer,
         key: u64,
         output: Size<i32, Physical>,
         below: &[E],
-        regions: &[Rectangle<i32, Logical>],
+        regions: &[Region],
         saturation: f32,
         tone: Tone,
-    ) -> Result<Vec<TextureRenderElement<GlesTexture>>, GlesError> {
+    ) -> Result<Vec<GlassElement>, GlesError> {
         if regions.is_empty() {
             self.entries.remove(&key);
             return Ok(Vec::new());
         }
         let (bw, bh) = ((output.w / DIV).max(2), (output.h / DIV).max(2));
         let sig = signature(output, below, saturation, tone);
-        if let Some(entry) = self.entries.get(&key) {
+        if let Some(entry) = self.entries.get_mut(&key) {
             if entry.sig == sig {
-                return Ok(Self::elements(entry, regions, entry.src_size, output));
+                return Ok(Self::elements(&self.mask, entry, regions, output));
             }
         }
         // 1. what lies under the surface, at a quarter of the output size
@@ -342,37 +457,46 @@ impl Glass {
         // 3. one element per region rectangle, sampling its part of the blurred texture
         match self.entries.get_mut(&key) {
             Some(entry) => {
-                entry.buffer.update_from_texture(renderer, src, 1, Transform::Normal, None);
+                entry.buffer.update_from_texture(renderer, src.clone(), 1, Transform::Normal, None);
+                entry.texture = src;
                 entry.sig = sig;
                 entry.src_size = src_size;
             }
             None => {
-                let buffer = TextureRenderBuffer::from_texture(renderer, src, 1, Transform::Normal, None);
-                self.entries.insert(key, Entry { buffer, sig, src_size });
+                let buffer = TextureRenderBuffer::from_texture(renderer, src.clone(), 1, Transform::Normal, None);
+                self.entries.insert(key, Entry { buffer, texture: src, ids: Vec::new(), sig, src_size });
             }
         }
-        let entry = &self.entries[&key];
-        Ok(Self::elements(entry, regions, src_size, output))
+        let entry = self.entries.get_mut(&key).expect("inserted above");
+        Ok(Self::elements(&self.mask, entry, regions, output))
     }
 
-    fn elements(
-        entry: &Entry,
-        regions: &[Rectangle<i32, Logical>],
-        src_size: (i32, i32),
-        output: Size<i32, Physical>,
-    ) -> Vec<TextureRenderElement<GlesTexture>> {
+    fn elements(mask: &GlesTexProgram, entry: &mut Entry, regions: &[Region], output: Size<i32, Physical>) -> Vec<GlassElement> {
+        while entry.ids.len() < regions.len() {
+            entry.ids.push(Id::new());
+        }
+        let flip = if entry.texture.is_y_inverted() { 1.0f32 } else { 0.0 };
         regions
             .iter()
-            .map(|r| {
+            .zip(&entry.ids)
+            .map(|(region, id)| {
+                let r = region.rect;
                 let loc: Point<f64, Physical> = (r.loc.x as f64, r.loc.y as f64).into();
-                TextureRenderElement::from_texture_render_buffer(
+                let inner = TextureRenderElement::from_texture_render_buffer(
                     loc,
                     &entry.buffer,
                     None,
-                    Some(source_in_texture(*r, src_size, (output.w, output.h))),
+                    Some(source_in_texture(r, entry.src_size, (output.w, output.h))),
                     Some(r.size),
                     Kind::Unspecified,
-                )
+                );
+                let uniforms = vec![
+                    Uniform::new("out_size", [output.w as f32, output.h as f32]),
+                    Uniform::new("rect", [r.loc.x as f32, r.loc.y as f32, r.size.w as f32, r.size.h as f32]),
+                    Uniform::new("radius", region.radius.max(0.0)),
+                    Uniform::new("flip", flip),
+                ];
+                GlassElement { inner, texture: entry.texture.clone(), program: mask.clone(), id: id.clone(), uniforms }
             })
             .collect()
     }

@@ -6,10 +6,9 @@ use smithay::{
         element::{
             memory::MemoryRenderBufferRenderElement,
             surface::{render_elements_from_surface_tree, WaylandSurfaceRenderElement},
-            texture::TextureRenderElement,
             AsRenderElements, Kind,
         },
-        gles::{element::PixelShaderElement, GlesRenderer, GlesTexture},
+        gles::{element::PixelShaderElement, GlesRenderer},
     },
     desktop::{layer_map_for_output, Window},
     output::Output,
@@ -21,7 +20,7 @@ use smithay::{
 
 use crate::{
     bifrost_material::effective_regions,
-    glass::{Glass, Plate, SATURATION},
+    glass::{Glass, GlassElement, Plate, Region, SATURATION},
     material_filter::Tone,
     material_kind::{premultiply, resolve, MaterialSpec, Resolved},
     state::WmState,
@@ -30,7 +29,7 @@ use crate::{
 render_elements! {
     pub SceneElement<=GlesRenderer>;
     Surface = WaylandSurfaceRenderElement<GlesRenderer>,
-    Glass = TextureRenderElement<GlesTexture>,
+    Glass = GlassElement,
     Plate = PixelShaderElement,
     Memory = MemoryRenderBufferRenderElement<GlesRenderer>,
 }
@@ -39,7 +38,7 @@ render_elements! {
 struct Item {
     key: u64,
     elements: Vec<SceneElement>,
-    blur: Vec<Rectangle<i32, Logical>>,
+    blur: Vec<Region>,
     /// Saturation of the backdrop from the material recipe of the first blurred region.
     saturation: f32,
     /// Brightness and luminance mapping from the same recipe.
@@ -50,8 +49,8 @@ struct Item {
 
 /// What the window server draws behind one surface's material regions (output logical px).
 struct Backing {
-    /// The regions that blur what lies below them.
-    blur: Vec<Rectangle<i32, Logical>>,
+    /// The regions that blur what lies below them, each with its corner radius.
+    blur: Vec<Region>,
     /// The recipe's saturation of the first blurred region.
     saturation: f32,
     /// Brightness and luminance mapping from the same recipe.
@@ -62,22 +61,23 @@ struct Backing {
     plates: Vec<Plate>,
 }
 
-/// The backing of `specs` (a surface's material regions) with the surface's origin at `origin` (pure). A plate takes
-/// the recipe's opaque colour and, when its material is one rectangle, the material's corner radius, like the Vulkan
-/// path's `material_nodes`.
+/// The backing of `specs` (a surface's material regions) with the surface's origin at `origin` (pure). A blur region
+/// and a plate take the material's corner radius when the material is one rectangle (the window's radius, which the
+/// shell sends for every region, so nothing shows past the window's rounded corners), like the Vulkan path's
+/// `material_nodes`; a plate takes the recipe's opaque colour.
 fn backing_of(specs: &[MaterialSpec], origin: Point<i32, Logical>, active: bool, dark: bool) -> Backing {
     let mut blur = Vec::new();
     let mut plates = Vec::new();
     let mut look = None;
     for spec in specs {
         let rects = spec.rects.iter().map(|r| Rectangle::new(r.loc + origin, r.size));
+        let radius = if spec.rects.len() == 1 { spec.mask_radius() } else { 0.0 };
         match resolve(spec, active, dark) {
             Resolved::Glass { saturation, tone, .. } => {
                 look.get_or_insert((saturation, tone));
-                blur.extend(rects);
+                blur.extend(rects.map(|rect| Region { rect, radius }));
             }
             Resolved::Plate(c) => {
-                let radius = if spec.rects.len() == 1 { spec.mask_radius() } else { 0.0 };
                 let color = premultiply(c);
                 plates.extend(rects.map(|rect| Plate { rect, color, radius }));
             }
@@ -241,7 +241,8 @@ mod tests {
     fn an_active_windows_materials_blur_and_have_no_plate() {
         let b = backing_of(&app_materials(), (100, 50).into(), true, false);
         assert!(b.plates.is_empty());
-        assert_eq!(b.blur, vec![rect(120, 70, 200, 600), rect(320, 70, 780, 52)]);
+        // each region keeps its corner radius, so the blur stays inside the window's rounded corners
+        assert_eq!(b.blur, vec![Region { rect: rect(120, 70, 200, 600), radius: 10.0 }, Region { rect: rect(320, 70, 780, 52), radius: 10.0 }]);
     }
 
     /// Kinds that follow no window state (menus) and the plain blur region stay blurred in an inactive window; a region
@@ -253,7 +254,7 @@ mod tests {
         let mut pinned = spec(MaterialKind::Sidebar, vec![rect(0, 200, 100, 100)]);
         pinned.state = MaterialState::Inactive;
         let b = backing_of(&[menu, plain, pinned.clone()], (0, 0).into(), false, true);
-        assert_eq!(b.blur, vec![rect(0, 0, 100, 100), rect(0, 100, 100, 100)]);
+        assert_eq!(b.blur, vec![Region { rect: rect(0, 0, 100, 100), radius: 10.0 }, Region { rect: rect(0, 100, 100, 100), radius: 0.0 }]);
         assert_eq!(b.plates.len(), 1);
         assert_eq!(b.plates[0].rect, rect(0, 200, 100, 100));
         let follows = spec(MaterialKind::Sidebar, vec![rect(0, 0, 10, 10)]);
