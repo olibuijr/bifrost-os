@@ -178,7 +178,7 @@ pub fn decompile(data: &[u8]) -> Result<Model, CompileError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::features::{DictionaryProvider, FeatureValue};
+    use crate::features::{DictionaryProvider, FeatureProvider, FeatureValue};
     use crate::ml_tensor::Tensor;
 
     fn model() -> Model {
