@@ -1372,15 +1372,14 @@
    "note": "provided by Arch package ruby-bundler, added to runtime-packages.txt (Arch splits it out of ruby); not yet verified on Midget.",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
      "path": "/usr/bin/bundle"
     }
    ],
-   "ready_note": "The Arch package ruby-bundler is in packaging/arch/runtime-packages.txt and installs /usr/bin/bundle; the file check proves it is present on the installed system.",
-   "ready_failed": "file /usr/bin/bundle: /usr/bin/bundle is missing"
+   "ready_note": "The Arch package ruby-bundler is in packaging/arch/runtime-packages.txt and installs /usr/bin/bundle; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/bin/bundler",
@@ -1402,15 +1401,14 @@
    "note": "provided by Arch package ruby-bundler, added to runtime-packages.txt (Arch splits it out of ruby); not yet verified on Midget.",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
      "path": "/usr/bin/bundler"
     }
    ],
-   "ready_note": "The Arch package ruby-bundler is in packaging/arch/runtime-packages.txt and installs /usr/bin/bundler; the file check proves it is present on the installed system.",
-   "ready_failed": "file /usr/bin/bundler: /usr/bin/bundler is missing"
+   "ready_note": "The Arch package ruby-bundler is in packaging/arch/runtime-packages.txt and installs /usr/bin/bundler; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/bin/bunzip2",

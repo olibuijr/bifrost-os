@@ -663,11 +663,11 @@
    "note": "Dash resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
-     "path": "/usr/share/fonts/inter/Inter-Regular.otf"
+     "path": "/usr/share/fonts/inter/InterVariable.ttf"
     },
     {
      "kind": "test",
@@ -675,8 +675,7 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Inter (inter-font, OFL-1.1) for the same role; design-similar, the reference face is not shipped.",
-   "ready_failed": "file /usr/share/fonts/inter/Inter-Regular.otf: /usr/share/fonts/inter/Inter-Regular.otf is missing"
+   "ready_note": "Inter (inter-font, OFL-1.1) for the same role; design-similar, the reference face is not shipped."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/DomaineDisplay.ttc",
@@ -698,11 +697,11 @@
    "note": "DomaineDisplay resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
-     "path": "/usr/share/fonts/OTF/LibertinusSerif-Regular.otf"
+     "path": "/usr/share/fonts/libertinus/LibertinusSerif-Regular.otf"
     },
     {
      "kind": "test",
@@ -710,8 +709,7 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Libertinus Serif (otf-libertinus, OFL-1.1) for the same role; design-similar display serif.",
-   "ready_failed": "file /usr/share/fonts/OTF/LibertinusSerif-Regular.otf: /usr/share/fonts/OTF/LibertinusSerif-Regular.otf is missing"
+   "ready_note": "Libertinus Serif (otf-libertinus, OFL-1.1) for the same role; design-similar display serif."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/FahKwang.ttc",
@@ -761,11 +759,11 @@
    "note": "FoundersGrotesk resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
-     "path": "/usr/share/fonts/inter/Inter-Regular.otf"
+     "path": "/usr/share/fonts/inter/InterVariable.ttf"
     },
     {
      "kind": "test",
@@ -773,8 +771,7 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Inter (inter-font, OFL-1.1) for the same role; design-similar grotesk.",
-   "ready_failed": "file /usr/share/fonts/inter/Inter-Regular.otf: /usr/share/fonts/inter/Inter-Regular.otf is missing"
+   "ready_note": "Inter (inter-font, OFL-1.1) for the same role; design-similar grotesk."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/FoundersGroteskCondensed.ttc",
@@ -796,11 +793,11 @@
    "note": "FoundersGroteskCondensed resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
-     "path": "/usr/share/fonts/inter/Inter-Regular.otf"
+     "path": "/usr/share/fonts/inter/InterVariable.ttf"
     },
     {
      "kind": "test",
@@ -808,8 +805,7 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Inter (inter-font, OFL-1.1) for the same role; design-similar grotesk, not condensed.",
-   "ready_failed": "file /usr/share/fonts/inter/Inter-Regular.otf: /usr/share/fonts/inter/Inter-Regular.otf is missing"
+   "ready_note": "Inter (inter-font, OFL-1.1) for the same role; design-similar grotesk, not condensed."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/FoundersGroteskText.ttc",
@@ -831,11 +827,11 @@
    "note": "FoundersGroteskText resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
-     "path": "/usr/share/fonts/inter/Inter-Regular.otf"
+     "path": "/usr/share/fonts/inter/InterVariable.ttf"
     },
     {
      "kind": "test",
@@ -843,8 +839,7 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Inter (inter-font, OFL-1.1) for the same role; design-similar grotesk.",
-   "ready_failed": "file /usr/share/fonts/inter/Inter-Regular.otf: /usr/share/fonts/inter/Inter-Regular.otf is missing"
+   "ready_note": "Inter (inter-font, OFL-1.1) for the same role; design-similar grotesk."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/DragShort.aiff",

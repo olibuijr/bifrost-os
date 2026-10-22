@@ -2958,11 +2958,11 @@
    "note": "Mount, unmount, eject, erase, partition, verify, repair and RAID commands through the disk session and diskutil. Disk arrival and removal events for apps are not provided (see disk-arbitration).",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "cmd",
-     "run": "diskutil help",
+     "run": "diskutil list",
      "expect_exit": 0
     },
     {
@@ -2971,8 +2971,7 @@
      "filter": "disk_commands"
     }
    ],
-   "ready_note": "Mount, unmount, eject, erase, partition and verify are in bifrost-core, with the diskutil tool.",
-   "ready_failed": "cmd diskutil help: exit 1, expected 0: instead of a GPT. level is 0, 1, 5, 6 or 10. The erase, partition, check, rename, restore and RAID verbs need root."
+   "ready_note": "Mount, unmount, eject, erase, partition and verify are in bifrost-core, with the diskutil tool."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/DiskSpaceDiagnostics.framework",

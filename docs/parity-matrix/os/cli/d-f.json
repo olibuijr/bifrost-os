@@ -1674,15 +1674,14 @@
    "note": "provided by Arch package ruby-erb, added to runtime-packages.txt (Arch splits it out of ruby); not yet verified on Midget.",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
      "path": "/usr/bin/erb"
     }
    ],
-   "ready_note": "The Arch package ruby-erb is in packaging/arch/runtime-packages.txt and installs /usr/bin/erb; the file check proves it is present on the installed system.",
-   "ready_failed": "file /usr/bin/erb: /usr/bin/erb is missing"
+   "ready_note": "The Arch package ruby-erb is in packaging/arch/runtime-packages.txt and installs /usr/bin/erb; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/bin/errinfo",

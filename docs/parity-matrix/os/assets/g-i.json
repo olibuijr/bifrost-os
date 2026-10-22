@@ -1183,11 +1183,11 @@
    "note": "open equivalent Liberation Sans (Arimo) (ttf-liberation), metric-compatible, glyph shapes differ. Closest installed stand-in: Nimbus Sans (gsfonts), Helvetica-class stand-in; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
-     "path": "/usr/share/texmf/fonts/opentype/public/tex-gyre/texgyreheros-regular.otf"
+     "path": "/usr/share/fonts/tex-gyre/texgyreheros-regular.otf"
     },
     {
      "kind": "test",
@@ -1195,8 +1195,7 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "TeX Gyre Heros (tex-gyre-fonts, GUST Font License) for the same role; metric-compatible with Helvetica.",
-   "ready_failed": "file /usr/share/texmf/fonts/opentype/public/tex-gyre/texgyreheros-regular.otf: /usr/share/texmf/fonts/opentype/public/tex-gyre/texgyreheros-regular.otf is missing"
+   "ready_note": "TeX Gyre Heros (tex-gyre-fonts, GUST Font License) for the same role; metric-compatible with Helvetica."
   },
   {
    "id": "path:/System/Library/Fonts/Hiragino Sans GB.ttc",
@@ -1279,11 +1278,11 @@
    "note": "Closest installed stand-in: Noto Serif Bold Italic (noto-fonts), serif stand-in; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
-     "path": "/usr/share/fonts/adobe-source-serif-fonts/SourceSerif4-Regular.otf"
+     "path": "/usr/share/fonts/adobe-source-serif/SourceSerif4-Regular.otf"
     },
     {
      "kind": "test",
@@ -1291,8 +1290,7 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Source Serif 4 (adobe-source-serif-fonts, OFL-1.1) for the same role; design-similar serif.",
-   "ready_failed": "file /usr/share/fonts/adobe-source-serif-fonts/SourceSerif4-Regular.otf: /usr/share/fonts/adobe-source-serif-fonts/SourceSerif4-Regular.otf is missing"
+   "ready_note": "Source Serif 4 (adobe-source-serif-fonts, OFL-1.1) for the same role; design-similar serif."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Georgia Bold.ttf",
@@ -1314,11 +1312,11 @@
    "note": "Closest installed stand-in: Noto Serif Bold (noto-fonts), serif stand-in; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
-     "path": "/usr/share/fonts/adobe-source-serif-fonts/SourceSerif4-Regular.otf"
+     "path": "/usr/share/fonts/adobe-source-serif/SourceSerif4-Regular.otf"
     },
     {
      "kind": "test",
@@ -1326,8 +1324,7 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Source Serif 4 (adobe-source-serif-fonts, OFL-1.1) for the same role; design-similar serif.",
-   "ready_failed": "file /usr/share/fonts/adobe-source-serif-fonts/SourceSerif4-Regular.otf: /usr/share/fonts/adobe-source-serif-fonts/SourceSerif4-Regular.otf is missing"
+   "ready_note": "Source Serif 4 (adobe-source-serif-fonts, OFL-1.1) for the same role; design-similar serif."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Georgia Italic.ttf",
@@ -1349,11 +1346,11 @@
    "note": "Closest installed stand-in: Noto Serif Italic (noto-fonts), serif stand-in; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
-     "path": "/usr/share/fonts/adobe-source-serif-fonts/SourceSerif4-Regular.otf"
+     "path": "/usr/share/fonts/adobe-source-serif/SourceSerif4-Regular.otf"
     },
     {
      "kind": "test",
@@ -1361,8 +1358,7 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Source Serif 4 (adobe-source-serif-fonts, OFL-1.1) for the same role; design-similar serif.",
-   "ready_failed": "file /usr/share/fonts/adobe-source-serif-fonts/SourceSerif4-Regular.otf: /usr/share/fonts/adobe-source-serif-fonts/SourceSerif4-Regular.otf is missing"
+   "ready_note": "Source Serif 4 (adobe-source-serif-fonts, OFL-1.1) for the same role; design-similar serif."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Georgia.ttf",
@@ -1384,11 +1380,11 @@
    "note": "Closest installed stand-in: Noto Serif (noto-fonts), serif stand-in; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
-     "path": "/usr/share/fonts/adobe-source-serif-fonts/SourceSerif4-Regular.otf"
+     "path": "/usr/share/fonts/adobe-source-serif/SourceSerif4-Regular.otf"
     },
     {
      "kind": "test",
@@ -1396,8 +1392,7 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Source Serif 4 (adobe-source-serif-fonts, OFL-1.1) for the same role; design-similar serif.",
-   "ready_failed": "file /usr/share/fonts/adobe-source-serif-fonts/SourceSerif4-Regular.otf: /usr/share/fonts/adobe-source-serif-fonts/SourceSerif4-Regular.otf is missing"
+   "ready_note": "Source Serif 4 (adobe-source-serif-fonts, OFL-1.1) for the same role; design-similar serif."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/GillSans.ttc",
@@ -1592,11 +1587,11 @@
    "note": "Herculanum resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
-     "path": "/usr/share/fonts/OTF/LibertinusSerif-Regular.otf"
+     "path": "/usr/share/fonts/libertinus/LibertinusSerif-Regular.otf"
     },
     {
      "kind": "test",
@@ -1604,8 +1599,7 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Libertinus Serif (otf-libertinus, OFL-1.1) for the same role; design-similar.",
-   "ready_failed": "file /usr/share/fonts/OTF/LibertinusSerif-Regular.otf: /usr/share/fonts/OTF/LibertinusSerif-Regular.otf is missing"
+   "ready_note": "Libertinus Serif (otf-libertinus, OFL-1.1) for the same role; design-similar."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Hoefler Text Ornaments.ttf",
@@ -1660,11 +1654,11 @@
    "note": "Hoefler Text resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
-     "path": "/usr/share/fonts/OTF/LibertinusSerif-Regular.otf"
+     "path": "/usr/share/fonts/libertinus/LibertinusSerif-Regular.otf"
     },
     {
      "kind": "test",
@@ -1672,8 +1666,7 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Libertinus Serif (otf-libertinus, OFL-1.1) for the same role; design-similar old-style serif.",
-   "ready_failed": "file /usr/share/fonts/OTF/LibertinusSerif-Regular.otf: /usr/share/fonts/OTF/LibertinusSerif-Regular.otf is missing"
+   "ready_note": "Libertinus Serif (otf-libertinus, OFL-1.1) for the same role; design-similar old-style serif."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/ITFDevanagari.ttc",
@@ -1784,11 +1777,11 @@
    "note": "Iowan Old Style resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
-     "path": "/usr/share/fonts/OTF/LibertinusSerif-Regular.otf"
+     "path": "/usr/share/fonts/libertinus/LibertinusSerif-Regular.otf"
     },
     {
      "kind": "test",
@@ -1796,8 +1789,7 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Libertinus Serif (otf-libertinus, OFL-1.1) for the same role; design-similar old-style serif.",
-   "ready_failed": "file /usr/share/fonts/OTF/LibertinusSerif-Regular.otf: /usr/share/fonts/OTF/LibertinusSerif-Regular.otf is missing"
+   "ready_note": "Libertinus Serif (otf-libertinus, OFL-1.1) for the same role; design-similar old-style serif."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/hand-bottom.pdf",
@@ -2137,11 +2129,11 @@
    "note": "Closest installed stand-in: P052 (gsfonts), Palatino-class serif stand-in; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
-     "path": "/usr/share/fonts/OTF/LibertinusSerif-Regular.otf"
+     "path": "/usr/share/fonts/libertinus/LibertinusSerif-Regular.otf"
     },
     {
      "kind": "test",
@@ -2149,8 +2141,7 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Libertinus Serif (otf-libertinus, OFL-1.1) for the same role; Garamond-like, design-similar (EB Garamond is not packaged).",
-   "ready_failed": "file /usr/share/fonts/OTF/LibertinusSerif-Regular.otf: /usr/share/fonts/OTF/LibertinusSerif-Regular.otf is missing"
+   "ready_note": "Libertinus Serif (otf-libertinus, OFL-1.1) for the same role; Garamond-like, design-similar (EB Garamond is not packaged)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Hopper Script.ttf",
@@ -2233,11 +2224,11 @@
    "note": "Graphik resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
-     "path": "/usr/share/fonts/inter/Inter-Regular.otf"
+     "path": "/usr/share/fonts/inter/InterVariable.ttf"
     },
     {
      "kind": "test",
@@ -2245,8 +2236,7 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Inter (inter-font, OFL-1.1) for the same role; design-similar grotesk.",
-   "ready_failed": "file /usr/share/fonts/inter/Inter-Regular.otf: /usr/share/fonts/inter/Inter-Regular.otf is missing"
+   "ready_note": "Inter (inter-font, OFL-1.1) for the same role; design-similar grotesk."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/GraphikCompact.ttc",
@@ -2268,11 +2258,11 @@
    "note": "GraphikCompact resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
-     "path": "/usr/share/fonts/inter/Inter-Regular.otf"
+     "path": "/usr/share/fonts/inter/InterVariable.ttf"
     },
     {
      "kind": "test",
@@ -2280,8 +2270,7 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Inter (inter-font, OFL-1.1) for the same role; design-similar grotesk, not compact.",
-   "ready_failed": "file /usr/share/fonts/inter/Inter-Regular.otf: /usr/share/fonts/inter/Inter-Regular.otf is missing"
+   "ready_note": "Inter (inter-font, OFL-1.1) for the same role; design-similar grotesk, not compact."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Gungseouche.ttf",
@@ -2387,11 +2376,11 @@
    "note": "HeadlineA resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
-     "path": "/usr/share/fonts/inter/Inter-Regular.otf"
+     "path": "/usr/share/fonts/inter/InterVariable.ttf"
     },
     {
      "kind": "test",
@@ -2399,8 +2388,7 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Inter (inter-font, OFL-1.1) for the same role; design-similar Latin display sans.",
-   "ready_failed": "file /usr/share/fonts/inter/Inter-Regular.otf: /usr/share/fonts/inter/Inter-Regular.otf is missing"
+   "ready_note": "Inter (inter-font, OFL-1.1) for the same role; design-similar Latin display sans."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Hei.ttf",

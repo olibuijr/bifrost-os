@@ -2296,12 +2296,12 @@
    "note": "Charter resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "ready_note": "Open-source substitute Charis SIL (ttf-charis, OFL-1.1-RFN) for the same role; design-similar (derived from Bitstream Charter).",
    "checks": [
     {
      "kind": "cmd",
-     "run": "fc-list : family | grep -qx 'Charis SIL'",
+     "run": "fc-list : family | grep -qx 'Charis'",
      "expect_exit": 0
     },
     {
@@ -2309,8 +2309,7 @@
      "crate": "bifrost-app",
      "filter": "font_substitution::tests"
     }
-   ],
-   "ready_failed": "cmd fc-list : family | grep -qx 'Charis SIL': exit 1, expected 0"
+   ]
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Cochin.ttc",

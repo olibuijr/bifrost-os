@@ -280,11 +280,11 @@
    "note": "Closest installed stand-in: Noto Sans (noto-fonts), humanist sans stand-in; closed by the open substitute named in ready_note.",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
-     "path": "/usr/share/fonts/adobe-source-sans-fonts/SourceSans3-Regular.otf"
+     "path": "/usr/share/fonts/adobe-source-sans/SourceSans3-Regular.otf"
     },
     {
      "kind": "test",
@@ -292,8 +292,7 @@
      "filter": "font_substitution::tests"
     }
    ],
-   "ready_note": "Source Sans 3 (adobe-source-sans-fonts, OFL-1.1) for the same role; the humanist class default.",
-   "ready_failed": "file /usr/share/fonts/adobe-source-sans-fonts/SourceSans3-Regular.otf: /usr/share/fonts/adobe-source-sans-fonts/SourceSans3-Regular.otf is missing"
+   "ready_note": "Source Sans 3 (adobe-source-sans-fonts, OFL-1.1) for the same role; the humanist class default."
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Kailasa.ttc",

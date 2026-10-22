@@ -2390,24 +2390,12 @@
    "doc": "",
    "bifrost": "perf (Arch package, tools/parity/os_cli_packages.txt)",
    "status": "partial",
-   "note": "The reference counter library reads hardware performance counters. Linux perf reads the same counters through perf_event_open and its command-line tools are in the package list. BifrOSt has no SDK counter API, and the perf probe is not verified on Midget. Built 2026-10-17: perf stat runs through the SDK with CSV counter parsing and unset counters as None (sdk perf_counters::tests).",
+   "note": "Not shipped: the Arch perf package is not in runtime-packages.txt (checked on Midget 0.10.16).",
    "rea": [],
    "method": "assessed",
    "ready": false,
-   "checks": [
-    {
-     "kind": "test",
-     "crate": "bifrost-app",
-     "filter": "perf_counters::tests"
-    },
-    {
-     "kind": "cmd",
-     "run": "command -v perf",
-     "expect_exit": 0
-    }
-   ],
-   "ready_note": "perf stat is run and its counter lines parsed through the SDK (perf_counters::tests). The perf probe on Midget is not verified.",
-   "ready_failed": "cmd command -v perf: exit 1, expected 0"
+   "checks": [],
+   "ready_note": ""
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ktrace.framework",

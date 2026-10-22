@@ -473,19 +473,20 @@ fn phrase_key(text: &str) -> (String, usize) {
     (words.join(" "), n)
 }
 
-/// Gives `translation` the capitals of `source`: all capitals stay all capitals, an initial capital stays one.
+/// Gives `translation` the capitals of `source`: all capitals stay all capitals, an initial capital or lower-case letter
+/// carries over to the first letter.
 fn recase(source: &str, translation: &str) -> String {
     let letters: Vec<char> = source.chars().filter(|c| c.is_alphabetic()).collect();
     if letters.len() > 1 && letters.iter().all(|c| c.is_uppercase()) {
         return translation.to_uppercase();
     }
-    if source.chars().next().map_or(false, |c| c.is_uppercase()) {
-        let mut chars = translation.chars();
-        if let Some(first) = chars.next() {
-            return first.to_uppercase().chain(chars).collect();
-        }
+    let mut chars = translation.chars();
+    match (source.chars().next(), chars.next()) {
+        (Some(s), Some(first)) if s.is_uppercase() => first.to_uppercase().chain(chars).collect(),
+        // a lower-case source gives a lower-case start, even where the pack spells the phrase as a label ("Vista")
+        (Some(s), Some(first)) if s.is_lowercase() => first.to_lowercase().chain(chars).collect(),
+        _ => translation.to_string(),
     }
-    translation.to_string()
 }
 
 impl GlossaryTranslator {

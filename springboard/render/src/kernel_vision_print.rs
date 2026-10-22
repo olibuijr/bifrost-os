@@ -16,6 +16,8 @@ pub const GRID: usize = 8;
 pub const ORIENT_BINS: usize = 8;
 /// Tones (after stretching the picture to its own range) are counted in this many bins.
 pub const TONE_BINS: usize = 8;
+/// Gradient magnitudes below this (tone 0..1 units) are rounding noise, not edges.
+const EDGE_FLOOR: f32 = 1e-4;
 /// Values in a feature print.
 pub const PRINT_LEN: usize = GRID * GRID + ORIENT_BINS + TONE_BINS;
 
@@ -80,6 +82,10 @@ pub fn feature_print(src: &[f32], w: usize, h: usize) -> Option<FeaturePrint> {
     let (mag, dir) = sobel(src, w, h)?;
     let mut orient = vec![0.0f32; ORIENT_BINS];
     for (m, d) in mag.iter().zip(&dir) {
+        // rounding leaves magnitudes near 1e-7 on a flat area; `unit` would blow that noise up to a full edge
+        if *m < EDGE_FLOOR {
+            continue;
+        }
         let mut a = *d;
         if a < 0.0 {
             a += std::f32::consts::PI;

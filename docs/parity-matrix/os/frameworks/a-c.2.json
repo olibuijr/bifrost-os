@@ -1677,7 +1677,7 @@
    "note": "On-device text translation. The SDK has the session, language availability and language-pack API (sdk::translation) and GlossaryTranslator (longest-phrase match over a pack, punctuation and spacing kept, capitals carried over, unknown words passed through, refused when fewer than half the words matched). New: two language packs ship, English to Icelandic and Icelandic to English (131 original phrases each: interface words, days, months, everyday phrases), installed by package-files.sh to /usr/share/bifrost/translation, and LanguagePack::system(), glossary() and session() open them; tests translate with the shipped files. It is a phrase-pack engine, not a neural model, so only the covered vocabulary translates and the Icelandic wording needs a native-speaker review. Not built: a neural engine, other language pairs, and an app or Settings entry that calls the system session.",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "ready_note": "Host tests parse the shipped packs and translate both ways; the file check proves the pack is installed.",
    "checks": [
     {
@@ -1698,8 +1698,7 @@
      "kind": "file",
      "path": "/usr/share/bifrost/translation/is-en.tsv"
     }
-   ],
-   "ready_failed": "test bifrost-app::translation::system_pack_tests: 1 failed, first translation::system_pack_tests::a_pair_without_a_pack_is_not_installed_and_a_broken_pack_spares_the_others; file /usr/share/bifrost/translation/en-is.tsv: /usr/share/bifrost/translation/en-is.tsv is missing; file /usr/share/bifrost/translation/is-en.tsv: /usr/share/bifrost/translation/is-en.tsv is missing"
+   ]
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ApplicationFirewall.framework",

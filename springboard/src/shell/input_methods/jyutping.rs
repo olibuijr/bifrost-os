@@ -442,9 +442,10 @@ mod tests {
 
     #[test]
     fn a_reading_without_candidates_ends_on_space() {
-        let mut c = typed("baau1");
+        // a valid syllable the table has no character for
+        let mut c = typed("deu6");
         assert_eq!(c.feed(' '), None, "the controller commits the reading and inserts the space");
-        assert_eq!(c.composed(), "baau1");
+        assert_eq!(c.composed(), "deu6");
     }
 
     #[test]

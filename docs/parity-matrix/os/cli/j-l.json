@@ -1159,18 +1159,12 @@
    "doc": "",
    "bifrost": "/usr/bin/lesskey",
    "status": "partial",
-   "note": "provided by Arch package less; not yet verified on Midget",
+   "note": "Not shipped: less 1:710 on Arch no longer installs lesskey (checked on Midget 0.10.16).",
    "rea": [],
    "method": "assessed",
    "ready": false,
-   "checks": [
-    {
-     "kind": "file",
-     "path": "/usr/bin/lesskey"
-    }
-   ],
-   "ready_note": "The Arch package less is in packaging/arch/runtime-packages.txt and installs /usr/bin/lesskey; the file check proves it is present on the installed system.",
-   "ready_failed": "file /usr/bin/lesskey: /usr/bin/lesskey is missing"
+   "checks": [],
+   "ready_note": ""
   },
   {
    "id": "path:/usr/bin/libnetcfg",
