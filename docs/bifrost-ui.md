@@ -6330,3 +6330,28 @@ The shell sees the pixels of the windows it draws itself; the window server comp
 | Screenshot, window mode (`capture_flow.rs`, `WindowGrab`) | once, at the window's full size; the window alone on a transparent ground with its shadow (`capture::window_picture`) | the cut from the composed screen (after a failure, or 2 s without an answer) |
 
 A window that failed is not asked about again for 5 s (`RETRY_AFTER_FAIL_MS`) except by a consumer that asks now; the pictures of windows that closed are freed every 2 s; a request nobody answers is given up after 4 s. The global is listed on the window server's privileged socket only, which the shell uses (`docs/window-server.md`, "Privileged socket and capture globals"): without it `set_window_capture(false)` and nothing is asked. Gaps: the screenshot's window mode picks windows by the rectangles the desk holds, so a window of another client (which the shell holds no rectangle for) cannot be picked in it yet (the window server reports frames only for a client's own toplevels); the Vulkan scanout answers `failed(unsupported)`. Tests: `window_shots::tests`, `overview::tests`, `desk::tests` (Dock), `capture_flow::tests`, `wm/tests/window_capture.rs`.
+
+## OS gap slice g4 (private frameworks: suggestions, embeddings, versions, generative layers)
+
+Rows advanced to `partial`; none is `parity` until the lab verify run. Apple's behaviour not matched is named per item.
+
+- **GenerativeModels: streamed local replies (`sdk/src/local_model_stream.rs`)**: `LocalModelProvider` implements
+  `StreamingModelProvider`: it asks the loopback engine for `"stream": true`, decodes chunked transfer and server-sent
+  events as bytes arrive, and passes answer text to `run_turn_streamed`. Tool calls (native `tool_calls` deltas or the
+  prompted JSON shape) are never shown as text. An engine that ignores `stream` still works (one piece). Stopping closes
+  the connection. Not matched: no on-device engine ships, so `on_device_availability()` stays `Unavailable`.
+- **EmbeddingCore: semantic score for document search (`ui/src/semantic_hash.rs`)**: `HashedSemantic` (words plus
+  character trigrams, 512 dimensions) is the `SemanticHook` of the Spotlight Documents source (`quicksearch::indexed_groups`).
+  Not matched: it is not a learned model (no synonyms), and app and settings results still use `NoSemantic`.
+- **GenerationalStorage: Versions browser model (`sdk/src/versions_browser.rs`)**: date labels, line-change summary, preview,
+  selection and Restore over the revision store; `DocumentController::open_versions` and `restore_version`. Not matched: the
+  shell has no Versions window yet; versions cannot be named or locked.
+- **GenerativeFunctions: tool choice and output cap (`ui/src/model_tool.rs`)**: `ToolChoice` (`Auto`, `Disabled`, `Only`)
+  limits what a request offers and what may run; `ToolSet::set_max_output` cuts long tool output and says how much was omitted.
+- **GenerativeFunctionsFoundation: partial output and JSON Schema (`ui/src/generation_partial.rs`)**: `partial_parse` reads
+  the JSON a model has written so far, `validate_partial` checks it without counting what has not arrived, `json_schema`
+  exports a schema for engines that constrain decoding. Not matched: the local provider does not send the schema as a
+  response format yet.
+- **CoreSuggestionsUI: durable dismissals (`ui/src/found_in.rs`)**: `Dismissed::to_text` and `from_text` (bounded to 500, oldest
+  first), `forget_app`, and `Pager::for_message` (extract, drop dismissed, page) for any message view. Not matched: the
+  Messages app does not call it yet, and Search has no suggestion section.
