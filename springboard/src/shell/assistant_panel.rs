@@ -167,15 +167,10 @@ impl Panel {
     }
 
     /// Starts a request for the field's text. Returns the messages to send, or None when nothing may be sent: the
-    /// panel is closed, the assistant is off, the backend is Off, or the field is empty. With the backend Off the
-    /// answer area says so instead.
+    /// panel is closed, the assistant is off, or the field is empty. With the backend Off the request is still taken:
+    /// it is matched on the device against the allowed intents (`assistant::ask`) and nothing leaves the machine.
     pub fn begin(&mut self, ui: &Ui, settings: &Settings) -> Option<Vec<(bool, String)>> {
         if !self.shown || !settings.enabled || self.waiting() {
-            return None;
-        }
-        if settings.backend == Backend::Off {
-            self.phase = Phase::Failed("Choose a backend in Settings > Assistant to ask questions.".into());
-            self.skip = 0;
             return None;
         }
         let text = self.field.text().trim().to_string();
@@ -226,6 +221,9 @@ impl Panel {
             Msg::Reply(Ok(Reply::Intent(call))) => {
                 let card = self.gate.propose(call);
                 self.phase = Phase::Card(card);
+            }
+            Msg::Reply(Err(assistant::Error::NoBackend)) => {
+                self.phase = Phase::Failed("I could not match that to an action. Choose a backend in Settings > Assistant for open questions.".into());
             }
             Msg::Reply(Err(e)) => self.phase = Phase::Failed(e.to_string()),
             Msg::Ran(Ok(Some(text))) => {
@@ -439,7 +437,9 @@ impl Shell {
     fn assistant_send(&mut self) {
         let settings = self.assistant_settings();
         let Some(messages) = self.assistant.begin(&self.ui, &settings) else { return };
-        let Some(api_key) = self.assistant_api_key() else {
+        // with the backend Off the request is matched on the device and no key is needed
+        let api_key = if settings.backend == Backend::Off { Some(String::new()) } else { self.assistant_api_key() };
+        let Some(api_key) = api_key else {
             self.assistant.fail("No API key is saved for the assistant. Add it to the keychain item is.olibuijr.assistant / anthropic-api-key.");
             return;
         };
@@ -541,14 +541,18 @@ mod tests {
     }
 
     #[test]
-    fn nothing_is_sent_while_the_backend_is_off() {
+    fn with_the_backend_off_the_request_stays_on_the_device() {
         let ui = ui();
         let mut p = shown(&ui);
         type_text(&mut p, &ui, "hello");
         let off = Settings { enabled: true, backend: Backend::Off, ..Settings::default() };
-        assert_eq!(p.begin(&ui, &off), None);
-        assert!(matches!(p.phase(), Phase::Failed(_)), "the panel says why nothing was sent");
-        assert_eq!(p.text(), "hello", "the question stays in the field");
+        let messages = p.begin(&ui, &off).expect("the request is taken for on-device matching");
+        assert_eq!(messages, vec![(true, "hello".to_string())]);
+        p.apply(Msg::Reply(Err(assistant::Error::NoBackend)));
+        match p.phase() {
+            Phase::Failed(text) => assert!(text.contains("Settings > Assistant"), "the panel says what to do: {text}"),
+            _ => panic!("an unmatched request is a failure"),
+        }
     }
 
     #[test]

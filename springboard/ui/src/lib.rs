@@ -1001,6 +1001,7 @@ pub mod data_store;
 pub mod ml_tensor;
 pub mod features;
 pub mod compute;
+pub mod ml_compile;
 pub mod ml_model;
 pub mod text_classifier;
 pub mod ml_state;
@@ -1044,6 +1045,7 @@ pub enum Event {
 pub mod ax;
 pub mod text_marker;
 pub mod speech;
+pub mod voice_profile;
 pub mod recognition;
 pub mod recognition_task;
 pub mod dictation_insert;

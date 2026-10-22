@@ -270,10 +270,13 @@ pub fn speech_engine(path_var: &str) -> Option<&'static str> {
 }
 
 /// Asks the chosen backend for one reply to `messages` (the turn from [`turn_messages`]) with the `intents` catalogue.
-/// Blocking: call it from a worker thread, never the UI thread. Nothing is sent while the backend is off.
+/// Blocking: call it from a worker thread, never the UI thread. Nothing is sent while the backend is off; the request is
+/// then understood on the device ([`assistant_client::local::match_text`], keyword matching against the intents the person
+/// allowed), and text that matches no intent is [`Error::NoBackend`].
 pub fn ask(settings: &Settings, connection: &Connection, messages: &[(bool, String)], intents: &Catalogue) -> Result<Reply, Error> {
     if settings.backend == Backend::Off {
-        return Err(Error::NoBackend);
+        let text = messages.iter().rev().find(|(from_person, _)| *from_person).map(|(_, text)| text.as_str()).unwrap_or("");
+        return assistant_client::local::match_text(text, intents).ok_or(Error::NoBackend);
     }
     assistant_client::ask(connection, messages, intents)
 }
@@ -282,6 +285,29 @@ pub fn ask(settings: &Settings, connection: &Connection, messages: &[(bool, Stri
 mod tests {
     use super::*;
     use bifrost_core::json;
+
+    #[test]
+    fn with_the_backend_off_a_request_is_matched_on_the_device() {
+        let connection = Connection { api_key: "unused".into(), model: "claude-haiku-5-5".into() };
+        let off = Settings { backend: Backend::Off, ..allowed(&["n.app"]) };
+        let catalogue = Catalogue {
+            entries: vec![Entry {
+                app_id: "n.app".into(),
+                app_name: "Notes".into(),
+                intent_id: "create-note".into(),
+                title: "Create note".into(),
+                description: String::new(),
+                params: vec![parse_param("text:string").unwrap()],
+            }],
+        };
+        let messages = turn_messages(false, &[], "create note Groceries");
+        match ask(&off, &connection, &messages, &catalogue) {
+            Ok(Reply::Intent(call)) => assert_eq!((call.app_id.as_str(), call.params[0].1.as_str()), ("n.app", "Groceries")),
+            other => panic!("expected an intent, got {other:?}"),
+        }
+        let unrelated = turn_messages(false, &[], "what is the weather");
+        assert_eq!(ask(&off, &connection, &unrelated, &catalogue), Err(Error::NoBackend));
+    }
 
     #[test]
     fn ask_sends_nothing_while_the_backend_is_off() {

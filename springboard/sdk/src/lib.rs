@@ -411,6 +411,7 @@ pub mod fs_module;
 pub mod file_version;
 pub mod save_sync;
 pub mod file_provider;
+pub mod family_controls;
 pub mod file_manager;
 /// File-manager sync extensions: badges, shortcut-menu items, a toolbar button and folder observation for Files.
 pub mod file_manager_sync;
