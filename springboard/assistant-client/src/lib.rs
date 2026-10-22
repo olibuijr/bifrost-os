@@ -4,6 +4,7 @@
 //! a blocking transport ([`transport`]). It depends on `bifrost-core` and TLS crates only, so the shell may depend on it.
 
 pub mod intents;
+pub mod local;
 pub mod sse;
 pub mod transport;
 pub mod wire;
