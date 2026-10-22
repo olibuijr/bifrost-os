@@ -1179,11 +1179,10 @@
    "role": "Web/office compatibility font: HelveticaNeue",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "open equivalent Liberation Sans (Arimo) (ttf-liberation), metric-compatible, glyph shapes differ. Closest installed stand-in: Nimbus Sans (gsfonts), Helvetica-class stand-in; closed by the open substitute named in ready_note.",
+   "status": "parity",
+   "note": "open equivalent Liberation Sans (Arimo) (ttf-liberation), metric-compatible, glyph shapes differ. Closest installed stand-in: Nimbus Sans (gsfonts), Helvetica-class stand-in; closed by the open substitute named in ready_note. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1274,11 +1273,10 @@
    "role": "Web/office compatibility font: Georgia Bold Italic",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Closest installed stand-in: Noto Serif Bold Italic (noto-fonts), serif stand-in; closed by the open substitute named in ready_note.",
+   "status": "parity",
+   "note": "Closest installed stand-in: Noto Serif Bold Italic (noto-fonts), serif stand-in; closed by the open substitute named in ready_note. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1308,11 +1306,10 @@
    "role": "Web/office compatibility font: Georgia Bold",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Closest installed stand-in: Noto Serif Bold (noto-fonts), serif stand-in; closed by the open substitute named in ready_note.",
+   "status": "parity",
+   "note": "Closest installed stand-in: Noto Serif Bold (noto-fonts), serif stand-in; closed by the open substitute named in ready_note. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1342,11 +1339,10 @@
    "role": "Web/office compatibility font: Georgia Italic",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Closest installed stand-in: Noto Serif Italic (noto-fonts), serif stand-in; closed by the open substitute named in ready_note.",
+   "status": "parity",
+   "note": "Closest installed stand-in: Noto Serif Italic (noto-fonts), serif stand-in; closed by the open substitute named in ready_note. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1376,11 +1372,10 @@
    "role": "Web/office compatibility font: Georgia",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Closest installed stand-in: Noto Serif (noto-fonts), serif stand-in; closed by the open substitute named in ready_note.",
+   "status": "parity",
+   "note": "Closest installed stand-in: Noto Serif (noto-fonts), serif stand-in; closed by the open substitute named in ready_note. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1583,11 +1578,10 @@
    "role": "Latin text/display font: Herculanum",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Herculanum resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
+   "status": "parity",
+   "note": "Herculanum resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1650,11 +1644,10 @@
    "role": "Latin text/display font: Hoefler Text",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Hoefler Text resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
+   "status": "parity",
+   "note": "Hoefler Text resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -1773,11 +1766,10 @@
    "role": "Latin text/display font: Iowan Old Style",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Iowan Old Style resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
+   "status": "parity",
+   "note": "Iowan Old Style resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2125,11 +2117,10 @@
    "role": "Web/office compatibility font: Garamond",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Closest installed stand-in: P052 (gsfonts), Palatino-class serif stand-in; closed by the open substitute named in ready_note.",
+   "status": "parity",
+   "note": "Closest installed stand-in: P052 (gsfonts), Palatino-class serif stand-in; closed by the open substitute named in ready_note. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2220,11 +2211,10 @@
    "role": "Latin text/display font: Graphik",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Graphik resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
+   "status": "parity",
+   "note": "Graphik resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2254,11 +2244,10 @@
    "role": "Latin text/display font: GraphikCompact",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "GraphikCompact resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
+   "status": "parity",
+   "note": "GraphikCompact resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -2372,11 +2361,10 @@
    "role": "Latin text/display font: HeadlineA",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "HeadlineA resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
+   "status": "parity",
+   "note": "HeadlineA resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",

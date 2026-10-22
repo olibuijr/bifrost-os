@@ -276,11 +276,10 @@
    "role": "Web/office compatibility font: LucidaGrande",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Closest installed stand-in: Noto Sans (noto-fonts), humanist sans stand-in; closed by the open substitute named in ready_note.",
+   "status": "parity",
+   "note": "Closest installed stand-in: Noto Sans (noto-fonts), humanist sans stand-in; closed by the open substitute named in ready_note. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",

@@ -2292,11 +2292,10 @@
    "role": "Latin text/display font: Charter",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Charter resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready.",
+   "status": "parity",
+   "note": "Charter resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Serif (noto-fonts), serif-class stand-in by class; its design differs from the reference, so the row is not ready. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "ready_note": "Open-source substitute Charis SIL (ttf-charis, OFL-1.1-RFN) for the same role; design-similar (derived from Bitstream Charter).",
    "checks": [
     {

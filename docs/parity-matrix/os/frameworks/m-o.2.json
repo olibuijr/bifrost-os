@@ -3676,11 +3676,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/render/src/svg_table.rs (SvgTable, glyph_markup, rasterize_glyph); springboard/render/src/svg.rs; springboard/render/src/font.rs",
-   "status": "partial",
-   "note": "OpenType-SVG glyphs: index, gunzip, glyph markup and rasterisation are built in render/src/svg_table.rs. Wired 2026-10-17: Font::parse keeps the SVG table index and the text renderer (render_placed) draws each glyph the table covers in colour, replacing its outline; a glyph whose document cannot be drawn keeps its outline.",
+   "status": "parity",
+   "note": "OpenType-SVG glyphs: index, gunzip, glyph markup and rasterisation are built in render/src/svg_table.rs. Wired 2026-10-17: Font::parse keeps the SVG table index and the text renderer (render_placed) draws each glyph the table covers in colour, replacing its outline; a glyph whose document cannot be drawn keeps its outline. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "test",

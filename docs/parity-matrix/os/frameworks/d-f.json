@@ -2954,11 +2954,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/disk_commands.rs; springboard/cmd/src/diskutil.rs",
-   "status": "partial",
-   "note": "Mount, unmount, eject, erase, partition, verify, repair and RAID commands through the disk session and diskutil. Disk arrival and removal events for apps are not provided (see disk-arbitration).",
+   "status": "parity",
+   "note": "Mount, unmount, eject, erase, partition, verify, repair and RAID commands through the disk session and diskutil. Disk arrival and removal events for apps are not provided (see disk-arbitration). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "cmd",

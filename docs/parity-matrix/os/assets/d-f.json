@@ -659,11 +659,10 @@
    "role": "Latin text/display font: Dash",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "Dash resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
+   "status": "parity",
+   "note": "Dash resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -693,11 +692,10 @@
    "role": "Latin text/display font: DomaineDisplay",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "DomaineDisplay resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
+   "status": "parity",
+   "note": "DomaineDisplay resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -755,11 +753,10 @@
    "role": "Latin text/display font: FoundersGrotesk",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "FoundersGrotesk resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
+   "status": "parity",
+   "note": "FoundersGrotesk resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -789,11 +786,10 @@
    "role": "Latin text/display font: FoundersGroteskCondensed",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "FoundersGroteskCondensed resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
+   "status": "parity",
+   "note": "FoundersGroteskCondensed resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
@@ -823,11 +819,10 @@
    "role": "Latin text/display font: FoundersGroteskText",
    "doc": "",
    "bifrost": "",
-   "status": "partial",
-   "note": "FoundersGroteskText resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note.",
+   "status": "parity",
+   "note": "FoundersGroteskText resolved to an open equivalent by class; no original face shipped. Closest installed stand-in: Noto Sans (noto-fonts), sans-class stand-in by class; closed by the open substitute named in ready_note. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "checks": [
     {
      "kind": "file",
