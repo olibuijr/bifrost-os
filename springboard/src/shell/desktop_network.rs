@@ -79,6 +79,8 @@ impl Interface {
 }
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Snapshot {
+    /// NetworkManager answered the last read; false (no service, or no read yet) means the link state is unknown here
+    pub managed: bool,
     pub interfaces: Vec<Interface>,
     pub wifi_available: bool,
     pub wifi_on: bool,
@@ -92,6 +94,29 @@ pub struct Snapshot {
     pub problem: Option<LinkProblem>,
     /// the VPN and WireGuard connections NetworkManager holds, with which ones are up
     pub vpns: Vec<VpnConnection>,
+}
+
+impl Snapshot {
+    /// Puts this snapshot's link state into `info` and keeps the snapshot. Without NetworkManager the link state is
+    /// unknown, not down: `info` keeps what the shell's own Wi-Fi stack read (a supplicant-managed device such as the
+    /// tablet), so no false "Disconnected" notice follows.
+    pub fn apply_to(self, info: &mut super::Info) {
+        if self.managed {
+            info.wifi_on = self.wifi_on;
+            // a joined link without an address or a DNS answer shows that in the menu bar, not the bare name
+            let problem = self.problem.map(LinkProblem::label);
+            info.wifi = if !self.wifi_available { "No adapter".into() } else if !self.wifi_on { "Off".into() } else { problem.map(str::to_string).or(self.ssid.clone()).unwrap_or_else(|| "Not Connected".into()) };
+            info.current_ssid = self.ssid.clone();
+            info.networks = self.networks.clone();
+            info.saved = self.saved.clone();
+            info.wifi_notice = self.error.clone().or(problem.map(str::to_string));
+            // the link kinds decide the glyph: a wired cable never shows as Wi-Fi
+            info.online = self.interfaces.iter().any(|i| i.kind == "wifi" && i.connected());
+            info.wired = self.interfaces.iter().any(|i| i.kind == "ethernet" && i.connected());
+            info.wifi_adapter = self.wifi_available;
+        }
+        info.desktop_network = Some(self);
+    }
 }
 
 /// A VPN configuration NetworkManager holds: a VPN plug-in connection (`vpn`) or a WireGuard one (`wireguard`).
@@ -373,6 +398,7 @@ fn fields(line: &str) -> Vec<String> {
 fn read() -> Snapshot {
     let mut s = Snapshot::default();
     if let Ok(text)=output("nmcli",&["--escape","no","-t","-f","GENERAL.DEVICE,GENERAL.TYPE,GENERAL.STATE,GENERAL.CONNECTION,GENERAL.CON-UUID,GENERAL.HWADDR,IP4.ADDRESS,IP4.GATEWAY,IP4.DNS,IP6.ADDRESS","device","show"]){
+        s.managed=true;
         for line in text.lines(){let Some((key,value))=line.split_once(':') else{continue};
             if key=="GENERAL.DEVICE" {s.interfaces.push(Interface{name:value.into(),..Interface::default()});continue;}
             let Some(i)=s.interfaces.last_mut() else{continue};
@@ -612,7 +638,8 @@ pub fn vpn_summary(profile: &VpnProfile) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_vpn_connections, security_of, vpn_profiles, vpn_summary, VpnConnection};
+    use super::{parse_vpn_connections, security_of, vpn_profiles, vpn_summary, Interface, Snapshot, VpnConnection};
+    use crate::shell::Info;
     use crate::net::wifi_config::{Eap, Security};
     use bifrost_core::tunnel::{VpnProfile, VpnProtocol};
 
@@ -673,6 +700,35 @@ mod tests {
         assert!(!valid_vpn_name("a\nb"));
         assert!(!valid_vpn_name(&"x".repeat(VPN_NAME_MAX + 1)));
         assert!(valid_vpn_name(&"x".repeat(VPN_NAME_MAX)));
+    }
+
+    fn wifi_link(status: &str) -> Interface {
+        Interface { name: "wlan0".into(), kind: "wifi".into(), status: status.into(), ..Interface::default() }
+    }
+
+    #[test]
+    fn without_the_network_service_the_link_state_stays_unknown_and_untouched() {
+        // the shell's own Wi-Fi stack read a joined network; there is no NetworkManager to say otherwise
+        let mut info = Info { online: true, current_ssid: Some("Home".into()), wifi: "Home".into(), wifi_on: true, wifi_adapter: true, ..Info::default() };
+        Snapshot::default().apply_to(&mut info);
+        assert!(info.online, "an absent service is not a disconnect");
+        assert_eq!((info.current_ssid.as_deref(), info.wifi.as_str()), (Some("Home"), "Home"));
+        assert!(info.wifi_on && info.wifi_adapter);
+        assert!(info.desktop_network.is_some(), "the rest of the snapshot is still kept");
+    }
+
+    #[test]
+    fn a_service_that_reports_a_disconnect_clears_the_link() {
+        let mut info = Info { online: true, current_ssid: Some("Home".into()), wifi: "Home".into(), ..Info::default() };
+        let down = Snapshot { managed: true, wifi_available: true, wifi_on: true, interfaces: vec![wifi_link("30 (disconnected)")], ..Snapshot::default() };
+        down.apply_to(&mut info);
+        assert!(!info.online);
+        assert_eq!((info.current_ssid, info.wifi.as_str()), (None, "Not Connected"));
+        let mut up = Info::default();
+        let joined = Snapshot { managed: true, wifi_available: true, wifi_on: true, ssid: Some("Home".into()), interfaces: vec![wifi_link("100 (connected)")], ..Snapshot::default() };
+        joined.apply_to(&mut up);
+        assert!(up.online);
+        assert_eq!((up.current_ssid.as_deref(), up.wifi.as_str()), (Some("Home"), "Home"));
     }
 
     #[test]
