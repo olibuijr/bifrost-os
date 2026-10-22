@@ -554,14 +554,28 @@ pub enum Action {
     AppPane(usize, String),
 }
 
-/// Compile-time identity of this build (build.rs supplies the git fields).
+/// Identity of this build: the crate version, and the git commit and date the update package recorded in
+/// [`BUILD_INFO`] when it was made. The commit is not compiled in, so a commit never forces a rebuild of the crate.
 pub struct Build {
     pub version: &'static str,
     pub git: &'static str,
     pub date: &'static str,
 }
 
-pub const BUILD: Build = Build { version: env!("CARGO_PKG_VERSION"), git: match option_env!("SPRINGBOARD_GIT") { Some(g) => g, None => "unknown" }, date: match option_env!("SPRINGBOARD_BUILD_DATE") { Some(d) => d, None => "unknown" } };
+/// Written by `packaging/arch/package-files.sh`: `git=<commit>` and `date=<YYYY-MM-DD>` lines.
+pub const BUILD_INFO: &str = "/usr/share/springboard/build-info";
+
+pub static BUILD: std::sync::LazyLock<Build> = std::sync::LazyLock::new(|| build_from(std::fs::read_to_string(BUILD_INFO).ok().as_deref()));
+
+/// The build identity from the text of a build-info file; a missing file or key reads "unknown".
+pub fn build_from(info: Option<&str>) -> Build {
+    let field = |key: &str| -> &'static str {
+        info.and_then(|t| t.lines().find_map(|l| l.strip_prefix(key)?.strip_prefix('=')).map(str::trim))
+            .filter(|v| !v.is_empty())
+            .map_or("unknown", |v| Box::leak(v.to_string().into_boxed_str()))
+    };
+    Build { version: env!("CARGO_PKG_VERSION"), git: field("git"), date: field("date") }
+}
 
 /// Live state a page is built from.
 pub struct Model<'a> {
@@ -2920,6 +2934,11 @@ mod tests {
         let u = spec(PageId::SoftwareUpdate, &m);
         assert_eq!(u.groups[0].items[0].value, env!("CARGO_PKG_VERSION"));
         assert!(!BUILD.git.is_empty() && !BUILD.date.is_empty());
+        let b = build_from(Some("git=0123abcd4567\ndate=2026-10-22\n"));
+        assert_eq!((b.git, b.date), ("0123abcd4567", "2026-10-22"));
+        let none = build_from(None);
+        assert_eq!((none.git, none.date), ("unknown", "unknown"), "no build-info file: a dev build");
+        assert_eq!(build_from(Some("date=2026-10-22")).git, "unknown");
         let t = spec(PageId::DateTime, &m);
         // the clock options (24-hour, date and day in the menu bar) take groups 1 and 2, so Time Zone and Time are group 3
         assert_eq!(t.groups[3].items[1].value, "14:05");

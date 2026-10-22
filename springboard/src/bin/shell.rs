@@ -44,7 +44,7 @@ fn run() -> std::io::Result<()> {
     }
     if args.get(1).map(String::as_str) == Some("--version") {
         // build stamp for `bifrost pc` diagnostics
-        let b = springboard::shell::pages::BUILD;
+        let b = &*springboard::shell::pages::BUILD;
         println!("{} {} {}", b.version, b.git, b.date);
         return Ok(());
     }

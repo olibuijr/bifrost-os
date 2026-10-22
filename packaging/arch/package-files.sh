@@ -1,6 +1,13 @@
 # Shared system payload. Caller supplies package root, binary and static guard.
 package_bifrost_files() {
   local here=$1 binary=$2 guard=$3
+  # the build's identity for Settings > General > About and the updater (springboard reads it at run time, so a commit
+  # never forces the crate to recompile): the commit, `+` when springboard/ has uncommitted changes, and the date
+  local git_rev
+  git_rev=$(git -C "$here" rev-parse --short=12 HEAD 2>/dev/null || echo untracked)
+  [[ -n "$(git -C "$here/../../springboard" status --porcelain --untracked-files=no . 2>/dev/null)" ]] && git_rev+="+"
+  install -d "$pkgdir/usr/share/springboard"
+  printf 'git=%s\ndate=%s\n' "$git_rev" "$(date -u +%F)" > "$pkgdir/usr/share/springboard/build-info"
   install -Dm755 "$here/wayland/open-url" "$pkgdir/usr/bin/bifrost-open-url"
   install -Dm644 "$here/wayland/bifrost-browser.desktop" "$pkgdir/usr/share/applications/bifrost-browser.desktop"
   install -Dm644 "$here/wayland/mimeapps.list" "$pkgdir/etc/xdg/mimeapps.list"
