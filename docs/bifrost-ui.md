@@ -6026,8 +6026,15 @@ Still missing from that list: `UNNotificationSound`, attachments, `userInfo`, in
   Parity row: `core-hid.json`.
 - **Icon images (`bifrost_app::icon_images`)**: `IconImages` maps content type identifiers to bitmap sets (the nearest registered
   ancestor wins) and a folder icon (`FOLDER`). No caller found.
-- **Raster 3D (`bifrost_ui::raster3d`)**: a CPU triangle rasteriser with a depth buffer; each triangle is lit once at its centroid.
-  A triangle with a vertex at or behind the eye is skipped, not clipped. A stand-in for a GPU rasteriser. No caller found.
+- **Raster 3D (`bifrost_ui::raster3d`)**: a CPU triangle rasteriser with a depth buffer. `draw` lights each triangle once at
+  its centroid; `draw_shaded` lights every pixel (Blinn-Phong or metallic-roughness GGX through `shading::shade_pbr`) from
+  perspective-correct interpolated normals and texture coordinates, with an optional bilinear `Texture` (repeat or clamp).
+  Both clip triangles against the near and eye planes. Missing: GPU rasterisation, mip-mapping, shadows and image-based
+  lighting. A stand-in for a GPU rasteriser; the scene widget still uses the flat path.
+- **Photo analysis (`bifrost_render::photo_analysis`)**: on-device quality measures for a photo library (mean brightness,
+  contrast, shadow and highlight clipping, Laplacian-variance focus, colourfulness, exposure and focus verdicts) and a
+  64-bit perceptual difference hash for near-duplicate detection. Classical measures with fixed thresholds, no trained
+  model: learned aesthetics and subject recognition are not covered. No caller found yet.
 
 ### Contacts and phone numbers
 
