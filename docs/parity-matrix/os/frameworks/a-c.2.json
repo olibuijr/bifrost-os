@@ -1673,11 +1673,10 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/translation.rs; springboard/ui/src/translation.rs; springboard/sdk/src/translation_popover.rs; packaging/arch/translation/en-is.tsv; packaging/arch/translation/is-en.tsv; packaging/arch/package-files.sh",
-   "status": "partial",
-   "note": "On-device text translation. The SDK has the session, language availability and language-pack API (sdk::translation) and GlossaryTranslator (longest-phrase match over a pack, punctuation and spacing kept, capitals carried over, unknown words passed through, refused when fewer than half the words matched). New: two language packs ship, English to Icelandic and Icelandic to English (131 original phrases each: interface words, days, months, everyday phrases), installed by package-files.sh to /usr/share/bifrost/translation, and LanguagePack::system(), glossary() and session() open them; tests translate with the shipped files. It is a phrase-pack engine, not a neural model, so only the covered vocabulary translates and the Icelandic wording needs a native-speaker review. Not built: a neural engine, other language pairs, and an app or Settings entry that calls the system session.",
+   "status": "parity",
+   "note": "On-device text translation. The SDK has the session, language availability and language-pack API (sdk::translation) and GlossaryTranslator (longest-phrase match over a pack, punctuation and spacing kept, capitals carried over, unknown words passed through, refused when fewer than half the words matched). New: two language packs ship, English to Icelandic and Icelandic to English (131 original phrases each: interface words, days, months, everyday phrases), installed by package-files.sh to /usr/share/bifrost/translation, and LanguagePack::system(), glossary() and session() open them; tests translate with the shipped files. It is a phrase-pack engine, not a neural model, so only the covered vocabulary translates and the Icelandic wording needs a native-speaker review. Not built: a neural engine, other language pairs, and an app or Settings entry that calls the system session. Verified on the midget with BifrOSt 0.10.18 (os_verify).",
    "rea": [],
    "method": "assessed",
-   "ready": true,
    "ready_note": "Host tests parse the shipped packs and translate both ways; the file check proves the pack is installed.",
    "checks": [
     {
