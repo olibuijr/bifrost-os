@@ -145,7 +145,7 @@ impl SvgTable<'_> {
     /// Draws glyph `gid` at `px_per_em` pixels per em: finds its document, gunzips it, cuts out the glyph's markup and
     /// rasterises it with the SVG reader. The glyph's origin is at the baseline with the y axis pointing down, as in
     /// OpenType-SVG, so the image covers `-ascent..descent` vertically and `0..advance` horizontally. Features the SVG
-    /// reader does not draw (gradients, transforms, strokes) leave their pixels clear. `None` when no document covers the
+    /// reader does not draw (gradients, clipping, text) leave their pixels clear. `None` when no document covers the
     /// glyph, the metrics are empty, or the size is zero or too large.
     pub fn rasterize_glyph(&self, gid: u16, m: GlyphMetrics, px_per_em: f32) -> Option<ColorGlyph> {
         let height_units = u32::from(m.ascent) + u32::from(m.descent);
