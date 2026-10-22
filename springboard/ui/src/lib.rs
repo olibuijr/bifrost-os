@@ -1001,6 +1001,7 @@ pub mod data_store;
 pub mod ml_tensor;
 pub mod features;
 pub mod compute;
+pub mod ml_compile;
 pub mod ml_model;
 pub mod text_classifier;
 pub mod ml_state;
