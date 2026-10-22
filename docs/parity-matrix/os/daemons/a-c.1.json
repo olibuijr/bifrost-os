@@ -1040,8 +1040,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/screentime/mod.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs, springboard/sdk/src/family_controls.rs",
-   "status": "parity",
-   "note": "The on-device part of family controls is Screen Time: per-app daily limits, Downtime, the shield over a blocked app and a passcode-guarded ignore grant, all local. Built 2026-10-22: the app-facing authorization (sdk family_controls.rs: request, owner decision, revoke; approved apps set blocked-app lists that vanish on revoke; Settings is never blockable; the text state re-applies the rules on load). Missing: the shell reading FamilyControls::is_blocked next to Config::block, the authorization prompt, and remote family management through an account (no family account service). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
+   "status": "partial",
+   "note": "Partial: on-device Screen Time works (per-app limits, Downtime, the shield and a passcode-guarded ignore grant) with the family-controls policy module; remote family management through accounts is not mirrored.",
    "rea": [],
    "method": "heuristic",
    "checks": [
@@ -1066,7 +1066,8 @@
      "filter": "family_controls::tests"
     }
    ],
-   "ready_note": "Screen Time limits, Downtime and the shield are tested, as is the new authorization model (approval gate, protected apps, revoke clears restrictions, hand-edited state cannot grant more)."
+   "ready_note": "Screen Time limits, Downtime and the shield are tested, as is the new authorization model (approval gate, protected apps, revoke clears restrictions, hand-edited state cannot grant more).",
+   "ready": false
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.FeatureAccessAgent.plist",
@@ -2271,8 +2272,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/assistant.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/services/recognizer.rs, springboard/assistant-client/src/local.rs",
-   "status": "parity",
-   "note": "BifrOSt has its own assistant: a panel opened by a shortcut (assistant_panel.rs), a service that decides what the assistant may see and do (assistant.rs, off by default, no history by default) and on-device speech recognition (recognizer.rs, whisper, consent first). Built 2026-10-22: with no backend chosen the request is matched on the device against the allowed intents (assistant-client local.rs: title keywords, quoted phrase or rest of sentence as the first parameter, app named to break ties) and still goes through the confirmation gate. It uses no vendor model or account. Missing: language understanding beyond keyword matching (open questions still need a backend), and a local language model backend. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
+   "status": "partial",
+   "note": "Partial: the assistant panel, its permission service and on-device speech exist (assistant.rs, assistant_panel.rs, recognizer.rs), and the local model client streams answers, but no on-device model ships, so the assistant cannot answer yet.",
    "rea": [],
    "method": "heuristic",
    "checks": [
@@ -2302,7 +2303,8 @@
      "filter": "local::tests"
     }
    ],
-   "ready_note": "Typed and spoken requests, intents with per-app access, the privacy gates and the new on-device intent matcher (with the backend Off) are tested."
+   "ready_note": "Typed and spoken requests, intents with per-app access, the privacy gates and the new on-device intent matcher (with the backend Off) are tested.",
+   "ready": false
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.SiriTTSTrainingAgent.plist",

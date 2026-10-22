@@ -99,14 +99,18 @@ fn shell_roles_are_mapped_and_platform_services_are_classified() {
         "com.apple.coreservices.sharedfilelistd",
         "com.apple.screensharing",
     ] {
-        assert_eq!(status_of(n), "partial", "{n} should be mapped to the shell service that fills its role");
+        let s = status_of(n);
+        assert!(s == "partial" || s == "parity", "{n} should be mapped to the shell service that fills its role (parity once verified on the lab machine), got {s}");
     }
+    // built in part (2026-10-22), but not complete: no on-device model ships for the assistant, and family controls are
+    // local Screen Time only. They must not claim parity until those exist.
     for n in ["com.apple.Siri.agent", "com.apple.FamilyControlsAgent"] {
-        assert_eq!(status_of(n), "gap", "{n} has no real counterpart and must stay a gap");
+        assert_eq!(status_of(n), "partial", "{n} is only partly built and must stay partial");
     }
     for n in ["com.apple.iCloudNotificationAgent", "com.apple.icloud.searchpartyd"] {
         assert_eq!(status_of(n), "n/a", "{n} is a vendor cloud service with no BifrOSt counterpart");
     }
-    assert_eq!(status_of("com.apple.ScreenTimeAgent"), "partial", "Screen Time usage and limits are mapped in the shell");
+    let st = status_of("com.apple.ScreenTimeAgent");
+    assert!(st == "partial" || st == "parity", "Screen Time usage and limits are mapped in the shell, got {st}");
     assert_eq!(status_of("com.apple.MemorySlotNotification"), "n/a", "platform-specific memory slot hardware");
 }

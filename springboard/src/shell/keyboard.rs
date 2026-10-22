@@ -385,6 +385,8 @@ pub struct Keyboard {
     touching: bool,
     /// the user opened this keyboard on purpose (the desktop's Input menu): the session-wide switch-off does not apply
     user_opened: bool,
+    /// Raised at least once with `set_shown(true)`: only then may a claim start the keyboard process.
+    raised: bool,
 }
 
 impl Keyboard {
@@ -419,6 +421,7 @@ impl Keyboard {
             slide: None,
             touching: false,
             user_opened: false,
+            raised: false,
         };
         k.claim(false);
         k
@@ -513,9 +516,10 @@ impl Keyboard {
             if self.shown && (take_over || svc.owner == 0) {
                 svc.owner = id;
             }
-            // the process starts when the keyboard in use is shown, also one created shown (the shell's, which the lock
-            // screen raises at once); a hidden view never starts it, and a desktop never shows one
-            if self.shown && svc.owner == id {
+            // the process starts when the keyboard in use is shown after it was raised: never because a view was created
+            // (a desktop never shows one, and a page that makes a keyboard shown must not start it), and again on a later
+            // claim of a raised keyboard (a tablet's rotation or accessory row restarts a process that went away)
+            if self.shown && svc.owner == id && (take_over || self.raised) {
                 svc.ensure(w, h, s);
             }
             if svc.owner == id {
@@ -621,6 +625,9 @@ impl Keyboard {
                 return;
             }
             self.slide = Some((t, shown));
+            if shown {
+                self.raised = true;
+            }
             self.claim(true);
         }
     }
@@ -650,6 +657,15 @@ impl Keyboard {
             let kx = (self.w / self.s / 768.0).max(1.0);
             let ky = kx.min(4.0 / 3.0);
             (258.0 + if self.predictive { 55.0 } else { 0.0 } + if self.accessory { 50.0 } else { 0.0 }) * self.s * ky
+        })
+    }
+
+    /// Why the keyboard animates, for test messages: the slide in progress and the shared service's state.
+    #[cfg(test)]
+    pub fn animation_state(&self) -> String {
+        SERVICE.with(|s| {
+            let s = s.borrow();
+            format!("slide {:?}, shown {}, owner {} (self {}), dirty {}, blocked {}", self.slide, self.shown, s.owner, self.id, s.dirty, self.blocked())
         })
     }
 
@@ -835,6 +851,8 @@ mod disabled_tests {
 
     #[test]
     fn a_disabled_keyboard_never_shows_or_reserves_room() {
+        // the policy is process-global: tests that raise keyboards hold the same lock
+        let _lock = crate::test_support::global_lock();
         set_disabled(true);
         let mut k = Keyboard::new_hidden(1000.0, 1.0);
         k.set_shown(true, 0.0);

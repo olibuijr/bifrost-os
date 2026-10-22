@@ -71,8 +71,10 @@ impl Files {
             place("Computer", "desktopcomputer", PathBuf::from("/")),
             place("Trash", "trash", self.bin()),
         ];
-        // removable volumes mounted now follow Trash, each with an Eject text
-        let volumes = springboard::files::volumes::mounted().into_iter().map(|v| Place { label: v.name, symbol: "externaldrive", dot: None, path: v.mount, eject: Some(v.device) });
+        // removable volumes mounted now follow Trash, each with an Eject text; under the test pin none are listed, so a
+        // snapshot does not depend on the disks plugged into the machine that runs it
+        let mounted = if bifrost_app::testing::pinned() { Vec::new() } else { springboard::files::volumes::mounted() };
+        let volumes = mounted.into_iter().map(|v| Place { label: v.name, symbol: "externaldrive", dot: None, path: v.mount, eject: Some(v.device) });
         // file provider domains (installed apps that serve one) follow the volumes
         let providers = provider::shared().rows().into_iter().map(|(label, path)| Place { label, symbol: "externaldrive", dot: None, path, eject: None });
         let locations: Vec<Place> = locations.into_iter().chain(volumes).chain(providers).collect();

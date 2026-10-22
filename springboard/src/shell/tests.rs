@@ -307,6 +307,8 @@
 
     #[test]
     fn the_tablet_desktop_keyboard_follows_the_app_store_search_field() {
+        // the keyboard policy is process-global and another test switches it off (keyboard::disabled_tests)
+        let _lock = crate::test_support::global_lock();
         let mut sh = tablet_desk_with_window_under_keyboard();
         sh.desk_open(AppId::AppStore, 0.);
         assert_eq!(sh.desk_text_focus(), Some(false), "the Today tab has no field");
@@ -318,6 +320,8 @@
 
     #[test]
     fn a_tablet_keyboard_lifts_the_front_window_clear_of_it_and_lets_it_back_down() {
+        // the keyboard policy is process-global and another test switches it off (keyboard::disabled_tests)
+        let _lock = crate::test_support::global_lock();
         let mut sh = tablet_desk_with_window_under_keyboard();
         sh.set_keyboard(true, 1000.);
         assert!(sh.keyboard.shown(), "a tablet raises the keyboard over the desktop");
@@ -332,19 +336,26 @@
 
     #[test]
     fn a_still_tablet_desktop_with_the_keyboard_up_stops_asking_for_frames() {
+        // the keyboard policy is process-global and another test switches it off (keyboard::disabled_tests)
+        let _lock = crate::test_support::global_lock();
         let mut sh = tablet_desk_with_window_under_keyboard();
         sh.set_keyboard(true, 1000.);
         let mut buf = vec![0u32; 1200 * 1920];
         // past the dock's launch bounce for the window (at most 10 s)
+        // the frame loop ticks before it draws (the keyboard's slide ends in `tick`)
         for t in [20000., 20016.] {
+            sh.tick(t);
             sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, t);
         }
-        assert!(sh.keyboard.shown() && !sh.keyboard.animating());
+        assert!(sh.keyboard.shown(), "the keyboard is up (form {:?}, allowed {})", sh.form, sh.keyboard_allowed());
+        assert!(!sh.keyboard.animating(), "the keyboard has settled: {}", sh.keyboard.animation_state());
         assert!(!sh.needs_frame(), "nothing moves: {}", sh.frame_reason());
     }
 
     #[test]
     fn a_window_the_user_moved_while_lifted_stays_where_the_user_put_it() {
+        // the keyboard policy is process-global and another test switches it off (keyboard::disabled_tests)
+        let _lock = crate::test_support::global_lock();
         let mut sh = tablet_desk_with_window_under_keyboard();
         sh.set_keyboard(true, 1000.);
         sh.desk.as_mut().unwrap().wins[0].r.y = 500;
@@ -354,6 +365,8 @@
 
     #[test]
     fn the_desktop_form_never_lifts_a_window_for_the_keyboard() {
+        // the keyboard policy is process-global and another test switches it off (keyboard::disabled_tests)
+        let _lock = crate::test_support::global_lock();
         let mut sh = tablet_desk_with_window_under_keyboard();
         sh.form = bifrost_ui::form_factor::FormFactor::Desktop;
         sh.set_keyboard(true, 1000.);
@@ -1698,7 +1711,8 @@
         sh.perf.fps=60.;let mut expected=pixels.clone();
         sh.draw_desktop_background(&mut Surface{w,h,stride:w,px:&mut expected,y0:0});
         sh.draw_perf(&mut Surface{w,h,stride:w,px:&mut expected,y0:0});
-        sh.perf_only=true;
+        // as `tick` sets them when only the HUD's reading changed: the perf-only frame, and dirty
+        sh.perf_only=true;sh.dirty=true;
         let damage=sh.draw(&mut Surface{w,h,stride:w,px:&mut pixels,y0:0},1000.);
         assert!(!damage.is_all());assert!(damage.pixels()<w*h/10);
         assert!(pixels==expected,"partial HUD repaint differs from full desktop");
