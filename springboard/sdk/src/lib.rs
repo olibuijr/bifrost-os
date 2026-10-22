@@ -389,6 +389,8 @@ pub mod layer_tree {
 pub mod document;
 pub mod document_package;
 pub mod revisions;
+/// The Versions browser model: saved versions of a document, change summary, preview and Restore.
+pub mod versions_browser;
 pub mod markup;
 pub mod log;
 pub mod signpost;
@@ -417,6 +419,8 @@ pub mod file_manager;
 pub mod file_manager_sync;
 /// A model provider for the local inference engine on a loopback port (`LocalModelProvider`).
 pub mod local_model;
+/// Streamed replies from the local engine (server-sent events) for `StreamingModelProvider`.
+pub mod local_model_stream;
 /// On-demand resources: tagged payloads fetched when asked for, pinned while used, purged under a disk budget.
 pub mod on_demand_resources;
 pub mod url;

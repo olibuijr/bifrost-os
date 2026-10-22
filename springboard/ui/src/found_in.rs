@@ -1,18 +1,19 @@
 //! "Found in" suggestions: the events, flights, contacts and addresses a message mentions, offered back to the person
 //! as things to add to the calendar, look up, save or open in the map. Everything runs on the device, over text the
 //! app already shows; nothing is sent anywhere and nothing is kept except the keys of the suggestions the person
-//! turned down ([`Dismissed`]).
+//! turned down ([`Dismissed`], which an app keeps between launches with [`Dismissed::to_text`]).
 //!
 //! [`extract`] reads the text: a meeting time ([`crate::proposed_event`]), a flight number with the airports named
 //! beside it (the table in [`airport`] gives each airport's city and time zone), and the emails, phone numbers and
 //! street addresses of [`crate::detect`]. Each result is a [`Found`] that knows the app and message it came from. A
 //! [`Pager`] is the model of the popover that shows them one at a time ("2 of 3"), with next, previous, dismiss and
 //! accept. Accepting hands back an [`Action`] for the app to run; the view and the calendar, contacts and map stores
-//! belong to the shell and the apps.
+//! belong to the shell and the apps. [`Pager::for_message`] does the whole read for one message (extract, drop what was
+//! turned down, page), which is all a Messages or Notes view needs to offer suggestions beside its text.
 
 use crate::detect::{self, Kind};
 use crate::proposed_event::{self, ProposedEvent};
-use std::collections::BTreeSet;
+use std::collections::VecDeque;
 use std::ops::Range;
 
 /// An airport the suggestion engine knows: its IATA code, the city it serves and the time zone of that city.
@@ -412,19 +413,30 @@ pub fn extract(source: &Source, text: &str, region: &str) -> Vec<Found> {
     out
 }
 
-/// The keys of suggestions the person turned down.
+/// The most dismissed keys kept; the oldest are forgotten first, so the list stays small.
+pub const MAX_DISMISSED: usize = 500;
+
+/// The keys of suggestions the person turned down, oldest first.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Dismissed {
-    keys: BTreeSet<String>,
+    keys: VecDeque<String>,
 }
 
 impl Dismissed {
+    /// Remembers a suggestion as turned down. Turning one down again moves it to the newest place; past
+    /// [`MAX_DISMISSED`] the oldest key is forgotten.
     pub fn add(&mut self, found: &Found) {
-        self.keys.insert(found.key());
+        let key = found.key();
+        self.keys.retain(|k| *k != key);
+        self.keys.push_back(key);
+        while self.keys.len() > MAX_DISMISSED {
+            self.keys.pop_front();
+        }
     }
 
     pub fn contains(&self, found: &Found) -> bool {
-        self.keys.contains(&found.key())
+        let key = found.key();
+        self.keys.iter().any(|k| *k == key)
     }
 
     /// `items` without the ones turned down.
@@ -439,6 +451,60 @@ impl Dismissed {
     pub fn is_empty(&self) -> bool {
         self.keys.is_empty()
     }
+
+    /// Forgets everything turned down for `app` (for example when its data is cleared). Returns how many were forgotten.
+    pub fn forget_app(&mut self, app: &str) -> usize {
+        // a key is `Kind|app|title|row`, and an app name has no `|`
+        let before = self.keys.len();
+        self.keys.retain(|k| k.split('|').nth(1) != Some(app));
+        before - self.keys.len()
+    }
+
+    /// The text an app stores: one key per line, oldest first, with `\`, newline and carriage return escaped.
+    pub fn to_text(&self) -> String {
+        let mut out = String::new();
+        for key in &self.keys {
+            for c in key.chars() {
+                match c {
+                    '\\' => out.push_str("\\\\"),
+                    '\n' => out.push_str("\\n"),
+                    '\r' => out.push_str("\\r"),
+                    c => out.push(c),
+                }
+            }
+            out.push('\n');
+        }
+        out
+    }
+
+    /// Reads what [`Dismissed::to_text`] wrote. Blank lines are skipped, an unknown escape keeps its character, and only
+    /// the newest [`MAX_DISMISSED`] keys are kept, so a damaged or oversized file cannot grow the list.
+    pub fn from_text(text: &str) -> Dismissed {
+        let mut keys: VecDeque<String> = VecDeque::new();
+        for line in text.lines().filter(|l| !l.is_empty()) {
+            let mut key = String::new();
+            let mut chars = line.chars();
+            while let Some(c) = chars.next() {
+                if c != '\\' {
+                    key.push(c);
+                    continue;
+                }
+                match chars.next() {
+                    Some('n') => key.push('\n'),
+                    Some('r') => key.push('\r'),
+                    Some(other) => key.push(other),
+                    None => {}
+                }
+            }
+            if !keys.contains(&key) {
+                keys.push_back(key);
+            }
+        }
+        while keys.len() > MAX_DISMISSED {
+            keys.pop_front();
+        }
+        Dismissed { keys }
+    }
 }
 
 /// The popover that pages through suggestions one at a time.
@@ -451,6 +517,12 @@ pub struct Pager {
 impl Pager {
     pub fn new(items: Vec<Found>) -> Self {
         Pager { items, index: 0 }
+    }
+
+    /// The pager for one message: its suggestions ([`extract`]) without the ones already turned down. Empty (and so not
+    /// shown) when the message holds nothing to suggest.
+    pub fn for_message(source: &Source, text: &str, region: &str, dismissed: &Dismissed) -> Pager {
+        Pager::new(dismissed.filter(extract(source, text, region)))
     }
 
     pub fn len(&self) -> usize {
@@ -509,6 +581,13 @@ impl Pager {
         self.take_current()
     }
 
+    /// [`Pager::dismiss`] that also remembers the suggestion in `dismissed`.
+    pub fn dismiss_into(&mut self, dismissed: &mut Dismissed) -> Option<Found> {
+        let found = self.dismiss()?;
+        dismissed.add(&found);
+        Some(found)
+    }
+
     /// Accepts the suggestion on show: it leaves the pager and its action is returned for the app to run.
     pub fn accept(&mut self) -> Option<Action> {
         self.take_current().map(|f| f.action())
@@ -534,6 +613,66 @@ mod tests {
         assert_eq!(airport("kef").map(|a| a.city), Some("Reykjavik"));
         assert_eq!(airport("JFK").map(|a| a.zone), Some("America/New_York"));
         assert_eq!(airport("XXX"), None);
+    }
+
+    fn messages(chat: &str) -> Source {
+        Source { app: "Messages".into(), title: chat.into() }
+    }
+
+    #[test]
+    fn a_message_pager_skips_what_was_turned_down_and_remembers_new_dismissals() {
+        let text = "Lunch tomorrow at 1pm, mail me at ada@example.com";
+        let mut dismissed = Dismissed::default();
+        let mut pager = Pager::for_message(&messages("Ada"), text, "IS", &dismissed);
+        assert_eq!(pager.len(), 2);
+        let first = pager.dismiss_into(&mut dismissed).unwrap();
+        assert!(dismissed.contains(&first));
+        let again = Pager::for_message(&messages("Ada"), text, "IS", &dismissed);
+        assert_eq!(again.len(), 1, "the same suggestion from the same chat is not offered again");
+        let other_chat = Pager::for_message(&messages("Bob"), text, "IS", &dismissed);
+        assert_eq!(other_chat.len(), 2, "a dismissal belongs to one chat");
+        assert!(Pager::for_message(&messages("Ada"), "nothing to suggest here", "IS", &dismissed).is_empty());
+    }
+
+    #[test]
+    fn dismissed_keys_survive_a_round_trip_through_text() {
+        let mut d = Dismissed::default();
+        let tricky = Source { app: "Messages".into(), title: "Line one\nline two \\ done\r".into() };
+        for found in extract(&tricky, "ada@example.com and bob@example.com", "IS") {
+            d.add(&found);
+        }
+        assert_eq!(d.len(), 2);
+        let text = d.to_text();
+        assert_eq!(text.lines().count(), 2, "an escaped newline does not split a key");
+        assert_eq!(Dismissed::from_text(&text), d);
+        assert_eq!(Dismissed::from_text(""), Dismissed::default());
+        assert_eq!(Dismissed::from_text("\n\na\\q\n").len(), 1, "blank lines are skipped and an unknown escape keeps its character");
+    }
+
+    #[test]
+    fn the_dismissed_list_is_bounded_and_drops_the_oldest() {
+        let mut d = Dismissed::default();
+        let found = |n: usize| extract(&messages(&format!("chat {n}")), "ada@example.com", "IS").remove(0);
+        for n in 0..MAX_DISMISSED + 5 {
+            d.add(&found(n));
+        }
+        assert_eq!(d.len(), MAX_DISMISSED);
+        assert!(!d.contains(&found(0)) && d.contains(&found(MAX_DISMISSED + 4)));
+        // dismissing again keeps one copy and moves it to the newest place
+        d.add(&found(10));
+        assert_eq!(d.len(), MAX_DISMISSED);
+        let text: String = (0..MAX_DISMISSED + 50).map(|n| format!("k{n}\n")).collect();
+        assert_eq!(Dismissed::from_text(&text).len(), MAX_DISMISSED, "a file past the limit keeps the newest keys");
+    }
+
+    #[test]
+    fn forgetting_an_app_removes_only_its_dismissals() {
+        let mut d = Dismissed::default();
+        d.add(&extract(&messages("Ada"), "ada@example.com", "IS").remove(0));
+        d.add(&extract(&mail(), "ada@example.com", "IS").remove(0));
+        assert_eq!(d.forget_app("Messages"), 1);
+        assert_eq!(d.len(), 1);
+        assert_eq!(d.forget_app("Messages"), 0);
     }
 
     #[test]

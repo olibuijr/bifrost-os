@@ -970,6 +970,8 @@ pub mod tool_picker;
 pub mod transcript;
 pub mod context_window;
 pub mod generation_schema;
+/// Structured output while it is written (`partial_parse`, `validate_partial`) and the schema as JSON Schema.
+pub mod generation_partial;
 pub mod model_session;
 pub mod model_tool;
 pub mod model_provider;
@@ -1242,6 +1244,8 @@ pub mod embedding;
 pub mod lexical_tags;
 pub mod inflection;
 pub mod search_rank;
+/// A local hashed-text semantic score for system search (`HashedSemantic`, a `SemanticHook`).
+pub mod semantic_hash;
 pub mod filebadge;
 pub mod itemattrs;
 pub mod match_pattern;

@@ -6339,3 +6339,28 @@ A window that failed is not asked about again for 5 s (`RETRY_AFTER_FAIL_MS`) ex
 - Voice profile (`ui/src/voice_profile.rs`, `shell/services/voice_banking.rs`): pitch, pace and loudness are measured from a recording and merged per bank; `VoiceProfile::apply` sets the rule-based synthesiser's pitch and rate; the service keeps the per-phrase profiles (`a11y_voice_profiles`) and answers `voice()`. Not built: a trained voice (timbre).
 - Family controls (`sdk/src/family_controls.rs`): app authorization (request, owner decision, revoke) and the blocked-app lists an approved app sets. Not built: the shell reading `is_blocked` next to `Config::block`, the prompt, and remote family management through an account (no family account service).
 - Local assistant (`assistant-client/src/local.rs`): with the backend Off, a request is matched against the allowed intents by title keywords and fills the first parameter from a quoted phrase or the rest of the sentence; the confirmation gate still applies. Not built: language understanding beyond keywords.
+
+## OS gap slice g4 (private frameworks: suggestions, embeddings, versions, generative layers)
+
+Rows advanced to `partial`; none is `parity` until the lab verify run. Apple's behaviour not matched is named per item.
+
+- **GenerativeModels: streamed local replies (`sdk/src/local_model_stream.rs`)**: `LocalModelProvider` implements
+  `StreamingModelProvider`: it asks the loopback engine for `"stream": true`, decodes chunked transfer and server-sent
+  events as bytes arrive, and passes answer text to `run_turn_streamed`. Tool calls (native `tool_calls` deltas or the
+  prompted JSON shape) are never shown as text. An engine that ignores `stream` still works (one piece). Stopping closes
+  the connection. Not matched: no on-device engine ships, so `on_device_availability()` stays `Unavailable`.
+- **EmbeddingCore: semantic score for document search (`ui/src/semantic_hash.rs`)**: `HashedSemantic` (words plus
+  character trigrams, 512 dimensions) is the `SemanticHook` of the Spotlight Documents source (`quicksearch::indexed_groups`).
+  Not matched: it is not a learned model (no synonyms), and app and settings results still use `NoSemantic`.
+- **GenerationalStorage: Versions browser model (`sdk/src/versions_browser.rs`)**: date labels, line-change summary, preview,
+  selection and Restore over the revision store; `DocumentController::open_versions` and `restore_version`. Not matched: the
+  shell has no Versions window yet; versions cannot be named or locked.
+- **GenerativeFunctions: tool choice and output cap (`ui/src/model_tool.rs`)**: `ToolChoice` (`Auto`, `Disabled`, `Only`)
+  limits what a request offers and what may run; `ToolSet::set_max_output` cuts long tool output and says how much was omitted.
+- **GenerativeFunctionsFoundation: partial output and JSON Schema (`ui/src/generation_partial.rs`)**: `partial_parse` reads
+  the JSON a model has written so far, `validate_partial` checks it without counting what has not arrived, `json_schema`
+  exports a schema for engines that constrain decoding. Not matched: the local provider does not send the schema as a
+  response format yet.
+- **CoreSuggestionsUI: durable dismissals (`ui/src/found_in.rs`)**: `Dismissed::to_text` and `from_text` (bounded to 500, oldest
+  first), `forget_app`, and `Pager::for_message` (extract, drop dismissed, page) for any message view. Not matched: the
+  Messages app does not call it yet, and Search has no suggestion section.

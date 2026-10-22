@@ -6,6 +6,9 @@
 //! is what a first system-search reranker needs. It does not know synonyms, word order or meaning, and hash collisions
 //! add small noise. Nothing is downloaded or loaded: the vectors are computed from the text alone.
 //!
+//! The shell's document search ranks with `bifrost_ui::semantic_hash::HashedSemantic`, the subword variant of this
+//! idea (words plus character trigrams) behind the search ranker's `SemanticHook`.
+//!
 //! ```ignore
 //! let mut index = EmbeddingIndex::new();
 //! index.insert("note-1", "Buy oat milk");
@@ -13,21 +16,12 @@
 //! let hits = index.nearest("milk", 5);   // [("note-1", score)]
 //! ```
 
+use bifrost_ui::semantic_hash::fnv1a;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
 /// Length of every vector. A fixed size keeps vectors from different texts comparable.
 pub const DIMENSIONS: usize = 256;
-
-/// FNV-1a over the bytes of a word.
-fn fnv1a(word: &str) -> u64 {
-    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-    for b in word.bytes() {
-        h ^= u64::from(b);
-        h = h.wrapping_mul(0x0000_0100_0000_01b3);
-    }
-    h
-}
 
 /// Lowercase runs of letters and digits.
 fn words(text: &str) -> Vec<String> {

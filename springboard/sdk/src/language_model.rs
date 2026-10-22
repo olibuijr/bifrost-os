@@ -10,10 +10,11 @@
 //! A provider that sends the conversation off the device is the app's own choice, and the app has to tell the user.
 
 pub use bifrost_ui::context_window::{estimate_tokens, fit, Fitted};
+pub use bifrost_ui::generation_partial::{json_schema, partial_parse, validate_partial};
 pub use bifrost_ui::generation_schema::{instructions, parse, read_reply, validate, Issue, Kind, ParseError, ReplyError, Value};
 pub use bifrost_ui::model_provider::{run_turn, ModelProvider, ProviderError, Reply, TurnError};
 pub use bifrost_ui::model_session::{DynamicInstructions, Frame, Profile, PropertyKey, PropertyValue, Session, SessionProperties};
-pub use bifrost_ui::model_tool::{Tool, ToolError, ToolSet};
+pub use bifrost_ui::model_tool::{Tool, ToolChoice, ToolError, ToolSet};
 pub use bifrost_ui::transcript::{Entry, Segment, ToolCall, ToolOutput, Transcript};
 pub use crate::local_model::{EndpointError, LocalEndpoint, LocalModelProvider};
 
