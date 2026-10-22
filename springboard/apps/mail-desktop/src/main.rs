@@ -364,7 +364,7 @@ impl MailApp {
         }
     }
 
-    /// Keeps Core Search in step with the newest messages of the mailbox on screen: subjects and senders only.
+    /// Keeps Core Search in step with the newest messages of the mailbox on screen: the fields of `index::SCHEMA`, no bodies.
     fn index_tick(&mut self, ctx: &Ctx, t: f64) {
         if t < self.next_index {
             return;
