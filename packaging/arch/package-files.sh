@@ -147,6 +147,13 @@ package_bifrost_files() {
   if [[ -f $here/keys/bifrost-repo.gpg ]]; then
     install -Dm644 "$here/keys/bifrost-repo.gpg" "$pkgdir/usr/share/bifrost/keys/bifrost-repo.gpg"
   fi
+  # ML-DSA-65 publisher public keys (`springboard --publisher-keygen`): the shell pins every `*.pub` here and then refuses
+  # an app package without a detached signature from one of them (packaging/arch/publisher-keys/README.md). Absent
+  # until a key is generated: the package then ships none and store packages pass on their checksum alone.
+  for key in "$here"/publisher-keys/*.pub; do
+    [[ -f $key ]] || continue
+    install -Dm644 "$key" "$pkgdir/usr/share/bifrost/publisher-keys/$(basename "$key")"
+  done
   install -Dm755 "$here/prune-stale-assets" "$pkgdir/usr/lib/springboard/prune-stale-assets"
   install -Dm644 "$here/../assets-allowlist.txt" "$pkgdir/usr/lib/springboard/assets-allowlist.txt"
   # boot speed: the initrd mounts the fstab subvolumes, and seatd starts without waiting for local-fs.target
