@@ -1471,18 +1471,8 @@ fn run() -> std::io::Result<()> {
             let mut info = gather(level, &current_wallpaper, &history);
             info.power_profile = boost.profile().label().into();
             if wayland {
-                let network=springboard::shell::desktop_network::snapshot();
-                info.wifi_on=network.wifi_on;
-                // a joined link without an address or a DNS answer shows that in the menu bar, not the bare name
-                let problem=network.problem.map(springboard::shell::desktop_network::LinkProblem::label);
-                info.wifi=if !network.wifi_available {"No adapter".into()} else if !network.wifi_on {"Off".into()} else {problem.map(str::to_string).or(network.ssid.clone()).unwrap_or_else(||"Not Connected".into())};
-                info.current_ssid=network.ssid.clone();info.networks=network.networks.clone();info.saved=network.saved.clone();
-                info.wifi_notice=network.error.clone().or(problem.map(str::to_string));
-                // the link kinds decide the glyph: a wired cable never shows as Wi-Fi
-                info.online=network.interfaces.iter().any(|i|i.kind=="wifi"&&i.connected());
-                info.wired=network.interfaces.iter().any(|i|i.kind=="ethernet"&&i.connected());
-                info.wifi_adapter=network.wifi_available;
-                info.desktop_network=Some(network);
+                // NetworkManager's link state wins only when it answered; without it the supplicant-fed state from `gather` stands
+                springboard::shell::desktop_network::snapshot().apply_to(&mut info);
             }
             // a new joined link is probed once on its own thread; a sign-in page is opened in the browser once
             let link = (info.online && info.ip != "—").then(|| format!("{}|{}", info.current_ssid.clone().unwrap_or_default(), info.ip));

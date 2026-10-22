@@ -1617,6 +1617,27 @@ mod tests {
     }
 
     #[test]
+    fn an_absent_network_service_posts_no_disconnect_but_a_reported_one_does() {
+        use crate::shell::desktop_network::{Interface, Snapshot};
+        let mut sh = shell();
+        unlock(&mut sh);
+        sh.tick(1000.0);
+        let mut next = Info { online: true, current_ssid: Some("Home".into()), wifi: "Home".into(), ..sh.info.clone() };
+        sh.set_info(next.clone());
+        // no service: the supplicant-read state stands, nothing drops
+        Snapshot::default().apply_to(&mut next);
+        sh.set_info(next.clone());
+        sh.tick(1000.0 + 2.0 * WIFI_DROP_MS);
+        assert_eq!(sh.notify.store().len(), 0, "an unknown link state posts nothing");
+        // the service says the link is down
+        let down = Snapshot { managed: true, wifi_available: true, wifi_on: true, interfaces: vec![Interface { kind: "wifi".into(), status: "30 (disconnected)".into(), ..Interface::default() }], ..Snapshot::default() };
+        down.apply_to(&mut next);
+        sh.set_info(next.clone());
+        sh.tick(1000.0 + 4.0 * WIFI_DROP_MS);
+        assert_eq!(sh.notify.store().groups()[0].latest().body, "Disconnected from Home");
+    }
+
+    #[test]
     fn boot_state_posts_nothing() {
         let info = Info { battery: 9, online: true, ..Info::default() };
         let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/SFUI.ttf")).unwrap().into_boxed_slice());
