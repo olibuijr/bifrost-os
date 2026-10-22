@@ -65,6 +65,8 @@ const SEARCHES: usize = 4;
 const PER_GROUP: usize = 3;
 /// The file beside quicksearch.ini that keeps how often each indexed result was opened (local only).
 const USAGE_FILE: &str = "search-usage.txt";
+/// The launch history the app prediction reads, beside quicksearch.ini (`bifrost_ui::app_prediction`).
+const LAUNCHES_FILE: &str = "app-launches.txt";
 /// The opens of indexed results, read by the Documents section; loaded by `QuickSearch::load`.
 static OPENS: std::sync::Mutex<Option<bifrost_ui::search_rank::Usage>> = std::sync::Mutex::new(None);
 /// How long a scan of the Files root is reused by later opens before the next opening scans again.
@@ -1124,6 +1126,9 @@ pub struct QuickSearch {
     deildu_stamp: Option<(PathBuf, std::time::SystemTime)>,
     /// where the indexed-result open counts are saved (beside quicksearch.ini); None until `load`
     usage_path: Option<PathBuf>,
+    /// every app launch with its time, for the prediction of the next app; saved at `launches_path`
+    launches: bifrost_ui::app_prediction::LaunchLedger,
+    launches_path: Option<PathBuf>,
     /// the query being shown: its sources (started by `start_run`) and what they answer with
     run: Option<search_rank::Query>,
     /// the query `run` was started for ("" when none)
@@ -1235,6 +1240,8 @@ impl QuickSearch {
             contacts_stamp: None,
             deildu_stamp: None,
             usage_path: None,
+            launches: Default::default(),
+            launches_path: None,
             run: None,
             run_query: String::new(),
             run_hits: BTreeMap::new(),
@@ -1262,6 +1269,9 @@ impl QuickSearch {
             *g = Some(opens);
         }
         self.usage_path = Some(usage_path);
+        let launches_path = path.with_file_name(LAUNCHES_FILE);
+        self.launches = std::fs::read_to_string(&launches_path).map(|t| bifrost_ui::app_prediction::LaunchLedger::from_text(&t)).unwrap_or_default();
+        self.launches_path = Some(launches_path);
         self.prefs = Prefs::load(path);
         self.recents = self.prefs.get("recents").unwrap_or("").split(',').filter_map(app_named).take(RECENTS).collect();
         self.searches = self.prefs.get("searches").unwrap_or("").split(',').map(str::trim).filter(|q| !q.is_empty()).map(String::from).take(SEARCHES).collect();
@@ -1287,6 +1297,13 @@ impl QuickSearch {
 
     /// Records a launch: `app` becomes the first suggestion.
     pub fn note_launch(&mut self, app: AppId) {
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        self.launches.record(&app_key(app), now);
+        if let Some(path) = &self.launches_path {
+            if let Err(e) = std::fs::write(path, self.launches.to_text()) {
+                eprintln!("springboard: {LAUNCHES_FILE}: {e}");
+            }
+        }
         self.recents.retain(|&a| a != app);
         self.recents.insert(0, app);
         self.recents.truncate(RECENTS);
@@ -1294,6 +1311,14 @@ impl QuickSearch {
         if let Err(e) = self.prefs.set("recents", &text) {
             eprintln!("springboard: quicksearch.ini: {e}");
         }
+    }
+
+    /// The apps most likely to be opened next at Unix time `now` (`tz_offset` seconds east of UTC), best first: the launch
+    /// history ranked by frequency, time of day and what usually follows the last app (`bifrost_ui::app_prediction`).
+    pub fn predicted_apps(&self, now: u64, tz_offset: i64, limit: usize) -> Vec<AppId> {
+        let previous = self.recents.first().map(|&a| app_key(a));
+        let open = previous.as_deref().into_iter().collect::<Vec<_>>();
+        self.launches.predict(now, tz_offset, previous.as_deref(), &open, limit).iter().filter_map(|k| app_named(k)).collect()
     }
 
     /// Remembers the current query as a recent search (call before a result opens).
@@ -2795,6 +2820,28 @@ mod tests {
         std::fs::write(&path, "recents=files,bogus,settings\n").unwrap();
         again.load(&path);
         assert_eq!(again.recents(), [AppId::Files, AppId::Settings], "unknown names are skipped");
+    }
+
+    #[test]
+    fn launches_are_kept_and_predict_the_next_app() {
+        let dir = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/target/test-quicksearch-launches"));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("quicksearch.ini");
+        let ui = ui();
+        let mut sp = QuickSearch::new(&ui, 1200.0, ui.s);
+        sp.load(&path);
+        assert!(sp.predicted_apps(1_000_000, 0, 3).is_empty(), "no history, no prediction");
+        for app in [AppId::Files, AppId::Files, AppId::Terminal] {
+            sp.note_launch(app);
+        }
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() + 60;
+        // the last app used (Terminal) is already open, so Files is the prediction
+        assert_eq!(sp.predicted_apps(now, 0, 3), [AppId::Files]);
+        let mut again = QuickSearch::new(&ui, 1200.0, ui.s);
+        again.load(&path);
+        assert_eq!(again.launches.count("files"), 2, "the history survives a restart");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
