@@ -1174,6 +1174,13 @@ fn prune_assets(dir: &std::path::Path) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn the_wireless_tools_and_the_regulatory_database_are_installed() {
+        let all = super::packages();
+        assert!(all.contains(&"iw"), "netd sets the regulatory domain with iw");
+        assert!(all.contains(&"wireless-regdb"), "the kernel needs regulatory.db for a country's channel rules");
+    }
+
+    #[test]
     fn the_installer_enables_the_mdns_responder_and_the_print_scheduler() {
         assert!(super::ENABLED_UNITS.contains(&"avahi-daemon.service"));
         assert!(super::ENABLED_UNITS.contains(&"cups.socket"));

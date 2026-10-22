@@ -49,21 +49,53 @@ pub fn from_region_pref(region: Option<&str>) -> Option<String> {
     is_country_code(&code).then_some(code)
 }
 
-/// Starts a thread that applies the region's country at start and again each time the setting changes. The shell
-/// saves the setting to `settings_path`; the file is read every few seconds, which is cheap and needs no new
-/// message on the network socket. A failed `iw` call is logged and retried on the next change only.
+/// How many times a country that `iw reg get` does not show is set again before the follower gives up until the
+/// setting changes (a chip with its own regulatory rules keeps reporting its own country).
+const MAX_RETRIES: u8 = 3;
+
+/// Decides when the regulatory domain is set: at the first pass, on each change of the setting, and again when the
+/// kernel reports another country than the setting names (the driver or an access point can move it back).
+#[derive(Debug, Default)]
+pub struct Follower {
+    target: Option<String>,
+    retries: u8,
+}
+
+impl Follower {
+    /// The country to apply now, given the country the setting names and the country the kernel reports.
+    pub fn step(&mut self, desired: Option<&str>, current: Option<&str>) -> Option<String> {
+        let desired = desired?;
+        if self.target.as_deref() != Some(desired) {
+            self.target = Some(desired.to_string());
+            self.retries = 0;
+            return Some(desired.to_string());
+        }
+        if current == Some(desired) {
+            self.retries = 0;
+            return None;
+        }
+        if self.retries < MAX_RETRIES {
+            self.retries += 1;
+            return Some(desired.to_string());
+        }
+        None
+    }
+}
+
+/// Starts a thread that applies the region's country at start and again each time the setting changes, and sets it
+/// again when the kernel has moved to another country. The shell saves the setting to `settings_path`; the file is
+/// read every few seconds, which is cheap and needs no new message on the network socket. A failed `iw` call is
+/// logged and tried again on the following passes, up to `MAX_RETRIES` times for one setting.
 pub fn follow_region(settings_path: std::path::PathBuf) {
     crate::bare::sys::spawn_named("regdomain", move || {
-        let mut applied: Option<String> = None;
+        let mut follower = Follower::default();
         loop {
             let prefs = crate::shell::prefs::Prefs::load(&settings_path);
-            if let Some(country) = from_region_pref(prefs.get("region")) {
-                if applied.as_deref() != Some(country.as_str()) {
-                    match apply(&country) {
-                        Ok(()) => eprintln!("netd: wireless regulatory domain {country}"),
-                        Err(e) => eprintln!("netd: {e}"),
-                    }
-                    applied = Some(country);
+            let desired = from_region_pref(prefs.get("region"));
+            if let Some(country) = follower.step(desired.as_deref(), current().as_deref()) {
+                match apply(&country) {
+                    Ok(()) => eprintln!("netd: wireless regulatory domain {country}"),
+                    Err(e) => eprintln!("netd: {e}"),
                 }
             }
             std::thread::sleep(std::time::Duration::from_secs(5));
@@ -105,6 +137,46 @@ mod tests {
         assert_eq!(parse_get("global\ncountry 00: DFS-UNSET\n"), None);
         assert_eq!(parse_get("nl80211 not found\n"), None);
         assert_eq!(parse_get(""), None);
+    }
+
+    #[test]
+    fn the_follower_applies_at_the_first_pass_and_on_each_change() {
+        let mut f = Follower::default();
+        assert_eq!(f.step(None, None), None, "no region saved, nothing to set");
+        assert_eq!(f.step(Some("IS"), None).as_deref(), Some("IS"), "first pass sets the country");
+        assert_eq!(f.step(Some("IS"), Some("IS")), None, "kernel already reports it");
+        assert_eq!(f.step(Some("DK"), Some("IS")).as_deref(), Some("DK"), "a changed setting is applied at once");
+        assert_eq!(f.step(Some("DK"), Some("DK")), None);
+    }
+
+    #[test]
+    fn the_follower_sets_the_country_again_when_the_kernel_moved_away() {
+        let mut f = Follower::default();
+        assert!(f.step(Some("IS"), None).is_some());
+        assert_eq!(f.step(Some("IS"), Some("US")).as_deref(), Some("IS"), "the driver reset the domain");
+        assert_eq!(f.step(Some("IS"), None).as_deref(), Some("IS"), "the world default is not the country either");
+    }
+
+    #[test]
+    fn the_follower_gives_up_after_the_retries_until_the_setting_changes() {
+        let mut f = Follower::default();
+        assert!(f.step(Some("IS"), Some("US")).is_some(), "first pass");
+        for _ in 0..MAX_RETRIES {
+            assert!(f.step(Some("IS"), Some("US")).is_some());
+        }
+        assert_eq!(f.step(Some("IS"), Some("US")), None, "a chip with its own rules is left alone");
+        assert_eq!(f.step(Some("DK"), Some("US")).as_deref(), Some("DK"), "a new setting starts again");
+    }
+
+    #[test]
+    fn a_match_resets_the_retries() {
+        let mut f = Follower::default();
+        f.step(Some("IS"), None);
+        f.step(Some("IS"), Some("US"));
+        assert_eq!(f.step(Some("IS"), Some("IS")), None);
+        for _ in 0..MAX_RETRIES {
+            assert!(f.step(Some("IS"), Some("US")).is_some(), "the count started over");
+        }
     }
 
     #[test]
