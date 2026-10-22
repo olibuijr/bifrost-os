@@ -425,6 +425,13 @@ globalThis.__main=function(){
 };
 })();"#;
 
+/// Checks that `source` parses as a script, without running it: what `osacompile -l JavaScript` does before it writes the
+/// compiled file. A syntax error is `-2740` with the engine's message.
+pub fn check_syntax(source: &str) -> Result<(), ScriptError> {
+    let mut ctx = Context::default();
+    boa_engine::Script::parse(Source::from_bytes(source), None, &mut ctx).map(|_| ()).map_err(|e| ScriptError::new(bifrost_core::script::interp::ERR_SYNTAX, e.to_string()))
+}
+
 /// Runs `source` as a JavaScript automation script with `argv`, against `host`, under `policy`.
 pub fn run(source: &str, argv: &[String], host: Box<dyn Host>, policy: Policy) -> Run {
     let e = Rc::new(Env { host: RefCell::new(host), policy, source: source.to_string(), argv: argv.to_vec(), dicts: RefCell::new(Vec::new()), log: RefCell::new(Vec::new()) });
@@ -633,6 +640,15 @@ mod tests {
         assert_eq!((e.number, e.message.as_str()), (ERR_GENERIC, "boom"));
         let (r, _, _, _) = go("while (true) {}", &[], Policy::none());
         assert!(r.result.is_err(), "the loop limit stops a script that never ends");
+    }
+
+    #[test]
+    fn check_syntax_accepts_a_script_without_running_it_and_refuses_a_bad_one() {
+        assert!(check_syntax("function run(argv){ return argv.length; }\nthrow new Error('never runs');").is_ok());
+        let e = check_syntax("var = ;").unwrap_err();
+        assert_eq!(e.number, bifrost_core::script::interp::ERR_SYNTAX);
+        assert!(!e.message.is_empty());
+        assert!(check_syntax("").is_ok());
     }
 
     #[test]
