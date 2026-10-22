@@ -6,7 +6,7 @@
 //! person grants it in Settings, and recognition starts only with consent and the model installed.
 //!
 //! Calls (JSON params):
-//! - `start` `{locale, partial?}` starts recognition; replies `{id}`. The locale must be English. `partial` (default
+//! - `start` `{locale, partial?}` starts recognition; replies `{id}`. English uses the English model; any other language the whisper models know needs the multilingual model (`download` `{locale}`). `partial` (default
 //!   false) asks for hypotheses as well as final transcripts.
 //! - `poll` `{}` replies `{transcripts: [{text, final}], running}` with the transcripts since the last poll. After the
 //!   pipeline has ended and its last transcripts were returned, `running` is false and the recognition is gone.
@@ -20,7 +20,7 @@
 //! - `consent` `{granted}` records the person's answer; revoking ends a running recognition. Replies `{granted}`.
 //! - `download` `{}` fetches the model in a thread once consent is granted; replies `{started}`. Progress is in `model`.
 //!
-//! Refusals are errors: no consent, no model, a non-English locale, or no pipeline program installed.
+//! Refusals are errors: no consent, no model, a locale no model serves, or no pipeline program installed.
 //!
 //! Voice Control: while the `voice_control` preference is `1` the shell holds a recognition of its own (the app id
 //! [`SYSTEM_APP`]) when no app has one, hands every final transcript to `Shell::voice_consume` ("press Save") and
@@ -29,8 +29,9 @@
 use super::{Event, Shell, SystemService};
 use bifrost_core::json::Json;
 use bifrost_ui::whisper::{
-    consent_path, data_subdir, locale_supported, model_path, parse_transcript_line, pipeline_argv, pipeline_argv_for, Capture,
-    Consent, PipelineError, Refusal, Source, Transcript, MODEL_SIZE_BYTES, MODEL_URL,
+    consent_path, data_subdir, model_file_path, model_for_locale, model_path, parse_transcript_line, pipeline_argv_for,
+    pipeline_argv_lang, whisper_language, Capture, Consent, Model, PipelineError, Refusal, Source, Transcript, ENGLISH_MODEL,
+    MULTILINGUAL_MODEL,
 };
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
@@ -242,10 +243,12 @@ pub fn grant_and_download(data_dir: &Path) -> Result<(), String> {
 /// Settings: removes the model file and withdraws consent. A running recognition ends on its next poll.
 pub fn remove_model(data_dir: &Path) -> Result<(), String> {
     write_consent(data_dir, Consent::default())?;
-    match std::fs::remove_file(model_path(data_dir)) {
-        Ok(()) => {}
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-        Err(e) => return Err(format!("speech model: {e}")),
+    for model in [ENGLISH_MODEL, MULTILINGUAL_MODEL] {
+        match std::fs::remove_file(model_file_path(data_dir, model)) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(format!("speech model: {e}")),
+        }
     }
     if let Ok(mut d) = DOWNLOAD.lock() {
         *d = Download::Idle;
@@ -255,8 +258,14 @@ pub fn remove_model(data_dir: &Path) -> Result<(), String> {
 
 /// Starts the model download when consent is granted and the model is missing. Returns false when nothing started.
 fn start_download(data_dir: &Path, fetcher: Arc<dyn Fetcher>) -> Result<bool, String> {
+    start_download_model(data_dir, fetcher, ENGLISH_MODEL)
+}
+
+/// [`start_download`] for a chosen model: the English one, or the multilingual one for other languages.
+fn start_download_model(data_dir: &Path, fetcher: Arc<dyn Fetcher>, model: Model) -> Result<bool, String> {
     consent_of(data_dir).may_download().map_err(refusal_text)?;
-    if model_path(data_dir).is_file() {
+    let to = model_file_path(data_dir, model);
+    if to.is_file() {
         return Ok(false);
     }
     {
@@ -266,9 +275,8 @@ fn start_download(data_dir: &Path, fetcher: Arc<dyn Fetcher>) -> Result<bool, St
         }
         *d = Download::Running;
     }
-    let to = model_path(data_dir);
     std::thread::spawn(move || {
-        let result = fetcher.fetch(MODEL_URL, &to);
+        let result = fetcher.fetch(model.url, &to);
         if let Ok(mut d) = DOWNLOAD.lock() {
             *d = match result {
                 Ok(()) => Download::Done,
@@ -386,12 +394,13 @@ impl Recognizer {
         match method {
             "start" => {
                 let locale = params.str_field("locale").unwrap_or_else(|| "en_US".to_string());
-                if !locale_supported(&locale) {
-                    return Err("speech recognizer: only English is served".to_string());
-                }
+                let (Some(model), Some(language)) = (model_for_locale(&locale), whisper_language(&locale)) else {
+                    return Err(format!("speech recognizer: no recognition model serves the locale {locale}"));
+                };
                 let partial = matches!(params.get("partial"), Some(Json::Bool(true)));
-                consent_of(&self.data_dir).may_recognize(self.installed()).map_err(refusal_text)?;
-                let argv = pipeline_argv(capture(), &model_path(&self.data_dir)).map_err(pipeline_error)?;
+                let path = model_file_path(&self.data_dir, model);
+                consent_of(&self.data_dir).may_recognize(path.is_file()).map_err(refusal_text)?;
+                let argv = pipeline_argv_lang(capture(), Source::Microphone, &path, Some(language)).map_err(pipeline_error)?;
                 // start first: when the pipeline cannot start the app keeps what it had
                 let pipeline = self.spawner.start(&argv)?;
                 self.stop_session();
@@ -459,12 +468,18 @@ impl Recognizer {
                 Ok(obj(vec![("stopped", Json::Bool(stopped))]))
             }
             "model" => {
+                // the model for the asked-for locale; English when none is named
+                let model = match params.str_field("locale") {
+                    Some(locale) => model_for_locale(&locale).ok_or_else(|| format!("speech recognizer: no recognition model serves the locale {locale}"))?,
+                    None => ENGLISH_MODEL,
+                };
                 let view = model_state(&self.data_dir);
                 Ok(obj(vec![
                     ("granted", Json::Bool(view.granted)),
-                    ("installed", Json::Bool(view.installed)),
+                    ("installed", Json::Bool(model_file_path(&self.data_dir, model).is_file())),
                     ("downloading", Json::Bool(view.downloading)),
-                    ("size_bytes", Json::Num(MODEL_SIZE_BYTES as f64)),
+                    ("size_bytes", Json::Num(model.size_bytes as f64)),
+                    ("multilingual", Json::Bool(model == MULTILINGUAL_MODEL)),
                 ]))
             }
             "consent" => {
@@ -480,7 +495,11 @@ impl Recognizer {
                 Ok(obj(vec![("granted", Json::Bool(granted))]))
             }
             "download" => {
-                let started = start_download(&self.data_dir, Arc::clone(&self.fetcher))?;
+                let model = match params.str_field("locale") {
+                    Some(locale) => model_for_locale(&locale).ok_or_else(|| format!("speech recognizer: no recognition model serves the locale {locale}"))?,
+                    None => ENGLISH_MODEL,
+                };
+                let started = start_download_model(&self.data_dir, Arc::clone(&self.fetcher), model)?;
                 Ok(obj(vec![("started", Json::Bool(started))]))
             }
             other => Err(format!("speech recognizer: no method {other}")),
@@ -663,9 +682,66 @@ mod tests {
     }
 
     #[test]
-    fn non_english_locales_are_refused() {
+    fn a_language_no_model_knows_is_refused() {
         let mut r = rig(true, true);
-        assert!(r.rec.handle("app.a", "start", &params(r#"{"locale":"is_IS"}"#)).is_err());
+        let err = r.rec.handle("app.a", "start", &params(r#"{"locale":"tlh"}"#)).unwrap_err();
+        assert!(err.contains("no recognition model"), "{err}");
+        let _ = std::fs::remove_dir_all(&r.root);
+    }
+
+    #[test]
+    fn a_non_english_start_waits_for_the_multilingual_model_then_names_its_language() {
+        // only the English model is installed: Icelandic is refused until the multilingual one is fetched
+        let mut r = rig(true, true);
+        let err = r.rec.handle("app.a", "start", &params(r#"{"locale":"is_IS"}"#)).unwrap_err();
+        assert!(err.contains("not installed"), "{err}");
+        assert!(r.log.lock().unwrap().argvs.is_empty(), "no pipeline starts without its model");
+        std::fs::write(model_file_path(&r.root, MULTILINGUAL_MODEL), b"model").unwrap();
+        r.rec.handle("app.a", "start", &params(r#"{"locale":"is_IS"}"#)).unwrap();
+        let log = r.log.lock().unwrap();
+        let argv = &log.argvs[0];
+        assert!(argv.contains(&"language=is".to_string()), "{argv:?}");
+        assert!(argv.iter().any(|a| a.ends_with("ggml-base.bin") && a.starts_with("model=")), "{argv:?}");
+        drop(log);
+        // English still uses its own model and no language property
+        r.rec.handle("app.b", "start", &params(r#"{"locale":"en_GB"}"#)).unwrap();
+        let log = r.log.lock().unwrap();
+        assert!(log.argvs[1].iter().any(|a| a.ends_with("ggml-base.en.bin")), "{:?}", log.argvs[1]);
+        assert!(!log.argvs[1].iter().any(|a| a.starts_with("language=")));
+        drop(log);
+        let _ = std::fs::remove_dir_all(&r.root);
+    }
+
+    #[test]
+    fn the_model_reply_and_download_follow_the_asked_for_locale() {
+        let mut r = rig(true, true);
+        let en = r.rec.handle("app.a", "model", &Json::Null).unwrap();
+        assert_eq!(en.get("multilingual"), Some(&Json::Bool(false)));
+        let is = r.rec.handle("app.a", "model", &params(r#"{"locale":"is_IS"}"#)).unwrap();
+        assert_eq!(is.get("installed"), Some(&Json::Bool(false)), "only the English model is installed");
+        assert_eq!(is.get("multilingual"), Some(&Json::Bool(true)));
+        assert_eq!(is.get("size_bytes").and_then(Json::number), Some(MULTILINGUAL_MODEL.size_bytes as f64));
+        assert!(r.rec.handle("app.a", "model", &params(r#"{"locale":"tlh"}"#)).is_err());
+        // the download state is shared with the other download test, so ask again until this recognizer's fetch lands
+        for _ in 0..200 {
+            let _ = r.rec.handle("app.a", "download", &params(r#"{"locale":"is_IS"}"#));
+            if !r.log.lock().unwrap().fetches.is_empty() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        let fetches = r.log.lock().unwrap().fetches.clone();
+        assert!(!fetches.is_empty() && fetches.iter().all(|u| u == MULTILINGUAL_MODEL.url), "{fetches:?}");
+        let _ = std::fs::remove_dir_all(&r.root);
+    }
+
+    #[test]
+    fn removing_the_models_removes_the_multilingual_one_too() {
+        let r = rig(true, true);
+        std::fs::write(model_file_path(&r.root, MULTILINGUAL_MODEL), b"model").unwrap();
+        remove_model(&r.root).unwrap();
+        assert!(!model_file_path(&r.root, ENGLISH_MODEL).exists());
+        assert!(!model_file_path(&r.root, MULTILINGUAL_MODEL).exists());
         let _ = std::fs::remove_dir_all(&r.root);
     }
 
@@ -790,7 +866,7 @@ mod tests {
         assert!(flag(&reply, "granted"));
         assert!(flag(&reply, "installed"));
         assert!(!flag(&reply, "downloading"));
-        assert_eq!(reply.unwrap().get("size_bytes").and_then(Json::number), Some(MODEL_SIZE_BYTES as f64));
+        assert_eq!(reply.unwrap().get("size_bytes").and_then(Json::number), Some(ENGLISH_MODEL.size_bytes as f64));
         let _ = std::fs::remove_dir_all(&r.root);
     }
 
@@ -814,7 +890,7 @@ mod tests {
             }
             std::thread::sleep(std::time::Duration::from_millis(5));
         }
-        assert_eq!(r.log.lock().unwrap().fetches, vec![MODEL_URL.to_string()]);
+        assert_eq!(r.log.lock().unwrap().fetches, vec![ENGLISH_MODEL.url.to_string()]);
         let _ = std::fs::remove_dir_all(&r.root);
     }
 

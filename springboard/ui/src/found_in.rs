@@ -78,7 +78,158 @@ static AIRPORTS: &[Airport] = &[
     ap("YVR", "Vancouver", "America/Vancouver"),
     ap("MEX", "Mexico City", "America/Mexico_City"),
     ap("GRU", "Sao Paulo", "America/Sao_Paulo"),
+    // Europe
+    ap("STN", "London", "Europe/London"),
+    ap("LCY", "London", "Europe/London"),
+    ap("BHX", "Birmingham", "Europe/London"),
+    ap("GLA", "Glasgow", "Europe/London"),
+    ap("BLL", "Billund", "Europe/Copenhagen"),
+    ap("BGO", "Bergen", "Europe/Oslo"),
+    ap("TRD", "Trondheim", "Europe/Oslo"),
+    ap("SVG", "Stavanger", "Europe/Oslo"),
+    ap("GOT", "Gothenburg", "Europe/Stockholm"),
+    ap("BMA", "Stockholm", "Europe/Stockholm"),
+    ap("TLL", "Tallinn", "Europe/Tallinn"),
+    ap("RIX", "Riga", "Europe/Riga"),
+    ap("VNO", "Vilnius", "Europe/Vilnius"),
+    ap("WAW", "Warsaw", "Europe/Warsaw"),
+    ap("PRG", "Prague", "Europe/Prague"),
+    ap("BUD", "Budapest", "Europe/Budapest"),
+    ap("OTP", "Bucharest", "Europe/Bucharest"),
+    ap("SOF", "Sofia", "Europe/Sofia"),
+    ap("BEG", "Belgrade", "Europe/Belgrade"),
+    ap("ZAG", "Zagreb", "Europe/Zagreb"),
+    ap("LJU", "Ljubljana", "Europe/Ljubljana"),
+    ap("MXP", "Milan", "Europe/Rome"),
+    ap("VCE", "Venice", "Europe/Rome"),
+    ap("NAP", "Naples", "Europe/Rome"),
+    ap("PMI", "Palma", "Europe/Madrid"),
+    ap("AGP", "Malaga", "Europe/Madrid"),
+    ap("ALC", "Alicante", "Europe/Madrid"),
+    ap("OPO", "Porto", "Europe/Lisbon"),
+    ap("GVA", "Geneva", "Europe/Zurich"),
+    ap("HAM", "Hamburg", "Europe/Berlin"),
+    ap("DUS", "Dusseldorf", "Europe/Berlin"),
+    ap("CGN", "Cologne", "Europe/Berlin"),
+    ap("STR", "Stuttgart", "Europe/Berlin"),
+    ap("LUX", "Luxembourg", "Europe/Luxembourg"),
+    ap("NCE", "Nice", "Europe/Paris"),
+    ap("LYS", "Lyon", "Europe/Paris"),
+    ap("MRS", "Marseille", "Europe/Paris"),
+    ap("FAE", "Torshavn", "Atlantic/Faroe"),
+    ap("GOH", "Nuuk", "America/Nuuk"),
+    // Middle East and Africa
+    ap("LCA", "Larnaca", "Asia/Nicosia"),
+    ap("TLV", "Tel Aviv", "Asia/Jerusalem"),
+    ap("AUH", "Abu Dhabi", "Asia/Dubai"),
+    ap("RUH", "Riyadh", "Asia/Riyadh"),
+    ap("CAI", "Cairo", "Africa/Cairo"),
+    ap("JNB", "Johannesburg", "Africa/Johannesburg"),
+    ap("CPT", "Cape Town", "Africa/Johannesburg"),
+    ap("NBO", "Nairobi", "Africa/Nairobi"),
+    ap("CMN", "Casablanca", "Africa/Casablanca"),
+    // Asia and Oceania
+    ap("HND", "Tokyo", "Asia/Tokyo"),
+    ap("KIX", "Osaka", "Asia/Tokyo"),
+    ap("ICN", "Seoul", "Asia/Seoul"),
+    ap("PEK", "Beijing", "Asia/Shanghai"),
+    ap("PVG", "Shanghai", "Asia/Shanghai"),
+    ap("TPE", "Taipei", "Asia/Taipei"),
+    ap("BKK", "Bangkok", "Asia/Bangkok"),
+    ap("KUL", "Kuala Lumpur", "Asia/Kuala_Lumpur"),
+    ap("CGK", "Jakarta", "Asia/Jakarta"),
+    ap("MNL", "Manila", "Asia/Manila"),
+    ap("BOM", "Mumbai", "Asia/Kolkata"),
+    ap("BLR", "Bengaluru", "Asia/Kolkata"),
+    ap("KHI", "Karachi", "Asia/Karachi"),
+    ap("MEL", "Melbourne", "Australia/Melbourne"),
+    ap("BNE", "Brisbane", "Australia/Brisbane"),
+    ap("AKL", "Auckland", "Pacific/Auckland"),
+    // North and South America
+    ap("MIA", "Miami", "America/New_York"),
+    ap("MCO", "Orlando", "America/New_York"),
+    ap("PHL", "Philadelphia", "America/New_York"),
+    ap("DCA", "Washington", "America/New_York"),
+    ap("CLT", "Charlotte", "America/New_York"),
+    ap("DTW", "Detroit", "America/Detroit"),
+    ap("IAH", "Houston", "America/Chicago"),
+    ap("MSP", "Minneapolis", "America/Chicago"),
+    ap("PHX", "Phoenix", "America/Phoenix"),
+    ap("LAS", "Las Vegas", "America/Los_Angeles"),
+    ap("SAN", "San Diego", "America/Los_Angeles"),
+    ap("PDX", "Portland", "America/Los_Angeles"),
+    ap("HNL", "Honolulu", "Pacific/Honolulu"),
+    ap("ANC", "Anchorage", "America/Anchorage"),
+    ap("YUL", "Montreal", "America/Toronto"),
+    ap("YYC", "Calgary", "America/Edmonton"),
+    ap("YHZ", "Halifax", "America/Halifax"),
+    ap("CUN", "Cancun", "America/Cancun"),
+    ap("PTY", "Panama City", "America/Panama"),
+    ap("BOG", "Bogota", "America/Bogota"),
+    ap("SCL", "Santiago", "America/Santiago"),
+    ap("EZE", "Buenos Aires", "America/Argentina/Buenos_Aires"),
+    ap("GIG", "Rio de Janeiro", "America/Sao_Paulo"),
 ];
+
+/// An airline the suggestion engine knows: its two character IATA designator and its name.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Airline {
+    pub code: &'static str,
+    pub name: &'static str,
+}
+
+static AIRLINES: &[Airline] = &[
+    Airline { code: "FI", name: "Icelandair" },
+    Airline { code: "OG", name: "PLAY" },
+    Airline { code: "BA", name: "British Airways" },
+    Airline { code: "SK", name: "Scandinavian Airlines" },
+    Airline { code: "DY", name: "Norwegian" },
+    Airline { code: "AY", name: "Finnair" },
+    Airline { code: "LH", name: "Lufthansa" },
+    Airline { code: "AF", name: "Air France" },
+    Airline { code: "KL", name: "KLM" },
+    Airline { code: "IB", name: "Iberia" },
+    Airline { code: "VY", name: "Vueling" },
+    Airline { code: "LX", name: "Swiss" },
+    Airline { code: "OS", name: "Austrian" },
+    Airline { code: "SN", name: "Brussels Airlines" },
+    Airline { code: "TP", name: "TAP Air Portugal" },
+    Airline { code: "AZ", name: "ITA Airways" },
+    Airline { code: "EI", name: "Aer Lingus" },
+    Airline { code: "U2", name: "easyJet" },
+    Airline { code: "FR", name: "Ryanair" },
+    Airline { code: "W6", name: "Wizz Air" },
+    Airline { code: "TK", name: "Turkish Airlines" },
+    Airline { code: "PC", name: "Pegasus" },
+    Airline { code: "EK", name: "Emirates" },
+    Airline { code: "QR", name: "Qatar Airways" },
+    Airline { code: "EY", name: "Etihad" },
+    Airline { code: "SQ", name: "Singapore Airlines" },
+    Airline { code: "CX", name: "Cathay Pacific" },
+    Airline { code: "NH", name: "ANA" },
+    Airline { code: "JL", name: "Japan Airlines" },
+    Airline { code: "KE", name: "Korean Air" },
+    Airline { code: "TG", name: "Thai Airways" },
+    Airline { code: "AI", name: "Air India" },
+    Airline { code: "QF", name: "Qantas" },
+    Airline { code: "NZ", name: "Air New Zealand" },
+    Airline { code: "AA", name: "American Airlines" },
+    Airline { code: "DL", name: "Delta" },
+    Airline { code: "UA", name: "United" },
+    Airline { code: "WN", name: "Southwest" },
+    Airline { code: "B6", name: "JetBlue" },
+    Airline { code: "AS", name: "Alaska Airlines" },
+    Airline { code: "AC", name: "Air Canada" },
+    Airline { code: "LA", name: "LATAM" },
+    Airline { code: "ET", name: "Ethiopian Airlines" },
+    Airline { code: "SA", name: "South African Airways" },
+    Airline { code: "MS", name: "EgyptAir" },
+];
+
+/// The airline with this two character IATA designator (in any case), or `None` when the table does not have it.
+pub fn airline(code: &str) -> Option<&'static Airline> {
+    AIRLINES.iter().find(|a| a.code.eq_ignore_ascii_case(code))
+}
 
 /// The airport with this IATA code (letters in any case), or `None` when the table does not have it.
 pub fn airport(code: &str) -> Option<&'static Airport> {
@@ -208,7 +359,15 @@ pub fn extract(source: &Source, text: &str, region: &str) -> Vec<Found> {
                 let Some((airline, number)) = detect::flight_parts(&shown) else { continue };
                 let named = airports_named(text, &m.range);
                 let route = (named.len() >= 2).then(|| (named[0].code.to_string(), named[1].code.to_string()));
-                let subtitle = if named.len() >= 2 { format!("{} to {}", named[0].city, named[1].city) } else { String::new() };
+                // "Icelandair · Reykjavik to New York": the airline when the table knows it, then the route
+                let mut parts: Vec<String> = Vec::new();
+                if let Some(a) = self::airline(airline) {
+                    parts.push(a.name.to_string());
+                }
+                if named.len() >= 2 {
+                    parts.push(format!("{} to {}", named[0].city, named[1].city));
+                }
+                let subtitle = parts.join(" \u{b7} ");
                 Found {
                     kind: SuggestionKind::Flight,
                     content: Content::Flight { airline: airline.to_string(), number: number.to_string(), route },
@@ -397,7 +556,7 @@ mod tests {
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].kind, SuggestionKind::Flight);
         assert_eq!(found[0].title, "Flight FI 552");
-        assert_eq!(found[0].subtitle, "Reykjavik to New York");
+        assert_eq!(found[0].subtitle, "Icelandair \u{b7} Reykjavik to New York");
         assert_eq!(
             found[0].content,
             Content::Flight { airline: "FI".into(), number: "552".into(), route: Some(("KEF".into(), "JFK".into())) }
@@ -409,8 +568,40 @@ mod tests {
     fn a_flight_without_airports_has_no_route() {
         let found = extract(&mail(), "Boarding BA117 now", "IS");
         assert_eq!(found.len(), 1);
-        assert_eq!(found[0].subtitle, "");
+        assert_eq!(found[0].subtitle, "British Airways", "no route, but the airline is known");
         assert!(matches!(&found[0].content, Content::Flight { route: None, .. }));
+    }
+
+    #[test]
+    fn an_airline_the_table_does_not_know_leaves_the_subtitle_to_the_route() {
+        let plain = extract(&mail(), "Boarding ZZ117 now", "IS");
+        assert_eq!(plain[0].subtitle, "");
+        let routed = extract(&mail(), "ZZ117 from KEF to ARN", "IS");
+        assert_eq!(routed[0].subtitle, "Reykjavik to Stockholm");
+    }
+
+    #[test]
+    fn the_airline_table_has_unique_two_character_codes() {
+        let mut codes: Vec<&str> = AIRLINES.iter().map(|a| a.code).collect();
+        assert!(codes.iter().all(|c| c.len() == 2 && c.chars().all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit())));
+        codes.sort_unstable();
+        codes.dedup();
+        assert_eq!(codes.len(), AIRLINES.len());
+        assert!(AIRLINES.iter().all(|a| !a.name.is_empty()));
+        assert_eq!(airline("fi").map(|a| a.name), Some("Icelandair"));
+        assert_eq!(airline("U2").map(|a| a.name), Some("easyJet"));
+        assert_eq!(airline("ZZ"), None);
+    }
+
+    #[test]
+    fn the_wider_airport_table_names_zones_for_far_away_cities() {
+        assert!(AIRPORTS.len() >= 120);
+        assert_eq!(airport("HNL").map(|a| a.zone), Some("Pacific/Honolulu"));
+        assert_eq!(airport("ICN").map(|a| a.city), Some("Seoul"));
+        assert_eq!(airport("FAE").map(|a| a.zone), Some("Atlantic/Faroe"));
+        let found = extract(&mail(), "Flight FI 205 from KEF to HNL tomorrow", "IS");
+        let flight = found.iter().find(|f| f.kind == SuggestionKind::Flight).expect("a flight");
+        assert_eq!(flight.subtitle, "Icelandair \u{b7} Reykjavik to Honolulu");
     }
 
     #[test]

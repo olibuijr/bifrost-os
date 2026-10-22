@@ -507,6 +507,24 @@ pub fn install_package_signed(root: &Path, bytes: &[u8], sha256: &str, signature
 /// Where the shell pins the ML-DSA-65 publisher public keys: one raw key per `*.pub` file.
 pub const PINNED_PUBLISHER_KEYS: &str = "/etc/bifrost/publisher-keys";
 
+/// Where the OS package ships the publisher keys that come with an image (`packaging/arch/publisher-keys/*.pub`).
+/// The directory is package-owned, so an OS update rotates these keys; [`PINNED_PUBLISHER_KEYS`] stays the place an
+/// administrator adds their own.
+pub const PACKAGED_PUBLISHER_KEYS: &str = "/usr/share/bifrost/publisher-keys";
+
+/// Every publisher key in effect: the packaged ones first, then the administrator's, with duplicates dropped.
+pub fn publisher_keys_in(dirs: &[&Path]) -> Vec<Vec<u8>> {
+    let mut all: Vec<Vec<u8>> = Vec::new();
+    for dir in dirs {
+        for key in pinned_publisher_keys(dir) {
+            if !all.contains(&key) {
+                all.push(key);
+            }
+        }
+    }
+    all
+}
+
 /// Loads the pinned publisher keys from `dir`. Only `*.pub` files whose length is exactly one ML-DSA-65 public key
 /// count; anything else in the directory is ignored. A missing directory yields no keys, so every signed package is
 /// refused.
@@ -560,8 +578,8 @@ pub fn write_publisher_key(dir: &Path, name: &str, seed: &[u8; 32]) -> Result<()
 
 /// Applies the pinned-key policy to the downloaded package at `part`: the detached signature is fetched from
 /// `<url>.sig` only when a key is pinned.
-fn enforce_signature_policy(keys_dir: &Path, part: &Path, url: &str) -> Result<(), String> {
-    let pinned = pinned_publisher_keys(keys_dir);
+fn enforce_signature_policy(keys_dirs: &[&Path], part: &Path, url: &str) -> Result<(), String> {
+    let pinned = publisher_keys_in(keys_dirs);
     if pinned.is_empty() {
         return Ok(());
     }
@@ -653,7 +671,7 @@ pub fn install_download_local(root: &Path, url: &str, size: u64, sha256: &str, s
         if got != sha256.to_ascii_lowercase() {
             return Err("checksum mismatch; package discarded".to_string());
         }
-        enforce_signature_policy(Path::new(PINNED_PUBLISHER_KEYS), &part, url)?;
+        enforce_signature_policy(&[Path::new(PACKAGED_PUBLISHER_KEYS), Path::new(PINNED_PUBLISHER_KEYS)], &part, url)?;
         let mut file = std::fs::File::open(&part).map_err(|e| e.to_string())?;
         install_archive(root, &mut file, shell)
     });
@@ -994,12 +1012,37 @@ pub mod tests {
         let none = scratch("policy-nokeys");
         let part = dir.join("pkg.part");
         std::fs::write(&part, pkg(MANIFEST)).unwrap();
-        assert_eq!(enforce_signature_policy(&none.join("missing"), &part, "http://127.0.0.1:9/p.aap"), Ok(()), "no key pinned");
+        assert_eq!(enforce_signature_policy(&[none.join("missing").as_path()], &part, "http://127.0.0.1:9/p.aap"), Ok(()), "no key pinned");
         std::fs::write(dir.join("pub.pub"), keygen(Params::MlDsa65, &[8u8; 32]).public_key).unwrap();
-        let err = enforce_signature_policy(&dir, &part, "http://127.0.0.1:9/p.aap").unwrap_err();
+        let err = enforce_signature_policy(&[dir.as_path()], &part, "http://127.0.0.1:9/p.aap").unwrap_err();
         assert!(err.contains("signature check failed"), "{err}");
         let _ = std::fs::remove_dir_all(dir);
         let _ = std::fs::remove_dir_all(none);
+    }
+
+    #[test]
+    fn packaged_and_administrator_keys_are_merged_without_duplicates() {
+        use bifrost_core::mldsa::{keygen, Params};
+        let packaged = scratch("packaged-keys");
+        let admin = scratch("admin-keys");
+        let shipped = keygen(Params::MlDsa65, &[11u8; 32]);
+        let local = keygen(Params::MlDsa65, &[12u8; 32]);
+        std::fs::write(packaged.join("release.pub"), &shipped.public_key).unwrap();
+        std::fs::write(admin.join("release-copy.pub"), &shipped.public_key).unwrap();
+        std::fs::write(admin.join("lab.pub"), &local.public_key).unwrap();
+        let missing = admin.join("missing");
+        let keys = publisher_keys_in(&[packaged.as_path(), admin.as_path(), missing.as_path()]);
+        assert_eq!(keys.len(), 2, "the same key in both places counts once");
+        assert_eq!(keys[0], shipped.public_key, "packaged keys come first");
+        assert!(publisher_keys_in(&[]).is_empty());
+        // a download signed by the packaged publisher passes with only the packaged directory populated
+        let bytes = pkg(MANIFEST);
+        let sig = sign_package(&shipped.secret_key, &bytes, &[1u8; 32]).unwrap();
+        let only_packaged = publisher_keys_in(&[packaged.as_path(), missing.as_path()]);
+        assert_eq!(check_package_policy(&only_packaged, &bytes, Some(&sig)), Ok(()));
+        assert!(check_package_policy(&only_packaged, &bytes, None).is_err(), "unsigned is refused once a packaged key exists");
+        let _ = std::fs::remove_dir_all(packaged);
+        let _ = std::fs::remove_dir_all(admin);
     }
 
     #[test]

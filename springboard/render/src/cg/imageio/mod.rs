@@ -155,9 +155,10 @@ pub fn pixel_size(bytes: &[u8]) -> Option<(usize, usize)> {
     probe_first(Format::detect(bytes)?, bytes).map(|p| (p.pixel_width, p.pixel_height))
 }
 
-/// Reads the first image of `bytes` as premultiplied pixels (animations: the first frame).
+/// Reads the first image of `bytes` as premultiplied pixels (animations: the first frame). An SVG document, which is
+/// not one of the raster [`Format`]s, is drawn by the SVG reader at its intrinsic size.
 pub fn decode(bytes: &[u8]) -> Option<Image> {
-    ImageSource::new(bytes.to_vec()).image_premultiplied(0)
+    ImageSource::new(bytes.to_vec()).image_premultiplied(0).or_else(|| crate::svg::decode_image(bytes, MAX_SIDE))
 }
 
 /// How far a source got (what a progressive loader asks while data arrives).
@@ -664,6 +665,16 @@ pub mod tests {
     pub fn png_bytes(w: u32, h: u32, color: [u8; 4]) -> Vec<u8> {
         let px: Vec<u8> = (0..w * h).flat_map(|_| color).collect();
         encode::encode_png(w as usize, h as usize, &px, &encode::PngOptions::default()).unwrap()
+    }
+
+    #[test]
+    fn decode_falls_back_to_the_svg_reader_for_a_vector_picture() {
+        let svg = br#"<svg xmlns="http://www.w3.org/2000/svg" width="3" height="3"><rect width="3" height="3"/></svg>"#;
+        assert!(!is_image(svg), "SVG is not one of the raster formats");
+        let img = decode(svg).expect("the SVG reader draws it");
+        assert_eq!((img.w, img.h), (3, 3));
+        assert_eq!(img.px[4], crate::gfx::rgba(0, 0, 0, 255));
+        assert!(decode(b"neither raster nor vector").is_none());
     }
 
     #[cfg(test)]

@@ -15,7 +15,7 @@
 //! transcripts into `SFSpeechRecognizer` for code that already takes a backend.
 //!
 //! Gaps: the whisper element reports no per-word timing or confidence, so the segments carry zero timestamps and
-//! confidence; the pipeline is English only; file recognition is not served; and the reply format of the element's
+//! confidence; other languages need the multilingual model; file recognition is not served; and the reply format of the element's
 //! messages is checked on the lab machine.
 
 use crate::runtime::Ctx;
@@ -44,7 +44,7 @@ pub fn start_params(locale: &str, report_partial: bool) -> Json {
 }
 
 /// Starts live recognition for this app with the request's options. The reply is `{id}`, or an error when the
-/// person has not granted consent, the model is not installed, or the locale is not English.
+/// person has not granted consent, the model is not installed, or no model serves the locale.
 pub fn start(ctx: &Ctx, locale: &str, request: &SFSpeechAudioBufferRecognitionRequest) -> u32 {
     call(ctx, "start", &start_params(locale, request.should_report_partial_results))
 }
@@ -309,10 +309,11 @@ mod tests {
     }
 
     #[test]
-    fn only_english_is_available_and_files_are_not_served() {
+    fn whisper_languages_are_available_and_files_are_not_served() {
         let mut b = backend(vec![], vec![]);
         assert!(b.is_available("en_GB"));
-        assert!(!b.is_available("is_IS"));
+        assert!(b.is_available("is_IS"));
+        assert!(!b.is_available("tlh"));
         assert!(b.transcribe_file("/tmp/a.wav").is_err());
     }
 

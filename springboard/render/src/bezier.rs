@@ -125,13 +125,19 @@ impl BezierPath {
     /// Flattens every subpath to a polyline. `tolerance` bounds how far a
     /// straight chord may stray from a curve, in path units.
     pub fn flatten(&self, tolerance: f32) -> Vec<Vec<Point>> {
+        self.flatten_with_close(tolerance).into_iter().map(|(pts, _)| pts).collect()
+    }
+
+    /// Like [`flatten`](Self::flatten), but each polyline also says whether its subpath was explicitly closed, which
+    /// strokes need to join the last segment to the first.
+    pub fn flatten_with_close(&self, tolerance: f32) -> Vec<(Vec<Point>, bool)> {
         let tol = if tolerance > 0.0 { tolerance } else { 0.25 };
-        let mut out: Vec<Vec<Point>> = Vec::new();
+        let mut out: Vec<(Vec<Point>, bool)> = Vec::new();
         let mut cur: Point = (0.0, 0.0);
         for op in &self.ops {
             match *op {
                 Op::Move(p) => {
-                    out.push(vec![p]);
+                    out.push((vec![p], false));
                     cur = p;
                 }
                 Op::Line(p) => {
@@ -147,8 +153,9 @@ impl BezierPath {
                     cur = p;
                 }
                 Op::Close => {
-                    if let Some(first) = out.last().and_then(|s| s.first().copied()) {
-                        cur = first;
+                    if let Some(sub) = out.last_mut() {
+                        sub.1 = true;
+                        cur = sub.0[0];
                     }
                 }
             }
@@ -204,10 +211,10 @@ impl BezierPath {
     }
 }
 
-fn push_point(out: &mut Vec<Vec<Point>>, p: Point) {
+fn push_point(out: &mut Vec<(Vec<Point>, bool)>, p: Point) {
     match out.last_mut() {
-        Some(sub) => sub.push(p),
-        None => out.push(vec![p]),
+        Some(sub) => sub.0.push(p),
+        None => out.push((vec![p], false)),
     }
 }
 
@@ -252,6 +259,18 @@ fn inside(polys: &[Vec<Point>], x: f32, y: f32, rule: WindingRule) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn flatten_with_close_reports_which_subpaths_were_closed() {
+        let mut p = BezierPath::rect(0.0, 0.0, 2.0, 2.0);
+        p.move_to((5.0, 5.0));
+        p.line_to((6.0, 5.0));
+        let subs = p.flatten_with_close(0.25);
+        assert_eq!(subs.len(), 2);
+        assert!(subs[0].1);
+        assert!(!subs[1].1);
+        assert_eq!(p.flatten(0.25).len(), 2);
+    }
 
     fn count(mask: &[u8]) -> usize {
         mask.iter().filter(|&&v| v == 255).count()
