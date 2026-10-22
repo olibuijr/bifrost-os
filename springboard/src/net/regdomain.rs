@@ -49,56 +49,107 @@ pub fn from_region_pref(region: Option<&str>) -> Option<String> {
     is_country_code(&code).then_some(code)
 }
 
-/// How many times a country that `iw reg get` does not show is set again before the follower gives up until the
-/// setting changes (a chip with its own regulatory rules keeps reporting its own country).
-const MAX_RETRIES: u8 = 3;
+/// The country the domain should follow: the saved region when there is one, else the default the Language & Region
+/// page shows (`bifrost_ui::region::DEFAULT_REGION`). A default install never saves `region=`, so without this
+/// fallback the domain would stay on the world default for ever.
+pub fn effective_country(settings_text: &str) -> String {
+    bifrost_ui::region::Region::from_settings_text(settings_text).region_code()
+}
 
-/// Decides when the regulatory domain is set: at the first pass, on each change of the setting, and again when the
-/// kernel reports another country than the setting names (the driver or an access point can move it back).
+/// How often the settings file is read.
+const SETTINGS_POLL_SECS: u64 = 5;
+/// While the domain is in force, `iw reg get` is checked every this many polls, so a driver that reloads and drops the
+/// domain is put right again without spawning `iw` every few seconds.
+const VERIFY_EVERY_POLLS: u32 = 12;
+/// After a failed `iw reg set` (no wireless device yet, `iw` missing) the next try is this many polls later.
+const RETRY_AFTER_POLLS: u32 = 6;
+
+/// What one poll of the follower decides.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Step {
+    /// Nothing to do this poll.
+    Idle,
+    /// Run `iw reg set` for this country.
+    Apply(String),
+}
+
+/// The decision logic of the follower, apart from the clock, the file and `iw`, so it can be tested.
 #[derive(Debug, Default)]
 pub struct Follower {
-    target: Option<String>,
-    retries: u8,
+    /// The country last set successfully.
+    applied: Option<String>,
+    /// Polls left until the next `iw reg get` check while the domain is in force.
+    verify_in: u32,
+    /// Polls left before a failed country is tried again.
+    retry_in: u32,
+    /// The country whose last attempt failed.
+    failed: Option<String>,
 }
 
 impl Follower {
-    /// The country to apply now, given the country the setting names and the country the kernel reports.
-    pub fn step(&mut self, desired: Option<&str>, current: Option<&str>) -> Option<String> {
-        let desired = desired?;
-        if self.target.as_deref() != Some(desired) {
-            self.target = Some(desired.to_string());
-            self.retries = 0;
-            return Some(desired.to_string());
+    /// One poll with the country the settings name now. `current` reads the domain back (`iw reg get`) and is only
+    /// called when the periodic check is due. Applies at once on the first poll and whenever `wanted` changes.
+    pub fn poll(&mut self, wanted: &str, current: impl FnOnce() -> Option<String>) -> Step {
+        if !is_country_code(wanted) {
+            return Step::Idle;
         }
-        if current == Some(desired) {
-            self.retries = 0;
-            return None;
+        if self.failed.as_deref() == Some(wanted) {
+            if self.retry_in > 0 {
+                self.retry_in -= 1;
+                return Step::Idle;
+            }
+            return Step::Apply(wanted.to_string());
         }
-        if self.retries < MAX_RETRIES {
-            self.retries += 1;
-            return Some(desired.to_string());
+        if self.applied.as_deref() != Some(wanted) {
+            return Step::Apply(wanted.to_string());
         }
-        None
+        if self.verify_in > 0 {
+            self.verify_in -= 1;
+            return Step::Idle;
+        }
+        self.verify_in = VERIFY_EVERY_POLLS;
+        if current().as_deref() == Some(wanted) {
+            Step::Idle
+        } else {
+            Step::Apply(wanted.to_string())
+        }
+    }
+
+    /// Records the result of the `iw reg set` a `Step::Apply` asked for.
+    pub fn applied(&mut self, country: &str, ok: bool) {
+        if ok {
+            self.applied = Some(country.to_string());
+            self.failed = None;
+            self.verify_in = VERIFY_EVERY_POLLS;
+        } else {
+            self.applied = None;
+            self.failed = Some(country.to_string());
+            self.retry_in = RETRY_AFTER_POLLS;
+        }
     }
 }
 
-/// Starts a thread that applies the region's country at start and again each time the setting changes, and sets it
-/// again when the kernel has moved to another country. The shell saves the setting to `settings_path`; the file is
-/// read every few seconds, which is cheap and needs no new message on the network socket. A failed `iw` call is
-/// logged and tried again on the following passes, up to `MAX_RETRIES` times for one setting.
+/// Starts a thread that keeps the wireless regulatory domain on the effective country (`effective_country`): applied
+/// at start and again each time the setting changes. It runs in `bifrost-privd`, which is root and started at boot,
+/// so the domain is set on an idle system too. The shell saves the setting to `settings_path`; the file is read every
+/// few seconds, which is cheap and needs no new message on a socket. A failed `iw` call is logged and retried later.
 pub fn follow_region(settings_path: std::path::PathBuf) {
     crate::bare::sys::spawn_named("regdomain", move || {
         let mut follower = Follower::default();
         loop {
-            let prefs = crate::shell::prefs::Prefs::load(&settings_path);
-            let desired = from_region_pref(prefs.get("region"));
-            if let Some(country) = follower.step(desired.as_deref(), current().as_deref()) {
-                match apply(&country) {
-                    Ok(()) => eprintln!("netd: wireless regulatory domain {country}"),
-                    Err(e) => eprintln!("netd: {e}"),
+            let text = std::fs::read_to_string(&settings_path).unwrap_or_default();
+            let wanted = effective_country(&text);
+            if let Step::Apply(country) = follower.poll(&wanted, current) {
+                let result = apply(&country);
+                match &result {
+                    Ok(()) => eprintln!("regdomain: wireless regulatory domain {country}"),
+                    // only the first failure of a country is logged; the retries stay quiet
+                    Err(e) if follower.failed.as_deref() != Some(country.as_str()) => eprintln!("regdomain: {e}"),
+                    Err(_) => {}
                 }
+                follower.applied(&country, result.is_ok());
             }
-            std::thread::sleep(std::time::Duration::from_secs(5));
+            std::thread::sleep(std::time::Duration::from_secs(SETTINGS_POLL_SECS));
         }
     });
 }
@@ -114,6 +165,78 @@ mod tests {
         assert_eq!(from_region_pref(Some("Iceland")), None, "a name is not a code");
         assert_eq!(from_region_pref(Some("")), None);
         assert_eq!(from_region_pref(None), None, "no region saved, no domain set");
+    }
+
+    #[test]
+    fn a_fresh_install_follows_the_default_region_the_settings_page_shows() {
+        assert_eq!(effective_country(""), bifrost_ui::region::DEFAULT_REGION, "no file at all");
+        assert_eq!(effective_country("languages=en\ncurrency=ISK\n"), "IS", "no region key saved");
+        assert_eq!(effective_country("region=garbage\n"), "IS", "a damaged value falls back to the default");
+    }
+
+    #[test]
+    fn a_saved_region_wins_over_the_default() {
+        assert_eq!(effective_country("region=dk\n"), "DK");
+        assert_eq!(effective_country("# c\nlanguages=en\nregion = US\n"), "US");
+    }
+
+    #[test]
+    fn the_first_poll_applies_and_an_unchanged_setting_then_idles() {
+        let mut f = Follower::default();
+        assert_eq!(f.poll("IS", || panic!("no read-back before the first apply")), Step::Apply("IS".into()));
+        f.applied("IS", true);
+        assert_eq!(f.poll("IS", || panic!("not due yet")), Step::Idle);
+    }
+
+    #[test]
+    fn a_changed_region_applies_the_new_country_at_once() {
+        let mut f = Follower::default();
+        f.applied("IS", true);
+        assert_eq!(f.poll("DK", || panic!("a change needs no read-back")), Step::Apply("DK".into()));
+    }
+
+    #[test]
+    fn a_domain_that_was_dropped_is_set_again_at_the_periodic_check() {
+        let mut f = Follower::default();
+        f.applied("IS", true);
+        for _ in 0..VERIFY_EVERY_POLLS {
+            assert_eq!(f.poll("IS", || panic!("not due")), Step::Idle);
+        }
+        // due: the driver fell back to the world default
+        assert_eq!(f.poll("IS", || None), Step::Apply("IS".into()));
+        f.applied("IS", true);
+        // due again later: the domain still holds, nothing to do
+        for _ in 0..VERIFY_EVERY_POLLS {
+            let _ = f.poll("IS", || panic!("not due"));
+        }
+        assert_eq!(f.poll("IS", || Some("IS".into())), Step::Idle);
+    }
+
+    #[test]
+    fn a_failed_apply_is_retried_after_a_pause_not_every_poll() {
+        let mut f = Follower::default();
+        assert_eq!(f.poll("IS", || None), Step::Apply("IS".into()));
+        f.applied("IS", false);
+        for _ in 0..RETRY_AFTER_POLLS {
+            assert_eq!(f.poll("IS", || None), Step::Idle);
+        }
+        assert_eq!(f.poll("IS", || None), Step::Apply("IS".into()));
+        f.applied("IS", true);
+        assert_eq!(f.poll("IS", || None), Step::Idle, "success clears the failure");
+    }
+
+    #[test]
+    fn a_new_country_is_tried_at_once_even_while_the_old_one_is_failing() {
+        let mut f = Follower::default();
+        f.applied("IS", false);
+        assert_eq!(f.poll("DK", || None), Step::Apply("DK".into()));
+    }
+
+    #[test]
+    fn something_that_is_not_a_country_code_is_never_applied() {
+        let mut f = Follower::default();
+        assert_eq!(f.poll("", || None), Step::Idle);
+        assert_eq!(f.poll("is", || None), Step::Idle);
     }
 
     #[test]
@@ -137,46 +260,6 @@ mod tests {
         assert_eq!(parse_get("global\ncountry 00: DFS-UNSET\n"), None);
         assert_eq!(parse_get("nl80211 not found\n"), None);
         assert_eq!(parse_get(""), None);
-    }
-
-    #[test]
-    fn the_follower_applies_at_the_first_pass_and_on_each_change() {
-        let mut f = Follower::default();
-        assert_eq!(f.step(None, None), None, "no region saved, nothing to set");
-        assert_eq!(f.step(Some("IS"), None).as_deref(), Some("IS"), "first pass sets the country");
-        assert_eq!(f.step(Some("IS"), Some("IS")), None, "kernel already reports it");
-        assert_eq!(f.step(Some("DK"), Some("IS")).as_deref(), Some("DK"), "a changed setting is applied at once");
-        assert_eq!(f.step(Some("DK"), Some("DK")), None);
-    }
-
-    #[test]
-    fn the_follower_sets_the_country_again_when_the_kernel_moved_away() {
-        let mut f = Follower::default();
-        assert!(f.step(Some("IS"), None).is_some());
-        assert_eq!(f.step(Some("IS"), Some("US")).as_deref(), Some("IS"), "the driver reset the domain");
-        assert_eq!(f.step(Some("IS"), None).as_deref(), Some("IS"), "the world default is not the country either");
-    }
-
-    #[test]
-    fn the_follower_gives_up_after_the_retries_until_the_setting_changes() {
-        let mut f = Follower::default();
-        assert!(f.step(Some("IS"), Some("US")).is_some(), "first pass");
-        for _ in 0..MAX_RETRIES {
-            assert!(f.step(Some("IS"), Some("US")).is_some());
-        }
-        assert_eq!(f.step(Some("IS"), Some("US")), None, "a chip with its own rules is left alone");
-        assert_eq!(f.step(Some("DK"), Some("US")).as_deref(), Some("DK"), "a new setting starts again");
-    }
-
-    #[test]
-    fn a_match_resets_the_retries() {
-        let mut f = Follower::default();
-        f.step(Some("IS"), None);
-        f.step(Some("IS"), Some("US"));
-        assert_eq!(f.step(Some("IS"), Some("IS")), None);
-        for _ in 0..MAX_RETRIES {
-            assert!(f.step(Some("IS"), Some("US")).is_some(), "the count started over");
-        }
     }
 
     #[test]

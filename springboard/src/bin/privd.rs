@@ -20,6 +20,9 @@ fn main() -> std::process::ExitCode {
     if let Some(p) = privd::methods::apply_saved_usb_policy() {
         eprintln!("bifrost-privd: usb policy {}", p.name());
     }
+    // the wireless regulatory domain follows the Language & Region country (saved, else the page's default). It is set
+    // here because this daemon runs as root from boot, while netd only starts on the first Wi-Fi request.
+    springboard::net::regdomain::follow_region(std::path::PathBuf::from(format!("{}/settings.ini", privd::STATE_DIR)));
     // Stage 1 (docs/privd-protocol.md): the shell runs as root, so no process of the account needs the socket. The
     // /proc/<pid>/exe check cannot tell the shell from any other process of the account (security review
     // 2026-10-11), so the account is refused outright until stage 2 hands the user shell a launch-time credential.
