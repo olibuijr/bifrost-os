@@ -120,6 +120,7 @@ pub fn run(socket: Option<&str>, command: &[String]) -> Result<(), Box<dyn Error
     let seat = session.seat();
     let gpu = primary_gpu(&seat)?.or_else(|| all_gpus(&seat).ok()?.into_iter().next()).ok_or("no GPU")?;
     eprintln!("bifrost-wm: GPU {}", gpu.display());
+    wait_for_display(&gpu);
     // the page flip's vblank time, written by the DRM event source and read by the vblank callback below
     let vblank_time: Rc<Cell<Option<Duration>>> = Rc::new(Cell::new(None));
     let mut drm = open_gpu(&mut session, &gpu, &mut state, event_loop.handle(), vblank_time.clone())?;
@@ -249,6 +250,42 @@ pub fn run(socket: Option<&str>, command: &[String]) -> Result<(), Box<dyn Error
         let _ = state.dh.flush_clients();
     })?;
     Ok(())
+}
+
+/// Blocks until a display is connected to `gpu` (one of its sysfs connectors reads `connected`), checking once a
+/// second. A PC whose monitor is off, asleep or on another input when the session starts then gets its desktop when the
+/// monitor comes back, instead of the session exiting with "no connected display". Without a sysfs view of the card
+/// (a container) it returns at once and `open_gpu` decides. A display plugged in while running is not handled yet.
+fn wait_for_display(gpu: &Path) {
+    let Some(card) = gpu.file_name().and_then(|n| n.to_str()) else { return };
+    let prefix = format!("{card}-");
+    let mut logged = false;
+    loop {
+        let statuses: Vec<String> = std::fs::read_dir("/sys/class/drm")
+            .map(|d| {
+                d.flatten()
+                    .filter(|e| e.file_name().to_str().is_some_and(|n| n.starts_with(&prefix)))
+                    .filter_map(|e| std::fs::read_to_string(e.path().join("status")).ok())
+                    .collect()
+            })
+            .unwrap_or_default();
+        if statuses.is_empty() || any_connected(&statuses) {
+            if logged {
+                eprintln!("bifrost-wm: display connected on {card}");
+            }
+            return;
+        }
+        if !logged {
+            eprintln!("bifrost-wm: no connected display on {card}, waiting for one");
+            logged = true;
+        }
+        std::thread::sleep(Duration::from_secs(1));
+    }
+}
+
+/// Whether any of a card's sysfs connector statuses (`connected`, `disconnected`, `unknown`) is a connected display.
+fn any_connected(statuses: &[String]) -> bool {
+    statuses.iter().any(|s| s.trim() == "connected")
 }
 
 fn open_gpu(
@@ -622,6 +659,13 @@ mod tests {
     use super::*;
 
     fn m(w: u16, h: u16, hz: u32, preferred: bool) -> ModeSummary { ModeSummary { w, h, hz, preferred } }
+
+    #[test]
+    fn the_session_waits_until_a_connector_reads_connected() {
+        let st = |v: &[&str]| v.iter().map(|s| format!("{s}\n")).collect::<Vec<_>>();
+        assert!(!any_connected(&st(&["disconnected", "disconnected", "unknown"])), "a monitor that is off: keep waiting");
+        assert!(any_connected(&st(&["disconnected", "connected"])));
+    }
 
     #[test]
     fn no_frame_while_paused_or_pending() {
