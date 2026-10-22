@@ -4793,6 +4793,9 @@ wiring.
 - `model_attachment`: Image attachments for a prompt.
 - `model_history`: Change history with transaction tokens (`HistoryDescriptor`, `HistoryTransaction`, `HistoryChange`).
 - `model_provider`: The model behind a session.
+- `model_foundation`: Model ids (`name[:tag]`), `ModelInfo` capabilities, `Request` with `GenerationOptions` and its
+  `check` against a model, `Response` with estimated `Usage` and `FinishReason`, and a `ModelRegistry` that resolves a
+  name. Pure types; no runtime answers yet.
 - `model_schema`: Attribute options for the fields of a model entity
 - `model_session`: A model session with profiles, dynamic instructions and typed session properties.
 - `model_specialization`: A cache of specialized model artifacts, keyed by model name and specialization options.
@@ -5627,9 +5630,17 @@ and the `note` class, whose `name`, `id`, `folder` and `modified` properties are
 
 **Gaps (recorded decisions).** The tools do not launch an app that is not running (error -600). `display dialog` and
 `display notification` print on standard error, because the shell has no request path for a command-line tool yet.
-Descriptors travel as JSON, not Apple event descriptors; there is no sdef file and no generated proxy. The reference
-JavaScript (`JavaScriptOSA`, `JavaScriptAppleEvents`) is not built, and `osascript -l JavaScript` is refused. Setting
-properties and deleting notes or events from a script are refused by the apps for now. The language has no
+Descriptors travel as JSON, not Apple event descriptors; there is no sdef file and no generated proxy. Setting
+properties and deleting notes or events from a script are refused by the apps for now.
+
+**JavaScript.** `osascript -l JavaScript` runs a script in a Boa context (`shell/js_automation.rs`; module doc lists
+the globals). `Application("Name")` properties are dictionary commands, or the plural of a declared class: a collection
+whose `()`, `[n]` (zero-based), `.byName(x)` and `.whose({prop: v})` read objects with the core `getd` event,
+`obj.prop()`, `obj.prop = v` / `.set(v)` and `obj.delete()` send `getd`, `setd` and `delt`, after the same grant and
+dictionary checks as the AppleScript-style language. Elements nested in an element are not reachable (the event record
+names one class). `osacompile -l JavaScript` (or a `.js` file) checks the syntax with the engine and writes
+`{"format": "bifrost-osa", "version": 1, "language": "JavaScript", "source": ...}` with no tree; `osascript` runs such
+a file as JavaScript without `-l` and refuses a conflicting `-l`. The language has no
 `repeat while`, no `considering`, and no object references beyond specifiers.
 
 ## Notification Center column and Control Centre modules (desktop, E2E round e4)
