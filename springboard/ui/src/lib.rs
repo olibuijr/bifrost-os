@@ -1239,6 +1239,8 @@ pub mod embedding;
 pub mod lexical_tags;
 pub mod inflection;
 pub mod search_rank;
+/// A local hashed-text semantic score for system search (`HashedSemantic`, a `SemanticHook`).
+pub mod semantic_hash;
 pub mod filebadge;
 pub mod itemattrs;
 pub mod match_pattern;

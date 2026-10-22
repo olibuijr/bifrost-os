@@ -907,7 +907,8 @@ fn indexed_groups(query: &str) -> Vec<Group> {
     let guard = OPENS.lock().unwrap_or_else(|e| e.into_inner());
     let empty = search_rank::Usage::default();
     let usage = guard.as_ref().unwrap_or(&empty);
-    let order = search_rank::order(query, &items, usage, now, &search_rank::NoSemantic);
+    // free document text is where a local semantic score helps; app and settings titles are too short for it
+    let order = search_rank::order(query, &items, usage, now, &bifrost_ui::semantic_hash::HashedSemantic::new());
     let mut groups: Vec<Group> = vec![];
     for i in order {
         let f = found[i].clone();
