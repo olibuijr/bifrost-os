@@ -1045,6 +1045,7 @@ pub enum Event {
 pub mod ax;
 pub mod text_marker;
 pub mod speech;
+pub mod voice_profile;
 pub mod recognition;
 pub mod recognition_task;
 pub mod dictation_insert;
