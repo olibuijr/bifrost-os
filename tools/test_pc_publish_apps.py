@@ -30,7 +30,17 @@ class OutdatedApps(unittest.TestCase):
             os.makedirs(os.path.join(d, "x-desktop"))
             with open(os.path.join(d, "x-desktop", "manifest.toml"), "w") as f:
                 f.write('id = "x"\nversion = "1.2.3"\narchitecture = "x86_64-linux"\n')
+            os.makedirs(os.path.join(d, "x-desktop", "src"))
+            open(os.path.join(d, "x-desktop", "src", "main.rs"), "w").close()
             self.assertEqual(pp.app_manifests(d), [("x-desktop", "x", "1.2.3", "x86_64-linux")])
+
+    def test_a_library_without_an_executable_is_not_published(self):
+        with tempfile.TemporaryDirectory() as d:
+            os.makedirs(os.path.join(d, "lib-desktop", "src"))
+            with open(os.path.join(d, "lib-desktop", "manifest.toml"), "w") as f:
+                f.write('id = "l"\nversion = "0.1.0"\narchitecture = "x86_64-linux"\n')
+            open(os.path.join(d, "lib-desktop", "src", "lib.rs"), "w").close()
+            self.assertEqual(pp.app_manifests(d), [])
 
 
 if __name__ == "__main__":

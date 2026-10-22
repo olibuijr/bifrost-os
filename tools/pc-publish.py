@@ -40,10 +40,20 @@ def outdated_apps(store, manifests):
     return [d for d, i, v, arch in manifests if arch == "x86_64-linux" and (i not in store or version_key(v) > version_key(store[i]))]
 
 
+def has_binary(app_dir):
+    """Whether the app's crate builds an executable (src/main.rs, src/bin/ or a [[bin]] table). A model-only library (such
+    as the Screenshot app before its window exists) has a manifest but nothing to package yet."""
+    cargo = os.path.join(app_dir, "Cargo.toml")
+    return (os.path.exists(os.path.join(app_dir, "src", "main.rs")) or os.path.isdir(os.path.join(app_dir, "src", "bin"))
+            or (os.path.exists(cargo) and "[[bin]]" in open(cargo, encoding="utf-8").read()))
+
+
 def app_manifests(apps_dir=APPS_DIR):
-    """(dir name, id, version, architecture) of every app manifest under springboard/apps."""
+    """(dir name, id, version, architecture) of every app manifest under springboard/apps whose crate builds an executable."""
     out = []
     for m in sorted(glob.glob(os.path.join(apps_dir, "*", "manifest.toml"))):
+        if not has_binary(os.path.dirname(m)):
+            continue
         t = open(m, encoding="utf-8").read()
         f = {k: re.search(rf'^{k}\s*=\s*"([^"]+)"', t, re.M) for k in ("id", "version", "architecture")}
         if f["id"] and f["version"]:

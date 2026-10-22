@@ -475,8 +475,11 @@
     fn menu_separators_are_short_and_skipped_by_the_keyboard() {
         use desktop_bar::Menu;
         let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
+        // the Services group is there only while some app registered services (a process-global registry other tests fill)
+        let _lock=crate::test_support::global_lock();
         let rows=sh.menu_row_texts(Menu::App);
-        assert_eq!(rows.iter().filter(|t|t.is_empty()).count(),3,"About | Settings | Services | Quit: {rows:?}");
+        let groups=if super::services_route::menu_entries().is_empty(){"About | Settings | Quit"}else{"About | Settings | Services | Quit"};
+        assert_eq!(rows.iter().filter(|t|t.is_empty()).count(),groups.matches('|').count(),"{groups}: {rows:?}");
         sh.desktop_menu=Some(Menu::App);
         let (_,_,_,h)=sh.desktop_popup_rect().unwrap();
         assert!((h as f32)<sh.ui.pt(8.+36.*rows.len() as f32),"separators are shorter than rows");
