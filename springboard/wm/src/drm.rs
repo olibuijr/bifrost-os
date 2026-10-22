@@ -118,7 +118,7 @@ pub fn run(socket: Option<&str>, command: &[String]) -> Result<(), Box<dyn Error
     let gpu = primary_gpu(&seat)?.or_else(|| all_gpus(&seat).ok()?.into_iter().next()).ok_or("no GPU")?;
     eprintln!("bifrost-wm: GPU {}", gpu.display());
     // before the Wayland socket exists: a client that connected now would get no answer until a display is there
-    wait_for_display(&gpu);
+    wait_for_display(&mut session, &gpu);
     let display: Display<WmState> = Display::new()?;
     let mut state = WmState::new(&mut event_loop, display, socket);
     // the page flip's vblank time, written by the DRM event source and read by the vblank callback below
@@ -252,47 +252,67 @@ pub fn run(socket: Option<&str>, command: &[String]) -> Result<(), Box<dyn Error
     Ok(())
 }
 
-/// Exists while the window server waits for a display (`packaging/arch/wayland/session` reads it).
-const AWAITING_DISPLAY: &str = "/run/bifrost/wm-awaiting-display";
-
-/// Blocks until a display is connected to `gpu` (one of its sysfs connectors reads `connected`), checking once a
-/// second. A PC whose monitor is off, asleep or on another input when the session starts then gets its desktop when the
-/// monitor comes back, instead of the session exiting with "no connected display". Without a sysfs view of the card
-/// (a container) it returns at once and `open_gpu` decides. A display plugged in while running is not handled yet.
-/// While it waits, [`AWAITING_DISPLAY`] exists, so the session keeps waiting for the socket instead of counting a
-/// failed start.
-fn wait_for_display(gpu: &Path) {
-    let Some(card) = gpu.file_name().and_then(|n| n.to_str()) else { return };
-    let prefix = format!("{card}-");
+/// Blocks until a display is connected to `gpu`, checking once a second with the same forced connector probe
+/// `open_gpu` uses (sysfs `status` is a cached value: a monitor in power save reads `disconnected` there while a probe
+/// finds it). A PC whose monitor is off, asleep or on another input when the session starts then gets its desktop when
+/// the monitor comes back, instead of the session exiting with "no connected display". When the card cannot be opened
+/// or probed it returns at once and `open_gpu` decides. A display plugged in while running is not handled yet. While
+/// it waits, [`awaiting_display_marker`] exists, so the session keeps waiting for the socket.
+fn wait_for_display(session: &mut LibSeatSession, gpu: &Path) {
+    let marker = awaiting_display_marker();
     let mut logged = false;
     loop {
-        let statuses: Vec<String> = std::fs::read_dir("/sys/class/drm")
-            .map(|d| {
-                d.flatten()
-                    .filter(|e| e.file_name().to_str().is_some_and(|n| n.starts_with(&prefix)))
-                    .filter_map(|e| std::fs::read_to_string(e.path().join("status")).ok())
-                    .collect()
-            })
-            .unwrap_or_default();
-        if statuses.is_empty() || any_connected(&statuses) {
-            if logged {
-                eprintln!("bifrost-wm: display connected on {card}");
-                let _ = std::fs::remove_file(AWAITING_DISPLAY);
-            }
-            return;
+        let Ok(fd) = session.open(gpu, OFlags::RDWR | OFlags::CLOEXEC | OFlags::NOCTTY | OFlags::NONBLOCK) else { break };
+        let card = Card(fd);
+        let found = card.connector_states().map(|states| has_display(&states));
+        let _ = session.close(card.0);
+        match found {
+            Some(false) => {}
+            // connected, or the card could not be probed: open_gpu decides
+            _ => break,
         }
         if !logged {
-            eprintln!("bifrost-wm: no connected display on {card}, waiting for one");
-            let _ = std::fs::write(AWAITING_DISPLAY, b"");
+            eprintln!("bifrost-wm: no connected display on {}, waiting for one", gpu.display());
+            let _ = std::fs::write(&marker, b"");
             logged = true;
         }
         std::thread::sleep(Duration::from_secs(1));
     }
+    if logged {
+        eprintln!("bifrost-wm: display connected on {}", gpu.display());
+        let _ = std::fs::remove_file(&marker);
+    }
 }
 
-/// Whether any of a card's sysfs connector statuses (`connected`, `disconnected`, `unknown`) is a connected display.
-fn any_connected(statuses: &[String]) -> bool {
-    statuses.iter().any(|s| s.trim() == "connected")
+/// Where the window server marks that it waits for a display: its runtime directory (it runs as the session account,
+/// so `/run/bifrost` itself is not writable). `packaging/arch/wayland/session` reads `$runtime/wm-awaiting-display`.
+fn awaiting_display_marker() -> std::path::PathBuf {
+    std::path::PathBuf::from(std::env::var_os("XDG_RUNTIME_DIR").unwrap_or_else(|| "/run/bifrost/user".into())).join("wm-awaiting-display")
+}
+
+/// A DRM card opened only to probe its connectors.
+struct Card(std::os::fd::OwnedFd);
+
+impl std::os::fd::AsFd for Card {
+    fn as_fd(&self) -> std::os::fd::BorrowedFd<'_> {
+        self.0.as_fd()
+    }
+}
+impl smithay::reexports::drm::Device for Card {}
+impl ControlDevice for Card {}
+
+impl Card {
+    /// Each connector's state and mode count after a forced probe; `None` when the card's resources cannot be read.
+    fn connector_states(&self) -> Option<Vec<(connector::State, usize)>> {
+        let res = self.resource_handles().ok()?;
+        Some(res.connectors().iter().filter_map(|c| self.get_connector(*c, true).ok()).map(|c| (c.state(), c.modes().len())).collect())
+    }
+}
+
+/// Whether a probed card has a display: a connector that is connected (or reports an unknown state, as some drivers
+/// do) and offers modes; the same rule `open_gpu` applies, widened to unknown.
+fn has_display(states: &[(connector::State, usize)]) -> bool {
+    states.iter().any(|(st, modes)| *modes > 0 && matches!(st, connector::State::Connected | connector::State::Unknown))
 }
 
 fn open_gpu(
@@ -668,10 +688,12 @@ mod tests {
     fn m(w: u16, h: u16, hz: u32, preferred: bool) -> ModeSummary { ModeSummary { w, h, hz, preferred } }
 
     #[test]
-    fn the_session_waits_until_a_connector_reads_connected() {
-        let st = |v: &[&str]| v.iter().map(|s| format!("{s}\n")).collect::<Vec<_>>();
-        assert!(!any_connected(&st(&["disconnected", "disconnected", "unknown"])), "a monitor that is off: keep waiting");
-        assert!(any_connected(&st(&["disconnected", "connected"])));
+    fn the_session_waits_until_a_probed_connector_has_a_display() {
+        use connector::State::{Connected, Disconnected, Unknown};
+        assert!(!has_display(&[(Disconnected, 0), (Disconnected, 0)]), "a monitor that is off: keep waiting");
+        assert!(!has_display(&[(Connected, 0)]), "connected without modes is no display yet");
+        assert!(has_display(&[(Disconnected, 0), (Connected, 3)]));
+        assert!(has_display(&[(Unknown, 1)]), "a driver that cannot tell: let open_gpu decide");
     }
 
     #[test]

@@ -332,6 +332,14 @@ fn run(program: &str, args: &[&str]) -> io::Result<()> {
     }
     Ok(())
 }
+/// The marker bifrost-wm keeps while it waits for a display (its runtime directory; `wm/src/drm.rs`).
+const AWAITING_DISPLAY: &str = "/run/bifrost/user/wm-awaiting-display";
+
+/// Whether the window server is waiting for a display: its marker exists.
+fn awaiting_display(marker: &Path) -> bool {
+    marker.exists()
+}
+
 fn running(inode: &str) -> bool {
     let Ok(entries) = fs::read_dir("/proc") else {
         return false;
@@ -375,6 +383,7 @@ fn watch() -> io::Result<()> {
     let mut healthy = None;
     let mut beat = String::new();
     let mut advanced = Instant::now();
+    let mut waiting_logged = false;
     if system::fallback_boot() || state(store).trim() == "system-restoring" {
         return system::restore();
     }
@@ -407,6 +416,20 @@ fn watch() -> io::Result<()> {
                 }
             }
             "probation" | "system-probation" => {
+                // no display connected (monitor off, asleep or on another input): the window server waits for one
+                // before it opens its socket, so the session cannot prove itself yet. Hold the probation clock instead
+                // of rolling back a good update; it runs again once a display is there.
+                if awaiting_display(Path::new(AWAITING_DISPLAY)) {
+                    if !waiting_logged {
+                        println!("BifrOSt update probation paused: no display connected");
+                        waiting_logged = true;
+                    }
+                    start = Some(Instant::now());
+                    healthy = None;
+                    advanced = Instant::now();
+                    std::thread::sleep(Duration::from_secs(2));
+                    continue;
+                }
                 let started = *start.get_or_insert_with(Instant::now);
                 let new = fs::metadata("/usr/bin/springboard")
                     .map(|m| format!("{}:{}", m.dev(), m.ino()))
@@ -586,6 +609,17 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn probation_pauses_only_while_the_window_server_waits_for_a_display() {
+        let dir = std::env::temp_dir().join(format!("guard-awaiting-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let marker = dir.join("wm-awaiting-display");
+        assert!(!awaiting_display(&marker), "no marker: probation runs");
+        fs::write(&marker, b"").unwrap();
+        assert!(awaiting_display(&marker), "the window server waits: probation holds");
+        let _ = fs::remove_dir_all(&dir);
+    }
     #[test]
     fn the_probe_asks_the_shell_over_its_unix_socket() {
         use std::os::unix::net::UnixListener;
