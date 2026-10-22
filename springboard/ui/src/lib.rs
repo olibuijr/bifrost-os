@@ -969,6 +969,8 @@ pub mod tool_picker;
 pub mod transcript;
 pub mod context_window;
 pub mod generation_schema;
+/// Structured output while it is written (`partial_parse`, `validate_partial`) and the schema as JSON Schema.
+pub mod generation_partial;
 pub mod model_session;
 pub mod model_tool;
 pub mod model_provider;
