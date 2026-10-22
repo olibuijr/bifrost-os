@@ -1,0 +1,133 @@
+# BifrOSt language pack, English to Icelandic. Original work for BifrOSt: common interface words, days, months and everyday phrases.
+# One `text<TAB>translation` line per phrase; read by bifrost_app::translation::LanguagePack (GlossaryTranslator).
+Save	vista
+Save as	vista sem
+Cancel	hætta við
+Open	opna
+Close	loka
+Delete	eyða
+Remove	fjarlægja
+Add	bæta við
+Edit	breyta
+Copy	afrita
+Cut	klippa
+Paste	líma
+Undo	afturkalla
+Redo	endurgera
+Print	prenta
+Share	deila
+Send	senda
+Search	leita
+Find	finna
+Select all	velja allt
+Select	velja
+Refresh	endurnýja
+Update	uppfæra
+Install	setja upp
+Download	sækja
+Upload	hlaða upp
+Settings	stillingar
+Preferences	valkostir
+Help	hjálp
+About	um
+Quit	hætta
+Back	til baka
+Forward	áfram
+Next	næsta
+Previous	fyrri
+Done	lokið
+Continue	halda áfram
+Retry	reyna aftur
+Yes	já
+No	nei
+Reset	endurstilla
+Restart	endurræsa
+Shut down	slökkva
+Log in	skrá inn
+Log out	skrá út
+Password	lykilorð
+Username	notandanafn
+Name	nafn
+Email	netfang
+File	skrá
+Files	skrár
+Folder	mappa
+Folders	möppur
+Document	skjal
+Documents	skjöl
+Desktop	skjáborð
+Downloads	niðurhal
+Pictures	myndir
+Music	tónlist
+Videos	myndbönd
+Trash	rusl
+Home	heim
+Network	net
+Battery	rafhlaða
+Volume	hljóðstyrkur
+Brightness	birtustig
+Display	skjár
+Keyboard	lyklaborð
+Mouse	mús
+Sound	hljóð
+Language	tungumál
+Date	dagsetning
+Time	tími
+Today	í dag
+Tomorrow	á morgun
+Yesterday	í gær
+Now	núna
+Calendar	dagatal
+Clock	klukka
+Notes	minnismiðar
+Contacts	tengiliðir
+Messages	skilaboð
+Mail	póstur
+Photos	ljósmyndir
+Calculator	reiknivél
+Weather	veður
+Maps	kort
+Camera	myndavél
+Phone	sími
+Error	villa
+Warning	viðvörun
+Please wait	vinsamlegast bíddu
+Hello	halló
+Goodbye	bless
+Good morning	góðan daginn
+Good evening	gott kvöld
+Good night	góða nótt
+Thank you	takk fyrir
+Thanks	takk
+Please	vinsamlegast
+Sorry	fyrirgefðu
+Excuse me	afsakið
+How are you	hvernig hefurðu það
+Yes please	já takk
+No thank you	nei takk
+I do not understand	ég skil ekki
+Where is	hvar er
+What is	hvað er
+Monday	mánudagur
+Tuesday	þriðjudagur
+Wednesday	miðvikudagur
+Thursday	fimmtudagur
+Friday	föstudagur
+Saturday	laugardagur
+Sunday	sunnudagur
+January	janúar
+February	febrúar
+March	mars
+April	apríl
+May	maí
+June	júní
+July	júlí
+August	ágúst
+September	september
+October	október
+November	nóvember
+December	desember
+and	og
+or	eða
+with	með
+without	án

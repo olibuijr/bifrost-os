@@ -173,6 +173,9 @@ impl Translator for TranslationMemory {
 /// `text<TAB>translation` line per phrase. Lines that are blank or start with `#` are ignored.
 pub const PACK_EXTENSION: &str = "tsv";
 
+/// Where the packs that ship with the system are installed (`packaging/arch/translation/`, English and Icelandic).
+pub const SYSTEM_PACK_DIR: &str = "/usr/share/bifrost/translation";
+
 /// Why a language pack could not be read.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PackError {
@@ -208,6 +211,34 @@ pub struct LanguagePack {
 impl LanguagePack {
     pub fn new(root: impl Into<PathBuf>) -> Self {
         Self { root: root.into() }
+    }
+
+    /// The packs that ship with the system, in [`SYSTEM_PACK_DIR`].
+    pub fn system() -> Self {
+        Self::new(SYSTEM_PACK_DIR)
+    }
+
+    /// One engine over every installed pair among `supported` (see [`LanguagePack::availability`]). A pack that cannot be
+    /// read is left out, so one broken file does not take the other pairs away.
+    pub fn glossary<S: AsRef<str>>(&self, supported: &[S]) -> GlossaryTranslator {
+        let mut all = TranslationMemory::new();
+        let codes: Vec<String> = supported.iter().map(|s| language_code(s.as_ref())).collect();
+        for source in &codes {
+            for target in codes.iter().filter(|t| *t != source) {
+                if let Ok(memory) = self.engine(source, target) {
+                    all.phrases.extend(memory.phrases);
+                }
+            }
+        }
+        GlossaryTranslator::new(&all)
+    }
+
+    /// A session for an installed pair that translates running text from its pack (`GlossaryTranslator`). A pair with no
+    /// pack is `NotInstalled`.
+    pub fn session(&self, source: &str, target: &str) -> Result<TranslationSession, TranslationError> {
+        let availability = self.availability(&[source, target]);
+        let engine = self.glossary(&[source, target]);
+        TranslationSession::new(&availability, source, target, Box::new(engine))
     }
 
     /// The pack file for a pair. Locale identifiers are reduced to language codes first.
@@ -586,5 +617,63 @@ mod glossary_tests {
         let out = session.translate_batch(&["Hello world", "world"]);
         assert_eq!(out[0], Ok("Halló heimur".to_string()));
         assert_eq!(out[1], Ok("heimur".to_string()));
+    }
+}
+
+#[cfg(test)]
+mod system_pack_tests {
+    use super::*;
+
+    /// The packs as they sit in the repository, where the package installs them from.
+    fn shipped() -> LanguagePack {
+        LanguagePack::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../packaging/arch/translation"))
+    }
+
+    #[test]
+    fn the_shipped_packs_parse_and_cover_both_directions() {
+        let packs = shipped();
+        let a = packs.availability(&["en", "is"]);
+        assert_eq!(a.status("en", "is"), bifrost_ui::translation::AvailabilityStatus::Installed);
+        assert_eq!(a.status("is", "en"), bifrost_ui::translation::AvailabilityStatus::Installed);
+        for (from, to) in [("en", "is"), ("is", "en")] {
+            let memory = packs.engine(from, to).unwrap_or_else(|e| panic!("{from}-{to}: {e:?}"));
+            assert!(memory.len() >= 100, "{from}-{to} holds {} phrases", memory.len());
+        }
+        assert_eq!(system_dir_name(), "/usr/share/bifrost/translation");
+    }
+
+    fn system_dir_name() -> String {
+        LanguagePack::system().file_for("en", "is").parent().unwrap().display().to_string()
+    }
+
+    #[test]
+    fn the_shipped_english_pack_translates_interface_words_and_phrases() {
+        let session = shipped().session("en", "is").unwrap();
+        assert_eq!(session.translate("Save").unwrap(), "Vista");
+        assert_eq!(session.translate("Cancel").unwrap(), "Hætta við");
+        assert_eq!(session.translate("Good morning, thank you!").unwrap(), "Góðan daginn, takk fyrir!");
+        assert_eq!(session.translate("Open settings").unwrap(), "Opna stillingar");
+        assert_eq!(session.translate("See you on Monday").err(), Some(TranslationError::InternalError), "too little is covered");
+        assert_eq!(session.translate("Monday and Friday").unwrap(), "Mánudagur og Föstudagur");
+    }
+
+    #[test]
+    fn the_shipped_icelandic_pack_translates_back() {
+        let session = shipped().session("is", "en").unwrap();
+        assert_eq!(session.translate("Vista").unwrap(), "Save");
+        assert_eq!(session.translate("Góðan daginn").unwrap(), "Good morning");
+        assert_eq!(session.translate("Opna skrá").unwrap(), "Open file");
+        assert_eq!(session.translate("Mánudagur").unwrap(), "Monday");
+    }
+
+    #[test]
+    fn a_pair_without_a_pack_is_not_installed_and_a_broken_pack_spares_the_others() {
+        assert_eq!(shipped().session("en", "de").err(), Some(TranslationError::NotInstalled));
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("en-is.tsv"), "Save\tVista\n").unwrap();
+        std::fs::write(dir.path().join("is-en.tsv"), "broken line\n").unwrap();
+        let g = LanguagePack::new(dir.path()).glossary(&["en", "is"]);
+        assert_eq!(g.pair_count(), 1, "only the readable pack is loaded");
+        assert_eq!(g.translate("en", "is", "save").unwrap(), "vista");
     }
 }
