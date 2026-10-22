@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.14.0
+
+- Upstream vectorcraft v0.14.0.
+  > [!NOTE]
+  > **FreeBSD aarch64 is dropped from this release.** We had to cut releases, and we cannot build this target within the 5-hour CI limit for any of the Craft apps, so we are dropping it for now. This is a known blocker, flagged for a future fix in storytold/craft-common-actions#39. FreeBSD x86_64 and every other platform are included.
+  ## What's Changed
+  * SVG import: hrefs that need no folder stay as written, and images in a non-absolute folder are read by @dotCooCoo in https://github.com/storytold/vectorcraft/pull/2837
+  * MCP: parse errors and overlong lines wait for room in the 64-line queue by @dotCooCoo in https://github.com/storytold/vectorcraft/pull/2776
+
 ## 0.13.1
 
 - Upstream vectorcraft v0.13.1.
