@@ -4,16 +4,17 @@
 //! per app. `apply` turns it into an nftables ruleset and loads it with `nft -f -`; the `bifrost-firewall.service`
 //! unit runs it at boot. `set`, `remove`, `list` and `show` edit and read the file, so Settings and a terminal write
 //! the same policies. A file that does not parse, or a policy that would allow and block one port, is refused and
-//! the rules in place stay as they were.
+//! the rules in place stay as they were. `mode block-all|stealth on|off` switches the machine-wide modes
+//! (`bifrost_core::app_firewall::Modes`), which the file keeps as `@mode` lines.
 
-use bifrost_core::app_firewall::{self as fw, AppPolicy, Policy};
+use bifrost_core::app_firewall::{self as fw, AppPolicy, Modes, Policy};
 use std::io::Write;
 use std::path::Path;
 use std::process::{Command as Process, Stdio};
 
 pub const POLICY_FILE: &str = "/etc/bifrost/app-firewall.conf";
 
-pub const USAGE: &str = "usage: bifrost-firewall [-f FILE] apply | show | list | clear\n       bifrost-firewall [-f FILE] set APP allow|block [tcp/N,udp/N,...]\n       bifrost-firewall [-f FILE] remove APP";
+pub const USAGE: &str = "usage: bifrost-firewall [-f FILE] apply | show | list | clear\n       bifrost-firewall [-f FILE] set APP allow|block [tcp/N,udp/N,...]\n       bifrost-firewall [-f FILE] remove APP\n       bifrost-firewall [-f FILE] mode block-all|stealth on|off";
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Action {
@@ -27,6 +28,8 @@ pub enum Action {
     Clear,
     Set(AppPolicy),
     Remove(String),
+    /// Turn a machine-wide mode on or off: `block-all` or `stealth`, and whether it is on.
+    Mode(String, bool),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -58,6 +61,16 @@ pub fn parse(args: &[String]) -> Result<Parsed, String> {
         ["list"] => Action::List,
         ["clear"] => Action::Clear,
         ["remove", app] => Action::Remove((*app).to_string()),
+        ["mode", name, state] => {
+            if !matches!(*name, "block-all" | "stealth") {
+                return Err(format!("mode must be block-all or stealth, not {name}"));
+            }
+            match *state {
+                "on" => Action::Mode((*name).to_string(), true),
+                "off" => Action::Mode((*name).to_string(), false),
+                other => return Err(format!("mode state must be on or off, not {other}")),
+            }
+        }
         ["set", app, policy] | ["set", app, policy, _] => {
             let policy = match *policy {
                 "allow" => Policy::Allow,
@@ -91,11 +104,11 @@ pub fn nft_load(script: &str) -> Result<(), String> {
     }
 }
 
-fn read_policies(file: &Path) -> Result<Vec<AppPolicy>, String> {
+fn read_policies(file: &Path) -> Result<(Vec<AppPolicy>, Modes), String> {
     match std::fs::read_to_string(file) {
-        Ok(text) => fw::parse_policies(&text),
+        Ok(text) => Ok((fw::parse_policies(&text)?, fw::parse_modes(&text)?)),
         // no file is no policies: the firewall then only sets the accept default
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok((Vec::new(), Modes::default())),
         Err(e) => Err(format!("{}: {e}", file.display())),
     }
 }
@@ -116,35 +129,47 @@ pub fn run(options: &Options, load: &dyn Fn(&str) -> Result<(), String>) -> Resu
             Ok(format!("applied {} policies\n", fw::parse_policies(&text)?.len()))
         }
         Action::Show => fw::plan_from_file(&std::fs::read_to_string(file).unwrap_or_default()),
-        Action::List => Ok(fw::format_policies(&read_policies(file)?)),
+        Action::List => {
+            let (policies, modes) = read_policies(file)?;
+            Ok(fw::format_file(&policies, modes))
+        }
         Action::Clear => {
             load(&fw::clear_script())?;
             Ok("cleared\n".into())
         }
         Action::Set(policy) => {
-            let mut policies = read_policies(file)?;
+            let (mut policies, modes) = read_policies(file)?;
             fw::set_policy(&mut policies, policy.clone()).map_err(|e| format!("{e:?}"))?;
-            write_policies(file, &policies)?;
+            write_policies(file, &policies, modes)?;
             Ok(format!("{} set\n", policy.app_id))
         }
         Action::Remove(app) => {
-            let mut policies = read_policies(file)?;
+            let (mut policies, modes) = read_policies(file)?;
             if !fw::remove_policy(&mut policies, app) {
                 return Err(format!("{app} has no policy"));
             }
-            write_policies(file, &policies)?;
+            write_policies(file, &policies, modes)?;
             Ok(format!("{app} removed\n"))
+        }
+        Action::Mode(name, on) => {
+            let (policies, mut modes) = read_policies(file)?;
+            match name.as_str() {
+                "block-all" => modes.block_all = *on,
+                _ => modes.stealth = *on,
+            }
+            write_policies(file, &policies, modes)?;
+            Ok(format!("{name} {}\n", if *on { "on" } else { "off" }))
         }
     }
 }
 
 /// Writes the file through a temporary name in the same folder, so a crash never leaves half a file.
-fn write_policies(file: &Path, policies: &[AppPolicy]) -> Result<(), String> {
+fn write_policies(file: &Path, policies: &[AppPolicy], modes: Modes) -> Result<(), String> {
     if let Some(dir) = file.parent() {
         std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     }
     let tmp = file.with_extension("tmp");
-    std::fs::write(&tmp, fw::format_policies(policies)).map_err(|e| format!("{}: {e}", tmp.display()))?;
+    std::fs::write(&tmp, fw::format_file(policies, modes)).map_err(|e| format!("{}: {e}", tmp.display()))?;
     std::fs::rename(&tmp, file).map_err(|e| format!("{}: {e}", file.display()))
 }
 
@@ -234,6 +259,43 @@ mod tests {
         std::fs::write(&file, "x.y maybe -\n").unwrap();
         assert!(run(&opts(&file), &count).is_err());
         assert_eq!(*calls.borrow(), 1, "nft is not called for a bad file");
+    }
+
+    #[test]
+    fn modes_are_switched_kept_across_edits_and_loaded() {
+        let file = tmp("modes");
+        let none = |_: &str| -> Result<(), String> { Ok(()) };
+        let go = |a: &str, load: &dyn Fn(&str) -> Result<(), String>| match parse(&args(&format!("-f {file} {a}"))).unwrap() {
+            Parsed::Run(o) => run(&o, load),
+            Parsed::Help => unreachable!(),
+        };
+        assert_eq!(go("mode stealth on", &none).unwrap(), "stealth on\n");
+        go("set web.app block tcp/8080", &none).unwrap();
+        go("mode block-all on", &none).unwrap();
+        assert_eq!(go("list", &none).unwrap(), "@mode block-all\n@mode stealth\nweb.app block tcp/8080\n");
+        go("remove web.app", &none).unwrap();
+        assert_eq!(go("list", &none).unwrap(), "@mode block-all\n@mode stealth\n", "an edit keeps the modes");
+        let seen = RefCell::new(String::new());
+        let capture = |s: &str| -> Result<(), String> {
+            *seen.borrow_mut() = s.to_string();
+            Ok(())
+        };
+        go("apply", &capture).unwrap();
+        assert!(seen.borrow().contains("ct state new drop") && seen.borrow().contains("icmp type echo-request drop"));
+        go("mode block-all off", &none).unwrap();
+        go("mode stealth off", &none).unwrap();
+        assert_eq!(go("list", &none).unwrap(), "");
+    }
+
+    #[test]
+    fn a_bad_mode_command_is_refused() {
+        assert!(parse(&args("mode loud on")).is_err());
+        assert!(parse(&args("mode stealth maybe")).is_err());
+        assert!(parse(&args("mode stealth")).is_err());
+        match parse(&args("mode stealth off")).unwrap() {
+            Parsed::Run(o) => assert_eq!(o.action, Action::Mode("stealth".into(), false)),
+            _ => panic!(),
+        }
     }
 
     #[test]

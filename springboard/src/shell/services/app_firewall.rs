@@ -16,7 +16,8 @@
 //! - `status {}` -> `{state, error?}`
 //!
 //! The choices are saved in `app-firewall.conf` under the data directory, in the policy file format
-//! (`bifrost_core::app_firewall::format_policies`).
+//! (`bifrost_core::app_firewall::format_file`), which also keeps the machine-wide modes (`modes {}` and
+//! `set_mode {mode: "block-all"|"stealth", on}`; see `app_firewall::Modes`).
 use super::{Event, Shell, SystemService};
 use bifrost_core::app_firewall::{self, AppPolicy, Policy, Port, Proto};
 use bifrost_core::json::Json;
@@ -72,6 +73,7 @@ impl Applier for Nft {
 pub struct AppFirewall {
     store: PathBuf,
     policies: Vec<AppPolicy>,
+    modes: app_firewall::Modes,
     applier: Arc<dyn Applier>,
     status: Arc<Mutex<Status>>,
     worker: Option<JoinHandle<()>>,
@@ -91,8 +93,10 @@ impl AppFirewall {
     }
 
     fn with(store: PathBuf, applier: Arc<dyn Applier>) -> Self {
-        let policies = std::fs::read_to_string(&store).ok().and_then(|t| app_firewall::parse_policies(&t).ok()).unwrap_or_default();
-        AppFirewall { store, policies, applier, status: Arc::new(Mutex::new(Status::NotLoaded)), worker: None, loaded_at_start: false }
+        let text = std::fs::read_to_string(&store).unwrap_or_default();
+        let policies = app_firewall::parse_policies(&text).unwrap_or_default();
+        let modes = app_firewall::parse_modes(&text).unwrap_or_default();
+        AppFirewall { store, policies, modes, applier, status: Arc::new(Mutex::new(Status::NotLoaded)), worker: None, loaded_at_start: false }
     }
 
     pub fn status(&self) -> Status {
@@ -101,7 +105,7 @@ impl AppFirewall {
 
     /// Builds the ruleset for the choices and loads it on a thread. A conflict or a bad id is `Failed` at once.
     pub fn apply(&mut self) {
-        let ruleset = match app_firewall::ruleset(&self.policies) {
+        let ruleset = match app_firewall::ruleset_with(&self.policies, self.modes) {
             Ok(r) => r,
             Err(e) => {
                 self.set_status(Status::Failed(format!("app firewall: {e:?}")));
@@ -141,7 +145,7 @@ impl AppFirewall {
         if let Some(dir) = self.store.parent() {
             std::fs::create_dir_all(dir).map_err(|e| format!("app firewall: {e}"))?;
         }
-        std::fs::write(&self.store, app_firewall::format_policies(&self.policies)).map_err(|e| format!("app firewall: {e}"))
+        std::fs::write(&self.store, app_firewall::format_file(&self.policies, self.modes)).map_err(|e| format!("app firewall: {e}"))
     }
 
     /// What is remembered for an app: allow, block, or ask.
@@ -202,6 +206,23 @@ impl AppFirewall {
                 }
                 Ok(obj(vec![("removed", Json::Bool(removed))]))
             }
+            "modes" => Ok(obj(vec![("block_all", Json::Bool(self.modes.block_all)), ("stealth", Json::Bool(self.modes.stealth))])),
+            "set_mode" => {
+                let on = match params.get("on") {
+                    Some(Json::Bool(on)) => *on,
+                    _ => return Err("app firewall: on must be true or false".into()),
+                };
+                let mut next = self.modes;
+                match params.str_field("mode").as_deref() {
+                    Some("block-all") => next.block_all = on,
+                    Some("stealth") => next.stealth = on,
+                    _ => return Err("app firewall: mode must be block-all or stealth".into()),
+                }
+                self.modes = next;
+                self.save()?;
+                self.apply();
+                Ok(obj(vec![("ok", Json::Bool(true))]))
+            }
             "status" => {
                 let (state, error) = match self.status() {
                     Status::NotLoaded => ("not_loaded", None),
@@ -232,7 +253,7 @@ impl SystemService for AppFirewall {
     }
 
     fn tick(&mut self, _shell: &mut Shell, _t: f64) -> Vec<Event> {
-        if !std::mem::replace(&mut self.loaded_at_start, true) && !self.policies.is_empty() {
+        if !std::mem::replace(&mut self.loaded_at_start, true) && (!self.policies.is_empty() || self.modes != app_firewall::Modes::default()) {
             self.apply();
         }
         Vec::new()
@@ -318,6 +339,37 @@ mod tests {
         assert!(err.contains("Conflict"), "{err}");
         assert_eq!(rec.0.lock().unwrap().len(), loads, "no new load");
         assert_eq!(call(&mut s, "decision", vec![("app_id", Json::Str("b.two".into()))]).unwrap().str_field("decision").as_deref(), Some("ask"));
+    }
+
+    #[test]
+    fn a_mode_loads_its_rules_and_survives_a_restart() {
+        let (mut s, rec) = service("modes", false);
+        let modes = call(&mut s, "modes", vec![]).unwrap();
+        assert_eq!((modes.get("block_all"), modes.get("stealth")), (Some(&Json::Bool(false)), Some(&Json::Bool(false))));
+        call(&mut s, "set_mode", vec![("mode", Json::Str("block-all".into())), ("on", Json::Bool(true))]).unwrap();
+        s.wait();
+        assert!(rec.0.lock().unwrap().last().unwrap().contains("ct state new drop"));
+        // a choice for an app keeps the mode in the file
+        call(&mut s, "set", set("a.one", "block", &["tcp/9"])).unwrap();
+        s.wait();
+        let text = std::fs::read_to_string(&s.store).unwrap();
+        assert!(text.starts_with("@mode block-all\n"), "{text}");
+        let again = AppFirewall::with(s.store.clone(), s.applier.clone());
+        assert!(again.modes.block_all && !again.modes.stealth);
+        assert_eq!(again.decision("a.one"), "block");
+        call(&mut s, "set_mode", vec![("mode", Json::Str("block-all".into())), ("on", Json::Bool(false))]).unwrap();
+        s.wait();
+        assert!(!rec.0.lock().unwrap().last().unwrap().contains("ct state new drop"));
+    }
+
+    #[test]
+    fn a_bad_mode_call_is_refused_and_changes_nothing() {
+        let (mut s, rec) = service("badmode", false);
+        assert!(call(&mut s, "set_mode", vec![("mode", Json::Str("loud".into())), ("on", Json::Bool(true))]).is_err());
+        assert!(call(&mut s, "set_mode", vec![("mode", Json::Str("stealth".into()))]).is_err(), "on is needed");
+        assert!(call(&mut s, "set_mode", vec![("mode", Json::Str("stealth".into())), ("on", Json::Str("yes".into()))]).is_err());
+        assert_eq!(s.modes, app_firewall::Modes::default());
+        assert!(rec.0.lock().unwrap().is_empty(), "nothing was loaded");
     }
 
     #[test]

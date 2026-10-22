@@ -5,6 +5,11 @@
 //! that two apps claim with opposite policies is a conflict and is refused rather than guessed. Default policy is
 //! accept: the firewall only drops what a user blocked.
 //!
+//! Two machine-wide modes sit beside the per-app choices ([`Modes`]): block all incoming connections (every new inbound
+//! connection is dropped whatever an app chose, while replies to what this machine started, loopback, IPv6 neighbour
+//! discovery and DHCP keep working) and stealth (echo requests, "ping", get no answer). They are `@mode` lines of the
+//! policy file.
+//!
 //! The ruleset is text for `nft -f`. It declares its own table, so applying it again replaces the previous one. App ids
 //! and comments are restricted to a safe character set, so no input can break out of the rule syntax.
 
@@ -57,6 +62,29 @@ pub struct AppPolicy {
     pub ports: Vec<Port>,
 }
 
+/// The machine-wide firewall modes. Both are off by default.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Modes {
+    /// Every new inbound connection is dropped, whatever the apps chose.
+    pub block_all: bool,
+    /// ICMP and ICMPv6 echo requests are dropped, so the machine does not answer a ping.
+    pub stealth: bool,
+}
+
+impl Modes {
+    /// The `@mode` lines that write these modes in the policy file (none when both are off).
+    pub fn lines(&self) -> String {
+        let mut out = String::new();
+        if self.block_all {
+            out.push_str("@mode block-all\n");
+        }
+        if self.stealth {
+            out.push_str("@mode stealth\n");
+        }
+        out
+    }
+}
+
 /// Why a set of policies cannot be turned into a ruleset.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Error {
@@ -79,6 +107,13 @@ pub fn valid_app_id(id: &str) -> bool {
 /// ports need no rule (the default is accept), so they only take part in conflict checks. Output is deterministic:
 /// ports are emitted in sorted order.
 pub fn ruleset(policies: &[AppPolicy]) -> Result<String, Error> {
+    ruleset_with(policies, Modes::default())
+}
+
+/// [`ruleset`] with the machine-wide `modes`. After the per-app drops come, in this order: loopback accept (when a mode
+/// is on), the echo-request drops (stealth), then replies to what this machine started, IPv6 neighbour discovery and
+/// DHCP replies, and a last drop of every other new connection (block all).
+pub fn ruleset_with(policies: &[AppPolicy], modes: Modes) -> Result<String, Error> {
     // port -> (proto, owning app id) for allowed and blocked apps, so a shared port with opposite policies is reported.
     let mut allowed: BTreeMap<Port, String> = BTreeMap::new();
     let mut blocked: BTreeMap<Port, String> = BTreeMap::new();
@@ -108,6 +143,18 @@ pub fn ruleset(policies: &[AppPolicy]) -> Result<String, Error> {
     for (port, app) in &blocked {
         out.push_str(&format!("\t\t{} dport {} drop comment \"{}\"\n", port.proto.keyword(), port.number, app));
     }
+    if modes.block_all || modes.stealth {
+        out.push_str("\t\tiifname \"lo\" accept\n");
+    }
+    if modes.stealth {
+        out.push_str("\t\ticmp type echo-request drop\n\t\ticmpv6 type echo-request drop\n");
+    }
+    if modes.block_all {
+        out.push_str("\t\tct state established,related accept\n");
+        out.push_str("\t\ticmpv6 type { nd-router-solicit, nd-router-advert, nd-neighbor-solicit, nd-neighbor-advert } accept\n");
+        out.push_str("\t\tudp dport { 68, 546 } accept\n");
+        out.push_str("\t\tct state new drop\n");
+    }
     out.push_str("\t}\n}\n");
     Ok(out)
 }
@@ -119,7 +166,7 @@ pub fn parse_policies(text: &str) -> Result<Vec<AppPolicy>, String> {
     let mut out = Vec::new();
     for (index, line) in text.lines().enumerate() {
         let line = line.trim();
-        if line.is_empty() || line.starts_with('#') {
+        if line.is_empty() || line.starts_with('#') || line.starts_with('@') {
             continue;
         }
         let at = |msg: String| format!("line {}: {msg}", index + 1);
@@ -149,7 +196,34 @@ pub fn parse_policies(text: &str) -> Result<Vec<AppPolicy>, String> {
 /// including a conflict, comes back as text so the service can log it and leave the current rules in place.
 pub fn plan_from_file(text: &str) -> Result<String, String> {
     let policies = parse_policies(text)?;
-    ruleset(&policies).map_err(|e| format!("{e:?}"))
+    let modes = parse_modes(text)?;
+    ruleset_with(&policies, modes).map_err(|e| format!("{e:?}"))
+}
+
+/// The modes a policy file names: `@mode block-all` and `@mode stealth` lines, each switching its mode on. Other lines
+/// are not looked at here ([`parse_policies`] reads them). An unknown mode is an error naming its line.
+pub fn parse_modes(text: &str) -> Result<Modes, String> {
+    let mut modes = Modes::default();
+    for (index, line) in text.lines().enumerate() {
+        let line = line.trim();
+        if !line.starts_with('@') {
+            continue;
+        }
+        let at = |msg: String| format!("line {}: {msg}", index + 1);
+        let mut fields = line.split_whitespace();
+        match (fields.next(), fields.next(), fields.next()) {
+            (Some("@mode"), Some("block-all"), None) => modes.block_all = true,
+            (Some("@mode"), Some("stealth"), None) => modes.stealth = true,
+            (Some("@mode"), Some(other), None) => return Err(at(format!("unknown mode {other}"))),
+            _ => return Err(at("a directive reads @mode block-all or @mode stealth".into())),
+        }
+    }
+    Ok(modes)
+}
+
+/// The whole policy file: the `@mode` lines, then [`format_policies`].
+pub fn format_file(policies: &[AppPolicy], modes: Modes) -> String {
+    format!("{}{}", modes.lines(), format_policies(policies))
 }
 
 /// One port from `tcp/<n>` or `udp/<n>`.
@@ -431,6 +505,71 @@ mod tests {
     fn the_policy_file_skips_comments_and_blank_lines() {
         let text = "# managed by settings\n\nis.mail allow tcp/993\n";
         assert_eq!(parse_policies(text).unwrap(), vec![app("is.mail", Policy::Allow, vec![tcp(993)])]);
+    }
+
+    #[test]
+    fn modes_are_off_by_default_and_the_default_ruleset_is_unchanged() {
+        assert_eq!(Modes::default(), Modes { block_all: false, stealth: false });
+        assert_eq!(ruleset_with(&[], Modes::default()).unwrap(), ruleset(&[]).unwrap());
+        assert!(!ruleset(&[]).unwrap().contains("ct state"));
+    }
+
+    #[test]
+    fn stealth_drops_echo_requests_but_keeps_loopback() {
+        let text = ruleset_with(&[], Modes { block_all: false, stealth: true }).unwrap();
+        let lo = text.find("iifname \"lo\" accept").expect("loopback accept");
+        let ping = text.find("icmp type echo-request drop").expect("ping drop");
+        assert!(lo < ping, "loopback is let through before the drop");
+        assert!(text.contains("icmpv6 type echo-request drop"));
+        assert!(!text.contains("ct state new drop"), "stealth alone does not block connections");
+    }
+
+    #[test]
+    fn block_all_keeps_replies_loopback_discovery_and_dhcp_then_drops_new_connections() {
+        let text = ruleset_with(&[app("is.chat", Policy::Block, vec![tcp(8080)])], Modes { block_all: true, stealth: false }).unwrap();
+        let positions: Vec<usize> = [
+            "tcp dport 8080 drop",
+            "iifname \"lo\" accept",
+            "ct state established,related accept",
+            "nd-neighbor-advert } accept",
+            "udp dport { 68, 546 } accept",
+            "ct state new drop",
+        ]
+        .iter()
+        .map(|rule| text.find(rule).unwrap_or_else(|| panic!("missing {rule}")))
+        .collect();
+        assert!(positions.windows(2).all(|w| w[0] < w[1]), "the rules come in a fixed order: {positions:?}");
+        assert!(!text.contains("echo-request"), "stealth is its own mode");
+    }
+
+    #[test]
+    fn both_modes_together_drop_pings_before_the_final_drop() {
+        let text = ruleset_with(&[], Modes { block_all: true, stealth: true }).unwrap();
+        assert!(text.find("icmp type echo-request drop").unwrap() < text.find("ct state new drop").unwrap());
+    }
+
+    #[test]
+    fn mode_lines_are_read_written_and_skipped_by_the_policy_parser() {
+        let text = "@mode block-all\n# note\n@mode stealth\nis.mail allow tcp/993\n";
+        assert_eq!(parse_modes(text).unwrap(), Modes { block_all: true, stealth: true });
+        assert_eq!(parse_policies(text).unwrap(), vec![app("is.mail", Policy::Allow, vec![tcp(993)])]);
+        assert_eq!(parse_modes("is.mail allow tcp/993\n").unwrap(), Modes::default());
+        let policies = vec![app("is.mail", Policy::Allow, vec![tcp(993)])];
+        let modes = Modes { block_all: true, stealth: true };
+        assert_eq!(format_file(&policies, modes), "@mode block-all\n@mode stealth\nis.mail allow tcp/993\n");
+        assert_eq!(parse_modes(&format_file(&policies, modes)).unwrap(), modes);
+        assert_eq!(parse_policies(&format_file(&policies, modes)).unwrap(), policies);
+        assert_eq!(format_file(&policies, Modes::default()), format_policies(&policies), "no modes, no extra lines");
+    }
+
+    #[test]
+    fn a_bad_mode_line_names_its_line_and_the_plan_refuses_it() {
+        assert_eq!(parse_modes("is.a allow -\n@mode loud\n").unwrap_err(), "line 2: unknown mode loud");
+        assert!(parse_modes("@mode\n").unwrap_err().starts_with("line 1:"));
+        assert!(parse_modes("@mode stealth extra\n").unwrap_err().starts_with("line 1:"));
+        assert!(parse_modes("@frob stealth\n").unwrap_err().starts_with("line 1:"));
+        assert!(plan_from_file("@mode loud\n").is_err());
+        assert!(plan_from_file("@mode block-all\n").unwrap().contains("ct state new drop"), "the boot plan carries the modes");
     }
 
     #[test]
