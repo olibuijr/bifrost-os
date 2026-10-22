@@ -64,6 +64,8 @@ pub struct Sheet {
     note: String,
     /// Whether Install asks for the administrator's password first.
     password: bool,
+    /// What the running install did last, from the pacman log (`pacman_progress::working_label`).
+    working: Option<String>,
     card: AlertCard,
 }
 
@@ -73,7 +75,7 @@ impl Sheet {
         if !pacman_progress::confirmation_needed(&packages) {
             return None;
         }
-        let mut sheet = Sheet { packages, step: Step::Confirm, error: None, note: String::new(), password: false, card: AlertCard::new(ui, "", "", Vec::new()) };
+        let mut sheet = Sheet { packages, step: Step::Confirm, error: None, note: String::new(), password: false, working: None, card: AlertCard::new(ui, "", "", Vec::new()) };
         sheet.card = sheet.build_card(ui);
         Some(sheet)
     }
@@ -97,6 +99,11 @@ impl Sheet {
 
     pub fn step(&self) -> Step {
         self.step
+    }
+
+    /// What the running install did last (a package step or a hook), when the log shows it.
+    pub fn working(&self) -> Option<&str> {
+        self.working.as_deref()
     }
 
     /// The packages this sheet is about.
@@ -131,7 +138,13 @@ impl Sheet {
                     format!("{} {warning}{ask}", self.note)
                 }
             }
-            Step::Installing { fraction } => format!("{} percent done.", (fraction * 100.0).round() as u32),
+            Step::Installing { fraction } => {
+                let percent = format!("{} percent done.", (fraction * 100.0).round() as u32);
+                match &self.working {
+                    Some(last) => format!("{percent} {last}."),
+                    None => percent,
+                }
+            }
             Step::Finished { ok: true } => "The software is ready to use.".to_string(),
             Step::Finished { ok: false } => self.error.clone().unwrap_or_else(|| "The install stopped.".to_string()),
         }
@@ -185,6 +198,7 @@ impl Sheet {
     pub fn update(&mut self, ui: &Ui, log: &str) {
         if let Step::Installing { .. } = self.step {
             self.step = Step::Installing { fraction: pacman_progress::progress(log, self.packages.len()) };
+            self.working = pacman_progress::working_label(log);
             self.card = self.build_card(ui);
         }
     }
@@ -374,7 +388,8 @@ impl super::Shell {
                 session.next_poll = t + LOG_POLL_MS;
                 let log = read_log_since(&session.log, session.log_start);
                 let fraction = pacman_progress::progress(&log, session.sheet.packages().len());
-                if !matches!(session.sheet.step(), Step::Installing { fraction: f } if (f - fraction).abs() < 0.001) {
+                let same_step = matches!(session.sheet.step(), Step::Installing { fraction: f } if (f - fraction).abs() < 0.001);
+                if !same_step || session.sheet.working() != pacman_progress::working_label(&log).as_deref() {
                     session.sheet.update(&self.ui, &log);
                 }
             }
@@ -527,6 +542,22 @@ mod tests {
         assert_eq!(sheet.step(), Step::Confirm, "no progress before the person says install");
         sheet.answer(&ui, Button::Install);
         sheet.update(&ui, LOG);
+        assert_eq!(sheet.step(), Step::Installing { fraction: 0.5 });
+    }
+
+    #[test]
+    fn the_sheet_names_the_step_the_install_is_on() {
+        let ui = crate::shell::tests::ui();
+        let mut sheet = Sheet::new(&ui, vec!["a".into(), "b".into()]).unwrap();
+        sheet.answer(&ui, Button::Install);
+        assert_eq!(sheet.working(), None, "nothing in the log yet");
+        assert_eq!(sheet.detail(), "0 percent done.");
+        sheet.update(&ui, LOG);
+        assert_eq!(sheet.working(), Some("Installed a"));
+        assert_eq!(sheet.detail(), "50 percent done. Installed a.");
+        let hook = format!("{LOG}[2026-10-17T10:00:02+0000] [ALPM] running '90-mkinitcpio.hook'...\n");
+        sheet.update(&ui, &hook);
+        assert_eq!(sheet.working(), Some("Running 90-mkinitcpio.hook"), "a hook is named though no package step changed");
         assert_eq!(sheet.step(), Step::Installing { fraction: 0.5 });
     }
 
