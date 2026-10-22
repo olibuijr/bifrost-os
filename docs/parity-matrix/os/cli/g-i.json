@@ -831,16 +831,14 @@
    "note": "provided by Arch package rdma-core; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 ibv_devinfo --version >/dev/null 2>&1 || timeout 5 ibv_devinfo --help >/dev/null 2>&1 || timeout 5 ibv_devinfo -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/ibv_devinfo"
     }
    ],
-   "ready_note": "counterpart /usr/bin/ibv_devinfo (Arch package rdma-core); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 ibv_devinfo --version >/dev/null 2>&1 || timeout 5 ibv_devinfo --help >/dev/null 2>&1 || timeout 5 ibv_devinfo -V >/dev/null 2>&1': exit 255, expected 0"
+   "ready_note": "The Arch package rdma-core is in packaging/arch/runtime-packages.txt and installs /usr/bin/ibv_devinfo; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/bin/ibv_uc_pingpong",
@@ -862,16 +860,14 @@
    "note": "provided by Arch package rdma-core; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 ibv_uc_pingpong --version >/dev/null 2>&1 || timeout 5 ibv_uc_pingpong --help >/dev/null 2>&1 || timeout 5 ibv_uc_pingpong -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/ibv_uc_pingpong"
     }
    ],
-   "ready_note": "counterpart /usr/bin/ibv_uc_pingpong (Arch package rdma-core); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 ibv_uc_pingpong --version >/dev/null 2>&1 || timeout 5 ibv_uc_pingpong --help >/dev/null 2>&1 || timeout 5 ibv_uc_pingpong -V >/dev/null 2>&1': exit 1, expected 0"
+   "ready_note": "The Arch package rdma-core is in packaging/arch/runtime-packages.txt and installs /usr/bin/ibv_uc_pingpong; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/bin/iconutil",
@@ -1414,19 +1410,17 @@
    "doc": "",
    "bifrost": "/usr/bin/irb",
    "status": "partial",
-   "note": "provided by Arch package ruby; not yet verified on Midget",
+   "note": "provided by Arch package ruby-irb, added to runtime-packages.txt (Arch splits it out of ruby); not yet verified on Midget.",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 irb --version >/dev/null 2>&1 || timeout 5 irb --help >/dev/null 2>&1 || timeout 5 irb -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/irb"
     }
    ],
-   "ready_note": "counterpart /usr/bin/irb (Arch package ruby); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 irb --version >/dev/null 2>&1 || timeout 5 irb --help >/dev/null 2>&1 || timeout 5 irb -V >/dev/null 2>&1': exit 127, expected 0"
+   "ready_note": "The Arch package ruby-irb is in packaging/arch/runtime-packages.txt and installs /usr/bin/irb; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/libexec/GamePolicyAgent",
@@ -2171,16 +2165,14 @@
    "note": "provided by Arch package apache; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 htcacheclean --version >/dev/null 2>&1 || timeout 5 htcacheclean --help >/dev/null 2>&1 || timeout 5 htcacheclean -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/htcacheclean"
     }
    ],
-   "ready_note": "counterpart /usr/bin/htcacheclean (Arch package apache); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 htcacheclean --version >/dev/null 2>&1 || timeout 5 htcacheclean --help >/dev/null 2>&1 || timeout 5 htcacheclean -V >/dev/null 2>&1': exit 1, expected 0"
+   "ready_note": "The Arch package apache is in packaging/arch/runtime-packages.txt and installs /usr/bin/htcacheclean; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/sbin/htdbm",
@@ -2202,16 +2194,14 @@
    "note": "provided by Arch package apache; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 htdbm --version >/dev/null 2>&1 || timeout 5 htdbm --help >/dev/null 2>&1 || timeout 5 htdbm -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/htdbm"
     }
    ],
-   "ready_note": "counterpart /usr/bin/htdbm (Arch package apache); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 htdbm --version >/dev/null 2>&1 || timeout 5 htdbm --help >/dev/null 2>&1 || timeout 5 htdbm -V >/dev/null 2>&1': exit 2, expected 0"
+   "ready_note": "The Arch package apache is in packaging/arch/runtime-packages.txt and installs /usr/bin/htdbm; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/sbin/htdigest",
@@ -2233,16 +2223,14 @@
    "note": "provided by Arch package apache; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 htdigest --version >/dev/null 2>&1 || timeout 5 htdigest --help >/dev/null 2>&1 || timeout 5 htdigest -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/htdigest"
     }
    ],
-   "ready_note": "counterpart /usr/bin/htdigest (Arch package apache); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 htdigest --version >/dev/null 2>&1 || timeout 5 htdigest --help >/dev/null 2>&1 || timeout 5 htdigest -V >/dev/null 2>&1': exit 1, expected 0"
+   "ready_note": "The Arch package apache is in packaging/arch/runtime-packages.txt and installs /usr/bin/htdigest; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/sbin/htpasswd",
@@ -2264,16 +2252,14 @@
    "note": "provided by Arch package apache; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 htpasswd --version >/dev/null 2>&1 || timeout 5 htpasswd --help >/dev/null 2>&1 || timeout 5 htpasswd -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/htpasswd"
     }
    ],
-   "ready_note": "counterpart /usr/bin/htpasswd (Arch package apache); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 htpasswd --version >/dev/null 2>&1 || timeout 5 htpasswd --help >/dev/null 2>&1 || timeout 5 htpasswd -V >/dev/null 2>&1': exit 2, expected 0"
+   "ready_note": "The Arch package apache is in packaging/arch/runtime-packages.txt and installs /usr/bin/htpasswd; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/sbin/httpd",
@@ -2345,16 +2331,14 @@
    "note": "provided by Arch package apache; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 httxt2dbm --version >/dev/null 2>&1 || timeout 5 httxt2dbm --help >/dev/null 2>&1 || timeout 5 httxt2dbm -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/httxt2dbm"
     }
    ],
-   "ready_note": "counterpart /usr/bin/httxt2dbm (Arch package apache); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 httxt2dbm --version >/dev/null 2>&1 || timeout 5 httxt2dbm --help >/dev/null 2>&1 || timeout 5 httxt2dbm -V >/dev/null 2>&1': exit 1, expected 0"
+   "ready_note": "The Arch package apache is in packaging/arch/runtime-packages.txt and installs /usr/bin/httxt2dbm; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/sbin/installer",

@@ -2347,9 +2347,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/mail-desktop/src/index.rs, springboard/apps/mail-desktop/src/search.rs",
-   "status": "gap",
-   "note": "Mail search is limited to the open mailbox in mail-desktop/src/search.rs, and no message reaches the shell search index in springboard/src/shell/spotindex.rs. Build a message indexer in the Mail app that feeds the Search panel.",
+   "bifrost": "springboard/apps/mail-desktop/src/index.rs; springboard/apps/mail-desktop/src/search.rs; springboard/apps/mail-desktop/src/main.rs",
+   "status": "partial",
+   "note": "Mail indexes the newest 200 messages of the open mailbox into the shell Core Search index (index::plan, fed by MailApp::index_tick), with subject, people, date, state keywords, list and mailbox fields. Search query parsing with field filters is in search.rs. Remaining: only the open mailbox is indexed (no background indexing of other mailboxes), message bodies are not indexed, and there is no persistent on-disk mail index outside the shell store.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -2365,7 +2365,7 @@
      "filter": "search::tests"
     }
    ],
-   "ready_note": "Message indexing: index::plan keeps the newest 200 messages of the mailbox on screen in Core Search (subject and sender, re-indexed on change, removed when gone or when \"Show in Search\" is off), fed by MailApp::index_tick (main.rs). Search query parsing with field filters (search.rs) is tested. Limit: only the open mailbox is indexed and bodies are not; the old note that no message reaches the shell index is out of date."
+   "ready_note": "Host tests index::tests cover the item fields, the id round trip, the plan (new, changed, gone, other mailboxes untouched, row cap, setting off) and re-indexing on read or flag change; search::tests cover query parsing."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MacSystemUI.framework",
@@ -2683,8 +2683,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/apps/mail-desktop/src/index.rs",
-   "status": "gap",
-   "note": "Mail messages are not registered with the shell search index in springboard/src/shell/spotindex.rs, so there is no searchable schema for them. Build the field schema for mail messages and send it to the shell index from the Mail app.",
+   "status": "partial",
+   "note": "The schema of an indexed message is the SCHEMA manifest in mail-desktop/src/index.rs: subject, from, recipients, date, unread, flagged, list, mailbox and account (account unsearchable), each mapped to an attribute of the shell index item (title, authorNames and persons, contentCreationDate, keywords, custom attributes), under domain \"mail\" and content type public.email-message. Remaining: the shell index stores items rather than typed columns, so the manifest is a mapping, not a schema the shell enforces; body text is not a field.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -2692,10 +2692,20 @@
     {
      "kind": "test",
      "crate": "bifrost-mail",
-     "filter": "index::tests"
+     "filter": "index::tests::the_schema_names_each_field_once_and_the_item_fills_it"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "index::tests::dates_parse_to_unix_seconds"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-mail",
+     "filter": "index::tests::state_keywords_and_rank_follow_the_flags"
     }
    ],
-   "ready_note": "Mail messages are registered with Core Search in mail-desktop index.rs: domain \"mail\", id account/mailbox/uid, title = subject, description = sender, no body. Tests index::tests."
+   "ready_note": "Tests index::tests::the_schema_names_each_field_once_and_the_item_fills_it, dates_parse_to_unix_seconds and state_keywords_and_rank_follow_the_flags check the manifest and the item it produces."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MailService.framework",

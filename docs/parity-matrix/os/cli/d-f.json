@@ -567,17 +567,12 @@
    "doc": "",
    "bifrost": "/usr/bin/db_codegen",
    "status": "partial",
-   "note": "provided by Arch package db; not yet verified on Midget",
+   "note": "Not shipped: the Arch db package does not install /usr/bin/db_codegen.",
    "rea": [],
    "method": "assessed",
    "ready": false,
-   "checks": [
-    {
-     "kind": "file",
-     "path": "/usr/bin/db_codegen"
-    }
-   ],
-   "ready_note": "db package",
+   "checks": [],
+   "ready_note": "",
    "ready_failed": "file /usr/bin/db_codegen: /usr/bin/db_codegen is missing"
   },
   {
@@ -1038,17 +1033,12 @@
    "doc": "",
    "bifrost": "/usr/bin/demandoc",
    "status": "partial",
-   "note": "provided by Arch package mandoc; not yet verified on Midget",
+   "note": "Not shipped: the mandoc package that provides demandoc is not in runtime-packages.txt because it conflicts with man-db (both provide man) and broke the update transaction.",
    "rea": [],
    "method": "assessed",
    "ready": false,
-   "checks": [
-    {
-     "kind": "file",
-     "path": "/usr/bin/demandoc"
-    }
-   ],
-   "ready_note": "mandoc package",
+   "checks": [],
+   "ready_note": "",
    "ready_failed": "file /usr/bin/demandoc: /usr/bin/demandoc is missing"
   },
   {
@@ -1683,18 +1673,17 @@
    "doc": "",
    "bifrost": "/usr/bin/erb",
    "status": "partial",
-   "note": "provided by Arch package ruby; not yet verified on Midget",
+   "note": "provided by Arch package ruby-erb, added to runtime-packages.txt (Arch splits it out of ruby); not yet verified on Midget.",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
      "path": "/usr/bin/erb"
     }
    ],
-   "ready_note": "ruby package erb",
-   "ready_failed": "file /usr/bin/erb: /usr/bin/erb is missing"
+   "ready_note": "The Arch package ruby-erb is in packaging/arch/runtime-packages.txt and installs /usr/bin/erb; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/bin/errinfo",

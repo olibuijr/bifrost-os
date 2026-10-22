@@ -2460,7 +2460,7 @@
     },
     {
      "kind": "test",
-     "crate": "bifrost-app",
+     "crate": "bifrost-core",
      "filter": "peer_session::tests"
     }
    ],
@@ -3535,7 +3535,7 @@
     },
     {
      "kind": "test",
-     "crate": "bifrost-app",
+     "crate": "bifrost-core",
      "filter": "peer_session::tests"
     }
    ],
@@ -3570,7 +3570,7 @@
     },
     {
      "kind": "test",
-     "crate": "bifrost-app",
+     "crate": "bifrost-core",
      "filter": "peer_session::tests"
     }
    ],

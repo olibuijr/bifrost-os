@@ -3045,17 +3045,12 @@
    "doc": "",
    "bifrost": "/usr/bin/traceroute6",
    "status": "partial",
-   "note": "provided by Arch package traceroute; not yet verified on Midget",
+   "note": "Not shipped: the Arch traceroute package installs only /usr/bin/traceroute (it handles IPv6 with -6); there is no traceroute6 command.",
    "rea": [],
    "method": "assessed",
    "ready": false,
-   "checks": [
-    {
-     "kind": "file",
-     "path": "/usr/bin/traceroute6"
-    }
-   ],
-   "ready_note": "Arch package traceroute ships it (packaging/arch/runtime-packages.txt)",
+   "checks": [],
+   "ready_note": "",
    "ready_failed": "file /usr/bin/traceroute6: /usr/bin/traceroute6 is missing"
   },
   {

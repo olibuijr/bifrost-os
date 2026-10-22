@@ -897,15 +897,14 @@
    "note": "BifrOSt ships Noto Sans Symbols 2 as Symbols.ttf for Unicode symbols; not SF Symbols (no SF Symbols font exists open source)",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
-     "path": "/usr/share/springboard/assets/Symbols.ttf"
+     "path": "/usr/share/springboard/system-assets/Symbols.ttf"
     }
    ],
-   "ready_note": "BifrOSt ships Noto Sans Symbols 2 as the top-level Symbols.ttf asset (installed under /usr/share/springboard/assets).",
-   "ready_failed": "file /usr/share/springboard/assets/Symbols.ttf: /usr/share/springboard/assets/Symbols.ttf is missing"
+   "ready_note": "BifrOSt ships Noto Sans Symbols 2 (SIL OFL 1.1) as the top-level Symbols.ttf; packaging/assets-allowlist.txt lets tools/stage-assets.py copy it into the springboard package at /usr/share/springboard/system-assets/Symbols.ttf (seed-data then copies it to /var/lib/springboard). render/src/symbols.rs FONT_FILES loads exactly this file. Not the Apple glyph shapes."
   },
   {
    "id": "path:/System/Library/Fonts/AppleSDGothicNeo.ttc",

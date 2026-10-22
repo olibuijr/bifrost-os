@@ -1869,18 +1869,17 @@
    "doc": "",
    "bifrost": "/usr/bin/rdoc",
    "status": "partial",
-   "note": "provided by Arch package ruby; not yet verified on Midget",
+   "note": "provided by Arch package ruby-rdoc, added to runtime-packages.txt (Arch splits it out of ruby); not yet verified on Midget.",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
      "path": "/usr/bin/rdoc"
     }
    ],
-   "ready_note": "Arch package ruby ships it (packaging/arch/runtime-packages.txt)",
-   "ready_failed": "file /usr/bin/rdoc: /usr/bin/rdoc is missing"
+   "ready_note": "The Arch package ruby-rdoc is in packaging/arch/runtime-packages.txt and installs /usr/bin/rdoc; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/bin/readlink",
@@ -1962,18 +1961,17 @@
    "doc": "",
    "bifrost": "/usr/bin/ri",
    "status": "partial",
-   "note": "provided by Arch package ruby; not yet verified on Midget",
+   "note": "provided by Arch package ruby-rdoc, added to runtime-packages.txt (Arch splits it out of ruby); not yet verified on Midget.",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
      "path": "/usr/bin/ri"
     }
    ],
-   "ready_note": "Arch package ruby ships it (packaging/arch/runtime-packages.txt)",
-   "ready_failed": "file /usr/bin/ri: /usr/bin/ri is missing"
+   "ready_note": "The Arch package ruby-rdoc is in packaging/arch/runtime-packages.txt and installs /usr/bin/ri; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/bin/rs",

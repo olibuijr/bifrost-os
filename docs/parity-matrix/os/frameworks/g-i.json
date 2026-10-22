@@ -2147,9 +2147,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/document.rs; springboard/sdk/src/revisions.rs; springboard/sdk/src/file_version.rs",
-   "status": "gap",
-   "note": "Built 2026-10-17: per-document revision store (record, browse newest first, restore as a new revision, pruning at a limit) in springboard/sdk/src/revisions.rs, tests revisions::tests. Still open: the document controller does not call it on save yet, and there is no Versions browser in the shell. Built 2026-10-17: DocumentController records the saved bytes as a revision on every save (sdk document.rs, test document::tests::every_save_keeps_a_revision_of_the_bytes_written). Open: no Versions browser yet.",
+   "bifrost": "springboard/sdk/src/document.rs; springboard/sdk/src/revisions.rs; springboard/sdk/src/file_version.rs; springboard/sdk/src/versions_browser.rs",
+   "status": "partial",
+   "note": "Built: per-document revision store (record, list newest first, restore as a new revision, prune at a limit), DocumentController records every save as a revision, per-app FileVersionStore. Added in slice g4: versions_browser::VersionsBrowser, the Versions browser model (date labels from a caller clock and UTC offset, line-change summary with a bounded LCS diff, text or binary preview, older/newer selection, Restore enabled only when the version differs) and DocumentController::versions, open_versions and restore_version (replaces the document content from a version, marks it edited, keeps the replaced content as a version, answers Notice::Reverted). Remaining: the shell has no Versions window that draws the model, versions cannot be named or locked, and packages keep no versions.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -2168,9 +2168,19 @@
      "kind": "test",
      "crate": "bifrost-app",
      "filter": "file_version::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "versions_browser::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "document::tests::a_saved_version_can_be_browsed_and_restored_into_the_document"
     }
    ],
-   "ready_note": "Per-document revision history: a revision store records, lists newest first, restores as a new revision and prunes at a limit (revisions), DocumentController records every save (document test), and the per-app FileVersionStore keeps versions of a file (file_version). Open: a Versions browser in the shell."
+   "ready_note": "The save history is browsable and restorable through the document controller (unit tests in revisions, versions_browser and document). No window draws it yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GenerativeAgents.framework",
@@ -2613,9 +2623,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/model_tool.rs, springboard/sdk/src/language_model.rs, springboard/sdk/src/intent_tools.rs",
-   "status": "gap",
-   "note": "Typed functions a model can invoke, the layer under the on-device model API. BifrOSt has no model-invoked tools API for apps. Build it in the SDK next to the model session API, reusing the typed action shape of springboard/sdk/src/intents.rs. Built 2026-10-17: intent_tools bridges App intents to model tools (schema from ParamType, auth-gated); tests intent_tools::tests.",
+   "bifrost": "springboard/ui/src/model_tool.rs; springboard/ui/src/model_provider.rs; springboard/sdk/src/language_model.rs; springboard/sdk/src/intent_tools.rs",
+   "status": "partial",
+   "note": "Built: named Tool with an argument schema, checked calls (arguments parsed and validated before the handler runs), a bounded tool loop (model_provider::run_turn), App intents offered as tools (intent_tools). Added in slice g4: ToolChoice (Auto, Disabled, Only(names)) limits which tools a request describes and which may run (ToolError::NotAllowed), and ToolSet::set_max_output cuts a long tool output and tells the model how many characters were omitted. Remaining: no per-turn call budget across tools beyond the round limit, no parallel execution, and tools are not yet exposed to out-of-process apps.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -2627,11 +2637,16 @@
     },
     {
      "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_tool::tests::a_tool_choice_limits_what_is_offered_and_what_may_run"
+    },
+    {
+     "kind": "test",
      "crate": "bifrost-app",
      "filter": "intent_tools::tests"
     }
    ],
-   "ready_note": "Typed functions a model invokes: named Tool with an argument schema, checked calls and a bounded tool loop (model_tool, model_provider::run_turn). App intents are offered as tools (intent_tools, tests intent_tools::tests)."
+   "ready_note": "Typed functions a model invokes with schema checks, a tool loop, intent bridging, a tool-choice policy and an output cap, covered by model_tool::tests and intent_tools::tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GenerativeFunctionsFoundation.framework",
@@ -2648,9 +2663,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/generation_schema.rs, springboard/ui/src/transcript.rs",
-   "status": "gap",
-   "note": "Foundation types for model-invoked functions, the base of the function layer. BifrOSt has none; build with the function layer, after the on-device model runtime exists.",
+   "bifrost": "springboard/ui/src/generation_schema.rs; springboard/ui/src/transcript.rs; springboard/ui/src/generation_partial.rs",
+   "status": "partial",
+   "note": "Built: argument schema and validation (generation_schema), typed transcript of calls and outputs (transcript). Added in slice g4 (generation_partial): partial_parse reads the JSON a model has written so far into the Value it has so far (cut strings and escapes, whole members and items, numbers as written, fences skipped, invalid prefixes refused), validate_partial checks it without counting what has not arrived (choice prefixes accepted, ranges left to the final check), and json_schema exports a schema as JSON Schema for engines that constrain decoding; the SDK re-exports them from language_model. Remaining: the local provider does not yet send the schema as a response format, and there is no on-device engine to enforce it.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -2664,9 +2679,14 @@
      "kind": "test",
      "crate": "bifrost-ui",
      "filter": "transcript::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "generation_partial::tests"
     }
    ],
-   "ready_note": "Foundation types of the function layer: the argument schema and its validation (generation_schema) and the typed transcript of calls and outputs (transcript)."
+   "ready_note": "The function layer's foundation types now include streaming-safe partial output and a JSON Schema export, with unit tests for every prefix of a valid reply (generation_partial::tests)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GenerativeFunctionsInstrumentation.framework",
@@ -2788,11 +2808,25 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/local_model.rs; springboard/sdk/src/language_model.rs; springboard/ui/src/model_provider.rs",
-   "status": "gap",
-   "note": "On-device generative model runtime for apps: load, run and stream a local model. BifrOSt has none (the Core AI and Foundation Models rows record the same gap), and the Assistant app calls only a cloud model. Build a local model session API in the SDK, backed by the local inference engine. Built 2026-10-17: the session and provider seam exists (sdk language_model, run_turn); no on-device runtime yet, so on_device_availability is always Unavailable. Open: a local engine behind ModelProvider. Built 2026-10-17 (wave 12): LocalModelProvider in springboard/sdk/src/local_model.rs, a loopback-only provider for the local engine (tests local_model::tests). Open: streaming and a packaged engine. Lead 2026-10-17: not ready: no on-device engine ships, so on_device_availability() stays Unavailable.",
+   "bifrost": "springboard/sdk/src/local_model.rs; springboard/sdk/src/local_model_stream.rs; springboard/sdk/src/language_model.rs; springboard/sdk/src/language_model_stream.rs; springboard/ui/src/model_provider.rs",
+   "status": "partial",
+   "note": "Built: the session and provider seam (language_model, run_turn), LocalModelProvider (loopback-only chat-completions client with tool calling and budget), and in slice g4 token-by-token streaming: LocalModelProvider implements StreamingModelProvider over server-sent events (incremental chunked decoder, SSE parser, accumulator that gathers native tool_calls deltas and holds back text that may be a prompted tool call, stop closes the connection, plain-JSON fallback). Remaining: no on-device engine ships, so on_device_availability() stays Unavailable and nothing starts the engine; attachments are passed as a text placeholder; no usage figures are read.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "ready_note": "Apps can run a session against the local engine on a loopback port and show the answer as it streams, with Stop; tests run against a real loopback server. A packaged engine and an on-device model are not shipped.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "local_model::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "local_model_stream::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GenerativeModelsFoundation.framework",
@@ -2809,13 +2843,18 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/model_session.rs, springboard/ui/src/model_provider.rs, springboard/sdk/src/language_model.rs",
-   "status": "gap",
-   "note": "Model foundation types (requests, responses, model identifiers) under the on-device model runtime. BifrOSt has none; build it with the local model session API.",
+   "bifrost": "springboard/ui/src/model_foundation.rs, springboard/ui/src/model_session.rs, springboard/ui/src/model_provider.rs, springboard/sdk/src/language_model.rs",
+   "status": "partial",
+   "note": "Model foundation types built: ModelId (name[:tag], validated), ModelInfo (context size, tools, image formats, on-device flag), GenerationOptions, Request (validate, and check against a model's context and attachment support), Response with estimated Usage and FinishReason, and ModelRegistry (resolve, default, filter by capability), re-exported by the SDK language_model module. Session, Profile, Reply and ModelProvider already existed. Not built: the runtime that answers (availability stays unavailable), real tokenizer counts (usage is estimated), streaming. Not verified on Midget.",
    "rea": [],
    "method": "assessed",
    "ready": true,
    "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "model_foundation::tests"
+    },
     {
      "kind": "test",
      "crate": "bifrost-ui",
@@ -2832,7 +2871,7 @@
      "filter": "language_model::tests"
     }
    ],
-   "ready_note": "Foundation types for requests, responses and sessions: Session, Profile, Reply and ModelProvider (model_session, model_provider). The runtime that answers is not built; availability reports unavailable (language_model::tests)."
+   "ready_note": "Host tests: model_foundation::tests (id parsing and folding, option validation, context and attachment checks, response usage and finish reason, registry resolve/default/filter), model_session::tests and model_provider::tests (session and turn loop), language_model::tests (an app picks a model, checks the request and wraps a provider reply). No model runtime exists, so nothing answers on the installed system yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GenerativePartnerService.framework",
@@ -3766,9 +3805,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/usb_approval.rs; springboard/src/shell/usb_sheet.rs; springboard/src/privd/methods.rs; springboard/src/privd_client.rs",
-   "status": "gap",
-   "note": "USB accessory approval: the decision (allow, deny, allow once, kernel authorized state), the persisted approvals, the sheet text with its three buttons mapped to answers, the arrival flow that holds a new device blocked until the answer, and the validated write-back to the kernel authorized attribute. Built 2026-10-17: Prompt, Approvals::arrive and finish, enforce and read_kernel (tests usb_approval::tests).",
+   "bifrost": "springboard/core/src/usb_approval.rs; springboard/src/shell/usb_sheet.rs; springboard/src/privd/methods.rs; springboard/src/privd_client.rs; springboard/src/bin/privd.rs",
+   "status": "partial",
+   "note": "USB accessory approval: the decision, persisted approvals, the three-button sheet, the arrival flow that holds a new device blocked until the answer, and the validated write-back to the kernel authorized attribute (usb.authorize). Added: the hold policy itself. Policy (allow 1 / ask 2) is written to the kernel's usbcore authorized_default parameter by privd usb.policy_set, saved in /var/lib/springboard/usb_policy and re-applied by bifrost-privd at start; usb.policy_get reads it back; privd_client has usb_policy_set and usb_policy. Not built: a Settings switch for the policy; devices already plugged in keep their state. Not verified on Midget.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -3789,7 +3828,7 @@
      "filter": "privd::methods::tests"
     }
    ],
-   "ready_note": "Host tests for the shell path: the bus scan runs the arrival flow (Approvals::arrive_with), an unknown device the kernel holds blocked stays blocked while the three-button approval sheet is up, the answer is written through privd (usb.authorize) and saved in usb_approvals.txt, a known device is allowed or denied without a sheet, the sheet waits for the unlock and goes with an unplugged device. Not verified on Midget. A stock kernel authorizes every device at once, so the sheet only meets devices held back (usbcore.authorized_default=2); setting that policy is not done here."
+   "ready_note": "Host tests: usb_approval::tests (decisions, approvals text, arrive/finish flow, sysfs write-back, Policy values, apply and read of the parameter, saved policy re-applied at start), shell::usb_sheet::tests (sheet and bus watcher), privd::methods::tests (usb.authorize port rules, usb.policy_set writes the kernel before saving and refuses other modes). Not verified on Midget; the real parameter is /sys/module/usbcore/parameters/authorized_default."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HMFoundation.framework",
@@ -3866,7 +3905,17 @@
     {
      "kind": "test",
      "crate": "bifrost-app",
-     "filter": "url::tests"
+     "filter": "url::cookie_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "url::upload_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "url::transport_security_tests"
     }
    ],
    "ready": true,
@@ -5174,8 +5223,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/admin_sign_in.rs, springboard/src/privd/auth.rs, springboard/src/shell/auth_sheet.rs",
-   "status": "gap",
-   "note": "Administrator sign-in for system changes: which changes need an administrator and the grace period after a sign-in (core/src/admin_sign_in.rs), the PAM password check with lockout (privd/auth.rs) and the password sheet (shell/auth_sheet.rs). Tests admin_sign_in::tests, privd::auth::tests, auth_sheet::tests.",
+   "status": "partial",
+   "note": "Administrator sign-in for system changes. Built: privd auth.elevate re-checks the administrator's password through PAM (lockout included) and issues a single-use grant; package.install_file and package.install_repo each spend one (package_install_sheet shows the password prompt). core/src/admin_sign_in.rs models which changes need an administrator and a grace period, but nothing outside its own tests uses it yet. Not built: grants for the other system changes (package.remove, update.apply, account changes, security settings), which need a password flow in the shell. Not verified on Midget.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -5196,7 +5245,7 @@
      "filter": "shell::auth_sheet::tests"
     }
    ],
-   "ready_note": "Administrator sign-in for system changes: which changes need an administrator and the grace period after a sign-in (core/src/admin_sign_in.rs), the PAM password check with lockout (privd/auth.rs) and the password sheet (shell/auth_sheet.rs). Tests admin_sign_in::tests, privd::auth::tests, auth_sheet::tests."
+   "ready_note": "Host tests: admin_sign_in::tests (which changes need an administrator, grace period, sign-out), privd::auth::tests (PAM check, lockout, grants), shell::auth_sheet::tests (the password sheet). Only installs are gated by a grant today."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IASUtilitiesCore.framework",
@@ -6942,9 +6991,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/install_log.rs, springboard/src/shell/store/mod.rs, springboard/src/shell/diagnostics_page.rs, springboard/src/shell/settings.rs, springboard/updated/src/main.rs",
-   "status": "gap",
-   "note": "Built 2026-10-17: the install failure log moved to springboard/src/install_log.rs; the App Store worker logs each failed app install, and Analytics & Diagnostics lists the newest failures. Not logged yet: installs run by the privd daemon (springboard/src/privd/methods.rs) and the OTA app path (springboard/src/shell/ota.rs).",
+   "bifrost": "springboard/src/install_log.rs, springboard/src/shell/store/mod.rs, springboard/src/shell/ota.rs, springboard/src/privd/methods.rs, springboard/src/shell/diagnostics_page.rs, springboard/src/shell/settings.rs, springboard/updated/src/main.rs",
+   "status": "partial",
+   "note": "Install failure log (install_log.rs): the App Store worker, the updater daemon, the OTA background installs (system packages and app updates, shell/ota.rs) and the privd installs (store.install, package.install_file, package.install_repo, internal errors only, written to /var/lib/springboard) all record failures. record_once collapses a repeat of the newest record, recent_in merges the user and system logs, and Analytics & Diagnostics lists the newest failures from both. Not built: the pacman install progress log is not attached to a failure record; a non-root shell can only read the system log if that directory is readable. Not verified on Midget.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -6958,9 +7007,14 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "diagnostics_page::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "privd::methods::tests"
     }
    ],
-   "ready_note": "Install failure log (write, rotate, read) and the diagnostics page list of failed installs are tested headless."
+   "ready_note": "Host tests: install_log::tests (write, rotate, read, record_once, logged, recent_in across directories), privd::methods::tests (a failed privd install is logged once; a refused request and a success are not), diagnostics_page::tests (the failed-installs list)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IntelligenceEngine.framework",

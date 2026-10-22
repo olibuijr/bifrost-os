@@ -333,8 +333,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/migration.rs; springboard/src/shell/backup.rs; springboard/core/src/container_layout.rs",
-   "status": "gap",
-   "note": "Moves a user's data from another disk or a backup archive into this machine: migration.rs lists categories (shell data sets and per-app folders), stages the picked ones and applies them at the next start through the backup restore; container_layout restore_files fills app containers safely. Driven by `springboard --migrate DEST SOURCE [CATEGORY...]`.",
+   "status": "partial",
+   "note": "Moves a user's data from another disk folder or a backup archive into this machine: migration.rs lists categories (shell data sets and per-app folders), stages the picked ones and applies them at the next start through the backup restore; container_layout restore_files fills app containers safely. Driven by `springboard --migrate DEST SOURCE [CATEGORY...]`. Remaining: no Settings screen or assistant UI for it, and no migration over the network from another machine.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -471,8 +471,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/updated/src/assets.rs; springboard/core/src/asset_pack_file.rs; springboard/ui/src/managed_download.rs; springboard/ui/src/assetpack.rs",
-   "status": "gap",
-   "note": "On-demand asset packs for apps. Built 2026-10-17 (wave 12): the pack file format (BFPK1, SHA-256 sealed, safe names only) in core/src/asset_pack_file.rs, a local pack source in updated/src/assets.rs (`<pack folder>/<app>/<pack>.bfpk`, default /usr/share/bifrost/asset-packs, BIFROST_ASSET_PACKS overrides) whose transfer verifies and installs the pack into the app container under Library/Caches/AssetPacks/<id>, and the update agent now calls it instead of the old stub. Packs come only from the local folder, never from a third party.",
+   "status": "partial",
+   "note": "On-demand asset packs for apps: BFPK1 pack file format (SHA-256 sealed, safe names only) in core/src/asset_pack_file.rs, a local pack source in updated/src/assets.rs (default /usr/share/bifrost/asset-packs, BIFROST_ASSET_PACKS overrides) that verifies and installs a pack into the app container under Library/Caches/AssetPacks/<id>, and the update agent calls it. Remaining: no remote pack index or download (packs are placed in the pack folder by the system image, an administrator or a disk), so there is no catalogue of assets to fetch.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -516,8 +516,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/updated/src/assets.rs; springboard/ui/src/managed_download.rs; springboard/core/src/asset_pack_file.rs",
-   "status": "gap",
-   "note": "The background daemon behind on-demand assets: AssetDaemon in the update agent runs each app's managed download queue on an unmetered, non-low-power link with a daily budget and three attempts, and since wave 12 its transfer is real (LocalPackSource reads, verifies and installs the pack file into the app container; main.rs calls it).",
+   "status": "partial",
+   "note": "AssetDaemon in the update agent runs each app's managed download queue on an unmetered, non-low-power link with a daily budget and three attempts; its transfer is real (LocalPackSource reads, verifies and installs the pack file into the app container). Remaining: it has no remote source and no catalogue polling, and it runs inside the update agent rather than as its own service.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -651,7 +651,7 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "core/src/container_layout.rs, springboard/sdk/src/container_layout.rs (re-export), springboard/src/shell/apphost.rs (spawn creates the folders), springboard/src/bare/app_policy.rs",
+   "bifrost": "springboard/core/src/container_layout.rs, springboard/src/shell/apphost.rs (spawn creates the folders), springboard/src/bare/app_policy.rs",
    "status": "partial",
    "note": "Per-app container folders (Documents, Library, Caches, tmp) and the sandbox policy that mounts them are modelled. Gap: the shell does not create the folders yet, so apps still use a flat data directory.",
    "rea": [],
@@ -864,8 +864,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/erase_content.rs; springboard/src/shell/settings.rs; springboard/src/shell/pages.rs; springboard/src/bin/shell.rs",
-   "status": "gap",
-   "note": "Built 2026-10-17 (wave 12): Settings > General > Transfer or Reset > Erase All Content and Settings asks for confirmation, writes erase.pending and restarts; the shell binary applies it before anything loads (core/src/erase_content.rs): the keychain goes first (deleting its master key), then every other entry of the data directory, keeping only update bookkeeping; links are removed, never followed; unsafe directories are refused. The system outside the data directory is untouched.",
+   "status": "partial",
+   "note": "Settings > General > Transfer or Reset > Erase All Content and Settings asks for confirmation, writes erase.pending and restarts; the shell applies it before anything loads (core/src/erase_content.rs): keychain first, then every other entry of the data directory, keeping only update bookkeeping; links are removed, never followed; unsafe directories refused. Remaining: it is a file removal, not a block-level or cryptographic wipe of the volume, and the alert text and start-up hook are untested.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -2092,9 +2092,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/net_auth.rs; springboard/src/keychain.rs; springboard/src/shell/network_auth_sheet.rs; springboard/src/shell/services/network_auth.rs",
-   "status": "gap",
-   "note": "Network authentication agent: prompts for credentials for SMB shares and 802.1X networks and stores them through the keychain (springboard/src/keychain.rs) and the Wi-Fi secret store (springboard/sdk/src/wifi_secrets.rs). Built 2026-10-17: the saved-or-prompt decision for both kinds, and the prompt model with its answer checks (springboard/src/net_auth.rs).",
+   "bifrost": "springboard/src/net_auth.rs; springboard/src/keychain.rs; springboard/src/shell/network_auth_sheet.rs; springboard/src/shell/services/network_auth.rs; springboard/src/net/wifi_config.rs; springboard/sdk/src/wifi_secrets.rs",
+   "status": "partial",
+   "note": "Network authentication agent: prompts for credentials for SMB shares and 802.1X networks and keeps them in the keychain group (springboard/src/net_auth.rs, keychain.rs). Built: the saved-or-prompt decision for both kinds, the prompt model with its answer checks, the shell login sheet and the network_auth service. Built in this round: wifi_join_config turns a saved 802.1X login into the enterprise network entry the supplicant is configured from (a Prompt or an incomplete login gives none), and remember_wifi_config keeps the login of a typed 802.1X network in the agent's store so the next join does not prompt (tests net_auth::tests). Not built: apps (Files for shares, the Wi-Fi join flow) do not call request_login or wifi_join_config yet; the SDK WifiSecrets store is still in memory; not verified on Midget.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -2115,7 +2115,7 @@
      "filter": "shell::services::network_auth::tests"
     }
    ],
-   "ready_note": "Host tests for the shell path: the network_auth service answers a saved share or 802.1X login from the keychain group, queues a sheet otherwise, the shell draws the user name, password and remember steps, Cancel and Escape end it, a refused login is forgotten and the retry wording shown, and the typed login reaches the app once and the keychain only on Remember. Not verified on Midget. The SDK's WifiSecrets store stays in memory; 802.1X logins are kept in the keychain group instead. Apps (Files for shares) still have to call request_login; no app does yet."
+   "ready_note": "Host tests: the saved-or-prompt decision for shares and 802.1X, the prompt model and answer checks, the sheet and the service, and the conversion of a saved login to a join entry and back (round trip through the keychain store). Not verified on Midget; no app calls the service yet."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NetFSServer.framework",
@@ -2329,7 +2329,7 @@
     {
      "kind": "test",
      "crate": "bifrost-app",
-     "filter": "url::tests"
+     "filter": "url::upload_tests"
     }
    ],
    "ready_note": "ProxySettings (environment, bypass rules, proxy_for) used by URLSession for each request, with CONNECT tunnels for https."

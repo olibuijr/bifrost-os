@@ -486,8 +486,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/js_automation.rs, springboard/cmd/src/osascript.rs, springboard/core/src/script/interp.rs",
-   "status": "gap",
-   "note": "JavaScript bridge to app events. Built 2026-10-17: Application(name) in a Boa context maps camelCase properties to the commands of the app's manifest dictionary and sends them as typed events through the same Host as the AppleScript-style language; the Policy rule refuses events to apps outside the grants (-1743) before sending, and the shell needs its own grant (js_automation::tests). Not covered: object specifiers (properties and elements); an app cannot push a notification into a script, as in the reference.",
+   "status": "partial",
+   "note": "JavaScript bridge to app events. Application(name) in a Boa context maps camelCase properties to dictionary commands and sends them as typed events through the same Host as the AppleScript-style language, under the Policy grant rule (-1743). Object specifiers added: a property that is the plural of a declared class is a collection (call it, [n] zero-based or negative from the end, .byName, .whose({prop: v})); obj.prop() reads, obj.prop = v or .set(v) writes, obj.delete() removes, as the core getd/setd/delt events with the dictionary's class and property check (-1728). Not covered: elements nested in an element (the event record names one class); an app cannot push a notification into a script. Not verified on Midget.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -503,7 +503,7 @@
      "filter": "osascript::tests"
     }
    ],
-   "ready_note": "JavaScript bridge to app events. Built 2026-10-17: Application(name) in a Boa context maps camelCase properties to the commands of the app's manifest dictionary and sends them as typed events through the same Host as the AppleScript-style language; the Policy rule refuses events to apps outside the grants (-1743) before sending, and the shell needs its own grant (js_automation::tests). Not covered: object specifiers (properties and elements); an app cannot push a notification into a script, as in the reference."
+   "ready_note": "Host tests with a fake host: shell::js_automation::tests (commands, grants, collections, indexes, byName and whose records, set and delete events, undeclared property and class errors, plural-to-class lookup) and osascript::tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/JavaScriptOSA.framework",
@@ -520,9 +520,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/js_automation.rs, springboard/cmd/src/osascript.rs, springboard/core/src/script/",
-   "status": "gap",
-   "note": "The JavaScript scripting component: a runner that evaluates a script in a fresh Boa context with the automation host object, calls run(argv) when defined, returns the result as a script value and reports errors with Apple-event numbers (syntax -2740, generic -2700). Built 2026-10-17 (shell/js_automation.rs) and reachable as `osascript -l JavaScript`. The compiled-script store (osacompile) stays AppleScript-only.",
+   "bifrost": "springboard/src/shell/js_automation.rs, springboard/cmd/src/osascript.rs, springboard/cmd/src/osacompile.rs, springboard/core/src/script/mod.rs",
+   "status": "partial",
+   "note": "The JavaScript scripting component: a runner that evaluates a script in a fresh Boa context with the automation host object, calls run(argv), returns the result as a script value and reports errors with Apple-event numbers (syntax -2740, generic -2700); reachable as osascript -l JavaScript. Compiled store added: osacompile -l JavaScript (or a .js file) checks the syntax with the engine (js_automation::check_syntax) and writes the bifrost-osa file with language JavaScript and the canonical source (no syntax tree); osascript runs such a file as JavaScript without -l and refuses a conflicting -l; older files read as AppleScript. Not built: a syntax tree or bytecode for JavaScript (the engine reparses the source). Not verified on Midget.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -539,11 +539,16 @@
     },
     {
      "kind": "test",
+     "crate": "bifrost-cmd",
+     "filter": "osacompile::tests"
+    },
+    {
+     "kind": "test",
      "crate": "bifrost-core",
      "filter": "script::tests"
     }
    ],
-   "ready_note": "The JavaScript scripting component: a runner that evaluates a script in a fresh Boa context with the automation host object, calls run(argv) when defined, returns the result as a script value and reports errors with Apple-event numbers (syntax -2740, generic -2700). Built 2026-10-17 (shell/js_automation.rs) and reachable as `osascript -l JavaScript`. The compiled-script store (osacompile) stays AppleScript-only."
+   "ready_note": "Host tests: shell::js_automation::tests (runner, check_syntax), osascript::tests (a compiled JavaScript file runs as JavaScript, language choice), osacompile::tests (-l and .js inference, syntax error writes nothing, language stored), script::tests (compile_js, compiled_language, canonical JavaScript source)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Jet.framework",

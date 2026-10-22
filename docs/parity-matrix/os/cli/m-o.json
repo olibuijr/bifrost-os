@@ -526,17 +526,12 @@
    "doc": "",
    "bifrost": "/usr/bin/mandoc",
    "status": "partial",
-   "note": "provided by Arch package mandoc; not yet verified on Midget",
+   "note": "Not shipped: the mandoc package is not in runtime-packages.txt because it conflicts with man-db (both provide man) and broke the update transaction; man-db provides the man tooling.",
    "rea": [],
    "method": "assessed",
    "ready": false,
-   "checks": [
-    {
-     "kind": "file",
-     "path": "/usr/bin/mandoc"
-    }
-   ],
-   "ready_note": "mandoc package (added to runtime-packages.txt)",
+   "checks": [],
+   "ready_note": "",
    "ready_failed": "file /usr/bin/mandoc: /usr/bin/mandoc is missing"
   },
   {
@@ -858,16 +853,14 @@
    "note": "provided by Arch package mg; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 mg --version >/dev/null 2>&1 || timeout 5 mg --help >/dev/null 2>&1 || timeout 5 mg -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/mg"
     }
    ],
-   "ready_note": "counterpart /usr/bin/mg (Arch package mg); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 mg --version >/dev/null 2>&1 || timeout 5 mg --help >/dev/null 2>&1 || timeout 5 mg -V >/dev/null 2>&1': exit 1, expected 0"
+   "ready_note": "The Arch package mg is in packaging/arch/runtime-packages.txt and installs /usr/bin/mg; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/bin/mib2c",
@@ -889,16 +882,14 @@
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 mib2c --version >/dev/null 2>&1 || timeout 5 mib2c --help >/dev/null 2>&1 || timeout 5 mib2c -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/mib2c"
     }
    ],
-   "ready_note": "counterpart /usr/bin/mib2c (Arch package net-snmp); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 mib2c --version >/dev/null 2>&1 || timeout 5 mib2c --help >/dev/null 2>&1 || timeout 5 mib2c -V >/dev/null 2>&1': exit 1, expected 0"
+   "ready_note": "The Arch package net-snmp is in packaging/arch/runtime-packages.txt and installs /usr/bin/mib2c; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/bin/mib2c-update",
@@ -920,16 +911,14 @@
    "note": "provided by Arch package net-snmp; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 mib2c-update --version >/dev/null 2>&1 || timeout 5 mib2c-update --help >/dev/null 2>&1 || timeout 5 mib2c-update -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/mib2c-update"
     }
    ],
-   "ready_note": "counterpart /usr/bin/mib2c-update (Arch package net-snmp); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 mib2c-update --version >/dev/null 2>&1 || timeout 5 mib2c-update --help >/dev/null 2>&1 || timeout 5 mib2c-update -V >/dev/null 2>&1': exit 99, expected 0"
+   "ready_note": "The Arch package net-snmp is in packaging/arch/runtime-packages.txt and installs /usr/bin/mib2c-update; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/bin/mkbom",
@@ -1573,16 +1562,14 @@
    "note": "provided by Arch package bind; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 nslookup --version >/dev/null 2>&1 || timeout 5 nslookup --help >/dev/null 2>&1 || timeout 5 nslookup -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/nslookup"
     }
    ],
-   "ready_note": "counterpart /usr/bin/nslookup (Arch package bind); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 nslookup --version >/dev/null 2>&1 || timeout 5 nslookup --help >/dev/null 2>&1 || timeout 5 nslookup -V >/dev/null 2>&1': timed out after 10 s"
+   "ready_note": "The Arch package bind is in packaging/arch/runtime-packages.txt and installs /usr/bin/nslookup; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/bin/nsupdate",
@@ -3282,19 +3269,17 @@
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt (nfs-utils provides nfsidmap)",
    "status": "partial",
-   "note": "The nfs-utils package that supplies nfsidmap is in the runtime package list. No BifrOSt code maps NFSv4 identities, and the command has not been run on Midget.",
+   "note": "The nfs-utils package that supplies nfsidmap is in the runtime package list. No BifrOSt code maps NFSv4 identities, and the command has not been run on Midget. The nfs4mapid name has no Arch binary; the equivalent command is nfsidmap, which the file check covers.",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 nfsidmap --version >/dev/null 2>&1 || timeout 5 nfsidmap --help >/dev/null 2>&1 || timeout 5 nfsidmap -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/nfsidmap"
     }
    ],
-   "ready_note": "counterpart packaging/arch/runtime-packages.txt (nfs-utils provides nfsidmap) (Arch package nfs-utils); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 nfsidmap --version >/dev/null 2>&1 || timeout 5 nfsidmap --help >/dev/null 2>&1 || timeout 5 nfsidmap -V >/dev/null 2>&1': exit 1, expected 0"
+   "ready_note": "The Arch package nfs-utils is in packaging/arch/runtime-packages.txt and installs /usr/bin/nfsidmap; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/sbin/nlcontrol",

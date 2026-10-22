@@ -1821,9 +1821,9 @@
    "description": "",
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
+   "bifrost": "springboard/render/src/kernel_vision.rs; springboard/render/src/kernel_vision_print.rs; springboard/render/src/kernel_feature_match.rs; springboard/render/src/feature_detect.rs; springboard/render/src/hdr_frame.rs",
+   "status": "partial",
+   "note": "BifrOSt has CPU classical-vision kernels: Sobel, Canny, Harris, Otsu and Sauvola thresholds, template matching, text-line bands and saliency (kernel_vision.rs), FAST corners with binary descriptors and matching (kernel_feature_match.rs), region and rectangle detection (feature_detect.rs), exposure fusion (hdr_frame.rs). Built in this round: kernel_vision_print.rs gives an image feature print (tone layout, edge directions, tone spread) with its distance and nearest-candidate search, and a 64-bit difference hash with near-duplicate test, for duplicate detection and more-like-this (tests kernel_vision_print::tests). Not built: trained models (classification, face and body detection, text recognition by network), depth and portrait effects, GPU versions; the metallib was not disassembled, its role is inferred from the owning framework path.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -1832,9 +1832,14 @@
      "kind": "test",
      "crate": "bifrost-render",
      "filter": "hdr_frame::fusion_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_vision_print::tests"
     }
    ],
-   "ready_note": "render::hdr_frame::merge_exposures exposure fusion (tests hdr_frame::fusion_tests); no trained or vision models"
+   "ready_note": "Host tests of the classical vision kernels, the feature print and difference hash, and exposure fusion; no trained or vision models, GPU path not built."
   },
   {
    "id": "path:/System/Library/Frameworks/_CompositorServices_SwiftUI.framework/Versions/A/Resources/default.metallib",
@@ -2145,9 +2150,9 @@
    "description": "",
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
+   "bifrost": "springboard/render/src/kernel_vision.rs; springboard/render/src/kernel_vision_print.rs; springboard/render/src/kernel_feature_match.rs; springboard/render/src/camera_isp.rs; springboard/render/src/hdr_frame.rs",
+   "status": "partial",
+   "note": "Capture pipeline shaders: BifrOSt has the camera image-signal steps (camera_isp.rs), exposure fusion (hdr_frame.rs) and CPU classical-vision kernels (kernel_vision.rs, kernel_feature_match.rs). Built in this round: kernel_vision_print.rs, an image feature print and difference hash for comparing pictures (tests kernel_vision_print::tests). Not built: trained models, depth and portrait effects, GPU versions; the metallib was not disassembled, its role is inferred from the owning framework path.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -2156,9 +2161,14 @@
      "kind": "test",
      "crate": "bifrost-render",
      "filter": "hdr_frame::fusion_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "kernel_vision_print::tests"
     }
    ],
-   "ready_note": "render::hdr_frame::merge_exposures exposure fusion (tests hdr_frame::fusion_tests); no trained or vision models"
+   "ready_note": "Host tests of exposure fusion and the picture-similarity kernels; no trained or vision models, GPU path not built."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CMImaging.framework/Versions/A/Resources/default.metallib",
@@ -2520,9 +2530,9 @@
    "description": "",
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
-   "bifrost": "springboard/ui/src/raster3d.rs",
-   "status": "gap",
-   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading.",
+   "bifrost": "springboard/ui/src/raster3d.rs; springboard/ui/src/shading.rs",
+   "status": "partial",
+   "note": "CPU 3D rasteriser (bifrost_ui::raster3d) with depth buffer, near-plane and eye-plane clipping, per-vertex normals and texture coordinates interpolated perspective-correctly, bilinear textures (repeat/clamp) and per-pixel Blinn-Phong or metallic-roughness GGX shading (shading::shade_pbr), two-sided. Still missing: GPU rasterisation, mip-maps, shadows, image-based lighting; the scene widget still uses the flat per-triangle path. The metallib was not disassembled.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -2530,15 +2540,15 @@
     {
      "kind": "test",
      "crate": "bifrost-ui",
-     "filter": "shading::pbr_tests"
+     "filter": "raster3d::tests"
     },
     {
      "kind": "test",
      "crate": "bifrost-ui",
-     "filter": "displacement::tests"
+     "filter": "shading::pbr_tests"
     }
    ],
-   "ready_note": "ui::shading::shade_pbr Cook-Torrance GGX PBR and ui::displacement vertex displacement (tests shading::pbr_tests, displacement::tests); GPU rasterisation and textures still missing"
+   "ready_note": "Covered by raster3d unit tests (clipping, texturing, per-pixel PBR/Phong, back-face normal flip) and the shading PBR tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreRE.framework/Versions/A/Resources/default.metallib",
@@ -2665,9 +2675,9 @@
    "description": "",
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
-   "bifrost": "springboard/ui/src/raster3d.rs",
-   "status": "gap",
-   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading.",
+   "bifrost": "springboard/ui/src/raster3d.rs; springboard/ui/src/displacement.rs; springboard/ui/src/shading.rs",
+   "status": "partial",
+   "note": "Displacement of vertices along normals (displacement.rs) feeds the CPU 3D rasteriser (raster3d), which now clips at the near plane, interpolates normals and texture coordinates perspective-correctly and shades per pixel (Phong or GGX PBR) with bilinear textures. Still missing: GPU displacement evaluation and tessellation, GPU rasterisation, shadows. The metallib was not disassembled.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -2675,7 +2685,7 @@
     {
      "kind": "test",
      "crate": "bifrost-ui",
-     "filter": "shading::pbr_tests"
+     "filter": "raster3d::tests"
     },
     {
      "kind": "test",
@@ -2683,7 +2693,7 @@
      "filter": "displacement::tests"
     }
    ],
-   "ready_note": "ui::shading::shade_pbr Cook-Torrance GGX PBR and ui::displacement vertex displacement (tests shading::pbr_tests, displacement::tests); GPU rasterisation and textures still missing"
+   "ready_note": "Covered by raster3d unit tests (clipping, texturing, per-pixel shading) and the displacement tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/DeepVideoProcessingCore.framework/frameRateConversionMetalLib.metallib",
@@ -2951,9 +2961,9 @@
    "description": "",
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
-   "bifrost": "springboard/ui/src/raster3d.rs",
-   "status": "gap",
-   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading.",
+   "bifrost": "springboard/ui/src/raster3d.rs; springboard/ui/src/shading.rs",
+   "status": "partial",
+   "note": "A 3D preview can now be drawn on the CPU: raster3d clips triangles at the near plane, interpolates normals and uvs perspective-correctly, shades per pixel (Phong or GGX PBR) and samples bilinear textures. Still missing: a USD scene reader wired to it for previews, GPU rasterisation, shadows, image-based lighting. The metallib was not disassembled.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -2961,15 +2971,15 @@
     {
      "kind": "test",
      "crate": "bifrost-ui",
-     "filter": "shading::pbr_tests"
+     "filter": "raster3d::tests"
     },
     {
      "kind": "test",
      "crate": "bifrost-ui",
-     "filter": "displacement::tests"
+     "filter": "shading::pbr_tests"
     }
    ],
-   "ready_note": "ui::shading::shade_pbr Cook-Torrance GGX PBR and ui::displacement vertex displacement (tests shading::pbr_tests, displacement::tests); GPU rasterisation and textures still missing"
+   "ready_note": "Covered by raster3d unit tests (clipping, texturing, per-pixel PBR/Phong) and the shading PBR tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IconRendering.framework/Versions/A/Resources/default.metallib",
@@ -3082,9 +3092,9 @@
    "description": "",
    "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
-   "bifrost": "springboard/ui/src/raster3d.rs",
-   "status": "gap",
-   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled Built 2026-10-17: a CPU flat-shaded triangle rasteriser with a depth buffer (springboard/ui/src/raster3d.rs, lit by shading::shade); still missing: near-plane clipping, textures, GPU rasterisation and PBR shading.",
+   "bifrost": "springboard/ui/src/raster3d.rs; springboard/ui/src/shading.rs",
+   "status": "partial",
+   "note": "CPU 3D rasteriser with near-plane clipping, perspective-correct normal and uv interpolation, bilinear textures and per-pixel Phong or GGX PBR shading (bifrost_ui::raster3d, shading::shade_pbr). Still missing: GPU rasterisation, mip-maps, shadows, image-based lighting, and any app-specific geometry processing this library does. The metallib was not disassembled.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -3092,15 +3102,15 @@
     {
      "kind": "test",
      "crate": "bifrost-ui",
-     "filter": "shading::pbr_tests"
+     "filter": "raster3d::tests"
     },
     {
      "kind": "test",
      "crate": "bifrost-ui",
-     "filter": "displacement::tests"
+     "filter": "shading::pbr_tests"
     }
    ],
-   "ready_note": "ui::shading::shade_pbr Cook-Torrance GGX PBR and ui::displacement vertex displacement (tests shading::pbr_tests, displacement::tests); GPU rasterisation and textures still missing"
+   "ready_note": "Covered by raster3d unit tests (clipping, texturing, per-pixel PBR/Phong) and the shading PBR tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MXI.framework/Versions/A/Resources/default.metallib",
@@ -3173,9 +3183,9 @@
    "description": "",
    "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
+   "bifrost": "springboard/render/src/photo_analysis.rs; springboard/render/src/kernel_vision.rs",
+   "status": "partial",
+   "note": "On-device photo analysis (bifrost_render::photo_analysis): mean brightness, contrast, shadow and highlight clipping, Laplacian-variance focus, colourfulness, exposure and focus verdicts, and a 64-bit perceptual difference hash for near-duplicate detection, on top of the classical vision kernels in kernel_vision (Sobel, Canny, Harris, saliency, template match). Classical measures with fixed thresholds, no trained model. Still missing: learned aesthetics and subject recognition, portrait/depth effects, an ML inference runtime for image analysis, and a Photos caller. The metallib was not disassembled.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -3183,10 +3193,10 @@
     {
      "kind": "test",
      "crate": "bifrost-render",
-     "filter": "hdr_frame::fusion_tests"
+     "filter": "photo_analysis::tests"
     }
    ],
-   "ready_note": "render::hdr_frame::merge_exposures exposure fusion (tests hdr_frame::fusion_tests); no trained or vision models"
+   "ready_note": "Covered by photo_analysis unit tests (focus, exposure, colourfulness, hash stability and distance)."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaCoreUI.framework/Versions/A/Resources/default.metallib",

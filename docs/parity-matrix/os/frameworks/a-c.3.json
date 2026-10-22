@@ -1487,9 +1487,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/store/install.rs (install_package_signed, check_package_policy, sign_package, write_publisher_key, pinned_publisher_keys), springboard/src/bin/shell.rs (--sign-package, --publisher-keygen), tools/pc-app.py (BIFROST_PUBLISHER_KEY), springboard/core/src/code_seal.rs, springboard/core/src/codereq.rs",
-   "status": "gap",
-   "note": "Verifying the signature of an app package before it is unpacked. install_download_local fetches <package>.sig and refuses an unsigned or wrongly signed package once a publisher key is pinned under /etc/bifrost/publisher-keys; with no key pinned the checksum alone decides. springboard --publisher-keygen DIR NAME writes the key pair and --sign-package KEY PKG writes PKG.sig; tools/pc-app.py signs a built package when BIFROST_PUBLISHER_KEY is set. Tests: shell::store::install::tests. Not yet done: the site publish script must upload the .sig, and a key must be pinned on the device image.",
+   "bifrost": "springboard/src/shell/store/install.rs (install_package_signed, check_package_policy, sign_package, write_publisher_key, pinned_publisher_keys, publisher_keys_in, PACKAGED_PUBLISHER_KEYS), springboard/src/bin/shell.rs (--sign-package, --publisher-keygen), tools/pc-app.py (BIFROST_PUBLISHER_KEY), packaging/arch/package-files.sh, packaging/arch/publisher-keys/README.md, springboard/core/src/code_seal.rs, springboard/core/src/codereq.rs",
+   "status": "partial",
+   "note": "Package signatures are verified before unpack: install_download_local fetches <package>.sig and refuses an unsigned or wrongly signed package once any publisher key is in effect; with no key the checksum alone decides. Keys now come from two places merged and de-duplicated: /usr/share/bifrost/publisher-keys (package-owned, installed by package-files.sh from packaging/arch/publisher-keys/*.pub, rotates with OS updates) and /etc/bifrost/publisher-keys (administrator). springboard --publisher-keygen and --sign-package make keys and signatures; tools/pc-app.py signs when BIFROST_PUBLISHER_KEY is set. Still open: no real release key is committed (and none should be until the site publish script, outside this repo, uploads the .sig next to every package, or store installs start failing as unsigned).",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -1498,6 +1498,11 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::store::install::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::store::install::tests::packaged_and_administrator_keys_are_merged_without_duplicates"
     },
     {
      "kind": "test",
@@ -1515,7 +1520,7 @@
      "filter": "mldsa::tests"
     }
    ],
-   "ready_note": "Package signatures are verified on every store download: install_download_local calls enforce_signature_policy, which requires a detached ML-DSA-65 signature from a pinned publisher key once any key is in /etc/bifrost/publisher-keys. springboard --publisher-keygen and --sign-package produce the keys and signatures, and tools/pc-app.py signs when BIFROST_PUBLISHER_KEY is set. Resource seals (code_seal) and code requirements (codereq) cover bundle integrity and identity."
+   "ready_note": "install::tests covers sign, verify and the strict-once-pinned policy, and the new merge of packaged and administrator keys; code_seal, codereq and mldsa tests cover seals, requirements and the signature primitive."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Coherence.framework",
@@ -2620,7 +2625,7 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/container_layout.rs",
+   "bifrost": "springboard/core/src/container_layout.rs",
    "status": "partial",
    "note": "Per-app container folders (Documents, Library, Library/Caches, tmp) with backup and purge classes and refusal of symbolic links exist. The reference container class database (the Container.Class and Containers property lists and the daemon and system policies) is not modelled.",
    "rea": [],
@@ -2629,8 +2634,8 @@
    "checks": [
     {
      "kind": "test",
-     "crate": "bifrost-app",
-     "filter": "container_layout"
+     "crate": "bifrost-core",
+     "filter": "container_layout::tests"
     }
    ],
    "ready_note": "Per-app container folders with backup and purge classes and symlink refusal (sdk/src/container_layout.rs) are tested."
@@ -2693,7 +2698,7 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/container_layout.rs",
+   "bifrost": "springboard/core/src/container_layout.rs",
    "status": "partial",
    "note": "The per-user app container folders are laid out, backed up and purged by class. The reference per-user container classes (perUserApp, pluginData) and the container property list database are not modelled.",
    "rea": [],
@@ -2702,8 +2707,8 @@
    "checks": [
     {
      "kind": "test",
-     "crate": "bifrost-app",
-     "filter": "container_layout"
+     "crate": "bifrost-core",
+     "filter": "container_layout::tests"
     }
    ],
    "ready_note": "Per-user app container folders are laid out, backed up and purged by class (sdk/src/container_layout.rs), tested."
@@ -3831,8 +3836,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/services/recognizer.rs, springboard/ui/src/whisper.rs, springboard/sdk/src/speech_whisper.rs, packaging/arch/runtime-packages.txt (gst-plugin-whisper)",
-   "status": "gap",
-   "note": "On-device recognition: the speech_recognizer shell service (recognizer.rs) captures the microphone with GStreamer into a local whisper model (ui whisper.rs), with consent and model download in Settings > Keyboard > Dictation; apps call it through sdk speech_whisper. English only for now.",
+   "status": "partial",
+   "note": "On-device recognition: the speech_recognizer shell service captures the microphone with GStreamer into a local whisper model with consent and model download in Settings > Keyboard > Dictation. Now multilingual: whisper::model_for_locale picks the English model for English and the multilingual ggml-base.bin for the 99 whisper languages (whisper_language, WHISPER_LANGUAGES); the service refuses a start until that locale's model is installed, passes language=<code> to the whisper element, and its model and download calls take a locale. Still open: the Settings page only downloads the English model (no language picker), the shell's own voice control and captions still use English, and the language property name on gst-plugin-whisper is unverified on the lab machine.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -3853,7 +3858,7 @@
      "filter": "speech_whisper::tests"
     }
    ],
-   "ready_note": "On-device speech to text: the speech_recognizer service runs a local whisper pipeline on microphone audio after the person grants consent and installs the model; Settings > Keyboard > Dictation drives it, and apps use sdk speech_whisper. No audio leaves the machine."
+   "ready_note": "whisper::tests (locales, per-locale model choice, language codes, pipeline language argument), recognizer tests (a non-English start waits for the multilingual model then names its language; model and download follow the locale; removal clears both models) and the SDK backend tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreEmoji.framework",
@@ -5367,9 +5372,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/render/src/svg.rs",
-   "status": "gap",
-   "note": "SVG parsing and rasterizing for images and icons. Build an SVG reader in the render crate; BifrOSt reads only the SVG size (svg_size in springboard/src/shell/browser/resources.rs) and drops SVG from mail HTML. Built 2026-10-17: SVG reader for the static icon subset (root size and viewBox; rect, circle, ellipse, polygon, polyline and path with M, L, H, V, C, Q, Z; fills and fill-opacity); tests svg::tests. Still open: image drawing and mail HTML do not call it yet, and arcs, smooth curves, strokes, gradients and transforms are not drawn.",
+   "bifrost": "springboard/render/src/svg.rs; springboard/render/src/bezier.rs; springboard/render/src/cg/imageio/mod.rs; springboard/render/src/svg_table.rs",
+   "status": "partial",
+   "note": "SVG reader in the render crate. Draws rect (with rx and ry), circle, ellipse, line, polygon, polyline and path with M L H V C S Q T A Z (absolute and relative, compact arc flags), transform lists (translate, scale, rotate, skewX, skewY, matrix) on elements and g groups, group-inherited fill, stroke, opacity, width, linecap, linejoin and miterlimit, fill-rule evenodd, and strokes with butt/round/square caps and miter/round/bevel joins. cg::imageio::decode falls back to it, so browser pages and files that hold an SVG show as pictures (svg::decode_image). Still open: gradients, use, clipPath, masks, dashes, text, CSS style attributes, preserveAspectRatio, named colours beyond a basic few, and mail HTML still drops inline SVG.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -5378,9 +5383,19 @@
      "kind": "test",
      "crate": "bifrost-render",
      "filter": "svg::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "cg::imageio::tests::decode_falls_back_to_the_svg_reader_for_a_vector_picture"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-render",
+     "filter": "bezier::tests::flatten_with_close_reports_which_subpaths_were_closed"
     }
    ],
-   "ready_note": "The SVG reader (parse and rasterise the static subset) is covered by svg::tests; the image pipeline does not use it yet."
+   "ready_note": "svg::tests covers arcs, smooth curves, transforms, group paint, strokes, caps, joins, fill rules and decode_image; the imageio test covers the decode fallback; the bezier test covers flatten_with_close."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreSceneUnderstanding.framework",
@@ -5599,8 +5614,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/whisper.rs; springboard/ui/src/recognition_task.rs; springboard/ui/src/voice_activity.rs; springboard/ui/src/speech_assets.rs; springboard/ui/src/dictation_insert.rs; springboard/sdk/src/speech_whisper.rs; springboard/src/shell/services/recognizer.rs; springboard/src/media/capture.rs; springboard/apps/keyboard/src/main.rs",
-   "status": "gap",
-   "note": "Speech recognition for dictation. BifrOSt recognises speech on the device with a local whisper model through GStreamer (ui whisper: pipeline, transcript parsing, consent gate; sdk speech_whisper and the shell recognizer service), reports it as recognition tasks, and the keyboard's dictation key inserts the text. Models download only after the person grants consent. The signed Apple model blobs, Trial delivery and the assistant wake-word and activation files (siri_activation.plist, endpointer nets) in the bundle are Apple ML model packs and assistant plumbing and are not mirrored.",
+   "status": "partial",
+   "note": "Speech recognition for dictation: local whisper through GStreamer (pipeline, transcript parsing, consent gate), recognition tasks, voice activity, model lifecycle, and the keyboard dictation key. Recognition is now multilingual through a second model (see CoreEmbeddedSpeechRecognition); models download only after consent. The signed Apple model blobs, Trial delivery and the assistant wake-word and activation files are Apple ML model packs and assistant plumbing and are not mirrored. Still open: the keyboard dictation key is fixed to English (DICTATION_LOCALE).",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -5636,7 +5651,7 @@
      "filter": "media::capture::tests"
     }
    ],
-   "ready_note": "whisper::tests (pipeline, transcripts, consent), recognition_task::tests (requests and results), voice_activity::tests (speech start and end), speech_assets::tests (model lifecycle), the shell recognizer service tests and microphone capture tests."
+   "ready_note": "whisper::tests, recognition_task::tests, voice_activity::tests, speech_assets::tests, the recognizer service tests and microphone capture tests."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreSpeechExclave.framework",
@@ -5945,12 +5960,17 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/found_in.rs; springboard/ui/src/proposed_event.rs; springboard/ui/src/detect.rs; springboard/ui/src/suggested_actions.rs; springboard/apps/mail-desktop/src/found.rs; springboard/apps/mail-desktop/src/state.rs (Mail::refresh_found_in, found_accept); springboard/apps/mail-desktop/src/draw.rs (draw_found_banner); springboard/apps/mail-desktop/src/window.rs (found_link)",
-   "status": "gap",
-   "note": "The suggestion engine and its data tables (airport and time zone tables, attribute names, reverse-template scripts and classifier calibration for finding events, flights and contacts in mail). Built 2026-10-17 (wave 12): springboard/ui/src/found_in.rs reads a message for meeting times (proposed_event), flights with the airports named beside them (a table of 49 airports with city and time zone), emails, phone numbers and street addresses (detect), and remembers the suggestions turned down. The reference's classifier calibrations are ML model data and are not mirrored; everything runs on the device.",
+   "status": "partial",
+   "note": "The suggestion engine and its data tables. found_in::extract reads a message for meeting times (proposed_event), flights, emails, phone numbers and street addresses (detect), and remembers the suggestions turned down. Data tables now: 136 airports with city and tz database zone (was 49) and a 45-entry airline table (IATA designator to name), so a flight suggestion reads like 'Icelandair · Reykjavik to New York'. The reference's classifier calibrations are ML model data and are not mirrored; everything runs on the device. Still open: city names in text are not matched to airports (codes only), no flight times or zone arithmetic, no contact-name extraction.",
    "rea": [],
    "method": "assessed",
    "ready": true,
    "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "found_in::tests"
+    },
     {
      "kind": "test",
      "crate": "bifrost-mail",
@@ -5960,14 +5980,9 @@
      "kind": "test",
      "crate": "bifrost-mail",
      "filter": "state::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "bifrost-ui",
-     "filter": "found_in::tests"
     }
    ],
-   "ready_note": "Mail reads the open message with found_in::extract once its text is here and keeps the suggestions in a Pager; turned-down and taken ones are not offered again from the same message in this run. The reference classifier calibrations are ML model data and are not mirrored; everything runs on the device."
+   "ready_note": "found_in::tests covers the airport and airline tables (unique codes, zones), flight subtitles with and without a known airline or route, and the wider airport set; mail found and state tests cover the app side."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreSuggestionsML.framework",
@@ -6006,8 +6021,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/ui/src/found_in.rs; springboard/ui/src/proposed_event.rs; springboard/ui/src/detect.rs; springboard/ui/src/suggested_actions.rs; springboard/apps/mail-desktop/src/found.rs; springboard/apps/mail-desktop/src/state.rs (Mail::refresh_found_in, found_accept); springboard/apps/mail-desktop/src/draw.rs (draw_found_banner); springboard/apps/mail-desktop/src/window.rs (found_link)",
-   "status": "gap",
-   "note": "Suggestion views for Mail, Messages and Search: a suggested-event popover, a paging popover and a found-in suggestion view. Built 2026-10-17 (wave 12): found_in::Pager is the model of the paging popover (page label, next, previous, dismiss, accept returning an Action) and Found carries the row text and the 'Found in <app>' line; the view draws it with the SDK popover and list kits. Wiring into Mail's reading pane is the app's step.",
+   "status": "partial",
+   "note": "Built: found_in::Pager (paging popover model: label, next, previous, dismiss, accept returning an Action), Found ('Found in <app>' row), extract over events, flights, emails, phones and addresses, wired into Mail's reading pane. Added in slice g4: Dismissed persists (to_text/from_text, escaped, bounded to 500 oldest-first, forget_app) and Pager::for_message does extract + drop dismissed + page in one call so any message view (Messages, Notes) can offer suggestions. Remaining: the Messages app does not call Pager::for_message yet, Mail does not yet store Dismissed between launches, and Search has no suggestion section.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -6026,9 +6041,19 @@
      "kind": "test",
      "crate": "bifrost-ui",
      "filter": "found_in::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "found_in::tests::dismissed_keys_survive_a_round_trip_through_text"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "found_in::tests::a_message_pager_skips_what_was_turned_down_and_remembers_new_dismissals"
     }
    ],
-   "ready_note": "Mail's reading pane shows the Found in Mail banner above the text: the suggestion, its detail, a page label (1 of 3) with Previous and Next, and Add and Dismiss. Add sends an event to Calendar, an email address or phone number to Contacts, and an address to Maps; a flight is shown and can be dismissed (nothing in BifrOSt tracks flights)."
+   "ready_note": "Mail shows the Found in banner with paging, Add and Dismiss. The shared model now keeps dismissals as text with a size bound and builds the pager for a whole message in one call (unit tests in found_in::tests). Messages and Search surfaces are not wired."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreSuggestionsUIMacHelper.framework",

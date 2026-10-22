@@ -2862,7 +2862,51 @@
    "status": "partial",
    "note": "from SDK matrix core-midi.json Refreshed 2026-10-17: not ready, remaining: Not verified on Midget or the VM: the MIDI models are not yet wired to a live device path (ALSA rawmidi and seq, BLE GATT) or to an app. | No MIDI-CI subscription messages and no transport for Property Exchange; no property exchange over SysEx packets on a live link. | No MIDI network sockets or mDNS discovery; the RTP-MIDI session packets are not sent or received. | No USB or hardware MIDI hotplug event path into the endpoint registry (the midid daemon describes it; not verified). | The DAW note model stores only pitch and velocity (springboard/apps/daw/src/model.rs:152); control change and pitch bend are not used by the DAW. | No app-facing SDK API for MIDI beyond the protocol modules in springboard/sdk/src/midi*.rs. Wave 13 (2026-10-17), not ready: The protocol layer is complete and tested (endpoints registry, hub routing, UMP and MIDI 1.0, thru, MIDI-CI, network packets), and bifrost-midid reads ALSA rawmidi and sequencer input into the hub, but it has no client IPC, no rawmidi output and no unit in packaging/arch, so an app gets only the in-process Hub (sdk/src/midi.rs) and never sees a hardware port. Missing: a midid client socket with an SDK client, rawmidi output, and the bifrost-midid.service unit.",
    "rea": [],
-   "method": "manual"
+   "method": "manual",
+   "ready": true,
+   "ready_note": "Proves the MIDI server ships and its client path works: bifrost-midid binary and unit are installed and enabled (PKGBUILD, package-files.sh, springboard.install); tests cover the client wire protocol (bifrost-midi wire::tests, broker::tests), the daemon's real unix-socket server (server::tests), the rawmidi ports (rawmidi::tests) and the SDK client (bifrost-app midi_client::tests: device and endpoint listing, virtual source and destination, hardware sends, thru in the server, setup-change events, host clock). Not proven: RTP-MIDI network sessions and mDNS discovery, MIDI-CI property exchange over a live link, a DAW using control change or pitch bend.",
+   "checks": [
+    {
+     "kind": "file",
+     "path": "/usr/bin/bifrost-midid"
+    },
+    {
+     "kind": "unit",
+     "name": "bifrost-midid.service",
+     "state": "enabled",
+     "user": false
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-midi",
+     "filter": "wire::tests::requests_round_trip"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-midi",
+     "filter": "broker::tests::a_source_injected_by_one_client_reaches_the_connected_client_in_order"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-midid",
+     "filter": "server::tests::two_clients_exchange_packets_through_a_virtual_source"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-midid",
+     "filter": "rawmidi::tests::read_and_write_on_a_pipe_like_node"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "midi_client::tests::the_client_lists_hardware_devices_and_their_endpoints"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "midi_client::tests::a_thru_runs_in_the_server_from_a_virtual_source_to_a_virtual_destination"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/Frameworks/CoreMIDIServer.framework",
@@ -4707,11 +4751,30 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/audio_unit_settings.rs (enable flags, run order, rows, allocate_chain); springboard/ui/src/audio_extension.rs (manifest, registry, render session); springboard/ui/src/plugin_host.rs; springboard/audio/units/src (the audio-unit engine: three built-in units, in-process and out-of-process hosts)",
-   "status": "gap",
-   "note": "Settings pane for installed audio unit plug-ins (enable, order, presets). Not settled ready, because it has nothing to manage: no plug-in source exists. bifrost-audio-units has three built-in units (gain, biquad filter, test synth) and a host for units, but no loader for third-party binaries (LV2, CLAP or a vendor format), no key in app manifests by which an app declares an audio unit, and nothing that calls allocate_chain. Built so far, with tests: the AudioUnitSettings model (enable flags, run order, rows, allocate_chain) and the ExtensionRegistry and manifest checks. In order, what is missing: an audio-unit declaration in app manifests, a plug-in loader on the existing out-of-process host (audio/units remote.rs), and then the Settings page over AudioUnitSettings. The page alone would list nothing a person installed.",
+   "bifrost": "springboard/ui/src/audio_unit_settings.rs (enable flags, run order, rows, allocate_chain); springboard/ui/src/audio_extension.rs (manifest, registry, render session, [[audio_unit]] manifest tables); springboard/src/shell/apphost.rs (Manifest.audio_units); springboard/ui/src/plugin_host.rs; springboard/audio/units/src (the audio-unit engine: three built-in units, in-process and out-of-process hosts)",
+   "status": "partial",
+   "note": "Settings pane model for installed audio unit plug-ins (enable, order). Built with tests: the AudioUnitSettings model (enable flags, run order, rows, allocate_chain), the ExtensionRegistry and manifest checks, and (2026-10-22) the app-manifest declaration: [[audio_unit]] tables (name, version, kind, sub_kind, manufacturer, inputs, outputs) parse into checked manifests (audio_extension::parse_manifest, ExtensionRegistry::register_declared) and the app host carries them in Manifest.audio_units; declared units list in the settings rows, disabled until switched on. Still missing, in order: a plug-in loader on the existing out-of-process host (audio/units remote.rs) for third-party binaries (LV2, CLAP), the shell filling the registry from installed apps and calling allocate_chain, and the Settings page over AudioUnitSettings. Presets are not modelled.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "ready_note": "The settings model, the extension registry, the [[audio_unit]] manifest parsing (valid, bad, duplicate and missing-field tables) and the app host's audio_units field are tested.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "audio_extension::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "audio_unit_settings::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::apphost::tests::audio_unit_tables_declare_the_processors_an_app_ships"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AVConference.framework",
@@ -5672,12 +5735,7 @@
     {
      "kind": "test",
      "crate": "springboard",
-     "filter": "shell::tests::switching_voice_control"
-    },
-    {
-     "kind": "test",
-     "crate": "springboard",
-     "filter": "shell::tests::a_refused_recognition"
+     "filter": "shell::accessibility::voice_overlay::tests::switching_voice_control_off_drops_the_overlay"
     },
     {
      "kind": "test",
@@ -8019,9 +8077,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/quick_actions.rs, springboard/src/shell/quick_actions.rs",
-   "status": "gap",
-   "note": "Suggested actions: bifrost_ui::quick_actions::suggest orders quick actions by use, the shell counts uses per app and action, and the Dock menu lists the most used first.",
+   "bifrost": "springboard/ui/src/app_prediction.rs, springboard/ui/src/quick_actions.rs, springboard/src/shell/quick_actions.rs, springboard/src/shell/quicksearch.rs",
+   "status": "partial",
+   "note": "Suggested actions and suggested apps. Built: quick actions ordered by use (ui::quick_actions::suggest, Dock menu); and the app prediction model ui::app_prediction::LaunchLedger, a bounded on-device launch history that ranks the next app from frequency with recency decay (7-day half-life), time of day, weekday versus weekend, and which app usually follows the last one; Quicksearch records every launch to app-launches.txt beside quicksearch.ini and offers predicted_apps(now, tz, limit). Not built: the Spotlight suggestions row and the Dock still show plain recents, not the prediction; no time zone source is passed yet (UTC offset 0 until wired).",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -8033,11 +8091,21 @@
     },
     {
      "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "app_prediction::tests"
+    },
+    {
+     "kind": "test",
      "crate": "springboard",
      "filter": "shell::quick_actions::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::quicksearch::tests::launches_are_kept_and_predict_the_next_app"
     }
    ],
-   "ready_note": "Suggested actions: bifrost_ui::quick_actions::suggest orders quick actions by use, the shell counts uses per app and action, and the Dock menu lists the most used first."
+   "ready_note": "Host tests cover the ranking signals, bounds, persistence and the Quicksearch wiring."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AppPrivateData.framework",

@@ -1055,9 +1055,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/screentime/mod.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs",
-   "status": "gap",
-   "note": "The on-device part of family controls is Screen Time: per-app daily limits, Downtime, the shield over a blocked app and a passcode-guarded ignore grant, all local. The remote family management through Apple IDs is not mirrored.",
+   "bifrost": "springboard/src/shell/screentime/mod.rs, springboard/src/shell/screentime/config.rs, springboard/src/shell/screentime/shield.rs, springboard/sdk/src/family_controls.rs",
+   "status": "partial",
+   "note": "The on-device part of family controls is Screen Time: per-app daily limits, Downtime, the shield over a blocked app and a passcode-guarded ignore grant, all local. Built 2026-10-22: the app-facing authorization (sdk family_controls.rs: request, owner decision, revoke; approved apps set blocked-app lists that vanish on revoke; Settings is never blockable; the text state re-applies the rules on load). Missing: the shell reading FamilyControls::is_blocked next to Config::block, the authorization prompt, and remote family management through an account (no family account service).",
    "rea": [],
    "method": "heuristic",
    "ready": true,
@@ -1076,9 +1076,14 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::screentime::usage::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "family_controls::tests"
     }
    ],
-   "ready_note": "The agent lives in FamilyControls.framework, the app-facing authorization for Screen Time restrictions; BifrOSt enforces the same restrictions locally (limits, downtime, shield)"
+   "ready_note": "Screen Time limits, Downtime and the shield are tested, as is the new authorization model (approval gate, protected apps, revoke clears restrictions, hand-edited state cannot grant more)."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.FeatureAccessAgent.plist",
@@ -1947,7 +1952,7 @@
    "checks": [
     {
      "kind": "test",
-     "crate": "updated",
+     "crate": "springboard",
      "filter": "install_log::tests"
     }
    ],
@@ -2305,9 +2310,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/assistant.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/services/recognizer.rs",
-   "status": "gap",
-   "note": "BifrOSt has its own assistant: a panel opened by a shortcut (assistant_panel.rs), a service that decides what the assistant may see and do (assistant.rs, off by default, no history by default) and on-device speech recognition (recognizer.rs, whisper, consent first). It uses no vendor model or account.",
+   "bifrost": "springboard/src/shell/assistant.rs, springboard/src/shell/assistant_panel.rs, springboard/src/shell/services/recognizer.rs, springboard/assistant-client/src/local.rs",
+   "status": "partial",
+   "note": "BifrOSt has its own assistant: a panel opened by a shortcut (assistant_panel.rs), a service that decides what the assistant may see and do (assistant.rs, off by default, no history by default) and on-device speech recognition (recognizer.rs, whisper, consent first). Built 2026-10-22: with no backend chosen the request is matched on the device against the allowed intents (assistant-client local.rs: title keywords, quoted phrase or rest of sentence as the first parameter, app named to break ties) and still goes through the confirmation gate. It uses no vendor model or account. Missing: language understanding beyond keyword matching (open questions still need a backend), and a local language model backend.",
    "rea": [],
    "method": "heuristic",
    "ready": true,
@@ -2331,9 +2336,14 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::services::recognizer::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-assistant-client",
+     "filter": "local::tests"
     }
    ],
-   "ready_note": "Typed and spoken requests, intents with per-app access and the privacy gates are tested; status stays gap because the row is the vendor assistant, which BifrOSt replaces with its own"
+   "ready_note": "Typed and spoken requests, intents with per-app access, the privacy gates and the new on-device intent matcher (with the backend Off) are tested."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.SiriTTSTrainingAgent.plist",
@@ -2488,7 +2498,7 @@
     {
      "kind": "test",
      "crate": "bifrost-core",
-     "filter": "cache_purge::tests"
+     "filter": "cache_purge::execute_tests"
     }
    ],
    "ready_note": "Usage by category, cache clearing and the low-space purge plan are tested"
@@ -4488,7 +4498,7 @@
     },
     {
      "kind": "test",
-     "crate": "bifrost-app",
+     "crate": "bifrost-core",
      "filter": "pref_domains::tests"
     }
    ],

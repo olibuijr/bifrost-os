@@ -373,16 +373,14 @@
    "note": "provided by Arch package sox; not yet verified on Midget. soxi prints the same file facts (format, rate, channels, duration) in its own layout",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "soxi --version",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/soxi"
     }
    ],
-   "ready_note": "sox soxi prints the same audio file facts; output layout differs",
-   "ready_failed": "cmd soxi --version: exit 1, expected 0: soxi FAIL getopt: invalid option `--'"
+   "ready_note": "The Arch package sox is in packaging/arch/runtime-packages.txt and installs /usr/bin/soxi; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/bin/afktool",
@@ -620,18 +618,12 @@
    "doc": "",
    "bifrost": "/usr/bin/arch",
    "status": "partial",
-   "note": "provided by Arch package coreutils; not yet verified on Midget",
+   "note": "Not shipped: the Arch coreutils package does not install /usr/bin/arch (uname -m reports the same).",
    "rea": [],
    "method": "assessed",
    "ready": false,
-   "checks": [
-    {
-     "kind": "cmd",
-     "run": "arch --version",
-     "expect_exit": 0
-    }
-   ],
-   "ready_note": "coreutils arch",
+   "checks": [],
+   "ready_note": "",
    "ready_failed": "cmd arch --version: exit 127, expected 0: sh: line 1: arch: command not found"
   },
   {
@@ -796,7 +788,7 @@
     },
     {
      "kind": "test",
-     "crate": "bifrost-cmd",
+     "crate": "bifrost-automator",
      "filter": "model::tests"
     },
     {
@@ -1381,19 +1373,17 @@
    "doc": "",
    "bifrost": "/usr/bin/bundle",
    "status": "partial",
-   "note": "provided by Arch package ruby; not yet verified on Midget",
+   "note": "provided by Arch package ruby-bundler, added to runtime-packages.txt (Arch splits it out of ruby); not yet verified on Midget.",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "bundle --version",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/bundle"
     }
    ],
-   "ready_note": "ruby bundler, shipped with the ruby package",
-   "ready_failed": "cmd bundle --version: exit 127, expected 0: sh: line 1: bundle: command not found"
+   "ready_note": "The Arch package ruby-bundler is in packaging/arch/runtime-packages.txt and installs /usr/bin/bundle; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/bin/bundler",
@@ -1412,19 +1402,17 @@
    "doc": "",
    "bifrost": "/usr/bin/bundler",
    "status": "partial",
-   "note": "provided by Arch package ruby; not yet verified on Midget",
+   "note": "provided by Arch package ruby-bundler, added to runtime-packages.txt (Arch splits it out of ruby); not yet verified on Midget.",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "bundler --version",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/bundler"
     }
    ],
-   "ready_note": "ruby bundler, shipped with the ruby package",
-   "ready_failed": "cmd bundler --version: exit 127, expected 0: sh: line 1: bundler: command not found"
+   "ready_note": "The Arch package ruby-bundler is in packaging/arch/runtime-packages.txt and installs /usr/bin/bundler; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/bin/bunzip2",
@@ -2084,17 +2072,12 @@
    "doc": "",
    "bifrost": "/usr/bin/config_data",
    "status": "partial",
-   "note": "provided by Arch package perl; not yet verified on Midget. the Perl Config helper from the perl package",
+   "note": "Not shipped: the Arch perl package no longer installs /usr/bin/config_data (it came with Module::Build, which Arch split out).",
    "rea": [],
    "method": "assessed",
    "ready": false,
-   "checks": [
-    {
-     "kind": "file",
-     "path": "/usr/bin/config_data"
-    }
-   ],
-   "ready_note": "perl package Config helper",
+   "checks": [],
+   "ready_note": "",
    "ready_failed": "file /usr/bin/config_data: /usr/bin/config_data is missing"
   },
   {

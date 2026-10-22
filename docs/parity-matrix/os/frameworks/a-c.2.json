@@ -74,9 +74,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/app_review.rs",
-   "status": "gap",
-   "note": "Gap: the rating and review sheet is not drawn or wired into the store, and the catalogue has no review endpoints (a server job outside this repo). Built: the rules (bifrost_core::app_review validate, to_json, summarise, average_label) and, in the 2026-10-17 wave 12 round, ReviewDraft, the sheet's editing state (tap a star, a second tap clears it, nickname and body typing with limits and backspace, can_submit, submit locks the draft and returns the request body; tests app_review::tests). Still open: draw the sheet in store/sheet.rs style and wire Get/Rate in store/mod.rs, plus the catalogue endpoints.",
+   "bifrost": "springboard/core/src/app_review.rs; springboard/src/shell/store/review_sheet.rs; springboard/src/shell/store/mod.rs",
+   "status": "partial",
+   "note": "Ratings and reviews. Built: the rules (bifrost_core::app_review validate, to_json, summarise, average_label, ReviewDraft) and now the sheet in the store: Rate on an installed app's product page opens a card with five numbered rating buttons (tap the chosen one again to clear), nickname and review fields that raise the keyboard, Send and Cancel (store::review_sheet: geometry, touches, typing, drawing). Send keeps the review in ReviewBook (bifrost_core::app_review, saved as store-reviews.json under the store root), and Rate reopens the sheet with it to edit. Not built: the catalogue has no review endpoints (a server job outside this repo), so nothing is sent and no average from other people is shown; star glyphs instead of numbered buttons.",
    "rea": [],
    "method": "assessed",
    "checks": [
@@ -84,8 +84,20 @@
      "kind": "test",
      "crate": "bifrost-core",
      "filter": "app_review::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::store::review_sheet::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::store::tests::rating_an_app_keeps_the_review_and_reopens_it_for_editing"
     }
-   ]
+   ],
+   "ready": true,
+   "ready_note": "Host tests cover the review rules and book, the sheet's geometry, touches and typing, and the store flow from Rate to a saved, reloadable review."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AppStoreUtilities.framework",
@@ -1673,11 +1685,33 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/translation.rs; springboard/ui/src/translation.rs; springboard/sdk/src/translation_popover.rs",
-   "status": "gap",
-   "note": "On-device text translation. The SDK has the session, language availability and language-pack API (sdk::translation), and now GlossaryTranslator: it translates running text from a language pack's phrases by longest-phrase match, keeps punctuation and spacing, carries capitals over, passes unknown words through, and refuses a text where fewer than half the words matched. It is a phrase-pack engine, not a neural model, so quality depends on the pack; no language pack data ships yet, so Icelandic and English need packs (<source>-<target>.tsv) to be installed. Lead 2026-10-17: not ready: no language-pack data ships, so nothing translates out of the box.",
+   "bifrost": "springboard/sdk/src/translation.rs; springboard/ui/src/translation.rs; springboard/sdk/src/translation_popover.rs; packaging/arch/translation/en-is.tsv; packaging/arch/translation/is-en.tsv; packaging/arch/package-files.sh",
+   "status": "partial",
+   "note": "On-device text translation. The SDK has the session, language availability and language-pack API (sdk::translation) and GlossaryTranslator (longest-phrase match over a pack, punctuation and spacing kept, capitals carried over, unknown words passed through, refused when fewer than half the words matched). New: two language packs ship, English to Icelandic and Icelandic to English (131 original phrases each: interface words, days, months, everyday phrases), installed by package-files.sh to /usr/share/bifrost/translation, and LanguagePack::system(), glossary() and session() open them; tests translate with the shipped files. It is a phrase-pack engine, not a neural model, so only the covered vocabulary translates and the Icelandic wording needs a native-speaker review. Not built: a neural engine, other language pairs, and an app or Settings entry that calls the system session.",
    "rea": [],
-   "method": "assessed"
+   "method": "assessed",
+   "ready": true,
+   "ready_note": "Host tests parse the shipped packs and translate both ways; the file check proves the pack is installed.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "translation::system_pack_tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-app",
+     "filter": "translation::glossary_tests"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/share/bifrost/translation/en-is.tsv"
+    },
+    {
+     "kind": "file",
+     "path": "/usr/share/bifrost/translation/is-en.tsv"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ApplicationFirewall.framework",
@@ -1694,9 +1728,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/app_firewall.rs; springboard/cmd/src/firewall.rs; packaging/arch/bifrost-firewall.service",
-   "status": "gap",
-   "note": "Per-app inbound firewall. Policies live in /etc/bifrost/app-firewall.conf; bifrost_core::app_firewall turns them into one nftables table of its own (drop rules for blocked apps' ports, conflict refusal, policy file read and write, set and remove); bifrost-firewall (springboard/cmd) sets, removes, lists and shows policies and loads the ruleset with nft; bifrost-firewall.service applies it at boot before the network comes up (nftables is in runtime-packages.txt). Not built: a Settings page for the policies (the tool writes the same file). nftables cannot match a process, so a policy applies to the ports an app declares.",
+   "bifrost": "springboard/core/src/app_firewall.rs; springboard/cmd/src/firewall.rs; springboard/src/shell/services/app_firewall.rs; springboard/src/shell/firewall_sheet.rs; packaging/arch/bifrost-firewall.service",
+   "status": "partial",
+   "note": "Per-app inbound firewall. Policies live in /etc/bifrost/app-firewall.conf; bifrost_core::app_firewall turns them into one nftables table of its own; bifrost-firewall sets, removes, lists and loads them at boot (bifrost-firewall.service); the shell asks Allow or Deny when an app starts listening and Settings > Network > Firewall lists the choices (firewall_sheet). New: machine-wide modes kept as @mode lines of the policy file: block-all (every new inbound connection dropped whatever an app chose; replies, loopback, IPv6 neighbour discovery and DHCP replies kept) and stealth (ICMP and ICMPv6 echo requests dropped), set with 'bifrost-firewall mode block-all|stealth on|off' and the service methods modes and set_mode. Not built: Settings toggles for the two modes; silence for closed ports under stealth; nftables cannot match a process, so a policy applies to the ports an app declares.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -1712,6 +1746,11 @@
      "filter": "firewall::tests"
     },
     {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::app_firewall::tests"
+    },
+    {
      "kind": "file",
      "path": "/usr/lib/systemd/system/bifrost-firewall.service"
     },
@@ -1724,7 +1763,7 @@
      "path": "/usr/bin/nft"
     }
    ],
-   "ready_note": "The ruleset model, the policy file tool and the boot unit are built and tested; nft and the unit are packaged files. The Settings page is not built."
+   "ready_note": "Host tests cover the ruleset, the policy file with modes, the tool and the shell service; file checks prove the unit, tool and nft on the installed system."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Archetype.framework",
@@ -2541,9 +2580,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/accessibility/switch_control.rs; springboard/src/shell/accessibility/switch_panels.rs; springboard/src/shell/accessibility/switch_scan.rs; springboard/ui/src/switch_scan.rs; springboard/src/bin/shell.rs",
-   "status": "gap",
-   "note": "Switch Control support. BifrOSt has the scanning models (ui::switch_scan with auto and manual steps; shell::accessibility::switch_scan with next and select presses), a panel template text format (shell::accessibility::switch_panels: panels of labelled buttons with actions, built-in System and Media panels, parse with line errors and a round trip), a PanelScanner and the key bindings for the two switches. Settings > Accessibility > Switch Control turns it on; the shell's input loop then offers every key to Shell::switch_control_key, the switch keys (Space and Enter, rebindable) are used up and step a floating panel whose highlight is drawn, and select performs the action of the highlighted button (Home, notifications, Control Centre, volume, lock, media keys, mute). Not built: auto-scanning, scanning the elements of the front app, switches other than keys.",
+   "bifrost": "springboard/src/shell/accessibility/switch_control.rs, springboard/src/shell/accessibility/switch_panels.rs, springboard/src/shell/accessibility/switch_scan.rs, springboard/ui/src/switch_scan.rs, springboard/src/bin/shell.rs",
+   "status": "partial",
+   "note": "Switch Control support. Built: the scanning models, the panel template format with built-in System and Media panels, the PanelScanner, key switches (Space and Enter, rebindable) stepping a floating panel, select performing the button's action, and now auto-scanning: with the a11y_switch_auto_ms pref (500 to 10000 ms, 0 keeps it manual) the highlight steps on by itself, going on into the next panel, any switch press restarts the interval, and after two idle rounds over every panel the panel hides (SwitchControl::auto_tick, called each frame by Shell::switch_control_tick). Not built: a Settings control for the interval (the pref is set by hand), scanning the elements of the front app, switches other than keys.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -2559,7 +2598,7 @@
      "filter": "shell::accessibility::switch_panels"
     }
    ],
-   "ready_note": "bin/shell.rs calls Shell::switch_control_key before any other key handling; switch_control tests turn the setting on, step the panel with the switch keys, perform Control Centre and volume actions in the real shell, mute and restore, hide the panel with Escape, leave the lock screen alone and paint the highlight into a frame."
+   "ready_note": "Host tests drive the panel, the key switches, the auto-scan interval, the panel-to-panel step, the idle give-up and the shell tick."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AsyncAlgorithmsInternal.framework",
@@ -5239,20 +5278,20 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/camera/qr.rs; springboard/sdk/src/data_scanner.rs",
+   "bifrost": "springboard/render/src/qr_decode.rs; springboard/src/shell/camera/qr.rs (re-export); springboard/sdk/src/data_scanner.rs",
    "status": "os",
-   "note": "Verification of a sampled module matrix (the byte matrix of a QR symbol): format-information BCH decode with up to three bit errors, mask removal, and Reed-Solomon error correction that rejects a corrupted block. BifrOSt does this in shell/camera/qr.rs (decode_matrix, read_format, rs_correct), used by the SDK DataScanner. Identification by name: the framework has no resources in the reference index.",
+   "note": "Verification of a sampled module matrix (the byte matrix of a QR symbol): format-information BCH decode with up to three bit errors, mask removal, and Reed-Solomon error correction that rejects a corrupted block. BifrOSt does this in render/src/qr_decode.rs (re-exported by shell/camera/qr.rs) (decode_matrix, read_format, rs_correct), used by the SDK DataScanner. Identification by name: the framework has no resources in the reference index.",
    "rea": [],
    "method": "assessed",
    "ready": true,
    "checks": [
     {
      "kind": "test",
-     "crate": "springboard",
-     "filter": "shell::camera::qr::tests"
+     "crate": "bifrost-render",
+     "filter": "qr_decode::tests"
     }
    ],
-   "ready_note": "qr.rs tests cover format-info recovery with bit errors, Reed-Solomon correction up to half the check bytes, all error-correction levels and masks, and larger versions with alignment and version info."
+   "ready_note": "qr_decode.rs tests cover format-info recovery with bit errors, Reed-Solomon correction up to half the check bytes, all error-correction levels and masks, and larger versions with alignment and version info."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ByteRangeLocking.framework",
@@ -5795,8 +5834,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/spotindex.rs",
-   "status": "gap",
-   "note": "Its service encrypts the search metadata kept in extended attributes; nothing in BifrOSt encrypts the search index, so build that inside the index (springboard/sdk/src/quicksearch.rs) or document that full-disk encryption covers it.",
+   "status": "partial",
+   "note": "Search metadata encryption: BifrOSt keeps no extended-attribute metadata, so the equivalent is encrypting the search index itself, and that is built. Each index file (<app>.json, <app>@<index>.json) is sealed at rest with XChaCha20-Poly1305 under a key held in the keychain (bifrost.quicksearch), with the file stem as associated data so a renamed file does not open; a plain index from an older shell is read once and sealed on its next save; with no key nothing is written. New: sealed files are written owner-only (0600) and a flipped byte makes the file read as empty (tests spotindex::tests). Not built: the thumbnail cache and the in-memory index are not encrypted; full-disk encryption covers those.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -5804,10 +5843,20 @@
     {
      "kind": "test",
      "crate": "springboard",
-     "filter": "shell::spotindex::tests"
+     "filter": "shell::spotindex::tests::index_files_are_sealed_and_bound_to_their_app"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests::a_tampered_sealed_index_reads_nothing_and_the_file_is_owner_only"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::spotindex::tests::a_plain_index_from_an_older_shell_loads_and_is_sealed_on_save"
     }
    ],
-   "ready_note": "The Core Search index is sealed at rest under a keychain key (spotindex.rs: index_files_are_sealed_and_bound_to_their_app, a_plain_index_from_an_older_shell_loads_and_is_sealed_on_save)."
+   "ready_note": "Host tests seal, tamper with, rename and re-key index files and check the 0600 mode."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CTBlastDoorSupport.framework",
@@ -5896,9 +5945,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/word_model.rs; springboard/core/src/spellcheck.rs; springboard/ui/src/script.rs",
-   "status": "gap",
-   "note": "Ships word language models for European languages and segmentation models for Chinese, Japanese and Korean, which predictive text and word splitting need; build predictive text on the text input path, starting from springboard/sdk/src/spellcheck.rs. Built 2026-10-17: prefix completion for predictive text in bifrost_core::spellcheck (SpellChecker::completions, Dictionary::completions; learned words first, then dictionary words, shortest first); tests completion_tests. Still open: the word language models for European languages and the segmentation models for Chinese, Japanese and Korean.",
+   "bifrost": "springboard/ui/src/word_model.rs; springboard/core/src/spellcheck.rs; springboard/ui/src/script.rs; packaging/arch/runtime-packages.txt (cppjieba)",
+   "status": "partial",
+   "note": "Predictive text and word splitting: unigram and bigram WordModel trained on the user's own text, prefix completions in the spell checker, script detection, and a lowest-cost CJK word splitter (Lexicon, segment, split_words). The Chinese word list now ships: the MIT-licensed cppjieba package (runtime-packages.txt) installs /usr/share/cppjieba/dict/jieba.dict.utf8, which Lexicon::load_space_separated, chinese_lexicon_from and system_chinese_lexicon load (size-capped, cached). Still open: no Japanese or Korean word list is packaged (kana and Hangul runs stay whole), word models for European languages are only trained on the user's text, and nothing outside word_model.rs calls the splitter yet (double-click word selection and search still use their own splitting).",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -5919,7 +5968,7 @@
      "filter": "script::tests"
     }
    ],
-   "ready_note": "Built this wave: word_model has a unigram and bigram WordModel (completions and next-word prediction trained only on the user's own text, saved as text) and a Lexicon with a lowest-cost word splitter for Chinese, Japanese and Korean (segment, split_words), next to the spell checker's prefix completions and script detection. The splitter needs a word list loaded with Lexicon::load_text; BifrOSt ships no CJK word list yet, so until one is packaged unknown characters fall back to single characters (kana and Hangul runs stay whole)."
+   "ready_note": "word_model::tests covers the jieba-layout loader, file loading limits, splitting with a loaded list and the always-usable system lexicon; spellcheck::completion_tests and script::tests cover completions and script detection."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CacheDelete.framework",

@@ -49,8 +49,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/input_methods/jyutping.rs",
-   "status": "gap",
-   "note": "Built 2026-10-17: the bundle's resources (cantonesePhonetic.tiff, pinyin.tiff, a Preferences.prefPane) show TYIM is the Traditional Chinese Cantonese input method. jyutping.rs is the Jyutping composer (source bifrost.inputmethod.TYIM.Jyutping, language yue-Hant): letters build syllables checked against the Jyutping initials and finals, a tone digit 1-6 ends a syllable, several syllables make a word, space picks the first candidate and a digit after the tone picks another. Seed dictionary only (about seventy readings); a larger table replaces it without changing the composer. Not built: the Cantonese pinyin layout.",
+   "status": "partial",
+   "note": "The bundle's resources show TYIM is the Traditional Chinese Cantonese input method. jyutping.rs is the Jyutping composer (source bifrost.inputmethod.TYIM.Jyutping, language yue-Hant): letters build syllables checked against the Jyutping initials and finals, a tone digit 1-6 ends a syllable, several syllables make a word, space picks the first candidate and a digit after the tone picks another. Built in this round: the reading table grew from about seventy to a few hundred everyday readings (pronouns, particles, family, school, time, travel, food, greetings and common words), checked for well-formed syllables and no duplicate readings (tests jyutping::tests). Not built: a full dictionary (rarer readings have no candidate) and the Cantonese pinyin layout.",
    "rea": [],
    "method": "heuristic",
    "ready": true,
@@ -61,7 +61,7 @@
      "filter": "shell::input_methods::jyutping::tests"
     }
    ],
-   "ready_note": "the Jyutping composer is a built-in input method source (source list, controller factory and plugin engine name); the checks run its syllable rules, candidates and controller"
+   "ready_note": "The Jyutping composer is a built-in input method source; the checks run its syllable rules, the table's well-formedness and uniqueness, word candidates, toneless candidate order and the controller typing a greeting into a field."
   },
   {
    "id": "path:/System/Library/Input Methods/TamilIM.app",

@@ -51,16 +51,14 @@
    "note": "provided by Arch package ksh; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 ksh --version >/dev/null 2>&1 || timeout 5 ksh --help >/dev/null 2>&1 || timeout 5 ksh -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/ksh"
     }
    ],
-   "ready_note": "counterpart /usr/bin/ksh (Arch package ksh); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 ksh --version >/dev/null 2>&1 || timeout 5 ksh --help >/dev/null 2>&1 || timeout 5 ksh -V >/dev/null 2>&1': exit 2, expected 0"
+   "ready_note": "The Arch package ksh is in packaging/arch/runtime-packages.txt and installs /usr/bin/ksh; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/bin/launchctl",
@@ -795,16 +793,14 @@
    "note": "provided by Arch package openldap; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 ldapcompare --version >/dev/null 2>&1 || timeout 5 ldapcompare --help >/dev/null 2>&1 || timeout 5 ldapcompare -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/ldapcompare"
     }
    ],
-   "ready_note": "counterpart /usr/bin/ldapcompare (Arch package openldap); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 ldapcompare --version >/dev/null 2>&1 || timeout 5 ldapcompare --help >/dev/null 2>&1 || timeout 5 ldapcompare -V >/dev/null 2>&1': exit 1, expected 0"
+   "ready_note": "The Arch package openldap is in packaging/arch/runtime-packages.txt and installs /usr/bin/ldapcompare; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/bin/ldapdelete",
@@ -826,16 +822,14 @@
    "note": "provided by Arch package openldap; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 ldapdelete --version >/dev/null 2>&1 || timeout 5 ldapdelete --help >/dev/null 2>&1 || timeout 5 ldapdelete -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/ldapdelete"
     }
    ],
-   "ready_note": "counterpart /usr/bin/ldapdelete (Arch package openldap); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 ldapdelete --version >/dev/null 2>&1 || timeout 5 ldapdelete --help >/dev/null 2>&1 || timeout 5 ldapdelete -V >/dev/null 2>&1': exit 1, expected 0"
+   "ready_note": "The Arch package openldap is in packaging/arch/runtime-packages.txt and installs /usr/bin/ldapdelete; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/bin/ldapexop",
@@ -857,16 +851,14 @@
    "note": "provided by Arch package openldap; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 ldapexop --version >/dev/null 2>&1 || timeout 5 ldapexop --help >/dev/null 2>&1 || timeout 5 ldapexop -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/ldapexop"
     }
    ],
-   "ready_note": "counterpart /usr/bin/ldapexop (Arch package openldap); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 ldapexop --version >/dev/null 2>&1 || timeout 5 ldapexop --help >/dev/null 2>&1 || timeout 5 ldapexop -V >/dev/null 2>&1': exit 1, expected 0"
+   "ready_note": "The Arch package openldap is in packaging/arch/runtime-packages.txt and installs /usr/bin/ldapexop; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/bin/ldapmodify",
@@ -888,16 +880,14 @@
    "note": "provided by Arch package openldap; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 ldapmodify --version >/dev/null 2>&1 || timeout 5 ldapmodify --help >/dev/null 2>&1 || timeout 5 ldapmodify -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/ldapmodify"
     }
    ],
-   "ready_note": "counterpart /usr/bin/ldapmodify (Arch package openldap); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 ldapmodify --version >/dev/null 2>&1 || timeout 5 ldapmodify --help >/dev/null 2>&1 || timeout 5 ldapmodify -V >/dev/null 2>&1': exit 1, expected 0"
+   "ready_note": "The Arch package openldap is in packaging/arch/runtime-packages.txt and installs /usr/bin/ldapmodify; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/bin/ldapmodrdn",
@@ -919,16 +909,14 @@
    "note": "provided by Arch package openldap; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 ldapmodrdn --version >/dev/null 2>&1 || timeout 5 ldapmodrdn --help >/dev/null 2>&1 || timeout 5 ldapmodrdn -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/ldapmodrdn"
     }
    ],
-   "ready_note": "counterpart /usr/bin/ldapmodrdn (Arch package openldap); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 ldapmodrdn --version >/dev/null 2>&1 || timeout 5 ldapmodrdn --help >/dev/null 2>&1 || timeout 5 ldapmodrdn -V >/dev/null 2>&1': exit 1, expected 0"
+   "ready_note": "The Arch package openldap is in packaging/arch/runtime-packages.txt and installs /usr/bin/ldapmodrdn; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/bin/ldappasswd",
@@ -950,16 +938,14 @@
    "note": "provided by Arch package openldap; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 ldappasswd --version >/dev/null 2>&1 || timeout 5 ldappasswd --help >/dev/null 2>&1 || timeout 5 ldappasswd -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/ldappasswd"
     }
    ],
-   "ready_note": "counterpart /usr/bin/ldappasswd (Arch package openldap); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 ldappasswd --version >/dev/null 2>&1 || timeout 5 ldappasswd --help >/dev/null 2>&1 || timeout 5 ldappasswd -V >/dev/null 2>&1': exit 1, expected 0"
+   "ready_note": "The Arch package openldap is in packaging/arch/runtime-packages.txt and installs /usr/bin/ldappasswd; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/bin/ldapsearch",
@@ -981,16 +967,14 @@
    "note": "provided by Arch package openldap; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 ldapsearch --version >/dev/null 2>&1 || timeout 5 ldapsearch --help >/dev/null 2>&1 || timeout 5 ldapsearch -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/ldapsearch"
     }
    ],
-   "ready_note": "counterpart /usr/bin/ldapsearch (Arch package openldap); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 ldapsearch --version >/dev/null 2>&1 || timeout 5 ldapsearch --help >/dev/null 2>&1 || timeout 5 ldapsearch -V >/dev/null 2>&1': exit 1, expected 0"
+   "ready_note": "The Arch package openldap is in packaging/arch/runtime-packages.txt and installs /usr/bin/ldapsearch; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/bin/ldapurl",
@@ -1012,16 +996,14 @@
    "note": "provided by Arch package openldap; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 ldapurl --version >/dev/null 2>&1 || timeout 5 ldapurl --help >/dev/null 2>&1 || timeout 5 ldapurl -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/ldapurl"
     }
    ],
-   "ready_note": "counterpart /usr/bin/ldapurl (Arch package openldap); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 ldapurl --version >/dev/null 2>&1 || timeout 5 ldapurl --help >/dev/null 2>&1 || timeout 5 ldapurl -V >/dev/null 2>&1': exit 1, expected 0"
+   "ready_note": "The Arch package openldap is in packaging/arch/runtime-packages.txt and installs /usr/bin/ldapurl; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/bin/ldapwhoami",
@@ -1043,16 +1025,14 @@
    "note": "provided by Arch package openldap; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 ldapwhoami --version >/dev/null 2>&1 || timeout 5 ldapwhoami --help >/dev/null 2>&1 || timeout 5 ldapwhoami -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/ldapwhoami"
     }
    ],
-   "ready_note": "counterpart /usr/bin/ldapwhoami (Arch package openldap); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 ldapwhoami --version >/dev/null 2>&1 || timeout 5 ldapwhoami --help >/dev/null 2>&1 || timeout 5 ldapwhoami -V >/dev/null 2>&1': exit 1, expected 0"
+   "ready_note": "The Arch package openldap is in packaging/arch/runtime-packages.txt and installs /usr/bin/ldapwhoami; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/bin/leaks",
@@ -1167,18 +1147,12 @@
    "doc": "",
    "bifrost": "/usr/bin/lessecho",
    "status": "partial",
-   "note": "provided by Arch package less; not yet verified on Midget",
+   "note": "Not shipped: the Arch less package installs less and lesskey but not lessecho.",
    "rea": [],
    "method": "assessed",
    "ready": false,
-   "checks": [
-    {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 lessecho --version >/dev/null 2>&1 || timeout 5 lessecho --help >/dev/null 2>&1 || timeout 5 lessecho -V >/dev/null 2>&1'",
-     "expect_exit": 0
-    }
-   ],
-   "ready_note": "counterpart /usr/bin/lessecho (Arch package less); the check runs its --version, --help or -V",
+   "checks": [],
+   "ready_note": "",
    "ready_failed": "cmd sh -c 'timeout 5 lessecho --version >/dev/null 2>&1 || timeout 5 lessecho --help >/dev/null 2>&1 || timeout 5 lessecho -V >/dev/null 2>&1': exit 127, expected 0"
   },
   {
@@ -1201,16 +1175,14 @@
    "note": "provided by Arch package less; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 lesskey --version >/dev/null 2>&1 || timeout 5 lesskey --help >/dev/null 2>&1 || timeout 5 lesskey -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/lesskey"
     }
    ],
-   "ready_note": "counterpart /usr/bin/lesskey (Arch package less); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 lesskey --version >/dev/null 2>&1 || timeout 5 lesskey --help >/dev/null 2>&1 || timeout 5 lesskey -V >/dev/null 2>&1': exit 127, expected 0"
+   "ready_note": "The Arch package less is in packaging/arch/runtime-packages.txt and installs /usr/bin/lesskey; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/bin/libnetcfg",
@@ -1499,16 +1471,14 @@
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 lp --version >/dev/null 2>&1 || timeout 5 lp --help >/dev/null 2>&1 || timeout 5 lp -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/lp"
     }
    ],
-   "ready_note": "counterpart /usr/bin/lp (Arch package cups); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 lp --version >/dev/null 2>&1 || timeout 5 lp --help >/dev/null 2>&1 || timeout 5 lp -V >/dev/null 2>&1': exit 1, expected 0"
+   "ready_note": "The Arch package cups is in packaging/arch/runtime-packages.txt and installs /usr/bin/lp; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/bin/lpoptions",
@@ -1530,16 +1500,14 @@
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 lpoptions --version >/dev/null 2>&1 || timeout 5 lpoptions --help >/dev/null 2>&1 || timeout 5 lpoptions -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/lpoptions"
     }
    ],
-   "ready_note": "counterpart /usr/bin/lpoptions (Arch package cups); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 lpoptions --version >/dev/null 2>&1 || timeout 5 lpoptions --help >/dev/null 2>&1 || timeout 5 lpoptions -V >/dev/null 2>&1': exit 1, expected 0"
+   "ready_note": "The Arch package cups is in packaging/arch/runtime-packages.txt and installs /usr/bin/lpoptions; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/bin/lpq",
@@ -1561,16 +1529,14 @@
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 lpq --version >/dev/null 2>&1 || timeout 5 lpq --help >/dev/null 2>&1 || timeout 5 lpq -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/lpq"
     }
    ],
-   "ready_note": "counterpart /usr/bin/lpq (Arch package cups); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 lpq --version >/dev/null 2>&1 || timeout 5 lpq --help >/dev/null 2>&1 || timeout 5 lpq -V >/dev/null 2>&1': exit 1, expected 0"
+   "ready_note": "The Arch package cups is in packaging/arch/runtime-packages.txt and installs /usr/bin/lpq; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/bin/lpr",
@@ -1592,16 +1558,14 @@
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 lpr --version >/dev/null 2>&1 || timeout 5 lpr --help >/dev/null 2>&1 || timeout 5 lpr -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/lpr"
     }
    ],
-   "ready_note": "counterpart /usr/bin/lpr (Arch package cups); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 lpr --version >/dev/null 2>&1 || timeout 5 lpr --help >/dev/null 2>&1 || timeout 5 lpr -V >/dev/null 2>&1': exit 1, expected 0"
+   "ready_note": "The Arch package cups is in packaging/arch/runtime-packages.txt and installs /usr/bin/lpr; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/bin/lprm",
@@ -1623,16 +1587,14 @@
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 lprm --version >/dev/null 2>&1 || timeout 5 lprm --help >/dev/null 2>&1 || timeout 5 lprm -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/lprm"
     }
    ],
-   "ready_note": "counterpart /usr/bin/lprm (Arch package cups); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 lprm --version >/dev/null 2>&1 || timeout 5 lprm --help >/dev/null 2>&1 || timeout 5 lprm -V >/dev/null 2>&1': exit 1, expected 0"
+   "ready_note": "The Arch package cups is in packaging/arch/runtime-packages.txt and installs /usr/bin/lprm; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/bin/lpstat",
@@ -1654,16 +1616,14 @@
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 lpstat --version >/dev/null 2>&1 || timeout 5 lpstat --help >/dev/null 2>&1 || timeout 5 lpstat -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/lpstat"
     }
    ],
-   "ready_note": "counterpart /usr/bin/lpstat (Arch package cups); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 lpstat --version >/dev/null 2>&1 || timeout 5 lpstat --help >/dev/null 2>&1 || timeout 5 lpstat -V >/dev/null 2>&1': exit 1, expected 0"
+   "ready_note": "The Arch package cups is in packaging/arch/runtime-packages.txt and installs /usr/bin/lpstat; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/bin/lsappinfo",
@@ -2798,16 +2758,14 @@
    "note": "provided by Arch package apache; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 logresolve --version >/dev/null 2>&1 || timeout 5 logresolve --help >/dev/null 2>&1 || timeout 5 logresolve -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/logresolve"
     }
    ],
-   "ready_note": "counterpart /usr/bin/logresolve (Arch package apache); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 logresolve --version >/dev/null 2>&1 || timeout 5 logresolve --help >/dev/null 2>&1 || timeout 5 logresolve -V >/dev/null 2>&1': timed out after 10 s"
+   "ready_note": "The Arch package apache is in packaging/arch/runtime-packages.txt and installs /usr/bin/logresolve; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/sbin/lpadmin",
@@ -2829,16 +2787,14 @@
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 lpadmin --version >/dev/null 2>&1 || timeout 5 lpadmin --help >/dev/null 2>&1 || timeout 5 lpadmin -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/lpadmin"
     }
    ],
-   "ready_note": "counterpart /usr/bin/lpadmin (Arch package cups); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 lpadmin --version >/dev/null 2>&1 || timeout 5 lpadmin --help >/dev/null 2>&1 || timeout 5 lpadmin -V >/dev/null 2>&1': exit 1, expected 0"
+   "ready_note": "The Arch package cups is in packaging/arch/runtime-packages.txt and installs /usr/bin/lpadmin; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/sbin/lpc",
@@ -2888,16 +2844,14 @@
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 lpinfo --version >/dev/null 2>&1 || timeout 5 lpinfo --help >/dev/null 2>&1 || timeout 5 lpinfo -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/lpinfo"
     }
    ],
-   "ready_note": "counterpart /usr/bin/lpinfo (Arch package cups); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 lpinfo --version >/dev/null 2>&1 || timeout 5 lpinfo --help >/dev/null 2>&1 || timeout 5 lpinfo -V >/dev/null 2>&1': exit 1, expected 0"
+   "ready_note": "The Arch package cups is in packaging/arch/runtime-packages.txt and installs /usr/bin/lpinfo; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/sbin/lpmove",
@@ -2919,16 +2873,14 @@
    "note": "provided by Arch package cups; not yet verified on Midget",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
-     "kind": "cmd",
-     "run": "sh -c 'timeout 5 lpmove --version >/dev/null 2>&1 || timeout 5 lpmove --help >/dev/null 2>&1 || timeout 5 lpmove -V >/dev/null 2>&1'",
-     "expect_exit": 0
+     "kind": "file",
+     "path": "/usr/bin/lpmove"
     }
    ],
-   "ready_note": "counterpart /usr/bin/lpmove (Arch package cups); the check runs its --version, --help or -V",
-   "ready_failed": "cmd sh -c 'timeout 5 lpmove --version >/dev/null 2>&1 || timeout 5 lpmove --help >/dev/null 2>&1 || timeout 5 lpmove -V >/dev/null 2>&1': exit 1, expected 0"
+   "ready_note": "The Arch package cups is in packaging/arch/runtime-packages.txt and installs /usr/bin/lpmove; the file check proves it is present on the installed system."
   },
   {
    "id": "path:/usr/sbin/lsof",

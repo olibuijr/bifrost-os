@@ -23,15 +23,14 @@
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
-     "path": "/usr/share/springboard/assets/SFUIMono.ttf"
+     "path": "/usr/share/springboard/system-assets/SFUIMono.ttf"
     }
    ],
-   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes.",
-   "ready_failed": "file /usr/share/springboard/assets/SFUIMono.ttf: /usr/share/springboard/assets/SFUIMono.ttf is missing"
+   "ready_note": "Substitute: SFUIMono.ttf (JetBrains Mono, variable wght 100-800, SIL OFL), allowlisted and packaged at /usr/share/springboard/system-assets/SFUIMono.ttf; the Bold weight is an instance of this variable font. Not the Apple glyph shapes."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-BoldItalic.otf",
@@ -87,15 +86,14 @@
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
-     "path": "/usr/share/springboard/assets/SFUIMono.ttf"
+     "path": "/usr/share/springboard/system-assets/SFUIMono.ttf"
     }
    ],
-   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes.",
-   "ready_failed": "file /usr/share/springboard/assets/SFUIMono.ttf: /usr/share/springboard/assets/SFUIMono.ttf is missing"
+   "ready_note": "Substitute: SFUIMono.ttf (JetBrains Mono, variable wght 100-800, SIL OFL), allowlisted and packaged at /usr/share/springboard/system-assets/SFUIMono.ttf; the Heavy weight is an instance of this variable font (800 is its top). Not the Apple glyph shapes."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-HeavyItalic.otf",
@@ -151,15 +149,14 @@
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
-     "path": "/usr/share/springboard/assets/SFUIMono.ttf"
+     "path": "/usr/share/springboard/system-assets/SFUIMono.ttf"
     }
    ],
-   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes.",
-   "ready_failed": "file /usr/share/springboard/assets/SFUIMono.ttf: /usr/share/springboard/assets/SFUIMono.ttf is missing"
+   "ready_note": "Substitute: SFUIMono.ttf (JetBrains Mono, variable wght 100-800, SIL OFL), allowlisted and packaged at /usr/share/springboard/system-assets/SFUIMono.ttf; the Light weight is an instance of this variable font. Not the Apple glyph shapes."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-LightItalic.otf",
@@ -215,15 +212,14 @@
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
-     "path": "/usr/share/springboard/assets/SFUIMono.ttf"
+     "path": "/usr/share/springboard/system-assets/SFUIMono.ttf"
     }
    ],
-   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes.",
-   "ready_failed": "file /usr/share/springboard/assets/SFUIMono.ttf: /usr/share/springboard/assets/SFUIMono.ttf is missing"
+   "ready_note": "Substitute: SFUIMono.ttf (JetBrains Mono, variable wght 100-800, SIL OFL), allowlisted and packaged at /usr/share/springboard/system-assets/SFUIMono.ttf; the Medium weight is an instance of this variable font. Not the Apple glyph shapes."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-MediumItalic.otf",
@@ -279,15 +275,14 @@
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
-     "path": "/usr/share/springboard/assets/SFUIMono.ttf"
+     "path": "/usr/share/springboard/system-assets/SFUIMono.ttf"
     }
    ],
-   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes.",
-   "ready_failed": "file /usr/share/springboard/assets/SFUIMono.ttf: /usr/share/springboard/assets/SFUIMono.ttf is missing"
+   "ready_note": "Substitute: SFUIMono.ttf (JetBrains Mono, variable wght 100-800, SIL OFL), allowlisted and packaged at /usr/share/springboard/system-assets/SFUIMono.ttf; Regular is the default instance. Not the Apple glyph shapes."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-RegularItalic.otf",
@@ -343,15 +338,14 @@
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
-     "path": "/usr/share/springboard/assets/SFUIMono.ttf"
+     "path": "/usr/share/springboard/system-assets/SFUIMono.ttf"
     }
    ],
-   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes.",
-   "ready_failed": "file /usr/share/springboard/assets/SFUIMono.ttf: /usr/share/springboard/assets/SFUIMono.ttf is missing"
+   "ready_note": "Substitute: SFUIMono.ttf (JetBrains Mono, variable wght 100-800, SIL OFL), allowlisted and packaged at /usr/share/springboard/system-assets/SFUIMono.ttf; the Semibold weight is an instance of this variable font. Not the Apple glyph shapes."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-SemiboldItalic.otf",
@@ -407,15 +401,14 @@
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
-     "path": "/usr/share/springboard/assets/SFUIMono.ttf"
+     "path": "/usr/share/springboard/system-assets/SFUIMono.ttf"
     }
    ],
-   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes.",
-   "ready_failed": "file /usr/share/springboard/assets/SFUIMono.ttf: /usr/share/springboard/assets/SFUIMono.ttf is missing"
+   "ready_note": "Substitute: SFUIMono.ttf (JetBrains Mono, variable wght 100-800, SIL OFL), the monospaced face the Terminal app uses, allowlisted and packaged at /usr/share/springboard/system-assets/SFUIMono.ttf. Upright weights only; not the Apple glyph shapes."
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SFMonoItalic-Terminal.ttf",
@@ -995,15 +988,14 @@
    "note": "BifrOSt default system font is Inter (SFUI.ttf, variable wght+opsz, OFL) as stand-in for SF Pro; optional Geist, IBM Plex Sans, Source Sans 3 in Settings > Fonts. Not the Apple glyph shapes",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
-     "path": "/usr/share/springboard/assets/SFUI.ttf"
+     "path": "/usr/share/springboard/system-assets/SFUI.ttf"
     }
    ],
-   "ready_note": "BifrOSt's system UI font SFUI.ttf (Inter, variable wght and opsz, OFL) is required by the ISO build as the default system font. Not the Apple glyph shapes.",
-   "ready_failed": "file /usr/share/springboard/assets/SFUI.ttf: /usr/share/springboard/assets/SFUI.ttf is missing"
+   "ready_note": "Substitute: SFUI.ttf (Inter, variable wght and opsz, SIL OFL), allowlisted and packaged at /usr/share/springboard/system-assets/SFUI.ttf; it is the system UI font the renderer embeds (render/src/lib.rs, canvas.rs). Not the Apple glyph shapes."
   },
   {
    "id": "path:/System/Library/Fonts/SFNSItalic.ttf",
@@ -1059,15 +1051,14 @@
    "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
-     "path": "/usr/share/springboard/assets/SFUIMono.ttf"
+     "path": "/usr/share/springboard/system-assets/SFUIMono.ttf"
     }
    ],
-   "ready_note": "BifrOSt's default mono font SFUIMono.ttf (JetBrains Mono, variable wght, OFL) is required by the ISO build. Upright weights only; not the Apple glyph shapes.",
-   "ready_failed": "file /usr/share/springboard/assets/SFUIMono.ttf: /usr/share/springboard/assets/SFUIMono.ttf is missing"
+   "ready_note": "Substitute: SFUIMono.ttf (JetBrains Mono, variable wght 100-800, SIL OFL), the default mono font, allowlisted and packaged at /usr/share/springboard/system-assets/SFUIMono.ttf. Upright weights only; not the Apple glyph shapes."
   },
   {
    "id": "path:/System/Library/Fonts/SFNSMonoItalic.ttf",
@@ -3622,7 +3613,7 @@
     {
      "kind": "test",
      "crate": "springboard",
-     "filter": "font_packages::library_pins_the_source_sans_italic_face"
+     "filter": "library_pins_the_source_sans_italic_face"
     }
    ],
    "ready_note": "The italic face is pinned in the font library (tools/pack.py LIBRARY_FONTS, SourceSans3-Italic-Variable.ttf, Google Fonts pinned commit, sha256 checked at pack time) so Settings > Fonts offers Source Sans 3 Italic. Not yet verified on Midget; the file ships when the font pack is built."

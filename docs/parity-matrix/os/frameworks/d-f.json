@@ -3037,7 +3037,12 @@
     {
      "kind": "test",
      "crate": "bifrost-core",
-     "filter": "parity_os-gaps-07"
+     "filter": "levels_order_from_ok_to_critical"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-core",
+     "filter": "only_a_shortage_posts_the_low_disk_space_notification"
     }
    ],
    "ready_note": "The low-space level, the warning sentence and the once-per-escalation Watch are tested headless; the shell reads capacity on each Info and posts through it."
@@ -4059,9 +4064,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/embedding.rs",
-   "status": "gap",
-   "note": "Built 2026-10-17: hashed bag-of-words embeddings (256 dimensions, FNV-1a with a sign bit) and cosine ranking in the SDK (embedding::EmbeddingIndex), tests embedding::tests. Not a neural model: no learned weights, no synonyms, and no system search reranker is wired yet.",
+   "bifrost": "springboard/sdk/src/embedding.rs; springboard/ui/src/semantic_hash.rs; springboard/src/shell/quicksearch.rs (indexed_groups)",
+   "status": "partial",
+   "note": "Built: hashed bag-of-words embeddings and cosine ranking in the SDK (embedding::EmbeddingIndex, 256 dims, FNV-1a with sign bit). Added in slice g4: bifrost_ui::semantic_hash::HashedSemantic, a SemanticHook over words plus character trigrams (512 dims, diacritic and case folded via the search tokenizer, bounded text length), wired as the semantic reranker of the Spotlight Documents source (quicksearch::indexed_groups). Not a neural model: no learned weights and no synonyms; word forms (run, running) are close through trigrams. App and settings search results still use NoSemantic; the ranker scores only items that already hold a query word, so recall is unchanged.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -4070,9 +4075,14 @@
      "kind": "test",
      "crate": "bifrost-app",
      "filter": "embedding::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "semantic_hash::tests"
     }
    ],
-   "ready_note": "The SDK embedding module (springboard/sdk/src/embedding.rs) builds a unit-length hashed bag-of-words vector per text and ranks documents by cosine similarity over the same word split as the search index. It is the on-device, non-neural stand-in for EmbeddingCore's text embeddings; a learned embedding model and the shell's system-search reranker are not built, so the row stays gap in status until verified."
+   "ready_note": "Document search results are reordered by a local hashed-text similarity (semantic_hash::tests prove word-form closeness, folding, caching and that the hook only raises scores of matching items). The SDK keeps the app-side EmbeddingIndex (embedding::tests). A learned embedding model is not bundled."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/EmbeddingService.framework",

@@ -57,8 +57,13 @@
    "checks": [
     {
      "kind": "test",
+     "crate": "springboard",
+     "filter": "maptiles::geocode::tests"
+    },
+    {
+     "kind": "test",
      "crate": "bifrost-maps",
-     "filter": "geocode::"
+     "filter": "rpc::tests"
     }
    ],
    "ready_note": "tiles, geocoding, routing, transit and window tests; window and main.rs present"

@@ -1444,8 +1444,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/core/src/pacman_progress.rs; springboard/src/shell/package_install_sheet.rs; springboard/src/shell/pacman_update.rs; springboard/src/shell/workspace.rs; springboard/src/privd/methods.rs",
-   "status": "gap",
-   "note": "Build the package install interface: a per-package progress sheet and a confirmation before scripts run. backup_page.rs notes that pacman reports no progress to the shell, so the progress needs a pacman hook or a log reader first. Built 2026-10-17: pacman_progress reads the steps of the latest transaction from the pacman log and gives a fraction for a progress bar (tests pacman_progress::tests). Built 2026-10-17: pacman_progress::progress gives the sheet's fraction against the packages it listed, and confirmation_needed says an install waits for the person before pacman runs its scripts (tests pacman_progress::tests). Built 2026-10-17: the install sheet (shell/package_install_sheet.rs) asks before the install runs, shows the install's progress from the pacman log, and needs the person's Install (tests package_install_sheet::tests).",
+   "status": "partial",
+   "note": "Package install interface: a confirmation sheet before the install runs scripts, a progress bar read from the pacman log, and the result with Done. Built in this round: pacman_progress::latest_status gives the phase of the latest transaction (waiting, running, completed, failed), its package steps and the last step or hook; working_label feeds the sheet, which now names the step the install is on (for example 'Installed foo' or 'Running 90-mkinitcpio.hook') beside the percentage and refreshes when only a hook changes (tests pacman_progress::tests, package_install_sheet::tests). Not built: per-package download progress (pacman writes none to its log), conflict and replace prompts; not verified on Midget, the real pacman path is untested on the host.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -1471,7 +1471,7 @@
      "filter": "pacman_progress::tests"
     }
    ],
-   "ready_note": "Host tests for the shell path: opening a package archive in Files (workspace OpenFile) or a bifrost-package: store link opens the install sheet, nothing runs until Install is pressed (Return never installs), the install runs on a worker through privd (package.install_file, package.install_repo) with the progress read from the pacman log since the start, and the sheet shows the result with Done. privd refuses bad paths and names before pacman runs. Not verified on Midget; the real pacman path is untested on the host."
+   "ready_note": "Host tests: the log reader (steps, hooks, failure, completion), the confirmation rule, the sheet from confirm through progress to result with the named step, the privd package methods and pacman update. Not verified on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PacketFilter.framework",
@@ -7046,9 +7046,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/net/regdomain.rs; springboard/netd/src/main.rs; springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "Set the wireless regulatory domain from the region setting (for example iw reg set with the country code) and show it in Wi-Fi settings; nothing in springboard/netd sets a country code. Built 2026-10-17: regdomain parses iw reg get and sets the domain with iw reg set, refusing anything but a two-letter country code. Built 2026-10-17: netd starts net::regdomain::follow_region, which reads region from settings.ini every 5 seconds and applies the country at start and on each change; the Wi-Fi page shows Country or Region (tests regdomain::tests, shell::pages::tests). Not built: a live check on the lab machine.",
+   "bifrost": "springboard/src/net/regdomain.rs; springboard/netd/src/main.rs; springboard/src/shell/pages.rs; springboard/src/installer/plan.rs; packaging/arch/runtime-packages.txt",
+   "status": "partial",
+   "note": "Wireless regulatory domain set from the Language & Region setting: regdomain parses iw reg get and sets the country with iw reg set (two-letter codes only); netd starts follow_region, which reads region from settings.ini every 5 seconds; the Wi-Fi page shows Country or Region. Built in this round: a Follower decides when to apply (first pass, each change, and again when the kernel reports another country, at most 3 retries per setting so a chip with its own rules is left alone), and wireless-regdb (regulatory.db for the kernel) is now in packaging/arch/runtime-packages.txt, so the country rules exist on an installed system (tests net::regdomain::tests, installer::plan::tests). Not built: a live check on the lab machine; Midget gets the database only after its next install or package sync.",
    "rea": [],
    "method": "assessed",
    "ready": true,
@@ -7062,9 +7062,14 @@
      "kind": "test",
      "crate": "springboard",
      "filter": "shell::pages::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "installer::plan::tests::the_wireless_tools_and_the_regulatory_database_are_installed"
     }
    ],
-   "ready_note": "The regulatory domain follows the region setting (netd applies it at start and on change) and the Wi-Fi page shows the country; host-tested only."
+   "ready_note": "Host tests: the country-code checks, the iw output parsing, the follower's apply/re-apply/give-up decisions, the Wi-Fi page row, and the installer package list holding iw and wireless-regdb. Not verified on Midget."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/RelativeMotion.framework",
@@ -7192,7 +7197,7 @@
     {
      "kind": "test",
      "crate": "bifrost-reminders",
-     "filter": "app::actions_tests"
+     "filter": "actions_tests"
     },
     {
      "kind": "test",
@@ -7227,7 +7232,7 @@
     {
      "kind": "test",
      "crate": "bifrost-reminders",
-     "filter": "app::actions_tests"
+     "filter": "actions_tests"
     },
     {
      "kind": "test",
@@ -7267,7 +7272,7 @@
     {
      "kind": "test",
      "crate": "bifrost-reminders",
-     "filter": "app::actions_tests"
+     "filter": "actions_tests"
     },
     {
      "kind": "test",
@@ -7307,7 +7312,7 @@
     {
      "kind": "test",
      "crate": "bifrost-reminders",
-     "filter": "app::actions_tests"
+     "filter": "actions_tests"
     },
     {
      "kind": "test",

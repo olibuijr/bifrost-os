@@ -71,7 +71,7 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "packaging/arch/cups-lpd.socket, packaging/arch/cups-lpd@.service, springboard/src/privd/accounts.rs, springboard/src/shell/sharing_page.rs",
+   "bifrost": "the cups package units cups-lpd.socket and cups-lpd@.service, springboard/src/privd/accounts.rs, springboard/src/shell/sharing_page.rs",
    "status": "partial",
    "note": "Built: Printer Sharing switch (Settings > Sharing) enabling cups-lpd.socket, which hands each LPD connection to the packaged cups-lpd.",
    "rea": [],

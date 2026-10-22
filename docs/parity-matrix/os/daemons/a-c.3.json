@@ -426,10 +426,24 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/services/voice_banking.rs",
-   "status": "gap",
-   "note": "Records voice samples and trains a personal synthetic voice for accessibility speech; ui/src/speech.rs synthesises speech, but no voice sample store or training exists, so build them.; built 2026-10-17: the sample store (voice_banking service, a11y_voice_bank pref) keeps one good sample per script phrase, refuses bad rates and lengths, and reports progress; tests shell::services::voice_banking::tests. Still missing: the app must upload the audio itself (the shell keeps metadata only) and training a personal voice from the samples. Reviewed 2026-10-17 (wave 13): left gap. The sample store is real (tests shell::services::voice_banking::tests), but the job the person sees is a personal voice that speaks, which needs a trainable speech model; ui/src/speech.rs is a rule-based synthesiser with no speaker adaptation, so training is an engine to design, not a row-sized change.",
-   "rea": []
+   "bifrost": "springboard/src/shell/services/voice_banking.rs, springboard/ui/src/voice_profile.rs, springboard/ui/src/speech.rs",
+   "status": "partial",
+   "note": "Records voice samples and adapts speech to the speaker. Built: the sample store (voice_banking service, a11y_voice_bank pref: one good sample per script phrase, bad rates and lengths refused, progress) and, 2026-10-22, speaker measurement: ui voice_profile.rs measures pitch (mean and range by autocorrelation), pace (syllable peaks per second) and loudness from recorded PCM, merges them per bank, and VoiceProfile::apply sets the rule-based synthesiser's pitch multiplier and rate; the service keeps each phrase's profile (a11y_voice_profiles) and answers voice(). Missing: the app must upload the audio itself (the shell keeps metadata and measurements only) and training a personal voice (timbre, phoneme shapes), which needs a trainable speech model; speech.rs has no speaker adaptation beyond pitch and rate.",
+   "rea": [],
+   "ready": true,
+   "ready_note": "The sample store, the profile analysis on synthetic voices (pitch, pace, loudness, silence/noise refusal, decimation), merging, the synthesiser mapping and the service's profile storage are tested.",
+   "checks": [
+    {
+     "kind": "test",
+     "crate": "springboard",
+     "filter": "shell::services::voice_banking::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "voice_profile::tests"
+    }
+   ]
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.voicememod.plist",
@@ -1113,8 +1127,8 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/sdk/src/container_migration.rs",
-   "status": "gap",
-   "note": "Migrates app data containers when the OS upgrades; the updater has rollback (packaging/arch/recovery) but moves no per-app data, so build a migration step for app data format changes.",
+   "status": "partial",
+   "note": "Migrates app data containers when the OS upgrades. Built: per-container format version file, resumable non-downgrading migration steps, and (2026-10-22) a copy-on-upgrade snapshot that is restored when a step fails (migrate_safely) and migrate_all over a containers root that reports each app's result without one failure stopping the rest. Missing: the updater (packaging/arch/recovery, updated) calling migrate_all after an OS install, and the concrete per-app migration steps (none exist yet, no app has bumped its format).",
    "rea": [],
    "ready": true,
    "checks": [
@@ -1124,7 +1138,7 @@
      "filter": "container_migration::tests"
     }
    ],
-   "ready_note": "Built 2026-10-17: per-container format version file and resumable, non-downgrading migration steps."
+   "ready_note": "Version file, step chain, resume, downgrade refusal, snapshot/restore on failure, no snapshot for an up-to-date container and migrate_all are tested."
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.CoreAuthentication.daemon.plist",

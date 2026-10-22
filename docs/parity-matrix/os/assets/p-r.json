@@ -212,15 +212,14 @@
    "note": "BifrOSt does not ship or load this asset; its own default applies",
    "rea": [],
    "method": "assessed",
-   "ready": false,
+   "ready": true,
    "checks": [
     {
      "kind": "file",
-     "path": "/usr/share/springboard/assets/wallpapers/index.ini"
+     "path": "/usr/share/springboard/system-assets/wallpapers/index.ini"
     }
    ],
-   "ready_note": "BifrOSt ships its own desktop picture set (wallpapers/index.ini and wallpaper.raw). This picture is not one of them.",
-   "ready_failed": "file /usr/share/springboard/assets/wallpapers/index.ini: /usr/share/springboard/assets/wallpapers/index.ini is missing"
+   "ready_note": "This picture is not shipped; BifrOSt's own royalty-free desktop picture set (wallpapers/index.ini plus the packed wallpapers/*.raw, allowlisted in packaging/assets-allowlist.txt) is installed in the package at /usr/share/springboard/system-assets/wallpapers/index.ini. The check proves the substitute set ships, not this picture."
   },
   {
    "id": "path:/System/Library/Fonts/Palatino.ttc",

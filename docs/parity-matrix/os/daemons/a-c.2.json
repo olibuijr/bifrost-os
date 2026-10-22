@@ -184,7 +184,7 @@
     },
     {
      "kind": "test",
-     "crate": "bifrost-app",
+     "crate": "bifrost-core",
      "filter": "peer_session::tests"
     }
    ]
@@ -1132,7 +1132,7 @@
     },
     {
      "kind": "test",
-     "crate": "bifrost-app",
+     "crate": "bifrost-core",
      "filter": "peer_session::tests"
     }
    ],
@@ -1167,7 +1167,7 @@
     },
     {
      "kind": "test",
-     "crate": "bifrost-app",
+     "crate": "bifrost-core",
      "filter": "peer_session::tests"
     }
    ],
@@ -2476,7 +2476,7 @@
     },
     {
      "kind": "test",
-     "crate": "bifrost-app",
+     "crate": "bifrost-core",
      "filter": "peer_session::tests"
     }
    ],
@@ -2819,9 +2819,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/sdk/src/core_ml.rs, springboard/sdk/src/inference.rs, springboard/ui/src/ml_runtime.rs, springboard/ui/src/ml_model.rs",
-   "status": "gap",
-   "note": "On-demand machine learning runtime for apps. Built: model loading and inference in the SDK (core_ml.rs, inference.rs over bifrost_ui ml_runtime and ml_model).",
+   "bifrost": "springboard/sdk/src/core_ml.rs, springboard/sdk/src/inference.rs, springboard/ui/src/ml_runtime.rs, springboard/ui/src/ml_model.rs, springboard/ui/src/ml_compile.rs",
+   "status": "partial",
+   "note": "On-demand machine learning runtime for apps. Built: model loading and inference in the SDK (core_ml.rs, inference.rs over bifrost_ui ml_runtime and ml_model) and, 2026-10-22, the compile step: a model's text form compiles to a checksummed binary (.bmlc, ml_compile.rs) that install_model stores and load_installed loads, refusing damaged or truncated files before any prediction. Missing: model download, any accelerator (CPU evaluator only: dense, relu, softmax), and a separate service process (the runtime is linked into the app).",
    "rea": [],
    "ready": true,
    "checks": [
@@ -2844,9 +2844,14 @@
      "kind": "test",
      "crate": "bifrost-ui",
      "filter": "ml_model::tests"
+    },
+    {
+     "kind": "test",
+     "crate": "bifrost-ui",
+     "filter": "ml_compile::tests"
     }
    ],
-   "ready_note": "Apps load and run models through the SDK (core_ml.rs: named models in an AnalysisRuntime, feature values in and out, a compute policy, typed input and output signatures in inference.rs); the runtime is linked into the app, so no separate service process is needed. Models run on the CPU evaluator (dense, relu, softmax); there is no accelerator, no model download or compile step, and hamr stays the language-model server."
+   "ready_note": "Apps load and run models through the SDK; compiled models round-trip equal, damaged, truncated, hostile-count and mis-shaped files are refused, and install/load over a models directory is tested."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.mobilerepaird.plist",
@@ -4034,7 +4039,7 @@
     },
     {
      "kind": "test",
-     "crate": "bifrost-app",
+     "crate": "bifrost-core",
      "filter": "peer_session::tests"
     }
    ]
@@ -4873,7 +4878,7 @@
     },
     {
      "kind": "test",
-     "crate": "bifrost-app",
+     "crate": "bifrost-core",
      "filter": "peer_session::tests"
     }
    ],
@@ -5797,7 +5802,7 @@
     },
     {
      "kind": "test",
-     "crate": "bifrost-app",
+     "crate": "bifrost-core",
      "filter": "pref_domains::tests"
     }
    ],
@@ -5908,7 +5913,7 @@
     },
     {
      "kind": "test",
-     "crate": "bifrost-app",
+     "crate": "bifrost-core",
      "filter": "pref_domains::tests"
     }
    ]
