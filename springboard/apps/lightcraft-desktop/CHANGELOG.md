@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.11.0
+
+- Upstream lightcraft v0.11.0.
+  ## What's Changed
+  * docs: add SonarCloud and CodeRabbit badges to README by @dylanmtaylor in https://github.com/storytold/lightcraft/pull/2240
+  * Skip CodeRabbit reviews on Dependabot PRs by @echelon in https://github.com/storytold/lightcraft/pull/2407
+  * ci: switch to shared nix workflow from craft-common-actions by @dylanmtaylor in https://github.com/storytold/lightcraft/pull/1980
+  * Integration: 43 reviewed PRs (round 1) by @aiongg in https://github.com/storytold/lightcraft/pull/2470
+
 ## 0.9.1
 
 - Upstream lightcraft v0.9.1.
