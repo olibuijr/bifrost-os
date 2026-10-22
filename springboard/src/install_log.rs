@@ -56,6 +56,25 @@ pub fn record(dir: &Path, what: &str, message: &str) {
     let _ = append(dir, unix, what, message);
 }
 
+/// Logs a failure unless the newest record already says the same thing. A background check that fails the same way
+/// every 15 minutes (offline, a bad package) then leaves one record, not one per check.
+pub fn record_once(dir: &Path, what: &str, message: &str) {
+    let clean = |s: &str| s.chars().map(|c| if matches!(c, '\t' | '\n' | '\r') { ' ' } else { c }).collect::<String>();
+    if read(dir).last().is_some_and(|f| f.what == clean(what) && f.message == clean(message)) {
+        return;
+    }
+    record(dir, what, message);
+}
+
+/// Passes a result through and logs its error as `subject: error` (once, see `record_once`). For the install paths
+/// that run in the background and drop the error: the privd daemon and the OTA checker.
+pub fn logged<T, E: std::fmt::Display>(dir: &Path, what: &str, subject: &str, result: Result<T, E>) -> Result<T, E> {
+    if let Err(e) = &result {
+        record_once(dir, what, &format!("{subject}: {e}"));
+    }
+    result
+}
+
 /// Every recorded failure, oldest first. A missing file is an empty log.
 pub fn read(dir: &Path) -> Vec<Failure> {
     std::fs::read_to_string(path(dir)).map(|t| parse(&t)).unwrap_or_default()
@@ -65,6 +84,23 @@ pub fn read(dir: &Path) -> Vec<Failure> {
 pub fn recent(dir: &Path, max: usize) -> Vec<Failure> {
     let mut all = read(dir);
     all.reverse();
+    all.truncate(max);
+    all
+}
+
+/// The newest `max` failures across several data directories (the user's and the system one the root daemons write to),
+/// newest first. A directory that cannot be read counts as empty.
+pub fn recent_in(dirs: &[&Path], max: usize) -> Vec<Failure> {
+    // a shell that runs as root has the same directory twice
+    let mut seen: Vec<&Path> = vec![];
+    let mut all: Vec<Failure> = vec![];
+    for d in dirs {
+        if !seen.contains(d) {
+            seen.push(*d);
+            all.extend(read(d));
+        }
+    }
+    all.sort_by(|a, b| b.unix.cmp(&a.unix));
     all.truncate(max);
     all
 }
@@ -111,6 +147,43 @@ mod tests {
         let newest = recent(&d, 2);
         assert_eq!(newest.iter().map(|f| f.message.as_str()).collect::<Vec<_>>(), ["third", "second"]);
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn record_once_collapses_a_repeated_failure_but_keeps_a_new_one() {
+        let d = tmp("once");
+        record_once(&d, "system package", "keyboard: offline");
+        record_once(&d, "system package", "keyboard: offline");
+        record_once(&d, "system package", "keyboard: disk full");
+        record_once(&d, "system package", "keyboard: offline");
+        let got = read(&d);
+        assert_eq!(got.iter().map(|f| f.message.as_str()).collect::<Vec<_>>(), ["keyboard: offline", "keyboard: disk full", "keyboard: offline"]);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn logged_passes_both_results_through_and_logs_only_the_error() {
+        let d = tmp("logged");
+        assert_eq!(logged(&d, "app install", "notes", Ok::<_, String>(3)), Ok(3));
+        assert!(read(&d).is_empty());
+        assert_eq!(logged(&d, "app install", "notes", Err::<u8, _>("bad hash".to_string())), Err("bad hash".to_string()));
+        let got = read(&d);
+        assert_eq!((got[0].what.as_str(), got[0].message.as_str()), ("app install", "notes: bad hash"));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn recent_in_merges_directories_newest_first_and_skips_a_missing_one() {
+        let (a, b) = (tmp("merge-a"), tmp("merge-b"));
+        append(&a, 10, "app install", "a1").unwrap();
+        append(&a, 30, "app install", "a2").unwrap();
+        append(&b, 20, "package install", "b1").unwrap();
+        let missing = std::env::temp_dir().join(format!("updated-installlog-none-{}", std::process::id()));
+        let got = recent_in(&[&a, &missing, &b], 2);
+        assert_eq!(got.iter().map(|f| f.message.as_str()).collect::<Vec<_>>(), ["a2", "b1"]);
+        assert_eq!(recent_in(&[&a, &a], 10).len(), 2, "the same directory is read once");
+        let _ = std::fs::remove_dir_all(&a);
+        let _ = std::fs::remove_dir_all(&b);
     }
 
     #[test]

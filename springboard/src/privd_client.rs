@@ -349,6 +349,17 @@ impl Client {
         self.call(bifrost_core::usb_approval::M_USB_AUTHORIZE, vec![("port", privd::s(port)), ("allow", Json::Bool(allow))]).map(|_| ())
     }
 
+    /// Sets the USB accessory policy: `ask` holds new external devices for the approval sheet, `allow` authorizes them at
+    /// once (`usb.policy_set`). Saved by privd, so it holds after a reboot.
+    pub fn usb_policy_set(&self, ask: bool) -> Result<(), ClientError> {
+        self.call(bifrost_core::usb_approval::M_USB_POLICY_SET, vec![("mode", privd::s(if ask { "ask" } else { "allow" }))]).map(|_| ())
+    }
+
+    /// The USB accessory policy the kernel runs: `ask`, `allow` or `other` (`usb.policy_get`).
+    pub fn usb_policy(&self) -> Result<String, ClientError> {
+        Ok(self.call(bifrost_core::usb_approval::M_USB_POLICY_GET, vec![])?.str_field("mode").unwrap_or_default())
+    }
+
     /// Asks privd to install the package archive at `path` with pacman (`package.install_file`). privd copies the file
     /// into its own staging folder before pacman reads it.
     /// `grant` is the single-use proof of a fresh administrator password from [`Client::elevate`]; privd refuses the

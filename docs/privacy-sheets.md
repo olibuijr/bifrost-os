@@ -37,7 +37,11 @@ All sheets default to refusal: an unanswered question never grants.
 - The `authorized` attribute is written by privd (`usb.authorize`); the shell skips a write that changes nothing.
   "Always" answers are kept in `usb_approvals.txt` in the settings folder, "Allow Once" until the shell restarts.
 - On a stock kernel every device is authorized at once, so the sheet meets only devices the system holds back, for
-  example with `usbcore.authorized_default=2` (authorize internal devices only). Setting that policy is not done here.
+  example with `usbcore.authorized_default=2` (authorize internal devices only). privd sets that policy at run time:
+  `usb.policy_set {mode: ask|allow}` writes `/sys/module/usbcore/parameters/authorized_default` (`usbcore` is built in, so
+  it is a runtime parameter, not a module option) and saves the word in `/var/lib/springboard/usb_policy`, which privd
+  re-applies at start (`usb_approval::apply_saved_policy`); `usb.policy_get` reads it back. There is no Settings switch for
+  it yet, and devices already plugged in keep their state.
 
 ## Network logins (`network_auth_sheet.rs`, `services/network_auth.rs`, `net_auth.rs`)
 

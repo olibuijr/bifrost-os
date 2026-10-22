@@ -68,11 +68,16 @@ pub fn call(method: &str, p: &Json) -> Result<Json, PErr> {
             let out = Command::new("/usr/bin/bifrost-update-guard").arg("status").output().map_err(|e| PErr::internal(e.to_string()))?;
             Ok(obj(vec![("status", s(String::from_utf8_lossy(&out.stdout).trim()))]))
         }
-        "store.install" => store_install(p),
+        "store.install" => install_logged("app install", str_param(p, "id").unwrap_or("?"), store_install(p)),
         "package.remove" => package_remove(str_param(p, "name")?),
-        "package.install_file" => package_install_file(str_param(p, "path")?),
-        "package.install_repo" => package_install_repo(p.get("names")),
+        "package.install_file" => {
+            let path = str_param(p, "path")?;
+            install_logged("package install", Path::new(path).file_name().and_then(|n| n.to_str()).unwrap_or(path), package_install_file(path))
+        }
+        "package.install_repo" => install_logged("package install", &repo_subject(p.get("names")), package_install_repo(p.get("names"))),
         bifrost_core::usb_approval::M_USB_AUTHORIZE => usb_authorize(Path::new(bifrost_core::usb_approval::SYSFS_USB_DEVICES), str_param(p, "port")?, p.get("allow")),
+        bifrost_core::usb_approval::M_USB_POLICY_SET => usb_policy_set(Path::new(STATE_DIR), Path::new(bifrost_core::usb_approval::USBCORE_AUTHORIZED_DEFAULT), str_param(p, "mode")?),
+        bifrost_core::usb_approval::M_USB_POLICY_GET => usb_policy_get(Path::new(bifrost_core::usb_approval::USBCORE_AUTHORIZED_DEFAULT)),
         "store.uninstall" => {
             let id = str_param(p, "id")?;
             if !install::valid_id(id) {
@@ -94,6 +99,31 @@ pub fn call(method: &str, p: &Json) -> Result<Json, PErr> {
         m if super::disk::handles(m) => super::disk::call(m, p),
         m if super::endpoint_security::handles(m) => super::endpoint_security::call(m, p),
         _ => super::accounts::call(method, p).unwrap_or_else(|| Err(PErr::bad(format!("unknown method {method}")))),
+    }
+}
+
+/// The install log of the root daemons: `STATE_DIR` is the root data directory, which Analytics & Diagnostics reads
+/// next to the user's own (`install_log::recent_in`).
+fn install_logged(what: &str, subject: &str, result: Result<Json, PErr>) -> Result<Json, PErr> {
+    log_install_failure(Path::new(STATE_DIR), what, subject, result)
+}
+
+/// Logs a failed install that ran in privd. Only `internal` errors are logged: a `bad_params` refusal means the request
+/// never started an install (a bad name, a path outside the allow-list), so it is not an install failure.
+fn log_install_failure(dir: &Path, what: &str, subject: &str, result: Result<Json, PErr>) -> Result<Json, PErr> {
+    if let Err(e) = &result {
+        if e.code == "internal" {
+            crate::install_log::record_once(dir, what, &format!("{subject}: {}", e.message));
+        }
+    }
+    result
+}
+
+/// The package names of a repo install, for the log line.
+fn repo_subject(names: Option<&Json>) -> String {
+    match names {
+        Some(Json::Arr(items)) => items.iter().filter_map(Json::as_str).collect::<Vec<_>>().join(" "),
+        _ => "?".to_string(),
     }
 }
 
@@ -120,6 +150,30 @@ fn usb_authorize(devices_root: &Path, port: &str, allow: Option<&Json>) -> Resul
         Err(e) if e.kind() == std::io::ErrorKind::InvalidInput => Err(PErr::bad("not a USB device port")),
         Err(e) => Err(PErr::internal(format!("usb {port}: {e}"))),
     }
+}
+
+/// `usb.policy_set {mode}`: `ask` holds new external USB devices blocked until the accessory sheet answers
+/// (`authorized_default` 2), `allow` is the stock behaviour (1). Applied to the kernel now and saved in `state_dir` so
+/// the daemon re-applies it at start (`apply_saved_usb_policy`). The kernel is written first: a refused write saves
+/// nothing, so the file never claims a policy the machine does not run.
+fn usb_policy_set(state_dir: &Path, param_file: &Path, mode: &str) -> Result<Json, PErr> {
+    use bifrost_core::usb_approval::{apply_policy, Policy, POLICY_FILE};
+    let policy = Policy::from_name(mode).ok_or_else(|| PErr::bad("mode must be ask or allow"))?;
+    apply_policy(param_file, policy).map_err(|e| PErr::internal(format!("usb policy: {e}")))?;
+    std::fs::create_dir_all(state_dir).map_err(|e| PErr::internal(e.to_string()))?;
+    write_nofollow(&state_dir.join(POLICY_FILE).to_string_lossy(), &format!("{}\n", policy.name())).map_err(|e| PErr::internal(e.to_string()))?;
+    Ok(obj(vec![("mode", s(policy.name()))]))
+}
+
+/// `usb.policy_get`: the policy the kernel runs now (`ask`, `allow`, or `other` for a value the shell does not set).
+fn usb_policy_get(param_file: &Path) -> Result<Json, PErr> {
+    let mode = bifrost_core::usb_approval::read_policy(param_file).map_or("other", |p| p.name());
+    Ok(obj(vec![("mode", s(mode))]))
+}
+
+/// Re-applies the saved USB policy; the daemon calls it before it listens.
+pub fn apply_saved_usb_policy() -> Option<bifrost_core::usb_approval::Policy> {
+    bifrost_core::usb_approval::apply_saved_policy(Path::new(STATE_DIR), Path::new(bifrost_core::usb_approval::USBCORE_AUTHORIZED_DEFAULT))
 }
 
 /// The largest package archive privd copies into staging, in bytes.
@@ -487,6 +541,48 @@ mod tests {
         assert_eq!(repo(Json::Arr(vec![Json::Bool(true)])).unwrap_err().code, "bad_params");
         assert_eq!(repo(s("htop")).unwrap_err().code, "bad_params");
         assert_eq!(call("package.install_repo", &obj(vec![])).unwrap_err().code, "bad_params");
+    }
+
+    #[test]
+    fn usb_policy_set_writes_the_kernel_first_then_saves_and_refuses_other_modes() {
+        let dir = std::env::temp_dir().join(format!("privd-usbpolicy-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (state, param) = (dir.join("state"), dir.join("authorized_default"));
+        std::fs::write(&param, "1").unwrap();
+        assert_eq!(usb_policy_set(&state, &param, "block").unwrap_err().code, "bad_params");
+        assert_eq!(std::fs::read_to_string(&param).unwrap(), "1");
+        let got = usb_policy_set(&state, &param, "ask").unwrap();
+        assert_eq!(got.get("mode").and_then(Json::as_str), Some("ask"));
+        assert_eq!(std::fs::read_to_string(&param).unwrap(), "2");
+        assert_eq!(std::fs::read_to_string(state.join("usb_policy")).unwrap(), "ask\n");
+        assert_eq!(usb_policy_get(&param).unwrap().get("mode").and_then(Json::as_str), Some("ask"));
+        // a kernel that refuses the write leaves the saved file alone
+        let before = std::fs::read_to_string(state.join("usb_policy")).unwrap();
+        let e = usb_policy_set(&state, &dir.join("nope").join("authorized_default"), "allow").unwrap_err();
+        assert_eq!(e.code, "internal");
+        assert_eq!(std::fs::read_to_string(state.join("usb_policy")).unwrap(), before);
+        std::fs::write(&param, "0").unwrap();
+        assert_eq!(usb_policy_get(&param).unwrap().get("mode").and_then(Json::as_str), Some("other"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_failed_install_is_logged_but_a_refused_request_and_a_success_are_not() {
+        let dir = std::env::temp_dir().join(format!("privd-installlog-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(log_install_failure(&dir, "app install", "notes", Ok(obj(vec![]))).is_ok());
+        assert!(log_install_failure(&dir, "app install", "../x", Err(PErr::bad("invalid app id"))).is_err());
+        assert!(crate::install_log::read(&dir).is_empty());
+        let e = log_install_failure(&dir, "app install", "notes", Err(PErr::internal("hash mismatch"))).unwrap_err();
+        assert_eq!(e.message, "hash mismatch", "the caller still gets the error");
+        let _ = log_install_failure(&dir, "app install", "notes", Err(PErr::internal("hash mismatch")));
+        let got = crate::install_log::read(&dir);
+        assert_eq!(got.len(), 1, "the same failure twice is one record");
+        assert_eq!((got[0].what.as_str(), got[0].message.as_str()), ("app install", "notes: hash mismatch"));
+        assert_eq!(repo_subject(Some(&Json::Arr(vec![s("htop"), s("jq")]))), "htop jq");
+        assert_eq!(repo_subject(None), "?");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

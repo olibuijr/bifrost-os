@@ -1046,7 +1046,9 @@ impl Settings {
             PageId::Diagnostics => {
                 let installs = dir.clone();
                 self.loads.crashes.start("diag-read", move || diag::load(&dir));
-                self.loads.install_failures.start("install-read", move || crate::install_log::recent(&installs, diagnostics_page::MAX_ROWS));
+                // the user's own log, and the root daemons' (privd installs, the updater) in the system data directory
+                let system = std::path::PathBuf::from(crate::privd::STATE_DIR);
+                self.loads.install_failures.start("install-read", move || crate::install_log::recent_in(&[&installs, &system], diagnostics_page::MAX_ROWS));
             }
             PageId::Backup | PageId::SoftwareUpdate => {
                 let root = backup::destination_root(&dir, &self.opts.backup_destination);

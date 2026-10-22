@@ -12,6 +12,7 @@
 pub use bifrost_ui::context_window::{estimate_tokens, fit, Fitted};
 pub use bifrost_ui::generation_partial::{json_schema, partial_parse, validate_partial};
 pub use bifrost_ui::generation_schema::{instructions, parse, read_reply, validate, Issue, Kind, ParseError, ReplyError, Value};
+pub use bifrost_ui::model_foundation::{FinishReason, GenerationOptions, IdError, ModelId, ModelInfo, ModelRegistry, RegistryError, Request, RequestError, Response, Usage};
 pub use bifrost_ui::model_provider::{run_turn, ModelProvider, ProviderError, Reply, TurnError};
 pub use bifrost_ui::model_session::{DynamicInstructions, Frame, Profile, PropertyKey, PropertyValue, Session, SessionProperties};
 pub use bifrost_ui::model_tool::{Tool, ToolChoice, ToolError, ToolSet};
@@ -60,6 +61,21 @@ mod tests {
     #[test]
     fn the_on_device_model_is_reported_unavailable_until_a_runtime_exists() {
         assert_eq!(on_device_availability(), Availability::Unavailable(Unavailable::NoOnDeviceModel));
+    }
+
+    #[test]
+    fn an_app_picks_a_model_checks_the_request_and_wraps_the_reply() {
+        let mut models = ModelRegistry::new();
+        models.register(ModelInfo::new(ModelId::parse("canned").unwrap(), 4096)).unwrap();
+        let mut session = Session::new(Profile::new("brief", DynamicInstructions::new().fixed("Be brief.")));
+        session.prompt(vec![Segment::Text("Hi".into())]);
+        let request = Request::new(session.prepare(1000, 0).transcript);
+        let model = models.for_request(&request).unwrap();
+        assert_eq!(request.check(model), Ok(()));
+        let reply = Canned.generate(&request.transcript).unwrap();
+        let response = Response::from_reply(model.id.clone(), &request, reply);
+        assert_eq!((response.model.to_string().as_str(), response.finish), ("canned", FinishReason::Stop));
+        assert!(response.usage.prompt_tokens > 0 && response.usage.completion_tokens > 0);
     }
 
     #[test]

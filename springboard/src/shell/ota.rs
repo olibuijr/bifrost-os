@@ -128,16 +128,20 @@ pub struct Found {
 }
 
 /// Downloads and installs the planned system packages, skipping any that fail (retried next check).
-fn install_system(root: &std::path::Path, plan: &[api::StoreApp]) -> Vec<install::InstalledApp> {
+/// Each failure goes to the install log in `log` (once per distinct message, see `install_log::record_once`).
+fn install_system(root: &std::path::Path, log: &std::path::Path, plan: &[api::StoreApp]) -> Vec<install::InstalledApp> {
     plan.iter()
         .filter_map(|a| {
             let progress = std::sync::atomic::AtomicU64::new(0);
-            let app = install::install_download(root, &a.id, &net::absolute(&a.package), a.size, &a.sha256, install::shell_version(), &progress, &std::sync::atomic::AtomicBool::new(false)).ok()?;
-            if app.id != a.id || !app.is_preinstalled() {
-                let _ = install::uninstall(root, &app.id);
-                return None;
-            }
-            Some(app)
+            let got = install::install_download(root, &a.id, &net::absolute(&a.package), a.size, &a.sha256, install::shell_version(), &progress, &std::sync::atomic::AtomicBool::new(false));
+            let checked = got.and_then(|app| {
+                if app.id != a.id || !app.is_preinstalled() {
+                    let _ = install::uninstall(root, &app.id);
+                    return Err("package id does not match the store entry".to_string());
+                }
+                Ok(app)
+            });
+            crate::install_log::logged(log, "system package", &a.id, checked).ok()
         })
         .collect()
 }
@@ -163,11 +167,13 @@ fn running_exes() -> Vec<PathBuf> {
 }
 
 /// Downloads and installs app updates, skipping any that fail (retried next check).
-fn install_apps(root: &std::path::Path, plan: &[api::StoreApp]) -> Vec<install::InstalledApp> {
+/// Each failure goes to the install log in `log`.
+fn install_apps(root: &std::path::Path, log: &std::path::Path, plan: &[api::StoreApp]) -> Vec<install::InstalledApp> {
     plan.iter()
         .filter_map(|a| {
             let progress = std::sync::atomic::AtomicU64::new(0);
-            install::install_download(root, &a.id, &net::absolute(&a.package), a.size, &a.sha256, install::shell_version(), &progress, &std::sync::atomic::AtomicBool::new(false)).ok()
+            let got = install::install_download(root, &a.id, &net::absolute(&a.package), a.size, &a.sha256, install::shell_version(), &progress, &std::sync::atomic::AtomicBool::new(false));
+            crate::install_log::logged(log, "app update", &a.id, got).ok()
         })
         .collect()
 }
@@ -177,7 +183,7 @@ fn os_server(pacman: bool, url: &str) -> Option<&str> {
     (!pacman).then_some(url)
 }
 
-fn run_check(url: Option<&str>, version: &str, git: &str, auto_apps: bool) -> Found {
+fn run_check(url: Option<&str>, version: &str, git: &str, auto_apps: bool, log: &std::path::Path) -> Found {
     let os = url.and_then(|u| update::fetch_manifest(u).ok()).map(|m| update::is_newer(&m, version, git).then_some(m));
     let root = PathBuf::from(install::ROOT);
     let cache = root.join("store-cache.json");
@@ -185,12 +191,12 @@ fn run_check(url: Option<&str>, version: &str, git: &str, auto_apps: bool) -> Fo
     let mut installed = vec![];
     if let Some(catalog) = &catalog {
         let plan: Vec<api::StoreApp> = api::system_plan(catalog, &install::installed_apps(), install::shell_version()).into_iter().cloned().collect();
-        installed = install_system(&root, &plan);
+        installed = install_system(&root, log, &plan);
         if auto_apps {
             let have = install::installed_apps();
             let ups = api::updates(catalog, &have);
             let plan: Vec<api::StoreApp> = app_plan(&ups, &have, &running_exes()).into_iter().cloned().collect();
-            installed.extend(install_apps(&root, &plan));
+            installed.extend(install_apps(&root, log, &plan));
         }
     }
     let (apps, system) = match &catalog {
@@ -278,10 +284,10 @@ impl Ota {
             }
             let (tx, rx) = channel();
             self.rx = Some(rx);
-            let (url, v, g) = (self.url.clone(), version.to_string(), git.to_string());
+            let (url, v, g, log) = (self.url.clone(), version.to_string(), git.to_string(), self.dir.clone());
             crate::bare::sys::spawn_named("ota-download", move || {
                 crate::gfx::affinity::background_thread();
-                let _ = tx.send(run_check(os_server(pacman, &url), &v, &g, auto_download));
+                let _ = tx.send(run_check(os_server(pacman, &url), &v, &g, auto_download, &log));
             });
         }
         changed
