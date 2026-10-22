@@ -16,6 +16,13 @@ pub const MODEL_FILE: &str = "ggml-base.en.bin";
 pub const MODEL_URL: &str = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin";
 /// The size of [`MODEL_FILE`] in bytes, shown to the person before consent.
 pub const MODEL_SIZE_BYTES: u64 = 147_964_211;
+/// The multilingual base model: the same size class as [`MODEL_FILE`], but it recognises the languages in
+/// [`WHISPER_LANGUAGES`]. It is fetched only when a locale other than English is asked for.
+pub const MULTILINGUAL_MODEL_FILE: &str = "ggml-base.bin";
+/// Where [`MULTILINGUAL_MODEL_FILE`] is fetched from when the person has granted consent.
+pub const MULTILINGUAL_MODEL_URL: &str = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin";
+/// The size of [`MULTILINGUAL_MODEL_FILE`] in bytes, shown to the person before consent.
+pub const MULTILINGUAL_MODEL_SIZE_BYTES: u64 = 147_951_465;
 /// The program that runs the pipeline.
 pub const GST_LAUNCH: &str = "gst-launch-1.0";
 /// The sample rate the whisper element expects.
@@ -29,6 +36,49 @@ pub fn data_subdir(data_dir: &Path) -> PathBuf {
 /// Where the model file lives for a given user data directory.
 pub fn model_path(data_dir: &Path) -> PathBuf {
     data_subdir(data_dir).join(MODEL_FILE)
+}
+
+/// A speech model the shell can fetch: its file name under the speech directory, where it comes from and how big it is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Model {
+    pub file: &'static str,
+    pub url: &'static str,
+    pub size_bytes: u64,
+}
+
+/// The English-only base model.
+pub const ENGLISH_MODEL: Model = Model { file: MODEL_FILE, url: MODEL_URL, size_bytes: MODEL_SIZE_BYTES };
+/// The multilingual base model.
+pub const MULTILINGUAL_MODEL: Model =
+    Model { file: MULTILINGUAL_MODEL_FILE, url: MULTILINGUAL_MODEL_URL, size_bytes: MULTILINGUAL_MODEL_SIZE_BYTES };
+
+/// The languages the multilingual whisper models recognise, as two or three letter ISO 639 codes.
+pub const WHISPER_LANGUAGES: &[&str] = &[
+    "en", "zh", "de", "es", "ru", "ko", "fr", "ja", "pt", "tr", "pl", "ca", "nl", "ar", "sv", "it", "id", "hi", "fi", "vi", "he",
+    "uk", "el", "ms", "cs", "ro", "da", "hu", "ta", "no", "th", "ur", "hr", "bg", "lt", "la", "mi", "ml", "cy", "sk", "te", "fa",
+    "lv", "bn", "sr", "az", "sl", "kn", "et", "mk", "br", "eu", "is", "hy", "ne", "mn", "bs", "kk", "sq", "sw", "gl", "mr", "pa",
+    "si", "km", "sn", "yo", "so", "af", "oc", "ka", "be", "tg", "sd", "gu", "am", "yi", "lo", "uz", "fo", "ht", "ps", "tk", "nn",
+    "mt", "sa", "lb", "my", "bo", "tl", "mg", "as", "tt", "haw", "ln", "ha", "ba", "jw", "su",
+];
+
+/// The whisper language code for a locale such as `is_IS` or `en-GB`, or `None` when the models do not recognise it.
+pub fn whisper_language(locale: &str) -> Option<&'static str> {
+    let code = crate::translation::language_code(locale);
+    WHISPER_LANGUAGES.iter().copied().find(|l| *l == code)
+}
+
+/// The model that serves `locale`: the English model for English, the multilingual one for any other language the
+/// whisper models know, and `None` for a language they do not.
+pub fn model_for_locale(locale: &str) -> Option<Model> {
+    match whisper_language(locale)? {
+        "en" => Some(ENGLISH_MODEL),
+        _ => Some(MULTILINGUAL_MODEL),
+    }
+}
+
+/// Where `model` lives for a given user data directory.
+pub fn model_file_path(data_dir: &Path, model: Model) -> PathBuf {
+    data_subdir(data_dir).join(model.file)
 }
 
 /// Where the consent record lives: a file that holds the single line `granted` once the person agrees.
@@ -81,12 +131,15 @@ impl Capture {
 pub enum PipelineError {
     /// The model path contains a quote, a space-separated `!` or a line break, which gst-launch would misread.
     UnsafeModelPath(String),
+    /// The language code is not two or three lowercase letters.
+    BadLanguage(String),
 }
 
 impl std::fmt::Display for PipelineError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             PipelineError::UnsafeModelPath(p) => write!(f, "the model path cannot be used in a pipeline: {p}"),
+            PipelineError::BadLanguage(l) => write!(f, "the language code cannot be used in a pipeline: {l}"),
         }
     }
 }
@@ -104,6 +157,18 @@ pub fn pipeline_argv(capture: Capture, model: &Path) -> Result<Vec<String>, Pipe
 /// [`pipeline_argv`] for a chosen [`Source`]: the same chain with the capture element for the microphone or for the
 /// sound the computer plays.
 pub fn pipeline_argv_for(capture: Capture, source: Source, model: &Path) -> Result<Vec<String>, PipelineError> {
+    pipeline_argv_lang(capture, source, model, None)
+}
+
+/// [`pipeline_argv_for`] with the language the multilingual model should listen for (`language=<code>` on the whisper
+/// element). `None` and English leave the element at its default, so an English pipeline is unchanged. A code that is
+/// not two or three lowercase letters is refused, since it would otherwise reach the gst-launch command line.
+pub fn pipeline_argv_lang(capture: Capture, source: Source, model: &Path, language: Option<&str>) -> Result<Vec<String>, PipelineError> {
+    if let Some(code) = language {
+        if !(2..=3).contains(&code.len()) || !code.bytes().all(|b| b.is_ascii_lowercase()) {
+            return Err(PipelineError::BadLanguage(code.to_string()));
+        }
+    }
     let model_text = model.to_string_lossy().into_owned();
     if model_text.contains(['"', '!', '\n', '\r', '\0']) {
         return Err(PipelineError::UnsafeModelPath(model_text));
@@ -112,7 +177,10 @@ pub fn pipeline_argv_for(capture: Capture, source: Source, model: &Path) -> Resu
     let model_arg = if model_text.contains(' ') { format!("model=\"{model_text}\"") } else { format!("model={model_text}") };
     let mut argv: Vec<&str> = vec![GST_LAUNCH, "-m"];
     argv.extend(capture.source_args(source));
-    argv.extend(["!", "audioconvert", "!", "audioresample", "!", caps.as_str(), "!", "whisper", model_arg.as_str(), "!", "fakesink"]);
+    let language_arg = language.filter(|l| *l != "en").map(|l| format!("language={l}"));
+    argv.extend(["!", "audioconvert", "!", "audioresample", "!", caps.as_str(), "!", "whisper", model_arg.as_str()]);
+    argv.extend(language_arg.as_deref());
+    argv.extend(["!", "fakesink"]);
     Ok(argv.iter().map(|s| s.to_string()).collect())
 }
 
@@ -223,10 +291,10 @@ pub struct PollReply {
     pub running: bool,
 }
 
-/// The whisper element transcribes English only, so only English locales are served.
+/// Whether a locale can be served: English with the English model, and every other language the multilingual whisper
+/// models know once that model is installed ([`model_for_locale`]).
 pub fn locale_supported(locale: &str) -> bool {
-    let code = crate::translation::language_code(locale);
-    code == "en"
+    whisper_language(locale).is_some()
 }
 
 #[cfg(test)]
@@ -326,9 +394,51 @@ mod tests {
     }
 
     #[test]
-    fn only_english_locales_are_served() {
+    fn locales_the_whisper_models_know_are_served() {
         assert!(locale_supported("en_US"));
         assert!(locale_supported("en-GB"));
-        assert!(!locale_supported("is_IS"));
+        assert!(locale_supported("is_IS"));
+        assert!(locale_supported("zh-Hans"));
+        assert!(!locale_supported("tlh"));
+        assert!(!locale_supported(""));
+    }
+
+    #[test]
+    fn english_uses_the_english_model_and_other_languages_the_multilingual_one() {
+        assert_eq!(model_for_locale("en_GB"), Some(ENGLISH_MODEL));
+        assert_eq!(model_for_locale("is_IS"), Some(MULTILINGUAL_MODEL));
+        assert_eq!(model_for_locale("de"), Some(MULTILINGUAL_MODEL));
+        assert_eq!(model_for_locale("tlh"), None);
+        assert_ne!(ENGLISH_MODEL.file, MULTILINGUAL_MODEL.file);
+        assert!(MULTILINGUAL_MODEL.url.ends_with(MULTILINGUAL_MODEL.file));
+        let dir = Path::new("/home/someone/data");
+        assert_eq!(model_file_path(dir, MULTILINGUAL_MODEL), PathBuf::from("/home/someone/data/speech/ggml-base.bin"));
+        assert_eq!(model_file_path(dir, ENGLISH_MODEL), model_path(dir));
+    }
+
+    #[test]
+    fn whisper_language_codes_are_unique_lowercase_letters() {
+        let mut seen = std::collections::HashSet::new();
+        for l in WHISPER_LANGUAGES {
+            assert!((2..=3).contains(&l.len()) && l.bytes().all(|b| b.is_ascii_lowercase()), "{l}");
+            assert!(seen.insert(*l), "{l} listed twice");
+        }
+        assert_eq!(whisper_language("Is_is"), Some("is"));
+        assert_eq!(whisper_language("haw_US"), Some("haw"));
+    }
+
+    #[test]
+    fn a_non_english_pipeline_names_its_language_after_the_model() {
+        let model = Path::new("/home/someone/data/speech/ggml-base.bin");
+        let is = pipeline_argv_lang(Capture::PulseAudio, Source::Microphone, model, Some("is")).unwrap();
+        let at = is.iter().position(|a| a == "language=is").expect("language property");
+        assert_eq!(is[at - 1], "model=/home/someone/data/speech/ggml-base.bin");
+        assert_eq!(is[at + 1], "!");
+        assert_eq!(is.last().map(String::as_str), Some("fakesink"));
+        assert_eq!(is.iter().filter(|a| a.as_str() == "!").count(), 5);
+        let en = pipeline_argv_lang(Capture::PulseAudio, Source::Microphone, model, Some("en")).unwrap();
+        assert_eq!(en, pipeline_argv(Capture::PulseAudio, model).unwrap(), "English keeps the element's default");
+        assert!(pipeline_argv_lang(Capture::PulseAudio, Source::Microphone, model, Some("is ! x")).is_err());
+        assert!(pipeline_argv_lang(Capture::PulseAudio, Source::Microphone, model, Some("IS")).is_err());
     }
 }
