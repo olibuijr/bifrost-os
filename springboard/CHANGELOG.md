@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 0.10.19 — 2026-10-22
+
+One codebase for the PC and the tablet: the tablet port's branch is merged into the main line.
+
+- Tablet work now in the shared code: the on-screen keyboard is its own overlay surface above the windows (chrome
+  id 16) with the terminal's accessory row; the desktop keeps a snapshot of its regions and reports motion from the
+  real frame time; a still tablet desktop with the keyboard up stops asking for frames; touch and tablet gestures;
+  the session ends its background helpers with it, so a failed start is restarted.
+- Keyboard: the keyboard process starts only once a keyboard is raised, never because a page created one.
+- Settings: the Voice Control switch works again.
+- Twelve Craft apps updated from upstream (CAD, Deck, Design, Effect, Film, Grid, Light, PDF, Photo, Sound, Vector and
+  Word).
+- Tests: Files snapshots no longer show the disks of the machine that runs them; Messages, Notes and Screen Sharing
+  snapshots re-blessed for their recent features.
+
 ## 0.10.18 — 2026-10-22
 
 Window corners, a monitor that is off at start, and an OS parity round.
