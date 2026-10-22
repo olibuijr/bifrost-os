@@ -972,6 +972,7 @@ pub mod generation_schema;
 pub mod model_session;
 pub mod model_tool;
 pub mod model_provider;
+pub mod model_foundation;
 pub mod model_attachment;
 pub mod music;
 pub mod automix;
