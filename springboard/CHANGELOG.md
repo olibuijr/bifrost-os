@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.10.20 — 2026-10-22
+
+- Wi-Fi: a device whose Wi-Fi is not run by NetworkManager (the tablet, where wpa_supplicant does it) no longer
+  shows a false "Disconnected" notice: without that service the link state stays what the shell's own Wi-Fi client
+  read.
+- App updates: a device only takes store updates built for its own CPU, so a tablet never downloads an x86 package or
+  counts it in the App Store badge. A system release now also publishes every app that is newer than the store, so
+  devices get the apps with the system update.
+- Tests: the app menu test and the tablet keyboard tests no longer depend on what other tests left behind.
+
 ## 0.10.19 — 2026-10-22
 
 One codebase for the PC and the tablet: the tablet port's branch is merged into the main line.
