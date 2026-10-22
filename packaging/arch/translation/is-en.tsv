@@ -1,0 +1,133 @@
+# BifrOSt language pack, Icelandic to English. Original work for BifrOSt: common interface words, days, months and everyday phrases.
+# One `text<TAB>translation` line per phrase; read by bifrost_app::translation::LanguagePack (GlossaryTranslator).
+vista	save
+vista sem	save as
+hætta við	cancel
+opna	open
+loka	close
+eyða	delete
+fjarlægja	remove
+bæta við	add
+breyta	edit
+afrita	copy
+klippa	cut
+líma	paste
+afturkalla	undo
+endurgera	redo
+prenta	print
+deila	share
+senda	send
+leita	search
+finna	find
+velja allt	select all
+velja	select
+endurnýja	refresh
+uppfæra	update
+setja upp	install
+sækja	download
+hlaða upp	upload
+stillingar	settings
+valkostir	preferences
+hjálp	help
+um	about
+hætta	quit
+til baka	back
+áfram	forward
+næsta	next
+fyrri	previous
+lokið	done
+halda áfram	continue
+reyna aftur	retry
+já	yes
+nei	no
+endurstilla	reset
+endurræsa	restart
+slökkva	shut down
+skrá inn	log in
+skrá út	log out
+lykilorð	password
+notandanafn	username
+nafn	name
+netfang	email
+skrá	file
+skrár	files
+mappa	folder
+möppur	folders
+skjal	document
+skjöl	documents
+skjáborð	desktop
+niðurhal	downloads
+myndir	pictures
+tónlist	music
+myndbönd	videos
+rusl	trash
+heim	home
+net	network
+rafhlaða	battery
+hljóðstyrkur	volume
+birtustig	brightness
+skjár	display
+lyklaborð	keyboard
+mús	mouse
+hljóð	sound
+tungumál	language
+dagsetning	date
+tími	time
+í dag	today
+á morgun	tomorrow
+í gær	yesterday
+núna	now
+dagatal	calendar
+klukka	clock
+minnismiðar	notes
+tengiliðir	contacts
+skilaboð	messages
+póstur	mail
+ljósmyndir	photos
+reiknivél	calculator
+veður	weather
+kort	maps
+myndavél	camera
+sími	phone
+villa	error
+viðvörun	warning
+vinsamlegast bíddu	please wait
+halló	hello
+bless	goodbye
+góðan daginn	good morning
+gott kvöld	good evening
+góða nótt	good night
+takk fyrir	thank you
+takk	thanks
+vinsamlegast	please
+fyrirgefðu	sorry
+afsakið	excuse me
+hvernig hefurðu það	how are you
+já takk	yes please
+nei takk	no thank you
+ég skil ekki	i do not understand
+hvar er	where is
+hvað er	what is
+mánudagur	Monday
+þriðjudagur	Tuesday
+miðvikudagur	Wednesday
+fimmtudagur	Thursday
+föstudagur	Friday
+laugardagur	Saturday
+sunnudagur	Sunday
+janúar	January
+febrúar	February
+mars	March
+apríl	April
+maí	May
+júní	June
+júlí	July
+ágúst	August
+september	September
+október	October
+nóvember	November
+desember	December
+og	and
+eða	or
+með	with
+án	without

@@ -4,6 +4,10 @@
 //! button. The panels come from the template in `PANELS_FILE` when it parses, else from the one that ships
 //! (`switch_panels::BUILTIN`). Escape hides the panel and scanning starts over.
 //!
+//! Auto scanning: with `a11y_switch_auto_ms` set (500 to 10000 ms), the highlight steps on by itself every interval once the
+//! panel is up, as if "next" were pressed, and a press of either switch restarts the interval. After `AUTO_PASSES` rounds
+//! over all the panels with no press the panel hides again, so an idle scan does not run for ever ([`SwitchControl::auto_tick`]).
+//!
 //! The shell's input loop offers every key to [`Shell::switch_control_key`] first; a key that is a switch (and its release)
 //! is used up, any other key is left alone. Nothing acts on the lock screen or with the screen off. Geometry is pure
 //! (`panel`, `row_rect`) and tested on the host; the `Shell` methods at the bottom are the glue.
@@ -17,6 +21,13 @@ use crate::shell::{assistive_touch, Drawn, Effect, Shell};
 
 /// The pref that holds the key codes of the two switches (`SwitchKeys::save`).
 pub const KEYS_PREF: &str = "a11y_switch_keys";
+/// The pref that holds the auto-scan interval in milliseconds; absent or 0 keeps scanning manual (`parse_auto_ms`).
+pub const AUTO_PREF: &str = "a11y_switch_auto_ms";
+/// The shortest and longest auto-scan interval accepted, in milliseconds.
+pub const AUTO_MIN_MS: u64 = 500;
+pub const AUTO_MAX_MS: u64 = 10_000;
+/// Auto scanning gives up after this many rounds over every button of every panel with no press.
+pub const AUTO_PASSES: usize = 2;
 /// A panel template that replaces the built-in panels when it exists and parses.
 pub const PANELS_FILE: &str = "/etc/bifrost/accessibility/switch-panels.txt";
 
@@ -50,6 +61,15 @@ pub fn row_rect(s: f32, w: f32, h: f32, n: usize, i: usize) -> Rect {
     (x, y + (TITLE_PT + i as f32 * ROW_PT) * s, pw, ROW_PT * s)
 }
 
+/// The auto-scan interval a pref value names: 0 (manual) for a missing, malformed or zero value, else the value clamped to
+/// `AUTO_MIN_MS..=AUTO_MAX_MS`.
+pub fn parse_auto_ms(value: Option<&str>) -> u64 {
+    match value.and_then(|v| v.trim().parse::<u64>().ok()) {
+        None | Some(0) => 0,
+        Some(ms) => ms.clamp(AUTO_MIN_MS, AUTO_MAX_MS),
+    }
+}
+
 /// The scanner over the panels: which panel is up, where the highlight is, and whether the panel is on screen.
 #[derive(Clone, Debug)]
 pub struct SwitchControl {
@@ -61,6 +81,11 @@ pub struct SwitchControl {
     shown: bool,
     /// The volume before the Mute button muted it, so the next press restores it.
     muted_from: Option<f32>,
+    /// Auto scanning: the interval in ms (0 for manual), when the highlight last moved or a switch was last pressed, and
+    /// the steps taken by the timer since the last press.
+    auto_ms: u64,
+    last_step: f64,
+    auto_steps: usize,
 }
 
 impl SwitchControl {
@@ -68,7 +93,7 @@ impl SwitchControl {
     pub fn new(panels: PanelSet, keys: SwitchKeys) -> SwitchControl {
         let panels = if panels.panels().is_empty() { PanelSet::builtin() } else { panels };
         let scanner = PanelScanner::new(panels.panels()[0].clone());
-        SwitchControl { panels, keys, index: 0, scanner, cursor: None, shown: false, muted_from: None }
+        SwitchControl { panels, keys, index: 0, scanner, cursor: None, shown: false, muted_from: None, auto_ms: 0, last_step: 0.0, auto_steps: 0 }
     }
 
     /// The control for the saved switch keys and the template that applies (see `PANELS_FILE`).
@@ -81,7 +106,19 @@ impl SwitchControl {
             }),
             Err(_) => PanelSet::default(),
         };
-        SwitchControl::new(panels, keys)
+        SwitchControl::new(panels, keys).with_auto(parse_auto_ms(prefs.get(AUTO_PREF)))
+    }
+
+    /// The same control scanning by itself every `ms` milliseconds (0 keeps it manual; other values are clamped as
+    /// `parse_auto_ms` does).
+    pub fn with_auto(mut self, ms: u64) -> SwitchControl {
+        self.auto_ms = parse_auto_ms(Some(&ms.to_string()));
+        self
+    }
+
+    /// The auto-scan interval in milliseconds, 0 when scanning is manual.
+    pub fn auto_ms(&self) -> u64 {
+        self.auto_ms
     }
 
     /// The switch a key stands for, if it is bound.
@@ -124,6 +161,44 @@ impl SwitchControl {
             self.cursor = Some(i);
         }
         out
+    }
+
+    /// A switch press at time `t` (ms): restarts the auto-scan interval and its round count, then acts as [`SwitchControl::press`].
+    pub fn press_at(&mut self, switch: Switch, t: f64) -> Outcome {
+        self.last_step = t;
+        self.auto_steps = 0;
+        self.press(switch)
+    }
+
+    /// The most steps the timer takes without a press: `AUTO_PASSES` rounds over every button of every panel.
+    fn auto_limit(&self) -> usize {
+        AUTO_PASSES * self.panels.panels().iter().map(|p| p.buttons.len()).sum::<usize>()
+    }
+
+    /// Auto scanning at time `t` (ms). With the panel up, a highlight on a button and the interval passed since the last
+    /// step or press, the highlight moves on as a "next" press would. Once the timer has made [`AUTO_PASSES`] rounds with no
+    /// press the panel hides and scanning starts over. True when anything changed (the frame needs repainting).
+    pub fn auto_tick(&mut self, t: f64) -> bool {
+        if self.auto_ms == 0 || !self.shown || self.cursor.is_none() || t - self.last_step < self.auto_ms as f64 {
+            return false;
+        }
+        self.last_step = t;
+        self.auto_steps += 1;
+        if self.auto_steps > self.auto_limit() {
+            self.hide();
+        } else {
+            self.press(Switch::Next);
+        }
+        true
+    }
+
+    /// Takes the panel away and starts scanning over from the first panel.
+    fn hide(&mut self) {
+        self.shown = false;
+        self.cursor = None;
+        self.index = 0;
+        self.auto_steps = 0;
+        self.scanner = PanelScanner::new(self.panels.panels()[0].clone());
     }
 
     pub fn draw(&self, s: &mut Surface, ui: &Ui, w: i32, h: i32) {
@@ -173,6 +248,19 @@ impl Shell {
         self.dirty = true;
     }
 
+    /// The per-frame step of auto scanning (see `SwitchControl::auto_tick`). True when the highlight moved or the panel hid.
+    /// Does nothing while the setting is off, the screen is off or locked, or the panel has never been opened.
+    pub(in crate::shell) fn switch_control_tick(&mut self, t: f64) -> bool {
+        if self.switch_control.is_none() || !self.switch_control_on() || !self.screen_on || self.is_locked() {
+            return false;
+        }
+        let moved = self.switch_control.as_mut().is_some_and(|c| c.auto_tick(t));
+        if moved {
+            self.switch_panel_changed();
+        }
+        moved
+    }
+
     /// Escape hides the panel and starts scanning over. True when it was up (the key is then used up).
     pub(in crate::shell) fn switch_panel_escape(&mut self) -> bool {
         if !self.switch_panel_shown() {
@@ -204,7 +292,7 @@ impl Shell {
         if !down {
             return Some(vec![]);
         }
-        let outcome = control.press(switch);
+        let outcome = control.press_at(switch, t);
         self.last_input = t;
         match outcome {
             Outcome::Moved(_) => {
@@ -329,6 +417,96 @@ mod tests {
         assert_eq!(c.press(Switch::Next), Outcome::Moved(0));
         assert_eq!(c.panel().id, "a");
         assert_eq!(SwitchControl::new(PanelSet::default(), SwitchKeys::default()).panel().id, "system", "no panels gives the built-in ones");
+    }
+
+    #[test]
+    fn the_auto_interval_is_read_from_a_pref_and_clamped() {
+        assert_eq!(parse_auto_ms(None), 0);
+        assert_eq!(parse_auto_ms(Some("")), 0);
+        assert_eq!(parse_auto_ms(Some("soon")), 0);
+        assert_eq!(parse_auto_ms(Some("0")), 0);
+        assert_eq!(parse_auto_ms(Some("1500")), 1500);
+        assert_eq!(parse_auto_ms(Some("10")), AUTO_MIN_MS);
+        assert_eq!(parse_auto_ms(Some("999999")), AUTO_MAX_MS);
+        assert_eq!(control().with_auto(2_000).auto_ms(), 2_000);
+        assert_eq!(control().auto_ms(), 0, "scanning is manual unless asked");
+    }
+
+    #[test]
+    fn auto_scanning_steps_on_its_own_after_the_interval() {
+        let mut c = control().with_auto(1_000);
+        assert!(!c.auto_tick(5_000.0), "nothing moves before the panel is up");
+        c.press_at(Switch::Next, 0.0);
+        assert_eq!(c.highlighted(), Some(0));
+        assert!(!c.auto_tick(900.0), "the interval has not passed");
+        assert!(c.auto_tick(1_000.0));
+        assert_eq!(c.highlighted(), Some(1));
+        assert!(!c.auto_tick(1_500.0), "the interval counts from the last step");
+        assert!(c.auto_tick(2_000.0));
+        assert_eq!(c.highlighted(), Some(2));
+        // a press restarts the interval
+        c.press_at(Switch::Next, 2_900.0);
+        assert!(!c.auto_tick(3_500.0));
+        assert!(c.auto_tick(3_900.0));
+        assert_eq!(c.highlighted(), Some(4));
+    }
+
+    #[test]
+    fn manual_scanning_never_moves_on_a_tick() {
+        let mut c = control();
+        c.press_at(Switch::Next, 0.0);
+        assert!(!c.auto_tick(1_000_000.0));
+        assert_eq!(c.highlighted(), Some(0));
+    }
+
+    #[test]
+    fn auto_scanning_goes_on_into_the_next_panel_and_gives_up_after_two_rounds() {
+        let mut c = control().with_auto(1_000);
+        c.press_at(Switch::Next, 0.0);
+        let mut t = 0.0;
+        for step in 1..=20 {
+            t += 1_000.0;
+            assert!(c.auto_tick(t));
+            assert!(c.shown(), "still scanning at step {step}");
+            if step == 6 {
+                assert_eq!(c.panel().id, "media", "the highlight went on to the next panel");
+            }
+        }
+        t += 1_000.0;
+        assert!(c.auto_tick(t), "the hiding is a change too");
+        assert!(!c.shown() && c.highlighted().is_none());
+        assert_eq!(c.panel().id, "system", "scanning starts over from the first panel");
+        assert!(!c.auto_tick(t + 5_000.0), "nothing runs while the panel is down");
+    }
+
+    #[test]
+    fn a_press_resets_the_count_of_idle_rounds() {
+        let mut c = control().with_auto(1_000);
+        c.press_at(Switch::Next, 0.0);
+        for n in 1..=15 {
+            assert!(c.auto_tick(n as f64 * 1_000.0));
+        }
+        c.press_at(Switch::Select, 15_500.0);
+        for n in 1..=20 {
+            assert!(c.auto_tick(15_500.0 + n as f64 * 1_000.0));
+            assert!(c.shown());
+        }
+    }
+
+    #[test]
+    fn the_shell_ticks_auto_scanning_while_the_setting_is_on() {
+        let mut sh = shell();
+        sh.prefs.set(AUTO_PREF, "1000").unwrap();
+        assert!(!sh.switch_control_tick(1_000.0), "no panel yet");
+        on(&mut sh);
+        assert!(!sh.switch_control_tick(1_500.0), "setting on but the panel was never opened");
+        sh.switch_control_key(KEY_SPACE, true, 2000.0);
+        assert_eq!(sh.switch_control.as_ref().unwrap().highlighted(), Some(0));
+        assert!(!sh.switch_control_tick(2_500.0));
+        assert!(sh.switch_control_tick(3_000.0));
+        assert_eq!(sh.switch_control.as_ref().unwrap().highlighted(), Some(1));
+        sh.prefs.set("a11y_switch_control", "0").unwrap();
+        assert!(!sh.switch_control_tick(4_000.0), "nothing steps with the setting off");
     }
 
     #[test]

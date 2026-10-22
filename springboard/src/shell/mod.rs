@@ -3872,6 +3872,7 @@ impl Shell {
         self.fx_tick(t);
         self.metrics_tick(t);
         self.live_wallpaper_tick(t);
+        self.switch_control_tick(t);
         let mut fx = self.tick_inner(t);
         fx.append(&mut self.voice_fx);
         fx.extend(self.voice_click_tick(t));

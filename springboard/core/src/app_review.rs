@@ -2,8 +2,9 @@
 //!
 //! A review is one star rating (1 to 5), an optional nickname, and an optional written body. Validation runs before a
 //! review is sent, and the summary turns a list of star ratings into the average and the five-bar histogram the store
-//! shows on a product page. The sheet and the catalogue endpoints are not built yet; this module is the rules they
-//! will call.
+//! shows on a product page. The sheet is `shell::store::review_sheet`; [`ReviewBook`] keeps the reviews written on this
+//! PC in a file, so one can be edited later and sent once the catalogue takes reviews (it has no review endpoint yet, a
+//! server job outside this repository).
 
 /// The lowest and highest star rating.
 pub const MIN_STARS: u8 = 1;
@@ -29,7 +30,14 @@ pub enum Error {
     BodyTooLong(usize),
     /// The sheet's draft was already sent.
     AlreadySubmitted,
+    /// The app id is empty, longer than [`MAX_APP_ID`] bytes, or holds a control character; or the book is full.
+    AppId,
 }
+
+/// The longest app id a [`ReviewBook`] keeps, in bytes.
+pub const MAX_APP_ID: usize = 128;
+/// The most reviews a [`ReviewBook`] keeps; a review of a new app past it is refused.
+pub const MAX_REVIEWS: usize = 500;
 
 /// Checks a review before it is sent. The text fields are trimmed first, so spaces alone do not count as text.
 pub fn validate(review: &Review) -> Result<(), Error> {
@@ -76,6 +84,89 @@ fn json_string(text: &str) -> String {
     }
     out.push('"');
     out
+}
+
+/// The reviews written on this PC: the latest review of each app, by app id. The book is the sheet's memory (an app already
+/// reviewed opens the sheet with its review to edit) and the queue of what the catalogue will receive. Its text form is one
+/// JSON object, `{"reviews":[{"app":"...","stars":N,"nickname":"...","body":"..."}]}`.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ReviewBook {
+    entries: std::collections::BTreeMap<String, Review>,
+}
+
+fn app_id_ok(id: &str) -> bool {
+    !id.is_empty() && id.len() <= MAX_APP_ID && !id.chars().any(char::is_control)
+}
+
+impl ReviewBook {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// The review of `app_id`, if one was written.
+    pub fn get(&self, app_id: &str) -> Option<&Review> {
+        self.entries.get(app_id)
+    }
+
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    /// The app ids with a review, in order.
+    pub fn app_ids(&self) -> Vec<&str> {
+        self.entries.keys().map(String::as_str).collect()
+    }
+
+    /// Keeps `review` as the review of `app_id`, replacing an earlier one. The review is validated and its text trimmed
+    /// first; a bad app id, an invalid review, or a new app past [`MAX_REVIEWS`] is refused and the book stays as it was.
+    pub fn set(&mut self, app_id: &str, review: &Review) -> Result<(), Error> {
+        if !app_id_ok(app_id) {
+            return Err(Error::AppId);
+        }
+        validate(review)?;
+        if !self.entries.contains_key(app_id) && self.entries.len() >= MAX_REVIEWS {
+            return Err(Error::AppId);
+        }
+        let tidy = Review { stars: review.stars, nickname: review.nickname.trim().to_string(), body: review.body.trim().to_string() };
+        self.entries.insert(app_id.to_string(), tidy);
+        Ok(())
+    }
+
+    /// Drops the review of `app_id`; true when there was one.
+    pub fn remove(&mut self, app_id: &str) -> bool {
+        self.entries.remove(app_id).is_some()
+    }
+
+    /// The book as text, apps in order.
+    pub fn to_text(&self) -> String {
+        let items: Vec<String> = self
+            .entries
+            .iter()
+            .map(|(app, r)| format!("{{\"app\":{},\"stars\":{},\"nickname\":{},\"body\":{}}}", json_string(app), r.stars, json_string(&r.nickname), json_string(&r.body)))
+            .collect();
+        format!("{{\"reviews\":[{}]}}\n", items.join(","))
+    }
+
+    /// Reads [`ReviewBook::to_text`] output. Text that is not a book gives an empty one, and an entry that does not
+    /// validate (bad app id, stars outside 1 to 5, text over its limit) is skipped, so a damaged file loses only that entry.
+    pub fn from_text(text: &str) -> Self {
+        let mut book = Self::new();
+        let Ok(root) = crate::json::parse(text) else { return book };
+        for item in root.get("reviews").and_then(crate::json::Json::as_array).unwrap_or(&[]) {
+            let (Some(app), Some(stars)) = (item.str_field("app"), item.get("stars").and_then(crate::json::Json::as_u64)) else { continue };
+            let review = Review {
+                stars: u8::try_from(stars).unwrap_or(0),
+                nickname: item.str_field("nickname").unwrap_or_default(),
+                body: item.str_field("body").unwrap_or_default(),
+            };
+            let _ = book.set(&app, &review);
+        }
+        book
+    }
 }
 
 /// The rating summary for one product: the number of ratings at each star count (index 0 is one star) and the average.
@@ -233,6 +324,63 @@ mod tests {
 
     fn review(stars: u8, nickname: &str, body: &str) -> Review {
         Review { stars, nickname: nickname.to_string(), body: body.to_string() }
+    }
+
+    #[test]
+    fn the_book_keeps_the_latest_trimmed_review_of_each_app() {
+        let mut book = ReviewBook::new();
+        assert!(book.is_empty());
+        book.set("is.o.chess", &review(4, "  Ana ", " fun  ")).unwrap();
+        assert_eq!(book.get("is.o.chess"), Some(&review(4, "Ana", "fun")));
+        book.set("is.o.chess", &review(5, "", "")).unwrap();
+        book.set("is.o.arc", &review(2, "", "slow")).unwrap();
+        assert_eq!((book.len(), book.get("is.o.chess").unwrap().stars), (2, 5), "a second review replaces the first");
+        assert_eq!(book.app_ids(), ["is.o.arc", "is.o.chess"]);
+        assert!(book.remove("is.o.arc") && !book.remove("is.o.arc"));
+    }
+
+    #[test]
+    fn a_bad_review_or_app_id_changes_nothing() {
+        let mut book = ReviewBook::new();
+        book.set("is.o.chess", &review(3, "", "")).unwrap();
+        assert_eq!(book.set("", &review(3, "", "")), Err(Error::AppId));
+        assert_eq!(book.set("bad\nid", &review(3, "", "")), Err(Error::AppId));
+        assert_eq!(book.set(&"a".repeat(MAX_APP_ID + 1), &review(3, "", "")), Err(Error::AppId));
+        assert_eq!(book.set("is.o.chess", &review(0, "", "")), Err(Error::Stars(0)));
+        assert_eq!(book.get("is.o.chess").unwrap().stars, 3);
+        assert_eq!(book.len(), 1);
+    }
+
+    #[test]
+    fn the_book_is_capped() {
+        let mut book = ReviewBook::new();
+        for n in 0..MAX_REVIEWS {
+            book.set(&format!("app{n}"), &review(1, "", "")).unwrap();
+        }
+        assert_eq!(book.set("one.more", &review(1, "", "")), Err(Error::AppId));
+        book.set("app0", &review(5, "", "")).unwrap();
+        assert_eq!(book.len(), MAX_REVIEWS, "an app already in the book can still be edited");
+    }
+
+    #[test]
+    fn the_book_round_trips_through_its_text() {
+        let mut book = ReviewBook::new();
+        book.set("is.o.chess", &review(4, "Ana \"A\"", "line one\nline \\two\tx")).unwrap();
+        book.set("is.o.arc", &review(1, "", "")).unwrap();
+        let text = book.to_text();
+        assert!(text.starts_with("{\"reviews\":[{\"app\":\"is.o.arc\""), "{text}");
+        assert_eq!(ReviewBook::from_text(&text), book);
+        assert_eq!(ReviewBook::new().to_text(), "{\"reviews\":[]}\n");
+    }
+
+    #[test]
+    fn a_damaged_book_loses_only_the_damaged_entries() {
+        assert!(ReviewBook::from_text("not json").is_empty());
+        assert!(ReviewBook::from_text("{}").is_empty());
+        let text = r#"{"reviews":[{"app":"a.ok","stars":3},{"app":"a.zero","stars":0},{"app":"a.six","stars":6},{"stars":4},{"app":"","stars":4},{"app":"a.big","stars":300}]}"#;
+        let book = ReviewBook::from_text(text);
+        assert_eq!(book.app_ids(), ["a.ok"]);
+        assert_eq!(book.get("a.ok"), Some(&review(3, "", "")));
     }
 
     #[test]
