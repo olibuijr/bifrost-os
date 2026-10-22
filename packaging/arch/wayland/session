@@ -97,6 +97,7 @@ start_wm() {
         /usr/bin/bifrost-wm --drm --socket wayland-0 1>&2 &
     compositor_pid=$!
 }
+rm -f /run/bifrost/wm-awaiting-display
 start_wm
 retried=
 while :; do
@@ -104,6 +105,9 @@ while :; do
     for ((i=0;i<250;i++)); do
         [[ -S "$runtime/wayland-0" ]] && { ready=1; break; }
         kill -0 "$compositor_pid" 2>/dev/null || break
+        # no display connected (monitor off, asleep or on another input): the window server opens its socket once one
+        # is, so this is not a failed start
+        [[ -e /run/bifrost/wm-awaiting-display ]] && i=0
         sleep .02
     done
     [[ -n "$ready" ]] && break

@@ -113,14 +113,14 @@ impl Boot {
 /// Runs the window server on the seat's primary GPU until the session ends.
 pub fn run(socket: Option<&str>, command: &[String]) -> Result<(), Box<dyn Error>> {
     let mut event_loop: EventLoop<'static, WmState> = EventLoop::try_new()?;
-    let display: Display<WmState> = Display::new()?;
-    let mut state = WmState::new(&mut event_loop, display, socket);
-
     let (mut session, notifier) = LibSeatSession::new().map_err(|e| format!("libseat: {e}"))?;
     let seat = session.seat();
     let gpu = primary_gpu(&seat)?.or_else(|| all_gpus(&seat).ok()?.into_iter().next()).ok_or("no GPU")?;
     eprintln!("bifrost-wm: GPU {}", gpu.display());
+    // before the Wayland socket exists: a client that connected now would get no answer until a display is there
     wait_for_display(&gpu);
+    let display: Display<WmState> = Display::new()?;
+    let mut state = WmState::new(&mut event_loop, display, socket);
     // the page flip's vblank time, written by the DRM event source and read by the vblank callback below
     let vblank_time: Rc<Cell<Option<Duration>>> = Rc::new(Cell::new(None));
     let mut drm = open_gpu(&mut session, &gpu, &mut state, event_loop.handle(), vblank_time.clone())?;
@@ -252,10 +252,15 @@ pub fn run(socket: Option<&str>, command: &[String]) -> Result<(), Box<dyn Error
     Ok(())
 }
 
+/// Exists while the window server waits for a display (`packaging/arch/wayland/session` reads it).
+const AWAITING_DISPLAY: &str = "/run/bifrost/wm-awaiting-display";
+
 /// Blocks until a display is connected to `gpu` (one of its sysfs connectors reads `connected`), checking once a
 /// second. A PC whose monitor is off, asleep or on another input when the session starts then gets its desktop when the
 /// monitor comes back, instead of the session exiting with "no connected display". Without a sysfs view of the card
 /// (a container) it returns at once and `open_gpu` decides. A display plugged in while running is not handled yet.
+/// While it waits, [`AWAITING_DISPLAY`] exists, so the session keeps waiting for the socket instead of counting a
+/// failed start.
 fn wait_for_display(gpu: &Path) {
     let Some(card) = gpu.file_name().and_then(|n| n.to_str()) else { return };
     let prefix = format!("{card}-");
@@ -272,11 +277,13 @@ fn wait_for_display(gpu: &Path) {
         if statuses.is_empty() || any_connected(&statuses) {
             if logged {
                 eprintln!("bifrost-wm: display connected on {card}");
+                let _ = std::fs::remove_file(AWAITING_DISPLAY);
             }
             return;
         }
         if !logged {
             eprintln!("bifrost-wm: no connected display on {card}, waiting for one");
+            let _ = std::fs::write(AWAITING_DISPLAY, b"");
             logged = true;
         }
         std::thread::sleep(Duration::from_secs(1));
