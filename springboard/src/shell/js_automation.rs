@@ -1,5 +1,5 @@
 //! JavaScript automation (`JavaScriptAppleEvents` and `JavaScriptOSA` parity): a script written in JavaScript that
-//! drives running apps through the same typed events the AppleScript-style language sends (`bifrost_core::script`).
+//! drives running apps through the same typed events the BifrOSt script language sends (`bifrost_core::script`).
 //!
 //! One run = one fresh Boa context (not the browser's: no DOM, no network, no timers). The runner evaluates the
 //! script's source at global scope; if the script then defines a global `run` function it is called with the argument
@@ -27,7 +27,7 @@
 //!   `app.notes.whose({name: "x"})` select by name or by one property. A specifier is read by calling it
 //!   (`app.notes[0]()`), a property of it by calling the property (`app.notes[0].name()`), set by assignment
 //!   (`app.notes[0].name = "x"`) or `.set(value)`, and the object is removed by `.delete()`. Each one goes as the core
-//!   events `getd`, `setd` and `delt`, the same records the AppleScript-style language sends, after the same grant check
+//!   events `getd`, `setd` and `delt`, the same records the BifrOSt script language sends, after the same grant check
 //!   and the same check of the dictionary's classes and properties (`-1728` for one it does not declare).
 //!
 //! Not covered: elements nested in an element (`app.windows[0].tabs[1]`): the event record names one class and one
@@ -212,7 +212,7 @@ impl Env {
 
     /// One core event on an object: `verb` is `getd`, `setd` or `delt`, `object` the specifier record, `property` the
     /// property to read or write (empty for the object itself), `value` the JSON to set. The class and the property must
-    /// be declared when the dictionary declares any, as in the AppleScript-style language.
+    /// be declared when the dictionary declares any, as in the BifrOSt script language.
     fn object_event(&self, app: &str, verb: &str, object: &str, property: &str, value: &str) -> Result<Json, ScriptError> {
         self.authorize(app)?;
         let dict = self.dictionary(app)?;
@@ -581,7 +581,7 @@ mod tests {
     }
 
     #[test]
-    fn undeclared_commands_and_labels_throw_with_apple_event_numbers() {
+    fn undeclared_commands_and_labels_throw_with_event_error_numbers() {
         let (r, sent, _, _) = go(r#"Application("Notes").explode()"#, &[], Policy::allow_all());
         assert_eq!(r.result.unwrap_err().number, ERR_NOT_HANDLED);
         let (r, _, _, _) = go(r#"Application("Notes").makeNewNote("x", {colour: "red"})"#, &[], Policy::allow_all());
@@ -721,7 +721,7 @@ mod tests {
         assert!(e.message.contains("colour") && e.message.contains("note"));
         let (r, _, _, _) = go(r#"Application("Notes").notes[0].colour = "red""#, &[], Policy::allow_all());
         assert_eq!(r.result.unwrap_err().number, ERR_NO_SUCH_OBJECT);
-        // a class that lists no properties accepts any, as the AppleScript-style language does
+        // a class that lists no properties accepts any, as the BifrOSt script language does
         let (r, sent2, _, _) = go(r#"Application("Notes").categories[0].anything()"#, &[], Policy::allow_all());
         assert!(r.result.is_ok());
         assert_eq!(sent2.borrow().len(), 1);

@@ -1,5 +1,5 @@
 //! BifrOSt scripting: the scripting dictionaries apps declare in their manifest (`dictionary`), and a small
-//! AppleScript-style language that sends dictionary commands to apps as typed events.
+//! BifrOSt script language that sends dictionary commands to apps as typed events.
 //!
 //! - `lexer` and `parser` turn source text into an `ast::Program`.
 //! - `interp` runs a program against a [`interp::Host`], which owns every side effect (events, dialogs, shell, sleep).
@@ -46,10 +46,10 @@ pub fn compile(source: &str) -> Result<String, lexer::ParseError> {
     Ok(doc.encode())
 }
 
-/// The `language` a compiled JavaScript script carries. A compiled AppleScript-style script has no `language` field (the
-/// first version of the format had none), and `compiled_language` reads that as `LANG_APPLESCRIPT`.
+/// The `language` a compiled JavaScript script carries. A compiled Script-style script has no `language` field (the
+/// first version of the format had none), and `compiled_language` reads that as `LANG_SCRIPT`.
 pub const LANG_JAVASCRIPT: &str = "JavaScript";
-pub const LANG_APPLESCRIPT: &str = "AppleScript";
+pub const LANG_SCRIPT: &str = "bifrost-script";
 
 /// The canonical text of a JavaScript script: line ends become LF and the text ends with one newline. Nothing else is
 /// touched, because trailing blanks and blank lines can be part of a template literal.
@@ -75,7 +75,7 @@ pub fn compile_js(source: &str) -> String {
     doc.encode()
 }
 
-/// The language of a compiled script: `LANG_JAVASCRIPT` or `LANG_APPLESCRIPT`. `None` when the text is not a compiled
+/// The language of a compiled script: `LANG_JAVASCRIPT` or `LANG_SCRIPT`. `None` when the text is not a compiled
 /// script or names a language this version does not know.
 pub fn compiled_language(text: &str) -> Option<&'static str> {
     let doc = crate::json::parse(text).ok()?;
@@ -83,7 +83,7 @@ pub fn compiled_language(text: &str) -> Option<&'static str> {
         return None;
     }
     match doc.str_field("language").as_deref() {
-        None | Some(LANG_APPLESCRIPT) => Some(LANG_APPLESCRIPT),
+        None | Some(LANG_SCRIPT) => Some(LANG_SCRIPT),
         Some(LANG_JAVASCRIPT) => Some(LANG_JAVASCRIPT),
         Some(_) => None,
     }
@@ -123,10 +123,10 @@ mod tests {
     }
 
     #[test]
-    fn a_compiled_applescript_script_and_older_files_read_as_applescript() {
+    fn a_compiled_script_and_older_files_read_as_the_script_language() {
         let text = compile("return 1\n").unwrap();
-        assert_eq!(compiled_language(&text), Some(LANG_APPLESCRIPT));
-        assert_eq!(compiled_language(r#"{"format":"bifrost-osa","version":1,"source":"x"}"#), Some(LANG_APPLESCRIPT));
+        assert_eq!(compiled_language(&text), Some(LANG_SCRIPT));
+        assert_eq!(compiled_language(r#"{"format":"bifrost-osa","version":1,"source":"x"}"#), Some(LANG_SCRIPT));
         assert_eq!(compiled_language(r#"{"format":"bifrost-osa","language":"Perl","source":"x"}"#), None);
         assert_eq!(compiled_language("return 1"), None);
         assert_eq!(compiled_language(r#"{"format":"other"}"#), None);

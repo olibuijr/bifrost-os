@@ -35,11 +35,11 @@ pub enum Input {
     Stdin,
 }
 
-/// The language of the script: the AppleScript-style language (`bifrost_core::script`) or JavaScript
+/// The language of the script: the BifrOSt script language (`bifrost_core::script`) or JavaScript
 /// (`springboard::shell::js_automation`, run with every grant because the person started it).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Language {
-    AppleScript,
+    Script,
     JavaScript,
 }
 
@@ -64,7 +64,7 @@ pub enum Parsed {
 pub fn parse(args: &[String]) -> Result<Parsed, String> {
     let mut lines: Vec<String> = Vec::new();
     let mut style = Style::Plain;
-    let mut language = Language::AppleScript;
+    let mut language = Language::Script;
     let mut language_given = false;
     let mut file: Option<PathBuf> = None;
     let mut argv: Vec<String> = Vec::new();
@@ -104,7 +104,7 @@ pub fn parse(args: &[String]) -> Result<Parsed, String> {
                 }
                 "-l" => {
                     match next.as_deref() {
-                        Some("AppleScript") => language = Language::AppleScript,
+                        Some("AppleScript") => language = Language::Script,
                         Some("JavaScript") => language = Language::JavaScript,
                         Some(other) => return Err(format!("language {other} is not supported; use AppleScript or JavaScript")),
                         None => return Err("-l needs a language".into()),
@@ -150,7 +150,7 @@ pub fn read_script(input: &Input) -> Result<(String, Option<Language>), String> 
                 Some(source) => {
                     let language = match script::compiled_language(&text) {
                         Some(script::LANG_JAVASCRIPT) => Language::JavaScript,
-                        Some(_) => Language::AppleScript,
+                        Some(_) => Language::Script,
                         None => return Err(format!("{} is compiled in a language this osascript does not know", path.display())),
                     };
                     Ok((source, Some(language)))
@@ -166,7 +166,7 @@ pub fn read_script(input: &Input) -> Result<(String, Option<Language>), String> 
     }
 }
 
-/// The language to run: `-l` when given, else the one a compiled file carries, else the AppleScript-style language. A
+/// The language to run: `-l` when given, else the one a compiled file carries, else the BifrOSt script language. A
 /// compiled file run with a different `-l` is an error, because its stored source belongs to one grammar.
 pub fn pick_language(asked: Language, given: bool, compiled: Option<Language>) -> Result<Language, String> {
     match (given, compiled) {
@@ -331,7 +331,7 @@ mod tests {
         assert!(parse(&args(&["-s", "q", "-e", "x"])).is_err());
         assert!(parse(&args(&["-l", "Perl", "-e", "x"])).is_err());
         assert_eq!(run_of(&["-l", "JavaScript", "-e", "1"]).language, Language::JavaScript);
-        assert_eq!(run_of(&["-e", "1"]).language, Language::AppleScript);
+        assert_eq!(run_of(&["-e", "1"]).language, Language::Script);
         assert!(parse(&args(&["-s"])).is_err());
     }
 
@@ -368,20 +368,20 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let js = dir.join("j.scpt");
         std::fs::write(&js, script::compile_js("1 + 1")).unwrap();
-        let apple = dir.join("a.scpt");
-        std::fs::write(&apple, script::compile("return 1\n").unwrap()).unwrap();
+        let compiled = dir.join("a.scpt");
+        std::fs::write(&compiled, script::compile("return 1\n").unwrap()).unwrap();
         let plain = dir.join("p.txt");
         std::fs::write(&plain, "return 1").unwrap();
         assert_eq!(read_script(&Input::File(js.clone())).unwrap(), ("1 + 1\n".to_string(), Some(Language::JavaScript)));
-        assert_eq!(read_script(&Input::File(apple)).unwrap().1, Some(Language::AppleScript));
+        assert_eq!(read_script(&Input::File(compiled)).unwrap().1, Some(Language::Script));
         assert_eq!(read_script(&Input::File(plain)).unwrap(), ("return 1".to_string(), None));
         let unknown = dir.join("u.scpt");
         std::fs::write(&unknown, r#"{"format":"bifrost-osa","language":"Perl","source":"x"}"#).unwrap();
         assert!(read_script(&Input::File(unknown)).is_err());
         // run: no -l means the file's own language, and the result is the JavaScript one
         let opts = |language_given, language| Options { input: Input::File(js.clone()), style: Style::Plain, language, language_given, argv: vec![] };
-        assert_eq!(run(&opts(false, Language::AppleScript)).unwrap().as_deref(), Some("2"));
-        assert!(run(&opts(true, Language::AppleScript)).is_err(), "-l AppleScript on a JavaScript file");
+        assert_eq!(run(&opts(false, Language::Script)).unwrap().as_deref(), Some("2"));
+        assert!(run(&opts(true, Language::Script)).is_err(), "-l with the script language on a JavaScript file");
         assert_eq!(run(&opts(true, Language::JavaScript)).unwrap().as_deref(), Some("2"));
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -389,11 +389,11 @@ mod tests {
     #[test]
     fn the_language_is_the_flag_then_the_file_then_the_default() {
         use Language::*;
-        assert_eq!(pick_language(AppleScript, false, None), Ok(AppleScript));
-        assert_eq!(pick_language(AppleScript, false, Some(JavaScript)), Ok(JavaScript));
+        assert_eq!(pick_language(Script, false, None), Ok(Script));
+        assert_eq!(pick_language(Script, false, Some(JavaScript)), Ok(JavaScript));
         assert_eq!(pick_language(JavaScript, true, Some(JavaScript)), Ok(JavaScript));
         assert_eq!(pick_language(JavaScript, true, None), Ok(JavaScript));
-        assert!(pick_language(AppleScript, true, Some(JavaScript)).is_err());
+        assert!(pick_language(Script, true, Some(JavaScript)).is_err());
         assert!(run_of(&["-l", "JavaScript", "-e", "1"]).language_given);
         assert!(!run_of(&["-e", "1"]).language_given);
     }

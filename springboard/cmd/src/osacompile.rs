@@ -17,7 +17,7 @@ pub const USAGE: &str = "usage: osacompile [-l AppleScript|JavaScript] [-o outpu
 /// The language of the script to compile (`-l`), the same two `osascript -l` runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Language {
-    AppleScript,
+    Script,
     JavaScript,
 }
 
@@ -32,7 +32,7 @@ pub struct Options {
     pub input: Input,
     /// `-o`: where the compiled file goes. Without it: the input file with `.scpt`, or `script.scpt` for `-e` lines.
     pub output: Option<PathBuf>,
-    /// `-l`: the language. Without it: JavaScript for a file ending in `.js`, else the AppleScript-style language.
+    /// `-l`: the language. Without it: JavaScript for a file ending in `.js`, else the BifrOSt script language.
     pub language: Option<Language>,
 }
 
@@ -64,7 +64,7 @@ pub fn parse(args: &[String]) -> Result<Parsed, String> {
             }
             "-l" => {
                 language = Some(match next.as_deref() {
-                    Some("AppleScript") => Language::AppleScript,
+                    Some("AppleScript") => Language::Script,
                     Some("JavaScript") => Language::JavaScript,
                     Some(other) => return Err(format!("language {other} is not supported; use AppleScript or JavaScript")),
                     None => return Err("-l needs a language".into()),
@@ -98,12 +98,12 @@ pub fn source_of(input: &Input) -> Result<String, String> {
     }
 }
 
-/// The language the input is compiled as: `-l`, else JavaScript for a `.js` file, else the AppleScript-style language.
+/// The language the input is compiled as: `-l`, else JavaScript for a `.js` file, else the BifrOSt script language.
 pub fn language_of(opts: &Options) -> Language {
     match (opts.language, &opts.input) {
         (Some(l), _) => l,
         (None, Input::File(path)) if path.extension().is_some_and(|e| e == "js") => Language::JavaScript,
-        _ => Language::AppleScript,
+        _ => Language::Script,
     }
 }
 
@@ -120,7 +120,7 @@ pub fn output_of(opts: &Options) -> PathBuf {
 pub fn compile_to_file(opts: &Options) -> Result<PathBuf, String> {
     let source = source_of(&opts.input)?;
     let compiled = match language_of(opts) {
-        Language::AppleScript => script::compile(&source).map_err(|e| e.to_string())?,
+        Language::Script => script::compile(&source).map_err(|e| e.to_string())?,
         Language::JavaScript => {
             springboard::shell::js_automation::check_syntax(&source).map_err(|e| e.to_string())?;
             script::compile_js(&source)
@@ -175,10 +175,10 @@ mod tests {
     #[test]
     fn the_language_comes_from_l_or_a_js_extension() {
         let opts = |input, language| Options { input, output: None, language };
-        assert_eq!(language_of(&opts(Input::Lines(vec!["1".into()]), None)), Language::AppleScript);
+        assert_eq!(language_of(&opts(Input::Lines(vec!["1".into()]), None)), Language::Script);
         assert_eq!(language_of(&opts(Input::File("a.js".into()), None)), Language::JavaScript);
-        assert_eq!(language_of(&opts(Input::File("a.bfs".into()), None)), Language::AppleScript);
-        assert_eq!(language_of(&opts(Input::File("a.js".into()), Some(Language::AppleScript))), Language::AppleScript);
+        assert_eq!(language_of(&opts(Input::File("a.bfs".into()), None)), Language::Script);
+        assert_eq!(language_of(&opts(Input::File("a.js".into()), Some(Language::Script))), Language::Script);
         match parse(&args(&["-l", "JavaScript", "-e", "1"])).unwrap() {
             Parsed::Run(o) => assert_eq!(o.language, Some(Language::JavaScript)),
             Parsed::Help => panic!(),
