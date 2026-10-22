@@ -4,7 +4,9 @@
 //! against the schema, and only then is the handler run.
 //!
 //! A failed call does not end the turn. [`ToolSet::output_for`] turns the error into the text of the tool output, so the
-//! model sees what went wrong and can try again. This is a pure model: the handlers run in the calling thread, and
+//! model sees what went wrong and can try again. A [`ToolChoice`] limits what a request may use (no tools, or only some
+//! of them), and [`ToolSet::set_max_output`] caps how much a tool can put back into the conversation, so one chatty tool
+//! cannot use up the context budget. This is a pure model: the handlers run in the calling thread, and
 //! nothing here calls a model or reads any data.
 
 use crate::generation_schema::{self, Issue, Kind, ParseError, Value};
@@ -83,6 +85,8 @@ pub enum ToolError {
     Invalid { name: String, issues: Vec<Issue> },
     /// The handler returned an error.
     Failed { name: String, message: String },
+    /// The tool exists, but the current [`ToolChoice`] does not offer it.
+    NotAllowed { name: String },
 }
 
 impl fmt::Display for ToolError {
@@ -101,14 +105,34 @@ impl fmt::Display for ToolError {
                 write!(f, "arguments for `{name}` do not fit the schema: {}", problems.join("; "))
             }
             ToolError::Failed { name, message } => write!(f, "tool `{name}` failed: {message}"),
+            ToolError::NotAllowed { name } => write!(f, "tool `{name}` is not available for this request"),
         }
     }
+}
+
+/// Which of a set's tools a request may use.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum ToolChoice {
+    /// Every registered tool.
+    #[default]
+    Auto,
+    /// None: the request describes no tools and every call is refused.
+    Disabled,
+    /// Only the named tools. A name that is not registered is ignored.
+    Only(Vec<String>),
+}
+
+/// The marker a capped output ends with; it says how much was left out.
+fn truncation_note(omitted: usize) -> String {
+    format!("\n[output truncated: {omitted} characters omitted]")
 }
 
 /// The tools a session offers, in the order they were registered.
 #[derive(Debug, Default)]
 pub struct ToolSet {
     tools: Vec<Tool>,
+    choice: ToolChoice,
+    max_output: Option<usize>,
 }
 
 impl ToolSet {
@@ -138,18 +162,57 @@ impl ToolSet {
         self.tools.iter().find(|t| t.name == name)
     }
 
+    /// The names of every registered tool.
     pub fn names(&self) -> Vec<&str> {
         self.tools.iter().map(|t| t.name.as_str()).collect()
+    }
+
+    /// Limits which tools requests offer and calls may run. The default is [`ToolChoice::Auto`].
+    pub fn set_choice(&mut self, choice: ToolChoice) {
+        self.choice = choice;
+    }
+
+    pub fn choice(&self) -> &ToolChoice {
+        &self.choice
+    }
+
+    /// Caps a tool's output at `max_chars` characters; the model is told how much was left out. `None` (the default)
+    /// passes outputs through whole.
+    pub fn set_max_output(&mut self, max_chars: Option<usize>) {
+        self.max_output = max_chars;
+    }
+
+    fn allows(&self, name: &str) -> bool {
+        match &self.choice {
+            ToolChoice::Auto => true,
+            ToolChoice::Disabled => false,
+            ToolChoice::Only(names) => names.iter().any(|n| n == name),
+        }
+    }
+
+    /// The tools the current [`ToolChoice`] offers.
+    fn offered(&self) -> impl Iterator<Item = &Tool> {
+        self.tools.iter().filter(|t| self.allows(&t.name))
+    }
+
+    fn capped(&self, text: String) -> String {
+        let Some(max) = self.max_output else { return text };
+        let total = text.chars().count();
+        if total <= max {
+            return text;
+        }
+        let kept: String = text.chars().take(max).collect();
+        format!("{kept}{}", truncation_note(total - max))
     }
 
     /// The text that describes the tools for a request: a header line, then one line per tool with its description and,
     /// unless it was left out, its arguments. Empty when the set has no tools.
     pub fn instructions(&self) -> String {
-        if self.tools.is_empty() {
+        if self.offered().next().is_none() {
             return String::new();
         }
         let mut lines = vec!["You may call these tools.".to_string()];
-        for tool in &self.tools {
+        for tool in self.offered() {
             let mut line = format!("- {}: {}", tool.name, tool.description);
             if tool.in_instructions {
                 line.push_str(&format!(" Arguments: {}", tool.parameters.describe()));
@@ -164,6 +227,9 @@ impl ToolSet {
     pub fn call(&self, call: &ToolCall) -> Result<String, ToolError> {
         let name = call.name.as_str();
         let tool = self.get(name).ok_or_else(|| ToolError::Unknown { name: name.into() })?;
+        if !self.allows(name) {
+            return Err(ToolError::NotAllowed { name: name.into() });
+        }
         let text = call.arguments.trim();
         let args = if text.is_empty() {
             Value::Object(Vec::new())
@@ -174,7 +240,7 @@ impl ToolSet {
         if !issues.is_empty() {
             return Err(ToolError::Invalid { name: name.into(), issues });
         }
-        (tool.handler)(&args).map_err(|message| ToolError::Failed { name: name.into(), message })
+        (tool.handler)(&args).map(|text| self.capped(text)).map_err(|message| ToolError::Failed { name: name.into(), message })
     }
 
     /// The output that goes back to the model for a call. A call that fails becomes the text `error: ...`, so the turn
@@ -305,6 +371,46 @@ mod tests {
         let blank = Tool::new("quiet", "   ", Kind::Object(vec![]), |_| Ok(String::new()));
         assert_eq!(set.register(blank), Err(ToolError::NoDescription { name: "quiet".into() }));
         assert_eq!(set.names(), vec!["ok_name-1"], "a refused tool is not kept");
+    }
+
+    #[test]
+    fn a_tool_choice_limits_what_is_offered_and_what_may_run() {
+        let runs = Rc::new(Cell::new(0));
+        let mut set = ToolSet::new();
+        set.register(weather(runs.clone())).unwrap();
+        set.register(Tool::new("time", "The local time.", Kind::Object(vec![]), |_| Ok("noon".into())).without_schema_in_instructions()).unwrap();
+        set.set_choice(ToolChoice::Only(vec!["time".into(), "missing".into()]));
+        assert_eq!(set.instructions(), "You may call these tools.\n- time: The local time.");
+        assert_eq!(set.call(&call("time", "")), Ok("noon".to_string()));
+        assert_eq!(set.call(&call("weather", "{\"city\":\"Oslo\"}")), Err(ToolError::NotAllowed { name: "weather".into() }));
+        assert_eq!(runs.get(), 0, "a tool that is not offered never runs");
+        assert_eq!(set.output_for(&call("weather", "{}")).text, "error: tool `weather` is not available for this request");
+        set.set_choice(ToolChoice::Disabled);
+        assert_eq!(set.instructions(), "");
+        assert!(set.call(&call("time", "")).is_err());
+        assert_eq!(set.names(), vec!["weather", "time"], "the registry itself is unchanged");
+        set.set_choice(ToolChoice::Auto);
+        assert_eq!(set.choice(), &ToolChoice::Auto);
+        assert!(set.instructions().contains("- weather:"));
+        set.set_choice(ToolChoice::Only(vec!["nothing".into()]));
+        assert_eq!(set.instructions(), "", "no tool left to offer");
+    }
+
+    #[test]
+    fn a_long_output_is_cut_and_says_how_much_was_left_out() {
+        let mut set = ToolSet::new();
+        set.register(Tool::new("dump", "Prints a lot.", Kind::Object(vec![]), |_| Ok("é".repeat(50)))).unwrap();
+        assert_eq!(set.call(&call("dump", "")).unwrap().chars().count(), 50);
+        set.set_max_output(Some(10));
+        let out = set.call(&call("dump", "")).unwrap();
+        assert_eq!(out, format!("{}\n[output truncated: 40 characters omitted]", "é".repeat(10)));
+        set.set_max_output(Some(50));
+        assert_eq!(set.call(&call("dump", "")).unwrap().chars().count(), 50, "a limit equal to the length keeps everything");
+        // an error message is not capped: the model needs to read it whole
+        let mut failing = ToolSet::new();
+        failing.register(Tool::new("bad", "Fails.", Kind::Object(vec![]), |_| Err("x".repeat(30)))).unwrap();
+        failing.set_max_output(Some(5));
+        assert!(failing.output_for(&call("bad", "")).text.ends_with(&"x".repeat(30)));
     }
 
     #[test]
