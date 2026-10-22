@@ -94,6 +94,9 @@ pub struct Manifest {
     /// `[privacy] location = "..."`: the reason shown when the app asks for location (the purpose string). A
     /// location request without it is refused, so no prompt shows without a reason.
     pub location_purpose: String,
+    /// `[[audio_unit]]` tables: the audio processors the app ships (`bifrost_ui::audio_extension::parse_manifest`). Tables
+    /// that fail the checks are left out; the audio unit settings list the rest, disabled until the person turns them on.
+    pub audio_units: Vec<bifrost_ui::audio_extension::Manifest>,
     /// `[[script.command]]` and `[[script.class]]` tables: the scripting dictionary (`bifrost_core::script`).
     pub scripting: bifrost_core::script::dictionary::Dictionary,
 }
@@ -236,6 +239,7 @@ impl Manifest {
         m.quick_actions = super::quick_actions::parse_static(text);
         m.settings_panes = super::settings_panes::parse_static(text);
         m.background_tasks = super::services::background::parse_tasks(text);
+        m.audio_units = bifrost_ui::audio_extension::parse_manifest(text).into_iter().filter_map(Result::ok).collect();
         // the `[[script.*]]` tables are skipped above (their header ends any open table) and read here
         m.scripting = bifrost_core::script::dictionary::Dictionary::parse(text);
         // ids become directory names: keep them to a safe alphabet
@@ -2718,6 +2722,14 @@ fn exit_status_soon(c: &mut std::process::Child) -> std::io::Result<Option<std::
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn audio_unit_tables_declare_the_processors_an_app_ships() {
+        let m = Manifest::parse("id = \"a.synth\"\nname = \"Synth\"\nexec = \"x\"\n\n[[audio_unit]]\nname = \"Pad\"\nkind = \"aumu\"\nsub_kind = \"pads\"\nmanufacturer = \"Exmp\"\noutputs = [2]\n\n[[audio_unit]]\nname = \"Broken\"\nkind = \"aufx\"\n").unwrap();
+        assert_eq!(m.audio_units.len(), 1, "a table that fails the checks is left out");
+        assert_eq!(m.audio_units[0].name, "Pad");
+        assert_eq!(m.name, "Synth", "an audio unit table does not change the app keys");
+        assert!(Manifest::parse("id = \"a.b\"\nname = \"x\"\nexec = \"x\"\n").unwrap().audio_units.is_empty());
+    }
     #[test]
     fn package_types_are_declared_in_the_manifest() {
         let m = Manifest::parse("id = \"is.a.edit\"\nname = \"Edit\"\nexec = \"x\"\npackage_types = [\"rtfd\"]\n").unwrap();

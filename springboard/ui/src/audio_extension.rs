@@ -113,6 +113,15 @@ impl ExtensionRegistry {
         Ok(self.manifests.len() - 1)
     }
 
+    /// The number of registered manifests.
+    pub fn len(&self) -> usize {
+        self.manifests.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.manifests.is_empty()
+    }
+
     pub fn manifest(&self, index: usize) -> Option<&Manifest> {
         self.manifests.get(index)
     }
@@ -176,6 +185,110 @@ impl Session {
         let mut unit = self.unit.take().ok_or(ExtensionError::NotAllocated)?;
         unit.uninitialize()?;
         Ok(())
+    }
+}
+
+/// The `[[audio_unit]]` tables of an app's `manifest.toml`: how an app declares an audio processor it ships. Pure text
+/// in, checked [`Manifest`]s out; the shell reads the file. Every table is checked as [`Manifest::new`] checks it, so a
+/// table with a bad code, no output bus or too many buses comes back as that error instead of a manifest.
+///
+/// ```toml
+/// [[audio_unit]]
+/// name = "Warm Saturator"      # required
+/// version = 3                  # optional, default 1
+/// kind = "aufx"                # four characters: effect, instrument, generator...
+/// sub_kind = "wsat"
+/// manufacturer = "Exmp"
+/// inputs = [2]                 # channels per input bus; omit for a generator
+/// outputs = [2]                # channels per output bus
+/// ```
+pub fn parse_manifest(text: &str) -> Vec<Result<Manifest, ExtensionError>> {
+    #[derive(Default)]
+    struct Table {
+        name: String,
+        version: Option<u32>,
+        kind: String,
+        sub_kind: String,
+        manufacturer: String,
+        inputs: Vec<u32>,
+        outputs: Vec<u32>,
+        bad_number: bool,
+    }
+    fn finish(t: Table) -> Result<Manifest, ExtensionError> {
+        if t.bad_number {
+            return Err(ExtensionError::Render(RenderError::InvalidFormat));
+        }
+        Manifest::new(&t.name, t.version.unwrap_or(1), &t.kind, &t.sub_kind, &t.manufacturer, &t.inputs, &t.outputs)
+    }
+    fn numbers(value: &str, bad: &mut bool) -> Vec<u32> {
+        let mut out = Vec::new();
+        for part in value.trim_start_matches('[').trim_end_matches(']').split(',').map(str::trim).filter(|s| !s.is_empty()) {
+            match part.parse::<u32>() {
+                Ok(n) => out.push(n),
+                Err(_) => *bad = true,
+            }
+        }
+        out
+    }
+    let mut out = Vec::new();
+    let mut current: Option<Table> = None;
+    for raw in text.lines() {
+        let line = raw.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if line.starts_with('[') && !line.contains('=') {
+            if let Some(done) = current.take() {
+                out.push(finish(done));
+            }
+            if line == "[[audio_unit]]" {
+                current = Some(Table::default());
+            }
+            continue;
+        }
+        let (Some(table), Some((key, value))) = (current.as_mut(), line.split_once('=')) else { continue };
+        let (key, value) = (key.trim(), value.trim());
+        let unquoted = value.trim_matches('"').trim_matches('\'').to_string();
+        match key {
+            "name" => table.name = unquoted,
+            "kind" => table.kind = unquoted,
+            "sub_kind" => table.sub_kind = unquoted,
+            "manufacturer" => table.manufacturer = unquoted,
+            "version" => match value.parse::<u32>() {
+                Ok(n) => table.version = Some(n),
+                Err(_) => table.bad_number = true,
+            },
+            "inputs" => table.inputs = numbers(value, &mut table.bad_number),
+            "outputs" => table.outputs = numbers(value, &mut table.bad_number),
+            _ => {}
+        }
+    }
+    if let Some(done) = current.take() {
+        out.push(finish(done));
+    }
+    out
+}
+
+/// What [`ExtensionRegistry::register_declared`] did with an app's tables.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Declared {
+    /// Registry indexes of the processors that were added, in table order.
+    pub registered: Vec<usize>,
+    /// The tables that were refused (a bad table, or a name or component description already taken), in table order.
+    pub rejected: Vec<ExtensionError>,
+}
+
+impl ExtensionRegistry {
+    /// Registers every `[[audio_unit]]` table of `text`. A refused table does not stop the others.
+    pub fn register_declared(&mut self, text: &str) -> Declared {
+        let mut out = Declared::default();
+        for parsed in parse_manifest(text) {
+            match parsed.and_then(|m| self.register(m)) {
+                Ok(index) => out.registered.push(index),
+                Err(error) => out.rejected.push(error),
+            }
+        }
+        out
     }
 }
 
@@ -302,5 +415,86 @@ mod tests {
         assert!(!session.is_allocated());
         assert_eq!(session.deallocate(), Err(ExtensionError::NotAllocated));
         assert_eq!(session.render(64, 0.0), Err(ExtensionError::NotAllocated));
+    }
+
+    const DECLARED: &str = r#"
+name = "App"
+[[audio_unit]]
+name = "Warm Saturator"
+version = 3
+kind = "aufx"
+sub_kind = "wsat"
+manufacturer = "Exmp"
+inputs = [2]
+outputs = [2]
+
+[[audio_unit]]
+name = "Pad Synth"
+kind = "aumu"
+sub_kind = "pads"
+manufacturer = "Exmp"
+outputs = [2, 2]
+
+[[other]]
+name = "ignored"
+"#;
+
+    #[test]
+    fn audio_unit_tables_parse_into_checked_manifests() {
+        let parsed = parse_manifest(DECLARED);
+        assert_eq!(parsed.len(), 2);
+        let first = parsed[0].as_ref().unwrap();
+        assert_eq!((first.name.as_str(), first.version), ("Warm Saturator", 3));
+        assert_eq!((first.inputs.clone(), first.outputs.clone()), (vec![2], vec![2]));
+        let second = parsed[1].as_ref().unwrap();
+        assert_eq!(second.version, 1);
+        assert!(second.inputs.is_empty());
+        assert_eq!(second.outputs, vec![2, 2]);
+    }
+
+    #[test]
+    fn a_bad_table_is_an_error_and_the_others_survive() {
+        let text = "[[audio_unit]]\nname = \"No Output\"\nkind = \"aufx\"\nsub_kind = \"nout\"\nmanufacturer = \"Exmp\"\n\
+            [[audio_unit]]\nname = \"Fine\"\nkind = \"aufx\"\nsub_kind = \"fine\"\nmanufacturer = \"Exmp\"\noutputs = [1]\n\
+            [[audio_unit]]\nname = \"Bad Channels\"\nkind = \"aufx\"\nsub_kind = \"badc\"\nmanufacturer = \"Exmp\"\noutputs = [two]\n";
+        let parsed = parse_manifest(text);
+        assert_eq!(parsed.len(), 3);
+        assert_eq!(parsed[0], Err(ExtensionError::NoOutputBus));
+        assert!(parsed[1].is_ok());
+        assert_eq!(parsed[2], Err(ExtensionError::Render(RenderError::InvalidFormat)));
+    }
+
+    #[test]
+    fn a_table_with_no_name_or_codes_is_refused() {
+        let parsed = parse_manifest("[[audio_unit]]\noutputs = [2]\n");
+        assert_eq!(parsed, vec![Err(ExtensionError::EmptyName)]);
+        let parsed = parse_manifest("[[audio_unit]]\nname = \"X\"\noutputs = [2]\n");
+        assert_eq!(parsed, vec![Err(ExtensionError::WildcardDescription)]);
+    }
+
+    #[test]
+    fn text_without_audio_unit_tables_declares_nothing() {
+        assert!(parse_manifest("id = \"a\"\n[[intent]]\nid = \"x\"\n").is_empty());
+    }
+
+    #[test]
+    fn register_declared_adds_new_units_and_reports_duplicates() {
+        let mut registry = ExtensionRegistry::new();
+        let first = registry.register_declared(DECLARED);
+        assert_eq!(first, Declared { registered: vec![0, 1], rejected: vec![] });
+        let again = registry.register_declared(DECLARED);
+        assert!(again.registered.is_empty());
+        assert_eq!(again.rejected, vec![ExtensionError::DuplicateComponent, ExtensionError::DuplicateComponent]);
+        assert_eq!(registry.manifest(1).unwrap().name, "Pad Synth");
+    }
+
+    #[test]
+    fn declared_units_show_up_in_the_settings_list_disabled() {
+        let mut registry = ExtensionRegistry::new();
+        registry.register_declared(DECLARED);
+        let settings = crate::audio_unit_settings::AudioUnitSettings::new(registry.len());
+        let rows = settings.rows(&registry);
+        assert_eq!(rows.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(), ["Warm Saturator", "Pad Synth"]);
+        assert!(rows.iter().all(|r| !r.enabled));
     }
 }
