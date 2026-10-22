@@ -188,6 +188,79 @@ pub fn enforce(devices_root: &std::path::Path, port: &str, decision: Decision) -
     Ok(true)
 }
 
+/// The kernel's default for new USB devices. `usbcore` is built into the stock kernel, so this runtime parameter (and not
+/// a module option) is what sets it; it applies to devices plugged in after the write.
+pub const USBCORE_AUTHORIZED_DEFAULT: &str = "/sys/module/usbcore/parameters/authorized_default";
+/// The saved policy, a one-word text file in the root data directory that privd re-applies at start.
+pub const POLICY_FILE: &str = "usb_policy";
+pub const M_USB_POLICY_SET: &str = "usb.policy_set";
+pub const M_USB_POLICY_GET: &str = "usb.policy_get";
+
+/// What the kernel does with a device that appears: authorize it at once, or hold it blocked until the approval sheet
+/// (`Approvals`) answers. Built-in devices (hubs, a laptop's keyboard) stay authorized either way: the kernel's
+/// `authorized_default` value 2 means "authorize internal devices only", which is what keeps the machine usable.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Policy {
+    /// `authorized_default` 1, the stock behaviour: every device works at once and the sheet never asks.
+    AllowAll,
+    /// `authorized_default` 2: external devices wait for the user's answer.
+    AskForNew,
+}
+
+impl Policy {
+    /// The text written to `authorized_default`.
+    pub fn kernel_value(self) -> &'static str {
+        match self {
+            Policy::AllowAll => "1",
+            Policy::AskForNew => "2",
+        }
+    }
+
+    /// The kernel parameter's text. `0` (block everything, including the keyboard) is not a policy the shell offers, so it
+    /// reads as `None`, as does anything else.
+    pub fn from_kernel(text: &str) -> Option<Policy> {
+        match text.trim() {
+            "1" => Some(Policy::AllowAll),
+            "2" => Some(Policy::AskForNew),
+            _ => None,
+        }
+    }
+
+    /// The word used in the saved file and the privd call.
+    pub fn name(self) -> &'static str {
+        match self {
+            Policy::AllowAll => "allow",
+            Policy::AskForNew => "ask",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Policy> {
+        match name.trim() {
+            "allow" => Some(Policy::AllowAll),
+            "ask" => Some(Policy::AskForNew),
+            _ => None,
+        }
+    }
+}
+
+/// The policy the kernel runs now, `None` when the parameter cannot be read or holds a value outside `Policy`.
+pub fn read_policy(param_file: &std::path::Path) -> Option<Policy> {
+    Policy::from_kernel(&std::fs::read_to_string(param_file).ok()?)
+}
+
+/// Sets the kernel's default for devices that appear from now on.
+pub fn apply_policy(param_file: &std::path::Path, policy: Policy) -> std::io::Result<()> {
+    std::fs::write(param_file, policy.kernel_value())
+}
+
+/// Reads the saved policy from `state_dir/usb_policy` and applies it; the privd daemon calls this at start, so a reboot
+/// keeps the choice. A missing or unreadable file leaves the kernel's own default alone and returns `None`.
+pub fn apply_saved_policy(state_dir: &std::path::Path, param_file: &std::path::Path) -> Option<Policy> {
+    let policy = Policy::from_name(&std::fs::read_to_string(state_dir.join(POLICY_FILE)).ok()?)?;
+    apply_policy(param_file, policy).ok()?;
+    Some(policy)
+}
+
 /// What the shell does after a new device appears.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Step {
@@ -474,5 +547,53 @@ mod tests {
         assert_eq!(device_ports(&root), vec!["1-2".to_string()]);
         assert!(device_ports(&root.join("missing")).is_empty());
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn policy_maps_to_the_kernel_values_and_the_saved_words() {
+        assert_eq!(Policy::AllowAll.kernel_value(), "1");
+        assert_eq!(Policy::AskForNew.kernel_value(), "2");
+        assert_eq!(Policy::from_kernel("2\n"), Some(Policy::AskForNew));
+        assert_eq!(Policy::from_kernel("1"), Some(Policy::AllowAll));
+        assert_eq!(Policy::from_kernel("0"), None, "block-everything is not offered");
+        assert_eq!(Policy::from_kernel("-1"), None);
+        for p in [Policy::AllowAll, Policy::AskForNew] {
+            assert_eq!(Policy::from_name(p.name()), Some(p));
+        }
+        assert_eq!(Policy::from_name("ask\n"), Some(Policy::AskForNew));
+        assert_eq!(Policy::from_name("block"), None);
+        assert_eq!(Policy::from_name(""), None);
+    }
+
+    #[test]
+    fn apply_policy_writes_the_parameter_and_read_policy_reads_it_back() {
+        let dir = std::env::temp_dir().join(format!("usb-policy-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let param = dir.join("authorized_default");
+        assert_eq!(read_policy(&param), None, "no parameter, no policy");
+        std::fs::write(&param, "1").unwrap();
+        apply_policy(&param, Policy::AskForNew).unwrap();
+        assert_eq!(std::fs::read_to_string(&param).unwrap(), "2");
+        assert_eq!(read_policy(&param), Some(Policy::AskForNew));
+        assert!(apply_policy(&dir.join("missing").join("x"), Policy::AllowAll).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_saved_policy_is_reapplied_at_start_and_a_missing_or_bad_file_changes_nothing() {
+        let dir = std::env::temp_dir().join(format!("usb-policy-saved-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let param = dir.join("authorized_default");
+        std::fs::write(&param, "1").unwrap();
+        assert_eq!(apply_saved_policy(&dir, &param), None, "nothing saved yet");
+        std::fs::write(dir.join(POLICY_FILE), "whatever\n").unwrap();
+        assert_eq!(apply_saved_policy(&dir, &param), None);
+        assert_eq!(std::fs::read_to_string(&param).unwrap(), "1");
+        std::fs::write(dir.join(POLICY_FILE), "ask\n").unwrap();
+        assert_eq!(apply_saved_policy(&dir, &param), Some(Policy::AskForNew));
+        assert_eq!(std::fs::read_to_string(&param).unwrap(), "2");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

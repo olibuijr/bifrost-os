@@ -18,7 +18,8 @@
 //! It takes every touch while it is up; typing is ignored, so the default stays "blocked".
 //!
 //! Note: on a stock kernel every new device is authorized at once (`authorized_default` 1), so the sheet only meets
-//! devices the system holds back, for example with `usbcore.authorized_default=2` (authorize internal devices only).
+//! devices the system holds back: privd's `usb.policy_set` sets `usbcore.authorized_default` to 2 (authorize internal
+//! devices only) and keeps it across reboots (`usb_approval::Policy`).
 
 use super::ui::{AlertCard, Ui, Weight, LINK, MAC_BODY_PT};
 use super::Drawn;

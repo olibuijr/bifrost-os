@@ -16,6 +16,10 @@ fn main() -> std::process::ExitCode {
     }
     // faillock's tally outlives a reboot (pam-bifrost-login dir=); the default /run/faillock is tmpfs
     let _ = std::fs::create_dir_all("/var/lib/faillock");
+    // the accessory approval policy outlives a reboot: the kernel default is a runtime parameter
+    if let Some(p) = privd::methods::apply_saved_usb_policy() {
+        eprintln!("bifrost-privd: usb policy {}", p.name());
+    }
     // Stage 1 (docs/privd-protocol.md): the shell runs as root, so no process of the account needs the socket. The
     // /proc/<pid>/exe check cannot tell the shell from any other process of the account (security review
     // 2026-10-11), so the account is refused outright until stage 2 hands the user shell a launch-time credential.
