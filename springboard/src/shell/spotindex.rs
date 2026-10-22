@@ -513,6 +513,14 @@ impl Index {
     }
 }
 
+/// Writes `bytes` to `path` readable by the owner only (0600), so a sealed index is not also world-readable.
+fn write_private(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+    let mut f = std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(path)?;
+    f.write_all(bytes)
+}
+
 /// Replaces `<dir>/<app>.json` with `text` (through a temporary file), or removes it when `text` is None. The text is
 /// sealed under `key`; without a key nothing is written.
 fn write_app(dir: &Path, app: &str, text: Option<String>, key: Option<&[u8; 32]>) {
@@ -523,7 +531,7 @@ fn write_app(dir: &Path, app: &str, text: Option<String>, key: Option<&[u8; 32]>
             let Ok(sealed) = seal_file(key, app, text.as_bytes()) else { return };
             let _ = std::fs::create_dir_all(dir);
             let tmp = dir.join(format!("{app}.json.tmp"));
-            if std::fs::write(&tmp, sealed).and_then(|_| std::fs::rename(&tmp, &path)).is_err() {
+            if write_private(&tmp, &sealed).and_then(|_| std::fs::rename(&tmp, &path)).is_err() {
                 let _ = std::fs::remove_file(&tmp);
             }
         }
@@ -1389,6 +1397,25 @@ mod tests {
         // renamed to another app, the file no longer opens: the app id is bound as associated data
         std::fs::rename(dir.join("is.example.notes.json"), dir.join("is.example.mail.json")).unwrap();
         assert!(Index::load_keyed(&dir, Some(&KEY)).apps.is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_tampered_sealed_index_reads_nothing_and_the_file_is_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("bifrost-spottamper-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut ix = Index::default();
+        ix.index("is.example.notes", vec![it("1", "", "Milk", "", &[])]);
+        ix.save_keyed(&dir, Some(&KEY));
+        let path = dir.join("is.example.notes.json");
+        assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
+        assert_eq!(Index::load_keyed(&dir, Some(&KEY)).apps["is.example.notes"].len(), 1);
+        let mut raw = std::fs::read(&path).unwrap();
+        let last = raw.len() - 1;
+        raw[last] ^= 1;
+        std::fs::write(&path, raw).unwrap();
+        assert!(Index::load_keyed(&dir, Some(&KEY)).apps.is_empty(), "a flipped byte fails the authentication");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
