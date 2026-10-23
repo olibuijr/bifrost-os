@@ -6,7 +6,7 @@
 //! This file is the model (what the bar has, what a press does, the menu rows) and the drawing of the slots the app
 //! draws itself. The window (`main.rs`) hit-tests with `hit`, asks `press` what to do and opens the menus.
 
-use crate::text::{families, Align, ListKind, COLORS, FAMILIES, SIZES, SPACINGS};
+use crate::text::{families, Align, ListKind, COLORS, SIZES, SPACINGS};
 use crate::view::{blit, family_name, spacing_label, text_color, Action, Geometry, Status, FORMAT_H};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::prefs_layout::m;
@@ -190,17 +190,6 @@ fn family_rows(count: usize) -> Vec<Row> {
     rows.push(Row::separator());
     rows.push(Row::new("Show Fonts\u{2026}", Action::ShowFonts));
     rows
-}
-
-/// The families Format > Font lists: the base ones, and the selection's family `current` when it is an installed one,
-/// so its check mark shows. Every family is in the Fonts panel and the format bar's pop-up: a menu of the menu bar
-/// carries at most `proto::MAX_APP_MENU_ITEMS` items, and the Format menu fills them.
-pub fn font_menu_families(current: u8) -> Vec<u8> {
-    let mut shown: Vec<u8> = (0..FAMILIES.len() as u8).collect();
-    if (current as usize) >= FAMILIES.len() && (current as usize) < families().len() {
-        shown.push(current);
-    }
-    shown
 }
 
 /// The style menu: the four faces.
@@ -415,13 +404,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn format_font_lists_the_base_families_and_an_installed_selection() {
-        assert_eq!(font_menu_families(1), vec![0, 1, 2]);
-        // tests see the base families only: an index past them is no family, so nothing is added
-        assert_eq!(font_menu_families(9), vec![0, 1, 2]);
-    }
-
     fn ui() -> Ui {
         let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice());
         Ui::new(Font::parse(data).unwrap(), 1.0)
@@ -559,7 +541,7 @@ mod tests {
         match press(&s, &placed, Hit::Item(FONT), font.x + 4.0, font.y + 4.0) {
             Some(Press::Menu { anchor, rows }) => {
                 assert_eq!(anchor, (font.x, font.bottom() + MENU_GAP));
-                assert_eq!(rows.len(), FAMILIES.len());
+                assert_eq!(rows.len(), crate::text::FAMILIES.len());
                 assert_eq!(rows[1], Row::new("Times", Action::Font(1)));
             }
             other => panic!("the font pop-up opens a menu, got {other:?}"),
