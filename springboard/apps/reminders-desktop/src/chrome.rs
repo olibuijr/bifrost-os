@@ -33,6 +33,10 @@ const GROUP_ROW: u32 = 5000;
 /// Accessibility ids of the sidebar's tiles and Add List (the toolbar uses 1 to 9).
 const SIDEBAR_TILE: u64 = 100;
 const SIDEBAR_ADD: u64 = 200;
+/// Accessibility ids of the completed strip's Clear and Show/Hide, and of the selected row's "i".
+const STRIP_CLEAR: u64 = 300;
+const STRIP_TOGGLE: u64 = 301;
+const INFO_NODE: u64 = 302;
 
 const B_SIDEBAR: u32 = 1;
 const B_EXPORT: u32 = 2;
@@ -158,7 +162,8 @@ impl Reminders {
         }
         let start = if x0 > 0.0 { x0 + 12.0 } else { lead };
         let end = x0 + w - 12.0;
-        if matches!(self.screen, Screen::Editor | Screen::ListEditor) {
+        // a saved reminder's Details are a popover over the list (`details.rs`): the list's toolbar stays
+        if matches!(self.screen, Screen::Editor | Screen::ListEditor) && !self.details_popover() {
             let title = if self.screen == Screen::Editor {
                 if self.editor.as_ref().is_some_and(|e| e.id.is_some()) { "Details" } else { "New Reminder" }
             } else {
@@ -255,6 +260,23 @@ impl Reminders {
                 let Some(item) = bar.items.iter().find(|i| i.id == id && id != B_TITLE) else { continue };
                 let (role, value) = if id == B_SEARCH { (Role::TextField, self.search_text()) } else { (Role::Button, String::new()) };
                 nodes.push(Node { id: id as u64, role, label: item.label.clone(), value, bounds: r, enabled: item.enabled });
+            }
+        }
+        // the completed strip's links and the selected row's "i" (`completed.rs`, `details.rs`)
+        if self.screen == Screen::Items {
+            let k = Self::k(ui);
+            if let Some(p) = self.strip_parts(ui) {
+                let toggle = if self.opts.show_completed { "Hide Completed" } else { "Show Completed" };
+                for (id, label, (x, w)) in [(STRIP_CLEAR, "Clear Completed", p.clear), (STRIP_TOGGLE, toggle, p.toggle)] {
+                    let bounds = Rect { x: (self.x0 + x) / k, y: p.y / k, w: w / k, h: p.h / k };
+                    nodes.push(Node { id, role: Role::Button, label: label.into(), value: String::new(), bounds, enabled: true });
+                }
+            }
+            let row = self.rows.iter().position(|r| matches!(r, Row::Item { idx, .. } if self.info_shown(self.data.items[*idx].id)));
+            if let Some(row) = row {
+                let r = self.info_rect(ui, row);
+                let bounds = Rect { x: r.x + self.x0 / k, ..r };
+                nodes.push(Node { id: INFO_NODE, role: Role::Button, label: "Show Details".into(), value: String::new(), bounds, enabled: true });
             }
         }
         // the sidebar: smart tiles (label, count), My Lists rows (name, count) and Add List

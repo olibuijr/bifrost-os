@@ -9,8 +9,12 @@
 mod view;
 #[path = "chrome.rs"]
 mod chrome;
+#[path = "completed.rs"]
+mod completed;
+#[path = "details.rs"]
+mod details;
 
-use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_M, SPACE_S, SPACE_XL};
+use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_L, SPACE_M, SPACE_S, SPACE_XL};
 use springboard::layout::in_rect as within;
 use crate::archive;
 use bifrost_app::kit::ui::{home_zone, Ui};
@@ -150,6 +154,14 @@ enum Target {
     ListUp,
     ListDown,
     Scroll,
+    /// The "i" of a list row (its row index): the reminder's Details popover (`details.rs`).
+    Info(usize),
+    /// A press outside the Details popover: it closes, keeping the edits.
+    DetailsClose,
+    /// The completed strip's Clear (`completed.rs`): asks first, then clears or not.
+    ClearAsk,
+    ClearConfirm,
+    ClearCancel,
 }
 
 struct Editor {
@@ -379,6 +391,10 @@ pub struct Reminders {
     /// Every undoable change (`NativeUndoManager`); the Undo bar offers the latest one.
     history: UndoManager<Data>,
     drag: Option<Drag>,
+    /// The list's scroll offset while a Details popover uses the scroller for its form (`details.rs`).
+    list_scroll: f32,
+    /// The completed strip's Clear alert is up (`completed.rs`).
+    clear_ask: bool,
     dirty: bool,
     error: bool,
     load_error: bool,
@@ -522,6 +538,8 @@ impl Reminders {
             undo: None,
             history: UndoManager::new(UNDO_LIMIT),
             drag: None,
+            list_scroll: 0.0,
+            clear_ask: false,
             dirty: true,
             error: load_error,
             load_error,
@@ -1170,10 +1188,14 @@ impl Reminders {
     // ---- geometry -------------------------------------------------------
 
     fn top_px(&self, ui: &Ui) -> f32 {
-        ui.pt(self.top_pt + match self.screen {
-            Screen::Items => ITEMS_TOP,
-            _ => FORM_TOP,
-        })
+        match self.screen {
+            Screen::Items => self.list_top_px(ui),
+            // a reminder's details are in a popover over the list (`details.rs`)
+            _ => match self.details_geometry(ui) {
+                Some(g) => ui.pt(g.panel.y + details::DETAILS_PAD),
+                None => ui.pt(self.top_pt + FORM_TOP),
+            },
+        }
     }
     /// Top of the Undo bar (the bottom of the list while there is none).
     fn bottom(&self, ui: &Ui) -> f32 {
@@ -1182,7 +1204,10 @@ impl Reminders {
     fn view_bottom(&self, ui: &Ui) -> f32 {
         match self.screen {
             Screen::Items => self.bottom(ui),
-            _ => self.h as f32 - home_zone(ui),
+            _ => match self.details_geometry(ui) {
+                Some(g) => ui.pt(g.panel.y + g.panel.h - details::DETAILS_PAD),
+                None => self.h as f32 - home_zone(ui),
+            },
         }
     }
     fn content_pt(&self) -> f32 {
@@ -1202,7 +1227,7 @@ impl Reminders {
         };
         (
             ui.pt(SPACE_XL),
-            self.top_px(ui) + ui.pt(self.row_y.get(i).copied().unwrap_or(0.0)) - self.scroll.offset(),
+            self.list_top_px(ui) + ui.pt(self.row_y.get(i).copied().unwrap_or(0.0)) - self.list_offset(),
             self.w as f32 - ui.pt(SPACE_HUGE),
             ui.pt(h),
         )
@@ -1293,6 +1318,10 @@ impl Reminders {
         (v, y)
     }
     fn form_rect(&self, ui: &Ui, y: f32, h: f32) -> (f32, f32, f32, f32) {
+        if let Some(g) = self.details_geometry(ui) {
+            let pad = details::DETAILS_PAD;
+            return (ui.pt(g.panel.x + pad), self.top_px(ui) + ui.pt(y) - self.scroll.offset(), ui.pt(g.panel.w - 2.0 * pad), ui.pt(h));
+        }
         (
             ui.pt(SPACE_XL),
             self.top_px(ui) + ui.pt(y) - self.scroll.offset(),
@@ -1308,8 +1337,9 @@ impl Reminders {
                 .iter()
                 .find(|(t, _, _)| *t == Target::Field(f))
                 .map(|&(_, y, h)| {
+                    // inset in its row: in the full form and in the Details popover alike
                     let r = self.form_rect(ui, y, h);
-                    (ui.pt(36.0), r.1, self.w as f32 - ui.pt(72.0), r.3)
+                    (r.0 + ui.pt(SPACE_L), r.1, r.2 - ui.pt(2.0 * SPACE_L), r.3)
                 }),
             // the search field is in the toolbar (window coordinates there, content coordinates here)
             Screen::Items if self.searching && f == Field::Title => self.search_px(ui).map(|(x, y, w, h)| (x - self.x0, y, w, h)),
@@ -1371,6 +1401,16 @@ impl Reminders {
     // ---- hit testing ----------------------------------------------------
 
     fn hit(&self, ui: &Ui, x: f32, y: f32) -> Option<Target> {
+        // the Clear alert blocks the window; the Details popover is transient: a press outside it closes it
+        if self.clear_ask {
+            return self.ask_target(ui, x + self.x0, y);
+        }
+        if let Some(g) = self.details_geometry(ui) {
+            let k = ui.pt(1.0);
+            if !g.panel.contains(x / k, y / k) {
+                return Some(Target::DetailsClose);
+            }
+        }
         if let Some(t) = self.bar_target(ui, x + self.x0, y) {
             return Some(t);
         }
@@ -1412,6 +1452,9 @@ impl Reminders {
                     }
                     return None;
                 }
+                if let Some(t) = self.strip_target(ui, x, y) {
+                    return Some(t);
+                }
                 let bar = self.bottom(ui);
                 if self.undo.is_some() && y >= bar && y < bar + ui.pt(52.0) {
                     return if x > wpx - ui.pt(UNDO_HIT_PT) { Some(Target::Undo) } else { None };
@@ -1438,7 +1481,13 @@ impl Reminders {
                     if x < rect.0 + ui.pt(52.0 + 30.0 * *depth as f32) {
                         return Some(Target::Circle(i));
                     }
-                    if *depth == 0 && model::has_children(&self.data.items, item.id) && x > right - ui.pt(56.0) {
+                    // the selected row's "i" at its trailing edge opens the Details popover (`details.rs`)
+                    let info = self.info_shown(item.id);
+                    if info && x >= right - ui.pt(details::INFO_W) {
+                        return Some(Target::Info(i));
+                    }
+                    let room = if info { details::INFO_W } else { 0.0 };
+                    if *depth == 0 && model::has_children(&self.data.items, item.id) && x > right - ui.pt(56.0 + room) {
                         return Some(Target::Collapse(i));
                     }
                     return Some(Target::Row(i));
@@ -1691,6 +1740,10 @@ impl Reminders {
         let month = month_start(draft.due.unwrap_or(self.today));
         self.editor = Some(Editor { id: id.filter(|_| draft.id != 0), draft, month, added: vec![] });
         self.list_edit = None;
+        // a saved reminder's details open in a popover over the list, which keeps its place underneath
+        if self.screen == Screen::Items {
+            self.list_scroll = self.scroll.offset();
+        }
         self.screen = Screen::Editor;
         self.swipe = None;
         self.scroll.jump_top();
@@ -1820,6 +1873,7 @@ impl Reminders {
         }
     }
     fn close_form(&mut self, ui: &Ui, t: f64) {
+        let popover = self.details_popover();
         let back_to = Screen::Items;
         self.set_focus(None, t);
         self.editor = None;
@@ -1833,6 +1887,10 @@ impl Reminders {
         }
         self.scroll.jump_top();
         self.rebuild(ui);
+        // the list under a Details popover comes back where it was
+        if popover {
+            self.scroll.jump_to(self.list_scroll);
+        }
     }
     fn now_min(&self, t: f64) -> u16 {
         ((self.wall.now(t) + self.wall.offset as i64).rem_euclid(86_400) / 60) as u16
@@ -2167,7 +2225,7 @@ impl Reminders {
     /// the list, Return saves the open editor, Z undoes the last delete. False when unused here.
     pub fn chord(&mut self, ui: &Ui, key: u32, mods: u32, t: f64) -> bool {
         use bifrost_proto::{CHORD_ALT, CHORD_CTRL, CHORD_META, CHORD_SHIFT};
-        if mods & (CHORD_CTRL | CHORD_META) == 0 || mods & CHORD_ALT != 0 {
+        if mods & (CHORD_CTRL | CHORD_META) == 0 || mods & CHORD_ALT != 0 || self.clear_ask {
             return false;
         }
         let shift = mods & CHORD_SHIFT != 0;
@@ -2196,6 +2254,11 @@ impl Reminders {
 
     /// Escape: leaves a focused field first, then cancels the open editor.
     pub fn escape(&mut self, ui: &Ui, t: f64) -> bool {
+        // Escape is the Clear alert's Cancel
+        if self.clear_ask {
+            self.activate(ui, Target::ClearCancel, t);
+            return true;
+        }
         if self.focus.is_some() {
             self.set_focus(None, t);
             return true;
@@ -2409,6 +2472,19 @@ impl Reminders {
                 self.rebuild(ui);
             }
             Target::New => self.open_editor(ui, None, t),
+            Target::Info(row) => {
+                if let Some(id) = self.item_id(row) {
+                    self.selected = Some(id);
+                    self.open_editor(ui, Some(id), t);
+                }
+            }
+            Target::DetailsClose => self.close_details(ui, t),
+            Target::ClearAsk => self.clear_ask = self.completed_in_list() > 0,
+            Target::ClearConfirm => {
+                self.clear_ask = false;
+                self.clear_completed(ui, t);
+            }
+            Target::ClearCancel => self.clear_ask = false,
             Target::Row(row) => {
                 if let Some(id) = self.item_id(row) {
                     self.open_editor(ui, Some(id), t);
@@ -2654,6 +2730,13 @@ impl Reminders {
     // ---- input ----------------------------------------------------------
 
     pub fn key(&mut self, ui: &Ui, out: Out, t: f64) {
+        // Return is the Clear alert's default button; other keys wait for the alert
+        if self.clear_ask {
+            if matches!(out, Out::Enter) {
+                self.activate(ui, Target::ClearConfirm, t);
+            }
+            return;
+        }
         if self.focus.is_none() {
             self.list_key(ui, out, t);
             return;
@@ -2703,6 +2786,11 @@ impl Reminders {
                 | Target::OptExport
                 | Target::OptClose
                 | Target::Field(_)
+                | Target::Info(_)
+                | Target::DetailsClose
+                | Target::ClearAsk
+                | Target::ClearConfirm
+                | Target::ClearCancel
         )
     }
     fn swipe_to(&mut self, ui: &Ui, x: f32) {

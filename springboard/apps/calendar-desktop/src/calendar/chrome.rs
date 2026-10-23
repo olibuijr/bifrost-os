@@ -231,7 +231,8 @@ impl Calendar {
         })?;
         Some(match id {
             B_SIDEBAR => Target::Sidebar,
-            B_ADD => Target::Add,
+            // "+" makes a new event with the quick-event popover beside it (`eventpop.rs`); Event > New Event opens the form
+            B_ADD => Target::NewPopover,
             B_DAY => Target::View(View::Day),
             B_WEEK => Target::View(View::Week),
             B_MONTH => Target::View(View::Month),
@@ -261,6 +262,7 @@ impl Calendar {
             }
         }
         nodes.extend(self.search_nodes(ui));
+        nodes.extend(self.pop_nodes(ui));
         if self.editor.is_some() {
             nodes.extend(self.editor_nodes(ui));
         } else if self.colour_sheet.is_some() {
@@ -410,6 +412,14 @@ impl Calendar {
         SourceList::new(items, 32.0, 30.0)
     }
 
+    /// The bottom of the calendar list's last row (points): the mini month goes below it (`minimonth.rs`).
+    pub(super) fn sidebar_bottom(&self, ui: &Ui) -> f32 {
+        let k = Self::k(ui);
+        let list = self.sidebar();
+        let bounds = Rect { x: 0.0, y: 0.0, w: self.x0 / k, h: self.h as f32 / k };
+        list.items.len().checked_sub(1).map_or(0.0, |i| list.item_rect(i, bounds, SIDE_SCROLL).bottom())
+    }
+
     /// The row of the calendar list under window pixel `(x, y)`.
     pub(super) fn layer_at(&self, ui: &Ui, x: f32, y: f32) -> Option<u32> {
         if self.x0 <= 0.0 {
@@ -458,6 +468,7 @@ impl Calendar {
         let k = Self::k(ui);
         if self.x0 > 0.0 {
             widgets::source_list(s, ui, Rect { x: 0.0, y: 0.0, w: self.x0 / k, h: self.h as f32 / k }, &self.sidebar(), SIDE_SCROLL, None);
+            self.draw_mini_month(s, ui);
             s.fill_rect(self.x0 as usize - 1, 0, 1, self.h as usize, SEPARATOR_C.now());
         }
         if opaque {

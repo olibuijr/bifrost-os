@@ -171,12 +171,20 @@ fn tap_event(c: &mut Calendar, ui: &Ui, id: u64, t: f64) {
     c.touch(ui, Event::Up(x, y), t + 20.0);
 }
 
+/// The full New Event form through the toolbar's "+": its popover, then Edit Details.
+fn new_form(c: &mut Calendar, ui: &Ui, t: f64) {
+    tap_bar(c, ui, chrome::B_ADD, t);
+    assert!(c.event_pop_open(), "\"+\" opens the quick-event popover");
+    c.activate(ui, Target::Pop(eventpop::PopPart::Details), t + 30.0);
+    assert!(c.editor.is_some() && !c.event_pop_open(), "Edit Details opens the form");
+}
+
 #[test]
 fn touch_add_edit_delete_and_reload() {
     let ui = crate::test_ui();
     let temp = Temp::new();
     let mut c = new(&ui, temp.file());
-    tap_bar(&mut c, &ui, chrome::B_ADD, 0.0);
+    new_form(&mut c, &ui, 0.0);
     assert!(c.keyboard_shown());
     c.key(&ui, Out::Text("Lunch with friends".into()), 100.0);
     c.key(&ui, Out::Hide, 110.0);
@@ -1708,7 +1716,7 @@ fn a_custom_repeat_is_saved_beside_the_store_and_its_days_are_worked_out() {
     let temp = Temp::new();
     let ui = crate::test_ui();
     let mut c = new(&ui, temp.file());
-    tap_bar(&mut c, &ui, chrome::B_ADD, 0.0);
+    new_form(&mut c, &ui, 0.0);
     type_text(&mut c, &ui, "Gym");
     c.key(&ui, Out::Hide, 1.0);
     c.activate(&ui, Target::Repeat, 2.0);
@@ -1739,7 +1747,7 @@ fn the_alert_picker_saves_custom_alarms_for_the_alert_calendar() {
     let temp = Temp::new();
     let ui = crate::test_ui();
     let mut c = new(&ui, temp.file());
-    tap_bar(&mut c, &ui, chrome::B_ADD, 0.0);
+    new_form(&mut c, &ui, 0.0);
     type_text(&mut c, &ui, "Call");
     c.key(&ui, Out::Hide, 1.0);
     c.activate(&ui, Target::Alert, 2.0);
@@ -1777,7 +1785,7 @@ fn calendars_are_made_shown_renamed_and_removed_only_when_empty() {
     assert!(c.line_sheet.is_none(), "Return makes the calendar and closes the sheet");
     assert_eq!(c.extras().name_of(2), "Work");
     // an event on the new calendar, shown until its row hides the calendar
-    tap_bar(&mut c, &ui, chrome::B_ADD, 2.0);
+    new_form(&mut c, &ui, 2.0);
     type_text(&mut c, &ui, "Standup");
     c.key(&ui, Out::Hide, 3.0);
     c.activate(&ui, Target::Calendar, 4.0);
@@ -1821,7 +1829,7 @@ fn the_default_calendar_setting_is_kept_with_the_calendars() {
     c.key(&ui, Out::Enter, 1.0);
     assert!(c.change_setting(&ui, Setting::DefaultCalendar(2)));
     assert!(c.setting_checked(Setting::DefaultCalendar(2)) && !c.setting_checked(Setting::DefaultCalendar(1)));
-    tap_bar(&mut c, &ui, chrome::B_ADD, 2.0);
+    new_form(&mut c, &ui, 2.0);
     assert_eq!(c.editor.as_ref().unwrap().extra.calendar, 2, "new events go to the default");
     c.activate(&ui, Target::Cancel, 3.0);
     assert!(!c.change_setting(&ui, Setting::DefaultCalendar(7)), "a calendar that does not exist");
@@ -1834,7 +1842,7 @@ fn the_time_zone_and_travel_time_rows_cycle_and_are_saved() {
     let temp = Temp::new();
     let ui = crate::test_ui();
     let mut c = new(&ui, temp.file());
-    tap_bar(&mut c, &ui, chrome::B_ADD, 0.0);
+    new_form(&mut c, &ui, 0.0);
     type_text(&mut c, &ui, "Flight");
     c.key(&ui, Out::Hide, 1.0);
     c.activate(&ui, Target::Zone, 2.0);
@@ -2557,4 +2565,184 @@ fn the_time_zone_button_is_a_glyph_and_the_all_day_band_stays_put() {
     assert!(c.scroll.offset() > 0.0);
     assert_eq!(band_y(&c), top, "the all-day event does not scroll away with the hours");
     draw_once(&mut c, &ui);
+}
+
+#[test]
+fn plus_opens_the_quick_event_popover_and_return_adds_the_event() {
+    let ui = crate::test_ui();
+    let temp = Temp::new();
+    let mut c = new(&ui, temp.file());
+    tap_bar(&mut c, &ui, chrome::B_ADD, 0.0);
+    assert!(c.event_pop_open() && c.editor.is_none(), "a popover, not the full form");
+    assert!(c.events.is_empty(), "nothing is saved while the popover is open");
+    let l = c.pop_layout(&ui).expect("the popover is laid out");
+    let anchor = c.pop_anchor(&ui, &c.event_pop.as_ref().unwrap().event);
+    assert!(l.panel.x >= anchor.x + anchor.w || l.panel.x + l.panel.w <= anchor.x, "beside the new event's day");
+    assert!(c.controls(&ui).iter().any(|n| n.label == "Title" && n.role == bifrost_app::controls::Role::TextField));
+    draw_once(&mut c, &ui);
+    type_text(&mut c, &ui, "Lunch");
+    c.key(&ui, Out::Named("Tab"), 1.0);
+    type_text(&mut c, &ui, "Laugavegur 5");
+    c.key(&ui, Out::Enter, 2.0);
+    assert!(!c.event_pop_open(), "Return adds the event and closes the popover");
+    assert_eq!(c.events.len(), 1);
+    let e = &c.events[0];
+    assert_eq!((e.title.as_str(), e.location.as_str(), e.date, e.minute), ("Lunch", "Laugavegur 5", date(2026, 10, 4), 540));
+    assert_eq!(e.duration, c.prefs.duration);
+    assert_eq!(store::load(&temp.file()).unwrap(), c.events);
+}
+
+#[test]
+fn escape_drops_the_popover_event_and_keys_and_commands_wait_for_it() {
+    use bifrost_app::proto::CHORD_META;
+    let ui = crate::test_ui();
+    let temp = Temp::new();
+    let mut c = new(&ui, temp.file());
+    tap_bar(&mut c, &ui, chrome::B_ADD, 0.0);
+    type_text(&mut c, &ui, "Gym");
+    assert_eq!(c.event_pop.as_ref().unwrap().title.to_string(), "Gym", "typing goes to the focused title");
+    assert!(!c.enabled(Command::NewEvent) && !c.settings_enabled(), "the popover holds the commands");
+    assert!(!c.chord(&ui, 3, CHORD_META, 1.0), "no view change under the popover");
+    assert!(c.escape(&ui, 2.0));
+    assert!(!c.event_pop_open() && c.events.is_empty(), "Escape drops the new event");
+    assert!(c.enabled(Command::NewEvent));
+}
+
+#[test]
+fn edit_details_opens_the_full_form_with_what_was_typed() {
+    let ui = crate::test_ui();
+    let temp = Temp::new();
+    let mut c = new(&ui, temp.file());
+    tap_bar(&mut c, &ui, chrome::B_ADD, 0.0);
+    type_text(&mut c, &ui, "Dentist");
+    let l = c.pop_layout(&ui).unwrap();
+    tap(&mut c, &ui, l.details.x + SPACE_S, l.details.y + l.details.h / 2.0, 100.0);
+    let draft = c.editor.as_ref().expect("the full form");
+    assert!(!draft.existing);
+    assert_eq!(c.fields[0].text(), "Dentist");
+    assert!(!c.event_pop_open());
+    tap_bar(&mut c, &ui, chrome::B_SAVE, 200.0);
+    assert_eq!(c.events.len(), 1);
+    assert_eq!(c.events[0].title, "Dentist");
+}
+
+#[test]
+fn a_click_outside_the_popover_adds_a_titled_event_and_drops_an_untitled_one() {
+    let ui = crate::test_ui();
+    let temp = Temp::new();
+    let mut c = new(&ui, temp.file());
+    let k = ui.pt(1.0);
+    tap_bar(&mut c, &ui, chrome::B_ADD, 0.0);
+    let l = c.pop_layout(&ui).unwrap();
+    let (x, y) = (c.x0 / k + 10.0, l.panel.y + l.panel.h + 20.0);
+    assert!(!l.panel.contains(x, y));
+    tap(&mut c, &ui, x, y, 100.0);
+    assert!(!c.event_pop_open() && c.events.is_empty(), "an untouched popover leaves nothing behind");
+    tap_bar(&mut c, &ui, chrome::B_ADD, 1000.0);
+    type_text(&mut c, &ui, "Call Ana");
+    tap(&mut c, &ui, x, y, 1100.0);
+    assert!(!c.event_pop_open());
+    assert_eq!(c.events.len(), 1);
+    assert_eq!(c.events[0].title, "Call Ana");
+}
+
+#[test]
+fn the_popover_calendar_pop_up_picks_the_calendar_the_event_goes_to() {
+    let ui = crate::test_ui();
+    let temp = Temp::new();
+    let mut c = new(&ui, temp.file());
+    assert!(c.perform(&ui, Command::NewCalendar, 0.0));
+    type_text(&mut c, &ui, "Work");
+    c.key(&ui, Out::Enter, 1.0);
+    tap_bar(&mut c, &ui, chrome::B_ADD, 2.0);
+    assert_eq!(c.event_pop.as_ref().unwrap().calendar, c.extras().default_id());
+    c.activate(&ui, Target::Pop(eventpop::PopPart::Calendar), 3.0);
+    assert_eq!(c.event_pop.as_ref().unwrap().calendar, 2);
+    draw_once(&mut c, &ui);
+    c.key(&ui, Out::Enter, 4.0);
+    let id = c.events[0].id;
+    assert_eq!(c.events[0].title, eventpop::UNTITLED, "Return with no title adds a New Event");
+    assert_eq!(c.extras().calendar_of(id), 2);
+}
+
+#[test]
+fn a_double_click_on_an_empty_day_of_the_month_opens_the_popover_there() {
+    let ui = crate::test_ui();
+    let temp = Temp::new();
+    let mut c = new(&ui, temp.file());
+    c.layout_columns(&ui);
+    let (left, cell, top, rh) = c.grid_geom(&ui);
+    let target = date(2026, 10, 20);
+    let n = (target.days() - c.grid_start().days()) as f32;
+    let (row, col) = ((n / 7.0).floor(), n % 7.0);
+    let (x, y) = (c.x0 + left + cell * (col + 0.5), top + rh * row + rh - ui.pt(6.0));
+    let click = |c: &mut Calendar, t: f64| {
+        c.touch(&ui, Event::Down(x, y), t);
+        c.touch(&ui, Event::Up(x, y), t + 20.0);
+    };
+    click(&mut c, 0.0);
+    assert!(!c.event_pop_open(), "one click selects the day");
+    assert_eq!(c.selected, target);
+    click(&mut c, 1000.0);
+    assert!(!c.event_pop_open(), "two clicks far apart are not a double-click");
+    click(&mut c, 1100.0);
+    let pop = c.event_pop.as_ref().expect("the double-click opens the popover");
+    assert_eq!((pop.event.date, pop.event.minute), (target, 540));
+    draw_once(&mut c, &ui);
+}
+
+#[test]
+fn a_double_click_on_an_empty_slot_of_the_week_grid_starts_on_its_half_hour() {
+    let ui = crate::test_ui();
+    let temp = Temp::new();
+    let mut c = new(&ui, temp.file());
+    c.activate(&ui, Target::View(View::Week), 0.0);
+    c.layout_columns(&ui);
+    let (gut, col_w) = c.col_geometry(&ui);
+    let hours_top = ui.pt(timeview::GRID0 + timeview::ALLDAY_H) - c.scroll.offset();
+    let (x, y) = (c.x0 + gut + col_w * 2.5, hours_top + (14.0 + 10.0 / 60.0) * ui.pt(c.prefs.hour_h));
+    assert!(y < c.bottom(&ui), "the slot is on screen");
+    for t in [100.0, 300.0] {
+        c.set_pointer(true);
+        c.touch(&ui, Event::Down(x, y), t);
+        c.touch(&ui, Event::Up(x, y), t + 20.0);
+    }
+    let pop = c.event_pop.as_ref().expect("the double-click opens the popover");
+    assert_eq!((pop.event.date, pop.event.minute), (c.view_days()[2], 14 * 60));
+    let anchor = c.pop_anchor(&ui, &pop.event);
+    assert!((anchor.y - y / ui.pt(1.0)).abs() < c.prefs.hour_h, "the popover points at the new block");
+    draw_once(&mut c, &ui);
+    c.key(&ui, Out::Enter, 400.0);
+    assert_eq!(c.events.len(), 1);
+    assert_eq!(c.events[0].minute, 14 * 60);
+}
+
+#[test]
+fn the_sidebar_mini_month_pages_and_shows_a_clicked_day() {
+    let ui = crate::test_ui();
+    let temp = Temp::new();
+    let mut c = new(&ui, temp.file());
+    c.create_event(intents::NewEvent { title: "Dinner".into(), date: date(2026, 10, 4), minute: Some(19 * 60), minutes: None, location: String::new(), notes: String::new(), all_day: false }).unwrap();
+    c.layout_columns(&ui);
+    assert!(c.mini_rect(&ui).is_some(), "the mini month fits under the calendar list");
+    assert!(c.mini_rect(&ui).unwrap().y >= c.sidebar_bottom(&ui), "below the calendar rows");
+    let marked = c.mini_marked(c.mini_month_shown());
+    assert!(marked.contains(&4) && !marked.contains(&5), "a dot under the day with an event");
+    draw_once(&mut c, &ui);
+    let l = c.mini_layout(&ui).unwrap();
+    tap(&mut c, &ui, l.next.x + l.next.w / 2.0, l.next.y + l.next.h / 2.0, 0.0);
+    assert_eq!(c.mini_month_shown(), date(2026, 11, 1), "the chevron pages the mini month");
+    assert_eq!(c.selected, date(2026, 10, 4), "and leaves the main view where it was");
+    let l = c.mini_layout(&ui).unwrap();
+    let (_, r) = l.days.iter().find(|(d, _)| *d == 12).copied().unwrap();
+    tap(&mut c, &ui, r.x + r.w / 2.0, r.y + r.h / 2.0, 100.0);
+    assert_eq!(c.selected, date(2026, 11, 12), "a click on a day shows it");
+    assert_eq!(c.mini_month_shown(), date(2026, 11, 1));
+    c.activate(&ui, Target::MiniPrev, 200.0);
+    c.activate(&ui, Target::MiniPrev, 300.0);
+    assert_eq!(c.mini_month_shown(), date(2026, 9, 1));
+    c.activate(&ui, Target::Today, 400.0);
+    assert_eq!(c.mini_month_shown(), date(2026, 10, 1), "Today brings the mini month back to the selected day");
+    c.activate(&ui, Target::Sidebar, 500.0);
+    assert!(c.mini_rect(&ui).is_none(), "hidden with the calendar list");
 }
