@@ -2768,6 +2768,11 @@ impl Shell {
 
     /// The live frame (or the look) changed: redraw, re-upload, and refresh what is sampled from the wallpaper.
     fn live_changed(&mut self) {
+        // back to the still (Drift -> Still): idle freed the fitted copy once the GPU held the texture, and without it
+        // `home_still` is the raw source (1920 x 1200 on a larger panel); refit it to the screen as unlock does
+        if self.live.view().is_none() && self.fit_home.is_none() && self.desk_active() {
+            self.fit_home = rotate::fit_wallpaper(self.home_src, self.w, self.h);
+        }
         self.wallpaper_uploaded = false;
         // the presenter keys its texture on the pixel address, which a new frame may reuse
         #[cfg(target_os = "linux")]
