@@ -131,6 +131,8 @@ struct State {
     /// the window server applies Night Shift to the whole output (`white_point_mode` not none), and the white point it was
     /// last sent (None: nothing sent yet)
     wm_white_point:bool, white_point_sent:Option<Option<[u32;3]>>,
+    /// the Screen Zoom factor last sent to the window server (`set_zoom`, 256 = 1.0)
+    zoom_sent:Option<u32>,
     foreign_manager:Option<foreign_manager::ZwlrForeignToplevelManagerV1>, foreign:Vec<Foreign>, foreign_dirty:bool,
     /// window capture (the global is listed on the privileged socket only): the manager, the requests in flight by token, the answers
     cap_mgr:Option<cap_manager::BifrostWindowCaptureManagerV1>, cap_jobs:HashMap<u64,CapJob>, cap_results:Vec<(u64,ShotOutcome)>,
@@ -890,8 +892,26 @@ fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_
     pub fn note_draw(&mut self, ms: f64) { if let Some(g) = &mut self.gpu { g.draw.0 += 1; g.draw.1 += ms; } }
     /// Screen Zoom for the next present: the shell's zoom state and the pointer in screen px. The presenter magnifies
     /// the composed frame around the pointer. Without a GPU presenter (the CPU path) zoom is not drawn.
+    ///
+    /// Under a window server with `set_zoom` (bifrost-wm, protocol version 6) Full Screen zoom is the window server's:
+    /// it magnifies the whole output, the wallpaper and every window included, around its own pointer, and the
+    /// presenter magnifies nothing (W5-17: magnifying the shell's frame alone left the windows, bar and Dock at 1x and
+    /// blacked out the wallpaper, which the presenter does not hold). The factor is sent once per change.
     pub fn set_zoom(&mut self, zoom: ScreenZoom, pointer: (f32, f32)) {
-        if let Some(g) = &mut self.gpu { g.zoom = zoom; g.pointer = pointer; }
+        let wm = self.state.level_mgr.as_ref().filter(|mgr| mgr.version() >= super::window_level_client::ZOOM_SINCE);
+        let local = match wm {
+            Some(mgr) => {
+                let wire = super::window_level_client::zoom_wire(zoom);
+                if self.state.zoom_sent != Some(wire) {
+                    mgr.set_zoom(wire);
+                    self.state.zoom_sent = Some(wire);
+                    let _ = transient(self.conn.flush());
+                }
+                if zoom.mode == Mode::Full { ScreenZoom { on: false, ..zoom } } else { zoom }
+            }
+            None => zoom,
+        };
+        if let Some(g) = &mut self.gpu { g.zoom = local; g.pointer = pointer; }
     }
     pub fn present(&mut self, pixels: &[u32], damage: &Damage) -> io::Result<()> {
         if self.state.lock_wanted && !self.state.lock.as_ref().is_some_and(|l|l.configured) { return Ok(()); }

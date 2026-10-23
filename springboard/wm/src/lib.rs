@@ -41,6 +41,7 @@ pub mod window_capture;
 pub mod window_level;
 pub mod white_point;
 pub mod wm;
+pub mod zoom;
 #[cfg(feature = "xwayland")]
 pub mod xwayland;
 

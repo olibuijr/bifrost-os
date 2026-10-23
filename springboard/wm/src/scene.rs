@@ -6,6 +6,7 @@ use smithay::{
         element::{
             memory::MemoryRenderBufferRenderElement,
             surface::{render_elements_from_surface_tree, WaylandSurfaceRenderElement},
+            utils::RescaleRenderElement,
             AsRenderElements, Kind,
         },
         gles::{element::PixelShaderElement, GlesRenderer},
@@ -34,6 +35,27 @@ render_elements! {
     Plate = PixelShaderElement,
     Memory = MemoryRenderBufferRenderElement<GlesRenderer>,
     WhitePoint = MultiplyElement,
+}
+
+// The scene under Screen Zoom: every element rescaled about one origin (`zoom.rs`).
+render_elements! {
+    pub ZoomElement<=GlesRenderer>;
+    Zoomed = RescaleRenderElement<SceneElement>,
+}
+
+/// The rescale origin (output pixels) and factor of Screen Zoom for `output` now, following the pointer; None at 1.0.
+pub fn zoom_origin(state: &WmState, output: &Output) -> Option<(Point<i32, Physical>, f64)> {
+    let factor = crate::zoom::factor(state.zoom);
+    let (w, h) = crate::transform::output_size(output)?;
+    let scale = output.current_scale().fractional_scale();
+    let p = state.pointer_location();
+    let (x, y) = crate::zoom::origin(factor, (p.x * scale, p.y * scale), (w as f64, h as f64))?;
+    Some(((x, y).into(), factor))
+}
+
+/// `elements` magnified by `factor` about `origin` (front to back order kept).
+pub fn zoomed(elements: Vec<SceneElement>, origin: Point<i32, Physical>, factor: f64) -> Vec<ZoomElement> {
+    elements.into_iter().map(|e| ZoomElement::Zoomed(RescaleRenderElement::from_element(e, origin, factor))).collect()
 }
 
 /// One surface of the scene: its elements and what sits behind its material regions on the output.

@@ -571,3 +571,13 @@ back at its frame but the window server forgets the frame it would un-zoom to.
 Not done: the full-screen window does not get a desktop of its own that the switch keys step to (`spaces.rs` is a model
 that nothing drives yet), and a full-screen window shows no title bar when the pointer reaches the top, so it is left with
 the menu bar's Window menu or Ctrl+Cmd+F.
+
+## Screen Zoom (`bifrost_window_level_v1` version 6)
+
+Settings > Accessibility > Zoom in Full Screen mode is the window server's: the shell sends the factor with `set_zoom`
+(256 = 1.0, privileged only, once per change, `bare/window_level_client.rs` `zoom_wire`) and stops magnifying its own
+frame. `wm/src/zoom.rs` keeps a viewport of the output size divided by the factor, centred on the pointer and kept on
+the output, and the GLES scanout (`drm.rs` `render`, `scene::zoomed`) rescales every scene element about the origin
+that makes that viewport fill the output: wallpaper, windows, menu bar, Dock and pointer. Input is not transformed; the
+point under the drawn pointer is the pointer's position. Picture in Picture (the lens) stays with the shell's
+presenter and only magnifies the shell's own frame; the Vulkan scanout has no zoom yet.

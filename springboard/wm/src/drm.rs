@@ -805,15 +805,21 @@ impl Drm {
             }
         }
         let elements = crate::scene::build(&mut self.renderer, state, &output, &mut self.glass, top);
-        match self.compositor.render_frame(&mut self.renderer, &elements, CLEAR, FrameFlags::DEFAULT) {
-            Ok(frame) => {
-                if !frame.is_empty {
-                    match self.compositor.queue_frame(()) {
-                        Ok(()) => self.pending = true,
-                        Err(e) => eprintln!("bifrost-wm: queue frame: {e}"),
-                    }
-                }
+        // Screen Zoom (`zoom.rs`): the whole composed scene, wallpaper, windows, bar, Dock and pointer, magnified about
+        // the viewport around the pointer; the shell sends the factor and stops magnifying its own frame
+        let rendered = match crate::scene::zoom_origin(state, &output) {
+            Some((origin, factor)) => {
+                let zoomed = crate::scene::zoomed(elements, origin, factor);
+                self.compositor.render_frame(&mut self.renderer, &zoomed, CLEAR, FrameFlags::DEFAULT).map(|f| f.is_empty).map_err(|e| e.to_string())
             }
+            None => self.compositor.render_frame(&mut self.renderer, &elements, CLEAR, FrameFlags::DEFAULT).map(|f| f.is_empty).map_err(|e| e.to_string()),
+        };
+        match rendered {
+            Ok(false) => match self.compositor.queue_frame(()) {
+                Ok(()) => self.pending = true,
+                Err(e) => eprintln!("bifrost-wm: queue frame: {e}"),
+            },
+            Ok(true) => {}
             Err(e) => eprintln!("bifrost-wm: render: {e}"),
         }
         state.send_frames(&output);

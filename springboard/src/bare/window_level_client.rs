@@ -31,14 +31,27 @@ pub mod protocol {
 /// The newest protocol version the shell binds: 2 adds `frame`, the window server's frame of each of the shell's
 /// toplevels (the shell keeps its window rectangles from it); 3 adds `tile`, the shell's request to place one; 4 adds
 /// `set_origin`, where a toplevel maps again after the shell destroyed it while the window was hidden; 5 adds
-/// `set_white_point` and `white_point_mode`, Night Shift applied by the window server to the whole output.
-pub const VERSION: u32 = 5;
+/// `set_white_point` and `white_point_mode`, Night Shift applied by the window server to the whole output; 6 adds
+/// `set_zoom`, Screen Zoom of the whole output.
+pub const VERSION: u32 = 6;
 /// The version that introduced `tile`; a manager bound at an older version is never sent one.
 pub const TILE_SINCE: u32 = 3;
 /// The version that introduced `set_origin`; a manager bound at an older version is never sent one.
 pub const ORIGIN_SINCE: u32 = 4;
 /// The version that introduced `set_white_point` and the `white_point_mode` event.
 pub const WHITE_POINT_SINCE: u32 = 5;
+/// The version that introduced `set_zoom`.
+pub const ZOOM_SINCE: u32 = 6;
+
+/// The `set_zoom` argument for the shell's Screen Zoom: the Full Screen factor (256 = 1.0), 256 when zoom is off or in
+/// Picture in Picture (the lens stays with the shell's presenter).
+pub fn zoom_wire(z: crate::shell::accessibility::zoom::ScreenZoom) -> u32 {
+    use crate::shell::accessibility::zoom::{Mode, MAX_FACTOR, MIN_FACTOR};
+    if !z.on || z.mode != Mode::Full || z.factor <= MIN_FACTOR {
+        return 256;
+    }
+    (z.factor.min(MAX_FACTOR) * 256.0).round() as u32
+}
 
 /// The `set_white_point` arguments for the Night Shift multipliers `m` (`night_shift::multipliers`, 256 = 1.0, in R, G,
 /// B order): off is 256 256 256, and nothing above 1.0 is sent.
@@ -101,6 +114,23 @@ mod tests {
         let xml = include_str!("../../wm/protocol/bifrost-window-level-v1.xml");
         assert!(xml.contains(&format!("<request name=\"set_origin\" since=\"{ORIGIN_SINCE}\">")));
         assert!(ORIGIN_SINCE <= VERSION);
+    }
+
+    #[test]
+    fn the_shell_asks_for_the_zoom_the_protocol_declares() {
+        let xml = include_str!("../../wm/protocol/bifrost-window-level-v1.xml");
+        assert!(xml.contains(&format!("<request name=\"set_zoom\" since=\"{ZOOM_SINCE}\">")));
+        assert!(ZOOM_SINCE <= VERSION);
+    }
+
+    #[test]
+    fn the_zoom_wire_value_is_the_full_screen_factor_only() {
+        use crate::shell::accessibility::zoom::{Mode, ScreenZoom};
+        assert_eq!(zoom_wire(ScreenZoom::default()), 256, "off");
+        assert_eq!(zoom_wire(ScreenZoom { on: true, factor: 2.0, mode: Mode::Full }), 512);
+        assert_eq!(zoom_wire(ScreenZoom { on: true, factor: 1.25, mode: Mode::Full }), 320);
+        assert_eq!(zoom_wire(ScreenZoom { on: true, factor: 2.0, mode: Mode::Lens }), 256, "the lens stays with the shell");
+        assert_eq!(zoom_wire(ScreenZoom { on: true, factor: 99.0, mode: Mode::Full }), 2048);
     }
 
     #[test]

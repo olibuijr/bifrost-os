@@ -4,7 +4,7 @@
     Copyright 2026 BifrOSt. Private protocol of the BifrOSt window server (docs/bifrost-ui.md, "Window level").
   </copyright>
 
-  <interface name="bifrost_window_level_manager_v1" version="5">
+  <interface name="bifrost_window_level_manager_v1" version="6">
     <description summary="stacking level of a toplevel">
       Lets the shell put a toplevel on the floating level. A floating window stays above the normal windows of the
       desktop and is raised only within its own band; menus, panels and the menu bar are not affected. The level
@@ -69,6 +69,18 @@
       <arg name="red" type="uint"/>
       <arg name="green" type="uint"/>
       <arg name="blue" type="uint"/>
+    </request>
+
+    <request name="set_zoom" since="6">
+      <description summary="Screen Zoom of the outputs">
+        The magnification every output is shown with, 256 being 1.0 (values below are 1.0, values above 2048 are
+        2048): 256 is off. The window server scales everything it composes, windows of every client, layer surfaces
+        and the pointer, around a viewport the size of the output divided by the factor, centred on the pointer and
+        kept on the output; it follows the pointer by itself, so the client sends the factor once per change. Input
+        is not transformed: the point under the drawn pointer is the pointer's position. Only the privileged client
+        (the shell) may set it; the request of any other client is ignored.
+      </description>
+      <arg name="factor" type="uint"/>
     </request>
 
     <event name="frame" since="2">
