@@ -18,7 +18,7 @@ mod wrap;
 
 use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::proto::DocMode;
-use bifrost_app::{App, AppMenu, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
+use bifrost_app::{App, AppMenu, Command, Commands, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
 use bifrost_app::now_playing;
 use bifrost_core::json::Json;
 use springboard::shell::keyboard::Out;
@@ -42,6 +42,18 @@ fn open_file_panel(p: &mut podcasts::Podcasts, ctx: &Ctx) {
     }
 }
 
+/// The text field's name for an Edit command (`TextField::edit` takes it as `Out::Named`).
+fn edit_name(command: Command) -> &'static str {
+    match command {
+        Command::Cut => "Cut",
+        Command::Copy => "Copy",
+        Command::Paste => "Paste",
+        Command::SelectAll => "SelectAll",
+        Command::Undo => "Undo",
+        Command::Redo => "Redo",
+    }
+}
+
 fn shell_dir() -> PathBuf {
     PathBuf::from(std::env::var("BIFROST_SERVICE_ROOT").unwrap_or_else(|_| "/var/lib/springboard".into()))
 }
@@ -60,7 +72,24 @@ impl App for PodcastsApp {
         }
     }
 
+    /// The Edit commands (menu and Cmd+X, C, V, A, Z) go to the search field or the add sheet's field while one has the
+    /// keys.
+    fn commands(&self, _ctx: &Ctx) -> Commands {
+        let text = self.podcasts.as_ref().is_some_and(|p| p.editing_text());
+        Commands::default()
+            .with(Command::Undo, text)
+            .with(Command::Redo, text)
+            .with(Command::Cut, text)
+            .with(Command::Copy, text)
+            .with(Command::Paste, text)
+            .with(Command::SelectAll, text)
+    }
+
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
+        if let Input::Command(command) = &ev {
+            let Some(p) = &mut self.podcasts else { return false };
+            return p.edit_command(&ctx.ui, edit_name(*command), bifrost_app::proto::sys::now_ms());
+        }
         match &ev {
             Input::Context { x, y } => {
                 let Some(p) = &mut self.podcasts else { return false };
@@ -203,4 +232,24 @@ impl App for PodcastsApp {
 
 fn main() {
     bifrost_app::run(PodcastsApp { podcasts: None });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_edit_command_has_the_text_field_name_it_runs() {
+        let names: Vec<&str> = Command::ALL.iter().map(|c| edit_name(*c)).collect();
+        assert_eq!(names, ["Cut", "Copy", "Paste", "SelectAll", "Undo", "Redo"]);
+    }
+
+    #[test]
+    fn without_a_text_field_the_edit_commands_are_off() {
+        let app = PodcastsApp { podcasts: None };
+        let ui = bifrost_app::Ui::new(bifrost_app::kit::Font::parse(Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice())).unwrap(), 1.0);
+        let cfg = bifrost_app::proto::Configure { w: 100, h: 100, scale: 1.0, safe_top: 0.0, safe_bottom: 0.0, dark: true, text_scale: 1.0, reduce_motion: false };
+        let ctx = Ctx::testing(ui, cfg);
+        assert!(!app.commands(&ctx).supports(Command::SelectAll));
+    }
 }
