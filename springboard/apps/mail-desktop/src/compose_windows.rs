@@ -251,6 +251,19 @@ impl Composes {
         true
     }
 
+    /// `scrollWheel:` on compose window `id`: the wheel moved its content `dy` pixels. Its message scrolls, the active
+    /// window's in the sheet slot and any other's in its own slot, so a wheel never moves the sheet slot between
+    /// windows. True when the message moved.
+    pub fn wheel(&mut self, ui: &bifrost_app::kit::Ui, mail: &mut MailWindow, id: WindowId, dy: f32) -> bool {
+        if self.active == Some(id) {
+            // the main window's size is the active compose window's (`activate`), so its sheet scrolls in place
+            return mail.wheel(ui, 0.0, 0.0, dy);
+        }
+        let Some(slot) = self.slot_mut(id) else { return false };
+        let (w, h) = (slot.w, slot.h);
+        crate::draw::scroll_message(ui, &mut slot.compose, w, h, dy)
+    }
+
     /// The compose a window holds, for drawing it while it is not active.
     pub fn compose_of(&self, id: WindowId) -> Option<Compose> {
         self.slots.iter().find(|slot| slot.id == id).map(|slot| slot.compose.clone())
