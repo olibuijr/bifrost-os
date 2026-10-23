@@ -90,13 +90,25 @@ struct Backing {
 /// shell sends for every region, so nothing shows past the window's rounded corners), like the Vulkan path's
 /// `material_nodes`; a plate takes the recipe's opaque colour.
 fn backing_of(specs: &[MaterialSpec], origin: Point<i32, Logical>, active: bool, dark: bool) -> Backing {
+    backing_with(specs, origin, active, dark, false)
+}
+
+/// `backing_of`, and under Reduce Transparency (`reduce`) every material is its recipe's opaque plate: nothing is blurred
+/// and nothing behind the surface shows through it (W5-18).
+fn backing_with(specs: &[MaterialSpec], origin: Point<i32, Logical>, active: bool, dark: bool, reduce: bool) -> Backing {
     let mut blur = Vec::new();
     let mut plates = Vec::new();
     let mut look = None;
     for spec in specs {
         let rects = spec.rects.iter().map(|r| Rectangle::new(r.loc + origin, r.size));
         let radius = if spec.rects.len() == 1 { spec.mask_radius() } else { 0.0 };
-        match resolve(spec, active, dark) {
+        let resolved = if reduce {
+            let rc = crate::material_kind::recipe(spec.kind);
+            Resolved::Plate(if dark { rc.plate_dark } else { rc.plate_light })
+        } else {
+            resolve(spec, active, dark)
+        };
+        match resolved {
             Resolved::Glass { saturation, tone, .. } => {
                 look.get_or_insert((saturation, tone));
                 blur.extend(rects.map(|rect| Region { rect, radius }));
@@ -112,8 +124,8 @@ fn backing_of(specs: &[MaterialSpec], origin: Point<i32, Logical>, active: bool,
 }
 
 /// The backing of `surface`'s material regions: `backing_of` its committed materials, else its plain blur regions.
-fn backing_at(surface: &WlSurface, origin: Point<i32, Logical>, active: bool, dark: bool) -> Backing {
-    backing_of(&effective_regions(surface), origin, active, dark)
+fn backing_at(surface: &WlSurface, origin: Point<i32, Logical>, active: bool, dark: bool, reduce: bool) -> Backing {
+    backing_with(&effective_regions(surface), origin, active, dark, reduce)
 }
 
 /// A stable key for a surface's glass between frames.
@@ -125,7 +137,7 @@ fn surface_key(surface: &WlSurface) -> u64 {
 }
 
 /// The surfaces of one layer, bottom first (the map lists them top first).
-fn layer_items(renderer: &mut GlesRenderer, map: &smithay::desktop::LayerMap, layer: Layer, scale: Scale<f64>, dark: bool, out: &mut Vec<Item>) {
+fn layer_items(renderer: &mut GlesRenderer, map: &smithay::desktop::LayerMap, layer: Layer, scale: Scale<f64>, (dark, reduce): (bool, bool), out: &mut Vec<Item>) {
     let mut ls: Vec<_> = map.layers_on(layer).collect();
     ls.reverse();
     for l in ls {
@@ -135,7 +147,7 @@ fn layer_items(renderer: &mut GlesRenderer, map: &smithay::desktop::LayerMap, la
             .into_iter()
             .map(SceneElement::Surface)
             .collect();
-        let Backing { blur, saturation, tone, plates } = backing_at(l.wl_surface(), geo.loc, true, dark);
+        let Backing { blur, saturation, tone, plates } = backing_at(l.wl_surface(), geo.loc, true, dark, reduce);
         out.push(Item { key: surface_key(l.wl_surface()), elements, blur, saturation, tone, plates });
     }
 }
@@ -144,8 +156,10 @@ fn layer_items(renderer: &mut GlesRenderer, map: &smithay::desktop::LayerMap, la
 fn items(renderer: &mut GlesRenderer, state: &WmState, output: &Output, scale: Scale<f64>) -> Vec<Item> {
     let mut out = Vec::new();
     let map = layer_map_for_output(output);
-    layer_items(renderer, &map, Layer::Background, scale, state.material_dark, &mut out);
-    layer_items(renderer, &map, Layer::Bottom, scale, state.material_dark, &mut out);
+    let reduce = state.display.now.reduce_transparency;
+    let look = (state.material_dark, reduce);
+    layer_items(renderer, &map, Layer::Background, scale, look, &mut out);
+    layer_items(renderer, &map, Layer::Bottom, scale, look, &mut out);
     // windows bottom first; a window's surface origin is its frame minus its geometry offset (client shadows)
     let windows: Vec<Window> = state.space.elements().cloned().collect();
     for w in windows {
@@ -156,7 +170,7 @@ fn items(renderer: &mut GlesRenderer, state: &WmState, output: &Output, scale: S
         let (key, backing) = match w.toplevel() {
             Some(t) => {
                 let active = t.current_state().states.contains(smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State::Activated);
-                (surface_key(t.wl_surface()), backing_at(t.wl_surface(), origin, active, state.material_dark))
+                (surface_key(t.wl_surface()), backing_at(t.wl_surface(), origin, active, state.material_dark, reduce))
             }
             None => (0, Backing { blur: Vec::new(), saturation: SATURATION, tone: Tone::NONE, plates: Vec::new() }),
         };
@@ -172,8 +186,8 @@ fn items(renderer: &mut GlesRenderer, state: &WmState, output: &Output, scale: S
             .collect();
         out.push(Item { key: surface_key(&surface), elements, blur: Vec::new(), saturation: SATURATION, tone: Tone::NONE, plates: Vec::new() });
     }
-    layer_items(renderer, &map, Layer::Top, scale, state.material_dark, &mut out);
-    layer_items(renderer, &map, Layer::Overlay, scale, state.material_dark, &mut out);
+    layer_items(renderer, &map, Layer::Top, scale, look, &mut out);
+    layer_items(renderer, &map, Layer::Overlay, scale, look, &mut out);
     out
 }
 
@@ -235,6 +249,16 @@ mod tests {
     }
 
     /// What an app with a sidebar and a toolbar band declares (surface coordinates, a 20 px shadow margin).
+    #[test]
+    fn reduce_transparency_plates_every_material_even_in_an_active_window() {
+        let b = backing_with(&app_materials(), (100, 50).into(), true, true, true);
+        assert!(b.blur.is_empty(), "nothing is blurred");
+        assert_eq!(b.plates.len(), app_materials().iter().map(|s| s.rects.len()).sum::<usize>(), "every region is backed");
+        assert!(b.plates.iter().all(|p| p.color[3] >= 0.999), "with an opaque plate");
+        let live = backing_with(&app_materials(), (100, 50).into(), true, true, false);
+        assert!(!live.blur.is_empty(), "off: the active window's sidebar is live glass");
+    }
+
     fn app_materials() -> Vec<MaterialSpec> {
         vec![spec(MaterialKind::Sidebar, vec![rect(20, 20, 200, 600)]), spec(MaterialKind::Titlebar, vec![rect(220, 20, 780, 52)])]
     }

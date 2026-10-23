@@ -5,6 +5,7 @@ pub mod bifrost_material;
 pub mod boot;
 pub mod capture;
 pub mod decorations;
+pub mod display_options;
 #[cfg(feature = "drm")]
 pub mod drm;
 #[cfg(feature = "drm")]

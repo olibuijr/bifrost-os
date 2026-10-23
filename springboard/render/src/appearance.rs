@@ -428,8 +428,30 @@ pub fn contrast(color: u32) -> u32 {
     contrast_on(color)
 }
 
-/// `contrast` with the setting taken as on.
+/// `contrast` with the setting taken as on, for the scheme the fade is heading for.
 pub fn contrast_on(color: u32) -> u32 {
+    contrast_for(color, target_is_light())
+}
+
+/// `contrast_on` for a given scheme (pure). On a light background the low-contrast greys go darker, never lighter
+/// (the dark map alone lifted the secondary grey towards white, lowering its contrast in Light).
+pub fn contrast_for(color: u32, light: bool) -> u32 {
+    use crate::gfx::pack;
+    if light {
+        const LIGHT: [(u32, u32); 4] = [
+            (crate::ui::SECONDARY, pack(86, 86, 90, 255)),        // secondary label
+            (pack(232, 232, 232, 255), pack(140, 140, 146, 255)), // separator
+            (pack(184, 184, 188, 255), pack(118, 118, 122, 255)), // tertiary label
+            (pack(209, 209, 214, 255), pack(160, 160, 166, 255)), // control track
+        ];
+        if let Some(&(_, to)) = LIGHT.iter().find(|(from, _)| *from == color) {
+            return to;
+        }
+    }
+    contrast_dark(color)
+}
+
+fn contrast_dark(color: u32) -> u32 {
     use crate::ui::{SECONDARY, SEPARATOR, TRACK};
     use crate::gfx::{pack, rgba};
     const MAP: [(u32, u32); 5] = [
@@ -676,6 +698,19 @@ mod tinted_tests {
 #[cfg(test)]
 mod display_option_tests {
     use super::*;
+
+    #[test]
+    fn increase_contrast_darkens_greys_in_light_and_lifts_them_in_dark() {
+        use crate::ui::{LABEL_3, SECONDARY, SEPARATOR_C, TRACK_C};
+        let lum = |c: u32| c & 0xff;
+        assert!(lum(contrast_for(SECONDARY, true)) < lum(SECONDARY), "secondary text darker on white");
+        assert!(lum(contrast_for(SECONDARY, false)) > lum(SECONDARY), "and lighter on black");
+        for p in [SEPARATOR_C, LABEL_3, TRACK_C] {
+            assert!(lum(contrast_for(p.light, true)) < lum(p.light), "light {}", p.light);
+            assert!(lum(contrast_for(p.dark, false)) > lum(p.dark), "dark {}", p.dark);
+        }
+        assert_eq!(contrast_for(0xffff_ffff, true), 0xffff_ffff, "other colours are kept");
+    }
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
 

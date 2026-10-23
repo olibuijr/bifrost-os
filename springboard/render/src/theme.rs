@@ -45,6 +45,7 @@ pub fn builtin_pairs() -> Vec<(&'static str, Pair)> {
         ("MENU_TINT", ui::MENU_TINT),
         ("MENU_SOLID", ui::MENU_SOLID),
         ("DOCK_TINT", ui::DOCK_TINT),
+        ("DOCK_SOLID", ui::DOCK_SOLID),
         ("SIDEBAR_BG", ui::SIDEBAR_BG),
         ("DETAIL_BG", ui::DETAIL_BG),
         ("CONTENT_BG", ui::CONTENT_BG),

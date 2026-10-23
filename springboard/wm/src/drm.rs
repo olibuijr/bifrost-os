@@ -675,6 +675,10 @@ impl Drm {
     /// Composes when the scene changed or a fade runs, and not while a flip is pending or the session is away.
     fn tick(&mut self, state: &mut WmState) {
         self.step_white_point(state);
+        // Reduce Transparency and Increase Contrast from the shell's file: a change repaints every material
+        if state.display.poll(std::time::Instant::now()) {
+            state.dirty = true;
+        }
         if !should_render(self.paused, self.pending) {
             return;
         }
