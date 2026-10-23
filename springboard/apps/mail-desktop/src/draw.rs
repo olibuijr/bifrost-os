@@ -50,6 +50,31 @@ const DOT_PT: f32 = 8.0;
 const INDENT_PT: f32 = 14.0;
 const MAX_INDENT_LEVELS: usize = 6;
 const RADIUS_PT: f32 = m::ICON_RADIUS;
+
+/// The list offset that shows line `index` whole in a window `h` pixels tall, from `offset`: unchanged while the line
+/// is in view, otherwise scrolled just far enough that it meets the top or the bottom (above the status footer). Up and
+/// Down Arrow keep the selection on screen this way.
+pub fn list_offset_showing(ui: &Ui, mail: &Mail, h: f32, index: usize, offset: f32) -> f32 {
+    use bifrost_app::controls::scroll::{offset_for_rect, Anchor};
+    let row = ui.pt(ROW_PT);
+    let footer = ui.pt(FOOT_LINE_PT) + 2.0 * ui.pt(SPACE_M);
+    let view = (h - chrome_height(ui, mail) - footer).max(row);
+    let y = index as f32 * row;
+    let anchor = if y < offset {
+        Anchor::Leading
+    } else if y + row > offset + view {
+        Anchor::Trailing
+    } else {
+        return offset;
+    };
+    offset_for_rect(y, row, view, mail.visible_lines().len() as f32 * row + footer, anchor)
+}
+
+/// Where a message row's sender and subject start in a list column at `x0`: past the unread dot's gutter (the dot, then
+/// a space so it never touches the first letter) and the conversation indent of `depth`.
+pub fn list_text_x(ui: &Ui, x0: f32, depth: usize) -> f32 {
+    x0 + ui.pt(SPACE_M) + ui.pt(DOT_PT) + ui.pt(SPACE_S) + depth.min(MAX_INDENT_LEVELS) as f32 * ui.pt(INDENT_PT)
+}
 const PANEL_RADIUS_PT: f32 = m::CARD_RADIUS;
 
 /// A rectangle in pixels: x, y, width, height.
@@ -175,23 +200,22 @@ fn favorite_items(mail: &Mail, ui: &Ui, y: f32, h: f32) -> Vec<(usize, Rect)> {
     items
 }
 
-/// The toolbar buttons and their rectangles, from the right edge inwards: Compose, then Reply, Reply All (only when the
-/// message has other recipients), Archive and Trash when a message is open, then the filter chip while a filter is
-/// applied, then Refresh.
-fn toolbar_items(open: bool, others: bool, filter: Filter) -> Vec<(Button, String)> {
-    let mut order: Vec<(Button, String)> = vec![(Button::Compose, "Compose".to_string())];
-    if open {
-        order.push((Button::Reply, "Reply".to_string()));
-        if others {
-            order.push((Button::ReplyAll, "Reply All".to_string()));
-        }
-        order.push((Button::Archive, "Archive".to_string()));
-        order.push((Button::Trash, "Trash".to_string()));
-    }
+/// The toolbar buttons from the right edge inwards, each with whether it can act: Compose, then Reply, Reply All,
+/// Archive and Trash, then the filter chip while a filter is applied, then Refresh. The message actions stay in the bar
+/// with no message open, disabled (HIG: disable an item that cannot act rather than remove it, so the bar does not
+/// shift); Reply All also needs other recipients.
+fn toolbar_items(open: bool, others: bool, filter: Filter) -> Vec<(Button, String, bool)> {
+    let mut order: Vec<(Button, String, bool)> = vec![
+        (Button::Compose, "Compose".to_string(), true),
+        (Button::Reply, "Reply".to_string(), open),
+        (Button::ReplyAll, "Reply All".to_string(), open && others),
+        (Button::Archive, "Archive".to_string(), open),
+        (Button::Trash, "Trash".to_string(), open),
+    ];
     if filter != Filter::All {
-        order.push((Button::Filter, filter.label().to_string()));
+        order.push((Button::Filter, filter.label().to_string(), true));
     }
-    order.push((Button::Refresh, "Refresh".to_string()));
+    order.push((Button::Refresh, "Refresh".to_string(), true));
     order
 }
 
@@ -219,7 +243,7 @@ fn toolbar_glyph(button: &Button) -> Option<(&'static str, &'static str)> {
 fn toolbar_model(mail: &Mail) -> Toolbar {
     let mut items = vec![ToolbarItem::custom(90, "Mailbox title", 180.0), ToolbarItem::flexible_space()];
     let visible = toolbar_items(mail.open.is_some(), open_has_others(mail), mail.filter);
-    for (button, label) in visible.into_iter().rev() {
+    for (button, label, enabled) in visible.into_iter().rev() {
         let id = match button {
             Button::Refresh => 1, Button::Compose => 2, Button::Reply => 3, Button::ReplyAll => 4,
             Button::Archive => 5, Button::Trash => 6, Button::Filter => 7,
@@ -230,10 +254,11 @@ fn toolbar_model(mail: &Mail) -> Toolbar {
             Button::Archive | Button::Trash => 2,
             _ => 0,
         };
-        items.push(match toolbar_glyph(&button) {
+        let item = match toolbar_glyph(&button) {
             Some((symbol, name)) => ToolbarItem::icon(id, name, symbol).in_group(group),
             None => ToolbarItem::button(id, &label),
-        });
+        };
+        items.push(item.enabled(enabled));
     }
     Toolbar::new(items)
 }
@@ -685,7 +710,9 @@ impl MailWindow {
             let scale = ui.pt(1.0);
             let model = toolbar_model(&self.mail);
             let placed = widgets::toolbar_layout(ui, toolbar_bounds(ui, w), &model);
-            return placed.hit(x / scale, y / scale).and_then(toolbar_button).map_or(Hit::None, Hit::Button);
+            // a disabled button takes no click
+            let enabled = |id: &u32| model.items.iter().any(|i| i.id == *id && i.enabled);
+            return placed.hit(x / scale, y / scale).filter(enabled).and_then(toolbar_button).map_or(Hit::None, Hit::Button);
         }
         if y < top {
             return favorite_items(&self.mail, ui, bar, top - bar).into_iter().find(|(_, r)| inside(*r, x, y)).map_or(Hit::None, |(i, _)| Hit::Favorite(i));
@@ -836,7 +863,7 @@ impl MailWindow {
             if y + row < top || y > h {
                 continue;
             }
-            let text_x = x0 + pad + dot + line.depth.min(MAX_INDENT_LEVELS) as f32 * ui.pt(INDENT_PT);
+            let text_x = list_text_x(ui, x0, line.depth);
             let selected = open == Some(r.uid);
             if selected {
                 s.fill_rrect(x0 + inset, y + inset / 2.0, width - 2.0 * inset, row - inset, ui.pt(RADIUS_PT), colors::SYSTEM_BLUE.now());
@@ -1368,6 +1395,32 @@ impl MailWindow {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_message_actions_stay_in_the_toolbar_disabled_with_nothing_selected() {
+        let enabled = |open: bool, others: bool| -> Vec<(Button, bool)> { toolbar_items(open, others, Filter::All).into_iter().map(|(b, _, on)| (b, on)).collect() };
+        let idle = enabled(false, false);
+        assert_eq!(idle.iter().map(|(b, _)| b.clone()).collect::<Vec<_>>(), enabled(true, true).iter().map(|(b, _)| b.clone()).collect::<Vec<_>>(), "the same buttons either way");
+        for (button, on) in &idle {
+            let acts = matches!(button, Button::Compose | Button::Refresh);
+            assert_eq!(*on, acts, "{button:?}");
+        }
+        assert!(enabled(true, false).iter().any(|(b, on)| matches!(b, Button::ReplyAll) && !on), "Reply All needs other recipients");
+        assert!(enabled(true, true).iter().all(|(_, on)| *on));
+        // the model carries the state to the kit's toolbar, which greys a disabled item
+        let model = toolbar_model(&Mail::new(vec![]));
+        assert!(model.items.iter().any(|i| i.id == 3 && !i.enabled), "Reply is there, disabled");
+    }
+
+    #[test]
+    fn the_unread_dot_has_a_gutter_before_the_sender() {
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        let ui = Ui::new(bifrost_app::kit::Font::parse(data).unwrap(), 2.0);
+        // the dot is drawn at x0 + pad, DOT_PT wide (draw_list)
+        let dot_right = 100.0 + ui.pt(SPACE_M) + ui.pt(DOT_PT);
+        assert!(list_text_x(&ui, 100.0, 0) - dot_right >= ui.pt(SPACE_S), "a space between the dot and the first letter");
+        assert_eq!(list_text_x(&ui, 100.0, 2) - list_text_x(&ui, 100.0, 0), 2.0 * ui.pt(INDENT_PT));
+    }
 
     #[test]
     fn list_rows_say_muted_and_the_sender_s_priority() {

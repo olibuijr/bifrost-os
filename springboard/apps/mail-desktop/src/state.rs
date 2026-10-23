@@ -907,6 +907,13 @@ pub struct Mail {
     pub found_pager: Option<(u32, Pager)>,
     /// The suggestions the person turned down or took, for this run: they are not offered again from the same message.
     pub found_dismissed: Dismissed,
+    /// The message selected in each mailbox the person left, by (account id, mailbox): coming back selects it again.
+    pub remembered: HashMap<(String, String), u32>,
+    /// The message to select again once the shown mailbox's listing arrives (from `remembered`).
+    restore: Option<u32>,
+    /// The listing brought back the message selected when the mailbox was left: the window opens it (and fetches its
+    /// text) and takes this.
+    pub reopen: Option<u32>,
 }
 
 impl Mail {
@@ -957,6 +964,9 @@ impl Mail {
             donated: HashSet::new(),
             found_pager: None,
             found_dismissed: Dismissed::default(),
+            remembered: HashMap::new(),
+            restore: None,
+            reopen: None,
         }
     }
 
@@ -1004,12 +1014,29 @@ impl Mail {
         if index >= self.accounts.len() {
             return;
         }
+        // the old account's selection is kept under its own id before the account changes
+        self.remember_selection();
+        self.open = None;
         self.account = index;
         self.mailboxes = vec![INBOX.to_string()];
         self.show_mailbox(INBOX);
     }
 
+    /// Keeps the selected message of the shown mailbox, for coming back to it.
+    fn remember_selection(&mut self) {
+        let Some(account) = self.current().map(|a| a.id.clone()) else { return };
+        if let Some(uid) = self.open {
+            self.remembered.insert((account, self.mailbox.clone()), uid);
+        }
+    }
+
+    /// Shows mailbox `name` of the shown account. The selection of the mailbox left is remembered, and the one this
+    /// mailbox had comes back once its listing arrives (as macOS Mail keeps a selection per mailbox).
     pub fn show_mailbox(&mut self, name: &str) {
+        self.remember_selection();
+        let account = self.current().map(|a| a.id.clone()).unwrap_or_default();
+        self.restore = self.remembered.get(&(account, name.to_string())).copied();
+        self.reopen = None;
         self.mailbox = name.to_string();
         self.rows.clear();
         self.bodies.clear();
@@ -1052,6 +1079,13 @@ impl Mail {
                 self.mailboxes = mailboxes;
             }
             self.rows = newest_first(messages);
+            // the first listing after coming back selects the message the mailbox had, when it is still there and
+            // nothing was clicked meanwhile
+            if let Some(uid) = self.restore.take() {
+                if self.open.is_none() && self.rows.iter().any(|r| r.uid == uid) {
+                    self.reopen = Some(uid);
+                }
+            }
         }
         notices
     }
@@ -1075,6 +1109,20 @@ impl Mail {
         self.open = Some(uid);
         self.mark_seen_locally(uid);
         !self.bodies.contains_key(&uid)
+    }
+
+    /// The message Down Arrow (`down`) or Up Arrow selects in the list: the line below or above the selected one, and
+    /// the first (Down) or the last (Up) line with nothing selected. None at either end, or for an empty list.
+    pub fn neighbour(&self, down: bool) -> Option<(usize, u32)> {
+        let lines = self.visible_lines();
+        let at = self.open.and_then(|uid| lines.iter().position(|l| l.row.uid == uid));
+        let next = match (at, down) {
+            (None, true) => 0,
+            (None, false) => lines.len().checked_sub(1)?,
+            (Some(i), true) => i + 1,
+            (Some(i), false) => i.checked_sub(1)?,
+        };
+        lines.get(next).map(|l| (next, l.row.uid))
     }
 
     pub fn mark_seen_locally(&mut self, uid: u32) {
@@ -2492,6 +2540,51 @@ mod tests {
         assert_eq!(files.iter().map(|a| a.name.as_str()).collect::<Vec<_>>(), vec!["tolur.csv"]);
         mail.show_mailbox("Sent");
         assert!(mail.attachments.is_empty());
+    }
+
+    #[test]
+    fn the_arrows_step_through_the_list_and_stop_at_its_ends() {
+        let mut mail = Mail::new(vec![account("work")]);
+        assert_eq!(mail.neighbour(true), None, "an empty list");
+        mail.apply_listing("work", INBOX, vec![], vec![listed(1, "a"), listed(2, "b"), listed(3, "c")]);
+        // newest first: 3, 2, 1
+        assert_eq!(mail.neighbour(true), Some((0, 3)), "Down with nothing selected takes the first");
+        assert_eq!(mail.neighbour(false), Some((2, 1)), "Up with nothing selected takes the last");
+        mail.open_message(2);
+        assert_eq!(mail.neighbour(true), Some((2, 1)));
+        assert_eq!(mail.neighbour(false), Some((0, 3)));
+        mail.open_message(1);
+        assert_eq!(mail.neighbour(true), None, "the last message stays selected");
+    }
+
+    #[test]
+    fn each_mailbox_keeps_its_selection() {
+        let mut mail = Mail::new(vec![account("work"), account("home")]);
+        mail.apply_listing("work", INBOX, vec![], vec![listed(1, "a"), listed(2, "b")]);
+        mail.open_message(2);
+        mail.show_mailbox("Drafts");
+        assert_eq!(mail.open, None);
+        mail.apply_listing("work", "Drafts", vec![], vec![listed(7, "d")]);
+        assert_eq!(mail.reopen, None, "Drafts had no selection");
+        mail.show_mailbox(INBOX);
+        assert_eq!(mail.reopen, None, "nothing until the listing is here");
+        mail.apply_listing("work", INBOX, vec![], vec![listed(1, "a"), listed(2, "b")]);
+        assert_eq!(mail.reopen, Some(2), "the inbox selects its message again");
+        // another account's inbox is another mailbox
+        mail.reopen = None;
+        mail.open_message(1);
+        mail.show_account(1);
+        mail.apply_listing("home", INBOX, vec![], vec![listed(1, "a")]);
+        assert_eq!(mail.reopen, None);
+        mail.show_account(0);
+        mail.apply_listing("work", INBOX, vec![], vec![listed(1, "a"), listed(2, "b")]);
+        assert_eq!(mail.reopen, Some(1));
+        // a message that is gone is not selected
+        mail.reopen = None;
+        mail.show_mailbox("Drafts");
+        mail.show_mailbox(INBOX);
+        mail.apply_listing("work", INBOX, vec![], vec![listed(2, "b")]);
+        assert_eq!(mail.reopen, None);
     }
 
     #[test]

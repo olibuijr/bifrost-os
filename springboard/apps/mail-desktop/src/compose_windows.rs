@@ -138,7 +138,11 @@ impl Composes {
                 match ctx.open_window(WindowSpec::new(COMPOSE_TITLE, COMPOSE_W, COMPOSE_H)) {
                     Ok(id) => {
                         let opened = fingerprint(&compose);
-                        self.slots.push(Slot { id, compose, w: COMPOSE_W, h: COMPOSE_H, opened, saved: String::new(), saved_at: 0.0 });
+                        // the main window's hit-testing takes the compose window's size, in pixels as it is drawn: a
+                        // click in the new window must land on the field drawn under it, not on the main window's layout
+                        let (w, h) = (ctx.ui.pt(COMPOSE_W), ctx.ui.pt(COMPOSE_H));
+                        self.slots.push(Slot { id, compose, w, h, opened, saved: String::new(), saved_at: 0.0 });
+                        mail.set_size(w as u32, h as u32);
                         self.active = Some(id);
                         changed_windows = true;
                     }
@@ -232,17 +236,10 @@ impl Composes {
         }
         match ctx.open_window(WindowSpec::new(COMPOSE_TITLE, COMPOSE_W, COMPOSE_H)) {
             Ok(new_id) => {
-                self.slots.push(Slot {
-                    id: new_id,
-                    compose: compose.clone(),
-                    w: COMPOSE_W,
-                    h: COMPOSE_H,
-                    opened: slot.opened,
-                    saved: slot.saved,
-                    saved_at: slot.saved_at,
-                });
+                let (w, h) = (ctx.ui.pt(COMPOSE_W), ctx.ui.pt(COMPOSE_H));
+                self.slots.push(Slot { id: new_id, compose: compose.clone(), w, h, opened: slot.opened, saved: slot.saved, saved_at: slot.saved_at });
                 self.active = Some(new_id);
-                mail.set_size(COMPOSE_W as u32, COMPOSE_H as u32);
+                mail.set_size(w as u32, h as u32);
                 mail.mail.sheet = Some(Sheet::Question(compose));
             }
             Err(e) => {
@@ -259,9 +256,14 @@ impl Composes {
         self.slots.iter().find(|slot| slot.id == id).map(|slot| slot.compose.clone())
     }
 
-    /// Records the size a compose window was drawn at.
-    pub fn resized(&mut self, id: WindowId, w: f32, h: f32) {
+    /// Records the size a compose window was drawn at (pixels). The active window's size is also the main window's
+    /// size for hit-testing, so a compose window the person resized keeps taking clicks where its fields are drawn.
+    pub fn resized(&mut self, mail: &mut MailWindow, id: WindowId, w: f32, h: f32) {
+        let active = self.active == Some(id);
         if let Some(slot) = self.slot_mut(id) {
+            if active && (slot.w != w || slot.h != h) && w >= 1.0 && h >= 1.0 {
+                mail.set_size(w as u32, h as u32);
+            }
             slot.w = w;
             slot.h = h;
         }
