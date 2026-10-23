@@ -15,14 +15,18 @@ pub struct MenuItem {
     /// A destructive action (Delete, Remove), drawn in systemRed (`NativeMenuElement.Attributes.destructive`; Golden Gate
     /// shows Delete items in red in Golden Gate context menus).
     pub destructive: bool,
+    /// A colour swatch drawn before the title (0xAARRGGBB), as a calendar or a tag colour shows in its pop-up menu (the
+    /// small round image `NativeMenuItem.image` carries there). When any item has one, every title moves over by the
+    /// swatch's width so the titles stay aligned.
+    pub swatch: Option<u32>,
 }
 
 impl MenuItem {
     pub fn new(id: u32, title: &str) -> Self {
-        MenuItem { id, title: title.into(), enabled: true, checked: false, separator: false, shortcut: None, destructive: false }
+        MenuItem { id, title: title.into(), enabled: true, checked: false, separator: false, shortcut: None, destructive: false, swatch: None }
     }
     pub fn separator() -> Self {
-        MenuItem { id: 0, title: String::new(), enabled: false, checked: false, separator: true, shortcut: None, destructive: false }
+        MenuItem { id: 0, title: String::new(), enabled: false, checked: false, separator: true, shortcut: None, destructive: false, swatch: None }
     }
     pub fn enabled(mut self, on: bool) -> Self {
         self.enabled = on;
@@ -38,6 +42,11 @@ impl MenuItem {
     }
     pub fn destructive(mut self, on: bool) -> Self {
         self.destructive = on;
+        self
+    }
+    /// Draws a round swatch of `colour` before the title (see `swatch`).
+    pub fn swatch(mut self, colour: u32) -> Self {
+        self.swatch = Some(colour);
         self
     }
     fn selectable(&self) -> bool {
@@ -149,6 +158,14 @@ pub fn popup_origin(button: Rect, menu_w: f32, menu_h: f32, selected_top: f32, b
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn a_swatch_is_kept_and_leaves_the_item_selectable() {
+        let it = MenuItem::new(3, "Work").swatch(0xFF34C759);
+        assert_eq!(it.swatch, Some(0xFF34C759));
+        assert!(it.selectable());
+        assert_eq!(MenuItem::new(1, "Home").swatch, None);
+        assert_eq!(MenuItem::separator().swatch, None);
+    }
     #[test]
     fn a_destructive_item_is_still_selectable() {
         let it = MenuItem::new(9, "Delete").destructive(true);
