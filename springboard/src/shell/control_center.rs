@@ -2303,6 +2303,7 @@ impl Shell {
     /// The panel's menu-bar icon: a press opens a hidden (or closing) panel and closes a shown (or opening) one, as the
     /// Notification Center clock does (E2E-13). The bar sees the press before the panel does, so without this the
     /// press that should close the panel opened it again.
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))] // called from the menu bar (desktop_bar.rs)
     pub(crate) fn toggle_desk_control_center(&mut self, t: f64) {
         match self.cc.state {
             State::Hidden => self.open_control_center(t),
@@ -2312,6 +2313,7 @@ impl Shell {
     }
 
     /// Slides the desktop panel away from where it is now (a press elsewhere in the menu bar, the icon again).
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))] // called from the menu bar (desktop_bar.rs)
     pub(crate) fn close_desk_control_center(&mut self, t: f64) {
         if self.cc.is_hidden() {
             return;
@@ -2847,6 +2849,7 @@ mod module_list_tests {
 #[cfg(test)]
 mod desk_panel_close_tests {
     use super::super::tests::{desktop_shell, settle};
+    #[allow(unused_imports)] // Event is for the desktop-wayland tests
     use super::super::{Event, Screen, Shell};
     use super::*;
     use crate::gfx::Surface;
