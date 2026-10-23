@@ -244,7 +244,10 @@ impl super::Shell {
             }
             ToShell::DragBegin { session, allowed, items, preview } => {
                 let source_app = self.ext.get(slot as usize).and_then(Option::as_ref).map(|h| h.id.clone());
-                let ok = self.dnd.session.is_none() && self.ext_fg == Some(slot) && session & INBOUND != 0 && allowed != 0 && valid_items(&items);
+                // the source is the app in front: the full-screen foreground app, or on the desktop the owner of the front
+                // window (a drag starts with a press in a window, which raises it; `ext_fg` follows only the full-screen app)
+                let front = self.ext_fg == Some(slot) || self.desk.as_ref().and_then(|d| d.front()).is_some_and(|w| w.app.parent() == AppId::External(slot));
+                let ok = self.dnd.session.is_none() && front && session & INBOUND != 0 && allowed != 0 && valid_items(&items);
                 match (ok, source_app) {
                     (true, Some(app)) => {
                         let preview = if preview.valid() { preview } else { DragPreview::default() };

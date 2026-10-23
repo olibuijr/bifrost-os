@@ -26,6 +26,12 @@ pub(crate) fn drop_reply(over_folder: bool, own: bool, copy: bool) -> u8 {
     }
 }
 
+/// Whether an `Ended` for this window's own session means the shell refused it: no `Dest` event came for it while the
+/// window still drags. Then the touches stay with the window and its own drop handles the release.
+pub(crate) fn session_refused(heard: bool, dragging: bool) -> bool {
+    !heard && dragging
+}
+
 /// The cross-window drag state of one window.
 #[derive(Default)]
 pub(crate) struct DragOut {
@@ -38,6 +44,8 @@ pub(crate) struct DragOut {
     /// the session this window began; its grants go back when it ends
     pub(crate) session: Option<u32>,
     session_grants: Vec<GrantId>,
+    /// the shell sent this window a `Dest` event of its own session: the shell owns the pointer for it
+    heard: bool,
     /// a drag from another app hovers over this window: its session, and how many items it carries
     pub(crate) foreign: Option<u32>,
     pub(crate) foreign_items: usize,
@@ -81,6 +89,7 @@ impl Files {
         let session = dnd::begin(ctx, dnd::dragop::COPY | dnd::dragop::MOVE, items, std::mem::take(&mut self.dnd.preview));
         self.dnd.session = Some(session);
         self.dnd.session_grants = grants;
+        self.dnd.heard = false;
     }
 
     /// `Ctx` document answers: grants for the drag, the files a drop brings, and the refusals.
@@ -138,6 +147,9 @@ impl Files {
     /// `allowed` is the source's mask as the held modifier keys narrow it (Option leaves copy only).
     pub(crate) fn drag_out_dest(&mut self, ctx: &Ctx, session: u32, phase: DragPhase, x: f32, y: f32, allowed: u8, items: Vec<DragItem>) -> bool {
         let own = self.dnd.session == Some(session);
+        if own {
+            self.dnd.heard = true;
+        }
         // a drag inside this window moves; Option (the key, or a mask the shell narrowed to copy) copies
         let copy = own_drop_copies(self.fx.copy_drag, allowed);
         match phase {
@@ -217,6 +229,11 @@ impl Files {
             for grant in std::mem::take(&mut self.dnd.session_grants) {
                 ctx.release_document(grant);
             }
+            if session_refused(std::mem::take(&mut self.dnd.heard), self.dragging) {
+                // the shell refused the session (or ended it before the pointer moved): the pointer is still this
+                // window's, so the drag goes on inside it and the release drops on the folder under it
+                return true;
+            }
             self.dragging = false;
             self.down = None;
             self.drop_target = None;
@@ -253,5 +270,12 @@ mod tests {
         assert_eq!(drop_reply(true, false, false), dragop::COPY, "another app's files are copied");
         assert_eq!(drop_reply(false, true, false), 0, "not over a folder");
         assert_eq!(drop_reply(false, false, true), 0);
+    }
+
+    #[test]
+    fn a_session_ended_before_any_dest_event_leaves_the_drag_in_the_window() {
+        assert!(session_refused(false, true), "refused at once: the drag goes on in the window");
+        assert!(!session_refused(true, true), "the shell owned the pointer: the drag is over");
+        assert!(!session_refused(false, false), "nothing is being dragged any more");
     }
 }
