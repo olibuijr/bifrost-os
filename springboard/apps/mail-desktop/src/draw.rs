@@ -50,6 +50,12 @@ const DOT_PT: f32 = 8.0;
 const INDENT_PT: f32 = 14.0;
 const MAX_INDENT_LEVELS: usize = 6;
 const RADIUS_PT: f32 = m::ICON_RADIUS;
+
+/// Where a message row's sender and subject start in a list column at `x0`: past the unread dot's gutter (the dot, then
+/// a space so it never touches the first letter) and the conversation indent of `depth`.
+pub fn list_text_x(ui: &Ui, x0: f32, depth: usize) -> f32 {
+    x0 + ui.pt(SPACE_M) + ui.pt(DOT_PT) + ui.pt(SPACE_S) + depth.min(MAX_INDENT_LEVELS) as f32 * ui.pt(INDENT_PT)
+}
 const PANEL_RADIUS_PT: f32 = m::CARD_RADIUS;
 
 /// A rectangle in pixels: x, y, width, height.
@@ -836,7 +842,7 @@ impl MailWindow {
             if y + row < top || y > h {
                 continue;
             }
-            let text_x = x0 + pad + dot + line.depth.min(MAX_INDENT_LEVELS) as f32 * ui.pt(INDENT_PT);
+            let text_x = list_text_x(ui, x0, line.depth);
             let selected = open == Some(r.uid);
             if selected {
                 s.fill_rrect(x0 + inset, y + inset / 2.0, width - 2.0 * inset, row - inset, ui.pt(RADIUS_PT), colors::SYSTEM_BLUE.now());
@@ -1368,6 +1374,16 @@ impl MailWindow {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_unread_dot_has_a_gutter_before_the_sender() {
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        let ui = Ui::new(bifrost_app::kit::Font::parse(data).unwrap(), 2.0);
+        // the dot is drawn at x0 + pad, DOT_PT wide (draw_list)
+        let dot_right = 100.0 + ui.pt(SPACE_M) + ui.pt(DOT_PT);
+        assert!(list_text_x(&ui, 100.0, 0) - dot_right >= ui.pt(SPACE_S), "a space between the dot and the first letter");
+        assert_eq!(list_text_x(&ui, 100.0, 2) - list_text_x(&ui, 100.0, 0), 2.0 * ui.pt(INDENT_PT));
+    }
 
     #[test]
     fn list_rows_say_muted_and_the_sender_s_priority() {
