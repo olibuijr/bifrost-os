@@ -2346,6 +2346,8 @@ pub(crate) mod tests {
     fn the_wheel_over_the_panel_never_clicks_and_never_reaches_the_window_under_it() {
         ALLOW.with(|a| a.set(true));
         let (d, mut sh, peer) = shell_with_app("e2e-wheel");
+        // the unlocked desktop: a locked shell takes no clicks on the desktop bar's popups at all
+        sh.screen = super::super::Screen::Home;
         ask(&peer, &mut sh, ToShell::DocOpen { request: 3, mode: DocMode::Read, title: String::new(), filters: vec![] });
         let (left, top, w, _) = sh.doc_panel_rect().expect("the panel is up");
         let p = sh.doc_panel.as_ref().unwrap();

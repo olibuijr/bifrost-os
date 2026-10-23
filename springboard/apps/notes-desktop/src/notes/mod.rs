@@ -4516,8 +4516,11 @@ mod tests {
         assert!(!n.keyboard_shown(), "Done hides the keyboard");
         assert_eq!(store::load(&dir)[0].text, "hi\nbody", "and saves at once");
         draw(&mut n, &ui, 4100.0);
-        assert!(n.escape(&ui, 5000.0), "Esc closes the note");
-        assert_eq!(n.editing(), None);
+        // Esc only drops a selection or a pending style: the note stays open (Back or the list closes it)
+        n.escape(&ui, 5000.0);
+        assert!(n.editing().is_some(), "Esc keeps the note open");
+        n.activate(&ui, Target::Back, 0.0, 0.0, 5100.0);
+        assert_eq!(n.editing(), None, "Back closes the note");
         assert_eq!(n.listed(), vec![(saved[0].id.as_str(), "hi")]);
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -5287,6 +5290,8 @@ mod tests {
         let ui = ui();
         // 1200 px at 1.5625 is the E2E window: 768 pt, too narrow for everything beside an open search field
         let mut n = Notes::new(&ui, 1200, 800, dir.clone(), wall());
+        // plain body text, as `app` sets: the default Title start would leave its "# " after the inserted text
+        n.note_settings.new_note_start = settings::NewNoteStart::Body;
         n.set_hardware_keyboard(true);
         open_with(&mut n, &ui, "Title\nbody");
         assert!(n.bar_rect(&ui, chrome::B_SEARCH).is_some(), "the closed search fits");

@@ -123,7 +123,8 @@ fn tinting_a_buffer_in_place_scales_green_and_blue_and_keeps_alpha() {
     let mut all = Damage::new(1, 1);
     all.all();
     tint_in_place(&mut buf, 1, &all, [256, 220, 176]);
-    assert_eq!(buf[0], 0x80FF_DBAF);
+    // frames are gfx::pack order (0xAABBGGRR): red in the low byte stays, green and blue above it fall
+    assert_eq!(buf[0], 0x80AF_DBFF);
 }
 
 #[test]
@@ -133,7 +134,8 @@ fn tinting_copies_the_source_pixels_through_the_multipliers() {
     let mut all = Damage::new(2, 1);
     all.all();
     tint(&src, &mut dst, 2, &all, [256, 200, 100]);
-    assert_eq!(dst, [0xFFFF_C763, 0xFF00_0063]);
+    // gfx::pack order: 0xFF00_00FF is pure red, which Night Shift keeps
+    assert_eq!(dst, [0xFF63_C7FF, 0xFF00_00FF]);
 }
 
 #[test]
@@ -144,7 +146,7 @@ fn tinting_writes_only_the_damaged_pixels() {
     let damage = Damage::between(&previous, &current, 3, 2);
     let mut dst = [0xFF00_0000u32; 6];
     tint(&current, &mut dst, 3, &damage, [256, 220, 176]);
-    assert_eq!(dst[0], 0xFFFF_DBAF, "the changed pixel is tinted");
+    assert_eq!(dst[0], 0xFFAF_DBFF, "the changed pixel is tinted (gfx::pack order, red low)");
     assert_eq!(dst[1], 0xFF00_0000, "an undamaged pixel is not written, although its source would tint to zero");
 }
 

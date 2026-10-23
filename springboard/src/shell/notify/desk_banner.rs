@@ -416,6 +416,8 @@ mod tests {
     fn the_desktop_banner_rests_at_the_top_right_under_the_menu_bar() {
         let mut sh = desk();
         sh.notify(note(AppId::Files, "Backup Complete"));
+        // mid-slide (the banner is still coming in): it is off to the right of where it rests
+        let (sx, _, _, _) = sh.banner_rect(500.0 + super::super::banner::SLIDE_MS / 4.0).expect("a banner sliding in");
         sh.notify_tick(500.0 + super::super::banner::SLIDE_MS);
         let (x, y, w, h) = sh.banner_rect(2000.0).expect("a banner");
         let right = sh.w as f32 - sh.ui.pt(NC_RIGHT_PT);
@@ -423,7 +425,6 @@ mod tests {
         assert!(x > sh.w as f32 / 2.0, "on the right half, not centred");
         assert!(y >= sh.desktop_bar_height() as f32, "under the menu bar");
         assert!(h > 0.0 && (w - sh.center_w()).abs() < 0.5);
-        let (sx, _, _, _) = sh.banner_rect(500.0).unwrap();
         assert!(sx > x, "it slides in from the right edge");
     }
 

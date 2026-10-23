@@ -606,7 +606,9 @@ impl Calculator {
         Toolbar::new(vec![
             ToolbarItem::icon(BAR_HISTORY, "History", "sidebar.left").selected(self.history_open),
             ToolbarItem::flexible_space(),
-            ToolbarItem::menu(BAR_MODE, self.mode_title(), None),
+            // the reference's compact window shows the pull-down as a calculator glyph (its title names the keypad for
+            // accessibility); a titled "Basic" pull-down does not fit beside the History button in 230 pt
+            ToolbarItem::menu(BAR_MODE, self.mode_title(), Some("calculator")),
         ])
     }
 
