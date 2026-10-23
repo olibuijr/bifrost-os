@@ -2123,9 +2123,9 @@ pub(crate) mod tests {
             .iter()
             .map(|(n, dir)| FileKind::of(&entry(n, *dir)))
             .collect();
-        use FileKind::*;
-        assert_eq!(kinds, [Folder, Image, Text, Text, Pdf, Archive, Audio, Movie, Document, Document]);
-        assert_ne!(Pdf.tint(), super::super::ui::system::SYSTEM_RED, "red is for destructive actions");
+        use FileKind as K;
+        assert_eq!(kinds, [K::Folder, K::Image, K::Text, K::Text, K::Pdf, K::Archive, K::Audio, K::Movie, K::Document, K::Document]);
+        assert_ne!(K::Pdf.tint(), super::super::ui::system::SYSTEM_RED, "red is for destructive actions");
     }
 
     #[test]
