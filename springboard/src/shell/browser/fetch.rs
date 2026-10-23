@@ -9,7 +9,7 @@
 use super::css::{self, Rule};
 use super::html::{self, Node};
 use super::nav;
-use crate::deildu::http::{Client, Jar, Stream, Transport};
+use crate::deildu::http::{Client, Jar, Stream, Transport, BROWSER_USER_AGENT};
 use crate::gfx::Image;
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
@@ -215,7 +215,9 @@ impl Loader {
     pub fn new(transport: Arc<dyn Transport>) -> Loader {
         let (tx, rx) = channel();
         let transport: Arc<dyn Transport> = Arc::new(Interruptible { inner: transport });
-        Loader { client: Arc::new(Client::new(transport, Jar::default())), tx, rx, active: Arc::new(AtomicUsize::new(0)), queue: VecDeque::new(), flags: HashMap::new() }
+        // the Browser loads pages for the person, signs in to sites with their cookies and needs a browser agent
+        let client = Client::new(transport, Jar::default()).with_cookies().user_agent(BROWSER_USER_AGENT);
+        Loader { client: Arc::new(client), tx, rx, active: Arc::new(AtomicUsize::new(0)), queue: VecDeque::new(), flags: HashMap::new() }
     }
 
     fn flag(&mut self, tab: u64) -> Arc<AtomicBool> {
@@ -290,6 +292,12 @@ pub mod tests {
     use std::sync::Mutex;
 
     type Sites = Arc<Mutex<HashMap<String, (String, Vec<u8>)>>>;
+
+    #[test]
+    fn the_browser_is_the_client_that_keeps_cookies() {
+        let loader = Loader::new(crate::deildu::http::tests::Fake::new(vec![]));
+        assert!(loader.client.keeps_cookies(), "sites sign the person in with cookies");
+    }
 
     /// One connection: remembers the request, answers it from the site table.
     struct Pipe {

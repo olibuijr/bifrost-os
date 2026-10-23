@@ -108,16 +108,34 @@ pub fn content_range_total(header: &str) -> Option<u64> {
     header.rsplit_once('/')?.1.trim().parse().ok()
 }
 
-/// The real thing: the Deildu app's HTTPS client, built on first use.
+/// The real thing: the shared HTTPS client, built on first use. This is the fetcher of the third-party services the
+/// apps read (Weather forecasts and place search, Podcasts directories and feeds, Music radio, News pictures), so it
+/// keeps no cookies and sends the generic `User-Agent` (the client's defaults; docs/bifrost-ui.md, "Networking and
+/// privacy").
 #[derive(Default)]
 pub struct Http {
     client: OnceLock<Client>,
+    /// the transport to dial with instead of TLS to the network (tests)
+    transport: Option<Arc<dyn Transport>>,
+}
+
+impl Http {
+    /// A fetcher over `transport` instead of the real network.
+    pub fn with_transport(transport: Arc<dyn Transport>) -> Http {
+        Http { client: OnceLock::new(), transport: Some(transport) }
+    }
+
+    fn client(&self) -> &Client {
+        self.client.get_or_init(|| {
+            let transport = self.transport.clone().unwrap_or_else(|| Arc::new(Tls::new()) as Arc<dyn Transport>);
+            Client::new(transport, Default::default()).without_cookies()
+        })
+    }
 }
 
 impl Fetch for Http {
     fn get(&self, url: &str, limit: usize) -> io::Result<Vec<u8>> {
-        let client = self.client.get_or_init(|| Client::new(Arc::new(Tls::new()) as Arc<dyn Transport>, Default::default()));
-        let r = client.get(url, None, limit)?;
+        let r = self.client().get(url, None, limit)?;
         if r.status != 200 {
             return Err(io::Error::other(format!("{url}: status {}", r.status)));
         }
@@ -125,8 +143,7 @@ impl Fetch for Http {
     }
 
     fn get_range(&self, url: &str, start: u64, len: u64) -> io::Result<Chunk> {
-        let client = self.client.get_or_init(|| Client::new(Arc::new(Tls::new()) as Arc<dyn Transport>, Default::default()));
-        let r = client.get(url, Some((start, start + len.max(1) - 1)), len as usize + 4096)?;
+        let r = self.client().get(url, Some((start, start + len.max(1) - 1)), len as usize + 4096)?;
         match r.status {
             206 => Ok(Chunk { total: r.header("content-range").and_then(content_range_total), bytes: r.body }),
             // a server that ignores ranges sent everything: only fine when that is what was asked for
@@ -292,6 +309,22 @@ pub mod json {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+
+    #[test]
+    fn the_shared_fetcher_sends_no_cookie_and_names_no_product() {
+        use crate::deildu::http::tests::{ok, Fake};
+        let fake = Fake::new(vec!["HTTP/1.1 200 OK\r\nSet-Cookie: track=1; Path=/\r\nContent-Length: 2\r\n\r\n{}", &ok("[]")]);
+        let http = Http::with_transport(fake.clone());
+        assert_eq!(http.get("https://api.example/v1/forecast?latitude=64.1", 1024).unwrap(), b"{}");
+        assert_eq!(http.get("https://api.example/v1/search?name=Reykjavik", 1024).unwrap(), b"[]");
+        let reqs = fake.requests.lock().unwrap().clone();
+        assert_eq!(reqs.len(), 2);
+        for r in &reqs {
+            assert!(!r.contains("Cookie:"), "the cookie the service set is not sent back: {r}");
+            assert!(r.contains("\r\nUser-Agent: Mozilla/5.0\r\n"), "{r}");
+            assert!(!r.to_ascii_lowercase().contains("bifrost"), "{r}");
+        }
+    }
     use std::sync::Mutex;
 
     #[test]
