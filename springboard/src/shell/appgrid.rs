@@ -1,7 +1,13 @@
 //! The Apps grid (F4, or the dock's Apps icon): a capsule header that is also the search field, and under it a
 //! floating glass panel with category chips and every app on a paged 7 column grid, page dots, swipe or scroll
-//! between pages, press-and-hold then drag to reorder, Esc or a click outside to close. The wallpaper and the
-//! windows stay visible around the panel (the exported surface is masked to the capsule and the panel).
+//! between pages, Esc or a click outside to close. The wallpaper and the windows stay visible around the panel (the
+//! exported surface is masked to the capsule and the panel).
+//!
+//! Reordering: with a pointer (the desktop), dragging an icon picks it up at once, as the reference's Launchpad does;
+//! on a touch screen a press held for `HOLD_MS` picks it up (it lifts under the finger even before it moves), so a
+//! plain swipe there still pages. A drag that starts on empty space pages everywhere. While an icon is held the
+//! others make room at the slot under the pointer, holding it at the panel's left or right edge turns the page, and
+//! the drop keeps the new order.
 //!
 //! Categories come from each installed app's manifest (`category`); the built-in apps and the few manifests whose
 //! category does not say where they belong are mapped in one table below (`CHIPS`, `chip_for_manifest`).
@@ -167,12 +173,38 @@ pub(super) fn arrange(all: &[(String, String)], order: &[String], query: &str) -
     idx
 }
 
-/// Moves `id` so it sits where `before` is in `order` (the full, unfiltered list of ids).
-pub(super) fn reorder(order: &mut Vec<String>, id: &str, before: &str) {
-    let Some(from) = order.iter().position(|o| o == id) else { return };
-    let item = order.remove(from);
-    let at = order.iter().position(|o| o == before).unwrap_or(order.len());
-    order.insert(at, item);
+/// The shown list's positions in the order they are drawn while the icon at position `from` is held over position
+/// `to`: the held one sits at `to` and the others close up or make room around it. `to` past the end is the last place.
+pub(super) fn display_order(len: usize, from: usize, to: usize) -> Vec<usize> {
+    let mut v: Vec<usize> = (0..len).collect();
+    if from >= len {
+        return v;
+    }
+    let item = v.remove(from);
+    v.insert(to.min(len - 1), item);
+    v
+}
+
+/// The full order after the icon at position `from` of `shown` (the ids on the grid, a subset of `full` in its order
+/// when a category is chosen) was dropped at position `to`: it takes that place among the shown ids, and the ids not
+/// shown keep theirs.
+pub(super) fn reorder_shown(full: &[String], shown: &[String], from: usize, to: usize) -> Vec<String> {
+    if from >= shown.len() {
+        return full.to_vec();
+    }
+    let moved: Vec<&String> = display_order(shown.len(), from, to).into_iter().map(|i| &shown[i]).collect();
+    let mut next = moved.into_iter();
+    full.iter().map(|id| if shown.contains(id) { next.next().unwrap_or(id).clone() } else { id.clone() }).collect()
+}
+
+/// Whether a press on an icon that has moved `moved` px after `held` ms picks the icon up: with a pointer as soon as it
+/// drags past the slop, on a touch screen only after the hold (a quicker drag there pages).
+pub(super) fn lifts(pointer: bool, held: f64, moved: f32, slop: f32) -> bool {
+    if pointer {
+        moved > slop || held >= HOLD_MS
+    } else {
+        held >= HOLD_MS
+    }
 }
 
 struct Lay {
@@ -555,8 +587,8 @@ impl AppGrid {
                         self.swipe_dx /= 3.0;
                     }
                     self.press = Some(p);
-                } else if let (Some(item), true) = (p.item, t - p.t0 >= HOLD_MS && self.query.is_empty()) {
-                    // held still, then moved: lift the icon
+                } else if let (Some(item), true) = (p.item, self.query.is_empty() && lifts(sh.form.is_desktop(), t - p.t0, (x - p.x0).hypot(y - p.y0), slop)) {
+                    // a pointer drag on an icon, or a press held then moved on a touch screen: lift the icon
                     self.lifted = Some((item, x, y));
                     self.edge_at = t;
                 } else if (x - p.x0).abs() > slop && (x - p.x0).abs() > (y - p.y0).abs() {
@@ -569,11 +601,10 @@ impl AppGrid {
             Event::Up(x, y) => {
                 let Some(p) = self.press.take() else { return Some(vec![]) };
                 if let Some((item, _, _)) = self.lifted.take() {
+                    // dropped on a slot: the icon takes that place (an empty slot after the last icon is the last place);
+                    // dropped off the grid, nothing moves
                     if let Some(k) = lay.slot_at(x, y) {
-                        let target = self.page * per + k;
-                        if let (Some(&from), Some(&to)) = (list.get(item), list.get(target.min(list.len().saturating_sub(1)))) {
-                            self.save_order(sh, from, to);
-                        }
+                        self.save_order(sh, &list, item, self.page * per + k);
                     }
                 } else if p.swiping {
                     let off = self.swipe_dx;
@@ -644,14 +675,17 @@ impl AppGrid {
         (i >= 0.0 && (i as usize) < pages).then_some(i as usize)
     }
 
-    /// Saves the order after the app at catalogue index `from` was dropped where `to` is.
-    fn save_order(&mut self, sh: &mut Shell, from: usize, to: usize) {
-        if from == to {
+    /// Saves the order after the icon at position `from` of the shown list `list` (catalogue indices) was dropped at
+    /// position `to`.
+    fn save_order(&mut self, sh: &mut Shell, list: &[usize], from: usize, to: usize) {
+        let to = to.min(list.len().saturating_sub(1));
+        if from == to || from >= list.len() {
             return;
         }
         let all = catalogue();
-        let mut full: Vec<String> = arrange(&all, &self.order, "").into_iter().map(|i| all[i].0.clone()).collect();
-        reorder(&mut full, &all[from].0, &all[to].0);
+        let full: Vec<String> = arrange(&all, &self.order, "").into_iter().map(|i| all[i].0.clone()).collect();
+        let shown: Vec<String> = list.iter().map(|&i| all[i].0.clone()).collect();
+        let full = reorder_shown(&full, &shown, from, to);
         if sh.prefs.set(ORDER_PREF, &full.join(",")).is_err() {
             eprintln!("BifrOSt: could not save the Apps grid order");
         }
@@ -757,10 +791,28 @@ impl AppGrid {
         let per = lay.per_page().max(1);
         let pages = self.pages(&lay, list.len());
         self.page = self.page.min(pages - 1);
+        // a touch held still on an icon lifts it under the finger once the hold is long enough
+        let mut holding = false;
+        if let Some(pr) = self.press.filter(|pr| !pr.swiping && self.lifted.is_none() && self.query.is_empty() && !sh.form.is_desktop()) {
+            if let Some(item) = pr.item {
+                if t - pr.t0 >= HOLD_MS {
+                    self.lifted = Some((item, pr.x0, pr.y0));
+                    self.edge_at = t;
+                } else {
+                    holding = true;
+                }
+            }
+        }
         let off = self.offset(t);
         let rise = (1.0 - p) * 14.0 * lay.pt;
         let lifted = self.lifted.map(|l| l.0);
         let hover_slot = self.lifted.and_then(|(_, x, y)| lay.slot_at(x, y));
+        // while an icon is held over a slot of this page the others make room for it there
+        let order = match (lifted, hover_slot) {
+            (Some(item), Some(k)) => display_order(list.len(), item, self.page * per + k),
+            (Some(item), None) => display_order(list.len(), item, item),
+            _ => (0..list.len()).collect(),
+        };
         for pg in self.page.saturating_sub(1)..(self.page + 2).min(pages) {
             let dx = (pg as f32 - self.page as f32) * lay.page_w() + off;
             if dx > lay.page_w() || dx < -lay.page_w() {
@@ -769,17 +821,22 @@ impl AppGrid {
             let (px, _, pw, _) = lay.panel;
             for k in 0..per {
                 let i = pg * per + k;
-                let Some(&app) = list.get(i) else { break };
-                if lifted == Some(i) {
-                    continue;
-                }
+                let Some(&shown) = order.get(i) else { break };
+                let Some(&app) = list.get(shown) else { break };
                 let (cx, cy) = lay.cell(k, dx);
                 let (cx, cy) = (cx, cy + rise);
                 // a page sliding in or out is clipped to the panel: cells wholly outside are not drawn
                 if cx + lay.cell_w <= px || cx >= px + pw {
                     continue;
                 }
-                if self.selected == Some(i) || (pg == self.page && hover_slot == Some(k) && lifted.is_some()) {
+                // the held icon's place: an empty slot with a plate where it will drop
+                if lifted == Some(shown) {
+                    if pg == self.page && hover_slot == Some(k) {
+                        s.fill_rrect(cx + lay.pt * 6.0, cy - lay.pt * 4.0, lay.cell_w - lay.pt * 12.0, lay.cell_h - lay.pt * 6.0, ui.pt(16.0), scale(SIDEBAR_PLATE.now(), a));
+                    }
+                    continue;
+                }
+                if self.selected == Some(i) && lifted.is_none() {
                     s.fill_rrect(cx + lay.pt * 6.0, cy - lay.pt * 4.0, lay.cell_w - lay.pt * 12.0, lay.cell_h - lay.pt * 6.0, ui.pt(16.0), scale(SIDEBAR_PLATE.now(), a));
                 }
                 self.draw_item(sh, s, app, cx, cy, &lay, a, 1.0);
@@ -805,7 +862,7 @@ impl AppGrid {
             let msg = format!("No results for \u{201c}{}\u{201d}", self.query);
             sh.label(&msg, MAC_BODY_PT, Weight::Regular, WHITE, |im| s.blit_colored(im, (lay.panel.0 + (lay.panel.2 - im.w as f32) / 2.0) as i32, (lay.y0 + lay.cell_h) as i32, LABEL_2.now(), a));
         }
-        p < 1.0 || self.closing.is_some() || self.settle.is_some_and(|(_, st)| prog(Kind::PanelReveal, Curve::EaseOut, st, t) < 1.0) || self.lifted.is_some()
+        p < 1.0 || self.closing.is_some() || self.settle.is_some_and(|(_, st)| prog(Kind::PanelReveal, Curve::EaseOut, st, t) < 1.0) || self.lifted.is_some() || holding
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -900,13 +957,44 @@ mod tests {
         assert!(arrange(&a, &[], "zzz").is_empty());
     }
 
+    fn ids(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| s.to_string()).collect()
+    }
+
     #[test]
-    fn reorder_puts_the_app_where_the_target_was() {
-        let mut o: Vec<String> = ["a", "b", "c", "d"].iter().map(|s| s.to_string()).collect();
-        reorder(&mut o, "d", "b");
-        assert_eq!(o, ["a", "d", "b", "c"]);
-        reorder(&mut o, "a", "c");
-        assert_eq!(o, ["d", "b", "a", "c"]);
+    fn a_dropped_icon_takes_the_place_it_was_dropped_on_forwards_and_backwards() {
+        let o = ids(&["a", "b", "c", "d"]);
+        assert_eq!(reorder_shown(&o, &o, 3, 1), ids(&["a", "d", "b", "c"]), "d dropped on b's place");
+        assert_eq!(reorder_shown(&o, &o, 0, 2), ids(&["b", "c", "a", "d"]), "a dropped on c's place: a is third");
+        assert_eq!(reorder_shown(&o, &o, 1, 9), ids(&["a", "c", "d", "b"]), "past the end is the last place");
+        assert_eq!(reorder_shown(&o, &o, 2, 2), o, "dropped where it was");
+        assert_eq!(reorder_shown(&o, &o, 7, 0), o, "nothing held");
+    }
+
+    #[test]
+    fn with_a_category_chosen_only_the_shown_icons_move_and_the_rest_keep_their_places() {
+        let full = ids(&["a", "x", "b", "y", "c"]);
+        let shown = ids(&["a", "b", "c"]);
+        assert_eq!(reorder_shown(&full, &shown, 2, 0), ids(&["c", "x", "a", "y", "b"]));
+    }
+
+    #[test]
+    fn the_other_icons_make_room_where_the_held_one_hovers() {
+        assert_eq!(display_order(5, 0, 3), vec![1, 2, 3, 0, 4], "held forwards: the ones between close up");
+        assert_eq!(display_order(5, 4, 1), vec![0, 4, 1, 2, 3], "held backwards: the ones from the slot move on");
+        assert_eq!(display_order(3, 1, 1), vec![0, 1, 2]);
+        assert_eq!(display_order(3, 0, 10), vec![1, 2, 0], "past the end: the last place");
+        assert_eq!(display_order(2, 5, 0), vec![0, 1], "an index past the list holds nothing");
+    }
+
+    #[test]
+    fn a_pointer_drag_lifts_at_once_and_a_touch_only_after_the_hold() {
+        let slop = 8.0;
+        assert!(lifts(true, 40.0, 20.0, slop), "a mouse drag on an icon picks it up (Launchpad)");
+        assert!(!lifts(true, 40.0, 4.0, slop), "a click that barely moves does not");
+        assert!(lifts(true, HOLD_MS, 0.0, slop));
+        assert!(!lifts(false, 40.0, 300.0, slop), "a quick swipe on a touch screen pages");
+        assert!(lifts(false, HOLD_MS + 1.0, 30.0, slop), "a held touch then a drag picks it up");
     }
 }
 
@@ -1062,5 +1150,42 @@ mod overlay_tests {
         let (sx, sy, _, shh) = lay.search;
         let capsule = buf[(sy + shh / 2.0) as usize * w + (sx + 3.0 * lay.pt) as usize] >> 24;
         assert!(capsule > 100 && capsule < 200, "and so is the capsule (alpha {capsule})");
+    }
+
+    /// W3-15: a mouse drag on an icon moves it (the others make room) instead of turning the page, the order is
+    /// saved, and a drag that starts on empty space still swipes the pages.
+    #[test]
+    fn a_mouse_drag_on_an_icon_reorders_and_a_drag_on_empty_space_swipes() {
+        let mut sh = open_grid();
+        sh.form = bifrost_ui::form_factor::FormFactor::Desktop;
+        let lay = sh.overview.grid.lay(&sh);
+        let before = sh.overview.grid.arranged();
+        assert!(before.len() >= 4, "the fixture has a few apps");
+        let centre = |k: usize| {
+            let (x, y) = lay.cell(k, 0.0);
+            (x + lay.cell_w / 2.0, y + lay.icon as f32 / 2.0)
+        };
+        let ((x0, y0), (x3, y3)) = (centre(0), centre(3));
+        assert!(sh.overview_event(Event::Down(x0, y0), 10.0).is_some());
+        sh.overview_event(Event::Move(x0 + lay.cell_w / 2.0, y0), 20.0);
+        assert!(sh.overview.grid.lifted.is_some(), "a drag on an icon picks it up at once");
+        sh.overview_event(Event::Move(x3, y3), 40.0);
+        assert_eq!(sh.overview.grid.swipe_dx, 0.0, "the pages do not move under a held icon");
+        sh.overview_event(Event::Up(x3, y3), 60.0);
+        let after = sh.overview.grid.arranged();
+        assert_eq!(after[3], before[0], "the icon takes the slot it was dropped on");
+        assert_eq!(&after[..3], &before[1..4], "and the ones it passed close up");
+        assert_eq!(sh.overview.grid.page, 0);
+        let saved = sh.prefs.get(super::ORDER_PREF).unwrap_or("").to_string();
+        assert!(saved.split(',').position(|id| id == super::apps()[before[0]].icon) == Some(3), "the order is saved: {saved}");
+        // a drag from the panel's padding, beside the grid, swipes the pages
+        let (px, py, _, ph) = lay.panel;
+        let (ex, ey) = (px + 3.0 * lay.pt, py + ph / 2.0);
+        assert!(sh.overview_event(Event::Down(ex, ey), 100.0).is_some());
+        sh.overview_event(Event::Move(ex - 60.0 * lay.pt, ey), 110.0);
+        sh.overview_event(Event::Move(ex - 120.0 * lay.pt, ey), 120.0);
+        assert!(sh.overview.grid.lifted.is_none(), "no icon is held");
+        assert!(sh.overview.grid.swipe_dx < 0.0, "the pages follow the drag");
+        sh.overview_event(Event::Up(ex - 120.0 * lay.pt, ey), 140.0);
     }
 }
