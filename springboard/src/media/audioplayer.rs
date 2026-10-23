@@ -628,6 +628,17 @@ impl Engine {
                     self.played_at_pause = self.out.played();
                 }
                 self.out.pause(self.paused);
+                if self.paused && live {
+                    // a paused station is not buffered: dropping its decoder stops the ring, so the network thread
+                    // closes the connection now instead of reading the station until the next song or quit
+                    self.decoder = None;
+                    self.drained = false;
+                }
+                if !self.paused && live && self.decoder.is_none() {
+                    // a station resumes live, from a new connection
+                    self.reopen(0.0);
+                    continue;
+                }
                 if !self.paused && self.out.played() < self.played_at_pause {
                     // the device dropped its queue on pause: resume from where it stopped
                     let at = self.shared.lock().unwrap_or_else(|p| p.into_inner()).position_ms;
@@ -1151,6 +1162,66 @@ mod tests {
         assert_eq!(s.index, Some(1));
         p.pause();
         assert!(!wait(&mut p, 500, |s| !s.playing).playing);
+    }
+
+    /// A station that streams `mp3_frames` to every connection and records when a connection's writes start failing
+    /// (the player closed it). Returns the port, the count of connections and the count of closed ones.
+    fn watched_station() -> (u16, Arc<std::sync::atomic::AtomicUsize>, Arc<std::sync::atomic::AtomicUsize>) {
+        use std::io::Write;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let (opened, closed) = (Arc::new(AtomicUsize::new(0)), Arc::new(AtomicUsize::new(0)));
+        let (o, c) = (opened.clone(), closed.clone());
+        std::thread::spawn(move || {
+            for conn in listener.incoming() {
+                let Ok(mut conn) = conn else { return };
+                o.fetch_add(1, Ordering::SeqCst);
+                let c = c.clone();
+                std::thread::spawn(move || {
+                    let mut line = [0u8; 1024];
+                    let _ = std::io::Read::read(&mut conn, &mut line);
+                    let head = ICY.replace("{metaint}", "0");
+                    let audio = mp3_frames();
+                    if conn.write_all(head.as_bytes()).is_ok() {
+                        for chunk in audio.chunks(500).cycle() {
+                            if conn.write_all(chunk).is_err() {
+                                break;
+                            }
+                            std::thread::sleep(Duration::from_millis(1));
+                        }
+                    }
+                    c.fetch_add(1, Ordering::SeqCst);
+                });
+            }
+        });
+        (port, opened, closed)
+    }
+
+    #[test]
+    fn pausing_a_station_closes_its_connection_and_play_reconnects() {
+        use std::sync::atomic::Ordering;
+        let (port, opened, closed) = watched_station();
+        let mut p = radio_player(vec![("w.test", port)]);
+        p.play_queue(vec![station(1, "w.test")], 0, false, 1);
+        let s = wait(&mut p, 5000, |s| s.live.as_ref().is_some_and(|l| l.phase == Phase::Live));
+        assert!(s.playing && s.live.is_some_and(|l| l.phase == Phase::Live));
+        assert_eq!(opened.load(Ordering::SeqCst), 1);
+        p.pause();
+        let start = Instant::now();
+        while closed.load(Ordering::SeqCst) == 0 && start.elapsed() < Duration::from_secs(3) {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(closed.load(Ordering::SeqCst), 1, "a paused station's connection closes within a moment, not 30 s later");
+        p.play();
+        let start = Instant::now();
+        while opened.load(Ordering::SeqCst) < 2 && start.elapsed() < Duration::from_secs(3) {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(opened.load(Ordering::SeqCst), 2, "play opens a new connection");
+        let s = wait(&mut p, 500, |s| s.playing);
+        assert!(s.playing && s.error.is_none(), "{s:?}");
+        p.stop();
     }
 
     #[test]
