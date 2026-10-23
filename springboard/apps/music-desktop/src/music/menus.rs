@@ -89,6 +89,8 @@ pub enum Command {
     KeepMiniOnTop,
     /// Controls > Crossfade Songs: one song fades into the next over this many seconds (0 is off)
     Crossfade(u32),
+    /// Controls > Output: make the n-th output device the default output
+    Output(usize),
 }
 
 const IMPORT: u32 = 1;
@@ -115,6 +117,9 @@ const SORT_DESCENDING: u32 = 70;
 const CROSSFADE_BASE: u32 = 100;
 /// The crossfade lengths the Controls menu offers, in seconds.
 pub const CROSSFADES: [u32; 7] = [0, 2, 4, 6, 8, 10, 12];
+/// Controls > Output rows: one per output device, below the playlist rows.
+const OUTPUT_BASE: u32 = 900;
+const OUTPUT_MAX: u32 = 64;
 const ADD_TO_BASE: u32 = 1000;
 /// The highest rating a Rate command carries.
 const RATE_MAX: u8 = 5;
@@ -145,6 +150,7 @@ impl Command {
             Command::SortBy(k) => SORT_BASE + SortKey::ALL.iter().position(|q| *q == k).unwrap_or(0) as u32,
             Command::SortDescending => SORT_DESCENDING,
             Command::Crossfade(secs) => CROSSFADE_BASE + secs.min(super::playback::CROSSFADE_MAX_SECS),
+            Command::Output(i) => OUTPUT_BASE + (i as u32).min(OUTPUT_MAX - 1),
             Command::AddTo(i) => ADD_TO_BASE + i as u32,
         }
     }
@@ -179,6 +185,7 @@ impl Command {
             _ if (SHOW_BASE..SHOW_BASE + Place::ALL.len() as u32).contains(&id) => Some(Command::Show(Place::ALL[(id - SHOW_BASE) as usize])),
             _ if (SORT_BASE..SORT_BASE + SortKey::ALL.len() as u32).contains(&id) => Some(Command::SortBy(SortKey::ALL[(id - SORT_BASE) as usize])),
             _ if (CROSSFADE_BASE..=CROSSFADE_BASE + super::playback::CROSSFADE_MAX_SECS).contains(&id) => Some(Command::Crossfade(id - CROSSFADE_BASE)),
+            _ if (OUTPUT_BASE..OUTPUT_BASE + OUTPUT_MAX).contains(&id) => Some(Command::Output((id - OUTPUT_BASE) as usize)),
             _ if id >= ADD_TO_BASE => Some(Command::AddTo((id - ADD_TO_BASE) as usize)),
             _ => None,
         }
@@ -209,11 +216,14 @@ pub struct MenuState {
     pub has_lyrics: bool,
     /// the crossfade between songs, in seconds (0 is off)
     pub crossfade_secs: u32,
+    /// the output devices' names, in the order Controls > Output lists them, and the one that is the default
+    pub outputs: Vec<String>,
+    pub output: Option<usize>,
 }
 
 impl Default for MenuState {
     fn default() -> Self {
-        MenuState { has_track: false, playing: false, live: false, has_song: false, shuffle: false, repeat: false, rating: 0, favourite: false, playlists: Vec::new(), place: Place::Songs, sort: SortKey::Title, descending: false, lyrics_shown: false, has_lyrics: false, crossfade_secs: 0 }
+        MenuState { has_track: false, playing: false, live: false, has_song: false, shuffle: false, repeat: false, rating: 0, favourite: false, playlists: Vec::new(), place: Place::Songs, sort: SortKey::Title, descending: false, lyrics_shown: false, has_lyrics: false, crossfade_secs: 0, outputs: Vec::new(), output: None }
     }
 }
 
@@ -267,8 +277,10 @@ pub fn build(s: &MenuState) -> Vec<AppMenu> {
         item(Command::Next, "Next", "cmd+right").enabled(s.has_track),
         item(Command::Previous, "Previous", "cmd+left").enabled(s.has_track),
         AppMenuItem::separator(),
+        // Shuffle reorders the queue, so it needs one; Repeat is a mode that holds for whatever plays next. A station
+        // has neither: it never ends and has no order.
         item(Command::Shuffle, "Shuffle", "").enabled(s.has_track && !s.live).checked(s.shuffle),
-        item(Command::Repeat, "Repeat", "").enabled(s.has_track && !s.live).checked(s.repeat),
+        item(Command::Repeat, "Repeat", "").enabled(!s.live).checked(s.repeat),
         AppMenuItem::separator(),
         AppMenuItem::submenu("Crossfade Songs"),
     ];
@@ -278,6 +290,13 @@ pub fn build(s: &MenuState) -> Vec<AppMenu> {
         item(Command::VolumeUp, "Volume Up", "cmd+up").enabled(true),
         item(Command::VolumeDown, "Volume Down", "cmd+down").enabled(true),
     ]);
+    controls.push(AppMenuItem::separator());
+    controls.push(AppMenuItem::submenu("Output"));
+    if s.outputs.is_empty() {
+        // nothing listed yet (or the shell has no device service): say so instead of an empty submenu
+        controls.push(AppMenuItem::new(0, "No Output Devices").depth(1).enabled(false));
+    }
+    controls.extend(s.outputs.iter().take(OUTPUT_MAX as usize).enumerate().map(|(i, name)| item(Command::Output(i), name, "").depth(1).checked(s.output == Some(i))));
     let mut view: Vec<AppMenuItem> = Place::ALL.iter().map(|p| item(Command::Show(*p), p.title(), p.key()).checked(*p == s.place)).collect();
     view.insert(5, AppMenuItem::separator());
     view.insert(9, AppMenuItem::separator());
@@ -318,6 +337,7 @@ mod tests {
         cmds.extend(SortKey::ALL.map(Command::SortBy));
         cmds.extend([Command::SortDescending, Command::AddTo(0), Command::AddTo(7), Command::AddTo(250)]);
         cmds.extend(CROSSFADES.map(Command::Crossfade));
+        cmds.extend([Command::Output(0), Command::Output(3)]);
         for c in &cmds {
             assert_eq!(Command::from_id(c.id()), Some(*c), "{c:?}");
         }
@@ -354,7 +374,7 @@ mod tests {
     fn controls_follow_the_transport() {
         let controls = |s: &MenuState| build(s).remove(2).items;
         let idle = controls(&MenuState::default());
-        let setting = |id: u32| id == VOLUME_UP || id == VOLUME_DOWN || (CROSSFADE_BASE..=CROSSFADE_BASE + 12).contains(&id);
+        let setting = |id: u32| id == VOLUME_UP || id == VOLUME_DOWN || id == REPEAT || (CROSSFADE_BASE..=CROSSFADE_BASE + 12).contains(&id) || (OUTPUT_BASE..OUTPUT_BASE + OUTPUT_MAX).contains(&id);
         assert!(idle.iter().filter(|i| i.id != 0 && !setting(i.id)).all(|i| !i.enabled), "nothing to control without a track");
         let playing = controls(&full());
         assert_eq!(playing[0].title, "Pause");
@@ -362,6 +382,8 @@ mod tests {
         let station = controls(&MenuState { live: true, shuffle: false, ..full() });
         let shuffle = station.iter().find(|i| i.id == SHUFFLE).unwrap();
         assert!(!shuffle.enabled, "a station has no shuffle");
+        assert!(!station.iter().find(|i| i.id == REPEAT).unwrap().enabled, "nor repeat");
+        assert!(idle.iter().find(|i| i.id == REPEAT).unwrap().enabled, "repeat is a mode: it can be set before anything plays");
         let paused = controls(&MenuState { playing: false, shuffle: true, repeat: true, ..full() });
         assert_eq!(paused[0].title, "Play");
         assert!(paused.iter().find(|i| i.id == SHUFFLE).unwrap().checked && paused.iter().find(|i| i.id == REPEAT).unwrap().checked);
@@ -379,6 +401,21 @@ mod tests {
         let six = controls(&MenuState { crossfade_secs: 6, ..MenuState::default() });
         let checked: Vec<&str> = six[header(&six) + 1..].iter().take_while(|i| i.depth == 1).filter(|i| i.checked).map(|i| i.title.as_str()).collect();
         assert_eq!(checked, ["6 seconds"]);
+    }
+
+    #[test]
+    fn the_controls_menu_lists_the_output_devices_and_checks_the_default() {
+        let controls = |s: &MenuState| build(s).remove(2).items;
+        let rows = |items: &[AppMenuItem]| -> Vec<(String, bool, bool)> {
+            let at = items.iter().position(|i| i.submenu && i.title == "Output").expect("the Output submenu");
+            items[at + 1..].iter().take_while(|i| i.depth == 1).map(|i| (i.title.clone(), i.enabled, i.checked)).collect()
+        };
+        let none = controls(&MenuState::default());
+        assert_eq!(rows(&none), [("No Output Devices".to_string(), false, false)]);
+        let two = controls(&MenuState { outputs: vec!["Speakers".into(), "Headphones".into()], output: Some(1), ..MenuState::default() });
+        assert_eq!(rows(&two), [("Speakers".to_string(), true, false), ("Headphones".to_string(), true, true)]);
+        let picked = two.iter().find(|i| i.title == "Speakers").unwrap();
+        assert_eq!(Command::from_id(picked.id), Some(Command::Output(0)));
     }
 
     #[test]

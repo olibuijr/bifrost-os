@@ -70,6 +70,8 @@ pub struct MusicApp {
     output: Option<String>,
     /// the `audio-devices` list request made for the output picker, until its reply arrives
     picker_request: Option<u32>,
+    /// the output devices (id, name) as last listed, for Controls > Output
+    outputs: Vec<(String, String)>,
     /// the open panel of File > Import, until the files arrive
     import_request: Option<u32>,
     /// whether the Dock tile shows the library scan's progress
@@ -91,6 +93,11 @@ struct Published {
     playing: bool,
 }
 
+/// The devices that can play, as (id, name), in the order the shell lists them.
+fn output_devices(listing: &audio_devices::Listing) -> Vec<(String, String)> {
+    listing.devices.iter().filter(|d| d.can_output && !d.hidden).map(|d| (d.id.clone(), d.name.clone())).collect()
+}
+
 impl MusicApp {
     pub fn new() -> Self {
         MusicApp {
@@ -107,6 +114,7 @@ impl MusicApp {
             devices_request: None,
             output: None,
             picker_request: None,
+            outputs: Vec::new(),
             import_request: None,
             dock_busy: false,
             mini: None,
@@ -445,7 +453,8 @@ impl App for MusicApp {
             self.picker_request = None;
             // the output devices for the route button's menu; an error leaves the button without a menu
             if let Ok(listing) = result.as_ref().map_err(|_| ()).and_then(|v| audio_devices::decode_list(v).map_err(|_| ())) {
-                let devices = listing.devices.iter().filter(|d| d.can_output && !d.hidden).map(|d| (d.id.clone(), d.name.clone())).collect();
+                let devices: Vec<(String, String)> = output_devices(&listing);
+                self.outputs = devices.clone();
                 self.output = listing.output.clone();
                 if let Some(m) = &mut self.app {
                     m.show_outputs(devices, listing.output);
@@ -459,6 +468,7 @@ impl App for MusicApp {
         self.devices_request = None;
         // an error (an older shell has no `audio-devices` service) leaves the route unknown: nothing pauses
         if let Ok(listing) = result.as_ref().map_err(|_| ()).and_then(|v| audio_devices::decode_list(v).map_err(|_| ())) {
+            self.outputs = output_devices(&listing);
             self.output = listing.output;
         }
         true
@@ -479,7 +489,7 @@ impl App for MusicApp {
         Ok(IntentResult::dialog(done))
     }
 
-    fn service_event(&mut self, _ctx: &Ctx, service: &str, event: &str, body: &Json) -> bool {
+    fn service_event(&mut self, ctx: &Ctx, service: &str, event: &str, body: &Json) -> bool {
         if let Some(index) = now_playing::queue_pick(service, event, body) {
             return self.app.as_mut().is_some_and(|m| m.remote_queue_pick(index));
         }
@@ -487,8 +497,11 @@ impl App for MusicApp {
             return self.system_command(cmd);
         }
         if service == audio_devices::SERVICE {
-            if let Some(Change::Route { output, .. }) = audio_devices::decode_event(event, body) {
-                return self.route_changed(output);
+            match audio_devices::decode_event(event, body) {
+                Some(Change::Route { output, .. }) => return self.route_changed(output),
+                // a device came or went: list them again for Controls > Output
+                Some(Change::Devices(_)) if self.devices_request.is_none() => self.devices_request = Some(audio_devices::list(ctx)),
+                _ => {}
             }
         }
         false
@@ -559,7 +572,10 @@ impl App for MusicApp {
     fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
         // With no window there is nothing to act on, so there are no menus at all.
         let Some(m) = self.app.as_ref() else { return Vec::new() };
-        let mut menus = menus::build(&m.menu_state());
+        let mut state = m.menu_state();
+        state.outputs = self.outputs.iter().map(|(_, name)| name.clone()).collect();
+        state.output = self.output.as_ref().and_then(|id| self.outputs.iter().position(|(d, _)| d == id));
+        let mut menus = menus::build(&state);
         menus.push(menus::window_menu(self.mini.is_some(), self.mini_on_top));
         menus
     }
@@ -620,6 +636,13 @@ impl App for MusicApp {
             Command::KeepMiniOnTop => {
                 self.mini_on_top = !self.mini_on_top;
                 self.apply_mini_level(ctx);
+                return true;
+            }
+            Command::Output(i) => {
+                // the shell answers with a route change, which updates `output`
+                let Some((id, _)) = self.outputs.get(i) else { return false };
+                let _ = audio_devices::set_default(ctx, audio_devices::Role::Output, id);
+                self.output = Some(id.clone());
                 return true;
             }
             _ => {}
@@ -784,6 +807,29 @@ mod tests {
         assert_eq!(app.devices_request, None);
         assert_eq!(app.output, None);
         assert!(!app.service_reply(&ctx, 8, &Ok(Json::Null)));
+    }
+
+    #[test]
+    fn the_listed_output_devices_feed_controls_output_and_a_pick_becomes_the_default() {
+        let ctx = test_ctx();
+        let mut app = MusicApp::new();
+        app.devices_request = Some(3);
+        let listing = bifrost_core::json::parse(
+            r#"{"devices":[{"id":"speaker","name":"Speakers","output":true},{"id":"mic","name":"Microphone","input":true},
+                {"id":"headphones","name":"Headphones","output":true}],"defaults":{"output":"speaker"}}"#,
+        )
+        .unwrap();
+        assert!(app.service_reply(&ctx, 3, &Ok(listing)));
+        assert_eq!(app.outputs, [("speaker".to_string(), "Speakers".to_string()), ("headphones".to_string(), "Headphones".to_string())], "only devices that can play");
+        assert!(app.menu_action(&ctx, Command::Output(1).id()));
+        assert_eq!(app.output.as_deref(), Some("headphones"));
+        let sent = calls(&ctx);
+        assert!(sent.iter().any(|(svc, method, body)| svc == audio_devices::SERVICE && method == "set_default" && body.contains("headphones") && body.contains("output")), "{sent:?}");
+        assert!(!app.menu_action(&ctx, Command::Output(9).id()), "a device that is gone does nothing");
+        // a device list change asks for the list again
+        let changed = bifrost_core::json::parse(r#"{"devices":["speaker"]}"#).unwrap();
+        app.service_event(&ctx, audio_devices::SERVICE, "devices_changed", &changed);
+        assert!(app.devices_request.is_some());
     }
 
     #[test]

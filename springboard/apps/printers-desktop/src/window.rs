@@ -64,6 +64,15 @@ pub const B_SAVE: u32 = 13;
 pub const B_ADD_CLIPBOARD: u32 = 14;
 /// Menu only: shows the help topics.
 pub const B_HELP: u32 = 15;
+/// The window title at the start of the toolbar: a slot the window draws, not a button.
+pub const B_TITLE: u32 = 16;
+/// The window's title, drawn in the toolbar (a full-size window has no title bar).
+pub const TITLE: &str = "Print Center";
+/// The title slot's width (points): room for the title at the title 3 size.
+pub const TITLE_PT: f32 = 120.0;
+/// The Add Printer button of the empty window: its width and height (points).
+const EMPTY_ADD_W_PT: f32 = 240.0;
+const EMPTY_ADD_H_PT: f32 = 28.0;
 
 /// A text field of the info pane.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -94,6 +103,8 @@ pub enum Target {
     Found(usize),
     /// The Add Printer pane's button for the address on the clipboard.
     Clipboard,
+    /// The "Add Printer, Scanner, or Fax…" button of the window while no printer is set up.
+    AddFirst,
 }
 
 pub struct PrintCenter {
@@ -630,13 +641,22 @@ impl PrintCenter {
         [x0 + 8.0, x0 + 64.0, pages - owner_w, pages, size, created, status]
     }
 
-    /// The toolbar. Each button is enabled only when the selection allows its action.
+    /// The toolbar: the window title, then the actions. Each button is enabled only when the selection allows its
+    /// action; with no printer set up there is nothing to act on, so only Add Printer and Refresh are offered.
     pub fn toolbar(&self) -> Toolbar {
+        let title = [ToolbarItem::custom(B_TITLE, TITLE, TITLE_PT), ToolbarItem::flexible_space()];
+        let add = ToolbarItem::button(B_ADD, "Add Printer\u{2026}").selected(self.model.pane() == Pane::Discover);
+        if self.model.printers.is_empty() {
+            let mut items = title.to_vec();
+            items.extend([add, ToolbarItem::button(B_REFRESH, "Refresh")]);
+            return Toolbar::new(items);
+        }
         let printer = self.model.selected_printer();
         let pause_label = printer.map_or("Pause", |p| model::toggle(p).1);
         let confirming = printer.is_some_and(|p| self.model.confirm_delete.as_deref() == Some(p.name.as_str()));
         let delete_label = if confirming { "Confirm Delete" } else { "Delete Printer" };
-        Toolbar::new(vec![
+        let mut items = title.to_vec();
+        items.extend([
             ToolbarItem::button(B_PAUSE, pause_label).enabled(printer.is_some()),
             ToolbarItem::button(B_DEFAULT, "Set Default").enabled(printer.is_some_and(|p| !p.is_default)),
             ToolbarItem::button(B_HOLD, "Hold").enabled(!self.model.chosen_ids(model::can_hold).is_empty()),
@@ -644,9 +664,21 @@ impl PrintCenter {
             ToolbarItem::button(B_CANCEL, "Cancel Job").enabled(!self.model.chosen_ids(model::can_cancel).is_empty()),
             ToolbarItem::button(B_DELETE, delete_label).enabled(printer.is_some()),
             ToolbarItem::button(B_INFO, if self.model.show_info { "Show Queue" } else { "Info" }).enabled(printer.is_some()),
-            ToolbarItem::button(B_ADD, "Add Printer"),
+            add,
             ToolbarItem::button(B_REFRESH, "Refresh"),
-        ])
+        ]);
+        Toolbar::new(items)
+    }
+
+    /// The window's "Add Printer, Scanner, or Fax…" button, centred in the queue pane under the empty-state text. It
+    /// is there only while no printer is set up and the queue pane is shown.
+    pub fn add_first_rect(&self) -> Option<Rect> {
+        if !self.model.printers.is_empty() || self.model.pane() != Pane::Queue {
+            return None;
+        }
+        let d = self.detail_rect();
+        let w = EMPTY_ADD_W_PT.min((d.w - 2.0 * PAD_PT).max(0.0));
+        Some(Rect { x: d.x + (d.w - w) / 2.0, y: d.y + d.h / 2.0 + 20.0, w, h: EMPTY_ADD_H_PT })
     }
 
     pub fn toolbar_layout(&self, ui: &Ui) -> ToolbarLayout {
@@ -685,6 +717,9 @@ impl PrintCenter {
             }
             return Target::Nothing;
         }
+        if self.add_first_rect().is_some_and(|r| r.contains(x, y)) {
+            return Target::AddFirst;
+        }
         if self.model.pane() == Pane::Discover {
             if self.clipboard_rect().contains(x, y) {
                 return Target::Clipboard;
@@ -720,7 +755,7 @@ impl PrintCenter {
             .visible
             .iter()
             .find(|(_, r)| r.contains(x, y))
-            .and_then(|(id, _)| bar.items.iter().find(|i| i.id == *id).filter(|i| i.enabled).map(|i| Target::Toolbar(i.id)))
+            .and_then(|(id, _)| bar.items.iter().find(|i| i.id == *id).filter(|i| i.enabled && i.id != B_TITLE).map(|i| Target::Toolbar(i.id)))
             .unwrap_or(Target::Nothing)
     }
 
@@ -790,6 +825,10 @@ impl PrintCenter {
             }
             Target::Clipboard => {
                 self.add_from_clipboard();
+                true
+            }
+            Target::AddFirst => {
+                self.toolbar_action(B_ADD);
                 true
             }
             Target::Field(f) => {
@@ -1001,6 +1040,33 @@ mod tests {
         assert_eq!(w.model.selected.as_deref(), Some("Lab"));
         assert_eq!(w.in_flight, 1);
         assert!(!w.activate(Target::Printer(7)));
+    }
+
+    #[test]
+    fn the_toolbar_starts_with_the_window_title_which_is_no_button() {
+        let w = window();
+        let bar = w.toolbar();
+        assert_eq!((bar.items[0].id, bar.items[0].label.as_str()), (B_TITLE, TITLE));
+        assert_eq!(bar.items.iter().filter(|i| i.id == B_TITLE).count(), 1);
+        assert!(bar.items.iter().any(|i| i.id == B_ADD && i.label.starts_with("Add Printer")));
+    }
+
+    #[test]
+    fn with_no_printer_only_add_and_refresh_are_offered_and_the_window_offers_to_add_one() {
+        let mut w = window();
+        w.model.printers.clear();
+        w.model.selected = None;
+        w.model.jobs.clear();
+        let ids: Vec<u32> = w.toolbar().items.iter().map(|i| i.id).filter(|id| *id != 0).collect();
+        assert_eq!(ids, [B_TITLE, B_ADD, B_REFRESH], "no greyed-out row of printer actions");
+        let r = w.add_first_rect().expect("the empty window offers Add Printer");
+        let d = w.detail_rect();
+        assert!(r.x >= d.x && r.x + r.w <= d.x + d.w && r.y > d.y && r.y + r.h < d.y + d.h, "{r:?} inside {d:?}");
+        assert_eq!(w.hit_body(r.x + r.w / 2.0, r.y + r.h / 2.0), Target::AddFirst);
+        assert!(w.activate(Target::AddFirst));
+        assert_eq!(w.model.pane(), Pane::Discover, "the button opens the Add Printer pane");
+        assert_eq!(w.add_first_rect(), None, "the pane replaces the empty state");
+        assert_eq!(window().add_first_rect(), None, "a window with printers has no such button");
     }
 
     #[test]

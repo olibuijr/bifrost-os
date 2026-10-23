@@ -54,6 +54,7 @@ const SIDE_UP_NEXT: u32 = 3;
 const SIDE_DOWNLOADED: u32 = 4;
 const SIDE_SEARCH: u32 = 5;
 const SIDE_SETTINGS: u32 = 6;
+const SIDE_CHARTS: u32 = 7;
 const SIDE_SHOW: u32 = 100;
 const BAR_REFRESH: u32 = 7;
 const BAR_SHOW_SETTINGS: u32 = 8;
@@ -122,6 +123,8 @@ const M_CLEAR_QUEUE: u32 = 60;
 const M_SHOW_PLAYED: u32 = 61;
 /// the New Episodes filters: M_NEW_FILTER + index into `library::NewFilter::ALL`
 const M_NEW_FILTER: u32 = 62;
+/// View > Top Charts
+const M_VIEW_CHARTS: u32 = 90;
 const POLL_MS: f64 = 250.0;
 const FEED_LIMIT: usize = 8 << 20;
 const EPISODE_LIMIT: usize = 160 << 20;
@@ -212,6 +215,8 @@ enum View {
     UpNext,
     Downloaded,
     Search,
+    /// the most followed shows of the open directory, to browse and follow
+    TopCharts,
     Settings,
     ShowSettings(usize),
     /// an episode's notes and chapters: show index, episode index
@@ -244,6 +249,8 @@ enum Msg {
     Episode(String, Result<PathBuf, String>),
     /// the answer of a show search
     Search(Result<Vec<search::Hit>, String>),
+    /// the Top Charts list
+    Charts(Result<Vec<search::Hit>, String>),
     /// the transcript cues of an episode (by URL)
     Transcript(String, Result<Vec<Cue>, String>),
     /// the chapters of an episode (by URL), read from the JSON file its feed links to
@@ -346,6 +353,9 @@ pub struct Podcasts {
     search_field: Option<TextField>,
     results: Vec<search::Hit>,
     searching: bool,
+    /// the Top Charts as last fetched, and whether a request is out
+    charts: Vec<search::Hit>,
+    charts_loading: bool,
     /// a line of news in grey (imports, exports), cleared with the next view change
     notice: String,
     sheet_panel: SheetPanel,
@@ -447,6 +457,8 @@ impl Podcasts {
             search_field: None,
             results: Vec::new(),
             searching: false,
+            charts: Vec::new(),
+            charts_loading: false,
             notice: String::new(),
             sheet_panel: SheetPanel::None,
             transcripts: Vec::new(),
@@ -742,6 +754,13 @@ impl Podcasts {
                     match r {
                         Ok(hits) => self.results = hits,
                         Err(e) => self.error = format!("Cannot search: {e}"),
+                    }
+                }
+                Msg::Charts(r) => {
+                    self.charts_loading = false;
+                    match r {
+                        Ok(hits) => self.charts = hits,
+                        Err(e) => self.error = format!("Cannot load the Top Charts: {e}"),
                     }
                 }
                 Msg::Transcript(url, r) => {
@@ -1095,6 +1114,26 @@ impl Podcasts {
         }
     }
 
+    /// Shows the Top Charts, fetching them the first time (and again after a failure).
+    fn open_charts(&mut self) {
+        self.go(View::TopCharts);
+        if self.charts.is_empty() && !self.charts_loading {
+            self.charts_loading = true;
+            self.error.clear();
+            self.rebuild();
+            let (net, inbox, url) = (self.net.clone(), self.inbox.clone(), search::charts_url());
+            DispatchQueue::global(Qos::Utility).async_(move || {
+                let r = net.get(&url, SEARCH_LIMIT).map_err(|e| e.to_string()).map(|bytes| search::parse_gpodder(&String::from_utf8_lossy(&bytes)));
+                deliver(&inbox, Msg::Charts(r));
+            });
+        }
+    }
+
+    /// The directory hits the current view lists: the Top Charts, or the search results.
+    fn hits(&self) -> &[search::Hit] {
+        if self.view == View::TopCharts { &self.charts } else { &self.results }
+    }
+
     /// The sidebar row `id` was chosen.
     fn navigate(&mut self, ui: &Ui, id: u32) {
         match id {
@@ -1103,6 +1142,7 @@ impl Podcasts {
             SIDE_UP_NEXT => self.go(View::UpNext),
             SIDE_DOWNLOADED => self.go(View::Downloaded),
             SIDE_SEARCH => self.open_search(ui),
+            SIDE_CHARTS => self.open_charts(),
             SIDE_SETTINGS => self.open_panel(View::Settings),
             _ => {
                 if let Some(i) = id.checked_sub(SIDE_SHOW).map(|i| i as usize).filter(|&i| i < self.shows.len()) {
@@ -1121,6 +1161,7 @@ impl Podcasts {
             View::UpNext => SIDE_UP_NEXT,
             View::Downloaded => SIDE_DOWNLOADED,
             View::Search => SIDE_SEARCH,
+            View::TopCharts => SIDE_CHARTS,
             View::Settings => SIDE_SETTINGS,
             View::Detail(s, _) => SIDE_SHOW + s as u32,
         }
@@ -1202,7 +1243,7 @@ impl Podcasts {
         let key = match *row {
             Row::Show(i) => self.shows.get(i).map(|s| s.url.clone()),
             Row::Ep(s, e) => self.episode_url((s, e)),
-            Row::Hit(i) => self.results.get(i).map(|h| h.feed.clone()),
+            Row::Hit(i) => self.hits().get(i).map(|h| h.feed.clone()),
         };
         key.unwrap_or_default()
     }
@@ -1242,6 +1283,7 @@ impl Podcasts {
                 all.into_iter().map(|(_, s, e)| Row::Ep(s, e)).collect()
             }
             View::Search => (0..self.results.len()).map(Row::Hit).collect(),
+            View::TopCharts => (0..self.charts.len()).map(Row::Hit).collect(),
             View::Settings | View::ShowSettings(_) | View::Detail(..) => Vec::new(),
         };
         self.rows = rows;
@@ -1261,7 +1303,7 @@ impl Podcasts {
     /// Moves the selection by `delta` rows and scrolls it into view.
     fn move_selection(&mut self, ui: &Ui, delta: i32) {
         let n = self.count();
-        if n == 0 || !matches!(self.view, View::Shows | View::Episodes(_) | View::New | View::UpNext | View::Downloaded | View::Search) {
+        if n == 0 || !matches!(self.view, View::Shows | View::Episodes(_) | View::New | View::UpNext | View::Downloaded | View::Search | View::TopCharts) {
             return;
         }
         let next = match self.selected {
@@ -1354,20 +1396,35 @@ impl Podcasts {
 
     fn run_search(&mut self) {
         let term = self.search_field.as_ref().map(|f| f.text().to_string()).unwrap_or_default();
-        let Some(url) = search::url(&term) else { return };
+        let asks = search::requests(&term);
+        if asks.is_empty() {
+            return;
+        }
         self.searching = true;
         self.results.clear();
         self.error.clear();
         self.rebuild();
         let (net, inbox) = (self.net.clone(), self.inbox.clone());
         DispatchQueue::global(Qos::Utility).async_(move || {
-            let r = net.get(&url, SEARCH_LIMIT).map_err(|e| e.to_string()).map(|bytes| search::parse(&String::from_utf8_lossy(&bytes)));
+            // both directories; one that fails leaves the other's answer, and only both failing is an error
+            let mut answers = Vec::new();
+            let mut failed = None;
+            for (source, url) in asks {
+                match net.get(&url, SEARCH_LIMIT) {
+                    Ok(bytes) => answers.push(search::parse_from(source, &String::from_utf8_lossy(&bytes))),
+                    Err(e) => failed = Some(e.to_string()),
+                }
+            }
+            let r = match failed {
+                Some(e) if answers.is_empty() => Err(e),
+                _ => Ok(search::merge(&term, answers)),
+            };
             deliver(&inbox, Msg::Search(r));
         });
     }
 
     fn follow_hit(&mut self, i: usize) {
-        let Some(hit) = self.results.get(i).cloned() else { return };
+        let Some(hit) = self.hits().get(i).cloned() else { return };
         if let Some(at) = self.follow(&hit.feed, Some(&hit.title)) {
             let url = self.shows[at].url.clone();
             self.fetch_feed(&url);
@@ -1539,6 +1596,7 @@ impl Podcasts {
                 AppMenuItem::new(M_REFRESH, "Refresh").key("cmd+r").enabled(!self.shows.is_empty()),
                 AppMenuItem::separator(),
                 AppMenuItem::new(M_VIEW_SEARCH, "Search Shows").key("cmd+f").checked(self.view == View::Search),
+                AppMenuItem::new(M_VIEW_CHARTS, "Top Charts").checked(self.view == View::TopCharts),
                 AppMenuItem::new(M_VIEW_NEW, "New Episodes").key("cmd+1").checked(self.view == View::New),
                 AppMenuItem::new(M_VIEW_UP_NEXT, "Up Next").key("cmd+2").checked(self.view == View::UpNext),
                 AppMenuItem::new(M_VIEW_DOWNLOADED, "Downloaded").key("cmd+3").checked(self.view == View::Downloaded),
@@ -1636,6 +1694,7 @@ impl Podcasts {
             M_VIEW_DOWNLOADED => self.navigate(ui, SIDE_DOWNLOADED),
             M_VIEW_SHOWS => self.navigate(ui, SIDE_SHOWS),
             M_VIEW_SEARCH => self.navigate(ui, SIDE_SEARCH),
+            M_VIEW_CHARTS => self.navigate(ui, SIDE_CHARTS),
             M_SETTINGS => self.navigate(ui, SIDE_SETTINGS),
             M_SHOW_SETTINGS => self.activate(ui, Target::ShowSettings, t),
             M_PLAY_PAUSE => self.activate(ui, Target::PlayPause, t),
@@ -1859,6 +1918,7 @@ impl Podcasts {
                 View::UpNext => "Up Next".into(),
                 View::Downloaded => "Downloaded".into(),
                 View::Search => "Search".into(),
+                View::TopCharts => "Top Charts".into(),
                 View::Settings => "Settings".into(),
                 View::ShowSettings(i) => self.shows.get(i).map_or("Settings".into(), |s| format!("{} Settings", s.title)),
                 View::Detail(..) => self.detail_episode().map_or(String::new(), |(_, e)| e.title.clone()),
@@ -1915,6 +1975,7 @@ impl Podcasts {
         let mut items = vec![
             SidebarItem::header("Library"),
             SidebarItem::row(SIDE_SEARCH, "Search").with_symbol("magnifyingglass"),
+            SidebarItem::row(SIDE_CHARTS, "Top Charts").with_symbol("list.number"),
             SidebarItem::row(SIDE_NEW, "New Episodes").with_symbol("star"),
             SidebarItem::row(SIDE_UP_NEXT, "Up Next").with_symbol("music.note.list").with_count(queued),
             SidebarItem::row(SIDE_DOWNLOADED, "Downloaded").with_symbol("arrow.down.circle"),
@@ -2022,7 +2083,7 @@ impl Podcasts {
             if y >= self.row_top(ui) {
                 for i in 0..self.count() {
                     if Self::inside(self.row_rect(ui, i), x, y) {
-                        if self.view == View::Search && Self::inside(self.follow_rect(ui, i), x, y) {
+                        if matches!(self.view, View::Search | View::TopCharts) && Self::inside(self.follow_rect(ui, i), x, y) {
                             return Some(Target::Follow(i));
                         }
                         return Some(if matches!(self.view, View::Settings | View::ShowSettings(_)) { Target::Opt(i) } else { Target::Row(i) });
@@ -2261,6 +2322,22 @@ impl Podcasts {
             }
         }
         self.dirty = true;
+    }
+
+    /// Whether a text field has the keys (the add sheet's or the search field), so Edit > Cut, Copy, Paste and Select All
+    /// apply to it.
+    pub fn editing_text(&self) -> bool {
+        self.field_kind().is_some()
+    }
+
+    /// Runs an Edit command (`SelectAll`, `Copy`, `Cut`, `Paste`, `Undo`, `Redo`) on the text field that has the keys;
+    /// false when none has them.
+    pub fn edit_command(&mut self, ui: &Ui, name: &'static str, t: f64) -> bool {
+        let Some(search) = self.field_kind() else { return false };
+        let Some(f) = self.field_mut(search) else { return false };
+        f.edit(ui, &Out::Named(name), t);
+        self.dirty = true;
+        true
     }
 
     /// Which text field takes touches now: the add sheet's (false) or the search field (true).
@@ -2729,7 +2806,9 @@ impl Podcasts {
                 View::Downloaded => "No downloaded episodes".into(),
                 View::Search if self.searching => "Searching...".into(),
                 View::Search if self.search_field.as_ref().is_some_and(|f| !f.is_empty()) => "No shows found".into(),
-                View::Search => "Search for shows by name and press Return.".into(),
+                View::Search => "Search for shows by name, author or network and press Return.".into(),
+                View::TopCharts if self.charts_loading => "Loading the Top Charts...".into(),
+                View::TopCharts => "The Top Charts could not be loaded. Choose Top Charts again to retry.".into(),
                 _ => String::new(),
             };
             let msg = ui.fit(&msg, MAC_TITLE3_PT, cw - 2.0 * self.margin(ui));
@@ -2751,7 +2830,7 @@ impl Podcasts {
                     (e.title.clone(), self.episode_line(si, ei), self.playing.as_deref() == Some(e.url.as_str()), !self.library.is_played(&e.url))
                 }
                 Row::Hit(hi) => {
-                    let hit = &self.results[hi];
+                    let hit = &self.hits()[hi];
                     (hit.title.clone(), hit.author.clone(), false, false)
                 }
             };
@@ -2776,7 +2855,7 @@ impl Podcasts {
             let sub_ink = if active { WHITE } else { LABEL_2.now() };
             self.text(s, ui, &sub, MAC_SUBHEAD_PT, Weight::Regular, sub_ink, r.0 + ui.pt(SPACE_L), r.1 + ui.pt(38.0));
             if let Row::Hit(hi) = row {
-                let followed = self.shows.iter().any(|sh| sh.url == self.results[hi].feed);
+                let followed = self.shows.iter().any(|sh| sh.url == self.hits()[hi].feed);
                 let f = self.follow_rect(ui, i);
                 if followed {
                     self.centred(s, ui, "Following", MAC_SUBHEAD_PT, LABEL_2.now(), f);
@@ -3067,6 +3146,51 @@ mod tests {
         let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target").join(format!("test-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         dir
+    }
+
+    fn test_ui() -> Ui {
+        let font = concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf");
+        let data: &'static [u8] = Box::leak(std::fs::read(font).unwrap().into_boxed_slice());
+        Ui::new(bifrost_app::kit::Font::parse(data).unwrap(), 1.0)
+    }
+
+    fn podcasts(name: &str, ui: &Ui) -> Podcasts {
+        Podcasts::new(ui, 1000, 700, scratch(name), Arc::new(Broken), &scratch(&format!("{name}-svc")))
+    }
+
+    #[test]
+    fn select_all_in_the_search_field_lets_typing_replace_the_term() {
+        let ui = test_ui();
+        let mut p = podcasts("select-all", &ui);
+        assert!(!p.editing_text(), "no field has the keys on the shows list");
+        assert!(!p.edit_command(&ui, "SelectAll", 0.0));
+        p.open_search(&ui);
+        assert!(p.editing_text());
+        p.key(&ui, Out::Text("Relay FM".into()), 1.0);
+        assert!(p.edit_command(&ui, "SelectAll", 2.0));
+        p.key(&ui, Out::Text("Accidental Tech Podcast".into()), 3.0);
+        assert_eq!(p.search_field.as_ref().map(|f| f.text().to_string()).as_deref(), Some("Accidental Tech Podcast"), "the selected term is replaced, not appended to");
+    }
+
+    #[test]
+    fn the_top_charts_list_the_directory_shows_with_follow_buttons() {
+        let ui = test_ui();
+        let mut p = podcasts("charts", &ui);
+        p.navigate(&ui, SIDE_CHARTS);
+        assert_eq!(p.view, View::TopCharts);
+        assert!(p.charts_loading, "the first visit fetches the list");
+        assert_eq!(p.sidebar().selected(), Some(SIDE_CHARTS));
+        let hits = vec![search::Hit { title: "This American Life".into(), author: "This American Life".into(), feed: "https://tal.test/rss".into() }, search::Hit { title: "Radiolab".into(), author: "WNYC Studios".into(), feed: "https://radiolab.test/rss".into() }];
+        p.inbox.lock().unwrap().push_back(Msg::Charts(Ok(hits)));
+        p.pump();
+        assert!(!p.charts_loading);
+        assert_eq!(p.rows, [Row::Hit(0), Row::Hit(1)]);
+        assert_eq!(p.row_key(&Row::Hit(1)), "https://radiolab.test/rss", "a chart row stands for its feed");
+        assert!(p.results.is_empty(), "the charts are not search results");
+        p.open_search(&ui);
+        assert!(p.rows.is_empty(), "Search lists its own results");
+        p.navigate(&ui, SIDE_CHARTS);
+        assert!(!p.charts_loading && p.rows.len() == 2, "the charts are kept, not fetched again");
     }
 
     #[test]

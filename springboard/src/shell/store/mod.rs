@@ -82,9 +82,83 @@ pub enum Tab {
     Games,
     Updates,
     Search,
+    /// a desktop sidebar shelf: the apps of a few related catalogue categories
+    Shelf(Shelf),
+    /// every catalogue category with its apps (desktop sidebar)
+    Categories,
+}
+
+/// The desktop sidebar's shelves (the reference's Create, Work, Play and Develop). Each gathers the catalogue
+/// categories that fit it; a category of the catalogue no shelf names is still listed under Categories.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Shelf {
+    Create,
+    Work,
+    Play,
+    Develop,
+}
+
+impl Shelf {
+    pub fn title(self) -> &'static str {
+        match self {
+            Shelf::Create => "Create",
+            Shelf::Work => "Work",
+            Shelf::Play => "Play",
+            Shelf::Develop => "Develop",
+        }
+    }
+
+    /// The catalogue categories on the shelf, in the order they are listed (matched without regard to case).
+    pub fn categories(self) -> &'static [&'static str] {
+        match self {
+            Shelf::Create => &["Graphics & Design", "Photo & Video", "Music"],
+            Shelf::Work => &["Productivity", "Business", "Finance", "Reference", "Education"],
+            Shelf::Play => &["Games", "Entertainment", "Sports"],
+            Shelf::Develop => &["Developer Tools", "Utilities"],
+        }
+    }
 }
 
 const TABS: [(Tab, &str); 5] = [(Tab::Today, "Today"), (Tab::Games, "Games"), (Tab::Apps, "Apps"), (Tab::Updates, "Updates"), (Tab::Search, "Search")];
+
+/// The desktop sidebar, under its search field: Discover (the Today cards), the shelves, Categories and Updates.
+const SIDEBAR: [(Tab, &str); 7] = [
+    (Tab::Today, "Discover"),
+    (Tab::Shelf(Shelf::Create), "Create"),
+    (Tab::Shelf(Shelf::Work), "Work"),
+    (Tab::Shelf(Shelf::Play), "Play"),
+    (Tab::Shelf(Shelf::Develop), "Develop"),
+    (Tab::Categories, "Categories"),
+    (Tab::Updates, "Updates"),
+];
+
+/// The desktop sidebar's geometry (points): the search capsule under the traffic lights, the rows under it, and the
+/// account chip at the foot.
+const SIDE_SEARCH_Y: f32 = 46.0;
+const SIDE_SEARCH_H: f32 = 28.0;
+const SIDE_ROWS_Y: f32 = 88.0;
+const SIDE_ROW_H: f32 = 36.0;
+const SIDE_ACCOUNT_H: f32 = 56.0;
+const SIDE_INSET: f32 = 10.0;
+
+/// What a click in the desktop sidebar lands on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SideHit {
+    Search,
+    Tab(Tab),
+    Account,
+}
+
+/// The name a tab goes by: its sidebar name on the desktop, else its tab bar name.
+fn tab_name(tab: Tab, desktop: bool) -> &'static str {
+    let side = SIDEBAR.iter().find(|(t, _)| desktop && *t == tab);
+    side.or_else(|| TABS.iter().find(|(t, _)| *t == tab)).or_else(|| SIDEBAR.iter().find(|(t, _)| *t == tab)).map_or("", |t| t.1)
+}
+
+/// The initials of an account name for the sidebar chip: the first letters of the first two words, upper case.
+fn initials(name: &str) -> String {
+    name.split_whitespace().filter_map(|w| w.chars().next()).take(2).flat_map(char::to_uppercase).collect()
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Target {
@@ -272,6 +346,8 @@ pub struct AppStore {
     keyboard_wanted: bool,
     /// the app whose Remove was tapped once: the next tap removes it
     confirm_remove: Option<String>,
+    /// the local account's name, for the sidebar's account chip (never sent anywhere)
+    account: String,
     /// decoded screenshots by URL, and each one resized to the strip height in px
     shots: HashMap<String, Image>,
     shot_px: HashMap<(String, usize), Image>,
@@ -358,6 +434,7 @@ impl AppStore {
             query: String::new(),
             keyboard_wanted: false,
             confirm_remove: None,
+            account: crate::shell::account::load().full_name,
             shots: HashMap::new(),
             shot_px: HashMap::new(),
             shot_pending: HashSet::new(),
@@ -539,9 +616,41 @@ impl AppStore {
                 }
                 r.push(Row::Restore);
             }
+            Tab::Shelf(shelf) => {
+                r.push(Row::Title(shelf.title()));
+                let mut any = false;
+                for cat in shelf.categories() {
+                    let list: Vec<usize> = all.iter().copied().filter(|&i| self.catalog[i].category.eq_ignore_ascii_case(cat)).collect();
+                    if !list.is_empty() {
+                        any = true;
+                        r.push(Row::Header((*cat).into(), false));
+                        r.extend(by_name(list, &self.catalog).into_iter().map(Row::App));
+                    }
+                }
+                if !any && !self.catalog.is_empty() {
+                    r.push(Row::Note(format!("No {} apps in the store yet.", shelf.title().to_lowercase())));
+                }
+            }
+            Tab::Categories => {
+                r.push(Row::Title("Categories"));
+                for cat in self.categories() {
+                    let list: Vec<usize> = all.iter().copied().filter(|&i| self.catalog[i].category == cat).collect();
+                    if !list.is_empty() {
+                        r.push(Row::Header(if cat.is_empty() { "Other".into() } else { cat }, false));
+                        r.extend(by_name(list, &self.catalog).into_iter().map(Row::App));
+                    }
+                }
+                if !system.is_empty() {
+                    r.push(Row::Header("System".into(), false));
+                    r.extend(by_name(system, &self.catalog).into_iter().map(Row::App));
+                }
+            }
             Tab::Search => {
                 r.push(Row::Title("Search"));
-                r.push(Row::Search);
+                // on the desktop the query field is the sidebar's, above the sections
+                if !self.desktop {
+                    r.push(Row::Search);
+                }
                 r.push(Row::Chips);
                 let cats = self.categories();
                 let q = self.query.trim();
@@ -552,7 +661,7 @@ impl AppStore {
                 r.extend(by_name(list, &self.catalog).into_iter().map(Row::App));
             }
         }
-        if self.catalog.is_empty() && matches!(self.tab, Tab::Today | Tab::Apps | Tab::Games | Tab::Search) {
+        if self.catalog.is_empty() && matches!(self.tab, Tab::Today | Tab::Apps | Tab::Games | Tab::Search | Tab::Shelf(_) | Tab::Categories) {
             let msg = match (&self.error, self.fetching) {
                 (_, true) => "Loading the store\u{2026}".to_string(),
                 (Some(e), false) => format!("Cannot connect to the store. {e}"),
@@ -898,6 +1007,47 @@ impl AppStore {
         self.dirty = true;
     }
 
+    /// The desktop sidebar's search capsule (px, window coordinates).
+    fn side_search_rect(&self, ui: &Ui) -> (f32, f32, f32, f32) {
+        let x = ui.pt(SIDE_INSET);
+        (x, ui.pt(SIDE_SEARCH_Y), (self.sidebar as f32 - 2.0 * x).max(0.0), ui.pt(SIDE_SEARCH_H))
+    }
+
+    /// The desktop sidebar's row `i` (px).
+    fn side_row_rect(&self, ui: &Ui, i: usize) -> (f32, f32, f32, f32) {
+        let x = ui.pt(SIDE_INSET);
+        (x, ui.pt(SIDE_ROWS_Y + i as f32 * SIDE_ROW_H), (self.sidebar as f32 - 2.0 * x).max(0.0), ui.pt(SIDE_ROW_H - 2.0))
+    }
+
+    /// The account chip at the foot of the desktop sidebar (px).
+    fn side_account_rect(&self, ui: &Ui) -> (f32, f32, f32, f32) {
+        let x = ui.pt(SIDE_INSET);
+        (x, self.h as f32 - ui.pt(SIDE_ACCOUNT_H), (self.sidebar as f32 - 2.0 * x).max(0.0), ui.pt(SIDE_ACCOUNT_H - SIDE_INSET))
+    }
+
+    /// What a click at `(x, y)` (px) in the desktop sidebar lands on.
+    fn side_hit(&self, ui: &Ui, x: f32, y: f32) -> Option<SideHit> {
+        let inside = |r: (f32, f32, f32, f32)| x >= r.0 && x < r.0 + r.2 && y >= r.1 && y < r.1 + r.3;
+        if inside(self.side_search_rect(ui)) {
+            return Some(SideHit::Search);
+        }
+        if inside(self.side_account_rect(ui)) {
+            return Some(SideHit::Account);
+        }
+        (0..SIDEBAR.len()).find(|&i| inside(self.side_row_rect(ui, i))).map(|i| SideHit::Tab(SIDEBAR[i].0))
+    }
+
+    /// A click on the sidebar's search field: the Search results take the pane and the typing goes to the query.
+    fn focus_search(&mut self) {
+        if self.tab != Tab::Search || self.page.is_some() {
+            self.tab = Tab::Search;
+            self.page = None;
+            self.scroll.jump_top();
+        }
+        self.keyboard_wanted = true;
+        self.dirty = true;
+    }
+
     /// True once after a tap on the query field: the shell raises the on-screen keyboard for it.
     pub fn take_keyboard_request(&mut self) -> bool {
         std::mem::take(&mut self.keyboard_wanted)
@@ -1031,7 +1181,8 @@ impl AppStore {
 
     fn hit(&self, ui: &Ui, x: f32, y: f32) -> Option<Target> {
         let bar = self.bottom(ui);
-        if y >= bar && y < bar + ui.pt(TAB_BAR) {
+        // the tab bar is the tablet's; the desktop has its sidebar instead
+        if !self.desktop && y >= bar && y < bar + ui.pt(TAB_BAR) {
             let i = (x / (self.w as f32 / TABS.len() as f32)) as usize;
             return TABS.get(i).map(|(t, _)| Target::Tab(*t));
         }
@@ -1311,9 +1462,14 @@ impl AppStore {
         };
         if self.desktop {
             if x < self.sidebar as f32 {
-                if matches!(ev, Event::Up(..)) && y >= ui.pt(76.0) {
-                    let i = ((y - ui.pt(76.0)) / ui.pt(44.0)) as usize;
-                    if let Some((tab, _)) = TABS.get(i) { self.activate(ui, Target::Tab(*tab)); }
+                if matches!(ev, Event::Up(..)) {
+                    match self.side_hit(ui, x, y) {
+                        Some(SideHit::Search) => self.focus_search(),
+                        Some(SideHit::Tab(tab)) => self.activate(ui, Target::Tab(tab)),
+                        // the account's apps: what it bought and what has an update
+                        Some(SideHit::Account) => self.activate(ui, Target::Tab(Tab::Updates)),
+                        None => {}
+                    }
                 }
                 self.dirty = true;
                 return;
@@ -1555,7 +1711,12 @@ impl AppStore {
     fn draw_today_head(&mut self, s: &mut Surface, ui: &Ui, y: f32) {
         let x = ui.pt(TODAY_MARGIN);
         self.put(s, ui, &date_label(), 15.0, Weight::Semibold, SECONDARY, false, x, y + ui.pt(30.0));
-        self.put(s, ui, "Today", 34.0, Weight::Bold, label(), false, x, y + ui.pt(70.0));
+        self.put(s, ui, tab_name(Tab::Today, self.desktop), 34.0, Weight::Bold, label(), false, x, y + ui.pt(70.0));
+        if self.desktop {
+            // the account sits at the foot of the sidebar on the desktop
+            s.fill_rect(x as usize, (y + ui.pt(95.0)) as usize, (self.w as f32 - 2.0 * x) as usize, 1, sep());
+            return;
+        }
         let (cx, cy, r) = (self.w as f32 - x - ui.pt(16.0), y + ui.pt(70.0), ui.pt(15.5));
         paint(s, (cx - r - 4.0, cy - r - 4.0, 2.0 * r + 8.0, 2.0 * r + 8.0), TINT, ring((cx, cy), r, ui.pt(2.0)));
         s.fill_rrect(cx - ui.pt(5.0), cy - ui.pt(11.0), ui.pt(10.0), ui.pt(10.0), ui.pt(5.0), TINT);
@@ -1790,7 +1951,7 @@ impl AppStore {
         let mid = ui.pt(STATUS_PT + 22.0);
         if let Some((back_tab, id)) = self.page.as_ref().map(|p| (p.back, p.id.clone())) {
             let history = self.page.as_ref().is_some_and(|p| p.history);
-            let prev = if history { self.find(&id).map(|a| a.name.clone()).unwrap_or_default() } else { TABS.iter().find(|(t, _)| *t == back_tab).map_or("Back", |t| t.1).to_string() };
+            let prev = if history { self.find(&id).map(|a| a.name.clone()).unwrap_or_default() } else { Some(tab_name(back_tab, self.desktop)).filter(|n| !n.is_empty()).unwrap_or("Back").to_string() };
             let back = format!("\u{2039} {prev}");
             self.put(s, ui, &back, 17.0, Weight::Regular, TINT, false, ui.pt(MARGIN), mid);
             if history {
@@ -1802,7 +1963,7 @@ impl AppStore {
                 self.put(s, ui, &name, 17.0, Weight::Semibold, label(), false, (self.w as f32 - tw) / 2.0, mid);
             }
         } else if self.tab != Tab::Today && self.scroll.offset() > ui.pt(40.0) {
-            let name = TABS.iter().find(|(t, _)| *t == self.tab).map_or("", |t| t.1);
+            let name = tab_name(self.tab, self.desktop);
             let tw = ui.measure(name, 17.0, Weight::Semibold);
             self.put(s, ui, name, 17.0, Weight::Semibold, label(), false, (self.w as f32 - tw) / 2.0, mid);
             s.fill_rect(0, top.saturating_sub(1), self.w as usize, 1, sep());
@@ -1839,17 +2000,62 @@ impl AppStore {
             self.draw_pane(&mut pane, ui);
             s.fill_rect(0, 0, self.sidebar as usize, self.h as usize, cell());
             s.blit(&image, self.sidebar, 0, 255, 255);
-            self.put(s, ui, "App Store", 20.0, Weight::Semibold, label(), false, ui.pt(20.0), ui.pt(40.0));
-            let current = self.page.as_ref().map_or(self.tab, |p| p.back);
-            for (i, (tab, name)) in TABS.iter().enumerate() {
-                let y = ui.pt(76.0 + i as f32 * 44.0);
-                if *tab == current { s.fill_rrect(ui.pt(8.0), y, self.sidebar as f32 - ui.pt(16.0), ui.pt(40.0), ui.pt(8.0), super::ui::SIDEBAR_SELECTED); }
-                tab_glyph(s, ui, *tab, (ui.pt(28.0), y + ui.pt(20.0)), if *tab == current { WHITE } else { TINT });
-                self.put(s, ui, name, 15.0, Weight::Regular, label(), false, ui.pt(52.0), y + ui.pt(20.0));
-            }
+            self.draw_sidebar(s, ui);
             s.fill_rect(self.sidebar as usize - 1, 0, 1, self.h as usize, sep());
         } else { self.draw_pane(s, ui); }
         let _ = t;
+    }
+
+    /// The desktop sidebar: the search capsule (it shows the query), the sections with the Updates count, and the
+    /// local account's chip at the foot.
+    fn draw_sidebar(&mut self, s: &mut Surface, ui: &Ui) {
+        use super::ui::{MAC_BODY_PT, MAC_FOOTNOTE_PT, SIDEBAR_SELECTED};
+        let (fx, fy, fw, fh) = self.side_search_rect(ui);
+        // search fields are capsules
+        s.fill_rrect(fx, fy, fw, fh, fh / 2.0, fill());
+        let (gx, gy) = (fx + ui.pt(14.0), fy + fh / 2.0);
+        let u = ui.pt(1.0);
+        let b = (gx - 8.0 * u, gy - 8.0 * u, 16.0 * u, 16.0 * u);
+        paint(s, b, SECONDARY, ring((gx - 1.0 * u, gy - 1.0 * u), 4.5 * u, 1.4 * u));
+        paint(s, b, SECONDARY, segment((gx + 2.5 * u, gy + 2.5 * u), (gx + 6.0 * u, gy + 6.0 * u), 1.6 * u));
+        let searching = self.tab == Tab::Search && self.page.is_none();
+        let (text, ink) = if self.query.is_empty() { ("Search".to_string(), SECONDARY) } else { (self.query.clone(), label()) };
+        let room = fw - ui.pt(36.0);
+        let text = ui.fit(&text, MAC_BODY_PT, room);
+        let shown = if searching { format!("{text}|") } else { text };
+        self.put(s, ui, &shown, MAC_BODY_PT, Weight::Regular, ink, false, fx + ui.pt(26.0), gy);
+        let current = self.page.as_ref().map_or(self.tab, |p| p.back);
+        let badge = self.update_count();
+        for (i, (tab, name)) in SIDEBAR.iter().enumerate() {
+            let (x, y, w, h) = self.side_row_rect(ui, i);
+            let on = *tab == current;
+            if on {
+                s.fill_rrect(x, y, w, h, ui.pt(9.0), SIDEBAR_SELECTED);
+            }
+            let mid = y + h / 2.0;
+            side_glyph(s, ui, *tab, (x + ui.pt(16.0), mid), if on { WHITE } else { TINT });
+            self.put(s, ui, name, MAC_BODY_PT, Weight::Regular, if on { WHITE } else { label() }, false, x + ui.pt(34.0), mid);
+            if *tab == Tab::Updates && badge > 0 {
+                let n = badge.min(99).to_string();
+                self.put(s, ui, &n, MAC_FOOTNOTE_PT, Weight::Semibold, if on { WHITE } else { SECONDARY }, true, x + w - ui.pt(10.0), mid);
+            }
+        }
+        // the local account, as the reference's account chip: initials on a disc, then the name
+        let (ax, ay, aw, ah) = self.side_account_rect(ui);
+        s.fill_rect(ax as usize, ay as usize, aw as usize, 1, sep());
+        let r = ui.pt(14.0);
+        let (cx, cy) = (ax + ui.pt(6.0) + r, ay + ah / 2.0);
+        s.fill_rrect(cx - r, cy - r, 2.0 * r, 2.0 * r, r, SECONDARY);
+        let account = self.account.clone();
+        let letters = initials(&account);
+        let lw = ui.measure(&letters, MAC_FOOTNOTE_PT, Weight::Semibold);
+        self.put(s, ui, &letters, MAC_FOOTNOTE_PT, Weight::Semibold, WHITE, false, cx - lw / 2.0, cy);
+        if badge > 0 {
+            let d = ui.pt(14.0);
+            s.fill_rrect(cx + r - d * 0.6, cy - r - d * 0.3, d, d, d / 2.0, super::ui::SYSTEM_RED);
+        }
+        let name = ui.fit(&account, MAC_BODY_PT, aw - 2.0 * r - ui.pt(18.0));
+        self.put(s, ui, &name, MAC_BODY_PT, Weight::Semibold, label(), false, cx + r + ui.pt(10.0), cy);
     }
 
     fn draw_pane(&mut self, s: &mut Surface, ui: &Ui) {
@@ -1965,8 +2171,57 @@ pub fn size_text(bytes: u64) -> String {
     if bytes == 0 { "-".into() } else { bifrost_ui::format::byte_count(bytes) }
 }
 
-fn tab_glyph(s: &mut Surface, ui: &Ui, tab: Tab, (cx, cy): (f32, f32), color: u32) {
-    let u = ui.pt(1.0);
+/// A desktop sidebar glyph: the tab bar's glyph at two thirds of its size, drawn about `(cx, cy)`.
+fn side_glyph(s: &mut Surface, ui: &Ui, tab: Tab, (cx, cy): (f32, f32), color: u32) {
+    let u = ui.pt(1.0) * 0.66;
+    let b = (cx - 14.0 * u, cy - 14.0 * u, 28.0 * u, 28.0 * u);
+    let t = 2.6 * u;
+    match tab {
+        // a star of four strokes: Discover
+        Tab::Today => {
+            for (dx, dy) in [(0.0, 11.0), (11.0, 0.0), (8.0, 8.0), (8.0, -8.0)] {
+                paint(s, b, color, segment((cx - dx * u, cy - dy * u), (cx + dx * u, cy + dy * u), t));
+            }
+        }
+        // a pencil: Create
+        Tab::Shelf(Shelf::Create) => {
+            paint(s, b, color, segment((cx - 9.0 * u, cy + 9.0 * u), (cx + 7.0 * u, cy - 7.0 * u), t + 1.6 * u));
+            paint(s, b, color, segment((cx - 11.0 * u, cy + 11.0 * u), (cx - 8.0 * u, cy + 8.0 * u), t));
+        }
+        // a paper plane: Work
+        Tab::Shelf(Shelf::Work) => {
+            let (a, c, d) = ((cx - 11.0 * u, cy), (cx + 11.0 * u, cy - 10.0 * u), (cx + 1.0 * u, cy + 11.0 * u));
+            paint(s, b, color, segment(a, c, t));
+            paint(s, b, color, segment(c, d, t));
+            paint(s, b, color, segment(d, (cx - 1.0 * u, cy + 1.0 * u), t));
+            paint(s, b, color, segment((cx - 1.0 * u, cy + 1.0 * u), a, t));
+        }
+        // a game controller's stick: Play
+        Tab::Shelf(Shelf::Play) => tab_glyph_scaled(s, ui, Tab::Games, (cx, cy), color, 0.66),
+        // angle brackets: Develop
+        Tab::Shelf(Shelf::Develop) => {
+            paint(s, b, color, segment((cx - 4.0 * u, cy - 9.0 * u), (cx - 11.0 * u, cy), t));
+            paint(s, b, color, segment((cx - 11.0 * u, cy), (cx - 4.0 * u, cy + 9.0 * u), t));
+            paint(s, b, color, segment((cx + 4.0 * u, cy - 9.0 * u), (cx + 11.0 * u, cy), t));
+            paint(s, b, color, segment((cx + 11.0 * u, cy), (cx + 4.0 * u, cy + 9.0 * u), t));
+        }
+        // a grid of four tiles: Categories
+        Tab::Categories => {
+            for (dx, dy) in [(-11.0, -11.0), (2.0, -11.0), (-11.0, 2.0), (2.0, 2.0)] {
+                s.stroke_rrect(cx + dx * u, cy + dy * u, 9.0 * u, 9.0 * u, 2.0 * u, t * 0.8, color);
+            }
+        }
+        other => tab_glyph_scaled(s, ui, other, (cx, cy), color, 0.66),
+    }
+}
+
+fn tab_glyph(s: &mut Surface, ui: &Ui, tab: Tab, centre: (f32, f32), color: u32) {
+    tab_glyph_scaled(s, ui, tab, centre, color, 1.0);
+}
+
+/// The tab bar's glyph for `tab` about `(cx, cy)`, `k` times its size.
+fn tab_glyph_scaled(s: &mut Surface, ui: &Ui, tab: Tab, (cx, cy): (f32, f32), color: u32, k: f32) {
+    let u = ui.pt(1.0) * k;
     let b = (cx - 14.0 * u, cy - 14.0 * u, 28.0 * u, 28.0 * u);
     let t = 2.2 * u;
     match tab {
@@ -1993,6 +2248,11 @@ fn tab_glyph(s: &mut Surface, ui: &Ui, tab: Tab, (cx, cy): (f32, f32), color: u3
         Tab::Search => {
             paint(s, b, color, ring((cx - 2.0 * u, cy - 2.0 * u), 8.0 * u, t));
             paint(s, b, color, segment((cx + 4.0 * u, cy + 4.0 * u), (cx + 11.0 * u, cy + 11.0 * u), t + 0.6 * u));
+        }
+        // the desktop-only sections are drawn by `side_glyph`; in the tab bar they would read as Apps
+        Tab::Shelf(_) | Tab::Categories => {
+            s.stroke_rrect(cx - 11.0 * u, cy - 11.0 * u, 15.0 * u, 15.0 * u, 3.0 * u, t, color);
+            s.stroke_rrect(cx - 4.0 * u, cy - 4.0 * u, 15.0 * u, 15.0 * u, 3.0 * u, t, color);
         }
     }
 }
@@ -2102,7 +2362,7 @@ mod tests {
     fn services_are_hidden_from_every_tab_and_the_badge() {
         let mut s = with_background_packages();
         s.installed = vec![InstalledApp { kind: "service".into(), ..local("is.o.update", "1.0.0") }, local("is.o.audio", "1.0.0")];
-        for tab in [Tab::Today, Tab::Games, Tab::Apps, Tab::Updates, Tab::Search] {
+        for tab in [Tab::Today, Tab::Games, Tab::Apps, Tab::Updates, Tab::Search, Tab::Categories, Tab::Shelf(Shelf::Develop), Tab::Shelf(Shelf::Play)] {
             s.tab = tab;
             let ids = listed(&s);
             assert!(!ids.iter().any(|i| i == "is.o.update" || i == "is.o.audio"), "{tab:?} lists a service");
@@ -2356,7 +2616,10 @@ mod tests {
     fn typing_filters_the_search_tab_and_says_when_nothing_matches() {
         let mut s = store();
         s.tab = Tab::Search;
-        assert!(s.rows().contains(&Row::Search), "the query field is the first row under the title");
+        assert!(!s.rows().contains(&Row::Search), "on the desktop the query field is the sidebar's");
+        s.desktop = false;
+        assert!(s.rows().contains(&Row::Search), "the tablet's query field is the first row under the title");
+        s.desktop = true;
         s.key(Out::Text("chess".into()));
         assert_eq!(s.query, "chess");
         assert_eq!(listed(&s), vec!["is.o.chess".to_string()]);
@@ -2389,6 +2652,7 @@ mod tests {
     fn tapping_the_query_field_asks_for_the_keyboard_once() {
         let ui = crate::shell::tests::ui();
         let mut s = store();
+        s.desktop = false;
         s.tab = Tab::Search;
         let mut field_row_y = None;
         s.each_row(&ui, |r, ry, _| {
@@ -2400,6 +2664,73 @@ mod tests {
         s.activate(&ui, Target::SearchField);
         assert!(s.take_keyboard_request());
         assert!(!s.take_keyboard_request(), "the request is read once");
+    }
+
+    /// A catalogue with one app per shelf category and one with a category no shelf names.
+    fn shelved() -> AppStore {
+        let mut s = store();
+        s.catalog = parse_catalog(&format!(
+            r#"{{"apps":[{{"id":"is.o.draw","name":"Draw","version":"1.0.0","sha256":"{SUM}","package":"/a","category":"Graphics & Design"}},
+                {{"id":"is.o.words","name":"Words","version":"1.0.0","sha256":"{SUM}","package":"/b","category":"Productivity"}},
+                {{"id":"is.o.chess","name":"Chess","version":"1.0.0","sha256":"{SUM}","package":"/c","category":"Games"}},
+                {{"id":"is.o.calc","name":"Calc","version":"1.0.0","sha256":"{SUM}","package":"/d","category":"Utilities"}},
+                {{"id":"is.o.maps","name":"Maps","version":"1.0.0","sha256":"{SUM}","package":"/e","category":"Travel"}}]}}"#
+        ))
+        .unwrap();
+        s
+    }
+
+    #[test]
+    fn each_shelf_lists_the_apps_of_its_categories_and_categories_lists_them_all() {
+        let mut s = shelved();
+        for (shelf, want) in [(Shelf::Create, "is.o.draw"), (Shelf::Work, "is.o.words"), (Shelf::Play, "is.o.chess"), (Shelf::Develop, "is.o.calc")] {
+            s.tab = Tab::Shelf(shelf);
+            assert_eq!(listed(&s), vec![want.to_string()], "{shelf:?}");
+            assert_eq!(s.rows()[0], Row::Title(shelf.title()));
+        }
+        s.tab = Tab::Categories;
+        let mut all = listed(&s);
+        all.sort();
+        assert_eq!(all, ["is.o.calc", "is.o.chess", "is.o.draw", "is.o.maps", "is.o.words"], "a category no shelf names is still listed");
+        assert!(s.rows().contains(&Row::Header("Travel".into(), false)));
+        s.catalog.retain(|a| a.id != "is.o.draw");
+        s.tab = Tab::Shelf(Shelf::Create);
+        assert!(s.rows().iter().any(|r| matches!(r, Row::Note(n) if n.contains("create"))), "an empty shelf says so");
+    }
+
+    #[test]
+    fn the_desktop_sidebar_has_a_search_field_the_sections_and_the_account_chip() {
+        let ui = crate::shell::tests::ui();
+        let mut s = shelved();
+        let names: Vec<&str> = SIDEBAR.iter().map(|(_, n)| *n).collect();
+        assert_eq!(names, ["Discover", "Create", "Work", "Play", "Develop", "Categories", "Updates"]);
+        let (fx, fy, fw, fh) = s.side_search_rect(&ui);
+        assert!(fy + fh <= s.side_row_rect(&ui, 0).1, "the search field sits above the sections");
+        assert_eq!(s.side_hit(&ui, fx + fw / 2.0, fy + fh / 2.0), Some(SideHit::Search));
+        let (rx, ry, rw, rh) = s.side_row_rect(&ui, 3);
+        assert_eq!(s.side_hit(&ui, rx + rw / 2.0, ry + rh / 2.0), Some(SideHit::Tab(Tab::Shelf(Shelf::Play))));
+        let (ax, ay, aw, ah) = s.side_account_rect(&ui);
+        assert!(ay > s.side_row_rect(&ui, SIDEBAR.len() - 1).1, "the account chip is at the foot");
+        assert_eq!(s.side_hit(&ui, ax + aw / 2.0, ay + ah / 2.0), Some(SideHit::Account));
+        // a click on the field opens the results and raises the keyboard; typing filters them
+        s.touch(&ui, Event::Up(fx + fw / 2.0, fy + fh / 2.0), 0.0);
+        assert_eq!(s.tab, Tab::Search);
+        assert!(s.take_keyboard_request() && s.text_focused());
+        s.key(Out::Text("draw".into()));
+        assert_eq!(listed(&s), vec!["is.o.draw".to_string()]);
+        s.touch(&ui, Event::Up(rx + rw / 2.0, ry + rh / 2.0), 0.0);
+        assert_eq!(s.tab, Tab::Shelf(Shelf::Play));
+        assert_eq!(tab_name(Tab::Today, true), "Discover");
+        assert_eq!(tab_name(Tab::Today, false), "Today");
+        assert_eq!(tab_name(Tab::Categories, false), "Categories");
+    }
+
+    #[test]
+    fn the_account_chip_shows_the_local_names_initials() {
+        assert_eq!(initials("Ada Lovelace"), "AL");
+        assert_eq!(initials("owner"), "O");
+        assert_eq!(initials("Ólafur Búi Ólafsson"), "ÓB");
+        assert_eq!(initials(""), "");
     }
 
     #[test]
