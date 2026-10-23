@@ -13,6 +13,10 @@ All sheets default to refusal: an unanswered question never grants.
   Allow or Don't Allow.
 - The answer is written with `privacy_permissions::decide`, the same store the Settings switches use.
 - Grants are saved to `privacy-grants.tsv` beside the other shell files, including the contacts answers.
+- The microphone is enforced for every app by the media service (`audiod`, `is.olibuijr.audio`): a `RecordStart` is
+  refused unless `privacy-grants.tsv` has `media <app> microphone 1` for the app whose `appdata/<id>` the take is written
+  to. Sandboxed apps get no `/dev/snd`, so the service is the only way to the microphone. Voice Memos asks with
+  `privacy_permissions::request` on Record and starts the take only after Allow.
 
 ## Password (`auth_sheet.rs`, `services/local_auth.rs`)
 

@@ -22,7 +22,7 @@ use bifrost_app::controls::textview::TextView;
 use bifrost_app::controls::{Node, Rect, Role};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::widgets;
-use crate::services::{self, Ask, Want};
+use crate::services::{self, Ask, Gate, Want};
 use bifrost_app::audio_devices;
 use bifrost_app::privacy_permissions;
 use bifrost_app::controls::capture_access::Status;
@@ -165,6 +165,8 @@ const SPEED_LABEL_PT: f32 = 64.0;
 const CTL_SIDEBAR: u64 = 16;
 /// Frame poll period while recording or playing (ms).
 const POLL_MS: f64 = 100.0;
+/// How often a Record press waiting for the microphone answer asks the privacy service again (ms).
+const MIC_POLL_S: f64 = 500.0;
 /// how long a started recording or playback may take to show up in the service state
 const START_TIMEOUT_MS: f64 = 4_000.0;
 
@@ -226,6 +228,15 @@ enum Scope {
     Favorites,
     Folder(String),
     Deleted,
+}
+
+/// A Record press waiting for the person to answer the shell's microphone sheet.
+#[derive(Clone, Debug, PartialEq)]
+struct MicWait {
+    /// the take to start once allowed (a span replacement, or a plain recording)
+    replace: Option<Replacement>,
+    /// when to ask the privacy service again (ms)
+    poll_at: f64,
 }
 
 /// A span of a recording being replaced by the take in progress (seconds).
@@ -339,6 +350,8 @@ pub struct VoiceMemos {
     cache_style: (u32, u32, bool),
     /// microphone permission as the privacy service last answered it (None until an answer)
     mic: Option<Status>,
+    /// a Record press waiting for the microphone answer; nothing records until the person allows it
+    mic_wait: Option<MicWait>,
     /// the default input device, from the audio-devices service
     input_id: Option<String>,
     input_name: Option<String>,
@@ -417,6 +430,7 @@ impl VoiceMemos {
             cache: TextCache::default(),
             cache_style: (ui.s.to_bits(), ui.text_scale.to_bits(), ui.bold),
             mic: None,
+            mic_wait: None,
             input_id: None,
             input_name: None,
             inputs: Vec::new(),
@@ -448,9 +462,32 @@ impl VoiceMemos {
             Ask::Mic => {
                 self.mic = result.as_ref().ok().and_then(privacy_permissions::decode_status);
                 // the permission was turned off while recording: stop, so nothing is taken without it
-                if self.recording && matches!(self.mic, Some(Status::Denied | Status::Restricted)) {
+                if self.recording && !matches!(self.mic, Some(Status::Authorized)) && result.is_ok() {
                     self.finish_recording();
                     self.error = "Recording stopped: microphone access was turned off".into();
+                }
+                // a Record press waiting for the person's answer
+                if self.mic_wait.is_some() {
+                    match (result.is_ok(), self.mic) {
+                        (true, Some(Status::Authorized)) => {
+                            let wait = self.mic_wait.take();
+                            self.begin_take(wait.and_then(|w| w.replace));
+                        }
+                        (true, Some(Status::Denied)) => {
+                            self.mic_wait = None;
+                            self.error = "Microphone access was not allowed. Turn it on in Settings > Privacy > App Permissions.".into();
+                        }
+                        (true, Some(Status::Restricted)) => {
+                            self.mic_wait = None;
+                            self.error = "Microphone access is restricted on this PC.".into();
+                        }
+                        // still open: the sheet is up; `tick` asks again shortly
+                        (true, _) => {}
+                        (false, _) => {
+                            self.mic_wait = None;
+                            self.error = "Cannot record: the microphone permission could not be asked".into();
+                        }
+                    }
                 }
             }
             Ask::Devices => match result.as_ref().ok().map(audio_devices::decode_list) {
@@ -674,11 +711,24 @@ impl VoiceMemos {
         self.error.clear();
         self.notice.clear();
         self.input_level = 0.0;
-        // the microphone permission is checked on the last answer; this press asks again for the next one
-        self.wants.push(Want::MicStatus);
-        if let Err(message) = services::record_gate(self.mic) {
-            self.error = message.into();
-            return;
+        self.mic_wait = None;
+        match services::record_gate(self.mic) {
+            Gate::Record => {
+                // checked on the last answer; this press asks again so a change in Settings shows next time
+                self.wants.push(Want::MicStatus);
+            }
+            Gate::Refuse(message) => {
+                self.wants.push(Want::MicStatus);
+                self.error = message.into();
+                return;
+            }
+            Gate::Ask => {
+                // nothing is captured before consent: the shell asks the person, and the take starts once they allow it
+                self.wants.push(Want::MicRequest);
+                self.mic_wait = Some(MicWait { replace, poll_at: self.now + MIC_POLL_S });
+                self.dirty = true;
+                return;
+            }
         }
         self.live.clear();
         let unix = self.wall.now(self.now);
@@ -2086,6 +2136,12 @@ impl VoiceMemos {
             }
         }
         self.sync_audio(t);
+        if let Some(wait) = &mut self.mic_wait {
+            if t >= wait.poll_at {
+                wait.poll_at = t + MIC_POLL_S;
+                self.wants.push(Want::MicStatus);
+            }
+        }
         self.dirty
     }
 
@@ -2093,6 +2149,9 @@ impl VoiceMemos {
         let mut due = ((self.recording && !self.is_paused()) || self.playing.is_some()).then_some(t + POLL_MS);
         if due.is_none() {
             due = self.audio.next_wake(t);
+        }
+        if let Some(wait) = &self.mic_wait {
+            due = Some(due.map_or(wait.poll_at, |d: f64| d.min(wait.poll_at)));
         }
         for wake in [self.editor.as_ref().and_then(|e| e.field.next_wake(t)), self.scroll.animating().then_some(t)] {
             if let Some(w) = wake {
@@ -2252,7 +2311,11 @@ impl VoiceMemos {
             let msg = ui.fit(&self.error, MAC_BODY_PT, pw - 2.0 * m);
             self.centred(s, ui, &msg, MAC_CALLOUT_PT, RED, (px, slot.1 - ui.pt(44.0), pw, ui.pt(28.0)));
         } else {
-            let caption = services::caption(self.mic, self.input_name.as_deref(), &self.notice);
+            let caption = if self.mic_wait.is_some() {
+                "Waiting for microphone access".to_string()
+            } else {
+                services::caption(self.mic, self.input_name.as_deref(), &self.notice)
+            };
             if !caption.is_empty() {
                 let msg = ui.fit(&caption, MAC_CALLOUT_PT, pw - 2.0 * m);
                 self.centred(s, ui, &msg, MAC_CALLOUT_PT, LABEL_2.now(), (px, slot.1 - ui.pt(44.0), pw, ui.pt(28.0)));
@@ -2642,11 +2705,52 @@ mod tests {
     }
 
     #[test]
-    fn a_missing_privacy_service_leaves_the_microphone_unknown_and_recording_allowed() {
+    fn a_missing_privacy_service_never_records() {
         let (mut app, _) = app("noservice");
         app.reply(Ask::Mic, &Err("no service privacy".into()));
         assert!(app.mic.is_none());
-        assert!(services::record_gate(app.mic).is_ok());
+        app.take_wants();
+        app.start_recording();
+        assert!(!app.recording, "no answer, no capture");
+        assert!(matches!(app.take_wants().as_slice(), [Want::MicRequest]));
+        app.reply(Ask::Mic, &Err("no service privacy".into()));
+        assert!(!app.recording && app.mic_wait.is_none());
+        assert!(app.error.contains("could not be asked"), "{}", app.error);
+    }
+
+    #[test]
+    fn an_unanswered_microphone_asks_the_person_and_records_only_after_allow() {
+        let (mut app, ui) = app("consent");
+        app.reply(Ask::Mic, &Ok(parse(r#"{"media":"microphone","status":"not_determined"}"#)));
+        app.take_wants();
+        app.start_recording();
+        assert!(!app.recording, "nothing is captured before consent");
+        assert!(matches!(app.take_wants().as_slice(), [Want::MicRequest]), "the shell's Allow sheet is asked for");
+        // the request reply: still open while the sheet is up
+        app.reply(Ask::Mic, &Ok(parse(r#"{"media":"microphone","status":"not_determined"}"#)));
+        assert!(!app.recording && app.mic_wait.is_some());
+        // the model polls the status while it waits
+        let due = app.next_wake(0.0).expect("a wake while waiting");
+        app.tick(&ui, due);
+        assert!(matches!(app.take_wants().as_slice(), [Want::MicStatus]));
+        // the person allowed it: the take starts (the audio service may be absent in a test, which only sets an error)
+        app.reply(Ask::Mic, &Ok(parse(r#"{"media":"microphone","status":"authorized"}"#)));
+        assert!(app.mic_wait.is_none());
+        assert_eq!(app.mic, Some(Status::Authorized));
+        assert!(app.recording || app.error.contains("audio service"), "{}", app.error);
+        let _ = std::fs::remove_dir_all(&app.dir);
+    }
+
+    #[test]
+    fn a_dont_allow_answer_refuses_the_waiting_take() {
+        let (mut app, _) = app("dontallow");
+        app.take_wants();
+        app.start_recording();
+        assert!(app.mic_wait.is_some());
+        app.reply(Ask::Mic, &Ok(parse(r#"{"media":"microphone","status":"denied"}"#)));
+        assert!(!app.recording && app.mic_wait.is_none());
+        assert!(app.error.contains("not allowed"), "{}", app.error);
+        let _ = std::fs::remove_dir_all(&app.dir);
     }
 
     #[test]
