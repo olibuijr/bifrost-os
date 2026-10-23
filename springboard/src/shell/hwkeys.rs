@@ -360,6 +360,33 @@ impl HwKeys {
         self.text.set_layout(layout);
     }
 
+    /// The pending dead key as the mark it shows (´ for the Icelandic acute), while it waits for a letter
+    /// (`shell::dead_key` shows it as marked text).
+    pub fn dead_mark(&self) -> Option<char> {
+        self.text.pending_mark()
+    }
+
+    /// A key-down other than a modifier takes the pending dead key: only the key that goes on to type (`typed`) gets it
+    /// back (`restore_dead`), so a shortcut, a menu key or an edit key cancels it.
+    pub fn take_dead(&mut self, code: u16) -> Option<char> {
+        let modifier = matches!(code, KEY_LEFTCTRL | KEY_RIGHTCTRL | KEY_LEFTSHIFT | KEY_RIGHTSHIFT | KEY_LEFTALT | KEY_RIGHTALT | KEY_LEFTMETA | KEY_RIGHTMETA | KEY_CAPSLOCK);
+        if modifier { None } else { self.text.take_dead() }
+    }
+
+    pub fn restore_dead(&mut self, dead: Option<char>) {
+        self.text.restore_dead(dead);
+    }
+
+    /// Drops the pending dead key (a click, a focus change).
+    pub fn cancel_dead(&mut self) {
+        self.text.take_dead();
+    }
+
+    /// Esc or Backspace with no Ctrl, Alt or Cmd: with a dead key's mark showing, the key only cancels the mark.
+    pub fn cancels_dead(&self, code: u16) -> bool {
+        matches!(code, KEY_ESC | KEY_BACKSPACE) && self.ctrl == 0 && self.meta == 0 && self.alt <= self.altgr
+    }
+
     /// True while a Shift key is held (Photos extends the selection to the last tapped photo with it).
     pub fn shift_held(&self) -> bool {
         self.shift > 0
@@ -1911,6 +1938,37 @@ mod tests {
         assert_eq!(k.typed(40), None, "the acute is a dead key: it waits for a letter");
         k.key(40, false);
         assert_eq!(k.typed(30), Some(Out::Text("á".into())));
+    }
+
+    #[test]
+    fn a_dead_key_is_taken_by_the_next_key_and_given_back_only_to_typing() {
+        use crate::installer::keymaps::layout_index;
+        let mut k = HwKeys::default();
+        k.set_layout(layout_index("is").unwrap());
+        assert_eq!(k.typed(40), None);
+        assert_eq!(k.dead_mark(), Some('´'), "the pending acute shows its mark");
+        // a modifier going down keeps it; the letter after Shift composes
+        assert_eq!(k.take_dead(KEY_LEFTSHIFT), None);
+        assert_eq!(k.dead_mark(), Some('´'));
+        // the next key takes it and gives it back for typing: ´ + a = á
+        let dead = k.take_dead(KEY_A);
+        assert!(dead.is_some());
+        assert_eq!(k.dead_mark(), None);
+        k.restore_dead(dead);
+        assert_eq!(k.typed(KEY_A), Some(Out::Text("á".into())));
+        assert_eq!(k.dead_mark(), None);
+        // taken by a key that does not type (a shortcut, Home): the letter after it is plain
+        k.typed(40);
+        k.take_dead(KEY_HOME);
+        assert_eq!(k.typed(KEY_A), Some(Out::Text("a".into())));
+        // Esc and Backspace cancel a showing mark; with Cmd held they are shortcuts
+        assert!(k.cancels_dead(KEY_ESC) && k.cancels_dead(KEY_BACKSPACE) && !k.cancels_dead(KEY_A));
+        k.key(KEY_LEFTMETA, true);
+        assert!(!k.cancels_dead(KEY_BACKSPACE));
+        k.key(KEY_LEFTMETA, false);
+        k.typed(40);
+        k.cancel_dead();
+        assert_eq!(k.dead_mark(), None);
     }
 
     #[test]

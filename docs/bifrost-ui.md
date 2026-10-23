@@ -5302,8 +5302,15 @@ routing, focus and the late lost focus, closed windows, menu items and text edit
 `marked_text_and_accent_holds_follow_the_key_window`); SDK `marked_text_and_accent_holds_reach_the_key_window_with_its_id`;
 proto `an_accent_hold_goes_to_the_key_window_and_a_bad_code_point_is_refused`. Hardware dead keys (the Icelandic `´` then
 `a`) are composed by the shell's keymap (`installer::keymaps::Keyboard::press`) and arrive in the key window as the composed
-text `á`, so they never were marked text; the reference shows the pending accent as marked text, which the shell does not
-send yet. Not verified: no build or test run was done
+text `á`. Since 2026-10-23 the pending accent shows as marked text, as the reference shows it (`shell::dead_key`): the
+key window gets `SetMarkedText("´")` (underlined by the field), and the next key sends `UnmarkText { commit: false }` before
+the composed text. A click, a shortcut or edit key, Esc and Backspace (which only cancel), a layout switch, and the typing
+moving to another window, app or field take the mark back the same way; it is never committed. The shell's Search field and
+a Wayland client's field (the input method's preedit) show it too; Settings search and the sheets compose without showing it
+(their fields are not reachable from the key path yet). A dead key with a letter it has no composition for still types the
+letter alone (the reference types the accent and the letter). Tests: keymaps
+`a_pending_dead_key_shows_its_mark_until_a_letter_composes_or_it_is_taken`, hwkeys
+`a_dead_key_is_taken_by_the_next_key_and_given_back_only_to_typing`, `dead_key` tests (Search, Wayland, no target). Not verified: no build or test run was done
 for this change; the desk's `sync_key_windows` has no test of its own. Apps: Contacts 1.14.0 (Cmd+W), Dictionary 0.6.0 (own
 keys and Copy per window, Cmd+W, prefs read back before each change), Activity Monitor 0.9.0 (Cmd+W in CPU windows).
 `min_shell` is not raised: an older shell sends none of these messages.
