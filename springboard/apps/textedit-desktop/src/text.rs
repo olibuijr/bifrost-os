@@ -15,27 +15,81 @@ pub const FAMILY_NAMES: [&str; 3] = ["Arial", "Times New Roman", "Courier New"];
 /// installed on the system and in the user's fonts folder, by name (`NSFontManager.availableFontFamilies`). At most 256.
 /// Tests see the base families only, so they do not depend on the machine's fonts.
 pub fn families() -> &'static [String] {
-    static ALL: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+    &catalogue().0
+}
+
+/// The font file family `font` is drawn with (`family_font`): an installed family's own file, an installed stand-in
+/// for Times and Courier (`stand_in`), and `None` for Helvetica, which is drawn in the system font, and when nothing
+/// stands in. The page then draws that run in the system font.
+pub fn family_file(font: u8) -> Option<&'static str> {
+    catalogue().1.get(font as usize).and_then(|p| p.as_deref())
+}
+
+/// The family names and the file each is drawn with, in `Style::font` order.
+fn catalogue() -> &'static (Vec<String>, Vec<Option<String>>) {
+    static ALL: std::sync::OnceLock<(Vec<String>, Vec<Option<String>>)> = std::sync::OnceLock::new();
     ALL.get_or_init(|| {
-        let mut v: Vec<String> = FAMILIES.iter().map(|f| f.to_string()).collect();
         #[cfg(not(test))]
-        for name in installed_families() {
-            if v.len() < 256 && !v.iter().any(|f| f.eq_ignore_ascii_case(&name)) {
-                v.push(name);
-            }
-        }
-        v
+        let installed = installed_families();
+        #[cfg(test)]
+        let installed: Vec<InstalledFamily> = Vec::new();
+        build_catalogue(&installed)
     })
+}
+
+/// One installed family: its name, the file that stands for it, and whether it is fixed pitch.
+#[derive(Clone, Debug, PartialEq)]
+pub struct InstalledFamily {
+    pub name: String,
+    pub path: String,
+    pub mono: bool,
+}
+
+/// The catalogue for the installed families `installed`: the base families first (with their stand-ins), then each
+/// installed family once, at most 256 in all.
+pub fn build_catalogue(installed: &[InstalledFamily]) -> (Vec<String>, Vec<Option<String>>) {
+    let mut names: Vec<String> = FAMILIES.iter().map(|f| f.to_string()).collect();
+    let mut files: Vec<Option<String>> = (0..FAMILIES.len()).map(|base| stand_in(installed, base)).collect();
+    for family in installed {
+        if names.len() < 256 && !names.iter().any(|f| f.eq_ignore_ascii_case(&family.name)) {
+            names.push(family.name.clone());
+            files.push(Some(family.path.clone()));
+        }
+    }
+    (names, files)
+}
+
+/// The installed family that draws base family `base` (index into `FAMILIES`): the family itself or a metric-compatible
+/// open one when installed, else any serif for Times and any fixed-pitch family for Courier. Helvetica has none: the
+/// system font is a sans serif already.
+pub fn stand_in(installed: &[InstalledFamily], base: usize) -> Option<String> {
+    let named = |names: &[&str]| names.iter().find_map(|n| installed.iter().find(|f| f.name.eq_ignore_ascii_case(n)));
+    let found = match base {
+        1 => named(&["Times", "Times New Roman", "Tinos", "Liberation Serif", "Nimbus Roman", "Noto Serif", "DejaVu Serif"]).or_else(|| {
+            installed.iter().find(|f| {
+                let l = f.name.to_lowercase();
+                l.contains("serif") && !l.contains("sans") && !f.mono
+            })
+        }),
+        2 => named(&["Courier", "Courier New", "Cousine", "Liberation Mono", "Nimbus Mono PS", "Noto Sans Mono", "DejaVu Sans Mono"])
+            .or_else(|| installed.iter().find(|f| f.mono)),
+        _ => None,
+    };
+    found.map(|f| f.path.clone())
 }
 
 /// The installed font families (the system's fonts and `~/.local/share/fonts`), sorted by name.
 #[cfg(not(test))]
-fn installed_families() -> Vec<String> {
+fn installed_families() -> Vec<InstalledFamily> {
     let mut dirs = vec![std::path::PathBuf::from("/usr/share/fonts")];
     if let Some(home) = std::env::var_os("HOME") {
         dirs.push(std::path::Path::new(&home).join(".local/share/fonts"));
     }
-    bifrost_app::fontprefs::installed(&dirs).into_iter().map(|f| f.family).filter(|f| !f.trim().is_empty()).collect()
+    bifrost_app::fontprefs::installed(&dirs)
+        .into_iter()
+        .filter(|f| !f.family.trim().is_empty())
+        .map(|f| InstalledFamily { name: f.family, path: f.path, mono: f.mono })
+        .collect()
 }
 
 /// The index of the family named exactly `name` (any case), when a document can use it.
@@ -1253,6 +1307,35 @@ fn find_index(hay: &[char], needle: &[char], from: usize, forward: bool, case_se
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn fam(name: &str, mono: bool) -> InstalledFamily {
+        InstalledFamily { name: name.into(), path: format!("/fonts/{name}.ttf"), mono }
+    }
+
+    #[test]
+    fn the_catalogue_lists_the_base_families_then_each_installed_one_with_its_file() {
+        let installed = [fam("Inter", false), fam("Liberation Serif", false), fam("helvetica", false), fam("JetBrains Mono", true)];
+        let (names, files) = build_catalogue(&installed);
+        assert_eq!(names, ["Helvetica", "Times", "Courier", "Inter", "Liberation Serif", "JetBrains Mono"], "an installed Helvetica is the base one");
+        assert_eq!(files.len(), names.len());
+        assert_eq!(files[0], None, "Helvetica draws in the system font");
+        assert_eq!(files[1].as_deref(), Some("/fonts/Liberation Serif.ttf"), "Times draws in an installed serif");
+        assert_eq!(files[2].as_deref(), Some("/fonts/JetBrains Mono.ttf"), "Courier draws in a fixed-pitch family");
+        assert_eq!(files[3].as_deref(), Some("/fonts/Inter.ttf"));
+        // more than 256 families are cut at 256
+        let many: Vec<InstalledFamily> = (0..300).map(|i| fam(&format!("F{i}"), false)).collect();
+        assert_eq!(build_catalogue(&many).0.len(), 256);
+    }
+
+    #[test]
+    fn a_base_family_prefers_its_own_name_then_a_compatible_one_and_else_has_no_stand_in() {
+        let installed = [fam("Noto Sans", false), fam("DejaVu Serif", false), fam("Tinos", false), fam("Cousine", true), fam("Courier New", true)];
+        assert_eq!(stand_in(&installed, 1).as_deref(), Some("/fonts/Tinos.ttf"), "Tinos before DejaVu Serif");
+        assert_eq!(stand_in(&installed, 2).as_deref(), Some("/fonts/Courier New.ttf"), "the family itself first");
+        assert_eq!(stand_in(&[fam("Noto Sans", false), fam("Noto Sans Serif Display", false)], 1), None, "a sans is no serif");
+        assert_eq!(stand_in(&[fam("Noto Sans", false)], 2), None);
+        assert_eq!(stand_in(&installed, 0), None);
+    }
 
     fn plain(s: &str) -> Text {
         let mut t = Text::new();

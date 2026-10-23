@@ -8,6 +8,7 @@
 
 mod docx;
 mod encoding;
+mod family_font;
 mod document;
 mod font_panel;
 mod format_bar;
@@ -1170,6 +1171,46 @@ impl TextEditApp {
         true
     }
 
+    /// `scrollWheel:` at (`x`, `y`) window pixels: the content moved `dy` pixels (negative for a wheel turned down, which
+    /// shows what is below). Over the Fonts panel's family column the families scroll; elsewhere on a floating panel, or
+    /// while a sheet is open, it is used up; over the page the page scrolls, within the text. True when something moved.
+    fn wheel(&mut self, ctx: &Ctx, x: f32, y: f32, dy: f32) -> bool {
+        if !(dy.is_finite() && x.is_finite() && y.is_finite()) || dy == 0.0 {
+            return false;
+        }
+        let (px, py, dy) = (x / ctx.ui.s, y / ctx.ui.s, dy / ctx.ui.s);
+        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        if let Some(panel) = self.fonts.as_mut() {
+            let layout = font_panel::fonts_layout(geom.width, geom.body_top);
+            if layout.family.contains(px, py) {
+                return panel.wheel(dy);
+            }
+            if layout.frame.contains(px, py) {
+                return false;
+            }
+        }
+        if self.colors_panel && font_panel::colors_layout(geom.width, geom.body_top).frame.contains(px, py) {
+            return false;
+        }
+        let sheet = self.props.is_some()
+            || self.spacing_sheet.is_some()
+            || self.encodings_panel
+            || self.settings
+            || self.spelling_panel
+            || self.plain_sheet
+            || self.line.is_some()
+            || self.link.is_some();
+        if sheet || py < geom.body_top || py >= geom.body_bottom {
+            return false;
+        }
+        let view_h = geom.body_bottom - geom.body_top;
+        let most = self.cache.as_ref().map_or(0.0, |c| (c.layout.height - view_h).max(0.0));
+        let to = (self.scroll - dy).clamp(0.0, most);
+        let moved = to != self.scroll;
+        self.scroll = to;
+        moved
+    }
+
     /// A press while the font panel is open: a family, typeface or size applies to the selection at once; the arrows
     /// scroll the families; Done closes. A press elsewhere is used up (the panel floats over the page).
     fn touch_fonts(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
@@ -2266,7 +2307,7 @@ impl TextEditApp {
         items.push(menu_item(Action::ShowFonts, "Show Fonts", "cmd+t", enabled).checked(self.fonts.is_some()).depth(1));
         items.push(menu_item(Action::ShowColors, "Show Colors", "cmd+shift+c", enabled).checked(self.colors_panel).depth(1));
         items.push(AppMenuItem::separator().depth(1));
-        for index in 0..text::FAMILIES.len() as u8 {
+        for index in format_bar::font_menu_families(style.font) {
             items.push(menu_item(Action::Font(index), view::family_name(index), "", rich).checked(style.font == index).depth(1));
         }
         items.push(AppMenuItem::submenu("Text"));
@@ -2641,6 +2682,18 @@ impl App for TextEditApp {
                 None => false,
             },
             Input::Activate(node) => self.activate(ctx, node),
+            _ => false,
+        }
+    }
+
+    /// The scroll wheel, in place of the drag the shell would emulate for it (which placed the caret and selected text).
+    fn pointer_interest(&self) -> u32 {
+        bifrost_app::pointer_events::WHEEL
+    }
+
+    fn pointer(&mut self, ctx: &Ctx, ev: &bifrost_app::pointer_events::PointerEvent) -> bool {
+        match *ev {
+            bifrost_app::pointer_events::PointerEvent::Wheel { x, y, dy, .. } => self.wheel(ctx, x, y, dy),
             _ => false,
         }
     }
@@ -3189,6 +3242,52 @@ mod tests {
 
     fn selected(app: &TextEditApp) -> String {
         active_doc(&app.docs).unwrap().text.selected_text().unwrap_or_default()
+    }
+
+    fn wheel_at(app: &mut TextEditApp, ctx: &Ctx, (x, y): (f32, f32), dy: f32) -> bool {
+        use bifrost_app::pointer_events::{Phase, PointerEvent};
+        let ev = PointerEvent::Wheel { x: x * ctx.ui.s, y: y * ctx.ui.s, dx: 0.0, dy: dy * ctx.ui.s, precise: false, phase: Phase::None, momentum: Phase::None };
+        app.pointer(ctx, &ev)
+    }
+
+    /// E2E: the wheel scrolls the page (the emulated drag it replaces placed the caret and selected text), stops at the
+    /// ends of the text, and over the Fonts panel it goes to the family column, never to the page under the panel.
+    #[test]
+    fn the_wheel_scrolls_the_page_and_over_the_fonts_panel_its_families() {
+        let ctx = window(1200, 780);
+        assert_eq!(TextEditApp::new().pointer_interest(), bifrost_app::pointer_events::WHEEL);
+        let long: String = (0..200).map(|i| format!("line {i}\n")).collect();
+        let mut app = app_with_text(&long, 0..0);
+        let geom = app.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        app.ensure_layout(&ctx.ui, geom.text_w);
+        let page = (geom.text_x + 10.0, geom.body_top + 40.0);
+        assert!(wheel_at(&mut app, &ctx, page, -40.0), "a wheel turned down shows the text below");
+        assert_eq!(app.scroll, 40.0);
+        assert_eq!(selected(&app), "", "no text is selected by the wheel");
+        assert_eq!(active_doc(&app.docs).unwrap().text.head(), 0, "and the caret stays");
+        assert!(wheel_at(&mut app, &ctx, page, 15.0));
+        assert_eq!(app.scroll, 25.0);
+        wheel_at(&mut app, &ctx, page, 1.0e6);
+        assert_eq!(app.scroll, 0.0, "the top of the text");
+        assert!(!wheel_at(&mut app, &ctx, page, 30.0), "already at the top");
+        wheel_at(&mut app, &ctx, page, -1.0e6);
+        let bottom = app.scroll;
+        assert!(bottom > 0.0 && bottom < app.cache.as_ref().unwrap().layout.height, "the end of the text: {bottom}");
+        assert!(!wheel_at(&mut app, &ctx, (page.0, geom.body_top - 4.0), 30.0), "the format bar does not scroll");
+
+        // the Fonts panel: its family column takes the wheel (three families fit, so nothing moves) and the page under
+        // the panel keeps its place
+        app.fonts = Some(font_panel::Fonts::new(0));
+        let layout = font_panel::fonts_layout(geom.width, geom.body_top);
+        let column = (layout.family.x + 4.0, layout.family.y + 4.0);
+        assert!(!wheel_at(&mut app, &ctx, column, 30.0));
+        assert!(!wheel_at(&mut app, &ctx, (layout.done.x + 1.0, layout.done.y + 1.0), 30.0));
+        assert_eq!(app.scroll, bottom);
+        // beside the panel the page still scrolls
+        let beside = (layout.frame.x + layout.frame.w + 4.0, geom.body_bottom - 10.0);
+        assert!(!layout.frame.contains(beside.0, beside.1));
+        assert!(wheel_at(&mut app, &ctx, beside, 30.0));
+        assert_eq!(app.scroll, bottom - 30.0);
     }
 
     #[test]

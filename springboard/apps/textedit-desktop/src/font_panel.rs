@@ -2,7 +2,8 @@
 //! family, the typeface and the size, and the colour panel (`NSColorPanel`) with the document's palette. Both float over
 //! the page like the app's other panels, apply a choice to the selection at once (as the shared panels do), and close
 //! with Done or Esc. The family column lists every family a document can use (`text::families`: the three base families,
-//! then the installed ones), scrolls with its arrows, Up and Down, and jumps to a family by typing its name.
+//! then the installed ones), scrolls with its arrows, Up and Down and the scroll wheel, and jumps to a family by typing
+//! its name.
 //!
 //! Layout and hit testing are pure (tested here); drawing goes through `Canvas`.
 
@@ -110,6 +111,26 @@ impl Fonts {
     /// Scrolls the family column by `rows` (negative is up).
     pub fn scroll(&mut self, rows: i32) {
         self.top = (self.top as i64 + rows as i64).clamp(0, Self::max_top() as i64) as usize;
+    }
+
+    /// `scrollWheel:` over the family column: the content moved `dy` points (negative for a wheel turned down, which
+    /// shows the families below). The column moves a row for each row height of travel, at least one a notch. True
+    /// when it moved.
+    pub fn wheel(&mut self, dy: f32) -> bool {
+        self.wheel_in(dy, families().len())
+    }
+
+    /// `wheel` for a column of `count` families.
+    fn wheel_in(&mut self, dy: f32, count: usize) -> bool {
+        if !dy.is_finite() || dy == 0.0 {
+            return false;
+        }
+        let rows = (-dy / ROW_H).round();
+        let rows = if rows == 0.0 { -dy.signum() } else { rows };
+        let most = count.saturating_sub(ROWS) as i64;
+        let before = self.top;
+        self.top = (self.top as i64 + rows as i64).clamp(0, most) as usize;
+        self.top != before
     }
 
     /// Type-select: the first family whose name starts with what was typed (keys within a second continue the name).
@@ -298,6 +319,27 @@ mod tests {
         assert_eq!(p.type_select("q", 5100.0), None, "no family starts with \"cq\"");
         p.scroll(-5);
         assert_eq!(p.top, 0);
+    }
+
+    #[test]
+    fn the_wheel_scrolls_the_family_column_by_rows_within_the_list() {
+        let mut p = Fonts::default();
+        // a wheel turned down a little shows the next family: at least one row a notch
+        assert!(p.wheel_in(-3.0, 40));
+        assert_eq!(p.top, 1);
+        assert!(p.wheel_in(-ROW_H * 4.0, 40));
+        assert_eq!(p.top, 5);
+        assert!(p.wheel_in(ROW_H * 2.0, 40), "turned up, the families above");
+        assert_eq!(p.top, 3);
+        p.wheel_in(-10_000.0, 40);
+        assert_eq!(p.top, 40 - ROWS, "the last family stays at the bottom row");
+        assert!(!p.wheel_in(-30.0, 40), "already at the end");
+        p.wheel_in(10_000.0, 40);
+        assert_eq!(p.top, 0);
+        assert!(!p.wheel_in(-30.0, ROWS), "a column that fits does not scroll");
+        assert!(!p.wheel_in(f32::NAN, 40));
+        // tests see the three base families only: the column fits
+        assert!(!p.wheel(-30.0));
     }
 
     #[test]
