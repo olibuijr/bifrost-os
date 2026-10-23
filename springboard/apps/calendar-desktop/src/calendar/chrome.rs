@@ -263,6 +263,7 @@ impl Calendar {
         }
         nodes.extend(self.search_nodes(ui));
         nodes.extend(self.pop_nodes(ui));
+        nodes.extend(self.cal_menu_nodes());
         if self.editor.is_some() {
             nodes.extend(self.editor_nodes(ui));
         } else if self.colour_sheet.is_some() {

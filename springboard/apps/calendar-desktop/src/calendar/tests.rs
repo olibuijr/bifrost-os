@@ -1789,6 +1789,10 @@ fn calendars_are_made_shown_renamed_and_removed_only_when_empty() {
     type_text(&mut c, &ui, "Standup");
     c.key(&ui, Out::Hide, 3.0);
     c.activate(&ui, Target::Calendar, 4.0);
+    assert!(c.cal_menu_open(), "the Calendar row opens the menu of calendars");
+    c.key(&ui, Out::Named("Down"), 4.1);
+    c.key(&ui, Out::Enter, 4.2);
+    assert!(!c.cal_menu_open());
     assert_eq!(c.editor.as_ref().unwrap().extra.calendar, 2);
     tap_bar(&mut c, &ui, chrome::B_SAVE, 5.0);
     let id = c.events[0].id;
@@ -2657,6 +2661,10 @@ fn the_popover_calendar_pop_up_picks_the_calendar_the_event_goes_to() {
     tap_bar(&mut c, &ui, chrome::B_ADD, 2.0);
     assert_eq!(c.event_pop.as_ref().unwrap().calendar, c.extras().default_id());
     c.activate(&ui, Target::Pop(eventpop::PopPart::Calendar), 3.0);
+    assert!(c.cal_menu_open(), "the pop-up opens the menu of calendars");
+    c.key(&ui, Out::Named("Down"), 3.1);
+    c.key(&ui, Out::Enter, 3.2);
+    assert!(!c.cal_menu_open() && c.event_pop_open(), "the pick closes the menu and keeps the popover");
     assert_eq!(c.event_pop.as_ref().unwrap().calendar, 2);
     draw_once(&mut c, &ui);
     c.key(&ui, Out::Enter, 4.0);
@@ -2745,6 +2753,74 @@ fn the_sidebar_mini_month_pages_and_shows_a_clicked_day() {
     assert_eq!(c.mini_month_shown(), date(2026, 10, 1), "Today brings the mini month back to the selected day");
     c.activate(&ui, Target::Sidebar, 500.0);
     assert!(c.mini_rect(&ui).is_none(), "hidden with the calendar list");
+}
+
+#[test]
+fn the_calendar_pop_up_is_a_menu_of_calendars_with_their_colours() {
+    let ui = crate::test_ui();
+    let temp = Temp::new();
+    let mut c = new(&ui, temp.file());
+    for name in ["Work", "Home"] {
+        assert!(c.perform(&ui, Command::NewCalendar, 0.0));
+        type_text(&mut c, &ui, name);
+        c.key(&ui, Out::Enter, 1.0);
+    }
+    tap_bar(&mut c, &ui, chrome::B_ADD, 2.0);
+    let l = c.pop_layout(&ui).expect("the popover");
+    let k = ui.pt(1.0);
+    tap(&mut c, &ui, l.calendar.x + 10.0, l.calendar.y + l.calendar.h / 2.0, 3.0);
+    let m = c.cal_menu.as_ref().expect("a click on the pop-up opens its menu");
+    assert_eq!(m.ids, c.extras().choices().into_iter().map(|(id, _)| id).collect::<Vec<_>>(), "one row per calendar");
+    assert_eq!(m.menu.selected(), Some(0), "the current calendar is checked");
+    for (item, id) in m.menu.items.iter().zip(&m.ids) {
+        assert_eq!(item.swatch, Some(c.calendar_colour(*id)), "each row has its calendar's colour dot");
+    }
+    let row = m.rect;
+    // the current row lies over the button, as a pop-up menu opens
+    assert!(row.y <= l.calendar.y + l.calendar.h && row.y + row.h >= l.calendar.y);
+    draw_once(&mut c, &ui);
+    // a click on the third row (Home) picks it and closes the menu; the popover stays
+    let (rows, _) = c.cal_menu.as_ref().unwrap().menu.rows(bifrost_app::widgets::MENU_ROW_PT, bifrost_app::widgets::MENU_SEPARATOR_PT, bifrost_app::widgets::MENU_PAD_PT);
+    let (x, y) = (row.x + 30.0, row.y + rows[2].0 + rows[2].1 / 2.0);
+    c.touch(&ui, Event::Down(x * k, y * k), 4.0);
+    c.touch(&ui, Event::Up(x * k, y * k), 4.02);
+    assert!(!c.cal_menu_open() && c.event_pop_open());
+    assert_eq!(c.event_pop.as_ref().unwrap().calendar, 3);
+    // a click outside the menu closes it and changes nothing; Escape too
+    tap(&mut c, &ui, l.calendar.x + 10.0, l.calendar.y + l.calendar.h / 2.0, 5.0);
+    assert!(c.cal_menu_open());
+    c.touch(&ui, Event::Down(1.0, ui.pt(300.0)), 6.0);
+    c.touch(&ui, Event::Up(1.0, ui.pt(300.0)), 6.02);
+    assert!(!c.cal_menu_open() && c.event_pop_open(), "the outside click is the menu's, not the popover's");
+    assert_eq!(c.event_pop.as_ref().unwrap().calendar, 3);
+    tap(&mut c, &ui, l.calendar.x + 10.0, l.calendar.y + l.calendar.h / 2.0, 7.0);
+    assert!(c.escape(&ui, 8.0));
+    assert!(!c.cal_menu_open() && c.event_pop_open(), "Escape closes the menu before the popover");
+}
+
+#[test]
+fn the_forms_calendar_row_opens_the_menu_and_a_row_picks_it() {
+    let ui = crate::test_ui();
+    let temp = Temp::new();
+    let mut c = new(&ui, temp.file());
+    assert!(c.perform(&ui, Command::NewCalendar, 0.0));
+    type_text(&mut c, &ui, "Work");
+    c.key(&ui, Out::Enter, 1.0);
+    new_form(&mut c, &ui, 2.0);
+    c.key(&ui, Out::Hide, 3.0);
+    c.activate(&ui, Target::Calendar, 4.0);
+    assert!(c.cal_menu_open());
+    let items: Vec<String> = c.controls(&ui).into_iter().filter(|n| n.role == bifrost_app::controls::Role::MenuItem).map(|n| n.label).collect();
+    assert_eq!(items, vec!["Calendar".to_string(), "Work".to_string()], "the rows are menu items for assistive technology");
+    draw_once(&mut c, &ui);
+    let m = c.cal_menu.as_ref().unwrap();
+    let (rows, _) = m.menu.rows(bifrost_app::widgets::MENU_ROW_PT, bifrost_app::widgets::MENU_SEPARATOR_PT, bifrost_app::widgets::MENU_PAD_PT);
+    let k = ui.pt(1.0);
+    let (x, y) = (m.rect.x + 30.0, m.rect.y + rows[1].0 + rows[1].1 / 2.0);
+    c.touch(&ui, Event::Down(x * k, y * k), 5.0);
+    c.touch(&ui, Event::Up(x * k, y * k), 5.02);
+    assert!(!c.cal_menu_open() && c.editor.is_some(), "the pick closes the menu and keeps the form");
+    assert_eq!(c.editor.as_ref().unwrap().extra.calendar, 2);
 }
 
 #[test]
