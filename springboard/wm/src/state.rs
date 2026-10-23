@@ -161,6 +161,9 @@ pub struct WmState {
     pub bifrost_window_level: smithay::reexports::wayland_server::backend::GlobalId,
     /// The clients that bound it and the frame each was last told for its toplevels (`report_frames`).
     pub frame_reports: crate::window_level::FrameReports,
+    /// Night Shift for every output (`set_white_point`): the shell's target, the fade towards it, and how the backend
+    /// applies it (`white_point::Mode`, reported to the shell when it binds).
+    pub white_point: crate::white_point::WhitePoint,
     /// `bifrost_window_capture_v1` (the shell captures one window's pixels; shell only, `window_capture.rs`).
     pub bifrost_window_capture: smithay::reexports::wayland_server::backend::GlobalId,
     /// Content serials and snapshots for window capture.
@@ -282,6 +285,7 @@ impl WmState {
             bifrost_material: crate::bifrost_material::init(&dh),
             bifrost_window_level: crate::window_level::init(&dh),
             frame_reports: Default::default(),
+            white_point: Default::default(),
             bifrost_window_capture: crate::window_capture::init(&dh),
             window_capture: Default::default(),
             hidden: Vec::new(),

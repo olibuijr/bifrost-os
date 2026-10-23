@@ -2,7 +2,15 @@
 //! input devices, libinput reads input, and Smithay's DRM compositor presents on the first connected display at its
 //! native size and fastest refresh.
 
-use std::{cell::Cell, error::Error, path::Path, rc::Rc, time::Duration};
+use std::{
+    cell::Cell,
+    error::Error,
+    os::fd::{AsRawFd, FromRawFd, OwnedFd},
+    path::Path,
+    rc::Rc,
+    sync::atomic::{AtomicI32, Ordering},
+    time::{Duration, Instant},
+};
 
 use smithay::{
     backend::{
@@ -30,7 +38,7 @@ use smithay::{
     },
     output::{Mode as WlMode, Output, PhysicalProperties, Subpixel},
     reexports::{
-        calloop::{timer::{TimeoutAction, Timer}, EventLoop, LoopHandle},
+        calloop::{generic::Generic, timer::{TimeoutAction, Timer}, EventLoop, Interest, LoopHandle, Mode as IoMode, PostAction},
         drm::control::{connector, crtc, Device as ControlDevice, Mode as DrmMode, ModeTypeFlags},
         input::Libinput,
         rustix::fs::OFlags,
@@ -39,7 +47,13 @@ use smithay::{
     utils::{DeviceFd, Transform},
 };
 
-use crate::{scene::SceneElement, session_protocols::{CaptureSpec, ModeInfo}, state::WmState, window_capture::WindowCaptureSpec};
+use crate::{
+    scene::SceneElement,
+    session_protocols::{CaptureSpec, ModeInfo},
+    state::WmState,
+    white_point::{self, Mode as WhiteMode, MultiplyElement, WHITE},
+    window_capture::WindowCaptureSpec,
+};
 
 pub(crate) const CLEAR: [f32; 4] = [0.06, 0.06, 0.08, 1.0];
 const SUPPORTED: &[Fourcc] = &[Fourcc::Argb8888, Fourcc::Xrgb8888, Fourcc::Abgr8888, Fourcc::Xbgr8888];
@@ -65,6 +79,114 @@ struct Drm {
     shutdown: Shutdown,
     /// The session is switched away (VT switch): nothing is composed or flipped until it comes back (WM-16).
     paused: bool,
+    /// The CRTC's gamma ramp, when the display has one: Night Shift in `white_point::Mode::Hardware`.
+    gamma: Option<Gamma>,
+    /// Night Shift's final pass in `white_point::Mode::Composited` (kept so its id and commit last between frames).
+    night_pass: MultiplyElement,
+}
+
+/// The CRTC's gamma ramp, programmed with the output's white point (`white_point.rs`): the display controller does the
+/// multiply on scanout, so Night Shift costs no GPU work and tints whatever is shown, planes and cursor included. The
+/// legacy gamma ioctl is used; on an atomic driver the kernel turns it into the GAMMA_LUT blob of the CRTC, and smithay's
+/// commits never touch that property, so the ramp stays until it is set again.
+struct Gamma {
+    fd: DrmDeviceFd,
+    crtc: crtc::Handle,
+    /// The ramp the display had when the session started (its calibration), per channel; put back on exit.
+    base: [Vec<u16>; 3],
+    /// The white point the ramp shows; None when it must be programmed again (the session came back from a VT switch,
+    /// where another DRM master may have changed it).
+    shown: Option<[f32; 3]>,
+    /// When the ramp was last set, for `white_point::ramp_due`.
+    at: Option<Instant>,
+}
+
+impl Gamma {
+    /// The ramp of `crtc`, or None when it has none (gamma size 0) or `BIFROST_WM_NIGHT=composited` asks for the pass.
+    fn probe(fd: &DrmDeviceFd, crtc: crtc::Handle) -> Option<Gamma> {
+        if std::env::var("BIFROST_WM_NIGHT").is_ok_and(|v| v == "composited") {
+            return None;
+        }
+        let len = fd.get_crtc(crtc).ok()?.gamma_length() as usize;
+        if len < 2 {
+            return None;
+        }
+        let (mut r, mut g, mut b) = (vec![0u16; len], vec![0u16; len], vec![0u16; len]);
+        let read = fd.get_gamma(crtc, &mut r, &mut g, &mut b).is_ok();
+        let calibrated = read
+            && [&r, &g, &b].iter().all(|c| white_point::usable_base(c, len))
+            && !white_point::leftover_tint(&r, &g, &b);
+        let base = if calibrated { [r, g, b] } else { [white_point::linear(len), white_point::linear(len), white_point::linear(len)] };
+        eprintln!("bifrost-wm: Night Shift on the CRTC gamma ramp ({len} entries{})", if calibrated { "" } else { ", identity base" });
+        // an identity base replaces whatever ramp was read, so it is programmed on the first step
+        Some(Gamma { fd: fd.clone(), crtc, base, shown: if calibrated { Some(WHITE) } else { None }, at: None })
+    }
+
+    /// Programs the ramp for white point `f`.
+    fn show(&mut self, f: [f32; 3]) -> std::io::Result<()> {
+        let [r, g, b] = [0, 1, 2].map(|i| white_point::ramp(&self.base[i], f[i]));
+        self.fd.set_gamma(self.crtc, &r, &g, &b)?;
+        self.shown = Some(f);
+        self.at = Some(Instant::now());
+        Ok(())
+    }
+
+    /// Puts the display's own ramp back (exit). Needs the DRM master, so it cannot run once a VT switch took it.
+    fn restore(&mut self) {
+        if self.shown == Some(WHITE) {
+            return;
+        }
+        match self.fd.set_gamma(self.crtc, &self.base[0], &self.base[1], &self.base[2]) {
+            Ok(()) => self.shown = Some(WHITE),
+            Err(e) => eprintln!("bifrost-wm: gamma restore: {e}"),
+        }
+    }
+}
+
+/// The signals that end the session; the window server puts the display's gamma ramp back before it goes.
+const EXIT_SIGNALS: [libc::c_int; 3] = [libc::SIGTERM, libc::SIGINT, libc::SIGHUP];
+/// The write end of the exit pipe (`exit_signals`), for the signal handler.
+static EXIT_PIPE: AtomicI32 = AtomicI32::new(-1);
+
+extern "C" fn on_exit_signal(sig: libc::c_int) {
+    let fd = EXIT_PIPE.load(Ordering::Relaxed);
+    if fd >= 0 {
+        let b = sig as u8;
+        // SAFETY: write(2) is async-signal-safe; the byte lives on this stack frame
+        unsafe { libc::write(fd, (&b as *const u8).cast(), 1) };
+    }
+}
+
+/// A pipe that receives the number of each exit signal, so the event loop can restore the gamma ramp and then let the
+/// signal end the process as before (the handler is reset to the default and raised again). Handlers do not survive
+/// exec, so the clients the window server starts are not affected.
+fn exit_signals() -> Option<OwnedFd> {
+    let mut fds = [-1; 2];
+    // SAFETY: plain syscalls on a local array and zeroed sigaction structs
+    unsafe {
+        if libc::pipe2(fds.as_mut_ptr(), libc::O_CLOEXEC | libc::O_NONBLOCK) != 0 {
+            return None;
+        }
+        EXIT_PIPE.store(fds[1], Ordering::Relaxed);
+        for sig in EXIT_SIGNALS {
+            let mut sa: libc::sigaction = std::mem::zeroed();
+            sa.sa_sigaction = on_exit_signal as extern "C" fn(libc::c_int) as libc::sighandler_t;
+            libc::sigemptyset(&mut sa.sa_mask);
+            sa.sa_flags = libc::SA_RESTART;
+            libc::sigaction(sig, &sa, std::ptr::null_mut());
+        }
+        Some(OwnedFd::from_raw_fd(fds[0]))
+    }
+}
+
+/// How the white point is applied with this backend: the gamma ramp when the CRTC has one, else the GLES pass; the
+/// Vulkan scanout has no pass, so without a ramp the shell keeps tinting its own surfaces (`Mode::None`).
+pub(crate) fn white_point_mode(has_ramp: bool, vulkan: bool) -> WhiteMode {
+    match (has_ramp, vulkan) {
+        (true, _) => WhiteMode::Hardware,
+        (false, false) => WhiteMode::Composited,
+        (false, true) => WhiteMode::None,
+    }
 }
 
 /// The loader's frame as a render buffer of the panel's size (the boot's first fade and the shutdown fade share it).
@@ -138,6 +260,9 @@ pub fn run(socket: Option<&str>, command: &[String]) -> Result<(), Box<dyn Error
             Err(e) => eprintln!("bifrost-wm: vulkan scanout unavailable, GLES: {e}"),
         }
     }
+    // Night Shift (`white_point.rs`): decided before the first client binds, which hears the mode at once
+    state.white_point.mode = white_point_mode(drm.gamma.is_some(), drm.vulkan.is_some());
+    eprintln!("bifrost-wm: Night Shift {:?}", state.white_point.mode);
     // the shell's output mode requests (zwlr output management, `apply_outputs`) reach the scanout through this hook
     let b = Rc::new(std::cell::RefCell::new(drm));
     let hook = b.clone();
@@ -186,6 +311,10 @@ pub fn run(socket: Option<&str>, command: &[String]) -> Result<(), Box<dyn Error
             let mut d = b.borrow_mut();
             d.paused = false;
             d.pending = false;
+            // another DRM master may have set its own ramp meanwhile: the white point is programmed again
+            if let Some(g) = d.gamma.as_mut() {
+                g.shown = None;
+            }
             state.dirty = true;
             let _ = d.compositor.reset_state();
             if let Some(v) = d.vulkan.as_mut() {
@@ -193,6 +322,26 @@ pub fn run(socket: Option<&str>, command: &[String]) -> Result<(), Box<dyn Error
             }
         }
     })?;
+
+    // the end of the session puts the display's own gamma ramp back (a VT switch cannot: the master is gone by then)
+    if let Some(pipe) = exit_signals() {
+        let b = backend.clone();
+        event_loop.handle().insert_source(Generic::new(pipe, Interest::READ, IoMode::Level), move |_, pipe, _| {
+            let mut sig = [0u8; 1];
+            // SAFETY: a one-byte read into a local buffer from the pipe the source owns
+            if unsafe { libc::read(pipe.as_raw_fd(), sig.as_mut_ptr().cast(), 1) } == 1 {
+                if let Some(g) = b.borrow_mut().gamma.as_mut() {
+                    g.restore();
+                }
+                // SAFETY: back to the default action, then the same signal ends the process as it did before
+                unsafe {
+                    libc::signal(sig[0] as libc::c_int, libc::SIG_DFL);
+                    libc::raise(sig[0] as libc::c_int);
+                }
+            }
+            Ok(PostAction::Continue)
+        })?;
+    }
 
     // first frame, then a frame only when something changed (`WmState::dirty`) or the boot/shutdown fade runs; the timer
     // is the retry for a dirty flag set while a flip was pending, and costs one flag check per tick on a quiet desktop
@@ -244,11 +393,15 @@ pub fn run(socket: Option<&str>, command: &[String]) -> Result<(), Box<dyn Error
     eprintln!("bifrost-wm: DRM on {name}");
     std::env::set_var("WAYLAND_DISPLAY", &name);
     crate::spawn(command, &name);
-    event_loop.run(None, &mut state, |state| {
+    let ran = event_loop.run(None, &mut state, |state| {
         state.space.refresh();
         state.popups.cleanup();
         let _ = state.dh.flush_clients();
-    })?;
+    });
+    if let Some(g) = backend.borrow_mut().gamma.as_mut() {
+        g.restore();
+    }
+    ran?;
     Ok(())
 }
 
@@ -346,6 +499,7 @@ fn open_gpu(
     let (w, h) = mode.size();
     eprintln!("bifrost-wm: {}-{} {w}x{h}@{}", conn.interface().as_str(), conn.interface_id(), mode.vrefresh());
 
+    let gamma = Gamma::probe(&fd, crtc);
     let surface = device.create_surface(crtc, mode, &[conn.handle()])?;
     let allocator = GbmAllocator::new(gbm.clone(), GbmBufferFlags::RENDERING | GbmBufferFlags::SCANOUT);
     let exporter = GbmFramebufferExporter::new(gbm.clone(), None);
@@ -413,7 +567,21 @@ fn open_gpu(
     let boot = std::env::var_os("BIFROST_BOOT_FADE").map(|_| Boot::new(lw, lh));
     let mut renderer = renderer;
     let glass = crate::glass::Glass::new(&mut renderer)?;
-    Ok(Drm { renderer, compositor, output, modes, pointer, pending: false, boot, glass, vulkan: None, shutdown: Shutdown::default(), paused: false })
+    Ok(Drm {
+        renderer,
+        compositor,
+        output,
+        modes,
+        pointer,
+        pending: false,
+        boot,
+        glass,
+        vulkan: None,
+        shutdown: Shutdown::default(),
+        paused: false,
+        gamma,
+        night_pass: MultiplyElement::default(),
+    })
 }
 
 /// The shutdown fade (`crate::boot::shutdown_alpha`): once `SHUTDOWN_REQUEST` exists the boot frame comes back over the
@@ -506,6 +674,7 @@ impl Drm {
 
     /// Composes when the scene changed or a fade runs, and not while a flip is pending or the session is away.
     fn tick(&mut self, state: &mut WmState) {
+        self.step_white_point(state);
         if !should_render(self.paused, self.pending) {
             return;
         }
@@ -520,6 +689,40 @@ impl Drm {
             v.forget_buffers(&gone);
         }
         self.render(state);
+    }
+
+    /// Steps Night Shift's fade (`WmState::white_point`) and applies it: the gamma ramp (throttled to
+    /// `white_point::RAMP_STEP`, the last step always lands), or a new frame for the compositor pass. A ramp the driver
+    /// refuses falls back to the pass, and the shell is told the new mode. Nothing while the session is away.
+    fn step_white_point(&mut self, state: &mut WmState) {
+        if self.paused {
+            return;
+        }
+        let now = Instant::now();
+        let changed = state.white_point.advance(now);
+        match state.white_point.mode {
+            WhiteMode::Hardware => {
+                let Some(g) = self.gamma.as_mut() else { return };
+                let want = state.white_point.current();
+                if g.shown == Some(want) || !white_point::ramp_due(g.at, now, want == state.white_point.target()) {
+                    return;
+                }
+                if let Err(e) = g.show(want) {
+                    self.gamma = None;
+                    let mode = white_point_mode(false, self.vulkan.is_some());
+                    eprintln!("bifrost-wm: gamma ramp refused ({e}), Night Shift {mode:?}");
+                    state.white_point.mode = mode;
+                    state.frame_reports.send_white_point_mode(mode);
+                    state.dirty = true;
+                }
+            }
+            WhiteMode::Composited => {
+                if changed {
+                    state.dirty = true;
+                }
+            }
+            WhiteMode::None => {}
+        }
     }
 
     /// A window capture (`SessionHooks::capture_window`): one window alone at `spec.size`, RGBA over a transparent
@@ -589,6 +792,16 @@ impl Drm {
             let pos = state.pointer_location();
             if let Ok(e) = MemoryRenderBufferRenderElement::from_buffer(&mut self.renderer, (pos.x, pos.y), &self.pointer, None, None, None, Kind::Cursor) {
                 top.push(SceneElement::Memory(e));
+            }
+        }
+        // Night Shift's pass, frontmost: everything under it (the pointer too) is multiplied by the white point. Captures
+        // build their own scene without it, as they never see the gamma ramp either.
+        if state.white_point.mode == WhiteMode::Composited {
+            if let Some(size) = crate::transform::output_size(&output) {
+                self.night_pass.update(size, state.white_point.current());
+            }
+            if !self.night_pass.is_identity() {
+                top.insert(0, SceneElement::WhitePoint(self.night_pass.clone()));
             }
         }
         let elements = crate::scene::build(&mut self.renderer, state, &output, &mut self.glass, top);
@@ -694,6 +907,20 @@ mod tests {
         assert!(!has_display(&[(Connected, 0)]), "connected without modes is no display yet");
         assert!(has_display(&[(Disconnected, 0), (Connected, 3)]));
         assert!(has_display(&[(Unknown, 1)]), "a driver that cannot tell: let open_gpu decide");
+    }
+
+    #[test]
+    fn night_shift_takes_the_ramp_first_then_the_gles_pass() {
+        assert_eq!(white_point_mode(true, false), WhiteMode::Hardware, "the gamma ramp costs no GPU work");
+        assert_eq!(white_point_mode(true, true), WhiteMode::Hardware, "the ramp serves the Vulkan scanout too");
+        assert_eq!(white_point_mode(false, false), WhiteMode::Composited, "no ramp: the GLES final pass");
+        assert_eq!(white_point_mode(false, true), WhiteMode::None, "Vulkan has no pass yet: the shell tints itself");
+    }
+
+    #[test]
+    fn the_exit_signals_are_the_ones_that_end_a_session() {
+        assert_eq!(EXIT_SIGNALS, [libc::SIGTERM, libc::SIGINT, libc::SIGHUP]);
+        assert!(EXIT_SIGNALS.iter().all(|&s| (s as u8) as libc::c_int == s), "each fits the pipe's one byte");
     }
 
     #[test]

@@ -6,6 +6,9 @@
 //! client where, so it reports each frame (`frame`) to the client that owns the toplevel. The shell keeps its window
 //! rectangles from these reports instead of its own guess, so what it places on the screen from them (context menus,
 //! the share menu, taps) lands where the window really is.
+//!
+//! Version 5 adds the output's white point (Night Shift, `white_point.rs`): the shell sends the target, the window
+//! server fades to it and applies it to the whole output, and tells each manager how (`white_point_mode`).
 
 #[allow(
     dead_code,
@@ -48,14 +51,17 @@ use crate::{
     wm::{Level, Rect, WindowId},
 };
 
-/// The protocol version the global offers: 2 adds the `frame` event, 3 the `tile` request, 4 `set_origin`.
-pub const VERSION: u32 = 4;
+/// The protocol version the global offers: 2 adds the `frame` event, 3 the `tile` request, 4 `set_origin`, 5
+/// `set_white_point` and `white_point_mode`.
+pub const VERSION: u32 = 5;
 /// The version that introduced `frame`; a manager bound at an older version is never sent one.
 pub const FRAME_SINCE: u32 = 2;
 /// The version that introduced `tile`.
 pub const TILE_SINCE: u32 = 3;
 /// The version that introduced `set_origin`.
 pub const ORIGIN_SINCE: u32 = 4;
+/// The version that introduced `set_white_point` and `white_point_mode`.
+pub const WHITE_POINT_SINCE: u32 = 5;
 
 /// Most managers one client may keep bound: each one is a reporter that `report_frames` walks, so a client that binds in
 /// a loop would otherwise make every frame report cost more. The shell binds once.
@@ -70,6 +76,8 @@ pub enum LevelRequest {
     SetOrigin,
     /// `tile`: a placement of a mapped toplevel.
     Tile,
+    /// `set_white_point`: the tint of every output, every client's windows included.
+    WhitePoint,
 }
 
 /// Which requests a client may make. Every request names a surface of the requesting client only (a client holds no
@@ -80,7 +88,7 @@ pub enum LevelRequest {
 pub fn request_allowed(privileged: bool, request: LevelRequest) -> bool {
     match request {
         LevelRequest::SetLevel(Level::Normal) | LevelRequest::SetOrigin => true,
-        LevelRequest::SetLevel(_) | LevelRequest::Tile => privileged,
+        LevelRequest::SetLevel(_) | LevelRequest::Tile | LevelRequest::WhitePoint => privileged,
     }
 }
 
@@ -114,6 +122,15 @@ impl FrameReports {
         self.reporters.is_empty()
     }
 
+    /// Tells every manager bound at version 5 or later how the white point is applied now (`white_point_mode`), after
+    /// the backend changed the way (a refused gamma ramp falls back to the compositor pass).
+    pub fn send_white_point_mode(&mut self, mode: crate::white_point::Mode) {
+        self.reporters.retain(|r| r.manager.is_alive());
+        for reporter in &self.reporters {
+            send_mode(&reporter.manager, mode);
+        }
+    }
+
     /// How many live managers the client of `manager` already has registered.
     pub fn managers_of_client(&self, manager: &BifrostWindowLevelManagerV1) -> usize {
         self.reporters.iter().filter(|r| r.manager.is_alive() && r.manager.id().same_client_as(&manager.id())).count()
@@ -144,6 +161,13 @@ impl FrameReports {
     }
 }
 
+/// Sends `manager` the white point mode when it was bound at a version that has the event.
+fn send_mode(manager: &BifrostWindowLevelManagerV1, mode: crate::white_point::Mode) {
+    if manager.version() >= WHITE_POINT_SINCE {
+        manager.white_point_mode(mode.wire());
+    }
+}
+
 /// The level the shell asked for `surface`; normal when it asked for none.
 pub fn level(surface: &WlSurface) -> Level {
     with_states(surface, |s| s.data_map.get::<Mutex<Level>>().map(|l| *l.lock().unwrap_or_else(|p| p.into_inner())).unwrap_or_default())
@@ -166,6 +190,8 @@ pub fn from_wire(v: u32) -> Option<Level> {
 impl GlobalDispatch<BifrostWindowLevelManagerV1, ()> for WmState {
     fn bind(state: &mut Self, _: &DisplayHandle, _: &Client, resource: New<BifrostWindowLevelManagerV1>, _: &(), init: &mut DataInit<'_, Self>) {
         let manager = init.init(resource, ());
+        // the shell learns at once whether the window server tints the output, before it draws its first frame
+        send_mode(&manager, state.white_point.mode);
         // past the cap the object still works for requests but is never sent frames
         if state.frame_reports.managers_of_client(&manager) >= MAX_MANAGERS_PER_CLIENT {
             return;
@@ -225,6 +251,14 @@ impl Dispatch<BifrostWindowLevelManagerV1, ()> for WmState {
                 }
                 state.place_surface(&surface, placement);
             }
+            bifrost_window_level_manager_v1::Request::SetWhitePoint { red, green, blue } => {
+                if !request_allowed(privileged, LevelRequest::WhitePoint) {
+                    return;
+                }
+                state.white_point.set_target([red, green, blue]);
+                // the backend's tick steps the fade; a frame is due for the compositor pass
+                state.dirty = true;
+            }
             _ => {}
         }
     }
@@ -266,7 +300,9 @@ mod tests {
         assert!(xml.contains(&format!("<event name=\"frame\" since=\"{FRAME_SINCE}\">")));
         assert!(xml.contains(&format!("<request name=\"tile\" since=\"{TILE_SINCE}\">")));
         assert!(xml.contains(&format!("<request name=\"set_origin\" since=\"{ORIGIN_SINCE}\">")));
-        assert!(FRAME_SINCE <= TILE_SINCE && TILE_SINCE <= ORIGIN_SINCE && ORIGIN_SINCE <= VERSION);
+        assert!(xml.contains(&format!("<request name=\"set_white_point\" since=\"{WHITE_POINT_SINCE}\">")));
+        assert!(xml.contains(&format!("<event name=\"white_point_mode\" since=\"{WHITE_POINT_SINCE}\">")));
+        assert!(FRAME_SINCE <= TILE_SINCE && TILE_SINCE <= ORIGIN_SINCE && ORIGIN_SINCE <= WHITE_POINT_SINCE && WHITE_POINT_SINCE <= VERSION);
     }
 
     #[test]
@@ -287,11 +323,12 @@ mod tests {
         assert!(!request_allowed(false, LevelRequest::Tile));
         assert!(request_allowed(false, LevelRequest::SetLevel(Level::Normal)));
         assert!(request_allowed(false, LevelRequest::SetOrigin));
+        assert!(!request_allowed(false, LevelRequest::WhitePoint), "an app may not tint the whole screen");
     }
 
     #[test]
     fn the_shell_may_make_every_request() {
-        for request in [LevelRequest::SetLevel(Level::Normal), LevelRequest::SetLevel(Level::Floating), LevelRequest::SetOrigin, LevelRequest::Tile] {
+        for request in [LevelRequest::SetLevel(Level::Normal), LevelRequest::SetLevel(Level::Floating), LevelRequest::SetOrigin, LevelRequest::Tile, LevelRequest::WhitePoint] {
             assert!(request_allowed(true, request), "{request:?}");
         }
     }
