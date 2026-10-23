@@ -2725,6 +2725,14 @@ impl Shell {
 
     /// Touches over the desktop. `None` leaves the event to the normal path.
     pub(super) fn desk_event(&mut self, ev: Event, t: f64) -> Option<Vec<Effect>> {
+        let fx = self.desk_event_inner(ev, t);
+        // Settings ran at its window's size. Apply desktop changes only after with_size restored the output size.
+        let changes = self.settings.as_mut().map(|st| st.take_dock_changes()).unwrap_or_default();
+        for change in changes { let _ = self.dock_change(change, t); }
+        fx
+    }
+
+    fn desk_event_inner(&mut self, ev: Event, t: f64) -> Option<Vec<Effect>> {
         // a press is also a pointer position: the magnified row is centred on it before the hit test, so the press
         // resolves the icon drawn under the pointer, not one laid out around where the pointer was a moment ago (W2-23)
         if let Event::Down(x, y) = ev { let _ = self.dock_pointer(super::desktop_dock::Pointer::Hover(x, y), t); }

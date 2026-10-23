@@ -5366,4 +5366,23 @@ mod e2e_w3_tests {
         assert!(st.list().expect("list").nav().has_back());
         assert!(st.back_page(0.0), "Esc goes back to the pane");
     }
+    #[test]
+    fn dock_changes_from_a_filled_settings_window_use_the_output_size() {
+        use crate::shell::{AppId, Event, desktop_dock::{Change, Position}, desk::Desk};
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.desk_open(AppId::Settings, 1000.0);
+        let m = sh.desk_metrics();
+        let index = sh.desk.as_ref().unwrap().index_of(AppId::Settings).unwrap();
+        sh.desk.as_mut().unwrap().toggle_zoom(&m, index);
+        for change in [Change::Position(Position::Left), Change::Position(Position::Right), Change::Position(Position::Bottom), Change::Autohide] {
+            let m = sh.desk_metrics();
+            let body = sh.desk.as_ref().unwrap().wins[index].body(&m);
+            // This queue is consumed during a real Settings content event, inside with_size before the fix.
+            sh.settings.as_mut().unwrap().dock_out.push(change);
+            sh.desk_event(Event::Down((body.x + body.w / 2) as f32, (body.y + body.h / 2) as f32), 2000.0);
+            let expected = Desk::area(&sh.desk_metrics());
+            assert_eq!(sh.desk.as_ref().unwrap().wins[index].r, expected);
+        }
+    }
+
 }

@@ -3857,7 +3857,6 @@ impl Shell {
                 let changed = *st.options() != before || !fx.is_empty();
                 let changes = st.take_notify_changes();
                 let view = st.take_view_request();
-                let dock_changes = st.take_dock_changes();
                 let default_changes = st.take_defaults_changes();
                 let login_removed = st.take_login_removed();
                 let login_moved = st.take_login_moved();
@@ -3898,11 +3897,6 @@ impl Shell {
                 self.login_items_approve(login_approved);
                 self.fw_edits(firewall_edits, t);
                 self.login_items_move(login_moved);
-                if self.desk.is_some() {
-                    for change in dock_changes {
-                        let _ = self.dock_change(change, t);
-                    }
-                }
                 if changed || matches!(ev, Event::Up(..)) {
                     self.apply_options();
                 }

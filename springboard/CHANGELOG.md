@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.10.24 — 2026-10-23
+
+- Dock changes from Settings use the full output after window-local input handling finishes. A filled Settings window no longer loses space repeatedly when moving the Dock between edges or toggling auto-hide.
+- Auto-hide keeps the Dock visible while the pointer rests on a magnified icon above the plate.
+
 ## 0.10.23 — 2026-10-23
 
 - The Dock sits close to its selected screen edge with a consistent inset instead of floating half its own height above it. The complete row, including Downloads and Trash, shrinks to fit smaller screens.

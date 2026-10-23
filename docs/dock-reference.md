@@ -92,3 +92,31 @@ intentionally clipped; actual icons are separately checked below the bar.
 the changed source introduces zero new findings. SDK coverage is 91.9% (floor
 79%). Parity check/build pass; built coverage is 99% against the 80% gate.
 Logs are in `out/dock-2026-10-23/`. Device verification follows publication.
+
+## Device follow-up in 0.10.24
+
+Midget accepted `0.10.23.1792778326-1` from `9882b467ea02` with the service active
+and zero restarts. Bottom hover now displays the entire magnified Mail icon and
+label (`05-bottom-hover.png`); Left placement and a newly maximized Settings
+window reserve the correct edge (`10-work-area-left.png`).
+
+Switching the Dock from that filled Settings window to Right exposed a further
+bug: the Settings input path temporarily sizes the shell to its window body.
+Applying a Dock change within that path subtracted the bar and Dock from the
+already reduced window size. The screenshot and state show a window of
+2368×1370 on the 2560×1440 output, leaving too much space.
+
+The follow-up defers Settings' queued Dock changes until desktop event handling
+returns from `with_size`. Reflow therefore uses the output size. A regression
+enters the real Settings content-event path with a filled window and changes
+Left, Right, Bottom and auto-hide. Auto-hide also keeps a hovered magnified icon
+visible above the plate rather than scheduling a hide while still over the icon.
+Follow-up host validation passed: **6,566 shell tests, 0 failed, 22 ignored**,
+including both new regressions. Command (in `springboard/`):
+
+```sh
+BIFROST_LEAD_BUILD=1 ../tools/lead-run.sh cargo test --offline --profile fast -p springboard --lib --features desktop-wayland,testkit -j4 -- --test-threads=1
+```
+
+The full workspace already passed in this batch before the shell-only follow-up.
+Device verification of 0.10.24 follows publication.

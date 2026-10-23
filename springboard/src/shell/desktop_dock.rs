@@ -75,7 +75,7 @@ impl Shell {
    let hov=if in_zone{self.dock_live(bar,&rects,now).1.iter().position(|r|r.contains(x,y))}else{None};
    let d=self.desk.as_mut().unwrap();
    if d.dock_hover!=hov{d.dock_label_last=d.dock_hover;d.dock_label_ms=t;d.dock_hover=hov;self.dirty=true;}
-   if edge||inside||menu {d.dock_hide_at=None;dock_reveal(d,now);if !d.dock_visible{self.dirty=true;}}
+   if edge||in_zone||menu {d.dock_hide_at=None;dock_reveal(d,now);if !d.dock_visible{self.dirty=true;}}
    else if d.dock_autohides()&&d.dock_hide_at.is_none(){d.dock_hide_at=Some(t+550.);}
    return Some(vec![]);
   }
@@ -431,6 +431,17 @@ fn dock_reveal(d:&mut super::desk::Desk,now:f64){
    for(y,row)in px.chunks(sh.w as usize).enumerate().skip(m.menubar as usize){for(x,p)in row.iter().enumerate(){if *p!=0{assert!(surface.contains(x as f32,y as f32),"{position:?}: painted pixel {x},{y} was cropped by {surface:?}");}}}
    let before=surface;sh.desk_t=1600.;assert_eq!(sh.dock_surface_rect(),before,"hover frames keep a stable surface");
   }
+ }
+
+ #[test]
+ fn autohide_keeps_a_hovered_magnified_icon_visible_above_the_plate(){
+  let mut sh=desktop(1280,800);sh.desk.as_mut().unwrap().dock_preferences.autohide=true;
+  let m=sh.desk_metrics();let(_,bar,rest)=sh.desk_dock(&m);let r=rest[1];
+  sh.desktop_pointer((r.x+r.w/2) as f32,(r.y+r.h/2) as f32,false,1000.);
+  let r=sh.dock_live(bar,&rest,1.3).1[1];assert!(r.y<bar.y);
+  sh.desktop_pointer((r.x+r.w/2) as f32,r.y as f32+1.,false,1300.);
+  assert!(sh.desk.as_ref().unwrap().dock_hide_at.is_none());
+  sh.dock_tick(2500.);assert!(sh.dock_is_visible());
  }
 
  #[test]
