@@ -1,6 +1,6 @@
 id = "ai.storyteller.filmcraft"
 name = "FilmCraft"
-version = "0.10.0"
+version = "0.11.0"
 exec = "filmcraft"
 icon = "icon.png"
 min_shell = "0.4.97"
