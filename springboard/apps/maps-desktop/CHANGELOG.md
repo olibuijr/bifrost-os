@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.0 — 2026-10-23
+
+- Return moves to the first search result; zooming out keeps scaled tiles instead of black; Recents has a context menu.
+- Clicks in extra windows land under the pointer on scaled screens.
+
 ## 0.6.7
 
 - Maps refuses a redirect from an https tile, search or route server to plain http, and keeps cookies per host instead of one jar for every service. A server the person configured as http still works.

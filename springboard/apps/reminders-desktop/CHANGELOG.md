@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20.0 — 2026-10-23
+
+- Add List creates a list even while a reminder's details are open; one click selects; Return commits; Delete List asks first.
+- A completed strip with Clear, a Details popover from the row's i button, and list context menus.
+
 ## 1.19.2 — 2026-10-20
 
 - The Recently Deleted tile in the sidebar shows its whole name: a name wider than the tile wraps to a second line instead of ending in an ellipsis. The tiles are a little taller to make room.

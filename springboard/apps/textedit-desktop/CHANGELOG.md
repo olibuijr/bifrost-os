@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.13.0 — 2026-10-23
+
+- Fonts (Cmd+T) and Colors panels; text draws in its chosen family; all installed families are listed.
+- Find highlights matches live and Cmd+A works in its fields; the Format menu follows the reference with Font and Text submenus.
+- The page and the Fonts panel scroll with the wheel; the Edited mark clears after autosave.
+
 ## 1.12.2 - 2026-10-20
 
 - Cut, Copy, Paste, Select All, Undo and Redo from the keyboard act on the Find or Replace field, or on the sheet that is

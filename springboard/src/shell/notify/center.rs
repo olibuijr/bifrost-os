@@ -1758,7 +1758,8 @@ mod stack_tests {
     fn a_click_on_one_card_clears_only_that_notification() {
         let mut sh = three();
         open(&mut sh, 1000.0);
-        click(&mut sh, mid(sh.center_desk_layout().cards[0].rect), 2000.0);
+        let first = mid(sh.center_desk_layout().cards[0].rect);
+        click(&mut sh, first, 2000.0);
         let second = sh.center_desk_layout().cards[1];
         // keep clear of the card's X
         click(&mut sh, (second.rect.0 + 40.0, second.rect.1 + second.rect.3 / 2.0), 3000.0);
@@ -1772,7 +1773,8 @@ mod stack_tests {
     fn the_header_x_grows_into_clear_all_on_hover_and_clears_the_stack() {
         let mut sh = three();
         open(&mut sh, 1000.0);
-        click(&mut sh, mid(sh.center_desk_layout().cards[0].rect), 2000.0);
+        let first = mid(sh.center_desk_layout().cards[0].rect);
+        click(&mut sh, first, 2000.0);
         let card = sh.center_desk_layout().cards[2];
         click(&mut sh, mid(card.close), 2500.0);
         assert_eq!(sh.notify.store().len(), 2, "a card's X clears its notification");

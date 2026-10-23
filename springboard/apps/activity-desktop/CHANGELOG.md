@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.4 — 2026-10-23
+
+- Extra windows receive wheel and hover events.
+
 ## 0.10.3
 
 - BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.

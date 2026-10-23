@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+## 0.10.21 — 2026-10-23
+
+Five rounds of end-to-end testing on Midget, each followed by fixes.
+
+- Desktop: closing notification banners no longer leave a smeared card behind (the long-standing "artifacts after
+  Notification Center"); banners sit at the top right on their own surface, with hover close and options, and stacks
+  in Notification Center expand. A Do Not Disturb moon shows in the menu bar.
+- Windows: the Dark rim no longer builds up into a white border; corner and edge resizes follow the pointer and act on
+  the pressed window; built-in windows come to the front; a launch no longer resizes other windows; the green-button
+  menu stays open under the pointer; Return to Previous Size, Center and full screen restore correctly; desktops can be
+  removed in Overview; windows reopen where they closed; menu-bar submenus open as flyouts and long menus scroll.
+- While an app animates its Dock tile (a Clock timer, a download) the windows stay on screen.
+- Clicks carry Shift, Control, Option and Command to apps; extra windows get the wheel, hover and composed text; clicks
+  in extra windows land under the pointer on scaled screens; a pending dead key shows underlined.
+- Apps can resize their own window, open installed apps and open files in the app that declares the type.
+- Settings: back and forward history, Esc never hides the desktop, a live Sound page with devices, search over headers,
+  the reference sidebar groups, Appearance and Keyboard panes, Highlight Colour, Sidebar Icon Size and Show Scroll Bars
+  take effect, and Wallpaper applies on click with Add Photo and Add Folder.
+- Night Shift tints the whole screen (the display's gamma ramp, or a final pass in the window server); Screen Zoom
+  magnifies the whole output; Reduce Transparency and Increase Contrast take effect.
+- Control Center modules open detail views (Wi-Fi, Bluetooth, Focus, Display, Sound, Now Playing); a quit app's Now
+  Playing session goes away.
+- Lock screen: the password field shows typing and wrong-password feedback, with a growing wait after five misses.
+- Spotlight finds dictionary definitions and files in the home folder; the Apps grid reorders by dragging.
+- Privacy: requests to third-party services carry no cookies and a generic User-Agent; Voice Memos asks for the
+  microphone, the audio service refuses recordings without the grant, and native audio apps get the capture devices
+  only with it.
+- The Wallpaper Drift look no longer shrinks the desktop; the boot log no longer warns about power profiles or HOME.
+
 ## 0.10.20 — 2026-10-22
 
 - Wi-Fi: a device whose Wi-Fi is not run by NetworkManager (the tablet, where wpa_supplicant does it) no longer

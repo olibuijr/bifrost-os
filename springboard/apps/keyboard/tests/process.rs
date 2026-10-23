@@ -70,8 +70,8 @@ fn the_keyboard_process_draws_reports_its_height_and_types() {
     let y = (8.0 + 27.5) * SCALE;
     for (i, x) in (30..1170).step_by(40).enumerate() {
         let t = i as u32 * 100;
-        h.touch(TouchKind::Down, 0, x as f32, y, t);
-        h.touch(TouchKind::Up, 0, x as f32, y, t + 30);
+        h.touch(TouchKind::Down, 0, x as f32, y, t, bifrost_app::proto::ModifierFlags::EMPTY);
+        h.touch(TouchKind::Up, 0, x as f32, y, t + 30, bifrost_app::proto::ModifierFlags::EMPTY);
     }
     pump_until(&mut h, &mut outs, |o| o.iter().any(|k| matches!(k, KeyboardOut::Text(t) if t.chars().all(char::is_alphabetic) && !t.is_empty())));
     h.kill();

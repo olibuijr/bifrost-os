@@ -357,7 +357,7 @@ mod tests {
     }
 
     fn app() -> ShortcutsApp {
-        ShortcutsApp { w: None, reminders: None, asked_login: false, keyboard: false, export: None, import: None, planner: Planner::new(), app_intents_loaded: false, dropped: Vec::new(), drag_files: false }
+        ShortcutsApp { w: None, reminders: None, asked_login: false, keyboard: false, export: None, import: None, planner: Planner::new(), app_intents_loaded: false, dropped: Vec::new(), drag_files: false, step_calls: Vec::new() }
     }
 
     fn obj(pairs: &[(&str, &str)]) -> Json {

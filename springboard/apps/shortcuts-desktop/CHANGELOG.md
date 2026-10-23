@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.14.0 — 2026-10-23
+
+- A click selects, a double-click edits and the play button runs a shortcut; a card context menu; Start Timer starts a Clock timer; errors wrap.
+
 ## 1.13.1
 
 - BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.

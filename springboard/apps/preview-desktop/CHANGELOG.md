@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.12 — 2026-10-23
+
+- Opens images and PDFs from Files; PDFs with the standard non-embedded fonts render their text.
+
 ## 0.11.11
 
 - Fix: with the sidebar hidden or no document open, the toolbar starts after the traffic lights instead of under them.

@@ -443,7 +443,8 @@ mod tests {
         assert_eq!(sh.desk_banner_part(mid(sh.desk_banner_close(card)).0, mid(sh.desk_banner_close(card)).1, t), Some(Part::Close));
         sh.notify_tick(t + 3.0 * super::super::banner::HOLD_MS);
         assert!(sh.notify.banner().is_some_and(|b| b.phase() == super::super::banner::Phase::Hold), "a hovered banner stays");
-        tap(&mut sh, mid(sh.desk_banner_close(card)), t + 20_000.0);
+        let close = mid(sh.desk_banner_close(card));
+        tap(&mut sh, close, t + 20_000.0);
         assert_eq!(sh.notify.banner().map(|b| b.phase()), Some(super::super::banner::Phase::Out));
         assert_eq!(sh.notify.store().len(), 1, "the notification stays in Notification Center");
     }
@@ -457,7 +458,8 @@ mod tests {
         sh.notify_tick(t);
         let card = sh.banner_rect(t).unwrap();
         sh.notify_hover(mid(card).0, mid(card).1, t);
-        tap(&mut sh, mid(sh.desk_banner_chevron(card)), t + 10.0);
+        let chevron = mid(sh.desk_banner_chevron(card));
+        tap(&mut sh, chevron, t + 10.0);
         assert!(sh.notify.banner_menu, "the menu is open");
         let items = sh.desk_banner_menu();
         assert_eq!(&items[items.len() - 2..], &[MenuItem::Mute, MenuItem::Settings]);

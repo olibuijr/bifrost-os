@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.8 — 2026-10-23
+
+- Declares the movie types so Files opens movies in it.
+
 ## 0.2.7 — 2026-10-20
 
 - Sound plays on the default output, and the app waits before reconnecting to the media service instead of retrying in a tight loop.

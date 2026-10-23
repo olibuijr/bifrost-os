@@ -80,13 +80,13 @@ impl SidebarItem {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
 /// A source-list row length `pt` at sidebar icon `scale` (Settings > Appearance > Sidebar Icon Size,
 /// `bifrost_render::ui::sidebar_icon_scale`; medium is 1): rows, their glyphs and selection plates scale together.
 pub fn scaled_row(pt: f32, scale: f32) -> f32 {
     if scale.is_finite() && scale > 0.0 { pt * scale } else { pt }
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct SourceList {
     pub items: Vec<SidebarItem>,
     selected: Option<u32>,

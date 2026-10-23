@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.0 — 2026-10-23
+
+- The forecast scrolls with the wheel; Return in Locations searches; distances are rounded.
+- Watchlist quotes come from Yahoo Finance's public chart endpoint without cookies, with the source named.
+
 ## 1.8.4
 
 - Fix: the toolbar is drawn where its clicks land. It is laid out in the detail pane's own coordinates, so the SDK traffic-light inset now gets the pane's offset and leaves it beside the sidebar.

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.0 — 2026-10-23
+
+- Alarm cards with the time, label and switch; delete with right-click or Delete.
+- Running timers show as cards with progress; finished timers and alarms post a notification.
+- One wheel notch moves a picker drum one row.
+
 ## 1.5.3 — 2026-10-20
 
 - Nothing else changed: this release only rewords the notes for the new app icon.

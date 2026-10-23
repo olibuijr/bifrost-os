@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.0 — 2026-10-23
+
+- The window is titled Print Center; with no printers it offers Add Printer instead of disabled buttons.
+
 ## 0.7.5
 
 - Print Center lists the printers only when no request is waiting for its reply, and waits longer after the scheduler fails (up to a minute), so a stalled scheduler is not sent a queue of listings.

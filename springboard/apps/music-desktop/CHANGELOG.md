@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.14.0 — 2026-10-23
+
+- A paused radio station closes its connection; the player bar shows live or elapsed time and a volume slider; an Output submenu.
+- Empty library sections explain how to add music; the MiniPlayer's clicks land under the pointer.
+
 ## 1.13.5 — 2026-10-20
 
 - Music no longer repaints in a loop while the audio service is failing. A service that accepts the connection and

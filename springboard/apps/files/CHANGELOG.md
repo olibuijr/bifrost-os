@@ -3,6 +3,11 @@
 - While a search is active the four view buttons collapse into one view pop-up, so the whole "Searching ..." title fits.
 - Generic document icons have a light folded corner instead of a black one.
 
+## 1.34.0 — 2026-10-23
+
+- Opening a file launches the app that declares its type (Open With lists only those apps); apps in Applications open on a double-click.
+- Column view starts at the home folder; dragging onto a folder moves (Option copies); Get Info opens its own window; the search scope bar shows everywhere.
+
 ## 1.33.0 — 2026-10-19
 
 - New Folder selects the new folder and opens its name for editing. Return renames the selection, Cmd+O and Cmd+Down open it, Cmd+Up goes to the enclosing folder. Renaming selects the name without its extension, so typing replaces it; the column and gallery views show the name field too.

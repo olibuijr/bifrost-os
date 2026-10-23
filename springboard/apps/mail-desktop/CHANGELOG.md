@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.17.0 — 2026-10-23
+
+- The compose window takes clicks, typing, Esc and its menu items (keys and commands now reach the window they were sent to, and its fields hit-test at the window's own size).
+- Up and Down move through the message list; Shift-click, Cmd-click and Shift-arrows select several messages, and Archive, Trash, Junk, Move, Flag and Mark as Unread act on all of them.
+- A right-click on a message opens its actions; a double-click opens it in a viewer window.
+- Each mailbox remembers its selected message; toolbar actions stay in place disabled instead of disappearing; the unread dot has a gap before the sender.
+- The viewer and compose windows scroll with the wheel, at the right speed on scaled screens.
+
 ## 0.16.2 — 2026-10-20
 
 - Reading hostile mail no longer hangs or crashes Mail: HTML tags are parsed in linear time (a tag is at most 4 KB, and

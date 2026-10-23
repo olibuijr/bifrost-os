@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.0 — 2026-10-23
+
+- Quotes from Yahoo Finance's public chart endpoint (Stooq is gone), sent without cookies or identifiers, with the source named.
+- A sidebar with sparklines and a detail pane with the chart; unknown symbols say Not Found.
+
 ## 0.1.4
 
 - BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.

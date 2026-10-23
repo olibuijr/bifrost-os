@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.17.0 — 2026-10-23
+
+- + and File > New Card (Cmd+N) create a contact; one Print item; sidebar labels fit.
+- Clicks in card windows land under the pointer on scaled screens.
+
 ## 1.16.1
 
 - BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.24.0 — 2026-10-23
+
+- Text selection with the mouse (drag, double and triple click, Shift-click) and the standard editing keys; Cut, Copy, Paste and Select All work and are enabled in the Edit menu.
+- Cmd+B/I/U with nothing selected set the style for the next typed text instead of inserting markers; Aa opens a style menu.
+- The toolbar fits its search field (compose glyph, working overflow menu); Cmd+Backspace deletes the note; New Folder preselects its name.
+- Note windows edit, scroll, blink their caret and take composed (dead-key) text.
+
 ## 1.23.3 — 2026-10-20
 
 - The folder list shows only your own folders: the system's Documents, Library and tmp folders are no longer listed, and a new folder cannot take one of those names.

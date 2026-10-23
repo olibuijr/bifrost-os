@@ -486,6 +486,8 @@ mod step_row_tests {
 mod symbol_and_line_tests {
     use super::*;
     use super::super::settings_actions::SettingsIntent as Action;
+    /// A fixed "now" for the row lines (seconds, UTC offset): 2026-10-22 22:13 UTC.
+    const W: (i64, i32) = (1_792_707_200, 0);
 
     #[test]
     fn settings_results_draw_the_symbol_their_pane_has_in_settings() {

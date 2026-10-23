@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.14.0 — 2026-10-23
+
+- Opens as a compact Basic calculator and resizes itself for Scientific, Programmer and Convert.
+- Decimal Comma moved to the View menu; Convert's capsules fit; History has Copy and Clear buttons.
+
 ## 1.13.2 — 2026-10-20
 
 - Scientific: a function key (square root, cube root, logarithms, trigonometry) pressed right after a result now applies to the shown value instead of starting a new expression.

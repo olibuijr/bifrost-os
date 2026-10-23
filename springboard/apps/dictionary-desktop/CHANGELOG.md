@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.2 — 2026-10-23
+
+- Clicks in extra windows land under the pointer on scaled screens.
+
 ## 0.6.1
 
 - BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.

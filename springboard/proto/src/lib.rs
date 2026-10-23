@@ -3776,14 +3776,14 @@ mod quick_action_tests {
     #[test]
     fn a_content_size_must_be_finite_positive_and_bounded() {
         let size = ToShell::SetContentSize { w: 230.0, h: 510.0 };
-        assert_eq!(tag_of(&size.encode()), 0x252);
+        assert_eq!(u32::from_le_bytes(size.encode()[..4].try_into().unwrap()), 0x252);
         assert_eq!(ToShell::decode(&size.encode()), Ok(size));
         for bad in [f32::NAN, f32::INFINITY, -1.0, 0.0, MAX_CONTENT_PT + 1.0] {
             assert!(ToShell::decode(&ToShell::SetContentSize { w: bad, h: 100.0 }.encode()).is_err(), "width {bad}");
             assert!(ToShell::decode(&ToShell::SetContentLimits { min: Some((100.0, bad)), max: None }.encode()).is_err(), "min height {bad}");
         }
         let limits = ToShell::SetContentLimits { min: Some((230.0, 400.0)), max: Some((800.0, 900.0)) };
-        assert_eq!(tag_of(&limits.encode()), 0x253);
+        assert_eq!(u32::from_le_bytes(limits.encode()[..4].try_into().unwrap()), 0x253);
         assert_eq!(ToShell::decode(&limits.encode()), Ok(limits));
     }
 }

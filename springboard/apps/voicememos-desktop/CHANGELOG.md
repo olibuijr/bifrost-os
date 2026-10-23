@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.11.0 — 2026-10-23
+
+- Recording asks for the microphone first; a deleted or finished memo leaves Now Playing.
+
 ## 1.10.6 — 2026-10-20
 
 - The folder list shows only your own folders: the system's Documents, Library and tmp folders are no longer listed, and a new folder cannot take one of those names.

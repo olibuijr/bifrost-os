@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.19.0 — 2026-10-23
+
+- Day view shows one day; a selected event is deleted with Backspace/Delete or Event > Delete Event, with Undo.
+- + and a double-click on an empty slot open a quick-event popover; a mini month sits in the sidebar.
+- Return saves forms, the hour grid keeps its scroll, calendar pickers are real menus with colours, and the editor window scrolls with the wheel.
+
 ## 1.18.2
 
 - BifrOSt 0.10.0 round (waves 14 and 15): see the system CHANGELOG for this app's changes.

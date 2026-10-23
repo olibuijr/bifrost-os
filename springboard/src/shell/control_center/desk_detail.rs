@@ -608,7 +608,8 @@ mod tests {
         assert!(r.1 + r.3 >= layout.panel.1 + layout.panel.3);
 
         let (px, py, _, _) = layout.panel;
-        assert!(click(&mut sh, (px - sh.ui.pt(20.0), py + sh.ui.pt(10.0))).is_empty());
+        let at = (px - sh.ui.pt(20.0), py + sh.ui.pt(10.0));
+        assert!(click(&mut sh, at).is_empty());
         assert_eq!(sh.cc.desk_detail, None, "a click beside the detail goes back to the modules");
         assert!(sh.cc.is_shown(), "and keeps the panel open");
     }
@@ -684,7 +685,8 @@ mod tests {
         sh.cc.desk_detail = None;
 
         // the whole right end, down to the module's bottom corner, opens the output menu
-        let fx = click(&mut sh, (r.0 + r.2 - sh.ui.pt(4.0), r.1 + r.3 - sh.ui.pt(4.0)));
+        let at = (r.0 + r.2 - sh.ui.pt(4.0), r.1 + r.3 - sh.ui.pt(4.0));
+        let fx = click(&mut sh, at);
         assert!(fx.is_empty() && sh.cc.volume == 0.644);
         let menu = sh.cc.route_menu.as_ref().expect("the output menu opened");
         assert!(menu.panel.y >= r.1 + r.3, "the menu hangs below the module, clear of the slider");

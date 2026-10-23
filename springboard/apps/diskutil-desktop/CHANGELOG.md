@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.0 — 2026-10-23
+
+- Mount points and usage come from the system, so the system volume shows / and its real usage; Erase and First Aid are disabled for the running system.
+
 ## 0.7.9
 
 - Disk Utility reads usage (df), SMART health (smartctl) and Get Info rows (lsblk) on a worker with a time limit and kills a tool that runs past it, so a stalled disk no longer freezes the window or its Unmount and Eject buttons. Get Info opens at once and adds the extra rows when they arrive.

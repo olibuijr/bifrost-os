@@ -940,7 +940,7 @@ impl PrintCenter {
                 items.push(item(B_DELETE, if pool { "Remove Printer Pool…" } else { "Remove Printer…" }, true));
                 items
             }
-            Target::Toolbar(_) | Target::Nothing | Target::Field(_) | Target::Save | Target::Share | Target::Found(_) | Target::Clipboard => Vec::new(),
+            Target::Toolbar(_) | Target::Nothing | Target::Field(_) | Target::Save | Target::Share | Target::Found(_) | Target::Clipboard | Target::AddFirst => Vec::new(),
         }
     }
 

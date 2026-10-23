@@ -4459,7 +4459,8 @@ impl Shell {
         let mut was_dirty = std::mem::replace(&mut self.dirty, false);
         // every frame records whether a desktop panel is up, so `needs_frame` asks for at most one frame after a panel
         // was dropped without a dirty mark (E2E-14); a change is a full frame, never the settled or bar-only shortcut
-        let panels_changed = panel_visibility_changed(&mut self.panels_were_open, self.desk_panels_open());
+        let panels_open = self.desk_panels_open();
+        let panels_changed = panel_visibility_changed(&mut self.panels_were_open, panels_open);
         if panels_changed && self.desk_active() {
             was_dirty = true;
         }

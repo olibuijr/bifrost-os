@@ -442,7 +442,7 @@ impl Display {
                 let shape_changed = w.frame.input != frame.input;
                 w.frame = frame;
                 w.frame.pixels = pixels;
-                if shape_changed { set_window_input(self.state.compositor.as_ref(),&w.surface,w.margin,w.frame.width,w.frame.height,w.frame.input.as_deref(),&qh); }
+                if shape_changed { Self::set_window_input(self.state.compositor.as_ref(),&w.surface,w.margin,w.frame.width,w.frame.height,w.frame.input.as_deref(),&qh); }
             } else {
                 let surface = self.state.compositor.as_ref().unwrap().create_surface(&qh,());
                 let xdg = self.state.wm.as_ref().ok_or_else(||err("xdg-shell unavailable"))?.get_xdg_surface(&surface,&qh,frame.id);
@@ -452,7 +452,7 @@ impl Display {
                 if let (Some((ox,oy)),Some(mgr))=(frame.origin,self.state.level_mgr.as_ref()) {
                     if mgr.version()>=super::window_level_client::ORIGIN_SINCE { mgr.set_origin(&surface,ox,oy); }
                 }
-                if frame.input.is_some() { set_window_input(self.state.compositor.as_ref(),&surface,0,frame.width,frame.height,frame.input.as_deref(),&qh); }
+                if frame.input.is_some() { Self::set_window_input(self.state.compositor.as_ref(),&surface,0,frame.width,frame.height,frame.input.as_deref(),&qh); }
                 surface.commit();
                 let mut pending=Damage::new(frame.width,frame.height); pending.all();
                 self.state.windows.insert(frame.id,Window { surface,xdg,top,level_sent:None,slots:vec![],buffer_size:(0,0),configured:false,frame,fs_pending:None,act:false,act_seen:false,fresh:true,pending,margin:0,gpu_size:(0,0),bg:None,bg_rects:Vec::new(),mat:None,mat_sent:(0,Vec::new()) });
@@ -540,7 +540,7 @@ impl Display {
                     w.xdg.set_window_geometry(margin,margin,width as i32,height as i32);
                     // the shadow is not part of the window: clicks there reach what is below (and a shaped window takes
                     // input only where it drew)
-                    set_window_input(self.state.compositor.as_ref(),&w.surface,margin,width,height,w.frame.input.as_deref(),&qh);
+                    Self::set_window_input(self.state.compositor.as_ref(),&w.surface,margin,width,height,w.frame.input.as_deref(),&qh);
                     self.state.gpu_slots.insert(key,slots);
                 }
                 let w=self.state.windows.get_mut(&id).unwrap();
@@ -671,7 +671,7 @@ fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u3
 fn set_window_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_surface::WlSurface,margin:i32,width:usize,height:usize,shape:Option<&[[i32;4]]>,qh:&QueueHandle<State>) {
     let Some(compositor)=compositor else {return};
     let region=compositor.create_region(qh,());
-    for [x,y,w,h] in input_rects(margin,width,height,shape) {region.add(x,y,w,h);}
+    for [x,y,w,h] in Self::input_rects(margin,width,height,shape) {region.add(x,y,w,h);}
     surface.set_input_region(Some(&region));region.destroy();
 }
 /// The rects of a window's input region in surface px (`set_window_input`): the body, or each shape rect moved by the margin.
@@ -1504,11 +1504,11 @@ mod tests {
     }
     #[test]
     fn a_shaped_window_takes_input_only_where_it_drew() {
-        assert_eq!(super::input_rects(12,300,200,None),vec![[12,12,300,200]],"the body inside the shadow");
+        assert_eq!(super::Display::input_rects(12,300,200,None),vec![[12,12,300,200]],"the body inside the shadow");
         let shape=[[10,20,100,50],[0,0,0,5]];
-        assert_eq!(super::input_rects(0,300,200,Some(&shape)),vec![[10,20,100,50]],"empty rects are dropped");
-        assert_eq!(super::input_rects(4,300,200,Some(&shape)),vec![[14,24,100,50]]);
-        assert!(super::input_rects(0,300,200,Some(&[])).is_empty(),"nothing drawn: no input at all");
+        assert_eq!(super::Display::input_rects(0,300,200,Some(&shape)),vec![[10,20,100,50]],"empty rects are dropped");
+        assert_eq!(super::Display::input_rects(4,300,200,Some(&shape)),vec![[14,24,100,50]]);
+        assert!(super::Display::input_rects(0,300,200,Some(&[])).is_empty(),"nothing drawn: no input at all");
     }
     #[test]
     fn the_dock_is_anchored_to_its_own_edge() {
