@@ -588,6 +588,12 @@ impl VoiceMemos {
         all.extend(store::scan_deleted(&self.dir));
         self.memos = all;
         self.selected = self.selected.filter(|&i| i < self.memos.len());
+        // the recording on the media tile went away (deleted here or in Files, moved to Recently Deleted): take the
+        // session off Control Center and the lock screen, which kept showing a deleted memo (W5-12)
+        let gone = self.session.as_ref().and_then(|s| s.content()).is_some_and(|c| !self.memos.iter().any(|m| m.path.to_string_lossy() == c.id));
+        if gone {
+            self.end_playback();
+        }
         // the folder being shown went away
         let gone = matches!(&self.scope, Scope::Folder(name) if !self.folders.contains(name));
         if gone {
@@ -2804,6 +2810,28 @@ mod tests {
         app.playing = None;
         app.end_playback();
         assert!(app.take_wants().iter().any(|w| matches!(w, Want::Withdraw)));
+        let _ = std::fs::remove_dir_all(&app.dir);
+    }
+
+    /// W5-12: a recording that disappears from the library while it is the Now Playing session (deleted in Files, or
+    /// trashed) takes the session off the media tile on the next reload.
+    #[test]
+    fn a_recording_that_went_away_withdraws_its_now_playing_session() {
+        let (mut app, _) = app("gone");
+        one_recording(&mut app, 8000);
+        let memo = app.memos[0].clone();
+        if let Some(session) = app.session.as_mut() {
+            session.set_content(content_for(&memo));
+        }
+        app.publish_playback();
+        app.take_wants();
+        // a reload with the recording still there keeps the session
+        app.reload();
+        assert!(!app.take_wants().iter().any(|w| matches!(w, Want::Withdraw)));
+        std::fs::remove_file(&memo.path).unwrap();
+        app.reload();
+        assert!(app.take_wants().iter().any(|w| matches!(w, Want::Withdraw)), "the deleted memo's session is withdrawn");
+        assert!(app.session.as_ref().is_some_and(|s| s.content().is_none()));
         let _ = std::fs::remove_dir_all(&app.dir);
     }
 
