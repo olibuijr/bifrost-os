@@ -1260,11 +1260,80 @@ impl Notes {
         self.notes.iter().find(|n| n.id == id).map(|n| n.title().to_string())
     }
 
-    /// Draws one of the note windows (`note_windows::draw`). The main window is drawn by `draw`.
-    pub fn draw_window(&mut self, s: &mut Surface, ui: &Ui, window: bifrost_app::app_windows::WindowId, t: f64) {
+    /// Draws one of the note windows (`note_windows::draw`); `key` says it has the keys (its caret shows). The main
+    /// window is drawn by `draw`.
+    pub fn draw_window(&mut self, s: &mut Surface, ui: &Ui, window: bifrost_app::app_windows::WindowId, key: bool, t: f64) {
         let text = self.windows.note_of(window).map(str::to_owned);
         let text = text.as_deref().and_then(|id| self.notes.iter().find(|n| n.id == id)).map(|n| n.text.as_str());
-        note_windows::draw(window, &mut self.windows, s, ui, text, self.note_settings, t);
+        note_windows::draw(window, &mut self.windows, s, ui, text, self.note_settings, key, t);
+    }
+
+    /// An input method's composition in a note window (`App::window_text_input`): the marked text composes there and
+    /// a change goes back to the note. True when the window needs a new frame.
+    pub fn window_text_input(&mut self, ui: &Ui, window: bifrost_app::app_windows::WindowId, ev: &bifrost_app::proto::ToApp, t: f64) -> bool {
+        match self.windows.text_input(ui, window, ev, t) {
+            Some(changed) => {
+                if changed {
+                    self.window_changed(ui, window, t);
+                }
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// The scroll wheel over a note window, `dy` in px. True when its text moved.
+    pub fn window_wheel(&mut self, ui: &Ui, window: bifrost_app::app_windows::WindowId, dy: f32) -> bool {
+        self.windows.wheel(ui, window, dy)
+    }
+
+    /// The Edit menu's Undo and Redo titles while a note window has the keys.
+    pub fn window_undo_titles(&self, window: bifrost_app::app_windows::WindowId) -> (String, String) {
+        self.windows.undo_titles(window)
+    }
+
+    /// An input method's composition in the main window (`App::text_input`): marked text, unmark and delete surrounding
+    /// go to the focused search field, or to the open note's editor, whose change is saved as typing is. True when a
+    /// frame is needed.
+    pub fn text_input(&mut self, ui: &Ui, ev: &bifrost_app::proto::ToApp, t: f64) -> bool {
+        use bifrost_app::proto::ToApp;
+        if self.sketch.is_some() || self.naming.is_some() || self.replacing.is_some() {
+            return false;
+        }
+        if self.search.focused {
+            match ev {
+                ToApp::SetMarkedText { text, sel_start, .. } => self.search.set_marked(ui, text, *sel_start as usize),
+                ToApp::UnmarkText { commit } => self.search.unmark(ui, *commit),
+                _ => return false,
+            }
+            self.rebuild(ui, t);
+            self.dirty = true;
+            return true;
+        }
+        if !matches!(self.screen, Screen::Editor(_)) {
+            return false;
+        }
+        let before = self.editor.text().to_string();
+        let handled = match ev {
+            ToApp::SetMarkedText { text, sel_start, sel_len } => {
+                self.editor.focused = true;
+                self.editor.set_marked_text(ui, text, *sel_start as usize, *sel_len as usize, t);
+                true
+            }
+            ToApp::UnmarkText { commit } => self.editor.unmark_text(ui, *commit, t),
+            ToApp::DeleteSurrounding { before, after } => self.editor.delete_surrounding(ui, *before as usize, *after as usize, t),
+            _ => false,
+        };
+        if !handled {
+            return false;
+        }
+        if self.editor.text() != before {
+            self.changed(ui, t);
+        } else {
+            self.show_caret(ui);
+        }
+        self.dirty = true;
+        true
     }
 
     /// A note window's text changed (typing, Cut, Paste, Undo in it): the note takes the text and the autosave is armed
@@ -3933,10 +4002,12 @@ impl Notes {
             _ if self.naming.is_some() => self.naming.as_ref().and_then(|n| n.field.next_blink(t)),
             _ if self.replacing.is_some() => self.replacing.as_ref().and_then(|r| r.field.next_blink(t)),
             _ if self.search.focused => self.search.next_blink(t),
-            Screen::Editor(_) if self.keyboard.shown() => self.editor.next_blink(t),
+            // the editor's caret blinks while the on-screen keyboard is up, and always with a hardware keyboard
+            Screen::Editor(_) if self.keyboard.shown() || self.hw_kb => self.editor.next_blink(t),
             _ => None,
         };
-        if let Some(b) = blink {
+        // the caret of the key note window blinks on the same clock
+        for b in blink.into_iter().chain(self.windows.next_blink(t)) {
             due = Some(due.map_or(b, |d| d.min(b)));
         }
         due
@@ -5044,7 +5115,7 @@ mod tests {
         let win = WindowId(7);
         n.windows.bind(win, &id);
         let mut buf = vec![0u32; 600 * 500];
-        n.draw_window(&mut Surface { w: 600, h: 500, stride: 600, px: &mut buf, y0: 0 }, &ui, win, 2000.0);
+        n.draw_window(&mut Surface { w: 600, h: 500, stride: 600, px: &mut buf, y0: 0 }, &ui, win, true, 2000.0);
         assert!(n.window_select_all(win));
         assert!(n.window_has_selection(win));
         assert!(n.window_key(&ui, win, Out::Text("Fresh".into()), 2100.0));
@@ -5063,6 +5134,43 @@ mod tests {
         assert!(n.window_chord(&ui, win, 105, CHORD_META | CHORD_SHIFT, 2450.0));
         assert!(n.window_has_selection(win));
         assert!(!n.window_chord(&ui, WindowId(9), 105, CHORD_META, 2500.0), "a window with no note takes no keys");
+        n.flush();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// An input method composes in the window being typed in: the main editor or a note window, each saved as typing.
+    #[test]
+    fn marked_text_composes_in_the_main_editor_and_in_a_note_window() {
+        use bifrost_app::app_windows::WindowId;
+        use bifrost_app::proto::ToApp;
+        let dir = scratch("marked-text");
+        let ui = ui();
+        let mut n = app(&ui, &dir);
+        n.set_hardware_keyboard(true);
+        open_with(&mut n, &ui, "Title\nk");
+        let Screen::Editor(i) = n.screen else { panic!("a note is open") };
+        // the main editor: the candidate is marked, then committed into the note
+        n.editor.set_caret(7);
+        assert!(n.text_input(&ui, &ToApp::SetMarkedText { text: "á".into(), sel_start: 2, sel_len: 0 }, 1000.0));
+        assert_eq!(n.editor.marked_range(), Some(7..8));
+        assert!(n.text_input(&ui, &ToApp::UnmarkText { commit: true }, 1100.0));
+        assert_eq!(n.notes[i].text, "Title\nká");
+        assert_eq!(n.undo_titles().0, "Undo Typing");
+        // the desktop editor's caret blinks with a hardware keyboard (no on-screen keyboard is up)
+        n.editor.focused = true;
+        n.flush();
+        assert_eq!(n.next_wake(1200.0), Some(1600.0), "the caret blink is the next deadline once the edit is saved");
+        // a note window: its own composition, its own Undo title, and the note follows
+        let id = n.notes[i].id.clone();
+        let win = WindowId(3);
+        n.windows.bind(win, &id);
+        let mut buf = vec![0u32; 600 * 500];
+        n.draw_window(&mut Surface { w: 600, h: 500, stride: 600, px: &mut buf, y0: 0 }, &ui, win, true, 2000.0);
+        assert!(n.window_text_input(&ui, win, &ToApp::SetMarkedText { text: "é".into(), sel_start: 2, sel_len: 0 }, 2100.0));
+        assert!(n.window_text_input(&ui, win, &ToApp::UnmarkText { commit: true }, 2200.0));
+        assert_eq!(n.notes[i].text, "Title\nkáé");
+        assert_eq!(n.window_undo_titles(win).0, "Undo Typing");
+        assert!(!n.window_text_input(&ui, WindowId(9), &ToApp::UnmarkText { commit: true }, 2300.0), "no such window");
         n.flush();
         let _ = std::fs::remove_dir_all(&dir);
     }
