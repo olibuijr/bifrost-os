@@ -81,6 +81,12 @@ impl SidebarItem {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+/// A source-list row length `pt` at sidebar icon `scale` (Settings > Appearance > Sidebar Icon Size,
+/// `bifrost_render::ui::sidebar_icon_scale`; medium is 1): rows, their glyphs and selection plates scale together.
+pub fn scaled_row(pt: f32, scale: f32) -> f32 {
+    if scale.is_finite() && scale > 0.0 { pt * scale } else { pt }
+}
+
 pub struct SourceList {
     pub items: Vec<SidebarItem>,
     selected: Option<u32>,
@@ -113,8 +119,9 @@ impl SourceList {
     fn height_of(&self, item: &SidebarItem) -> f32 {
         match item {
             SidebarItem::Header(_) | SidebarItem::Section { .. } => self.header_h,
-            SidebarItem::Row { subtitle: Some(_), .. } => self.two_line_h,
-            SidebarItem::Row { .. } => self.row_h,
+            // rows follow Sidebar Icon Size live (headers keep their height); drawing and hit-testing both read here
+            SidebarItem::Row { subtitle: Some(_), .. } => scaled_row(self.two_line_h, bifrost_render::ui::sidebar_icon_scale()),
+            SidebarItem::Row { .. } => scaled_row(self.row_h, bifrost_render::ui::sidebar_icon_scale()),
         }
     }
     /// False for a row under a collapsed section.
@@ -251,6 +258,14 @@ mod tests {
             28.0,
             22.0,
         )
+    }
+
+    #[test]
+    fn sidebar_icon_size_scales_rows_and_ignores_a_bad_factor() {
+        assert_eq!(scaled_row(28.0, 1.0), 28.0, "medium is the measured size");
+        assert!(scaled_row(28.0, 0.85) < 28.0 && scaled_row(28.0, 1.2) > 28.0);
+        assert_eq!(scaled_row(28.0, 0.0), 28.0);
+        assert_eq!(scaled_row(28.0, f32::NAN), 28.0);
     }
 
     #[test]

@@ -1023,7 +1023,8 @@ pub fn set_highlight(index: u32) {
 /// The text selection colour now: the chosen highlight, or the accent colour.
 pub fn highlight_now() -> u32 {
     match HIGHLIGHT.load(std::sync::atomic::Ordering::Relaxed) as usize {
-        0 => crate::appearance::accent_now(),
+        // the selection plate, which `Pair::now` already turns to the accent: unchanged pixels until a colour is chosen
+        0 => SELECTION.now(),
         k => {
             let (dark, light) = crate::appearance::Accent::ALL[k.min(crate::appearance::Accent::ALL.len() - 1)].colours();
             Pair::new(dark, light).now()
@@ -1031,9 +1032,19 @@ pub fn highlight_now() -> u32 {
     }
 }
 
+/// The Highlight Colour choice (0 follows the accent), as `set_highlight` stored it: what the shell sends apps.
+pub fn highlight_index() -> u32 {
+    HIGHLIGHT.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 /// Sidebar icon size: 0 small, 1 medium, 2 large.
 pub fn set_sidebar_icon_size(index: u32) {
     SIDEBAR_ICON.store(index.min(2), std::sync::atomic::Ordering::Relaxed);
+}
+
+/// The Sidebar Icon Size choice (0 small, 1 medium, 2 large).
+pub fn sidebar_icon_size() -> u32 {
+    SIDEBAR_ICON.load(std::sync::atomic::Ordering::Relaxed).min(2)
 }
 
 /// The factor a source list scales its row glyphs and row height by (medium is 1).
@@ -1046,6 +1057,12 @@ pub fn set_scroll_bars(mode: u32) {
     SCROLL_BARS.store(mode.min(2), std::sync::atomic::Ordering::Relaxed);
 }
 
+/// The Show Scroll Bars choice (0 automatically, 1 when scrolling, 2 always).
+pub fn scroll_bars_mode() -> u32 {
+    SCROLL_BARS.load(std::sync::atomic::Ordering::Relaxed).min(2)
+}
+
+/// Show Scroll Bars is Always: scroll indicators stay drawn (as legacy scrollers), never fade.
 pub fn scroll_bars_always() -> bool {
     SCROLL_BARS.load(std::sync::atomic::Ordering::Relaxed) == 2
 }
@@ -1053,6 +1070,37 @@ pub fn scroll_bars_always() -> bool {
 /// Scroll bars fade out when idle (every mode but Always).
 pub fn scroll_bars_fade() -> bool {
     !scroll_bars_always()
+}
+
+#[cfg(test)]
+mod appearance_prefs_tests {
+    use super::*;
+
+    #[test]
+    fn the_highlight_colour_is_the_selection_plate_until_one_is_chosen() {
+        let keep = highlight_index();
+        set_highlight(0);
+        assert_eq!(highlight_now(), SELECTION.now(), "Accent Colour: the plate the accent already tints");
+        set_highlight(5);
+        let (dark, light) = crate::appearance::Accent::ALL[5].colours();
+        assert!([dark, light].contains(&highlight_now()) || crate::appearance::scheme() > 0.0 && crate::appearance::scheme() < 1.0);
+        set_highlight(99);
+        assert_eq!(highlight_index(), crate::appearance::Accent::ALL.len() as u32 - 1, "clamped to the list");
+        set_highlight(keep);
+    }
+
+    #[test]
+    fn sidebar_and_scroll_bar_choices_read_back_clamped() {
+        let keep = (sidebar_icon_size(), scroll_bars_mode());
+        set_sidebar_icon_size(7);
+        assert_eq!(sidebar_icon_size(), 2);
+        assert!(sidebar_icon_scale() > 1.0);
+        set_scroll_bars(9);
+        assert_eq!(scroll_bars_mode(), 2);
+        assert!(scroll_bars_always() && !scroll_bars_fade());
+        set_sidebar_icon_size(keep.0);
+        set_scroll_bars(keep.1);
+    }
 }
 
 #[cfg(test)]

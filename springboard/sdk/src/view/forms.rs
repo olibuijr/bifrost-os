@@ -3,7 +3,7 @@
 use super::controls::{draw_text, focus_ring, is_activate, node};
 use super::{blit, TextInputInfo, View, ViewBase, ViewEvent};
 use crate::kit::clipboard;
-use crate::kit::ui::{Weight, CARD_BG, CONTROL_PRESSED, FIELD_BG, HAIRLINE_C, LABEL, LABEL_2, LABEL_3, SELECTION, SEPARATOR_C, TINT, TRACK_C, WHITE};
+use crate::kit::ui::{Weight, CARD_BG, CONTROL_PRESSED, FIELD_BG, HAIRLINE_C, LABEL, LABEL_2, LABEL_3, SEPARATOR_C, TINT, TRACK_C, WHITE};
 use crate::kit::{Event, Ui};
 use bifrost_render::canvas::{Canvas, RectF};
 use crate::layout::ROW_PT;
@@ -565,7 +565,8 @@ impl View for TextField {
             let (a, e) = (sel.start.clamp(start, end), sel.end.clamp(start, end));
             let (sx, ex) = (px(&marks, a), px(&marks, e));
             if ex > sx {
-                s.fill_rrect(RectF::new(left + sx, top, ex - sx, ui.pt(17.)), 0., SELECTION.now());
+                // Settings > Appearance > Highlight Colour (the accent unless chosen)
+                s.fill_rrect(RectF::new(left + sx, top, ex - sx, ui.pt(17.)), 0., crate::kit::ui::highlight_now());
             }
         }
         if value.is_empty() {

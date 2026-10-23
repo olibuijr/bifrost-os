@@ -148,7 +148,9 @@ struct State {
     vk_manager: Option<vk_manager::ZwpVirtualKeyboardManagerV1>, vk: Option<vk::ZwpVirtualKeyboardV1>,
 }
 /// The GPU presenter and what it needs between frames.
-struct Gpu { p: Presenter, glass: Vec<Glass>, log: (std::time::Instant, usize, f64, f64, usize), draw: (usize, f64), last_frame: std::time::Instant, zoom: ScreenZoom, pointer: (f32, f32), zoomed: bool }
+struct Gpu { p: Presenter, glass: Vec<Glass>, log: (std::time::Instant, usize, f64, f64, usize), draw: (usize, f64), last_frame: std::time::Instant, zoom: ScreenZoom, pointer: (f32, f32), zoomed: bool,
+    /// when the Night Shift fade last stepped (`night`)
+    night_at: std::time::Instant }
 
 /// The Screen Zoom pass for a `w` x `h` screen with the pointer at `pointer`, in the presenter's terms: the Full
 /// Screen source rect, or the Picture in Picture lens and the part of the frame it shows. None while zoom is off.
@@ -253,7 +255,7 @@ impl Display {
                 Ok(p) => {
                     bifrost_core::log::shell_logger("presenter").notice(format!("Wayland dma-buf presenter on {} ({}x{}, {}..{} drawables)", p.renderer, w, h, GPU_POOL_MIN, GPU_POOL_MAX));
                     bifrost_render::glass::enable(true);
-                    Some(Gpu { p, glass: Vec::new(), log: (std::time::Instant::now(), 0, 0., 0., 0), draw: (0, 0.), last_frame: std::time::Instant::now(), zoom: ScreenZoom::default(), pointer: (0.0, 0.0), zoomed: false })
+                    Some(Gpu { p, glass: Vec::new(), log: (std::time::Instant::now(), 0, 0., 0., 0), draw: (0, 0.), last_frame: std::time::Instant::now(), zoom: ScreenZoom::default(), pointer: (0.0, 0.0), zoomed: false, night_at: std::time::Instant::now() })
                 }
                 Err(e) => { bifrost_core::log::shell_logger("presenter").error(format!("presenter unavailable, SHM path: {e}")); state.gpu_slots.clear(); None }
             }
@@ -741,7 +743,8 @@ fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_
                 }
                 let Some(slot)=self.state.gpu_slots.get(&id).and_then(|v|v.iter().position(|s|!s.busy)) else {continue;};
                 let w=self.state.chrome.get_mut(&id).unwrap();
-                if w.pending.is_empty() {continue;}
+                // drawn for new content, or when the presenter owes it a redraw of its own (the Night Shift fade)
+                if w.pending.is_empty() && !g.p.owes(id) {continue;}
                 let areas=g.p.draw(id,slot,&w.frame.pixels,width,&w.pending,Backdrop::GlassOnly{x:w.frame.x,y:w.frame.y,active:true},&g.glass);
                 w.pending.clear();
                 if areas.is_empty() {continue;}
@@ -797,10 +800,34 @@ fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_
         self.state.fingers.take(&mut self.state.inputs);
         out.append(&mut self.state.inputs);
     }
-    /// The wallpaper the GPU draws under the desktop (uploaded and blurred once per change).
+    /// The wallpaper the GPU draws under the desktop (uploaded and blurred once per change), always covering the output
+    /// whatever the picture's size. `live` marks a frame of an animated look (its blur is rebuilt less often).
     /// Returns false when there is no GPU presenter or the blur did not land (the shell asks again).
-    pub fn wallpaper(&mut self, wp: crate::gfx::View, x: i32) -> bool {
-        if let Some(g) = &mut self.gpu { g.p.set_wallpaper(wp, x, 0) } else { false }
+    pub fn wallpaper(&mut self, wp: crate::gfx::View, x: i32, live: bool) -> bool {
+        let screen = (self.state.size.0 as usize, self.state.size.1 as usize);
+        if let Some(g) = &mut self.gpu { g.p.set_wallpaper(wp, x, 0, screen, live) } else { false }
+    }
+    /// Night Shift on the GPU path: fades the presenter's white point towards `m` (`night_shift::multipliers`, None off)
+    /// and redraws the shell's surfaces with it from what they already hold: windows and chrome now, the desktop through
+    /// an empty `present` (nothing is uploaded, the CPU draws nothing). True while the fade runs, so the caller keeps
+    /// waking every frame; false once settled or without a GPU presenter (the CPU path tints the frame itself).
+    pub fn night(&mut self, m: Option<[u32; 3]>) -> io::Result<bool> {
+        let Some(g) = &mut self.gpu else { return Ok(false) };
+        let now = std::time::Instant::now();
+        // a long idle gap counts as one frame, so a schedule that starts while nothing draws still fades in
+        let dt = (now.duration_since(g.night_at).as_secs_f32() * 1000.0).min(50.0);
+        g.night_at = now;
+        let target = crate::gpu::wl::night_factors(m);
+        let cur = g.p.night();
+        if cur == target { return Ok(false); }
+        g.p.set_night(crate::gpu::wl::night_step(cur, target, dt));
+        let (w, h) = (self.state.size.0 as usize, self.state.size.1 as usize);
+        self.render_windows()?;
+        self.render_chrome()?;
+        // a presenter that failed in the passes above fell back to SHM, which must not be handed an empty frame
+        if self.gpu.is_some() { self.present(&[], &Damage::new(w, h))?; }
+        transient(self.conn.flush())?;
+        Ok(true)
     }
     /// Frees the spare background drawable once the shell has drawn nothing for `GPU_POOL_IDLE_SECS`.
     pub fn trim_idle(&mut self) {

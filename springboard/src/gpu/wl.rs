@@ -146,6 +146,54 @@ pub fn bump_wallpaper_generation() {
     WALLPAPER_GEN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 }
 
+/// glBlendFunc factors for the Night Shift multiply (dst * colour).
+const GL_ZERO: u32 = 0;
+const GL_DST_COLOR: u32 = 0x0306;
+
+/// Where a `tw` x `th` wallpaper texture lands on a `screen`: scaled to cover it and centred, so the desktop is always
+/// the screen's size whatever size the picture has (a raw 1920 x 1200 still on a 2560 x 1600 panel fills the panel, it
+/// does not sit in the top-left corner). Without a screen size the texture keeps its own size at (`x`, `y`).
+pub fn wallpaper_rect(tw: usize, th: usize, x: i32, y: i32, (sw, sh): (usize, usize)) -> [f32; 4] {
+    if sw == 0 || sh == 0 || tw == 0 || th == 0 {
+        return [x as f32, y as f32, tw as f32, th as f32];
+    }
+    let scale = (sw as f32 / tw as f32).max(sh as f32 / th as f32);
+    let (w, h) = (tw as f32 * scale, th as f32 * scale);
+    [(sw as f32 - w) / 2.0, (sh as f32 - h) / 2.0, w, h]
+}
+
+/// A live wallpaper (an animated look) re-blurs its glass material at most this often; the sharp picture under the
+/// desktop is still replaced with every frame. The looks move slowly, so the material lagging by up to this long is
+/// not visible, and the full blur pyramid is not rebuilt four times a second.
+pub const LIVE_BLUR_EVERY_MS: u128 = 2_000;
+
+/// True when a new wallpaper frame may keep the blur already made: a live frame of the same size whose blur is younger
+/// than `LIVE_BLUR_EVERY_MS`. A new still, a new size or an old blur rebuilds the pyramid.
+pub fn keeps_blur(live: bool, same_size: bool, blur_age_ms: Option<u128>) -> bool {
+    live && same_size && blur_age_ms.is_some_and(|ms| ms < LIVE_BLUR_EVERY_MS)
+}
+
+/// Night Shift fades in and out over this long (ms), not in one step.
+pub const NIGHT_FADE_MS: f32 = 1_500.0;
+
+/// The Night Shift multipliers (`night_shift::multipliers`, 256 = 1.0, in R, G, B order) as GPU factors; off is white.
+pub fn night_factors(m: Option<[u32; 3]>) -> [f32; 3] {
+    m.map_or([1.0; 3], |m| [m[0] as f32 / 256.0, m[1] as f32 / 256.0, m[2] as f32 / 256.0].map(|c| c.clamp(0.0, 1.0)))
+}
+
+/// One step of the Night Shift fade: `cur` moves towards `target` along a straight line in RGB, so the white point
+/// does not change hue on the way, covering the whole range (1.0) in `NIGHT_FADE_MS`. `dt_ms` is the time since the
+/// previous step.
+pub fn night_step(cur: [f32; 3], target: [f32; 3], dt_ms: f32) -> [f32; 3] {
+    let d = (0..3).map(|i| (target[i] - cur[i]).abs()).fold(0.0f32, f32::max);
+    let step = dt_ms.max(0.0) / NIGHT_FADE_MS;
+    if d <= step || d < 1e-4 {
+        return target;
+    }
+    let k = step / d;
+    [cur[0] + (target[0] - cur[0]) * k, cur[1] + (target[1] - cur[1]) * k, cur[2] + (target[2] - cur[2]) * k]
+}
+
 pub struct Presenter {
     egl: Egl,
     gl: Gles,
@@ -160,11 +208,16 @@ pub struct Presenter {
     vao: u32,
     vbo: u32,
     surfaces: HashMap<u32, Surf>,
-    wallpaper: Option<(Tex, i32, i32)>,
+    /// the wallpaper texture and the screen rect it covers (`wallpaper_rect`), never sized from the texture alone
+    wallpaper: Option<(Tex, [f32; 4])>,
     blur: Vec<Tex>,
+    /// when the blur pyramid was last built (a live look keeps it for `LIVE_BLUR_EVERY_MS`)
+    blurred_at: Option<std::time::Instant>,
+    /// Night Shift: the white point every presented surface is multiplied by in the final pass (1.0 = off)
+    night: [f32; 3],
     /// glass rects were owed: the next present draws even with empty content damage
     flush: bool,
-    wallpaper_key: (usize, usize, i32, u32),
+    wallpaper_key: (usize, usize, i32, u32, (usize, usize)),
     pub renderer: String,
     pub stats: Stats,
     /// the driver syncs shared dma-bufs itself (Mesa); otherwise each pass is waited for
@@ -361,8 +414,10 @@ impl Presenter {
             surfaces: HashMap::new(),
             wallpaper: None,
             blur: Vec::new(),
+            blurred_at: None,
+            night: [1.0; 3],
             flush: false,
-            wallpaper_key: (0, 0, 0, 0),
+            wallpaper_key: (0, 0, 0, 0, (0, 0)),
             renderer,
             stats: Stats::default(),
             implicit_sync,
@@ -477,6 +532,33 @@ impl Presenter {
         self.surfaces.contains_key(&id)
     }
 
+    /// True while surface `id` has drawables owed a redraw (its content is unchanged, but the presenter's own state,
+    /// such as the Night Shift tint, changed): the caller draws it even without new content damage.
+    pub fn owes(&self, id: u32) -> bool {
+        self.surfaces.get(&id).is_some_and(|s| s.owed.iter().any(|d| !d.is_empty()))
+    }
+
+    /// Sets the Night Shift white point (`night_factors`) applied to every surface in the final pass. A change owes
+    /// every drawable a full redraw and asks for a flush; true when it changed.
+    pub fn set_night(&mut self, m: [f32; 3]) -> bool {
+        if m == self.night {
+            return false;
+        }
+        self.night = m;
+        for s in self.surfaces.values_mut() {
+            for d in &mut s.owed {
+                d.all();
+            }
+        }
+        self.flush = true;
+        true
+    }
+
+    /// The Night Shift white point in force.
+    pub fn night(&self) -> [f32; 3] {
+        self.night
+    }
+
     /// The GPU figures of surface `id` over its recent frames, or `None` before it has presented one.
     pub fn frame_summary(&self, id: u32) -> Option<Summary> {
         self.frames.get(&id).map(|r| r.summary())
@@ -526,12 +608,34 @@ impl Presenter {
         self.free(s.content);
     }
 
-    /// Uploads the wallpaper (once per change) at screen position (`x`, `y`) and blurs it on the GPU.
+    /// Uploads the wallpaper (once per change) and blurs it on the GPU. It is drawn covering `screen` (`wallpaper_rect`),
+    /// whatever the texture's size; (`x`, `y`) only place it when no screen size is known. `live` marks a frame of an
+    /// animated look: its blur is rebuilt at most every `LIVE_BLUR_EVERY_MS` (`keeps_blur`), the sharp picture every frame.
     /// Returns false when the rebuild did not land: nothing is kept, the key is not stored, and the next call tries again.
-    pub fn set_wallpaper(&mut self, wp: View, x: i32, y: i32) -> bool {
+    pub fn set_wallpaper(&mut self, wp: View, x: i32, y: i32, screen: (usize, usize), live: bool) -> bool {
         self.current();
-        let key = (wp.px.as_ptr() as usize, wp.px.len(), x, WALLPAPER_GEN.load(std::sync::atomic::Ordering::Relaxed));
+        let key = (wp.px.as_ptr() as usize, wp.px.len(), x, WALLPAPER_GEN.load(std::sync::atomic::Ordering::Relaxed), screen);
         if key == self.wallpaper_key && self.wallpaper.is_some() {
+            return true;
+        }
+        let rect = wallpaper_rect(wp.w, wp.h, x, y, screen);
+        let same_size = self.wallpaper.as_ref().is_some_and(|(t, _)| (t.w, t.h) == (wp.w, wp.h)) && self.blur.len() == LEVELS - 1;
+        if keeps_blur(live, same_size, self.blurred_at.map(|at| at.elapsed().as_millis())) && wp.px.len() >= wp.w * wp.h {
+            // the sharp picture is replaced in place (no new texture), the blur pyramid stays
+            let gl = self.gl;
+            let tex = self.wallpaper.as_ref().map_or(0, |(t, _)| t.tex);
+            gl!(gl, bind_texture(GL_TEXTURE_2D, tex));
+            gl!(gl, pixel_storei(GL_UNPACK_ROW_LENGTH, 0));
+            gl!(gl, tex_sub_image_2d(GL_TEXTURE_2D, 0, 0, 0, wp.w as i32, wp.h as i32, GL_RGBA, GL_UNSIGNED_BYTE, wp.px.as_ptr() as *const c_void));
+            if let Some((_, r)) = &mut self.wallpaper {
+                *r = rect;
+            }
+            self.wallpaper_key = key;
+            for s in self.surfaces.values_mut() {
+                for d in &mut s.owed {
+                    d.all();
+                }
+            }
             return true;
         }
         if let Some((t, ..)) = self.wallpaper.take() {
@@ -602,12 +706,14 @@ impl Presenter {
                 self.free(b);
             }
             self.wallpaper = None;
-            self.wallpaper_key = (0, 0, 0, 0);
+            self.blurred_at = None;
+            self.wallpaper_key = (0, 0, 0, 0, (0, 0));
             bifrost_core::log::shell_logger("presenter").error(format!("wallpaper blur failed ({}x{}, {made} of {} levels made): retrying on the next frame", wp.w, wp.h, LEVELS - 1));
             return false;
         }
         self.wallpaper_key = key;
-        self.wallpaper = Some((t, x, y));
+        self.wallpaper = Some((t, rect));
+        self.blurred_at = Some(std::time::Instant::now());
         for s in self.surfaces.values_mut() {
             for d in &mut s.owed {
                 d.all();
@@ -628,7 +734,9 @@ impl Presenter {
         let t0 = std::time::Instant::now();
         let gl = self.gl;
         let Some(s) = self.surfaces.get_mut(&id) else { return Vec::new() };
-        if slot >= s.ring.len() || content.len() < stride * (s.ch.saturating_sub(1)) + s.cw {
+        // a redraw owed only to the presenter's own state (Night Shift) uploads nothing and may come without content
+        let uploads = s.fresh || !s.pending.is_empty() || !damage.is_empty();
+        if slot >= s.ring.len() || (uploads && content.len() < stride * (s.ch.saturating_sub(1)) + s.cw) {
             return Vec::new();
         }
         // 1. the content layer: only the damaged rectangles cross the bus
@@ -692,6 +800,7 @@ impl Presenter {
             Backdrop::None => (0, 0, false),
         };
         let glass = if matches!(back, Backdrop::None) { &[][..] } else { glass };
+        let night = self.night;
         let mut drawn = 0;
         for a in &owed {
             gl!(gl, scissor(a.x0 as i32, a.y0 as i32, (a.x1 - a.x0) as i32, (a.y1 - a.y0) as i32));
@@ -704,8 +813,9 @@ impl Presenter {
             }
             gl!(gl, clear(GL_COLOR_BUFFER_BIT));
             gl!(gl, enable(GL_BLEND));
-            if let Some((wp, wx, wy)) = &self.wallpaper {
-                let dst = [(*wx - ox) as f32, (*wy - oy) as f32, wp.w as f32, wp.h as f32];
+            if let Some((wp, rect)) = &self.wallpaper {
+                // the wallpaper's screen rect, never the texture's own size (a raw still covers the screen too)
+                let dst = [rect[0] - ox as f32, rect[1] - oy as f32, rect[2], rect[3]];
                 if full_wp {
                     self.quad(wp.tex, dst, 1.0, None);
                 }
@@ -759,6 +869,19 @@ impl Presenter {
                 self.shadow(drect, margin, sh, fx.shadow * fx.alpha, fx.scale);
             }
             self.quad(content_tex, drect, fx.alpha, None);
+            if night != [1.0; 3] {
+                // Night Shift, the final pass: the composed pixels times the warm white point (alpha kept, so a
+                // premultiplied transparent surface stays premultiplied)
+                gl!(gl, blend_func(GL_DST_COLOR, GL_ZERO));
+                gl!(gl, uniform1i(self.prog.mode, 4));
+                gl!(gl, uniform4f(self.prog.color, night[0], night[1], night[2], 1.0));
+                let all = [-1.0, -1.0, w as f32 + 2.0, h as f32 + 2.0];
+                gl!(gl, uniform4f(self.prog.rrect, all[0], all[1], all[2], all[3]));
+                gl!(gl, uniform1f(self.prog.radius, 0.0));
+                self.quad_raw(all);
+                gl!(gl, uniform1i(self.prog.mode, 0));
+                gl!(gl, blend_func(GL_ONE, GL_ONE_MINUS_SRC_ALPHA));
+            }
         }
         gl!(gl, disable(GL_SCISSOR_TEST));
         self.finish();
@@ -1121,6 +1244,55 @@ fn link(gl: &Gles) -> io::Result<Program> {
 #[cfg(test)]
 mod frame_feed_tests {
     use super::*;
+
+    #[test]
+    fn the_wallpaper_always_covers_the_screen_not_its_texture_size() {
+        let near = |a: [f32; 4], b: [f32; 4]| a.iter().zip(b).all(|(x, y)| (x - y).abs() < 0.01);
+        // W3-2: a raw 1920 x 1200 still on a 2560 x 1600 panel fills the panel
+        let r = wallpaper_rect(1920, 1200, 0, 0, (2560, 1600));
+        assert!(near(r, [0.0, 0.0, 2560.0, 1600.0]), "{r:?}");
+        // a fitted still is drawn as it is
+        assert_eq!(wallpaper_rect(2560, 1600, 0, 0, (2560, 1600)), [0.0, 0.0, 2560.0, 1600.0]);
+        // a portrait still on a landscape panel is covered and centred (cropped top and bottom)
+        let r = wallpaper_rect(1200, 1920, 0, 0, (1920, 1200));
+        assert!(r[0].abs() < 0.01 && (r[2] - 1920.0).abs() < 0.01, "{r:?}");
+        assert!(r[1] < 0.0 && (r[1] * 2.0 + r[3] - 1200.0).abs() < 0.01, "{r:?}");
+        // without a screen size the texture keeps its own place
+        assert_eq!(wallpaper_rect(100, 50, 7, 3, (0, 0)), [7.0, 3.0, 100.0, 50.0]);
+    }
+
+    #[test]
+    fn a_live_frame_keeps_a_young_blur_and_a_still_never_does() {
+        assert!(keeps_blur(true, true, Some(250)));
+        assert!(!keeps_blur(true, true, Some(LIVE_BLUR_EVERY_MS)), "an old blur is rebuilt");
+        assert!(!keeps_blur(true, false, Some(10)), "a new size rebuilds");
+        assert!(!keeps_blur(true, true, None), "no blur yet");
+        assert!(!keeps_blur(false, true, Some(10)), "a new still always rebuilds");
+    }
+
+    #[test]
+    fn night_shift_fades_along_a_straight_line_to_its_white_point() {
+        assert_eq!(night_factors(None), [1.0; 3]);
+        let warm = night_factors(Some([256, 220, 160]));
+        assert_eq!(warm, [1.0, 220.0 / 256.0, 160.0 / 256.0]);
+        let mut cur = [1.0; 3];
+        let mut steps = 0;
+        while cur != warm {
+            let next = night_step(cur, warm, 16.0);
+            // red stays, green and blue fall together: the ratio of what they have travelled is constant
+            assert_eq!(next[0], 1.0);
+            let (dg, db) = (1.0 - next[1], 1.0 - next[2]);
+            if db > 1e-3 {
+                assert!((dg / db - (36.0 / 96.0)).abs() < 1e-3, "{next:?}");
+            }
+            cur = next;
+            steps += 1;
+            assert!(steps < 1000, "the fade ends");
+        }
+        // 96/256 of the range at 16 ms a step over NIGHT_FADE_MS: about 35 steps, not one
+        assert!(steps > 20 && steps < 50, "{steps}");
+        assert_eq!(night_step(warm, [1.0; 3], NIGHT_FADE_MS), [1.0; 3], "a long gap lands on the target");
+    }
 
     #[test]
     fn presented_passes_feed_the_surface_summary_and_a_backwards_frame_is_dropped() {

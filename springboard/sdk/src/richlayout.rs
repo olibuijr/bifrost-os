@@ -485,7 +485,9 @@ impl TextLayout {
             if sel.start < sel.end {
                 for r in self.selection_px(sel) {
                     let (rx, ry) = (x as f32 + r.x, y as f32 + r.y);
-                    s.fill_rect(rx.max(0.0) as usize, ry.max(0.0) as usize, r.w.round().max(1.0) as usize, r.h.round().max(1.0) as usize, ui::MATERIAL_SELECTION.now());
+                    // Settings > Appearance > Highlight Colour, at the selection material's opacity
+                    let wash = crate::kit::gfx::scale(ui::highlight_now(), ui::MATERIAL_SELECTION.now() >> 24);
+                    s.fill_rect(rx.max(0.0) as usize, ry.max(0.0) as usize, r.w.round().max(1.0) as usize, r.h.round().max(1.0) as usize, wash);
                 }
             }
         }

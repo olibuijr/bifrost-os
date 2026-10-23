@@ -148,8 +148,10 @@ pub fn multipliers(minute: u16) -> Option<[u32; 3]> {
     Some([256, (256.0 * (1.0 - 0.28 * w)) as u32, (256.0 * (1.0 - 0.62 * w)) as u32])
 }
 
+/// One pixel times the multipliers. Frames are `gfx::pack` order (red in the low byte, then green, blue, alpha), the
+/// same bytes the GPU presenter uploads; the old XRGB reading cut red and kept blue, a cold tint instead of a warm one.
 fn shade(s: u32, m: [u32; 3]) -> u32 {
-    (s & 0xFF00_0000) | (((s >> 16 & 0xFF) * m[0] >> 8) << 16) | (((s >> 8 & 0xFF) * m[1] >> 8) << 8) | ((s & 0xFF) * m[2] >> 8)
+    (s & 0xFF00_0000) | (((s >> 16 & 0xFF) * m[2] >> 8) << 16) | (((s >> 8 & 0xFF) * m[1] >> 8) << 8) | ((s & 0xFF) * m[0] >> 8)
 }
 
 /// Tints `src` into `dst` (same size, `w` pixels wide) over the damaged areas.
@@ -189,12 +191,15 @@ mod tests {
 
     #[test]
     fn tint_keeps_red_and_cuts_blue() {
-        let mut d = Damage::new(2, 1);
+        let mut d = Damage::new(3, 1);
         d.all();
-        let mut out = [0u32; 2];
-        tint(&[0xFFFF_FFFF, 0xFF00_00FF], &mut out, 2, &d, [256, 200, 100]);
-        assert_eq!(out[0], 0xFFFF_C763);
-        assert_eq!(out[1], 0xFF00_0063);
+        let mut out = [0u32; 3];
+        // pack order: 0xAABBGGRR, so 0xFF00_00FF is pure red and 0xFFFF_0000 pure blue
+        tint(&[0xFFFF_FFFF, 0xFF00_00FF, 0xFFFF_0000], &mut out, 3, &d, [256, 200, 100]);
+        assert_eq!(out[0], 0xFF63_C7FF);
+        assert_eq!(out[1], 0xFF00_00FF, "red is kept");
+        assert_eq!(out[2], 0xFF63_0000, "blue is cut");
+        assert_eq!(out[1], crate::gfx::pack(255, 0, 0, 255));
     }
 
     #[test]

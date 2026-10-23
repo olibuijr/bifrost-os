@@ -1007,7 +1007,8 @@ pub fn draw_text(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry, lines: &Layout, c
             };
             if x1 > x0 {
                 let rect = Rect { x: origin_x + x0, y: origin_y + line.top, w: x1 - x0, h: line.height };
-                c.fill_rect(to_px(ui, rect), SELECTION.now());
+                // the text selection follows Settings > Appearance > Highlight Colour, live
+                c.fill_rect(to_px(ui, rect), bifrost_app::kit::ui::highlight_now());
             }
         }
     }

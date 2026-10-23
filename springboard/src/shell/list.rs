@@ -41,6 +41,12 @@ pub const DETAIL_MARGIN_PT: f32 = bifrost_ui::prefs_layout::m::DETAIL_MARGIN;
 const SIDEBAR_CARD_PT: f32 = bifrost_ui::prefs_layout::m::ACCOUNT_H;
 const SIDEBAR_ROW_PT: f32 = bifrost_ui::prefs_layout::m::SIDEBAR_ROW_PITCH;
 const SIDEBAR_SEL_H_PT: f32 = bifrost_ui::prefs_layout::m::SIDEBAR_ROW_H;
+
+/// A sidebar length in pt at Settings > Appearance > Sidebar Icon Size (medium is the measured value): the icons, the
+/// row pitch and the selection plate grow and shrink together, as a source list does.
+fn sidebar_pt(pt: f32) -> f32 {
+    bifrost_ui::sidebar::scaled_row(pt, bifrost_render::ui::sidebar_icon_scale())
+}
 const SIDEBAR_GROUP_GAP_PT: f32 = bifrost_ui::prefs_layout::m::SIDEBAR_GROUP_GAP;
 /// gap between the account block and the first sidebar row
 const SIDEBAR_ACCOUNT_GAP_PT: f32 = 17.0;
@@ -711,7 +717,7 @@ impl NavBar {
 fn row_icon(sidebar: bool) -> (f32, f32, f32) {
     use bifrost_ui::prefs_layout::m;
     if sidebar {
-        (m::SIDEBAR_ICON, m::SIDEBAR_ICON_X - m::SIDEBAR_INSET, m::SIDEBAR_LABEL_X - m::SIDEBAR_ICON_X - m::SIDEBAR_ICON)
+        (sidebar_pt(m::SIDEBAR_ICON), m::SIDEBAR_ICON_X - m::SIDEBAR_INSET, m::SIDEBAR_LABEL_X - m::SIDEBAR_ICON_X - m::SIDEBAR_ICON)
     } else {
         (m::ROW_ICON, m::ROW_ICON_X, m::ROW_LABEL_X - m::ROW_ICON_X - m::ROW_ICON)
     }
@@ -781,7 +787,7 @@ impl ListPage {
             }
             let top = y;
             for (i, item) in group.items.iter().enumerate() {
-                let rh = ui.pt(if pane.sidebar { SIDEBAR_ROW_PT } else { item.height_pt() });
+                let rh = ui.pt(if pane.sidebar { sidebar_pt(SIDEBAR_ROW_PT) } else { item.height_pt() });
                 rows.push(RowGeom { g, i, y, h: rh });
                 let color = match item.tint {
                     Tint::Plain => WHITE,
@@ -1267,7 +1273,7 @@ impl ListPage {
         let is_pressed = item.tappable() && pressed == Some(Hit::Row(g, i));
         if self.sidebar.is_some() {
             // a sidebar row is its own rounded plate (30 pt) inside a 32 pt pitch, not part of a card
-            let plate = (m, ry + ui.pt((SIDEBAR_ROW_PT - SIDEBAR_SEL_H_PT) / 2.0), cw, ui.pt(SIDEBAR_SEL_H_PT));
+            let plate = (m, ry + ui.pt((sidebar_pt(SIDEBAR_ROW_PT) - sidebar_pt(SIDEBAR_SEL_H_PT)) / 2.0), cw, ui.pt(sidebar_pt(SIDEBAR_SEL_H_PT)));
             if selected {
                 s.fill_rrect(plate.0, plate.1, plate.2, plate.3, ui.pt(bifrost_ui::prefs_layout::m::SELECTION_RADIUS), bifrost_render::appearance::accent_now());
             } else if is_pressed {

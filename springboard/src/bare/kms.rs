@@ -881,7 +881,10 @@ impl Display {
     pub fn wayland_take_gpu_fallback(&mut self) -> bool {self.wayland.as_mut().is_some_and(|w| w.take_gpu_fallback())}
     #[cfg(feature = "desktop-wayland")]
     /// Returns true when the presenter holds the blurred wallpaper now (false: no GPU presenter, or the blur did not land).
-    pub fn wayland_wallpaper(&mut self, wp: crate::gfx::View, x: i32) -> bool {if let Some(w)=&mut self.wayland {w.wallpaper(wp,x)} else {false}}
+    pub fn wayland_wallpaper(&mut self, wp: crate::gfx::View, x: i32, live: bool) -> bool {if let Some(w)=&mut self.wayland {w.wallpaper(wp,x,live)} else {false}}
+    /// Night Shift through the GPU presenter's final pass (`wayland::Display::night`): true while its fade runs.
+    #[cfg(feature = "desktop-wayland")]
+    pub fn wayland_night(&mut self, m: Option<[u32; 3]>) -> io::Result<bool> {if let Some(w)=&mut self.wayland {w.night(m)} else {Ok(false)}}
     /// Screen Zoom state and pointer for the next present (see `wayland::Display::set_zoom`).
     #[cfg(feature = "desktop-wayland")]
     pub fn wayland_set_zoom(&mut self, zoom: crate::shell::accessibility::zoom::ScreenZoom, pointer: (f32, f32)) {if let Some(w)=&mut self.wayland {w.set_zoom(zoom,pointer);}}

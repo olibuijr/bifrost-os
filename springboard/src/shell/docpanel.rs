@@ -1865,7 +1865,7 @@ impl super::Shell {
                 if !sel.is_empty() {
                     let before = ui.measure(&t[..sel.start], MAC_BODY_PT, Weight::Regular);
                     let picked = ui.measure(&t[sel.clone()], MAC_BODY_PT, Weight::Regular);
-                    s.fill_rrect(left + before, fy + ui.pt(4.0), picked, fh - ui.pt(8.0), ui.pt(3.0), SELECTION.now());
+                    s.fill_rrect(left + before, fy + ui.pt(4.0), picked, fh - ui.pt(8.0), ui.pt(3.0), bifrost_render::ui::highlight_now());
                 }
                 let mut cx = left;
                 for (part, color) in [(&t[..sel.start], LABEL.now()), (&t[sel.clone()], WHITE), (&t[sel.end..], LABEL.now())] {

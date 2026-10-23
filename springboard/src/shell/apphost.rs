@@ -1933,6 +1933,10 @@ pub fn appearance_flags() -> u32 {
         .into_iter()
         .fold(0, |f, (on, bit)| if on { f | bit } else { f })
         | (bifrost_render::appearance::accent().to_wire() << ACCENT_SHIFT)
+        // Highlight Colour, Sidebar Icon Size and Show Scroll Bars: a change is pushed to every app (`sync_appearance`)
+        | ((bifrost_render::ui::highlight_index() + 1) << HIGHLIGHT_SHIFT & HIGHLIGHT_MASK)
+        | ((bifrost_render::ui::sidebar_icon_size() + 1) << SIDEBAR_ICON_SHIFT & SIDEBAR_ICON_MASK)
+        | ((bifrost_render::ui::scroll_bars_mode() + 1) << SCROLL_BARS_SHIFT & SCROLL_BARS_MASK)
 }
 
 /// Behind-window vibrancy works only when the GPU presenter blurs the desktop under windows, and not with Reduce
@@ -3037,6 +3041,32 @@ mod tests {
         assert_ne!(appearance_flags() & LIGHT, 0, "light scheme sends the LIGHT bit");
         bifrost_render::appearance::jump_to(false);
         assert_eq!(appearance_flags() & LIGHT, 0, "dark scheme clears it");
+    }
+
+    #[test]
+    fn highlight_sidebar_icons_and_scroll_bars_ride_in_the_appearance_flags() {
+        let _lock = crate::test_support::global_lock();
+        use bifrost_proto::appearance::*;
+        use bifrost_render::ui;
+        let keep = (ui::highlight_index(), ui::sidebar_icon_size(), ui::scroll_bars_mode());
+        ui::set_highlight(4);
+        ui::set_sidebar_icon_size(2);
+        ui::set_scroll_bars(2);
+        let f = appearance_flags();
+        assert_eq!(field(f, HIGHLIGHT_MASK, HIGHLIGHT_SHIFT), Some(4));
+        assert_eq!(field(f, SIDEBAR_ICON_MASK, SIDEBAR_ICON_SHIFT), Some(2));
+        assert_eq!(field(f, SCROLL_BARS_MASK, SCROLL_BARS_SHIFT), Some(2));
+        ui::set_highlight(0);
+        ui::set_sidebar_icon_size(0);
+        ui::set_scroll_bars(0);
+        let f = appearance_flags();
+        assert_eq!(field(f, HIGHLIGHT_MASK, HIGHLIGHT_SHIFT), Some(0), "follow the accent is sent, not left unsaid");
+        assert_eq!(field(f, SIDEBAR_ICON_MASK, SIDEBAR_ICON_SHIFT), Some(0));
+        assert_eq!(field(f, SCROLL_BARS_MASK, SCROLL_BARS_SHIFT), Some(0));
+        assert_eq!(field(0, HIGHLIGHT_MASK, HIGHLIGHT_SHIFT), None, "an older shell says nothing");
+        ui::set_highlight(keep.0);
+        ui::set_sidebar_icon_size(keep.1);
+        ui::set_scroll_bars(keep.2);
     }
 
     #[test]

@@ -476,7 +476,8 @@ impl View for ScrollLayerView {
         }
     }
     fn draw_overlay(&mut self, s: &mut dyn Canvas, ui: &Ui) {
-        if !self.knob {
+        // Settings > Appearance > Show Scroll Bars: Always keeps the indicators drawn at rest
+        if !(self.knob || crate::kit::ui::scroll_bars_always()) {
             return;
         }
         let f = self.base.frame;

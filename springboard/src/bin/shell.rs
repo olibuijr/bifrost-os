@@ -568,14 +568,21 @@ fn run() -> std::io::Result<()> {
         #[cfg(feature = "desktop-wayland")]
         if wayland {
             // the wallpaper stays pending until the presenter reports the blur landed (a failed rebuild is retried)
+            let live = shell.live_look().animated();
             let uploaded = match shell.desktop_wallpaper_once() {
-                Some((wp, x)) => disp.wayland_wallpaper(wp, x),
+                Some((wp, x)) => disp.wayland_wallpaper(wp, x, live),
                 None => disp.wayland_gpu_active(),
             };
             if uploaded { shell.note_wallpaper_uploaded(); }
             // the GPU presenter gave up: the SHM path has no frame of its own yet, so the next one is drawn whole
             if disp.wayland_take_gpu_fallback() { shell.gpu_presenter_lost(); }
         }
+        // Night Shift on the GPU presenter: its final pass fades the white point and redraws what the surfaces hold (the
+        // CPU tint below is then skipped); while the fade runs the loop wakes every frame
+        #[cfg(feature = "desktop-wayland")]
+        let night_fading = wayland && disp.wayland_night(night_mult)?;
+        #[cfg(not(feature = "desktop-wayland"))]
+        let night_fading = false;
         #[cfg(feature = "desktop-wayland")]
         let previous_present = last_present;
         if disp.boot_fading() { shell.force_full_redraw(); }
@@ -599,6 +606,9 @@ fn run() -> std::io::Result<()> {
             _ if shell.screen_on() && !wayland && !wifi_settled(&wifi) => 1000,
             _ => (60 - sys::local_time().2) * 1000 + 50,
         };
+        if night_fading {
+            timeout = timeout.min(16);
+        }
         let now = sys::now_ms();
         springboard::bare::heartbeat::beat();
         boost.update(animating, now);
@@ -1614,6 +1624,9 @@ fn run() -> std::io::Result<()> {
             let reason = if trace { shell.frame_reason() } else { String::new() };
             let t0 = sys::now_ms();
             let jctx = shell.jank_context();
+            // the GPU presenter tints in its final pass (`wayland_night`): the CPU copies are tinted only without it
+            #[cfg(feature = "desktop-wayland")]
+            let night_mult = night_mult.filter(|_| !(wayland && disp.wayland_gpu_active()));
             let mut scan_failed = false;
             if scan.live && !gpu_comp.scanout_active() {
                 // the GPU compositor went away with the ring: CPU frames from here on

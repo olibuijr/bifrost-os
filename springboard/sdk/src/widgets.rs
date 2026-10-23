@@ -555,6 +555,10 @@ pub fn toolbar_in(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, bar: &Toolbar, pres
 
 /// Side of a sidebar row glyph, in points.
 const SIDEBAR_GLYPH_PT: f32 = 20.0;
+/// The row glyph's side at Settings > Appearance > Sidebar Icon Size (the row height follows in `SourceList`).
+fn sidebar_glyph_pt() -> f32 {
+    bifrost_ui::sidebar::scaled_row(SIDEBAR_GLYPH_PT, crate::kit::ui::sidebar_icon_scale())
+}
 /// Diameter of a sidebar monogram avatar, in points (`SidebarItem::with_avatar`).
 const SIDEBAR_AVATAR_PT: f32 = 24.0;
 /// Diameter of a sidebar tag dot, in points.
@@ -618,12 +622,12 @@ pub fn source_list(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, list: &SourceList,
                     blit(s, &img, ui.pt(cx) as i32 - img.w as i32 / 2, ui.pt(cy) as i32 - img.h as i32 / 2);
                     text_x += d + SPACE_S;
                 } else if let Some(c) = dot {
-                    let g = SIDEBAR_GLYPH_PT;
+                    let g = sidebar_glyph_pt();
                     let r = ui.pt(SIDEBAR_DOT_PT / 2.0);
                     crate::glyphs::disc(s, ui.pt(text_x + g / 2.0), ui.pt(plate.y + plate.h / 2.0), r, *c);
                     text_x += g + SPACE_S;
                 } else if let Some(name) = symbol {
-                    let g = SIDEBAR_GLYPH_PT;
+                    let g = sidebar_glyph_pt();
                     // accent glyph, or the secondary grey for a neutral row (Files's Locations)
                     let tint = if *neutral { LABEL_2.now() } else { crate::kit::appearance::accent_now() };
                     glyph(s, ui, name, Rect { x: text_x, y: plate.y + (plate.h - g) / 2.0, w: g, h: g }, if *enabled { tint } else { LABEL_3.now() });
@@ -696,7 +700,8 @@ pub fn search_field(s: &mut dyn Canvas, ui: &Ui, field: &TextField, bounds: Rect
             let (a, b) = (rel(sel.start), rel(sel.end));
             let sx = ui.measure(&visible[..a], MAC_BODY_PT, Weight::Regular);
             let ex = ui.measure(&visible[..b], MAC_BODY_PT, Weight::Regular);
-            s.fill_rrect(RectF::new(left + sx, top, ex - sx + ui.pt(1.0), im_h), 0.0, SELECTION.now());
+            // Settings > Appearance > Highlight Colour (the accent unless chosen)
+            s.fill_rrect(RectF::new(left + sx, top, ex - sx + ui.pt(1.0), im_h), 0.0, crate::kit::ui::highlight_now());
             let mut cx = left as i32;
             for (part, color) in [(&visible[..a], LABEL.now()), (&visible[a..b], WHITE), (&visible[b..], LABEL.now())] {
                 if part.is_empty() {
@@ -842,7 +847,7 @@ pub fn text_field(
         let sx = ui.measure(&value[start..a], 13., Weight::Regular).min(room);
         let ex = ui.measure(&value[start..b], 13., Weight::Regular).min(room);
         if ex > sx {
-            s.fill_rrect(RectF::new(left + sx, top, ex - sx + ui.pt(1.), ui.pt(17.)), 0., SELECTION.now());
+            s.fill_rrect(RectF::new(left + sx, top, ex - sx + ui.pt(1.), ui.pt(17.)), 0., crate::kit::ui::highlight_now());
         }
     }
     if value.is_empty() {

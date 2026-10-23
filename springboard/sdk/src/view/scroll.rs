@@ -192,7 +192,8 @@ impl View for ScrollView {
     }
     fn draw_overlay(&mut self, s: &mut dyn Canvas, ui: &Ui) {
         let max = self.max_offset();
-        if !self.knob || max <= 0.0 {
+        // Settings > Appearance > Show Scroll Bars: Always keeps the knob drawn at rest; otherwise it shows while moving
+        if !(self.knob || crate::kit::ui::scroll_bars_always()) || max <= 0.0 {
             return;
         }
         let f = self.base.frame;
