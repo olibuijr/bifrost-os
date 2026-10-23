@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.12.1
+
+- Upstream soundcraft v0.12.1.
+  > [!NOTE]
+  > **FreeBSD aarch64 is dropped from this release.** We had to cut releases, and we cannot build this target within the 5-hour CI limit for any of the Craft apps, so we are dropping it for now. This is a known blocker, flagged for a future fix in storytold/craft-common-actions#39. FreeBSD x86_64 and every other platform are included.
+  ## What's Changed
+  * security: enforce HTTPS on curl downloads (SonarCloud S6506) by @dylanmtaylor in https://github.com/storytold/soundcraft/pull/860
+  * README: the app icon above the title by @bflatastic in https://github.com/storytold/soundcraft/pull/934
+
 ## 0.11.0
 
 - Upstream soundcraft v0.11.0.
