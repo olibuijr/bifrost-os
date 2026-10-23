@@ -206,6 +206,13 @@ pub struct TextArea {
     links: Vec<Range<usize>>,
     /// paragraphs (by index) drawn with no height: folded sections; empty for every other user
     hidden: Vec<Range<usize>>,
+    /// a mouse drives the text (`set_pointer_mode`): no selection handles or loupe, and `press`/`drag_to` select
+    pointer: bool,
+    /// consecutive presses for double and triple click (`bifrost_ui::text::ClickCounter`)
+    clicks: bifrost_ui::text::ClickCounter,
+    /// the mouse button is down: the unit the press selected (an empty range at the caret for one click) and the
+    /// click count, so a drag grows the selection by characters, words or paragraphs
+    drag: Option<(Range<usize>, u8)>,
 }
 
 /// What a finger down on the text is doing.
@@ -283,7 +290,7 @@ impl TextArea {
     /// Wraps at `w` px; the first paragraph is set at `title_pt` bold, the
     /// rest at `body_pt` regular. `tint` colours the caret and selection.
     pub fn new(ui: &Ui, w: f32, body_pt: f32, title_pt: f32, color: u32, tint: u32) -> Self {
-        let mut ta = TextArea { text: String::new(), caret: 0, anchor: None, w, body_pt, title_pt, color, tint, lines: vec![], history: UndoManager::new(UNDO_DEPTH), typing: None, focused: false, blink_from: 0.0, markdown: false, images: HashMap::new(), highlights: vec![], current_hl: None, touch: None, last_tap: None, detect_links: false, links: vec![], hidden: vec![] };
+        let mut ta = TextArea { text: String::new(), caret: 0, anchor: None, w, body_pt, title_pt, color, tint, lines: vec![], history: UndoManager::new(UNDO_DEPTH), typing: None, focused: false, blink_from: 0.0, markdown: false, images: HashMap::new(), highlights: vec![], current_hl: None, touch: None, last_tap: None, detect_links: false, links: vec![], hidden: vec![], pointer: false, clicks: Default::default(), drag: None };
         ta.layout(ui);
         ta
     }
@@ -761,6 +768,227 @@ impl TextArea {
         self.anchor = (a != b).then_some(a);
     }
 
+    // --- the desktop: mouse and hardware-keyboard selection (`set_pointer_mode`) ---
+
+    /// Turns the mouse-and-keyboard behaviour on (a desktop window) or off (touch, the default): with it on, the
+    /// selection has no lollipop handles and `press`, `drag_to`, `release` and `key_combo` drive the caret.
+    pub fn set_pointer_mode(&mut self, on: bool) {
+        self.pointer = on;
+    }
+
+    pub fn pointer_mode(&self) -> bool {
+        self.pointer
+    }
+
+    /// The char index of byte offset `b` (clamped to the text).
+    fn char_of_byte(&self, b: usize) -> usize {
+        let b = bifrost_ui::text::floor_boundary(&self.text, b.min(self.text.len()));
+        self.text[..b].chars().count()
+    }
+
+    /// The word a double click at char `c` selects (`TextBuffer::select_word_at`), as a char range.
+    pub fn word_range(&self, c: usize) -> Range<usize> {
+        let mut buf = bifrost_ui::text::TextBuffer::from_text(&self.text);
+        buf.select_word_at(self.byte_at(c));
+        let r = buf.selection();
+        self.char_of_byte(r.start)..self.char_of_byte(r.end)
+    }
+
+    /// The paragraph a triple click at char `c` selects (`TextBuffer::select_line_at`), without its newline.
+    pub fn line_range(&self, c: usize) -> Range<usize> {
+        let mut buf = bifrost_ui::text::TextBuffer::from_text(&self.text);
+        buf.select_line_at(self.byte_at(c));
+        let r = buf.selection();
+        self.char_of_byte(r.start)..self.char_of_byte(r.end)
+    }
+
+    /// The unit `clicks` presses at char `c` select: the caret, the word, or the paragraph.
+    fn unit_at(&self, c: usize, clicks: u8) -> Range<usize> {
+        match clicks {
+            1 => c..c,
+            2 => self.word_range(c),
+            _ => self.line_range(c),
+        }
+    }
+
+    /// Sets the selection from its fixed end `anchor` to the moving end `head` (no selection when they meet).
+    fn set_ends(&mut self, anchor: usize, head: usize) {
+        let n = self.len();
+        let (anchor, head) = (anchor.min(n), head.min(n));
+        self.caret = head;
+        self.anchor = (anchor != head).then_some(anchor);
+    }
+
+    /// The mouse button went down at (x, y) px from the text origin at `t` ms: one click places the caret, a double
+    /// click selects the word and a triple click the paragraph (`ClickCounter`). With `extend` (Shift held) a single
+    /// click moves the selection's free end there instead. A drag that follows grows the selection by the same unit.
+    pub fn press(&mut self, ui: &Ui, x: f32, y: f32, t: f64, extend: bool) {
+        self.focused = true;
+        self.blink_from = t;
+        self.end_typing();
+        let k = ui.pt(1.0).max(f32::EPSILON);
+        let clicks = self.clicks.press(t, x / k, y / k);
+        let c = self.position_at(x, y);
+        if extend && clicks == 1 {
+            let anchor = self.anchor.unwrap_or(self.caret);
+            self.set_ends(anchor, c);
+            self.drag = Some((anchor..anchor, 1));
+            return;
+        }
+        let unit = self.unit_at(c, clicks);
+        if clicks == 1 {
+            self.set_ends(c, c);
+        } else {
+            self.set_ends(unit.start, unit.end);
+        }
+        self.drag = Some((unit, clicks));
+    }
+
+    /// The mouse moved with the button down: the selection runs from where the press began to (x, y), by characters
+    /// after one click, by whole words or paragraphs after two or three (`text::extend_unit`). False when no press
+    /// is in progress.
+    pub fn drag_to(&mut self, x: f32, y: f32) -> bool {
+        let Some((origin, clicks)) = self.drag.clone() else { return false };
+        let c = self.position_at(x, y);
+        let (anchor, head) = if clicks == 1 { (origin.start, c) } else { bifrost_ui::text::extend_unit(origin, self.unit_at(c, clicks)) };
+        self.set_ends(anchor, head);
+        true
+    }
+
+    /// The mouse button came up; the selection stays.
+    pub fn release(&mut self) {
+        self.drag = None;
+    }
+
+    /// True while the mouse button is down on the text.
+    pub fn pressed(&self) -> bool {
+        self.drag.is_some()
+    }
+
+    /// The char where the wrapped line holding the caret starts, and where it ends (before its newline, or before the
+    /// space it hangs at a soft wrap).
+    fn visual_line(&self) -> (usize, usize) {
+        let l = &self.lines[self.line_of(self.caret)];
+        let mut end = l.range.end;
+        if l.text.chars().count() < l.range.len() || (end < self.len() && l.text.ends_with(' ')) {
+            end = end.saturating_sub(1).max(l.range.start);
+        }
+        (l.range.start, end)
+    }
+
+    /// Selects every character.
+    pub fn select_all(&mut self) {
+        self.set_ends(0, self.len());
+    }
+
+    /// A key combination from a hardware keyboard, as `bifrost_ui::text::binding` reads it: the arrows, Home, End and
+    /// Page Up and Down move (Shift extends the selection, Option or Ctrl by word, Cmd to the line or text ends),
+    /// Backspace and Delete delete (by word with Option, to the line start with Cmd), Cmd+A selects all, Cmd+Z and
+    /// Shift+Cmd+Z undo and redo, and the emacs Ctrl keys work. `None` when the combination is not an editing key;
+    /// `Some(true)` when the text changed.
+    pub fn key_combo(&mut self, ui: &Ui, k: bifrost_ui::keys::KeyCombo, t: f64) -> Option<bool> {
+        use bifrost_ui::text::{self as kit, EditCommand::*};
+        let (cmd, extend) = kit::binding(k)?;
+        self.blink_from = t;
+        let sel = self.selection();
+        let head = self.caret;
+        let byte = self.byte_at(head);
+        let delete = |ta: &mut TextArea, range: Range<usize>| {
+            let range = ta.selection().unwrap_or(range);
+            if range.is_empty() {
+                return false;
+            }
+            ta.replace_range(ui, range, "", t, false);
+            true
+        };
+        let to = match cmd {
+            MoveLeft if !extend && sel.is_some() => sel.as_ref().map_or(head, |r| r.start),
+            MoveRight if !extend && sel.is_some() => sel.as_ref().map_or(head, |r| r.end),
+            MoveLeft => super::edit::prev_boundary(&self.text, head),
+            MoveRight => super::edit::next_boundary(&self.text, head),
+            MoveUp | MoveDown | MovePageUp | MovePageDown => {
+                let down = matches!(cmd, MoveDown | MovePageDown);
+                let steps = if matches!(cmd, MovePageUp | MovePageDown) { kit::PAGE_LINES } else { 1 };
+                let anchor = self.anchor.unwrap_or(head);
+                if !extend {
+                    if let Some(r) = &sel {
+                        self.caret = if down { r.end } else { r.start };
+                    }
+                }
+                for _ in 0..steps {
+                    self.vertical(down);
+                }
+                let to = self.caret;
+                if extend {
+                    self.set_ends(anchor, to);
+                } else {
+                    self.set_ends(to, to);
+                }
+                return Some(false);
+            }
+            MoveWordLeft => self.char_of_byte(kit::prev_word_start(&self.text, byte)),
+            MoveWordRight => self.char_of_byte(kit::next_word_end(&self.text, byte)),
+            MoveLineStart => self.visual_line().0,
+            MoveLineEnd => self.visual_line().1,
+            MoveDocumentStart => 0,
+            MoveDocumentEnd => self.len(),
+            SelectAll => {
+                self.select_all();
+                return Some(false);
+            }
+            Undo => return Some(self.undo(ui, t)),
+            Redo => return Some(self.redo(ui, t)),
+            DeleteBackward => return Some(self.edit(ui, &Out::Backspace, t)),
+            DeleteForward => {
+                let range = head..super::edit::next_boundary(&self.text, head);
+                return Some(delete(self, range));
+            }
+            DeleteWordBackward => {
+                let range = self.char_of_byte(kit::prev_word_start(&self.text, byte))..head;
+                return Some(delete(self, range));
+            }
+            DeleteWordForward => {
+                let range = head..self.char_of_byte(kit::next_word_end(&self.text, byte));
+                return Some(delete(self, range));
+            }
+            DeleteToLineStart => {
+                let range = self.char_of_byte(kit::line_start(&self.text, byte))..head;
+                return Some(delete(self, range));
+            }
+            KillLine => {
+                let end = self.char_of_byte(kit::line_end(&self.text, byte));
+                // at the end of a paragraph Ctrl+K joins the next one
+                let end = if end == head { super::edit::next_boundary(&self.text, head) } else { end };
+                return Some(delete(self, head..end));
+            }
+            OpenLine => {
+                self.replace_range(ui, head..head, "\n", t, false);
+                self.set_caret(head);
+                return Some(true);
+            }
+            Transpose => {
+                let n = self.len();
+                if n < 2 || head == 0 {
+                    return Some(false);
+                }
+                let at = if head >= n { n - 1 } else { head };
+                let pair: String = self.text.chars().skip(at - 1).take(2).collect();
+                let swapped: String = pair.chars().rev().collect();
+                self.replace_range(ui, at - 1..at + 1, &swapped, t, false);
+                return Some(true);
+            }
+            // a note keeps no kill ring
+            Yank => return None,
+        };
+        if extend {
+            let anchor = self.anchor.unwrap_or(head);
+            self.set_ends(anchor, to);
+        } else {
+            self.set_ends(to, to);
+        }
+        Some(false)
+    }
+
     /// The selected char range, if any.
     pub fn selection(&self) -> Option<Range<usize>> {
         self.anchor.map(|a| a.min(self.caret)..a.max(self.caret))
@@ -1083,7 +1311,8 @@ impl TextArea {
             let (cx, cy, cw, ch) = self.caret_rect(ui);
             s.fill_rrect(x + cx, y + cy, cw, ch, cw / 2.0, self.tint);
         }
-        if let Some(hs) = self.handles(ui) {
+        // the lollipop handles are for fingers: a mouse-driven text shows the plain highlight
+        if let Some(hs) = self.handles(ui).filter(|_| !self.pointer) {
             let (bar, dot) = (ui.pt(BAR_PT), ui.pt(DOT_PT));
             for (i, (top, bot, hx, dy)) in hs.into_iter().enumerate() {
                 let (by, bh) = if i == 0 { (top - dot / 2.0, bot - top + dot / 2.0) } else { (top, bot - top + dot / 2.0) };
@@ -1577,5 +1806,120 @@ mod tests {
         assert!(ta.undo(&ui, 1.0));
         assert_eq!(ta.text(), "T\n- [x] a\n- [ ] b");
         assert!(!ta.can_undo());
+    }
+
+    /// The point (px from the text origin) in the middle of the line holding char `c`, at its left edge.
+    fn at(ta: &TextArea, c: usize) -> (f32, f32) {
+        let l = &ta.lines[ta.line_of(c)];
+        (l.x_at(c), l.y + l.h / 2.0)
+    }
+
+    fn combo(key: bifrost_ui::keys::Key, shift: bool, alt: bool, cmd: bool) -> bifrost_ui::keys::KeyCombo {
+        bifrost_ui::keys::KeyCombo { cmd, ctrl: false, alt, shift, key }
+    }
+
+    #[test]
+    fn a_mouse_click_places_the_caret_and_a_drag_selects_by_characters() {
+        let ui = ui();
+        let mut ta = area(&ui, 2000.0);
+        ta.set_pointer_mode(true);
+        ta.set_text(&ui, "Title\nthe quick brown fox");
+        let (x0, y0) = at(&ta, 10);
+        ta.press(&ui, x0, y0, 0.0, false);
+        assert_eq!((ta.caret(), ta.selection()), (10, None), "one click is a caret");
+        let (x1, y1) = at(&ta, 15);
+        assert!(ta.drag_to(x1, y1));
+        ta.release();
+        assert_eq!(ta.selection(), Some(10..15));
+        assert_eq!(ta.selected_text(), "quick");
+        // a Shift-click moves the free end and keeps the anchor
+        let (x2, y2) = at(&ta, 21);
+        ta.press(&ui, x2, y2, 2000.0, true);
+        ta.release();
+        assert_eq!(ta.selection(), Some(10..21));
+        assert!(!ta.drag_to(x0, y0), "no drag after the release");
+    }
+
+    #[test]
+    fn double_and_triple_clicks_select_the_word_and_the_paragraph() {
+        let ui = ui();
+        let mut ta = area(&ui, 2000.0);
+        ta.set_pointer_mode(true);
+        ta.set_text(&ui, "Title\nthe quick brown fox\nnext");
+        let (x, y) = at(&ta, 12);
+        ta.press(&ui, x, y, 0.0, false);
+        ta.release();
+        ta.press(&ui, x, y, 100.0, false);
+        ta.release();
+        assert_eq!(ta.selected_text(), "quick", "double click");
+        ta.press(&ui, x, y, 200.0, false);
+        assert_eq!(ta.selected_text(), "the quick brown fox", "triple click, without the newline");
+        // dragging after a triple click grows by paragraphs
+        let (xn, yn) = at(&ta, 27);
+        ta.drag_to(xn, yn);
+        ta.release();
+        assert_eq!(ta.selected_text(), "the quick brown fox\nnext");
+        // a slow second click starts over
+        ta.press(&ui, x, y, 5000.0, false);
+        assert_eq!(ta.selection(), None);
+        // a double click then a drag grows by words
+        ta.release();
+        ta.press(&ui, x, y, 5100.0, false);
+        let (xb, yb) = at(&ta, 17);
+        ta.drag_to(xb, yb);
+        assert_eq!(ta.selected_text(), "quick brown");
+    }
+
+    #[test]
+    fn hardware_keys_move_extend_select_all_and_delete_by_word() {
+        use bifrost_ui::keys::Key;
+        let ui = ui();
+        let mut ta = area(&ui, 2000.0);
+        ta.set_pointer_mode(true);
+        ta.set_text(&ui, "Title\nthe quick brown");
+        // the caret is at the end: Shift+Option+Left takes the last word
+        assert_eq!(ta.key_combo(&ui, combo(Key::Left, true, true, false), 0.0), Some(false));
+        assert_eq!(ta.selected_text(), "brown");
+        // Shift+Home extends to the start of the line
+        assert_eq!(ta.key_combo(&ui, combo(Key::Home, true, false, false), 1.0), Some(false));
+        assert_eq!(ta.selected_text(), "the quick brown");
+        // a plain Right collapses to the end of the selection
+        ta.key_combo(&ui, combo(Key::Right, false, false, false), 2.0);
+        assert_eq!((ta.caret(), ta.selection()), (21, None));
+        // Shift+Left twice, then Shift+Right once
+        ta.key_combo(&ui, combo(Key::Left, true, false, false), 3.0);
+        ta.key_combo(&ui, combo(Key::Left, true, false, false), 3.0);
+        ta.key_combo(&ui, combo(Key::Right, true, false, false), 3.0);
+        assert_eq!(ta.selected_text(), "n");
+        // Cmd+A
+        ta.key_combo(&ui, combo(Key::Char('a'), false, false, true), 4.0);
+        assert_eq!(ta.selection(), Some(0..21));
+        // Option+Backspace deletes the word before the caret
+        ta.set_caret(21);
+        assert_eq!(ta.key_combo(&ui, combo(Key::Delete, false, true, false), 5.0), Some(true));
+        assert_eq!(ta.text(), "Title\nthe quick ");
+        assert!(ta.undo(&ui, 6.0));
+        assert_eq!(ta.text(), "Title\nthe quick brown");
+        // Shift+Cmd+Up selects to the start of the text
+        ta.set_caret(9);
+        ta.key_combo(&ui, combo(Key::Up, true, false, true), 7.0);
+        assert_eq!(ta.selection(), Some(0..9));
+        // a letter on its own is not an editing key
+        assert_eq!(ta.key_combo(&ui, combo(Key::Char('q'), false, false, false), 8.0), None);
+    }
+
+    #[test]
+    fn shift_with_up_and_down_extends_by_lines() {
+        use bifrost_ui::keys::Key;
+        let ui = ui();
+        let mut ta = area(&ui, 2000.0);
+        ta.set_pointer_mode(true);
+        ta.set_text(&ui, "Title\none\ntwo");
+        ta.set_caret(8);
+        ta.key_combo(&ui, combo(Key::Down, true, false, false), 0.0);
+        assert_eq!(ta.selection().map(|r| r.start), Some(8), "the anchor stays");
+        assert!(ta.caret() > 9, "the caret went down a line");
+        ta.key_combo(&ui, combo(Key::Up, false, false, false), 1.0);
+        assert_eq!(ta.selection(), None, "a plain arrow collapses");
     }
 }
