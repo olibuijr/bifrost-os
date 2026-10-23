@@ -175,17 +175,13 @@ impl Files {
                 }
                 let text = String::from_utf8_lossy(&out.stdout).into_owned();
                 if let Some((_, point)) = text.trim().split_once(' ') {
-                    let _ = std::process::Command::new("/usr/bin/bifrost-apps").arg("--open").arg(point).status();
+                    // the mounted folder opens in this window (`tick` takes it on the main thread)
+                    system::from_worker(system::FromWorker::Show(PathBuf::from(point)));
                 }
             });
         } else {
-            let path = e.path;
-            DispatchQueue::global(Qos::Utility).async_(move || {
-                let _ = std::process::Command::new("/usr/bin/bifrost-apps")
-                    .arg("--open")
-                    .arg(path)
-                    .status();
-            });
+            // the shell opens it in the default app for its type and grants that app the file (`workspace::open_file`)
+            self.sys.effects.push(Effect::OpenFiles(vec![e.path], None));
         }
     }
     pub(crate) fn go_back(&mut self) {
@@ -243,6 +239,11 @@ impl Files {
         self.controls.update(nodes);
     }
     pub(crate) fn click(&mut self, x: f32, y: f32, t: f64) {
+        // a Get Info window only has its permission grid to click
+        if self.info_window {
+            let _ = self.info_click(x, y);
+            return;
+        }
         if self.tag_panel {
             // a colour row toggles that colour on the selection; anywhere else closes the panel
             let row = ((y - TAG_ROWS_TOP) / TAG_ROW).floor();
@@ -275,6 +276,9 @@ impl Files {
         // a pointer click does not leave a keyboard focus ring on a button (Golden Gate: only Tab moves the ring there)
         if self.controls.focused().is_some_and(|n|n.role==Role::Button) { self.controls.focus(None); }
         if self.info.is_some() && self.info_click(x, y) {
+            return;
+        }
+        if self.open_with.is_some() && self.open_with_click(x, y) {
             return;
         }
         if self.preview.is_some() || self.info.is_some() || self.open_with.is_some() {
@@ -439,6 +443,10 @@ impl Files {
         // Reset every dirty pixel opaquely, including fractional-scale edge rows. The content area is the window's
         // white in Light and the dark content grey in Dark (CONTENT_BG), not the pure black of DETAIL_BG.
         s.fill_rect(0,0,s.w,s.h,CONTENT_BG.now());
+        if self.info_window {
+            self.paint_info(ui, s);
+            return;
+        }
         // Golden Gate full-size window: the sidebar runs to the top edge under the traffic lights (the shell draws them)
         if !self.sidebar_hidden {
             let pressed = if self.dragging { self.drop_target.as_ref().and_then(|t| self.sidebar_id(t)) } else { None };

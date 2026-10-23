@@ -199,6 +199,8 @@ impl Files {
         }
         self.preview = None;
         self.info = Some(Info { name: entry.name.clone(), rows, path: entry.path.clone(), mode, editable });
+        // the reference shows Get Info in a small window of its own; the panel stays as the fallback
+        self.info_wanted = !self.info_window;
         self.revision += 1;
     }
     /// The Tags panel.
@@ -224,8 +226,10 @@ impl Files {
     pub(crate) fn paint_info(&self, ui: &Ui, s: &mut Surface) {
         let (w, h) = (self.w, self.h);
         if let Some(info) = &self.info {
-            let (x, y) = (self.side() + 16., 72.);
-            rect(s, ui, x, y, w - x - 16., h - y - 64., CARD_BG.now());
+            let (x, y) = self.info_origin();
+            if !self.info_window {
+                rect(s, ui, x, y, w - x - 16., h - y - 64., CARD_BG.now());
+            }
             text(s, ui, &info.name, 17., LABEL.now(), x + 20., y + 18., w - x - 56.);
             for (i, (label, value)) in info.rows.iter().enumerate() {
                 let row_y = y + 56. + i as f32 * 26.;
@@ -234,7 +238,11 @@ impl Files {
             }
             self.paint_perm_grid(ui, s);
             let grid_h = if info.mode.is_some() { perms::GRID_H + 14. } else { 0. };
-            let hint = if info.mode.is_none() {
+            let hint = if self.info_window && !info.editable {
+                ""
+            } else if self.info_window {
+                "Click a box to change who can read, write or run it."
+            } else if info.mode.is_none() {
                 "Press Escape or click to close"
             } else if info.editable {
                 "Click a box to change who can read, write or run it. Press Escape to close"

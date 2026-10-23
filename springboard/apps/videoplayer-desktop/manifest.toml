@@ -8,6 +8,7 @@ summary = "Plays movie files with captions, trim marks and audio recording."
 category = "Photo & Video"
 architecture = "x86_64-linux"
 permissions = ["storage", "documents", "audio"]
+handles = ["public.movie:owner"]
 window = "full-size"
 
 [[intent]]

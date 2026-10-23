@@ -74,6 +74,7 @@ mod undo;
 mod views;
 mod window;
 mod windows;
+mod info_window;
 use barmenu::*;
 use extensions::*;
 use go::*;
@@ -194,6 +195,10 @@ struct Files {
     sys: SystemState,
     /// The windows opened with New Window (⌘N), in the order they were opened. The main window is `self`.
     windows: Vec<windows::ExtraWindow>,
+    /// This `Files` is a Get Info window (`info_window.rs`): it shows only its `info`, filling the window.
+    info_window: bool,
+    /// Get Info asked for its own window; `open_info_window` opens it once a `Ctx` is at hand.
+    info_wanted: bool,
     /// File-manager sync extensions: apps that badge items and add menu items for the folders they declare. A cell,
     /// because drawing asks for the badges.
     ext: std::cell::RefCell<Extensions>,
@@ -289,6 +294,8 @@ impl Files {
             row_text: Default::default(),
             sys: SystemState::default(),
             windows: Vec::new(),
+            info_window: false,
+            info_wanted: false,
             ext,
         };
         // a folder given on the command line opens there (Show in Files)
@@ -357,6 +364,7 @@ impl App for Files {
     }
     fn event(&mut self, ctx: &Ctx, input: Input) -> bool {
         let handled = self.route_input(ctx, input);
+        self.open_info_window(ctx);
         self.flush_services(ctx);
         handled
     }
@@ -377,12 +385,16 @@ impl App for Files {
     }
     fn drag(&mut self, ctx: &Ctx, ev: bifrost_app::dnd::Event) -> bool {
         match ev {
-            bifrost_app::dnd::Event::Dest { session, phase, x, y, items, .. } => self.drag_out_dest(ctx, session, phase, x / ctx.ui.s, y / ctx.ui.s, items),
+            bifrost_app::dnd::Event::Dest { session, phase, x, y, allowed, items } => self.drag_out_dest(ctx, session, phase, x / ctx.ui.s, y / ctx.ui.s, allowed, items),
             bifrost_app::dnd::Event::Ended { session, .. } => self.drag_out_ended(ctx, session),
         }
     }
     fn document(&mut self, ctx: &Ctx, ev: bifrost_app::DocumentEvent) -> bool {
-        self.drag_out_document(ctx, ev)
+        // a grant for an Open goes to the workspace; the rest belong to drag and drop
+        match system::open_answer(ctx, ev) {
+            Ok(changed) => changed,
+            Err(ev) => self.drag_out_document(ctx, ev),
+        }
     }
     fn window_event(&mut self, ctx: &Ctx, window: WindowId, ev: Input) -> bool {
         if window.is_main() {
@@ -392,7 +404,13 @@ impl App for Files {
         let Some(e) = self.windows.iter_mut().find(|e| e.id == window) else { return false };
         match ev {
             // an extra window's touches arrive in window points (`WindowTouch`); `event` takes px, as the main window's
-            Input::Touch { .. } => e.files.event(ctx, bifrost_app::app_windows::window_touch_in_px(ev, ctx.ui.pt(1.0))),
+            Input::Touch { .. } => {
+                let changed = e.files.event(ctx, bifrost_app::app_windows::window_touch_in_px(ev, ctx.ui.pt(1.0)));
+                // a window that window opened (Get Info) is drawn and closed from here, with the others
+                let opened = std::mem::take(&mut e.files.windows);
+                self.windows.extend(opened);
+                changed
+            }
             _ => false,
         }
     }
@@ -415,6 +433,20 @@ impl App for Files {
         if let Some(name) = self.sys.take_app_open_failure() {
             self.notice = Some(format!("\u{201C}{name}\u{201D} can\u{2019}t be opened."));
             self.revision += 1;
+            changed = true;
+        }
+        // a file the shell would not open (no app declares its type, or the grant was refused)
+        if let Some(name) = system::take_open_failure() {
+            self.notice = Some(format!("The document \u{201C}{name}\u{201D} could not be opened."));
+            self.revision += 1;
+            changed = true;
+        }
+        // a provider download to open, or a mounted disk image to show
+        for work in system::take_from_workers() {
+            match work {
+                system::FromWorker::Open(path) => self.sys.effects.push(Effect::OpenFiles(vec![path], None)),
+                system::FromWorker::Show(folder) => self.navigate(folder, true),
+            }
             changed = true;
         }
         if self.poll_server() {
@@ -603,6 +635,7 @@ impl Files {
                 x,
                 y,
                 t: _,
+                mods,
                 ..
             } => {
                 let (x, y) = (x / ctx.ui.s, y / ctx.ui.s);
@@ -622,6 +655,10 @@ impl Files {
                     }
                 }
                 if self.dragging {
+                    // Option held while dragging inside the window copies instead of moving
+                    if mods.option() {
+                        self.fx.copy_drag = true;
+                    }
                     let target = self.drop_target_at(x, y);
                     if target != self.drop_target {
                         self.spring_hover(target.as_ref());
@@ -810,7 +847,7 @@ mod tests {
     pub(crate) fn fixture(rows: Vec<Entry>) -> Files {
         Files {
             scope_bar: ScopeBar::default(),
-            dnd: Default::default(), windows: Vec::new(), home:"/fixture".into(), path:"/fixture".into(), history:vec![], at:0,
+            dnd: Default::default(), windows: Vec::new(), info_window: false, info_wanted: false, home:"/fixture".into(), path:"/fixture".into(), history:vec![], at:0,
             tabs: tabs::TabStrip::new(tabs::TabState { path: "/fixture".into(), history: vec![], at: 0 }),
             listing: rows.clone(), rows, hits: None, search: None, selection:vec![], select_mode:false, sidebar_hidden:false, status_bar:false, title_w:120., path_segs:vec![], loading:false, error:None, job:None,grid:true,sort:Sort::Name,
             query:TextField::new(),controls:Controls::default(),searching:false,scroll:0.,down:None,last_click:None,preview:None,

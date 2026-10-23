@@ -640,6 +640,14 @@ impl Files {
     }
     /// File > Open (Cmd+O, Cmd+Down): opens the focused item as a double-click does.
     pub(crate) fn open_selected(&mut self) {
+        // several selected files each open in their app, as Open on a selection does in the reference
+        let files: Vec<usize> = self.selection.iter().copied().filter(|&i| self.rows.get(i).is_some_and(|e| !e.is_dir)).collect();
+        if self.selection.len() > 1 && files.len() == self.selection.len() {
+            for i in files {
+                self.open(i);
+            }
+            return;
+        }
         if let Some(i) = self.focus() {
             self.open(i);
         }

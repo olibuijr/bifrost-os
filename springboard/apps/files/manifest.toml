@@ -8,5 +8,6 @@ summary = "Desktop file browser with sidebar, icon and list views, search and Pr
 category = "Utilities"
 architecture = "x86_64-linux"
 permissions = ["storage", "documents"]
+handles = ["public.folder:owner"]
 window = "full-size"
 help = "help"

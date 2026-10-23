@@ -122,7 +122,7 @@ impl Files {
     fn perm_grid_origin(&self) -> Option<(f32, f32)> {
         let info = self.info.as_ref()?;
         info.mode?;
-        let (x, y) = (self.side() + 16., 72.);
+        let (x, y) = self.info_origin();
         Some((x + 20., y + 56. + info.rows.len() as f32 * 26. + 14.))
     }
     /// A click while Get Info is open: a cell of the permissions grid changes the mode (true); anything else is not ours.

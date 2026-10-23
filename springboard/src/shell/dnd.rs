@@ -9,6 +9,11 @@
 //! `Perform`; the destination answers `DragPerformed`, and the source hears `ToApp::DragEnded` with the operation (0 when
 //! nothing took the drop).
 //!
+//! A drop on the source's own window always ends in `Perform` there, whatever the window last replied: the app moves or
+//! copies within itself (Files dropping on one of its folder rows), and its reply to the last `Updated` may still be on
+//! the way when the button goes up. The modifier keys narrow the source's mask the way `draggingSourceOperationMask` does:
+//! Option is copy, Command is move, both are link; the destination hears the narrowed mask as `allowed`.
+//!
 //! `Session` is the pure state machine; `Shell::dnd_*` feed it from the sockets and the pointer.
 
 use super::sharing::{text_url, INBOUND};
@@ -16,7 +21,7 @@ use super::apps::apps;
 use super::AppId;
 #[cfg(feature = "desktop-wayland")]
 use crate::files::batch;
-use bifrost_proto::{dragop, DragItem, DragPhase, DragPreview, GrantId, Payload, ToApp, ToShell};
+use bifrost_proto::{dragop, DragItem, DragPhase, DragPreview, GrantId, ModifierFlags, Payload, ToApp, ToShell};
 use std::collections::HashMap;
 #[cfg(feature = "desktop-wayland")]
 use std::path::{Path, PathBuf};
@@ -52,7 +57,7 @@ struct Over {
     slot: u8,
     x: f32,
     y: f32,
-    /// the operation the destination last replied with
+    /// the operation the destination last replied with, as it sent it (negotiated against the mask when read)
     op: u8,
 }
 
@@ -68,6 +73,21 @@ pub struct Session {
     over: Option<Over>,
     /// the destination `Perform` went to; the session ends when it answers
     pub performing: Option<u8>,
+    /// the modifier keys held at the last pointer step (`modifier_mask`)
+    mods: ModifierFlags,
+}
+
+/// The source's mask as the modifier keys narrow it (`draggingSourceOperationMask`): Option asks for copy, Command for
+/// move, both for link; with no modifier the source's mask stands. A wanted operation the source does not allow leaves
+/// nothing (0), as in the reference.
+pub fn modifier_mask(allowed: u8, mods: ModifierFlags) -> u8 {
+    let want = match (mods.option(), mods.command()) {
+        (true, true) => dragop::LINK,
+        (true, false) => dragop::COPY,
+        (false, true) => dragop::MOVE,
+        (false, false) => return allowed,
+    };
+    allowed & want
 }
 
 /// True when a window that registered `registered` takes at least one of `items` (`NativeDraggingInfo` types match): some type
@@ -87,7 +107,17 @@ pub fn negotiate(allowed: u8, reply: u8) -> u8 {
 
 impl Session {
     pub fn new(id: u32, source: u8, source_app: &str, allowed: u8, items: Vec<DragItem>, preview: DragPreview) -> Self {
-        Session { id, source, source_app: source_app.into(), allowed, items, preview, pos: None, over: None, performing: None }
+        Session { id, source, source_app: source_app.into(), allowed, items, preview, pos: None, over: None, performing: None, mods: ModifierFlags::EMPTY }
+    }
+
+    /// The modifier keys held now; they narrow the mask the destinations hear and the operation a reply selects.
+    pub fn set_modifiers(&mut self, mods: ModifierFlags) {
+        self.mods = mods;
+    }
+
+    /// The operations the source allows under the held modifier keys (`allowed` in `DragDest`).
+    pub fn mask(&self) -> u8 {
+        modifier_mask(self.allowed, self.mods)
     }
 
     /// The destination window the session is over.
@@ -97,7 +127,7 @@ impl Session {
 
     /// The operation currently agreed (0 until the destination replies).
     pub fn operation(&self) -> u8 {
-        self.over.map_or(0, |o| o.op)
+        self.over.map_or(0, |o| negotiate(self.mask(), o.op))
     }
 
     /// The pointer moved to `target` (None: not over an app window). `takes(slot)` says whether that window registered for
@@ -130,17 +160,18 @@ impl Session {
 
     /// The destination `slot` replied to `Entered` / `Updated` with `op`. Stale replies (another window) are ignored.
     pub fn reply(&mut self, slot: u8, op: u8) {
-        let allowed = self.allowed;
         if let Some(o) = self.over.as_mut().filter(|o| o.slot == slot) {
-            o.op = negotiate(allowed, op);
+            o.op = op;
         }
     }
 
     /// The pointer was released. Over a destination that agreed to an operation this is `Perform` (the session then waits
-    /// for `performed`); otherwise the destination, if any, hears `Exited` and the session ends with nothing.
+    /// for `performed`); otherwise the destination, if any, hears `Exited` and the session ends with nothing. The source's
+    /// own window always gets `Perform`: it decides itself (its last reply may not have arrived yet).
     pub fn release(&mut self) -> Vec<Out> {
+        let op = self.operation();
         match self.over {
-            Some(o) if o.op != 0 => {
+            Some(o) if op != 0 || o.slot == self.source => {
                 self.performing = Some(o.slot);
                 vec![Out::Dest { slot: o.slot, phase: DragPhase::Perform, x: o.x, y: o.y }]
             }
@@ -213,7 +244,10 @@ impl super::Shell {
             }
             ToShell::DragBegin { session, allowed, items, preview } => {
                 let source_app = self.ext.get(slot as usize).and_then(Option::as_ref).map(|h| h.id.clone());
-                let ok = self.dnd.session.is_none() && self.ext_fg == Some(slot) && session & INBOUND != 0 && allowed != 0 && valid_items(&items);
+                // the source is the app in front: the full-screen foreground app, or on the desktop the owner of the front
+                // window (a drag starts with a press in a window, which raises it; `ext_fg` follows only the full-screen app)
+                let front = self.ext_fg == Some(slot) || self.desk.as_ref().and_then(|d| d.front()).is_some_and(|w| w.app.parent() == AppId::External(slot));
+                let ok = self.dnd.session.is_none() && front && session & INBOUND != 0 && allowed != 0 && valid_items(&items);
                 match (ok, source_app) {
                     (true, Some(app)) => {
                         let preview = if preview.valid() { preview } else { DragPreview::default() };
@@ -296,6 +330,7 @@ impl super::Shell {
         let registered = &self.dnd.registered;
         let items = sess.items.clone();
         let takes = |slot: u8| registered.get(&slot).is_some_and(|r| accepts(r, &items));
+        sess.set_modifiers(self.key_mods);
         let mut outs = sess.moved(target, &takes);
         sess.pos = Some((x, y));
         if up {
@@ -436,7 +471,7 @@ impl super::Shell {
             match out {
                 Out::Dest { slot, phase, x, y } => {
                     let Some(s) = self.dnd.session.as_ref() else { continue };
-                    let (id, allowed, source_app, source) = (s.id, s.allowed, s.source_app.clone(), s.source);
+                    let (id, allowed, source_app, source) = (s.id, s.mask(), s.source_app.clone(), s.source);
                     let mut items = Vec::new();
                     if phase == DragPhase::Entered {
                         items = s.items.clone();
@@ -597,6 +632,40 @@ mod tests {
         assert_eq!(s.release(), vec![dest(2, DragPhase::Perform, 3.0, 4.0)]);
         assert_eq!(s.performing, Some(2));
         assert_eq!(s.performed(true), vec![Out::Ended { op: dragop::MOVE }]);
+    }
+
+    #[test]
+    fn a_drop_on_the_source_window_always_performs_there() {
+        // the source is slot 0: its own window hears Perform even before (or without) an agreeing reply
+        let mut s = session(dragop::COPY | dragop::MOVE, vec![png()]);
+        assert_eq!(s.moved(at(0, 10.0, 20.0), ALL), vec![dest(0, DragPhase::Entered, 10.0, 20.0)]);
+        assert_eq!(s.release(), vec![dest(0, DragPhase::Perform, 10.0, 20.0)]);
+        assert_eq!(s.performing, Some(0));
+        assert_eq!(s.performed(true), vec![Out::Ended { op: 0 }], "no operation was agreed, the app moved the files itself");
+        // another window still needs an agreeing reply
+        let mut s = session(dragop::COPY, vec![png()]);
+        s.moved(at(2, 1.0, 1.0), ALL);
+        assert_eq!(s.release(), vec![dest(2, DragPhase::Exited, 1.0, 1.0), Out::Ended { op: 0 }]);
+    }
+
+    #[test]
+    fn modifier_keys_narrow_the_mask_and_the_operation() {
+        let both = dragop::COPY | dragop::MOVE;
+        assert_eq!(modifier_mask(both, ModifierFlags::EMPTY), both);
+        assert_eq!(modifier_mask(both, ModifierFlags::OPTION), dragop::COPY, "Option copies");
+        assert_eq!(modifier_mask(both, ModifierFlags::COMMAND), dragop::MOVE, "Command moves");
+        assert_eq!(modifier_mask(dragop::ALL, ModifierFlags::OPTION.union(ModifierFlags::COMMAND)), dragop::LINK);
+        assert_eq!(modifier_mask(dragop::MOVE, ModifierFlags::OPTION), 0, "the source does not allow copy");
+        assert_eq!(modifier_mask(both, ModifierFlags::SHIFT), both, "other keys leave the mask");
+        let mut s = session(both, vec![png()]);
+        s.moved(at(2, 0.0, 0.0), ALL);
+        s.reply(2, dragop::MOVE);
+        assert_eq!(s.operation(), dragop::MOVE);
+        s.set_modifiers(ModifierFlags::OPTION);
+        assert_eq!(s.mask(), dragop::COPY);
+        assert_eq!(s.operation(), 0, "a move reply does not stand while Option asks for a copy");
+        s.reply(2, dragop::COPY);
+        assert_eq!(s.operation(), dragop::COPY);
     }
 
     #[test]

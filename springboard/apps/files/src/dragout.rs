@@ -9,6 +9,29 @@ use bifrost_app::dnd::{self, DragItem, DragPhase, DragPreview, Payload};
 use bifrost_app::proto::GrantId;
 use bifrost_app::{Document, DocumentEvent};
 
+/// Whether a drop of this window's own drag copies: Option was held (`copy_drag`), or the shell narrowed the mask so that
+/// a move is not allowed (Option held while the shell owns the pointer).
+pub(crate) fn own_drop_copies(copy_drag: bool, allowed: u8) -> bool {
+    copy_drag || allowed & dnd::dragop::MOVE == 0
+}
+
+/// The operation this window answers for a hover: none away from a folder; inside the window a move, or a copy when
+/// `copy`; files from another app are always copied.
+pub(crate) fn drop_reply(over_folder: bool, own: bool, copy: bool) -> u8 {
+    match (over_folder, own) {
+        (false, _) => 0,
+        (true, true) if copy => dnd::dragop::COPY,
+        (true, true) => dnd::dragop::MOVE,
+        (true, false) => dnd::dragop::COPY,
+    }
+}
+
+/// Whether an `Ended` for this window's own session means the shell refused it: no `Dest` event came for it while the
+/// window still drags. Then the touches stay with the window and its own drop handles the release.
+pub(crate) fn session_refused(heard: bool, dragging: bool) -> bool {
+    !heard && dragging
+}
+
 /// The cross-window drag state of one window.
 #[derive(Default)]
 pub(crate) struct DragOut {
@@ -21,6 +44,8 @@ pub(crate) struct DragOut {
     /// the session this window began; its grants go back when it ends
     pub(crate) session: Option<u32>,
     session_grants: Vec<GrantId>,
+    /// the shell sent this window a `Dest` event of its own session: the shell owns the pointer for it
+    heard: bool,
     /// a drag from another app hovers over this window: its session, and how many items it carries
     pub(crate) foreign: Option<u32>,
     pub(crate) foreign_items: usize,
@@ -64,6 +89,7 @@ impl Files {
         let session = dnd::begin(ctx, dnd::dragop::COPY | dnd::dragop::MOVE, items, std::mem::take(&mut self.dnd.preview));
         self.dnd.session = Some(session);
         self.dnd.session_grants = grants;
+        self.dnd.heard = false;
     }
 
     /// `Ctx` document answers: grants for the drag, the files a drop brings, and the refusals.
@@ -118,8 +144,14 @@ impl Files {
     }
 
     /// Pointer hovers, enters, leaves or drops on this window during a session (own or another app's).
-    pub(crate) fn drag_out_dest(&mut self, ctx: &Ctx, session: u32, phase: DragPhase, x: f32, y: f32, items: Vec<DragItem>) -> bool {
+    /// `allowed` is the source's mask as the held modifier keys narrow it (Option leaves copy only).
+    pub(crate) fn drag_out_dest(&mut self, ctx: &Ctx, session: u32, phase: DragPhase, x: f32, y: f32, allowed: u8, items: Vec<DragItem>) -> bool {
         let own = self.dnd.session == Some(session);
+        if own {
+            self.dnd.heard = true;
+        }
+        // a drag inside this window moves; Option (the key, or a mask the shell narrowed to copy) copies
+        let copy = own_drop_copies(self.fx.copy_drag, allowed);
         match phase {
             DragPhase::Entered | DragPhase::Updated => {
                 if !own {
@@ -136,13 +168,7 @@ impl Files {
                 }
                 self.revision += 1;
                 // inside this window a drag moves the items, Option copies; files from another app are copied
-                let op = match (&self.drop_target, own) {
-                    (None, _) => 0,
-                    (Some(_), true) if self.fx.copy_drag => dnd::dragop::COPY,
-                    (Some(_), true) => dnd::dragop::MOVE,
-                    (Some(_), false) => dnd::dragop::COPY,
-                };
-                dnd::reply(ctx, session, op);
+                dnd::reply(ctx, session, drop_reply(self.drop_target.is_some(), own, copy));
                 true
             }
             DragPhase::Exited => {
@@ -156,9 +182,12 @@ impl Files {
                 let dest = self.drop_target.take();
                 self.spring_hover(None);
                 if own {
+                    // a drop on one of this window's folders (the shell always hands the source window its own drop): the
+                    // target from the last Updated, else the folder under the drop point
+                    let dest = dest.or_else(|| self.drop_target_at(x, y));
                     self.dragging = false;
                     let paths = std::mem::take(&mut self.fx.drag_paths);
-                    let copy = std::mem::take(&mut self.fx.copy_drag);
+                    self.fx.copy_drag = false;
                     let accepted = dest.is_some();
                     if let Some(dest) = dest {
                         let (title, op) = if copy { ("Copying", Op::Copy) } else { ("Moving", Op::Move) };
@@ -200,6 +229,11 @@ impl Files {
             for grant in std::mem::take(&mut self.dnd.session_grants) {
                 ctx.release_document(grant);
             }
+            if session_refused(std::mem::take(&mut self.dnd.heard), self.dragging) {
+                // the shell refused the session (or ended it before the pointer moved): the pointer is still this
+                // window's, so the drag goes on inside it and the release drops on the folder under it
+                return true;
+            }
             self.dragging = false;
             self.down = None;
             self.drop_target = None;
@@ -217,5 +251,31 @@ impl Files {
             return true;
         }
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bifrost_app::dnd::dragop;
+
+    #[test]
+    fn a_drag_inside_the_window_moves_and_option_copies() {
+        let both = dragop::COPY | dragop::MOVE;
+        assert!(!own_drop_copies(false, both));
+        assert!(own_drop_copies(true, both), "Option seen by the window");
+        assert!(own_drop_copies(false, dragop::COPY), "Option narrowed the mask while the shell owns the pointer");
+        assert_eq!(drop_reply(true, true, false), dragop::MOVE);
+        assert_eq!(drop_reply(true, true, true), dragop::COPY);
+        assert_eq!(drop_reply(true, false, false), dragop::COPY, "another app's files are copied");
+        assert_eq!(drop_reply(false, true, false), 0, "not over a folder");
+        assert_eq!(drop_reply(false, false, true), 0);
+    }
+
+    #[test]
+    fn a_session_ended_before_any_dest_event_leaves_the_drag_in_the_window() {
+        assert!(session_refused(false, true), "refused at once: the drag goes on in the window");
+        assert!(!session_refused(true, true), "the shell owned the pointer: the drag is over");
+        assert!(!session_refused(false, false), "nothing is being dragged any more");
     }
 }

@@ -9,6 +9,7 @@ category = "Utilities"
 kind = "system-app"
 architecture = "x86_64-linux"
 permissions = ["storage", "documents"]
+handles = ["public.png:owner", "public.jpeg:owner", "com.compuserve.gif:owner", "public.webp:owner", "public.svg-image:alternate", "public.image:default", "com.adobe.pdf:owner"]
 window = "full-size"
 
 [[service]]
