@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.1 — 2026-10-23
+
+- Rebuilt with the shared text-rendering fix so invisible formatting characters in message viewers no longer appear as missing-glyph boxes.
+
 ## 0.17.0 — 2026-10-23
 
 - The compose window takes clicks, typing, Esc and its menu items (keys and commands now reach the window they were sent to, and its fields hit-test at the window's own size).

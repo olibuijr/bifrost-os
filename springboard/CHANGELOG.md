@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.10.22 — 2026-10-23
+
+- Text rendering no longer draws missing-glyph boxes for invisible formatting characters; soft hyphens stay invisible except at line breaks. Apps receive this fix when rebuilt with the updated renderer.
+- Scrolling app context menus stay within the desktop work area without rounding one pixel under the Dock.
+- Corrected the new soft-hyphen regression test to cover its entire input.
+
 ## 0.10.21 — 2026-10-23
 
 Five rounds of end-to-end testing on Midget, each followed by fixes.

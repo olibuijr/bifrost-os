@@ -1489,13 +1489,13 @@ mod tests {
     #[test]
     fn a_soft_hyphen_is_invisible_unless_the_line_breaks_at_it() {
         let t = ts("abc\u{ad}defgh");
-        let whole = t.create_line(0..8);
-        assert_eq!(whole.typographic_bounds().width, 70.0, "mid-line the soft hyphen takes no room");
+        let whole = t.create_line(0..t.len());
+        assert_eq!(whole.typographic_bounds().width, 80.0, "mid-line the soft hyphen takes no room");
         assert_eq!(t.suggest_line_break(0, 45.0), 4, "the line may break after the soft hyphen");
         let first = t.create_line(0..4);
         assert_eq!(line_text(&first), "abc-", "and there it shows as a hyphen");
         assert_eq!(first.typographic_bounds().width, 40.0);
-        assert_eq!(line_text(&t.create_line(4..8)), "defgh");
+        assert_eq!(line_text(&t.create_line(4..t.len())), "defgh");
         let end = ts("abc\u{ad}").create_line(0..4);
         assert_eq!(end.typographic_bounds().width, 30.0, "at the end of the paragraph it stays invisible");
     }

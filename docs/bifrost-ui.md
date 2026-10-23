@@ -27,6 +27,22 @@ and semantic Back/Forward/View/Search controls. Tab traverses enabled controls;
 Enter activates a focused button. Left/Right/Home/End/Delete edit search text.
 Cut/Copy/Paste/Select All are available through the desktop Edit menu.
 
+## Invisible text characters (system 0.10.22)
+
+The shared renderer omits Unicode default-ignorable characters from visible glyph
+placement and measurement, including zero-width spaces, formatting controls and
+soft hyphens. This prevents missing-glyph boxes in plain-text message viewers.
+Joiners remain in the shaping input where supported; font fallback does not split
+runs for invisible characters. GPU glyph placement and SDK outline drawing also
+skip them. The typesetter shows a soft hyphen only where a line ends at it.
+
+Regression coverage: `default_ignorable_characters_take_no_room_and_draw_no_box`,
+`placements_skip_default_ignorable_characters` and
+`a_soft_hyphen_is_invisible_unless_the_line_breaks_at_it`.
+The line-fitting step does not yet reserve a visible hyphen's width. This change
+does not establish complete script-shaping parity. Apps statically link these
+paths and need rebuilding to receive the fix; Mail 0.17.1 includes it.
+
 ## System services (named service channel)
 
 One generic channel lets an app use a shell feature without a new wire message. The app calls

@@ -26,7 +26,7 @@
    "apple": "CTFont glyph lookup, CTGlyphInfo",
    "bifrost": "springboard/render/src/font.rs (Font::glyph, Font::glyph_named, lookup); springboard/render/src/fontobj.rs (glyph_for_char, with_glyph_override, fallback_runs); springboard/render/src/fontfallback.rs (split); springboard/render/tests/parity_sdk-complete-17.rs",
    "status": "partial",
-   "note": "cmap formats 4 and 12 (Unicode) and CFF glyph names, with misses at glyph 0, per-font glyph overrides and cascade runs through script faces, all tested headless. Gap: the lab machine has not compared the fallback choices with the reference system."
+   "note": "cmap formats 4 and 12 (Unicode) and CFF glyph names, with misses at glyph 0, per-font glyph overrides and cascade runs through script faces, all tested headless. Gap: the lab machine has not compared the fallback choices with the reference system. 2026-10-23 follow-up: default-ignorable characters have no visible glyph or advance in CPU/GPU text and SDK outline drawing; host regression tests cover the behavior. Mail 0.17.1 is rebuilt with this fix. This does not close script-shaping or fallback-comparison gaps."
   },
   {
    "feature": "Font metrics",
@@ -75,7 +75,7 @@
    "apple": "CTTypesetterSuggestLineBreak, CTLineCreateTruncatedLine",
    "bifrost": "springboard/ui/src/typeset.rs (frame wrapping, truncated_line, Truncation)",
    "status": "parity",
-   "note": "verified on Midget 0.7.25 by 21 tests. Greedy word wrap and binary-search truncation against a caller-supplied measure function. No grapheme or script-aware break rules beyond whitespace. Browser layout has its own wrapper in springboard/src/shell/browser/layout2/text.rs."
+   "note": "verified on Midget 0.7.25 by 21 tests. Greedy word wrap and binary-search truncation against a caller-supplied measure function. No grapheme or script-aware break rules beyond whitespace. Browser layout has its own wrapper in springboard/src/shell/browser/layout2/text.rs. 2026-10-23 follow-up: soft hyphens are invisible inside a line and shown at a break. The new behavior is covered by a host regression test; visible hyphen width is not yet reserved by line fitting. The existing parity status does not attest this follow-up on Midget."
   },
   {
    "feature": "Line and run layout objects (typesetter, framesetter, line, run, frame)",
