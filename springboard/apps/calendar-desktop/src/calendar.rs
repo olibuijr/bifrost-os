@@ -307,6 +307,9 @@ pub struct Calendar {
     /// Event editors shown in windows of their own (`window.rs`), the event a double-click asked to open, and the last
     /// tap on an event with its time (a second tap in time is a double-click).
     panes: Vec<window::Pane>,
+    /// Editor windows whose event was deleted from the main window (Event > Delete Event, Backspace): the app closes them
+    /// (`take_closed_windows`).
+    closed_windows: Vec<u32>,
     open_request: Option<u64>,
     last_tap: Option<(u64, f64)>,
     /// Replies and invitations waiting for Mail (`rsvp.rs`); the app takes them with `take_outgoing`.
@@ -426,6 +429,7 @@ impl Calendar {
             subs,
             fields,
             panes: Vec::new(),
+            closed_windows: Vec::new(),
             open_request: None,
             last_tap: None,
             outbox: Vec::new(),
@@ -833,6 +837,9 @@ impl Calendar {
     fn close(&mut self) {
         if self.editor.take().is_some() {
             let saved = self.saved_scroll;
+            // the scroller still has the form's range, which is shorter than the hour grid's: widen it first, or the
+            // grid comes back clamped (8 AM at the top became 5 AM, E2E W2-18). The next `fit_scroll` sets the real range.
+            self.scroll.set_max(saved);
             self.scroll.jump_to(saved);
         }
         self.focus(None);
@@ -1026,8 +1033,8 @@ impl Calendar {
                 if !delete {
                     self.invite_new_attendees(&event);
                 }
+                // the grid comes back where it was (`close`), not at midnight
                 self.close();
-                self.scroll.jump_top();
                 self.fit_scroll(ui);
             }
             Err(e) => {
@@ -1313,6 +1320,14 @@ impl Calendar {
             return;
         }
         if self.editor.is_none() {
+            // Backspace and Delete delete the event selected with a click, with the Undo bar (E2E W2-16)
+            if matches!(out, Out::Backspace | Out::Named("Delete")) {
+                if self.delete_picked(t) {
+                    self.fit_scroll(ui);
+                }
+                self.dirty = true;
+                return;
+            }
             if out == Out::Enter {
                 self.open(ui, None);
                 self.dirty = true;
@@ -1332,6 +1347,12 @@ impl Calendar {
         }
         // the Add Invitees line, when it is open, takes the keys
         if self.invitee_key(out.clone()) {
+            return;
+        }
+        // Return in the title or the location is Save, as in the stock app's event popover (E2E W2-18)
+        if out == Out::Enter && matches!(self.focused(), Some(0 | 1)) {
+            self.focus(None);
+            self.activate(ui, Target::Save, t);
             return;
         }
         if matches!(out, Out::Hide | Out::Enter) {
@@ -1945,7 +1966,8 @@ impl Calendar {
         match cmd {
             Command::Save | Command::Duplicate => editing,
             Command::ExportEvent => editing && saved && self.file_export,
-            Command::Delete => editing && saved,
+            // the open event, or with no form open the event selected with a click (E2E W2-16)
+            Command::Delete => (editing && saved) || (!busy && self.picked_event().is_some()),
             Command::WeekNumbers | Command::ExportCalendar => !busy && self.file_export,
             Command::ZoomIn => !busy && self.time_view() && self.prefs.hour_h < prefs::HOUR_H_MAX,
             Command::ZoomOut => !busy && self.time_view() && self.prefs.hour_h > prefs::HOUR_H_MIN,
@@ -1990,6 +2012,12 @@ impl Calendar {
         if cmd == Command::NewCalendar {
             self.open_line(linesheet::Purpose::NewCalendar, "");
             return true;
+        }
+        if cmd == Command::Delete && self.editor.is_none() {
+            let deleted = self.delete_picked(t);
+            self.fit_scroll(ui);
+            self.dirty = true;
+            return deleted;
         }
         let target = match cmd {
             Command::NewEvent => Target::Add,

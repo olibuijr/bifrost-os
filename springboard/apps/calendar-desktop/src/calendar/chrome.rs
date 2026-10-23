@@ -174,7 +174,8 @@ impl Calendar {
         }
         items.push(ToolbarItem::flexible_space());
         // the time zone the grids show times in: a tap steps through the zones, back to each event's own (`viewzone.rs`)
-        items.push(ToolbarItem::button(B_ZONE, self.view_zone_label()).selected(self.prefs.view_zone.is_some()));
+        // a glyph, not the zone's name: a text button pushed the bar into its overflow (E2E W2-18); the name is its label
+        items.push(ToolbarItem::icon(B_ZONE, self.view_zone_label(), "globe").selected(self.prefs.view_zone.is_some()));
         if self.file_export {
             items.push(ToolbarItem::button(B_WEEKNO, "Week Numbers").selected(self.prefs.week_numbers));
             items.push(ToolbarItem::icon(B_EXPORT, "Export Calendar", "square.and.arrow.up"));
@@ -448,12 +449,25 @@ impl Calendar {
 
     /// The window around the content: the calendar list, the toolbar band and every toolbar.
     pub(super) fn draw_chrome(&mut self, s: &mut Surface, ui: &Ui) {
+        self.draw_chrome_opaque(s, ui, false);
+    }
+
+    /// The chrome with the toolbar band as window material (`opaque` false, the main window), or filled with the content
+    /// colour (an editor window: there the material shows whatever window is behind it).
+    pub(super) fn draw_chrome_opaque(&mut self, s: &mut Surface, ui: &Ui, opaque: bool) {
         let k = Self::k(ui);
         if self.x0 > 0.0 {
             widgets::source_list(s, ui, Rect { x: 0.0, y: 0.0, w: self.x0 / k, h: self.h as f32 / k }, &self.sidebar(), SIDE_SCROLL, None);
             s.fill_rect(self.x0 as usize - 1, 0, 1, self.h as usize, SEPARATOR_C.now());
         }
-        widgets::toolbar_band(s, ui, Rect { x: self.x0 / k, y: 0.0, w: self.w as f32 / k, h: UNIFIED_BAR_PT });
+        if opaque {
+            let band_h = ui.pt(UNIFIED_BAR_PT) as usize;
+            let x = self.x0 as usize;
+            s.fill_rect(x, 0, s.w.saturating_sub(x), band_h, CONTENT_BG.now());
+            s.fill_rect(x, band_h.saturating_sub(1), s.w.saturating_sub(x), 1, SEPARATOR_C.now());
+        } else {
+            widgets::toolbar_band(s, ui, Rect { x: self.x0 / k, y: 0.0, w: self.w as f32 / k, h: UNIFIED_BAR_PT });
+        }
         self.draw_search(s, ui);
         for (bar, r) in self.bars(ui) {
             let placed = widgets::toolbar(s, ui, r, &bar, None);

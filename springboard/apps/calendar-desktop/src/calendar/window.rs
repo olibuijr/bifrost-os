@@ -143,6 +143,56 @@ impl Calendar {
         opened
     }
 
+    /// The event selected with a click (or last opened or saved), when it still exists.
+    pub(super) fn picked_event(&self) -> Option<u64> {
+        self.picked.filter(|id| self.events.iter().any(|e| e.id == *id))
+    }
+
+    /// Deletes the selected event with the Undo bar (Event > Delete Event, Backspace and Delete with no form open). An
+    /// editor window on that event goes with it: its window is queued for the app to close (`take_closed_windows`).
+    pub(super) fn delete_picked(&mut self, t: f64) -> bool {
+        if self.editor.is_some() {
+            return false;
+        }
+        if self.storage_blocked {
+            self.error = Some("Saved events could not be read. Delete is unavailable.".into());
+            return false;
+        }
+        let Some(id) = self.picked_event() else { return false };
+        let Some(removed) = self.events.iter().find(|e| e.id == id).cloned() else { return false };
+        let mut events = self.events.clone();
+        events.retain(|e| e.id != id);
+        match super::store::save(&self.path, &events) {
+            Ok(()) => {
+                self.events = events;
+                self.changes.post();
+                // the deleted event's extras wait with Undo, as when it is deleted from its form
+                self.undo_extra = self.extras.events.remove(&id);
+                self.save_extras();
+                self.error = None;
+                self.notice = None;
+                self.undo = Some((removed, t + super::UNDO_MS));
+                self.picked = None;
+                self.last_tap = None;
+                let gone: Vec<u32> = self.panes.iter().filter(|p| p.editor.as_ref().is_some_and(|d| d.event.id == id)).map(|p| p.window).collect();
+                self.panes.retain(|p| !gone.contains(&p.window));
+                self.closed_windows.extend(gone);
+                self.dirty = true;
+                true
+            }
+            Err(e) => {
+                eprintln!("springboard: calendar: {e}");
+                self.error = Some("Could not save. The event is still here.".into());
+                false
+            }
+        }
+    }
+
+    /// The editor windows to close because their event was deleted elsewhere; taken once.
+    pub fn take_closed_windows(&mut self) -> Vec<u32> {
+        std::mem::take(&mut self.closed_windows)
+    }
+
     /// Forgets the editor of a window that was closed (by the shell or by the app). Its unsaved edits are dropped.
     pub fn drop_pane(&mut self, window: u32) {
         self.panes.retain(|p| p.window != window);
@@ -175,7 +225,8 @@ impl Calendar {
             c.layout_columns(ui);
             c.background(s);
             c.draw_editor(s, ui, t);
-            c.draw_chrome(s, ui);
+            // an opaque band: the window material would show the main window's title through it (E2E W2-17)
+            c.draw_chrome_opaque(s, ui, true);
             c.dirty = false;
         })
         .is_some()

@@ -394,7 +394,12 @@ impl App for CalendarApp {
                 let text = ctx.pasteboard_string().unwrap_or_default();
                 c.enabled(cmd) && c.new_event_from_text(&ctx.ui, &text, t)
             }
-            Some(c) => c.perform(&ctx.ui, cmd, t),
+            Some(c) => {
+                let done = c.perform(&ctx.ui, cmd, t);
+                // Event > Delete Event on the selected event also closes its editor window
+                self.send_outbox(ctx);
+                done
+            }
             None => false,
         }
     }
@@ -705,6 +710,10 @@ impl CalendarApp {
     /// the message follows in `document` (`Job::Attach`).
     fn send_outbox(&mut self, ctx: &Ctx) {
         let Some(c) = &mut self.cal else { return };
+        // an editor window whose event was deleted from the main window
+        for window in c.take_closed_windows() {
+            let _ = ctx.close_window(WindowId(window));
+        }
         if let Some(url) = c.take_map_link() {
             let _ = ctx.open_url(&url);
         }
@@ -747,6 +756,8 @@ fn key_input(c: &mut calendar::Calendar, ctx: &Ctx, key: &KeyInput) -> bool {
     let out = match key {
         KeyInput::Text(text) => Out::Text(text.clone()),
         KeyInput::Code(8) => Out::Backspace,
+        // the forward Delete key: with no form open it deletes the selected event, as Backspace does
+        KeyInput::Code(46) => Out::Named("Delete"),
         KeyInput::Code(13) => Out::Enter,
         KeyInput::Code(9) => Out::Named("Tab"),
         KeyInput::Code(37) => Out::Named("Left"),
