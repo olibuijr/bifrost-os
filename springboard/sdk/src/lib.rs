@@ -746,6 +746,14 @@ pub trait App {
     fn pointer(&mut self, _ctx: &Ctx, _ev: &pointer_events::PointerEvent) -> bool {
         false
     }
+    /// One pointer event for `window`, the window under the pointer (`scrollWheel` and `mouseMoved` sent to that
+    /// window's views). The main window's go to `pointer`, in surface pixels, as before. An extra window's arrive here
+    /// in window points, like its touches (`Input::Touch` through `window_event`), and are dropped unless the app
+    /// overrides this. Called only for the kinds `pointer_interest` names; the wheel then no longer arrives as an
+    /// emulated drag in any of the app's windows. True when the app needs a new frame.
+    fn window_pointer(&mut self, ctx: &Ctx, window: app_windows::WindowId, ev: &pointer_events::PointerEvent) -> bool {
+        if window.is_main() { self.pointer(ctx, ev) } else { false }
+    }
     /// Semantic controls in logical points; sent only when they change.
     fn controls(&self, _ctx: &Ctx) -> Vec<controls::Node> {Vec::new()}
     /// Parent/child relations and focus/checked state for the nodes `controls` returns (`NativeAccessibility` hierarchy).

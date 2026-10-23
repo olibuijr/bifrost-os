@@ -21,6 +21,12 @@ pub const TAG_INTEREST: u32 = 0x1f1;
 pub(crate) fn encode_app(m: &ToApp, b: &mut Vec<u8>) {
     let ToApp::Pointer(ev) = m else { return };
     u32_(b, TAG_POINTER);
+    encode_event(ev, b);
+}
+
+/// One event after its tag: the kind byte and the payload. `WindowInput::Pointer` carries the same bytes after its own
+/// kind byte, so an extra window's wheel and hover use this layout too.
+pub(crate) fn encode_event(ev: &PointerEvent, b: &mut Vec<u8>) {
     match *ev {
         PointerEvent::Wheel { x, y, dx, dy, precise, phase, momentum } => {
             b.push(0);
@@ -72,7 +78,12 @@ pub(crate) fn decode_app(t: u32, r: &mut Reader) -> Result<ToApp, DecodeError> {
     if t != TAG_POINTER {
         return Err(DecodeError::UnknownTag(t));
     }
-    let ev = match r.u8()? {
+    Ok(ToApp::Pointer(decode_event(r)?))
+}
+
+/// The kind byte and payload `encode_event` writes; a NaN or infinite number or an unknown kind or phase is refused.
+pub(crate) fn decode_event(r: &mut Reader) -> Result<PointerEvent, DecodeError> {
+    Ok(match r.u8()? {
         0 => {
             let (x, y, dx, dy) = (finite(r)?, finite(r)?, finite(r)?, finite(r)?);
             let precise = match r.u8()? {
@@ -98,8 +109,7 @@ pub(crate) fn decode_app(t: u32, r: &mut Reader) -> Result<ToApp, DecodeError> {
             PointerEvent::Rotate { x, y, radians, phase: read_phase(r)? }
         }
         _ => return Err(DecodeError::BadValue),
-    };
-    Ok(ToApp::Pointer(ev))
+    })
 }
 
 pub(crate) fn encode_shell(m: &ToShell, b: &mut Vec<u8>) {

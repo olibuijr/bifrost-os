@@ -378,6 +378,8 @@ impl App for ActivityApp {
                 let _ = ctx.close_window(window);
                 self.forget_window(window)
             }
+            // the wheel and hover of the window under the pointer take the SDK route (`App::window_pointer`)
+            pointer @ bifrost_app::proto::WindowInput::Pointer(_) => bifrost_app::app_windows::default_window_input(self, ctx, window, pointer),
             _ => false,
         }
     }

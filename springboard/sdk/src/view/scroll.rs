@@ -15,8 +15,9 @@ const DRAG_SLOP_PT: f32 = 12.0;
 /// A scroll view (`NativeScrollView` + `NativeClipView`) holding one document view. Vertical only: the document is as wide as
 /// the scroll view and as tall as its `intrinsic` height (or the scroll view's, when it has none), so `Surface`'s row
 /// clip is enough. Dragging pans the content one to one with the finger; a release runs the reference fling or spring
-/// back (`ScrollPhysics`), driven by `View::tick`; the knob shows while the content moves. There is no wheel input yet
-/// (the proto delivers only Down, Move, Up and Cancel).
+/// back (`ScrollPhysics`), driven by `View::tick`; the knob shows while the content moves. The scroll wheel over it
+/// (`Window::wheel`, from `App::pointer` or an extra window's `App::window_pointer`) moves the content by the wheel's
+/// travel, clamped to the document; a scroll view with nothing to scroll passes the wheel on to its ancestors.
 pub struct ScrollView {
     base: ViewBase,
     kids: Vec<Box<dyn View>>,
@@ -160,6 +161,16 @@ impl View for ScrollView {
             _ => return false,
         }
         self.base.dirty = true;
+        true
+    }
+    /// The wheel moves the content by its travel (`dy` negative for a wheel turned down shows what is below). It is
+    /// not taken while a touch is down, or when the document fits and there is nothing to scroll.
+    fn scroll_wheel(&mut self, _dx: f32, dy: f32) -> bool {
+        if self.down_y.is_some() || self.physics.max_offset() <= 0.0 {
+            return false;
+        }
+        let to = self.content_offset() - dy;
+        self.scroll_to(to);
         true
     }
     fn wants_tick(&self) -> bool {
@@ -696,6 +707,43 @@ mod view_tests {
     fn at(sv: &mut ScrollView, t: f64, ev: Event) {
         sv.tick(t);
         sv.handle(&ViewEvent::Pointer(ev));
+    }
+
+    #[test]
+    fn the_wheel_scrolls_by_its_travel_and_stops_at_the_ends() {
+        let mut sv = list();
+        // a wheel turned down: the content travels up, so the offset grows
+        assert!(sv.scroll_wheel(0.0, -30.0));
+        assert_eq!(sv.content_offset(), 30.0);
+        assert!(sv.scroll_wheel(0.0, 10.0));
+        assert_eq!(sv.content_offset(), 20.0);
+        sv.scroll_wheel(0.0, -5000.0);
+        assert_eq!(sv.content_offset(), sv.max_offset(), "clamped to the end");
+        sv.scroll_wheel(0.0, 5000.0);
+        assert_eq!(sv.content_offset(), 0.0, "clamped to the top");
+    }
+
+    #[test]
+    fn a_document_that_fits_or_a_touch_that_is_down_leaves_the_wheel_to_the_ancestors() {
+        let mut short = ScrollView::new(Box::new(Doc { base: ViewBase::default(), h: 50.0 }));
+        short.layout(&ui(), Rect { x: 0.0, y: 0.0, w: 200.0, h: 100.0 });
+        assert!(!short.scroll_wheel(0.0, -30.0));
+        let mut sv = list();
+        at(&mut sv, 0.0, Event::Down(10.0, 50.0));
+        assert!(!sv.scroll_wheel(0.0, -30.0));
+        assert_eq!(sv.content_offset(), 0.0);
+    }
+
+    #[test]
+    fn the_window_hands_the_wheel_to_the_scroll_view_under_the_pointer() {
+        // the tree of an extra window (or the main window) built on the view kit: the wheel at a point inside the
+        // document reaches the scroll view through the document view, which takes none
+        let mut w: crate::view::Window = crate::view::Window::new(list(), 10);
+        w.layout(&ui(), Rect { x: 0.0, y: 0.0, w: 200.0, h: 100.0 });
+        assert!(w.wheel(10.0, 50.0, 0.0, -40.0));
+        let sv = w.root().as_any().downcast_ref::<ScrollView>().unwrap();
+        assert_eq!(sv.content_offset(), 40.0);
+        assert!(!w.wheel(500.0, 500.0, 0.0, -40.0), "outside the window nothing scrolls");
     }
 
     #[test]

@@ -162,15 +162,25 @@ fn photo_row(p:&super::photos::Photos,c:super::photos::commands::PhotoCommand)->
 #[cfg(feature = "desktop-wayland")]
 impl Row {pub(super) fn is_separator(&self)->bool {self.sep} pub(super) fn key_text(&self)->Option<&str> {self.key.as_deref()}}
 /// Rows of one app-published menu (`ToShell::AppMenus`): disabled items and submenu headers are labels, a checked item
-/// starts with a check mark, a submenu's children are indented. Invalid key equivalents are dropped.
+/// starts with a check mark, a submenu's children are indented. Invalid key equivalents are dropped. The app's own
+/// Print (`AppMenuItem::prints`) is left out here: it takes the place of the shell's File > Print… row (`app_print_row`).
 #[cfg(feature = "desktop-wayland")]
 pub(super) fn app_menu_rows(slot:u8,menu:&bifrost_proto::AppMenu)->Vec<Row> {
-    menu.items.iter().map(|i|{
-        if i.separator {return Row::separator();}
-        let text=format!("{}{}{}",if i.depth>0{"    "}else{""},if i.checked{"\u{2713} "}else{""},i.title);
-        let row=if i.enabled&&!i.submenu&&i.id!=0 {Row::action(text,Action::AppMenu(slot,i.id))}else{Row::label(text)};
-        if i.key.is_empty(){row}else{row.key(&i.key)}
-    }).collect()
+    menu.items.iter().filter(|i|!i.prints).map(|i|app_item_row(slot,i)).collect()
+}
+/// One row of an app menu (see `app_menu_rows`).
+#[cfg(feature = "desktop-wayland")]
+fn app_item_row(slot:u8,i:&bifrost_proto::AppMenuItem)->Row {
+    if i.separator {return Row::separator();}
+    let text=format!("{}{}{}",if i.depth>0{"    "}else{""},if i.checked{"\u{2713} "}else{""},i.title);
+    let row=if i.enabled&&!i.submenu&&i.id!=0 {Row::action(text,Action::AppMenu(slot,i.id))}else{Row::label(text)};
+    if i.key.is_empty(){row}else{row.key(&i.key)}
+}
+/// The app's own Print (`AppMenuItem::print`, `printDocument:`) as the File menu row that replaces the shell's
+/// Print… (a window snapshot), so File has one Print… and Cmd+P chooses the app's. `None` when the app declares none.
+#[cfg(feature = "desktop-wayland")]
+pub(super) fn app_print_row(slot:u8,menus:&[bifrost_proto::AppMenu])->Option<Row> {
+    menus.iter().flat_map(|m|m.items.iter()).find(|i|i.prints&&!i.separator&&!i.submenu).map(|i|app_item_row(slot,&bifrost_proto::AppMenuItem{depth:0,checked:false,..i.clone()}))
 }
 /// Rows of an app's context menu (`ToShell::ContextMenu`): a separator row for `ContextItem::separator`, a disabled item as a
 /// label (secondary ink), an enabled one as a choice that goes back to the app as `ToApp::ContextAction`, and a key
@@ -502,6 +512,12 @@ impl Shell {
         let mut rows=self.own_menu_rows(menu);
         if self.photos_front(){rows=self.photo_overlay(menu,rows);}
         if let Screen::App(AppId::External(slot))=self.screen {
+            // the app owns File > Print… (`AppMenuItem::print`): its item stands where the shell's would
+            if menu==Menu::File {
+                if let Some(print)=app_print_row(slot,self.app_menus()) {
+                    if let Some(r)=rows.iter_mut().find(|r|r.text=="Print\u{2026}"&&matches!(r.action,None|Some(Action::Print))) {*r=print;}
+                }
+            }
             let merged:Vec<Row>=self.app_menus().iter().filter(|m|shell_menu(&m.title)==Some(menu)).flat_map(|m|app_menu_rows(slot,m)).collect();
             if !merged.is_empty() {if !rows.is_empty(){rows.insert(0,Row::separator());}for r in merged.into_iter().rev(){rows.insert(0,r);}}
         }

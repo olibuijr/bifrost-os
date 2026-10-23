@@ -980,6 +980,8 @@ impl App for DictionaryApp {
             }
             WindowInput::Key(k) => self.extra_event(ctx, window, Input::Key(k)),
             WindowInput::Command(c) => self.extra_event(ctx, window, Input::Command(c)),
+            // the wheel and hover of the window under the pointer take the SDK route (`App::window_pointer`)
+            pointer @ WindowInput::Pointer(_) => bifrost_app::app_windows::default_window_input(self, ctx, window, pointer),
             _ => false,
         }
     }

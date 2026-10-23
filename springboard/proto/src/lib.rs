@@ -67,9 +67,10 @@ pub enum KeyInput {
     Code(u32),
 }
 
-/// Input for the key window of an app (`ToApp::WindowInput`): the keys, menu items, commands and text edits that go
-/// to the window with key focus. The main window gets the same input in the messages every app already handles
-/// (`WindowInput::to_app` with window 0), so an app without extra windows is unchanged.
+/// Input for one window of an app (`ToApp::WindowInput`): the keys, menu items, commands and text edits that go to the
+/// window with key focus, and the pointer events (wheel, hover, gestures) that go to the window under the pointer. The
+/// main window gets the same input in the messages every app already handles (`WindowInput::to_app` with window 0), so
+/// an app without extra windows is unchanged.
 #[derive(Clone, Debug, PartialEq)]
 pub enum WindowInput {
     Key(KeyInput),
@@ -81,6 +82,10 @@ pub enum WindowInput {
     UnmarkText { commit: bool },
     /// as `ToApp::DeleteSurrounding`
     DeleteSurrounding { before: u32, after: u32 },
+    /// as `ToApp::Pointer`, for the window under the pointer (not the key window), sent only when the app asked for
+    /// that kind (`ToShell::PointerInterest`). An extra window's locations and wheel deltas are window points, like
+    /// `ToApp::WindowTouch`; window 0 gets `ToApp::Pointer` in surface pixels as before.
+    Pointer(bifrost_ui::pointer_event::PointerEvent),
 }
 
 impl WindowInput {
@@ -97,6 +102,7 @@ impl WindowInput {
             WindowInput::SetMarkedText { text, sel_start, sel_len } => ToApp::SetMarkedText { text, sel_start, sel_len },
             WindowInput::UnmarkText { commit } => ToApp::UnmarkText { commit },
             WindowInput::DeleteSurrounding { before, after } => ToApp::DeleteSurrounding { before, after },
+            WindowInput::Pointer(ev) => ToApp::Pointer(ev),
         }
     }
 }
@@ -1058,11 +1064,21 @@ pub struct AppMenuItem {
     pub separator: bool,
     pub submenu: bool,
     pub depth: u8,
+    /// The app's own Print (`printDocument:` / `print:` parity: the app owns File > Print… for its documents).
+    /// The shell then shows this item in place of its own File > Print… (the window snapshot) instead of next to it,
+    /// and Cmd+P chooses it. See `AppMenuItem::print`. Bit 4 of the item flags on the wire.
+    pub prints: bool,
 }
 
 impl AppMenuItem {
     pub fn new(id: u32, title: &str) -> Self {
-        AppMenuItem { id, title: title.into(), key: String::new(), enabled: true, checked: false, separator: false, submenu: false, depth: 0 }
+        AppMenuItem { id, title: title.into(), key: String::new(), enabled: true, checked: false, separator: false, submenu: false, depth: 0, prints: false }
+    }
+    /// The app's own File > Print… (`printDocument:`): titled "Print…" with Cmd+P, it replaces the shell's Print… row
+    /// (which prints a snapshot of the window) while the app is in front. Put it in the app's "File" menu; it is shown
+    /// where the shell's row was, at the end of File, whichever menu it is declared in.
+    pub fn print(id: u32) -> Self {
+        AppMenuItem { prints: true, ..AppMenuItem::new(id, "Print\u{2026}").key("cmd+p") }
     }
     pub fn separator() -> Self {
         AppMenuItem { separator: true, enabled: false, ..AppMenuItem::new(0, "") }
@@ -1334,7 +1350,7 @@ fn checked_title(title: String) -> Result<String, DecodeError> {
 }
 
 /// `WindowInput` after the window id: a kind byte, then the payload (`0` key, `1` command, `2` menu item, `3` marked
-/// text, `4` unmark, `5` delete surrounding).
+/// text, `4` unmark, `5` delete surrounding, `6` pointer: the `ToApp::Pointer` kind byte and payload, see `pointer`).
 fn window_input_encode(b: &mut Vec<u8>, input: &WindowInput) {
     match input {
         WindowInput::Key(KeyInput::Text(s)) => {
@@ -1370,6 +1386,10 @@ fn window_input_encode(b: &mut Vec<u8>, input: &WindowInput) {
             u32_(b, *before);
             u32_(b, *after);
         }
+        WindowInput::Pointer(ev) => {
+            b.push(6);
+            pointer::encode_event(ev, b);
+        }
     }
 }
 
@@ -1393,6 +1413,7 @@ fn window_input_decode(r: &mut Reader) -> Result<WindowInput, DecodeError> {
         }
         4 => WindowInput::UnmarkText { commit: r.u8()? != 0 },
         5 => WindowInput::DeleteSurrounding { before: r.u32()?, after: r.u32()? },
+        6 => WindowInput::Pointer(pointer::decode_event(r)?),
         _ => return Err(DecodeError::BadValue),
     })
 }
@@ -2049,7 +2070,7 @@ impl ToShell {
                         u32_(&mut b, i.id);
                         str_(&mut b, &title);
                         str_(&mut b, &key);
-                        b.push(i.enabled as u8 | (i.checked as u8) << 1 | (i.separator as u8) << 2 | (i.submenu as u8) << 3);
+                        b.push(i.enabled as u8 | (i.checked as u8) << 1 | (i.separator as u8) << 2 | (i.submenu as u8) << 3 | (i.prints as u8) << 4);
                         b.push(i.depth.min(MAX_APP_MENU_DEPTH));
                         n += 1;
                     }
@@ -2451,10 +2472,10 @@ impl ToShell {
                         let key = r.str()?;
                         let flags = r.u8()?;
                         let depth = r.u8()?;
-                        if title.len() > 512 || key.len() > 128 || depth > MAX_APP_MENU_DEPTH || flags > 15 {
+                        if title.len() > 512 || key.len() > 128 || depth > MAX_APP_MENU_DEPTH || flags > 31 {
                             return Err(DecodeError::BadValue);
                         }
-                        items.push(AppMenuItem { id, title, key, enabled: flags & 1 != 0, checked: flags & 2 != 0, separator: flags & 4 != 0, submenu: flags & 8 != 0, depth });
+                        items.push(AppMenuItem { id, title, key, enabled: flags & 1 != 0, checked: flags & 2 != 0, separator: flags & 4 != 0, submenu: flags & 8 != 0, depth, prints: flags & 16 != 0 });
                     }
                     menus.push(AppMenu { title, items });
                 }
@@ -2916,6 +2937,21 @@ mod sys_tests {
         assert!(!m.is_empty() && m.len() <= MAX_APP_MENUS);
         assert_eq!((m[0].items.len(), m[0].items[0].title.chars().count()), (MAX_APP_MENU_ITEMS, MAX_APP_MENU_TITLE));
     }
+    #[test]
+    fn the_apps_own_print_item_keeps_its_flag_over_the_wire() {
+        let print = AppMenuItem::print(7);
+        assert_eq!((print.title.as_str(), print.key.as_str(), print.prints), ("Print\u{2026}", "cmd+p", true));
+        assert!(!AppMenuItem::new(8, "Print Address Labels\u{2026}").prints, "only the declared item is the app's Print");
+        let packet = ToShell::AppMenus(vec![AppMenu { title: "File".into(), items: vec![print.clone().enabled(false), AppMenuItem::new(8, "Export")] }]);
+        let bytes = packet.encode();
+        assert_eq!(ToShell::decode(&bytes), Ok(packet));
+        // a flag byte past the five known bits is refused
+        let flags_at = 4 + 4 + (4 + 4) + 4 + 4 + (4 + "Print\u{2026}".len()) + (4 + 5);
+        assert_eq!(bytes[flags_at], 16, "disabled, with the print bit");
+        let mut bad = bytes.clone();
+        bad[flags_at] = 32;
+        assert_eq!(ToShell::decode(&bad), Err(DecodeError::BadValue));
+    }
 }
 
 #[cfg(test)]
@@ -3315,6 +3351,20 @@ mod quick_action_tests {
             ToApp::WindowInput { window: 3, input: WindowInput::SetMarkedText { text: "にほん".into(), sel_start: 3, sel_len: 3 } },
             ToApp::WindowInput { window: 3, input: WindowInput::UnmarkText { commit: true } },
             ToApp::WindowInput { window: 3, input: WindowInput::DeleteSurrounding { before: 2, after: 0 } },
+            ToApp::WindowInput {
+                window: 3,
+                input: WindowInput::Pointer(bifrost_ui::pointer_event::PointerEvent::Wheel {
+                    x: 12.5,
+                    y: 40.0,
+                    dx: 0.0,
+                    dy: -19.2,
+                    precise: false,
+                    phase: bifrost_ui::wheel::Phase::None,
+                    momentum: bifrost_ui::wheel::Phase::None,
+                }),
+            },
+            ToApp::WindowInput { window: 3, input: WindowInput::Pointer(bifrost_ui::pointer_event::PointerEvent::Hover { x: 1.0, y: 2.0 }) },
+            ToApp::WindowInput { window: 3, input: WindowInput::Pointer(bifrost_ui::pointer_event::PointerEvent::HoverExit) },
         ];
         for m in app {
             assert_eq!(ToApp::decode(&m.encode()), Ok(m.clone()), "{m:?}");
@@ -3342,6 +3392,26 @@ mod quick_action_tests {
         assert_eq!(WindowInput::MenuAction(4).to_app(0), ToApp::MenuAction(4));
         assert_eq!(WindowInput::UnmarkText { commit: false }.to_app(0), ToApp::UnmarkText { commit: false });
         assert_eq!(WindowInput::MenuAction(4).to_app(2), ToApp::WindowInput { window: 2, input: WindowInput::MenuAction(4) });
+        let hover = bifrost_ui::pointer_event::PointerEvent::Hover { x: 3.0, y: 4.0 };
+        assert_eq!(WindowInput::Pointer(hover).to_app(0), ToApp::Pointer(hover));
+        assert_eq!(WindowInput::Pointer(hover).to_app(5), ToApp::WindowInput { window: 5, input: WindowInput::Pointer(hover) });
+    }
+
+    #[test]
+    fn a_window_pointer_event_has_the_pointer_layout_after_kind_six() {
+        use bifrost_ui::pointer_event::PointerEvent;
+        let ev = PointerEvent::Hover { x: 1.5, y: 2.5 };
+        let bytes = ToApp::WindowInput { window: 4, input: WindowInput::Pointer(ev) }.encode();
+        assert_eq!(&bytes[..4], &0x250u32.to_le_bytes());
+        assert_eq!(&bytes[4..8], &4u32.to_le_bytes());
+        // kind 6, then the `ToApp::Pointer` bytes without their tag: kind 1 (hover) and the two floats
+        let main = ToApp::Pointer(ev).encode();
+        assert_eq!(bytes[8], 6);
+        assert_eq!(&bytes[9..], &main[4..]);
+        // a NaN location is refused here as it is for the main window
+        let mut bad = bytes.clone();
+        bad[10..14].copy_from_slice(&f32::NAN.to_le_bytes());
+        assert_eq!(ToApp::decode(&bad), Err(DecodeError::BadValue));
     }
 
     #[test]

@@ -2943,6 +2943,35 @@
         assert!(sh.ax_press("General > About", 8.0).is_ok(), "presses work again");
     }
 
+    /// E2E: an app that owns Print (`AppMenuItem::print`, `printDocument:`) gets one File > Print…, its own, in
+    /// the place of the shell's window snapshot, and Cmd+P chooses it. An app without one keeps the shell's.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn an_apps_own_print_replaces_the_shells_print_row() {
+        use bifrost_proto::{AppMenu,AppMenuItem,CHORD_META};
+        let mut sh=desktop_shell();sh.anim=None;
+        let (mine,theirs)=bifrost_proto::sys::socketpair_pair().unwrap();
+        let mut host=apphost::AppHost::with_channel("fixture",mine,None,bifrost_proto::Configure{w:100,h:100,scale:1.,safe_top:0.,safe_bottom:0.,dark:true,text_scale:1.,reduce_motion:false});
+        host.app_menus=vec![AppMenu{title:"File".into(),items:vec![AppMenuItem::new(1,"New Card").key("cmd+n")]}];
+        sh.ext.push(Some(host));sh.ext_fg=Some(0);sh.screen=Screen::App(AppId::External(0));
+        let prints=|sh:&Shell|sh.menu_rows(desktop_bar::Menu::File).into_iter().filter(|r|r.text.starts_with("Print")).collect::<Vec<_>>();
+        let shell_print=prints(&sh);
+        assert_eq!(shell_print.len(),1,"the shell's own Print… for an app without one");
+        assert!(matches!(shell_print[0].action,None|Some(desktop_bar::Action::Print)));
+        sh.ext[0].as_mut().unwrap().app_menus[0].items.push(AppMenuItem::print(7));
+        let rows=sh.menu_rows(desktop_bar::Menu::File);
+        let print:Vec<&desktop_bar::Row>=rows.iter().filter(|r|r.text.starts_with("Print")).collect();
+        assert_eq!(print.len(),1,"one Print…, not the app's and the shell's: {:?}",rows.iter().map(|r|r.text.as_str()).collect::<Vec<_>>());
+        assert_eq!(print[0].text,"Print\u{2026}");
+        assert!(matches!(print[0].action,Some(desktop_bar::Action::AppMenu(0,7))),"the row is the app's command");
+        assert_eq!(rows.last().map(|r|r.text.as_str()),Some("Print\u{2026}"),"it stands where the shell's row was, at the end of File");
+        assert_eq!(rows[0].text,"New Card","the app's other File items still lead");
+        // Cmd+P (evdev P is 25) is the app's Print
+        assert!(sh.ext_chord(25,CHORD_META));
+        let bifrost_proto::sys::Recv::Packet(packet,_)=theirs.recv(false).unwrap() else{panic!("missing key equivalent")};
+        assert_eq!(bifrost_proto::ToApp::decode(&packet),Ok(bifrost_proto::ToApp::MenuAction(7)));
+    }
+
     #[cfg(feature="desktop-wayland")]
     #[test]
     fn app_published_menus_follow_the_app_name_and_send_the_chosen_item_back() {

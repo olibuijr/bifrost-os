@@ -2204,9 +2204,9 @@ impl Contacts {
                     AppMenuItem::new(MENU_EXPORT_V4, "Export vCard 4.0...").enabled(ready),
                     AppMenuItem::new(MENU_EXPORT_ARCHIVE, "Export Contacts Archive...").enabled(ready),
                     AppMenuItem::separator(),
-                    // the shell's File menu ends with Print... (Cmd+P); a second "Print..." here was a duplicate
-                    // (E2E W2-19), so the app's text printout is named for what it prints
-                    AppMenuItem::new(MENU_PRINT, "Print Contact List...").enabled(ready),
+                    // the app owns File > Print… (Cmd+P): the shell shows this item in place of its own window
+                    // snapshot, so File has one Print… (E2E W2-19)
+                    AppMenuItem::print(MENU_PRINT).enabled(ready),
                     AppMenuItem::new(MENU_PRINT_LABELS, "Print Address Labels...").enabled(ready),
                     AppMenuItem::new(MENU_EXPORT_PDF, "Export as PDF...").enabled(ready),
                     AppMenuItem::separator(),
@@ -5281,8 +5281,11 @@ BEGIN:VCARD\r\nVERSION:4.0\r\nFN:Bo Berg\r\nN:Berg;Bo;;;\r\nEND:VCARD\r\n",
         assert!(app.detail_bar().items.iter().any(|i| i.id == BAR_MERGE_ALL), "Merge All moved to the detail bar");
         assert!(!app.list_bar().items.iter().any(|i| i.id == BAR_MERGE_ALL));
         let file = app.main_menu().into_iter().find(|m| m.title == "File").unwrap();
-        // the shell appends its own Print... (Cmd+P) to File, so the app must not add another
-        assert!(!file.items.iter().any(|i| i.title == "Print..." || i.title == "Print\u{2026}" || i.key == "cmd+p"));
+        // the app's own Print… (Cmd+P) is declared as such, so the shell replaces its own row with it instead of adding
+        // a second one; no other item takes Print's title or key
+        let prints: Vec<_> = file.items.iter().filter(|i| i.title.starts_with("Print\u{2026}") || i.title == "Print..." || i.key == "cmd+p").collect();
+        assert_eq!(prints.len(), 1, "one Print…");
+        assert!(prints[0].prints && prints[0].id == MENU_PRINT && prints[0].key == "cmd+p" && prints[0].title == "Print\u{2026}");
         assert!(file.items.iter().any(|i| i.id == MENU_NEW_GROUP && i.key == "shift+cmd+n"));
         assert!(app.menu_action(&ui, MENU_SETTINGS));
         assert_eq!(app.screen, Screen::Settings, "View > Contacts Settings replaces the toolbar gear");

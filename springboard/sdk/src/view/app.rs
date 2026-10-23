@@ -184,6 +184,18 @@ impl<S: Responder + 'static> ViewApp<S> {
         self.sync_drop_types(ctx);
         need
     }
+    /// `App::pointer` for the main window (surface pixels): the wheel scrolls the scroll view under the pointer
+    /// (`Window::wheel`). Other pointer events are not used by the view kit yet. True when a frame is needed.
+    pub fn pointer(&mut self, ctx: &Ctx, ev: &crate::pointer_events::PointerEvent) -> bool {
+        self.pointer_points(&ev.to_points(ctx.ui.s))
+    }
+    /// The same for an event already in window points: an extra window's, from `App::window_pointer`.
+    pub fn pointer_points(&mut self, ev: &crate::pointer_events::PointerEvent) -> bool {
+        match *ev {
+            crate::pointer_events::PointerEvent::Wheel { x, y, dx, dy, .. } => self.window.wheel(x, y, dx, dy),
+            _ => false,
+        }
+    }
     /// Registers the types the views take as drops with the shell (`registerForDraggedTypes`) when they changed since the
     /// last call. `event` and `drag` call it; call it after building or changing the tree outside them.
     pub fn sync_drop_types(&mut self, ctx: &Ctx) {

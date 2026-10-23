@@ -689,8 +689,9 @@ pub struct Shell {
     compose_ime: compose_window::ComposeWindow,
     /// installed input methods (`input_providers`): the host that runs them and the Search field's session
     input_providers: input_providers::Providers,
-    /// the external app whose window content the pointer is over and that takes hover events (`pointer_events`)
-    pointer_over: Option<u8>,
+    /// the external app (slot) and its window (0 is the main window) whose content the pointer is over and that takes
+    /// hover events (`pointer_events`)
+    pointer_over: Option<(u8, u32)>,
     /// the two touchscreen fingers of the app in front and the pinch and rotation recognizers they run (`pointer_events`)
     pinch_fingers: Vec<(i32, (f32, f32))>,
     pinch: bifrost_ui::trackpad_gesture::TwoFinger,
@@ -3670,6 +3671,10 @@ impl Shell {
             _ => return,
         };
         if let Some(Some(host)) = self.ext.get_mut(slot) {
+            // the drag emulated for a wheel event the window took (`pointer_wheel`) is not a touch
+            if host.swallows_touch(t) {
+                return;
+            }
             host.touch_window(id, 1, kind, x / k, y / k, t as u32, self.key_mods);
         }
     }
