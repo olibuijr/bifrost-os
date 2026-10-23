@@ -2669,7 +2669,8 @@ impl Shell {
     pub(super) fn desk_window_unmapped(&self, app: AppId) -> bool {
         match app {
             // a host whose process is gone keeps its last frame, but the window has nothing live to show
-            AppId::External(slot) => self.ext.get(slot as usize).and_then(Option::as_ref).is_some_and(|h| !h.incompatible && (!h.running() || h.frame().is_none())),
+            // an app drawing its first frame into a new buffer set (a live resize) stays mapped (`between_buffers`)
+            AppId::External(slot) => self.ext.get(slot as usize).and_then(Option::as_ref).is_some_and(|h| !h.incompatible && (!h.running() || (h.frame().is_none() && !h.between_buffers()))),
             AppId::ExternalWindow(slot, id) => self.ext.get(slot as usize).and_then(Option::as_ref).map_or(true, |h| !h.window_mapped(u32::from(id))),
             _ => false,
         }
@@ -2792,6 +2793,23 @@ impl Shell {
                     // on a key-state change the app's last frame may still be a few pixels larger than the window (the
                     // size it first drew at); `blit` clips it to the body exactly as the full draw would, so it is taken
                     let fits = mapped==Some((width,body_h)) || (refocus && mapped.is_some_and(|(mw,mh)| mw>=width && mh>=body_h));
+                    // the app reallocated its buffers (each step of a live resize does) and has not drawn into them yet:
+                    // the window keeps the pixels it last presented, at their size, until the app's frame arrives. It used
+                    // to be dropped from the frames, which destroyed its toplevel: the pointer left it, the resize grab
+                    // ended after a few pixels (E2E-11) and the window behind took the focus (E2E-12)
+                    if mapped.is_none() && self.ext.get(slot as usize).and_then(Option::as_ref).is_some_and(|h| h.between_buffers()) {
+                        if let Some(c) = cached.take() {
+                            let (cw, ch) = (c.width, c.height);
+                            let desk = self.desk.as_mut().unwrap();
+                            desk.window_cache.insert(id, c);
+                            desk.frames.push(crate::bare::wayland::WindowFrame {
+                                id, title: frame_title(id), x:w.r.x, y:w.r.y, width:cw, height:ch, pixels:None,
+                                damage:crate::gfx::Damage::new(cw,ch), maximized:w.maximized, fullscreen:w.full, title_height:m.title,
+                                drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None,
+                            });
+                            continue;
+                        }
+                    }
                     if (unchanged || refocus) && !self.keyboard.shown() && !self.keyboard.animating() && fits {
                         let mut retained=cached.take().unwrap();
                         retained.focused=focused;
