@@ -572,7 +572,11 @@ impl App for MusicApp {
             return false;
         }
         match ev {
-            Input::Touch { kind, x, y, .. } => self.mini_touch(ctx, kind, x, y),
+            // the window's touches arrive in window points (`WindowTouch`); the MiniPlayer layout is in px
+            Input::Touch { kind, x, y, .. } => {
+                let k = ctx.ui.pt(1.0);
+                self.mini_touch(ctx, kind, x * k, y * k)
+            }
             Input::Key(k) if is_close_window_key(&k) => {
                 self.close_mini(ctx);
                 true

@@ -391,7 +391,8 @@ impl App for Files {
         // the keyboard, the menus and the clipboard belong to the main window; a New Window takes its touches
         let Some(e) = self.windows.iter_mut().find(|e| e.id == window) else { return false };
         match ev {
-            Input::Touch { .. } => e.files.event(ctx, ev),
+            // an extra window's touches arrive in window points (`WindowTouch`); `event` takes px, as the main window's
+            Input::Touch { .. } => e.files.event(ctx, bifrost_app::app_windows::window_touch_in_px(ev, ctx.ui.pt(1.0))),
             _ => false,
         }
     }

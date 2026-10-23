@@ -948,7 +948,8 @@ impl App for DictionaryApp {
         // the keyboard, the menus and the clipboard belong to the main window; a window takes its touches
         let Some(e) = self.windows.iter_mut().find(|e| e.id == window) else { return false };
         match ev {
-            Input::Touch { .. } => e.app.event(ctx, ev),
+            // an extra window's touches arrive in window points (`WindowTouch`); `event` takes px, as the main window's
+            Input::Touch { .. } => e.app.event(ctx, bifrost_app::app_windows::window_touch_in_px(ev, ctx.ui.pt(1.0))),
             _ => false,
         }
     }

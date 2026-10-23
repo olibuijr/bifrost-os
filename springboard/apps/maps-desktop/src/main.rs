@@ -209,8 +209,10 @@ impl App for MapsApp {
         }
         let Some(e) = self.extra.iter_mut().find(|e| e.id == window) else { return false };
         match ev {
+            // an extra window's touches arrive in window points (`WindowTouch`); `finger` takes px
             Input::Touch { kind, id, x, y, t, .. } => {
-                e.win.finger(ctx, &ctx.ui, id, kind, x, y, t);
+                let k = ctx.ui.pt(1.0);
+                e.win.finger(ctx, &ctx.ui, id, kind, x * k, y * k, t);
                 true
             }
             // keys, commands and the menu bar belong to the main window

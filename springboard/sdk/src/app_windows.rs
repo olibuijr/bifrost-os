@@ -297,6 +297,17 @@ pub fn is_close_window_key(key: &crate::proto::KeyInput) -> bool {
     key.as_chord() == Some((17, crate::proto::CHORD_META))
 }
 
+/// An extra window's touch (`window_event`) with its location in px, as the main window's touches arrive. The shell sends
+/// an extra window's touches in the window's own points (`ToApp::WindowTouch`); an app that lays a window out and hit-tests
+/// it in px (or hands the event to code written for the main window) converts with `px_per_pt = ctx.ui.pt(1.0)` first,
+/// so a click lands under the pointer at every display scale. Any other input is returned as it is.
+pub fn window_touch_in_px(ev: crate::Input, px_per_pt: f32) -> crate::Input {
+    match ev {
+        crate::Input::Touch { kind, id, x, y, t, mods } => crate::Input::Touch { kind, id, x: x * px_per_pt, y: y * px_per_pt, t, mods },
+        other => other,
+    }
+}
+
 /// Records a focus change in the key window cell. Focusing window `window` makes it key; losing focus only clears it when
 /// it was the key window, so a late "lost" for an old window cannot take the key from the window that is key now.
 pub(crate) fn apply_focus(key: &std::cell::Cell<u32>, window: u32, focused: bool) {
@@ -317,6 +328,22 @@ mod tests {
 
     fn ids(w: &AppWindows) -> Vec<u32> {
         w.list().iter().map(|x| x.id.0).collect()
+    }
+
+    #[test]
+    fn a_window_touch_in_points_becomes_px_at_the_display_scale_and_other_input_is_kept() {
+        use crate::proto::{ModifierFlags, TouchKind};
+        let k = 1200.0 / 768.0; // Midget's 1.5625
+        let ev = crate::Input::Touch { kind: TouchKind::Down, id: 3, x: 100.0, y: 40.0, t: 7.0, mods: ModifierFlags::SHIFT };
+        match window_touch_in_px(ev, k) {
+            crate::Input::Touch { kind, id, x, y, t, mods } => {
+                assert_eq!((kind, id, t, mods), (TouchKind::Down, 3, 7.0, ModifierFlags::SHIFT));
+                assert_eq!((x, y), (156.25, 62.5));
+            }
+            _ => panic!("still a touch"),
+        }
+        assert!(matches!(window_touch_in_px(crate::Input::Activate(9), k), crate::Input::Activate(9)));
+        assert!(matches!(window_touch_in_px(crate::Input::Context { x: 2.0, y: 2.0 }, k), crate::Input::Context { x, y } if x == 2.0 && y == 2.0));
     }
 
     #[test]

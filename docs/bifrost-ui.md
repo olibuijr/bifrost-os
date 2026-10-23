@@ -5187,6 +5187,16 @@ The shell sends `WindowClosed {id}` (its own close control), `WindowConfigure {i
 t_ms}` and `WindowRelease {id, buf, generation}`; the wheel and hover over an extra window arrive as `WindowInput::Pointer` for
 that window (`App::window_pointer`, see "Pointer events"). Titles are cut to 512 bytes; non-finite or negative sizes are refused.
 
+Units (2026-10-23, E2E follow-up). `WindowTouch` and an extra window's pointer events are in the window's **points**, while
+the main window's `ToApp::Touch` is in surface pixels. An app that hit-tests an extra window in px, or hands its touches to code
+written for the main window, scales them first: `app_windows::window_touch_in_px(ev, ctx.ui.pt(1.0))` returns the touch in px
+and leaves other input alone. Contacts card windows (`card_windows::card_touch`), Dictionary and Files extra windows, the
+Maps window and the Music MiniPlayer read the points as px (or divided them by the scale again), so clicks missed at
+Midget's 1.5625 scale; Mail, Notes and Calendar already scaled. Tests: sdk
+`a_window_touch_in_points_becomes_px_at_the_display_scale_and_other_input_is_kept`, contacts
+`a_card_window_click_in_window_points_lands_under_the_pointer_at_a_non_1_scale`, music
+`a_window_touch_in_points_hits_play_only_once_scaled_to_px`.
+
 Placement, collapse and title double-click (tags 0x246, 0x247, 0x24d, 0x24e). `WindowOpen` carries an optional `position`
 (points, relative to the visible desktop area) and a `flags` word (`window_flags::TITLE_DOUBLE_CLICK`). The app sends
 `WindowMove {window, x, y}` to place a window and `WindowCollapse {window, collapsed}` to fold it to its title bar. The shell
