@@ -213,6 +213,9 @@ pub struct TextArea {
     /// the mouse button is down: the unit the press selected (an empty range at the caret for one click) and the
     /// click count, so a drag grows the selection by characters, words or paragraphs
     drag: Option<(Range<usize>, u8)>,
+    /// an input method's composition in progress (`setMarkedText:`): the char range of the marked text, and the text it
+    /// took the place of (the selection when the composition began), which comes back when it is dropped
+    marked: Option<(Range<usize>, String)>,
 }
 
 /// What a finger down on the text is doing.
@@ -290,7 +293,7 @@ impl TextArea {
     /// Wraps at `w` px; the first paragraph is set at `title_pt` bold, the
     /// rest at `body_pt` regular. `tint` colours the caret and selection.
     pub fn new(ui: &Ui, w: f32, body_pt: f32, title_pt: f32, color: u32, tint: u32) -> Self {
-        let mut ta = TextArea { text: String::new(), caret: 0, anchor: None, w, body_pt, title_pt, color, tint, lines: vec![], history: UndoManager::new(UNDO_DEPTH), typing: None, focused: false, blink_from: 0.0, markdown: false, images: HashMap::new(), highlights: vec![], current_hl: None, touch: None, last_tap: None, detect_links: false, links: vec![], hidden: vec![], pointer: false, clicks: Default::default(), drag: None };
+        let mut ta = TextArea { text: String::new(), caret: 0, anchor: None, w, body_pt, title_pt, color, tint, lines: vec![], history: UndoManager::new(UNDO_DEPTH), typing: None, focused: false, blink_from: 0.0, markdown: false, images: HashMap::new(), highlights: vec![], current_hl: None, touch: None, last_tap: None, detect_links: false, links: vec![], hidden: vec![], pointer: false, clicks: Default::default(), drag: None, marked: None };
         ta.layout(ui);
         ta
     }
@@ -333,6 +336,7 @@ impl TextArea {
 
     /// Replaces the contents (caret at the end) and forgets the history.
     pub fn set_text(&mut self, ui: &Ui, text: &str) {
+        self.marked = None;
         self.text = text.to_string();
         self.caret = self.len();
         self.anchor = None;
@@ -823,6 +827,7 @@ impl TextArea {
     /// click selects the word and a triple click the paragraph (`ClickCounter`). With `extend` (Shift held) a single
     /// click moves the selection's free end there instead. A drag that follows grows the selection by the same unit.
     pub fn press(&mut self, ui: &Ui, x: f32, y: f32, t: f64, extend: bool) {
+        self.commit_marked(ui, t);
         self.focused = true;
         self.blink_from = t;
         self.end_typing();
@@ -889,6 +894,7 @@ impl TextArea {
     pub fn key_combo(&mut self, ui: &Ui, k: bifrost_ui::keys::KeyCombo, t: f64) -> Option<bool> {
         use bifrost_ui::text::{self as kit, EditCommand::*};
         let (cmd, extend) = kit::binding(k)?;
+        self.commit_marked(ui, t);
         self.blink_from = t;
         let sel = self.selection();
         let head = self.caret;
@@ -998,8 +1004,119 @@ impl TextArea {
         self.selection().map(|r| self.text.chars().skip(r.start).take(r.len()).collect()).unwrap_or_default()
     }
 
+    // --- marked text (input methods) ------------------------------------------------------------------------------
+
+    /// The char range of the marked text while an input method composes (`markedRange`).
+    pub fn marked_range(&self) -> Option<Range<usize>> {
+        self.marked.as_ref().map(|(r, _)| r.clone())
+    }
+
+    /// The chars in `range`, as a string.
+    fn slice(&self, range: Range<usize>) -> String {
+        self.text.chars().skip(range.start).take(range.len()).collect()
+    }
+
+    /// Replaces chars `range` with `s` without recording anything (the composition is not an undo step until it is
+    /// committed). The caller lays out.
+    fn splice(&mut self, range: Range<usize>, s: &str) {
+        let (a, b) = (self.byte_at(range.start), self.byte_at(range.end));
+        self.text.replace_range(a..b, s);
+    }
+
+    /// `setMarkedText:selectedRange:` from an input method (`ToApp::SetMarkedText`): `text` replaces the marked text, or
+    /// the selection when nothing is marked yet, and is drawn underlined. `sel_start` and `sel_len` select inside `text`
+    /// in UTF-8 bytes (the caret when `sel_len` is 0). An empty `text` ends the composition and puts back what it
+    /// replaced. Nothing is recorded for undo until `unmark_text` commits.
+    pub fn set_marked_text(&mut self, ui: &Ui, text: &str, sel_start: usize, sel_len: usize, t: f64) {
+        self.end_typing();
+        self.drag = None;
+        let (range, replaced) = match self.marked.take() {
+            Some(m) => m,
+            None => {
+                let r = self.selection().unwrap_or(self.caret..self.caret);
+                let replaced = self.slice(r.clone());
+                (r, replaced)
+            }
+        };
+        let start = range.start;
+        self.blink_from = t;
+        if text.is_empty() {
+            self.splice(range, &replaced);
+            self.caret = start + replaced.chars().count();
+            self.anchor = None;
+            self.layout(ui);
+            return;
+        }
+        self.splice(range, text);
+        let n = text.chars().count();
+        self.marked = Some((start..start + n, replaced));
+        // the selection inside the marked text, bytes to chars (a cut inside a character rounds to the end)
+        let chars_to = |b: usize| text.get(..b.min(text.len())).map_or(n, |p| p.chars().count());
+        let (a, b) = (start + chars_to(sel_start), start + chars_to(sel_start.saturating_add(sel_len)));
+        self.caret = b;
+        self.anchor = (b > a).then_some(a);
+        self.layout(ui);
+    }
+
+    /// `unmarkText` (`ToApp::UnmarkText`): the composition ends. With `commit` the marked text stays as typed text (one
+    /// "Typing" undo step that puts back what it replaced); otherwise it is removed and the replaced text comes back.
+    /// False when nothing was marked.
+    pub fn unmark_text(&mut self, ui: &Ui, commit: bool, t: f64) -> bool {
+        let Some((range, replaced)) = self.marked.take() else { return false };
+        let marked = self.slice(range.clone());
+        let start = range.start;
+        // the text goes back to what it was before the composition, so the commit is an ordinary recorded edit
+        self.splice(range, &replaced);
+        let end = start + replaced.chars().count();
+        self.caret = end;
+        self.anchor = (end > start).then_some(start);
+        if commit && !marked.is_empty() {
+            self.replace_range(ui, start..end, &marked, t, true);
+        } else {
+            self.anchor = None;
+            self.layout(ui);
+        }
+        self.blink_from = t;
+        true
+    }
+
+    /// `delete_surrounding_text` (`ToApp::DeleteSurrounding`): deletes `before` UTF-8 bytes before and `after` bytes
+    /// after the selection (rounded out to characters), one undo step. True when the text changed.
+    pub fn delete_surrounding(&mut self, ui: &Ui, before: usize, after: usize, t: f64) -> bool {
+        self.commit_marked(ui, t);
+        let sel = self.selection().unwrap_or(self.caret..self.caret);
+        let (a, b) = (self.byte_at(sel.start), self.byte_at(sel.end));
+        let mut from = a.saturating_sub(before);
+        while !self.text.is_char_boundary(from) {
+            from -= 1;
+        }
+        let mut to = b.saturating_add(after).min(self.text.len());
+        while !self.text.is_char_boundary(to) {
+            to += 1;
+        }
+        let (from, to) = (self.text[..from].chars().count(), self.text[..to].chars().count());
+        if from == sel.start && to == sel.end {
+            return false;
+        }
+        let kept = self.slice(sel.clone());
+        self.replace_range(ui, from..to, &kept, t, false);
+        // the selection stays on the same text
+        self.caret = from + kept.chars().count();
+        self.anchor = (!kept.is_empty()).then_some(from);
+        true
+    }
+
+    /// Commits a composition in progress before another edit, a click or a move (an input method's marked text is
+    /// kept as typed text, as the reference does when the user acts elsewhere).
+    fn commit_marked(&mut self, ui: &Ui, t: f64) {
+        if self.marked.is_some() {
+            self.unmark_text(ui, true, t);
+        }
+    }
+
     /// Replaces the selection (or inserts at the caret) with `s`.
     pub fn replace_selection(&mut self, ui: &Ui, s: &str, t: f64) {
+        self.commit_marked(ui, t);
         let range = self.selection().unwrap_or(self.caret..self.caret);
         self.replace_range(ui, range, s, t, false);
     }
@@ -1058,6 +1175,7 @@ impl TextArea {
 
     /// Runs an undo or redo step on the text and caret; true when something changed.
     fn step_history(&mut self, ui: &Ui, t: f64, step: impl FnOnce(&mut UndoManager<Doc>, &mut Doc) -> bool) -> bool {
+        self.commit_marked(ui, t);
         self.end_typing();
         let mut doc = Doc { text: std::mem::take(&mut self.text), caret: self.caret };
         let moved = step(&mut self.history, &mut doc);
@@ -1107,6 +1225,7 @@ impl TextArea {
 
     /// Applies a key from the on-screen keyboard; true when the text changed.
     pub fn edit(&mut self, ui: &Ui, out: &Out, t: f64) -> bool {
+        self.commit_marked(ui, t);
         self.blink_from = t;
         match out {
             Out::Text(s) => {
@@ -1209,6 +1328,14 @@ impl TextArea {
                 if a < b {
                     let (x0, x1) = (l.x_at(a), l.x_at(b));
                     s.fill_rrect(x + x0, ly + l.h - ui.pt(3.0), (x1 - x0).max(ui.pt(2.0)), ui.pt(1.0), 0.0, self.tint);
+                }
+            }
+            // the marked text of a composition: underlined in the text colour, thicker than a link
+            if let Some((r, _)) = &self.marked {
+                let (a, b) = (r.start.max(l.range.start), r.end.min(shown));
+                if a < b {
+                    let (x0, x1) = (l.x_at(a), l.x_at(b));
+                    s.fill_rrect(x + x0, ly + l.h - ui.pt(3.0), (x1 - x0).max(ui.pt(2.0)), ui.pt(2.0), 0.0, self.color);
                 }
             }
             for (hi, r) in self.highlights.iter().enumerate() {
@@ -1595,6 +1722,100 @@ mod tests {
         ta.replace_selection(&ui, "", 5.0);
         assert_eq!(ta.text(), "tle\nXY def", "replacing nothing with nothing is a no-op");
         assert_eq!(ta.steps(), steps, "and records no step");
+    }
+
+    #[test]
+    fn marked_text_composes_in_place_and_commits_as_one_typing_step() {
+        let ui = ui();
+        let mut ta = area(&ui, 500.0);
+        ta.set_text(&ui, "Title\nk");
+        let steps = ta.steps();
+        // an input method marks "´", then replaces the marked text with the composed "á"
+        ta.set_marked_text(&ui, "´", "´".len(), 0, 1.0);
+        assert_eq!(ta.text(), "Title\nk´");
+        assert_eq!(ta.marked_range(), Some(7..8));
+        assert_eq!(ta.caret(), 8);
+        assert_eq!(ta.steps(), steps, "marking records nothing");
+        ta.set_marked_text(&ui, "á", "á".len(), 0, 2.0);
+        assert_eq!(ta.text(), "Title\nká", "the new candidate replaces the marked text");
+        assert!(ta.unmark_text(&ui, true, 3.0));
+        assert_eq!(ta.text(), "Title\nká");
+        assert_eq!(ta.marked_range(), None);
+        assert_eq!(ta.caret(), 8);
+        assert_eq!(ta.steps(), steps + 1, "the commit is one step");
+        assert!(ta.undo(&ui, 4.0));
+        assert_eq!(ta.text(), "Title\nk", "undo takes the committed text back out");
+        assert!(!ta.unmark_text(&ui, true, 5.0), "nothing marked");
+    }
+
+    #[test]
+    fn a_dropped_composition_puts_back_the_selection_it_replaced() {
+        let ui = ui();
+        let mut ta = area(&ui, 500.0);
+        ta.set_text(&ui, "Title\nthe fox");
+        ta.select(10..13);
+        ta.set_marked_text(&ui, "にほん", 3, 3, 1.0);
+        assert_eq!(ta.text(), "Title\nthe にほん");
+        assert_eq!(ta.selection(), Some(11..12), "the selection inside the marked text, bytes to chars");
+        assert!(ta.unmark_text(&ui, false, 2.0));
+        assert_eq!(ta.text(), "Title\nthe fox");
+        assert_eq!(ta.marked_range(), None);
+        // an empty composition ends it the same way
+        ta.set_marked_text(&ui, "x", 1, 0, 3.0);
+        ta.set_marked_text(&ui, "", 0, 0, 4.0);
+        assert_eq!(ta.text(), "Title\nthe fox");
+        assert_eq!(ta.marked_range(), None);
+    }
+
+    #[test]
+    fn typing_or_clicking_during_a_composition_commits_it_first() {
+        let ui = ui();
+        let mut ta = area(&ui, 500.0);
+        ta.set_text(&ui, "Title\n");
+        ta.set_marked_text(&ui, "ka", 2, 0, 1.0);
+        assert!(ta.edit(&ui, &Out::Text("!".into()), 2.0));
+        assert_eq!(ta.text(), "Title\nka!");
+        assert_eq!(ta.marked_range(), None);
+        ta.set_marked_text(&ui, "é", 2, 0, 3.0);
+        ta.set_pointer_mode(true);
+        ta.press(&ui, 0.0, 0.0, 4.0, false);
+        ta.release();
+        assert_eq!(ta.text(), "Title\nka!é", "a click keeps the marked text");
+        assert_eq!(ta.marked_range(), None);
+        // a new text from elsewhere forgets the composition
+        ta.set_marked_text(&ui, "x", 1, 0, 5.0);
+        ta.set_text(&ui, "other");
+        assert_eq!(ta.marked_range(), None);
+    }
+
+    #[test]
+    fn marked_text_is_drawn_underlined() {
+        let ui = ui();
+        let mut ta = area(&ui, 500.0);
+        ta.set_text(&ui, "Title\nbody ");
+        ta.set_marked_text(&ui, "ab", 2, 0, 0.0);
+        let mut buf = vec![0u32; 600 * 300];
+        ta.draw(&mut Surface { w: 600, h: 300, stride: 600, px: &mut buf, y0: 0 }, &ui, 20.0, 10.0, 0.0);
+        let l1 = &ta.lines[1];
+        let (x0, x1) = (l1.x_at(11), l1.x_at(13));
+        let y = (10.0 + l1.y + l1.h - ui.pt(2.0)) as usize;
+        let x = (20.0 + (x0 + x1) / 2.0) as usize;
+        assert_eq!(buf[y * 600 + x], WHITE, "an underline in the text colour under the marked text");
+    }
+
+    #[test]
+    fn delete_surrounding_removes_bytes_around_the_caret() {
+        let ui = ui();
+        let mut ta = area(&ui, 500.0);
+        ta.set_text(&ui, "Title\nbaká");
+        ta.set_caret(10);
+        // "k" and "á" before the caret are 1 and 2 bytes
+        assert!(ta.delete_surrounding(&ui, 3, 0, 1.0));
+        assert_eq!(ta.text(), "Title\nba");
+        assert_eq!(ta.caret(), 8);
+        assert!(!ta.delete_surrounding(&ui, 0, 4, 2.0), "nothing after the caret");
+        assert!(ta.undo(&ui, 3.0));
+        assert_eq!(ta.text(), "Title\nbaká");
     }
 
     #[test]
