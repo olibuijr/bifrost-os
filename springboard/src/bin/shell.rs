@@ -1087,7 +1087,7 @@ fn run() -> std::io::Result<()> {
                     }
                     // Ctrl or Cmd with a key the shell did not take: an external app in front may use it
                     if let Some(mods) = hw_keys.chord_mods(code).filter(|_| down) {
-                        if shell.hw_chord(code, mods) {
+                        if shell.hw_builtin_chord(code, mods, t) || shell.hw_chord(code, mods) {
                             continue;
                         }
                     }

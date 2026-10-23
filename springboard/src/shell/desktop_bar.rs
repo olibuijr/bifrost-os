@@ -624,8 +624,10 @@ impl Shell {
             Menu::NowPlaying=>super::now_playing_menu::panel().map(|p|{let mut rows=vec![Row::label(p.title),Row::label(p.position),Row::separator()];rows.extend(p.transport.into_iter().map(|(c,text,on)|if on {Row::action(text,Action::Media(c))} else {Row::label(text)}));rows}).unwrap_or_default(),
             // View holds the Dock's display options (also in the Dock menu), as Files and Mail keep theirs in View
             Menu::View=>{use super::desktop_dock::Change;let autohide=self.desk.as_ref().is_some_and(|d|d.dock_preferences.autohide);let mut v=vec![Row::action(format!("{} Automatically Hide Dock",if autohide{"✓"}else{" "}),Action::Dock(Change::Autohide)),Row::action("Smaller Icons",Action::Dock(Change::Size(-8.))),Row::action("Larger Icons",Action::Dock(Change::Size(8.)))];if self.term_front(){v.splice(0..0,[Row::action("Actual Size",Action::Term(TermKey::ActualSize)).key("cmd+0"),Row::action("Bigger",Action::Term(TermKey::Bigger)).key("cmd+="),Row::action("Smaller",Action::Term(TermKey::Smaller)).key("cmd+-"),Row::separator()]);}v},
-            // Window: Minimize and Zoom (also in File), Bring All to Front, then every open window by name, the front one checked
-            Menu::Window=>{let Some(d)=self.desk.as_ref() else{return Vec::new();};let enabled=self.foreign_active().is_some()||d.front().is_some();let front=d.front().map(|w|w.app);let mut rows=vec![(if enabled{Row::action("Minimize",Action::Minimize)}else{Row::label("Minimize")}).key("cmd+m"),if enabled{Row::action("Zoom",Action::Zoom)}else{Row::label("Zoom")},match d.front().map(|w|(w.app,w.full)).filter(|_|enabled&&self.foreign_active().is_none()){Some((a,full))=>Row::action(if full{"Exit Full Screen"}else{"Enter Full Screen"},Action::Arrange(a,super::desk::Arrange::FullScreen(!full))),None=>Row::label("Enter Full Screen")},Row::separator(),if d.wins.iter().any(|w|w.minimized){Row::action("Bring All to Front",Action::ShowAll)}else{Row::label("Bring All to Front")},Row::action("Show Desktop",Action::Desktop)];let tile_on=self.foreign_active().is_none()&&d.front().is_some();rows.push(Row::separator());rows.extend([("Left Half",super::desk::Tile::Left,"ctrl+cmd+left"),("Right Half",super::desk::Tile::Right,"ctrl+cmd+right"),("Fill",super::desk::Tile::Fill,"ctrl+cmd+up"),("Center",super::desk::Tile::Center,"ctrl+cmd+down")].map(|(l,t,k)|if tile_on&&(t==super::desk::Tile::Fill||!super::desk::compositor_places_windows()){Row::action(l,Action::Tile(t)).key(k)}else{Row::label(l).key(k)}));rows.push(if tile_on{Row::action("Return to Previous Size",Action::RestoreSize)}else{Row::label("Return to Previous Size")});rows.push(if d.wins.len()>=2{Row::action("Next Window",Action::CycleWindow).key("cmd+`")}else{Row::label("Next Window")});let front_parent=d.front().map(|w|w.app.parent());let mut open:Vec<(String,super::AppId)>=d.wins.iter().filter(|w|Some(w.app.parent())==front_parent).map(|w|(self.window_menu_name(w.app),w.app)).collect();open.sort_by_key(|(name,_)|name.to_lowercase());let foreign:Vec<&crate::bare::wayland::ForeignWindow>=d.native_windows.iter().chain(d.linux_apps.iter().flat_map(|a|a.windows.iter())).collect();if !open.is_empty()||!foreign.is_empty(){rows.push(Row::separator());}rows.extend(open.into_iter().take(12).map(|(name,app)|Row::action(format!("{} {}",if front==Some(app)&&self.foreign_active().is_none(){"✓"}else{" "},name),Action::Open(app))));rows.extend(foreign.into_iter().take(12).map(|w|Row::action(format!("{} {}",if w.active{"✓"}else{" "},self.fit_chrome(if w.title.is_empty(){w.app_id.as_str()}else{w.title.as_str()},13.,self.ui.pt(300.))),Action::Foreign(w.id))));rows},
+            // Window: Minimize and Zoom (also in File), Bring All to Front, then every open window by name, the front one checked.
+            // Bring All to Front is on whenever there is a window, and the halves and Center are on in the window server's
+            // session too: the shell asks it to place the window (`desk_tile_window`), as the green button's menu does (E2E-15)
+            Menu::Window=>{let Some(d)=self.desk.as_ref() else{return Vec::new();};let enabled=self.foreign_active().is_some()||d.front().is_some();let front=d.front().map(|w|w.app);let mut rows=vec![(if enabled{Row::action("Minimize",Action::Minimize)}else{Row::label("Minimize")}).key("cmd+m"),if enabled{Row::action("Zoom",Action::Zoom)}else{Row::label("Zoom")},match d.front().map(|w|(w.app,w.full)).filter(|_|enabled&&self.foreign_active().is_none()){Some((a,full))=>Row::action(if full{"Exit Full Screen"}else{"Enter Full Screen"},Action::Arrange(a,super::desk::Arrange::FullScreen(!full))),None=>Row::label("Enter Full Screen")},Row::separator(),if !d.wins.is_empty(){Row::action("Bring All to Front",Action::ShowAll)}else{Row::label("Bring All to Front")},Row::action("Show Desktop",Action::Desktop)];let tile_on=self.foreign_active().is_none()&&d.front().is_some();rows.push(Row::separator());rows.extend([("Left Half",super::desk::Tile::Left,"ctrl+cmd+left"),("Right Half",super::desk::Tile::Right,"ctrl+cmd+right"),("Fill",super::desk::Tile::Fill,"ctrl+cmd+up"),("Center",super::desk::Tile::Center,"ctrl+cmd+down")].map(|(l,t,k)|if tile_on{Row::action(l,Action::Tile(t)).key(k)}else{Row::label(l).key(k)}));rows.push(if tile_on{Row::action("Return to Previous Size",Action::RestoreSize)}else{Row::label("Return to Previous Size")});rows.push(if d.wins.len()>=2{Row::action("Next Window",Action::CycleWindow).key("cmd+`")}else{Row::label("Next Window")});let front_parent=d.front().map(|w|w.app.parent());let mut open:Vec<(String,super::AppId)>=d.wins.iter().filter(|w|Some(w.app.parent())==front_parent).map(|w|(self.window_menu_name(w.app),w.app)).collect();open.sort_by_key(|(name,_)|name.to_lowercase());let foreign:Vec<&crate::bare::wayland::ForeignWindow>=d.native_windows.iter().chain(d.linux_apps.iter().flat_map(|a|a.windows.iter())).collect();if !open.is_empty()||!foreign.is_empty(){rows.push(Row::separator());}rows.extend(open.into_iter().take(12).map(|(name,app)|Row::action(format!("{} {}",if front==Some(app)&&self.foreign_active().is_none(){"✓"}else{" "},name),Action::Open(app))));rows.extend(foreign.into_iter().take(12).map(|w|Row::action(format!("{} {}",if w.active{"✓"}else{" "},self.fit_chrome(if w.title.is_empty(){w.app_id.as_str()}else{w.title.as_str()},13.,self.ui.pt(300.))),Action::Foreign(w.id))));rows},
             Menu::File=>{let enabled=self.foreign_active().is_some()||self.desk.as_ref().and_then(|d|d.front()).is_some();
             // an app that keeps Cmd+W for its own Close Tab leaves the window the shifted chord (Close Window is Shift+Cmd+W then)
             let close_key=if self.app_owns_close(){"cmd+shift+w"}else{"cmd+w"};let mut rows=vec![(if enabled{Row::action("Close Window",Action::Close)}else{Row::label("Close Window")}).key(close_key),(if enabled{Row::action("Minimize Window",Action::Minimize)}else{Row::label("Minimize Window")}).key("cmd+m"),if enabled {Row::action("Maximize / Restore Window",Action::Zoom)}else{Row::label("Maximize / Restore Window")}];if self.term_front(){rows.splice(0..0,[Row::action("New Tab",Action::Term(TermKey::NewTab)).key("cmd+t"),Row::separator()]);rows[2]=Row::action("Close Tab",Action::Term(TermKey::CloseTab)).key("cmd+w");}if self.foreign_active().is_none(){rows.push(Row::separator());rows.push((if enabled{Row::action("Print\u{2026}",Action::Print)}else{Row::label("Print\u{2026}")}).key("cmd+p"));}rows},
@@ -829,7 +831,7 @@ impl Shell {
         match event {
             // Golden Gate: the clock opens Notification Center (notifications and widgets), as on Golden Gate
             Event::Down(x,y) if self.clock_hit(x,y)&&self.desktop_menu.is_none()&&self.desk.is_some()=>{if self.notify.center.is_hidden(){self.open_notification_center(t);}else{self.notify.center.hide();}self.dirty=true;Some(vec![])},
-            Event::Down(x,y) if y<self.desktop_bar_height() as f32 && (!self.cc_reveal_zone(x,y)||self.menu_buttons().iter().any(|(_,left,w,_)|x>=*left&&x<*left+*w))=>{self.desktop_menu_row=None;self.help_reset();self.desktop_menu=self.menu_buttons().into_iter().find(|(_,left,w,_)|x>=*left&&x<*left+*w).map(|b|b.0);if self.desktop_menu==Some(Menu::ControlCenter){self.desktop_menu=None;self.open_control_center(t);}self.dirty=true;Some(vec![])},
+            Event::Down(x,y) if y<self.desktop_bar_height() as f32 && (!self.cc_reveal_zone(x,y)||self.menu_buttons().iter().any(|(_,left,w,_)|x>=*left&&x<*left+*w))=>{self.desktop_menu_row=None;self.help_reset();self.desktop_menu=self.menu_buttons().into_iter().find(|(_,left,w,_)|x>=*left&&x<*left+*w).map(|b|b.0);if self.desktop_menu==Some(Menu::ControlCenter){self.desktop_menu=None;self.toggle_desk_control_center(t);}else{self.close_desk_control_center(t);}self.dirty=true;Some(vec![])},
             // a press on the green button the menu hangs from is the button's own click (full screen), not a click outside
             Event::Down(x,y) if self.desktop_menu==Some(Menu::Arrange)&&self.arrange_on_button(x,y)=>{self.desktop_menu=None;self.dirty=true;None},
             Event::Down(x,y) if self.desktop_menu.is_some()=>{if !self.desktop_popup_rect().is_some_and(|(left,top,w,h)|x>=left as f32&&x<(left+w) as f32&&y>=top as f32&&y<(top+h) as f32){self.desktop_menu=None;self.dirty=true;}Some(vec![])},
@@ -1842,5 +1844,37 @@ mod submenu_tests {
         assert!(fx.is_some());
         assert_eq!(sh.desktop_menu, Some(Menu::Recent), "the click opens the submenu instead of closing the menu");
         assert!(sh.desktop_popup_rect().is_some());
+    }
+}
+
+/// E2E-15: the Window menu of a normal window offers every placement and Bring All to Front, as Golden Gate does.
+#[cfg(test)]
+mod window_menu_tests {
+    use super::Menu;
+    use crate::shell::{AppId, Screen};
+
+    #[test]
+    fn a_normal_window_enables_the_halves_center_and_bring_all_to_front() {
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.screen = Screen::Home;
+        sh.anim = None;
+        sh.desk_open(AppId::Settings, 0.0);
+        let rows = sh.menu_rows(Menu::Window);
+        for want in ["Left Half", "Right Half", "Fill", "Center", "Bring All to Front", "Return to Previous Size"] {
+            let row = rows.iter().find(|r| r.text.trim() == want).unwrap_or_else(|| panic!("{want} is in the Window menu"));
+            assert!(row.action.is_some(), "{want} is enabled for a normal window");
+        }
+    }
+
+    #[test]
+    fn with_no_window_the_placements_are_labels() {
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.screen = Screen::Home;
+        sh.anim = None;
+        let rows = sh.menu_rows(Menu::Window);
+        for want in ["Left Half", "Right Half", "Fill", "Center", "Bring All to Front"] {
+            let row = rows.iter().find(|r| r.text.trim() == want).unwrap_or_else(|| panic!("{want} is in the Window menu"));
+            assert!(row.action.is_none(), "{want} has nothing to act on without a window");
+        }
     }
 }
