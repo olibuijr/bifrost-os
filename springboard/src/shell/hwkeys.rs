@@ -920,6 +920,25 @@ impl Shell {
     /// native text field of the app on screen (Search, Browser, Settings, Files, Deildu); elsewhere it is ignored. The effects are the field's (a Wi-Fi join, say).
     /// A Ctrl or Cmd chord the shell did not take goes to the external app in front. False when
     /// the screen is not an external app, so the key falls through as before.
+    /// Key equivalents of the shell's own windows that `hw_chord` (which serves the SDK app in front) never sees: Cmd+[ goes
+    /// Back in Settings, as the back control does (Golden Gate's System Settings binds Cmd+[ to Back). True when the chord
+    /// was used; false leaves it to `hw_chord`.
+    pub fn hw_builtin_chord(&mut self, code: u16, mods: u32, t: f64) -> bool {
+        const KEY_LEFTBRACE: u16 = 26;
+        if !self.screen_on || self.anim.is_some() || self.shell_takes_typing() || self.card_alert_up() {
+            return false;
+        }
+        if code == KEY_LEFTBRACE && mods == CHORD_META && self.screen == Screen::App(AppId::Settings) {
+            let stepped = self.settings.as_mut().is_some_and(|s| s.back_page(t));
+            if stepped {
+                self.last_input = t;
+                self.dirty = true;
+            }
+            return stepped;
+        }
+        false
+    }
+
     pub fn hw_chord(&mut self, code: u16, mods: u32) -> bool {
         // Option+Cmd+D (KEY_D): Automatically Hide and Show for the dock
         if code == 32 && mods == (CHORD_META | CHORD_ALT) && self.dock_toggle_autohide() {
@@ -1371,6 +1390,27 @@ impl Shell {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// QA 0.10.20: Cmd+[ did nothing in Settings; it goes Back like the back control, and only Cmd+[ does.
+    #[test]
+    fn cmd_left_bracket_goes_back_in_settings() {
+        use crate::shell::tests::{settle, shell, unlock};
+        let mut sh = shell();
+        unlock(&mut sh);
+        sh.open(AppId::Settings, 1000.0);
+        settle(&mut sh, 1000.0);
+        let (ui, st) = (&sh.ui, sh.settings.as_mut().expect("Settings is open"));
+        // the single column, where About is pushed on the root (the split view replaces the detail pane instead)
+        st.allow_split(ui, false);
+        st.open_page(ui, "About", 3000.0);
+        st.tick(ui, 5000.0);
+        let depth = st.stack().len();
+        assert!(depth >= 2, "About is a page above the root: {:?}", st.stack());
+        assert!(!sh.hw_builtin_chord(26, CHORD_META | CHORD_SHIFT, 6000.0), "Shift+Cmd+[ is not Back");
+        assert!(!sh.hw_builtin_chord(27, CHORD_META, 6000.0), "Cmd+] is not Back");
+        assert!(sh.hw_builtin_chord(26, CHORD_META, 6000.0), "Cmd+[ goes Back");
+        assert_eq!(sh.settings.as_ref().unwrap().stack().len(), depth - 1);
+    }
 
     #[test]
     fn term_takes_cmd_chords_only_while_in_front_and_ctrl_reaches_the_pty() {
