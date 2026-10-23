@@ -26,6 +26,11 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+#[path = "quicksearch_dict.rs"]
+mod dict;
+#[path = "quicksearch_files.rs"]
+mod files_walk;
+
 const CARD_W_PT: f32 = 556.0;
 const CARD_TOP_PT: f32 = 41.0;
 const RADIUS_PT: f32 = 6.0;
@@ -200,8 +205,12 @@ pub enum Hit {
     Terminal(String),
     /// an inline calculator or unit-conversion answer
     Answer(String),
-    /// a file under the Files root, previewed in Files
-    File { path: PathBuf, name: String },
+    /// a file under the Files root or the home folder, previewed in Files; `modified` is its modification time (Unix
+    /// seconds, 0 when unknown), shown on the row
+    File { path: PathBuf, name: String, modified: i64 },
+    /// a dictionary definition of `word` (`quicksearch_dict`): opens the word in Dictionary; Space shows the whole
+    /// definition in the Look Up popover. `dictionary` is empty for the "look it up" row of a word no dictionary has.
+    Definition { word: String, dictionary: String, preview: String },
     /// "Show in Folder": opens Files at `folder`, the folder that holds the file `name`
     Reveal { folder: PathBuf, name: String },
     /// an app shortcut (`AppShortcut`): an intent declared in the app's manifest; opens the app and runs `intent.<id>`
@@ -332,7 +341,7 @@ fn action_line(intent: &super::settings_actions::SettingsIntent) -> &'static str
 
 /// A result as the Golden Gate panel shows it: its title and its second line (what kind of thing it is, where it is, or
 /// what it does). The second line is empty when there is nothing more to say.
-fn row_text(hit: &Hit, apps_name: impl Fn(AppId) -> String) -> (String, String) {
+fn row_text(hit: &Hit, apps_name: impl Fn(AppId) -> String, (now, offset): (i64, i32)) -> (String, String) {
     let folder_of = |path: &Path| path.parent().and_then(|p| p.file_name()).map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     match hit {
         Hit::App(app) => (apps_name(*app), "Application".to_string()),
@@ -343,11 +352,17 @@ fn row_text(hit: &Hit, apps_name: impl Fn(AppId) -> String) -> (String, String) 
         Hit::Event { title } => (title.clone(), "Calendar event".to_string()),
         Hit::Terminal(query) => ("Search in Terminal".to_string(), query.clone()),
         Hit::Answer(a) => (format!("= {a}"), "Calculator".to_string()),
-        Hit::File { path, name } => {
-            let kind = crate::files::fs::kind_of(name, path.is_dir()).label();
-            let folder = folder_of(path);
-            (name.clone(), if folder.is_empty() { kind.to_string() } else { format!("{kind} \u{b7} {folder}") })
+        Hit::File { path, name, modified } => {
+            // the kind, where it is and when it last changed ("Image · Downloads · Today at 09:41")
+            let mut parts = vec![crate::files::fs::kind_of(name, false).label().to_string()];
+            parts.extend(Some(folder_of(path)).filter(|f| !f.is_empty()));
+            if *modified > 0 {
+                parts.push(crate::files::fs::date_text(*modified, now, offset));
+            }
+            (name.clone(), parts.join(" \u{b7} "))
         }
+        Hit::Definition { word, dictionary, .. } if dictionary.is_empty() => (word.clone(), "Look up in Dictionary".to_string()),
+        Hit::Definition { word, preview, .. } => (word.clone(), if preview.is_empty() { "Dictionary".to_string() } else { preview.clone() }),
         Hit::Reveal { folder, name } => (format!("Show {name} in Folder"), folder.display().to_string()),
         Hit::Shortcut { title, app_name, .. } => (title.clone(), format!("Shortcut \u{b7} {app_name}")),
         Hit::SettingsIntent { id, title } => (title.to_string(), super::settings_intents::find(id).map_or("Settings", |i| i.description).to_string()),
@@ -501,20 +516,30 @@ mod symbol_and_line_tests {
     #[test]
     fn rows_have_a_title_and_a_second_line_saying_what_they_are() {
         let name = |_: AppId| "Files".to_string();
-        assert_eq!(row_text(&Hit::App(AppId::Files), name), ("Files".to_string(), "Application".to_string()));
-        assert_eq!(row_text(&Hit::Settings("Wi-Fi"), name), ("Wi-Fi".to_string(), "Settings".to_string()));
-        let file = Hit::File { path: PathBuf::from("/home/u/Downloads/photo.jpg"), name: "photo.jpg".into() };
-        assert_eq!(row_text(&file, name), ("photo.jpg".to_string(), "Image \u{b7} Downloads".to_string()));
+        assert_eq!(row_text(&Hit::App(AppId::Files), name, W), ("Files".to_string(), "Application".to_string()));
+        assert_eq!(row_text(&Hit::Settings("Wi-Fi"), name, W), ("Wi-Fi".to_string(), "Settings".to_string()));
+        let file = Hit::File { path: PathBuf::from("/home/u/Downloads/photo.jpg"), name: "photo.jpg".into(), modified: 0 };
+        assert_eq!(row_text(&file, name, W), ("photo.jpg".to_string(), "Image \u{b7} Downloads".to_string()));
+        // a file row says when the file last changed
+        let dated = Hit::File { path: PathBuf::from("/home/u/Documents/e2e.txt"), name: "e2e.txt".into(), modified: W.0 - 60 };
+        let (_, line) = row_text(&dated, name, W);
+        assert!(line.contains(" \u{b7} Documents \u{b7} "), "kind, folder, then the date: {line}");
+        assert!(line.ends_with(&crate::files::fs::date_text(W.0 - 60, W.0, 0)), "{line}");
+        assert!(line.contains("Today at"), "{line}");
+        let def = Hit::Definition { word: "weather".into(), dictionary: "Test".into(), preview: "n. the state of the atmosphere".into() };
+        assert_eq!(row_text(&def, name, W), ("weather".to_string(), "n. the state of the atmosphere".to_string()));
+        let look = Hit::Definition { word: "zyx".into(), dictionary: String::new(), preview: String::new() };
+        assert_eq!(row_text(&look, name, W), ("zyx".to_string(), "Look up in Dictionary".to_string()));
         let shortcut = Hit::Shortcut { app_id: "a.b".into(), app_name: "Notes".into(), intent: "new".into(), title: "New Note".into() };
-        assert_eq!(row_text(&shortcut, name), ("New Note".to_string(), "Shortcut \u{b7} Notes".to_string()));
+        assert_eq!(row_text(&shortcut, name, W), ("New Note".to_string(), "Shortcut \u{b7} Notes".to_string()));
         let wallpaper = Hit::SettingsAction { intent: Action::SetWallpaper("dusk".into()), title: "Set Wallpaper to Dusk".into() };
-        assert_eq!(row_text(&wallpaper, name).1, "Use this picture as the desktop wallpaper");
-        assert_eq!(row_text(&Hit::Answer("4".into()), name), ("= 4".to_string(), "Calculator".to_string()));
-        assert_eq!(row_text(&Hit::Terminal("ls".into()), name), ("Search in Terminal".to_string(), "ls".to_string()));
+        assert_eq!(row_text(&wallpaper, name, W).1, "Use this picture as the desktop wallpaper");
+        assert_eq!(row_text(&Hit::Answer("4".into()), name, W), ("= 4".to_string(), "Calculator".to_string()));
+        assert_eq!(row_text(&Hit::Terminal("ls".into()), name, W), ("Search in Terminal".to_string(), "ls".to_string()));
         let indexed = Hit::Indexed { app_id: "a".into(), unique_id: "1".into(), domain: String::new(), title: "Q1 report".into(), kind: "PDF document".into(), thumb: String::new() };
-        assert_eq!(row_text(&indexed, name), ("Q1 report".to_string(), "PDF document".to_string()));
+        assert_eq!(row_text(&indexed, name, W), ("Q1 report".to_string(), "PDF document".to_string()));
         let intent = Hit::SettingsIntent { id: "open-keyboard", title: "Open Keyboard" };
-        assert_eq!(row_text(&intent, name), ("Open Keyboard".to_string(), "Show the keyboard settings".to_string()));
+        assert_eq!(row_text(&intent, name, W), ("Open Keyboard".to_string(), "Show the keyboard settings".to_string()));
     }
 
     #[test]
@@ -665,7 +690,7 @@ fn build_tables(c: &Corpus) -> (Vec<Table>, BTreeMap<String, Hit>) {
     shortcut_rows.extend(settings_intent_rows(&mut hits));
     shortcut_rows.extend(settings_action_rows(&mut hits));
     shortcut_rows.extend(media_transport_rows(&mut hits));
-    let file_rows = c.files.iter().zip(c.files_folded).map(|(e, f)| table_row(&mut hits, format!("file:{}", e.path.display()), &e.name, String::new(), search_rank::Kind::File, Hit::File { path: e.path.clone(), name: e.name.clone() }, f.clone())).collect();
+    let file_rows = c.files.iter().zip(c.files_folded).map(|(e, f)| table_row(&mut hits, format!("file:{}", e.path.display()), &e.name, String::new(), search_rank::Kind::File, Hit::File { path: e.path.clone(), name: e.name.clone(), modified: e.mtime }, f.clone())).collect();
     let event_rows = c
         .events
         .iter()
@@ -713,7 +738,7 @@ fn split_merged(merged: &search_rank::Merged, hits: &BTreeMap<String, Hit>, top:
         }
         if section.source == "Files" {
             let show = match rows.first() {
-                Some(Hit::File { path, name }) => Some(Group { title: "Show in Folder", hits: vec![Hit::Reveal { folder: path.parent().map_or_else(|| path.clone(), Path::to_path_buf), name: name.clone() }] }),
+                Some(Hit::File { path, name, .. }) => Some(Group { title: "Show in Folder", hits: vec![Hit::Reveal { folder: path.parent().map_or_else(|| path.clone(), Path::to_path_buf), name: name.clone() }] }),
                 _ => None,
             };
             files.push(Group { title: "Files", hits: rows });
@@ -725,11 +750,23 @@ fn split_merged(merged: &search_rank::Merged, hits: &BTreeMap<String, Hit>, top:
     (top_group, sections, files)
 }
 
+/// The definition row of `query` as its group ("Dictionary"), and whether the query asked for it ("define x").
+fn dictionary_group(query: &str) -> Option<(Group, bool)> {
+    dict::lookup(query).map(|(d, explicit)| (Group { title: "Dictionary", hits: vec![Hit::Definition { word: d.word, dictionary: d.dictionary, preview: d.preview }] }, explicit))
+}
+
 /// The groups in display order: the calculator answer, the Top Hit, the sections, the Documents, the files, and the
-/// "Search in Apps" action last.
+/// "Search in Apps" action last. A definition the query asked for ("define x") comes first, so Return opens it; the
+/// definition of a plain word follows the sections.
 fn compose(query: &str, calc: Option<Group>, top: Option<Group>, sections: Vec<Group>, documents: Vec<Group>, files: Vec<Group>) -> Vec<Group> {
-    let mut groups: Vec<Group> = calc.into_iter().chain(top).collect();
+    let (asked, plain) = match dictionary_group(query) {
+        Some((g, true)) => (Some(g), None),
+        Some((g, false)) => (None, Some(g)),
+        None => (None, None),
+    };
+    let mut groups: Vec<Group> = asked.into_iter().chain(calc).chain(top).collect();
     groups.extend(sections);
+    groups.extend(plain);
     groups.extend(documents);
     groups.extend(files);
     groups.push(Group { title: "Search in Apps", hits: vec![Hit::Terminal(query.to_string())] });
@@ -749,7 +786,8 @@ fn hit_category(hit: &Hit) -> (Option<super::spotlight_scope::Category>, Option<
         Hit::Indexed { .. } => (Some(C::Documents), None),
         Hit::City(_) => (Some(C::Cities), None),
         Hit::Answer(_) => (Some(C::Calculator), None),
-        Hit::Deildu(_) | Hit::Terminal(_) => (None, None),
+        // no Settings > Search switch covers definitions (gap: the page lists no Dictionary category yet)
+        Hit::Deildu(_) | Hit::Terminal(_) | Hit::Definition { .. } => (None, None),
     }
 }
 
@@ -1112,7 +1150,7 @@ pub struct QuickSearch {
     contacts: Vec<super::contactstore::Contact>,
     /// `folded_fields` of each contact
     contacts_folded: Vec<[String; 3]>,
-    /// files under the Files root, newest first, and their folded names
+    /// files under the Files root and the home folder, newest first, and their folded names
     files: Vec<crate::files::fs::Entry>,
     files_folded: Vec<String>,
     /// the background file scan started at open, until its result is taken
@@ -1143,6 +1181,11 @@ pub struct QuickSearch {
     /// the calendar events, read on a worker (see `refresh_sources`)
     events: Vec<super::calendar::store::CalendarEvent>,
     calendar_stamp: Option<(PathBuf, std::time::SystemTime)>,
+    /// the wall clock (Unix seconds, zone offset) the file rows' dates are written against, set when Search opens;
+    /// (0, 0) until then, when the system clock is read
+    wall: (i64, i32),
+    /// set by Space on a definition row: the next act shows the whole definition instead of opening Dictionary
+    space_preview: bool,
     suggestions: Image,
     chevron: Image,
 }
@@ -1250,6 +1293,8 @@ impl QuickSearch {
             shown: vec![],
             events: vec![],
             calendar_stamp: None,
+            wall: (0, 0),
+            space_preview: false,
             suggestions: ui.text("Assistant Suggestions", 20.0, Weight::Semibold, WHITE),
             chevron: ui.text("›", 22.0, Weight::Semibold, SECONDARY),
         }
@@ -1419,7 +1464,10 @@ impl QuickSearch {
             crate::bare::sys::spawn_named("quicksearch-files", move || {
                 // Privacy: files in the folders Settings > Search excludes are never listed
                 let excluded = super::search_prefs::current();
-                let files: Vec<crate::files::fs::Entry> = crate::files::fs::recent_in(&[root], 2000).into_iter().filter(|e| !excluded.folder_excluded(&e.path)).collect();
+                // the Files root and the home folder, in a bounded walk (`quicksearch_files`)
+                let home = files_walk::user_home();
+                let roots = files_walk::roots(&root, home.as_deref());
+                let files: Vec<crate::files::fs::Entry> = files_walk::walk(&roots, files_walk::LIMIT, files_walk::VISIT_BUDGET).into_iter().filter(|e| !excluded.folder_excluded(&e.path)).collect();
                 let _ = tx.send(files);
             });
             self.files_rx = Some(rx);
@@ -1565,7 +1613,9 @@ impl QuickSearch {
             self.run_query.clear();
         }
         let answered = self.run.as_mut().is_some_and(|r| r.poll());
-        if (files || sources || answered) && self.active() && !self.field.text().is_empty() {
+        // the dictionaries finished loading: the query may have a definition now
+        let defined = dict::take_fresh();
+        if (files || sources || answered || defined) && self.active() && !self.field.text().is_empty() {
             self.search(ui, h);
             dirty = true;
         }
@@ -1625,12 +1675,16 @@ impl QuickSearch {
                 self.move_selection(ui, -1);
                 return None;
             }
-            // Space on an arrow-selected file previews it in Files instead of typing a space
-            Out::Text(ref text) if text == " " => {
-                if let Some(hit @ Hit::File { .. }) = self.selected_hit() {
+            // Space on an arrow-selected file previews it in Files instead of typing a space; on a definition it shows
+            // the whole definition (Look Up)
+            Out::Text(ref text) if text == " " => match self.selected_hit() {
+                Some(hit @ Hit::File { .. }) => return Some(hit),
+                Some(hit @ Hit::Definition { .. }) => {
+                    self.space_preview = true;
                     return Some(hit);
                 }
-            }
+                _ => {}
+            },
             _ => {}
         }
         if self.field.edit(ui, &out, t) {
@@ -1644,6 +1698,26 @@ impl QuickSearch {
     pub fn selected_hit(&self) -> Option<Hit> {
         let (si, ri) = self.selected?;
         self.sections.get(si).and_then(|s| s.rows.get(ri)).map(|(h, _)| h.clone())
+    }
+
+    /// Cmd+Return: "Show in Folder" for the file row the arrow keys are on, or else the first file row. None when no
+    /// file is listed.
+    pub fn reveal_hit(&self) -> Option<Hit> {
+        let file = |h: &Hit| match h {
+            Hit::File { path, name, .. } => Some(Hit::Reveal { folder: path.parent().map_or_else(|| path.clone(), Path::to_path_buf), name: name.clone() }),
+            Hit::Reveal { .. } => Some(h.clone()),
+            _ => None,
+        };
+        self.selected_hit().as_ref().and_then(file).or_else(|| self.rows().iter().find_map(|(_, _, h)| file(h)))
+    }
+
+    /// The wall clock the rows' dates are written against.
+    fn wall_now(&self) -> (i64, i32) {
+        if self.wall.0 > 0 {
+            self.wall
+        } else {
+            (now_secs() as i64, 0)
+        }
     }
 
     /// Moves the keyboard selection one row down (`step` 1) or up (-1) through the shown rows.
@@ -1780,7 +1854,7 @@ impl QuickSearch {
                 let max_w = self.px(ui, m.card_w - m.row_text_x - m.inset);
                 let label_pt = self.m().label_pt * k;
                 if self.mac {
-                    let (title, sub) = row_text(&hit, name_of);
+                    let (title, sub) = row_text(&hit, name_of, self.wall_now());
                     rows.push((hit, ui.text(&ui.fit(&title, label_pt, max_w), label_pt, Weight::Regular, WHITE)));
                     subs.push((!sub.is_empty()).then(|| ui.text(&ui.fit(&sub, MAC_BODY_PT * k, max_w), MAC_BODY_PT * k, Weight::Regular, WHITE)));
                     continue;
@@ -1799,6 +1873,8 @@ impl QuickSearch {
                     Hit::SettingsIntent { title, .. } => title.to_string(),
                     Hit::SettingsAction { title, .. } | Hit::MediaTransport { title, .. } => title.clone(),
                     Hit::Indexed { title, kind, .. } => indexed_label(title, kind),
+                    Hit::Definition { word, preview, .. } if !preview.is_empty() => format!("{word}: {preview}"),
+                    Hit::Definition { word, .. } => format!("Look up \u{201c}{word}\u{201d}"),
                 };
                 rows.push((hit, ui.text(&ui.fit(&label, label_pt, max_w), label_pt, Weight::Regular, WHITE)));
                 subs.push(None);
@@ -2300,6 +2376,7 @@ impl QuickSearch {
                         Hit::File { .. } | Hit::Reveal { .. } => Some(AppId::Files),
                         Hit::Shortcut { app_id, .. } | Hit::Indexed { app_id, .. } => super::apphost::slot_of(app_id).map(|n| AppId::External(n as u8)),
                         Hit::Event { .. } => super::apphost::slot_of(super::services::calendar::STORE_APP).map(|n| AppId::External(n as u8)),
+                        Hit::Definition { .. } => super::apphost::slot_of(bifrost_ui::services_menu::DICTIONARY_APP).map(|n| AppId::External(n as u8)),
                         Hit::Settings(_) | Hit::SettingsIntent { .. } | Hit::SettingsAction { .. } | Hit::MediaTransport { .. } => None,
                     };
                     // an indexed item with a readable thumbnail shows it in place of its app's icon
@@ -2479,6 +2556,9 @@ impl Shell {
             self.quicksearch.set_icons(&self.ui, icons);
         }
         let root = self.files_locations.first().map_or_else(|| crate::files::fs::home(), |l| l.path.clone());
+        // the dictionaries load once, off the UI thread; the file rows' dates use the shell's wall clock
+        dict::preload(super::apphost::root().join("appdata").join(bifrost_ui::services_menu::DICTIONARY_APP));
+        self.quicksearch.wall = self.wall_now(t);
         self.quicksearch.refresh_sources(&super::contactstore::store_path(&self.data_dir), &self.deildu_dir, &super::services::calendar::store_path(&self.data_dir), root);
         self.quicksearch.open(&self.ui, self.h, y0, y, t, range);
     }
@@ -2504,6 +2584,9 @@ impl Shell {
 
     /// Opens what a result stands for; the card drops at once.
     fn quicksearch_act(&mut self, hit: Hit, t: f64) -> Vec<Effect> {
+        if !matches!(hit, Hit::Definition { .. }) {
+            self.quicksearch.space_preview = false;
+        }
         self.quicksearch.note_search();
         self.quicksearch.hide();
         match hit {
@@ -2547,6 +2630,14 @@ impl Shell {
                 self.open(AppId::Files, t);
                 if let Some(entry) = self.quicksearch.files.iter().find(|e| e.path == path).cloned() {
                     self.preview_in_files(&entry, t);
+                }
+            }
+            Hit::Definition { word, .. } => {
+                if std::mem::take(&mut self.quicksearch.space_preview) {
+                    // Space: the whole definition in the Look Up popover
+                    self.open_look_up(word);
+                } else {
+                    self.run_intent(bifrost_ui::services_menu::DICTIONARY_APP, "look-up", "word", &word, t);
                 }
             }
             Hit::Reveal { folder, .. } => {
@@ -2635,6 +2726,19 @@ impl Shell {
             Some(hit) => self.quicksearch_act(hit, t),
             None => vec![],
         }
+    }
+
+    /// Cmd+Return in Search: shows the selected (or first) file in its folder in Files, as "Show in Folder" does. True
+    /// when Search was open and took the chord (it does even with no file listed, so the app behind never gets it).
+    pub(super) fn quicksearch_reveal(&mut self, t: f64) -> bool {
+        if !self.quicksearch.is_shown() {
+            return false;
+        }
+        if let Some(hit) = self.quicksearch.reveal_hit() {
+            let _ = self.quicksearch_act(hit, t);
+        }
+        self.dirty = true;
+        true
     }
 
     /// Advances the card's settle and keyboard; true when a frame is needed.
@@ -2768,13 +2872,13 @@ mod tests {
             title: "Top Hit",
             hits: vec![
                 Hit::SettingsIntent { id: "open-keyboard", title: "Open Keyboard" },
-                Hit::File { path: PathBuf::from("/home/u/Private/a.txt"), name: "a.txt".into() },
-                Hit::File { path: PathBuf::from("/home/u/Work/b.txt"), name: "b.txt".into() },
+                Hit::File { path: PathBuf::from("/home/u/Private/a.txt"), name: "a.txt".into(), modified: 0 },
+                Hit::File { path: PathBuf::from("/home/u/Work/b.txt"), name: "b.txt".into(), modified: 0 },
             ],
         }, Group { title: "Settings", hits: vec![Hit::SettingsIntent { id: "open-sound", title: "Open Sound" }] }, Group { title: "Search in Apps", hits: vec![Hit::Terminal("x".into())] }];
         let kept = scoped(groups, &scope);
         assert_eq!(kept.len(), 2, "the Settings group empties and goes: {kept:?}");
-        assert_eq!(kept[0].hits, vec![Hit::File { path: PathBuf::from("/home/u/Work/b.txt"), name: "b.txt".into() }]);
+        assert_eq!(kept[0].hits, vec![Hit::File { path: PathBuf::from("/home/u/Work/b.txt"), name: "b.txt".into(), modified: 0 }]);
         assert_eq!(kept[1].title, "Search in Apps", "the action is never hidden");
     }
 
@@ -3379,7 +3483,7 @@ mod file_actions_tests {
         let groups = file_groups("report", &files);
         assert_eq!(groups.len(), 2, "{groups:?}");
         assert_eq!(groups[0].title, "Files");
-        assert_eq!(groups[0].hits, vec![Hit::File { path: PathBuf::from("/home/me/Docs/Q1 report.pdf"), name: "Q1 report.pdf".into() }]);
+        assert_eq!(groups[0].hits, vec![Hit::File { path: PathBuf::from("/home/me/Docs/Q1 report.pdf"), name: "Q1 report.pdf".into(), modified: 0 }]);
         assert_eq!(groups[1], Group { title: "Show in Folder", hits: vec![Hit::Reveal { folder: PathBuf::from("/home/me/Docs"), name: "Q1 report.pdf".into() }] });
         assert!(file_groups("zzz", &files).is_empty());
         assert!(file_groups("  ", &files).is_empty());
@@ -3389,7 +3493,7 @@ mod file_actions_tests {
     fn space_previews_an_arrow_selected_file_and_types_otherwise() {
         let u = ui();
         let mut q = QuickSearch::new(&u, 800.0, 1.0);
-        let file = Hit::File { path: PathBuf::from("/home/me/a.txt"), name: "a.txt".into() };
+        let file = Hit::File { path: PathBuf::from("/home/me/a.txt"), name: "a.txt".into(), modified: 0 };
         let section = |u: &Ui| Section { header: u.text("Files", 20.0, Weight::Semibold, WHITE), rows: vec![(file.clone(), u.text("a.txt", 13.0, Weight::Regular, WHITE))], subs: vec![None] };
         q.sections = vec![section(&u)];
         assert_eq!(q.key(&u, 800, Out::Text(" ".into()), 0.0), None, "no row selected: the space is typed");
@@ -3398,6 +3502,45 @@ mod file_actions_tests {
         q.selected = Some((0, 0));
         assert_eq!(q.key(&u, 800, Out::Text(" ".into()), 0.0), Some(file), "Space previews the selected file");
         assert_eq!(q.query(), " ", "the query is untouched by the preview");
+    }
+
+    #[test]
+    fn space_on_a_definition_asks_for_the_whole_definition() {
+        let u = ui();
+        let mut q = QuickSearch::new(&u, 800.0, 1.0);
+        let def = Hit::Definition { word: "weather".into(), dictionary: "Test".into(), preview: "n. air".into() };
+        q.sections = vec![Section { header: u.text("Dictionary", 20.0, Weight::Semibold, WHITE), rows: vec![(def.clone(), u.text("weather", 13.0, Weight::Regular, WHITE))], subs: vec![None] }];
+        q.selected = Some((0, 0));
+        assert_eq!(q.key(&u, 800, Out::Text(" ".into()), 0.0), Some(def));
+        assert!(q.space_preview, "the act shows the definition instead of opening Dictionary");
+    }
+
+    #[test]
+    fn cmd_return_reveals_the_selected_file_or_else_the_first_one() {
+        let u = ui();
+        let mut q = QuickSearch::new(&u, 800.0, 1.0);
+        assert_eq!(q.reveal_hit(), None, "no file listed");
+        let file = |p: &str| Hit::File { path: PathBuf::from(p), name: Path::new(p).file_name().unwrap().to_string_lossy().into_owned(), modified: 0 };
+        let row = |h: Hit| (h, u.text("x", 13.0, Weight::Regular, WHITE));
+        q.sections = vec![
+            Section { header: Image::new(1, 1), rows: vec![row(Hit::App(AppId::Files))], subs: vec![None] },
+            Section { header: Image::new(1, 1), rows: vec![row(file("/home/me/Docs/a.txt")), row(file("/home/me/Pics/b.png"))], subs: vec![None, None] },
+        ];
+        assert_eq!(q.reveal_hit(), Some(Hit::Reveal { folder: PathBuf::from("/home/me/Docs"), name: "a.txt".into() }), "the first file");
+        q.selected = Some((1, 1));
+        assert_eq!(q.reveal_hit(), Some(Hit::Reveal { folder: PathBuf::from("/home/me/Pics"), name: "b.png".into() }), "the selected file");
+        q.selected = Some((0, 0));
+        assert_eq!(q.reveal_hit(), Some(Hit::Reveal { folder: PathBuf::from("/home/me/Docs"), name: "a.txt".into() }), "an app row is not revealed");
+    }
+
+    #[test]
+    fn define_puts_a_dictionary_row_first_and_a_word_with_no_definition_gets_none() {
+        // no dictionary defines this word: "define" still offers to look it up, first, so Return opens Dictionary
+        let groups = results("define zqxjvw", &[]);
+        assert_eq!(groups[0], Group { title: "Dictionary", hits: vec![Hit::Definition { word: "zqxjvw".into(), dictionary: String::new(), preview: String::new() }] });
+        // a plain word is only defined when a dictionary has it
+        assert!(results("zqxjvw", &[]).iter().all(|g| g.title != "Dictionary"));
+        assert!(results("e2e", &[]).iter().all(|g| g.title != "Dictionary"));
     }
 }
 

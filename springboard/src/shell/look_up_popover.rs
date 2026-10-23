@@ -219,7 +219,8 @@ fn title_of(hit: &Hit) -> Option<String> {
         Hit::Shortcut { title, .. } | Hit::Indexed { title, .. } | Hit::Event { title } => title.clone(),
         Hit::SettingsIntent { title, .. } => title.to_string(),
         Hit::SettingsAction { title, .. } | Hit::MediaTransport { title, .. } => title.clone(),
-        Hit::Terminal(_) | Hit::Reveal { .. } => return None,
+        // the popover shows the definition itself: a Search definition row would repeat it
+        Hit::Terminal(_) | Hit::Reveal { .. } | Hit::Definition { .. } => return None,
     })
 }
 
