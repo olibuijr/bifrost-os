@@ -6,6 +6,9 @@
 use super::glyphs::{either, paint, segment};
 use super::keyboard::Out;
 use super::textfield::{draw_loupe, SELECT};
+
+/// Opacity of the selection wash (the highlight colour under selected text).
+const SELECTION_ALPHA: u32 = 90;
 use super::md::{self, Block, Style};
 use super::ui::{Ui, Weight, BLACK, SECONDARY};
 use crate::gfx::{pack, rgba, Image, Surface};
@@ -1223,7 +1226,8 @@ impl TextArea {
                 let (a, b) = (r.start.max(l.range.start), r.end.min(l.range.end));
                 if a < b {
                     let (x0, x1) = (l.x_at(a), if b == l.range.end && l.text.chars().count() < l.range.len() { l.x_at(b - 1) + ui.pt(4.0) } else { l.x_at(b) });
-                    s.fill_rrect(x + x0, ly, (x1 - x0).max(ui.pt(2.0)), l.h, 0.0, rgba(255, 214, 10, 70));
+                    // the selection: a wash of Settings > Appearance > Highlight Colour under the text
+                    s.fill_rrect(x + x0, ly, (x1 - x0).max(ui.pt(2.0)), l.h, 0.0, crate::gfx::scale(bifrost_render::ui::highlight_now(), SELECTION_ALPHA));
                 }
             }
             if let Some(name) = &l.image {

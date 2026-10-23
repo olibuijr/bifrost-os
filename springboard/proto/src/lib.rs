@@ -765,6 +765,21 @@ pub mod appearance {
     /// by the accent (switches, checkmarks, the default button) follow it; links stay blue.
     pub const ACCENT_SHIFT: u32 = 8;
     pub const ACCENT_MASK: u32 = 0xF << ACCENT_SHIFT;
+    /// Bits 12 to 15: Settings > Appearance > Highlight Colour (the text selection) plus one; 1 follows the accent,
+    /// n + 1 is `Accent::ALL[n]`. Zero means the shell did not say.
+    pub const HIGHLIGHT_SHIFT: u32 = 12;
+    pub const HIGHLIGHT_MASK: u32 = 0xF << HIGHLIGHT_SHIFT;
+    /// Bits 16 and 17: Sidebar Icon Size plus one (1 small, 2 medium, 3 large); zero means not said.
+    pub const SIDEBAR_ICON_SHIFT: u32 = 16;
+    pub const SIDEBAR_ICON_MASK: u32 = 0x3 << SIDEBAR_ICON_SHIFT;
+    /// Bits 18 and 19: Show Scroll Bars plus one (1 automatically, 2 when scrolling, 3 always); zero means not said.
+    pub const SCROLL_BARS_SHIFT: u32 = 18;
+    pub const SCROLL_BARS_MASK: u32 = 0x3 << SCROLL_BARS_SHIFT;
+
+    /// A wire field `(flags & mask) >> shift` minus one: the setting's value, or None when the shell did not send it.
+    pub fn field(flags: u32, mask: u32, shift: u32) -> Option<u32> {
+        ((flags & mask) >> shift).checked_sub(1)
+    }
 }
 
 /// The material model is shared with the shell and the window server (`bifrost_ui::visual_effect`): one kind, state,

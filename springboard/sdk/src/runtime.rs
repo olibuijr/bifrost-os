@@ -856,6 +856,9 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                     if let Some(accent) = kit::appearance::Accent::from_wire((flags & ACCENT_MASK) >> ACCENT_SHIFT) {
                         kit::appearance::set_accent(accent);
                     }
+                    // Settings > Appearance: the text selection colour, the source-list icon size and the scroll bars
+                    // (`kit::ui::highlight_now`, `sidebar_icon_scale`, `scroll_bars_always`); the repaint below shows them
+                    apply_appearance_prefs(flags);
                     let vibrant = flags & VIBRANCY != 0 && flags & REDUCE_TRANSPARENCY == 0;
                     crate::widgets::set_vibrancy(vibrant, flags & MATERIALS != 0);
                     if !vibrant {
@@ -1126,6 +1129,22 @@ fn flush_restorable<A: App>(app: &A, ctx: &Ctx, force: bool) {
 /// When a touch happened, from the shell's stamp (the low 32 bits of the same monotonic ms clock).
 /// Moves arrive in batches, so stamping them with the time they are read would give several the
 /// same time and break scroll velocity; a stamp that is far off (another clock) falls back to `now`.
+/// Publishes the Settings > Appearance choices a `ToApp::Appearance` carries into this process: Highlight Colour (text
+/// selections), Sidebar Icon Size (source lists) and Show Scroll Bars (scroll indicators). A field the shell did not
+/// send leaves the setting as it is.
+pub(crate) fn apply_appearance_prefs(flags: u32) {
+    use crate::proto::appearance::*;
+    if let Some(h) = field(flags, HIGHLIGHT_MASK, HIGHLIGHT_SHIFT) {
+        kit::ui::set_highlight(h);
+    }
+    if let Some(s) = field(flags, SIDEBAR_ICON_MASK, SIDEBAR_ICON_SHIFT) {
+        kit::ui::set_sidebar_icon_size(s);
+    }
+    if let Some(m) = field(flags, SCROLL_BARS_MASK, SCROLL_BARS_SHIFT) {
+        kit::ui::set_scroll_bars(m);
+    }
+}
+
 pub(crate) fn event_time(now: f64, t_ms: u32) -> f64 {
     let ago = (now as u64 as u32).wrapping_sub(t_ms) as f64;
     if ago < 1000.0 { now - ago } else { now }
@@ -2019,6 +2038,34 @@ mod window_pixel_tests {
         assert!(release_window_buffer(&mut pixels, id, 0, g));
         assert!(!pixels[&id].slots[0].held);
         assert!(!release_window_buffer(&mut pixels, 99, 0, g), "an unknown window is ignored");
+    }
+}
+
+#[cfg(test)]
+mod appearance_prefs_tests {
+    use super::apply_appearance_prefs;
+    use crate::kit::ui;
+    use crate::proto::appearance::*;
+
+    #[test]
+    fn the_shells_appearance_choices_reach_the_app_and_unsent_fields_keep_theirs() {
+        let keep = (ui::highlight_index(), ui::sidebar_icon_size(), ui::scroll_bars_mode());
+        apply_appearance_prefs((5 << HIGHLIGHT_SHIFT) | (3 << SIDEBAR_ICON_SHIFT) | (3 << SCROLL_BARS_SHIFT));
+        assert_eq!(ui::highlight_index(), 4, "Highlight Colour: Accent::ALL[4]");
+        assert_eq!(ui::sidebar_icon_size(), 2);
+        assert!(ui::scroll_bars_always());
+        let (dark, light) = crate::kit::appearance::Accent::ALL[4].colours();
+        let fading = (0.0..1.0).contains(&crate::kit::appearance::scheme()) && crate::kit::appearance::scheme() > 0.0;
+        assert!(fading || [dark, light].contains(&ui::highlight_now()), "text selections now draw in the chosen colour");
+        // an older shell sends none of the three: nothing changes
+        apply_appearance_prefs(0);
+        assert_eq!((ui::highlight_index(), ui::sidebar_icon_size(), ui::scroll_bars_mode()), (4, 2, 2));
+        apply_appearance_prefs((1 << HIGHLIGHT_SHIFT) | (1 << SIDEBAR_ICON_SHIFT) | (1 << SCROLL_BARS_SHIFT));
+        assert_eq!((ui::highlight_index(), ui::sidebar_icon_size(), ui::scroll_bars_mode()), (0, 0, 0));
+        assert!(!ui::scroll_bars_always());
+        ui::set_highlight(keep.0);
+        ui::set_sidebar_icon_size(keep.1);
+        ui::set_scroll_bars(keep.2);
     }
 }
 

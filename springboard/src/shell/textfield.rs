@@ -11,7 +11,7 @@ use super::keyboard::Out;
 use super::ui::{Ui, Weight, WHITE};
 use super::wifi_page::BLUE;
 use super::Event;
-use crate::gfx::{pack, rgba, Image, Surface};
+use crate::gfx::{pack, Image, Surface};
 use crate::scene::STATUS_PT;
 
 /// Caret on/off period in ms (bifrost blinks at roughly 1 Hz).
@@ -597,7 +597,8 @@ impl TextField {
         if let Some((hx, hy, hw, hh)) = self.highlight(ui, frame) {
             let (hx0, hx1) = (hx.max(x), (hx + hw).min(x + w));
             if hx1 > hx0 {
-                s.fill_rrect(hx0, hy, hx1 - hx0, hh, 0.0, rgba(70, 147, 255, HIGHLIGHT_ALPHA));
+                // a 20% wash of Settings > Appearance > Highlight Colour under the text
+                s.fill_rrect(hx0, hy, hx1 - hx0, hh, 0.0, crate::gfx::scale(bifrost_render::ui::highlight_now(), u32::from(HIGHLIGHT_ALPHA)));
             }
             let (bar, dot) = (ui.pt(BAR_PT), ui.pt(DOT_PT));
             let [start, end] = self.dots(ui, frame).unwrap_or_default();
