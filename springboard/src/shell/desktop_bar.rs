@@ -49,6 +49,9 @@ fn status_icon_lift(battery:bool,ethernet:bool)->f32 {if battery{0.}else if ethe
     Cpu,Memory,Dock,Context,
     /// the n-th menu the frontmost SDK app published (`ToShell::AppMenus`)
     Custom(u8),
+    /// a submenu of the front app's menu `.0` (index in `app_menus`): the children of its submenu header at item index
+    /// `.1`. It opens in place of the menu it hangs from, under the same bar item, with a row back (as Recent Items does)
+    AppSub(u8,u16),
     /// the n-th menu extra an app published (`NativeStatusItem`), in the order of `status_entries_now`
     Status(u8),
     /// the input source menu extra: the active source's short label, its rows the enabled sources (shown with two or more)
@@ -95,6 +98,55 @@ const MENU_ROW_PT:f32=24.;
 const MENU_SEP_PT:f32=11.;
 #[cfg(feature = "desktop-wayland")]
 const MENU_PAD_PT:f32=5.;
+/// Height of the scroll arrow at the top or bottom of a menu taller than the screen, in pt.
+#[cfg(any(test, feature = "desktop-wayland"))]
+const MENU_ARROW_PT:f32=18.;
+/// How fast a menu scrolls while the pointer rests on one of its scroll arrows, in pt a second.
+#[cfg(feature = "desktop-wayland")]
+const MENU_AUTOSCROLL_PT_S:f32=360.;
+/// How a menu taller than its room scrolls (`NativeMenu`: a scroll arrow at the top and/or bottom edge; resting the pointer
+/// on one scrolls, as does the wheel, and the keyboard keeps the highlighted row in view). All in pt.
+#[cfg(any(test, feature = "desktop-wayland"))]
+#[derive(Clone,Copy,Debug,PartialEq)]
+pub(super) struct MenuScroll {
+    /// the popup's height: the rows' when they fit, else the room
+    pub(super) height:f32,
+    /// how far the rows are scrolled up, clamped to what there is
+    pub(super) offset:f32,
+    /// an arrow at the top (rows above) and at the bottom (rows below)
+    pub(super) up:bool,pub(super) down:bool,
+}
+#[cfg(any(test, feature = "desktop-wayland"))]
+impl MenuScroll {
+    /// The part of the popup (top, bottom, in pt from its top edge) the rows show in, between the arrows.
+    pub(super) fn window(&self)->(f32,f32) {(if self.up{MENU_ARROW_PT}else{0.},self.height-if self.down{MENU_ARROW_PT}else{0.})}
+    /// Whether a row at `top` (pt in the rows) of height `h` shows whole.
+    pub(super) fn shows(&self,top:f32,h:f32)->bool {let (lo,hi)=self.window();top-self.offset>=lo-0.01&&top-self.offset+h<=hi+0.01}
+    /// The offset that brings the row at `top` of height `h` into view, scrolling as little as possible.
+    pub(super) fn reveal(&self,content:f32,top:f32,h:f32)->f32 {
+        if self.shows(top,h) {return self.offset;}
+        // the arrows follow the offset: scrolled to the top there is no top arrow, scrolled to the end no bottom one
+        let max=(content-self.height).max(0.);
+        let target=if top-self.offset<self.window().0 {top-MENU_ARROW_PT} else {top+h-self.height+MENU_ARROW_PT};
+        if target<=0. {0.} else if target>=max {max} else {target}
+    }
+}
+/// The scrolling of a menu whose rows are `content` pt tall, given at most `room` pt, scrolled by `offset` pt.
+#[cfg(any(test, feature = "desktop-wayland"))]
+pub(super) fn menu_scroll(content:f32,room:f32,offset:f32)->MenuScroll {
+    if content<=room {return MenuScroll{height:content,offset:0.,up:false,down:false};}
+    // room for both arrows and a row between them, however small the screen
+    let room=room.max(2.*MENU_ARROW_PT+24.);
+    if content<=room {return MenuScroll{height:content,offset:0.,up:false,down:false};}
+    let max=content-room;
+    let offset=if offset.is_finite(){offset.clamp(0.,max)}else{0.};
+    MenuScroll{height:room,offset,up:offset>0.,down:offset<max}
+}
+/// What a menu taller than its room is scrolled to, with the arrow the pointer rests on (-1 up, 1 down, 0 none) and
+/// when the arrow last scrolled it (ms; 0 until the next tick).
+#[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+#[derive(Clone,Copy,Debug,Default,PartialEq)]
+pub(super) struct MenuScrollState {pub(super) menu:Option<Menu>,pub(super) offset:f32,pub(super) arrow:i8,pub(super) last_t:f64}
 /// Height of the Help menu's search field, in pt.
 #[cfg(feature = "desktop-wayland")]
 const HELP_FIELD_PT:f32=30.;
@@ -163,18 +215,69 @@ fn photo_row(p:&super::photos::Photos,c:super::photos::commands::PhotoCommand)->
 /// Accessors the chrome menu bar model reads (chrome_host/menubar.rs): the separator flag and the shortcut text.
 #[cfg(feature = "desktop-wayland")]
 impl Row {pub(super) fn is_separator(&self)->bool {self.sep} pub(super) fn key_text(&self)->Option<&str> {self.key.as_deref()}}
-/// Rows of one app-published menu (`ToShell::AppMenus`): disabled items and submenu headers are labels, a checked item
-/// starts with a check mark, a submenu's children are indented. Invalid key equivalents are dropped. The app's own
+#[cfg(feature = "desktop-wayland")]
+impl Row {
+    /// The submenu this row opens (Recent Items, Services, an app's submenu); None for a row back to a parent menu
+    /// (it carries the left chevron) and for every other row.
+    pub(super) fn opens(&self)->Option<Menu> {
+        match &self.action {Some(Action::Submenu(m)) if !matches!(self.symbol,Some(crate::symbols::Symbol::ChevronLeft))=>Some(*m),_=>None}
+    }
+}
+#[cfg(feature = "desktop-wayland")]
+impl Shell {
+    /// The rows of submenu `menu` without its row back to the parent and the separator after it: the items as a
+    /// nested menu shows them (`chrome_host::menubar`).
+    pub(super) fn submenu_rows(&self,menu:Menu)->Vec<Row> {
+        let mut rows=self.menu_rows(menu);
+        if rows.first().is_some_and(|r|matches!(r.action,Some(Action::Submenu(_)))&&matches!(r.symbol,Some(crate::symbols::Symbol::ChevronLeft))) {
+            rows.remove(0);
+            if rows.first().is_some_and(|r|r.sep) {rows.remove(0);}
+        }
+        rows
+    }
+}
+/// Rows of one app-published menu (`ToShell::AppMenus`), the `mi`-th of the app's menus: its top level only. Disabled
+/// items are labels, a checked item starts with a check mark, and a submenu header is a row that opens the submenu
+/// (`Menu::AppSub`, drawn with a chevron) unless it is disabled. Invalid key equivalents are dropped. The app's own
 /// Print (`AppMenuItem::prints`) is left out here: it takes the place of the shell's File > Print… row (`app_print_row`).
 #[cfg(feature = "desktop-wayland")]
-pub(super) fn app_menu_rows(slot:u8,menu:&bifrost_proto::AppMenu)->Vec<Row> {
-    menu.items.iter().filter(|i|!i.prints).map(|i|app_item_row(slot,i)).collect()
+pub(super) fn app_menu_rows(slot:u8,mi:u8,menu:&bifrost_proto::AppMenu)->Vec<Row> {
+    app_level_rows(slot,mi,menu,None)
+}
+/// The item indices of one level of `menu`: its top level (`header` None) or the direct children of the submenu header at
+/// item index `header`. A level ends at the first item that is not deeper than its header.
+#[cfg(any(test, feature = "desktop-wayland"))]
+pub(super) fn app_level_items(menu:&bifrost_proto::AppMenu,header:Option<usize>)->Vec<usize> {
+    let (start,depth)=match header {
+        None=>(0,0),
+        Some(h)=>match menu.items.get(h) {Some(i) if i.submenu=>(h+1,i.depth+1),_=>return Vec::new()},
+    };
+    menu.items.iter().enumerate().skip(start).take_while(|(_,i)|i.depth>=depth).filter(|(_,i)|i.depth==depth).map(|(k,_)|k).collect()
+}
+/// The submenu header that item `item` of `menu` sits under (its nearest earlier header one level up); None at the top level.
+#[cfg(any(test, feature = "desktop-wayland"))]
+pub(super) fn app_item_parent(menu:&bifrost_proto::AppMenu,item:usize)->Option<usize> {
+    let depth=menu.items.get(item)?.depth;
+    if depth==0 {return None;}
+    (0..item).rev().find(|&k|menu.items[k].depth<depth).filter(|&k|menu.items[k].submenu&&menu.items[k].depth+1==depth)
+}
+/// Rows of one level of app menu `mi` (`app_level_items`).
+#[cfg(feature = "desktop-wayland")]
+fn app_level_rows(slot:u8,mi:u8,menu:&bifrost_proto::AppMenu,header:Option<usize>)->Vec<Row> {
+    app_level_items(menu,header).into_iter().filter(|&k|!menu.items[k].prints).map(|k|{
+        let i=&menu.items[k];
+        if i.submenu&&!i.separator {
+            let text=format!("{}{}",if i.checked{"\u{2713} "}else{""},i.title);
+            return if i.enabled {Row::action(text,Action::Submenu(Menu::AppSub(mi,k.min(u16::MAX as usize) as u16)))} else {Row::label(text)};
+        }
+        app_item_row(slot,&bifrost_proto::AppMenuItem{depth:0,..i.clone()})
+    }).collect()
 }
 /// One row of an app menu (see `app_menu_rows`).
 #[cfg(feature = "desktop-wayland")]
 fn app_item_row(slot:u8,i:&bifrost_proto::AppMenuItem)->Row {
     if i.separator {return Row::separator();}
-    let text=format!("{}{}{}",if i.depth>0{"    "}else{""},if i.checked{"\u{2713} "}else{""},i.title);
+    let text=format!("{}{}",if i.checked{"\u{2713} "}else{""},i.title);
     let row=if i.enabled&&!i.submenu&&i.id!=0 {Row::action(text,Action::AppMenu(slot,i.id))}else{Row::label(text)};
     if i.key.is_empty(){row}else{row.key(&i.key)}
 }
@@ -544,6 +647,23 @@ impl Shell {
             for ((ax,ay),(bx,by)) in strokes {for k in 0..=8 {let f=k as f32/8.;rect(s,ax+(bx-ax)*f-1.,ay+(by-ay)*f-1.,2.,2.);}}
         }else if label=="ethernet" {s.stroke_rrect(x-7.*p,y-7.*p,14.*p,10.*p,p,p,ink);rect(s,-1.,3.,2.,4.);rect(s,-9.,6.,18.,2.);for dx in [-9.,-1.,7.] {rect(s,dx,6.,2.,4.);}}else{for i in 0..3 {let w=(16-i*5) as f32;rect(s,-w/2.,-6.+i as f32*4.,w,2.);}rect(s,-1.,6.,2.,2.);}
     }
+    /// The menu `menu` opens in place of and goes back to: Recent Items and Services as `submenu_parent` says, an app's
+    /// submenu the submenu or bar menu its header is in. None for a menu of its own.
+    pub(super) fn menu_parent(&self,menu:Menu)->Option<Menu> {
+        match menu {
+            Menu::AppSub(mi,h)=>{
+                let m=self.app_menus().get(mi as usize)?;
+                Some(match app_item_parent(m,h as usize) {Some(k)=>Menu::AppSub(mi,k as u16),None=>shell_menu(&m.title).unwrap_or(Menu::Custom(mi))})
+            },
+            _=>submenu_parent(menu),
+        }
+    }
+    /// The bar menu a (possibly nested) submenu hangs from: the bar item it opens under and whose title stays highlighted.
+    pub(super) fn bar_anchor(&self,menu:Menu)->Menu {
+        let mut m=menu;
+        for _ in 0..=bifrost_proto::MAX_APP_MENU_DEPTH as usize+1 {match self.menu_parent(m) {Some(p)=>m=p,None=>break}}
+        m
+    }
     /// The rows of a bar menu as drawn and navigated. The Help menu starts with its search field; typing replaces
     /// its items with the grouped results.
     pub(super) fn menu_rows(&self,menu:Menu)->Vec<Row> {if menu==Menu::Help {self.help_rows()} else {self.plain_rows(menu)}}
@@ -558,7 +678,7 @@ impl Shell {
                     if let Some(r)=rows.iter_mut().find(|r|r.text=="Print\u{2026}"&&matches!(r.action,None|Some(Action::Print))) {*r=print;}
                 }
             }
-            let merged:Vec<Row>=self.app_menus().iter().filter(|m|shell_menu(&m.title)==Some(menu)).flat_map(|m|app_menu_rows(slot,m)).collect();
+            let merged:Vec<Row>=self.app_menus().iter().enumerate().filter(|(_,m)|shell_menu(&m.title)==Some(menu)).flat_map(|(i,m)|app_menu_rows(slot,i as u8,m)).collect();
             if !merged.is_empty() {if !rows.is_empty(){rows.insert(0,Row::separator());}for r in merged.into_iter().rev(){rows.insert(0,r);}}
         }
         rows
@@ -588,10 +708,16 @@ impl Shell {
         menus.extend([(Menu::View,"View"),(Menu::Window,"Window"),(Menu::Help,"Help")].map(|(m,t)|(m,t.to_string())));
         menus.extend(self.app_menus().iter().enumerate().filter(|(_,m)|shell_menu(&m.title).is_none()).map(|(i,m)|(Menu::Custom(i as u8),m.title.clone())));
         let mut out=Vec::new();
-        for (menu,title) in &menus {
-            for (i,row) in self.plain_rows(*menu).iter().enumerate() {
+        // an app's submenus are searched too, under "Menu > Submenu" (their rows back to the parent are not)
+        let mut todo:Vec<(Menu,String)>=menus.into_iter().rev().collect();
+        while let Some((menu,title))=todo.pop() {
+            for (i,row) in self.plain_rows(menu).iter().enumerate() {
                 if row.is_separator()||row.text.trim().is_empty() {continue;}
-                out.push((*menu,i,help_item(title,&row.text,row.action.is_some())));
+                if let Some(Action::Submenu(sub@Menu::AppSub(..)))=&row.action {
+                    if row.symbol.is_some() {continue;}
+                    todo.push((*sub,format!("{title} \u{203a} {}",row.text)));
+                }
+                out.push((menu,i,help_item(&title,&row.text,row.action.is_some())));
             }
         }
         out
@@ -659,7 +785,17 @@ impl Shell {
             Menu::Scripts=>super::scripts_menu::folder().map(|d|super::scripts_menu::list(&d).iter().enumerate().map(|(i,n)|Row::action(super::scripts_menu::title(n),Action::Script(i as u8))).collect()).unwrap_or_default(),
             Menu::Input=>{let mut v:Vec<Row>=super::kb_layouts::Layout::ALL.iter().enumerate().filter(|(_,l)|super::kb_layouts::is_enabled(**l)).map(|(i,l)|Row::action(format!("{} {}",if *l==super::kb_layouts::active()&&!self.input_providers.is_method_active(){"✓"}else{" "},l.name()),Action::InputSource(i as u8))).collect();v.extend(self.input_providers.modes().into_iter().map(|(id,label,on)|Row::action(format!("{} {}",if on{"✓"}else{" "},label),Action::InputMethod(id))));v.extend([Row::separator(),Row::action("Show Keyboard Viewer",Action::KeyboardViewer),Row::action(if self.keyboard_opened_explicitly(){"Hide On-Screen Keyboard"}else{"Show On-Screen Keyboard"},Action::OnScreenKeyboard)]);v},
             Menu::Status(i)=>self.status_entries_now().get(i as usize).map(|e|e.menu.iter().map(|m|if m.separator{Row::separator()}else if m.enabled{Row::action(format!("{} {}",if m.checked{"✓"}else{" "},m.title),Action::StatusItem(e.slot,e.item,m.id))}else{Row::label(format!("{} {}",if m.checked{"✓"}else{" "},m.title))}).collect()).unwrap_or_default(),
-            Menu::Custom(i)=>{let slot=match self.screen {Screen::App(AppId::External(n))=>n,_=>return Vec::new()};self.app_menus().get(i as usize).map(|m|app_menu_rows(slot,m)).unwrap_or_default()},
+            Menu::Custom(i)=>{let slot=match self.screen {Screen::App(AppId::External(n))=>n,_=>return Vec::new()};self.app_menus().get(i as usize).map(|m|app_menu_rows(slot,i,m)).unwrap_or_default()},
+            // an app's submenu: a row back to the menu it hangs from, then the submenu's own items (its submenus open the same way)
+            Menu::AppSub(mi,h)=>{
+                let slot=match self.screen {Screen::App(AppId::External(n))=>n,_=>return Vec::new()};
+                let Some(m)=self.app_menus().get(mi as usize) else{return Vec::new();};
+                let Some(head)=m.items.get(h as usize).filter(|i|i.submenu) else{return Vec::new();};
+                let back=self.menu_parent(menu).unwrap_or(Menu::Custom(mi));
+                let mut rows=vec![Row::action(head.title.clone(),Action::Submenu(back)).symbol(crate::symbols::Symbol::ChevronLeft),Row::separator()];
+                rows.extend(app_level_rows(slot,mi,m,Some(h as usize)));
+                rows
+            },
             Menu::Context=>self.desktop_context.as_ref().map(|c|context_rows(c.slot,&c.items)).unwrap_or_default(),
             Menu::Arrange=>self.arrange_rows(),
             Menu::Dock=>{use super::desktop_dock::{Change,Position};let p=self.dock_preferences();let d=self.desk.as_ref().unwrap();let mut rows=Vec::new();if let Some(index)=d.dock_menu_target{let name=super::apps().get(index).map(|a|a.name).unwrap_or("Application");rows.push(Row::label(name));rows.push(Row::action("Open / Show",Action::Dock(Change::Open(index))));let pinned=self.dock_app_key(index).is_some_and(|key|p.pinned.contains(&key));rows.push(Row::action(if pinned{"Remove from Dock"}else{"Keep in Dock"},Action::Dock(Change::Pin(index))));rows.push(Row::action("Quit",Action::Dock(Change::Quit(index))));if let Some(AppId::External(slot))=super::apps().get(index).map(|a|a.id){if let Some(Some(host))=self.ext.get(slot as usize){for (id,title) in host.windows.menu_items(&host.id){if let Ok(n)=u16::try_from(id){rows.push(Row::action(title,Action::Open(AppId::ExternalWindow(slot,n))));}}if !host.windows.of_app(&host.id).is_empty(){rows.push(Row::separator());}let quick=self.quick_actions_for(slot as usize);for (i,item) in quick.iter().enumerate(){rows.push(Row::action(item.title.clone(),Action::QuickAction(slot,i as u8)));}if !quick.is_empty(){rows.push(Row::separator());}for item in &host.dock_menu{rows.push(if item.enabled{Row::action(item.title.clone(),Action::DockMenu(slot,item.id))}else{Row::label(item.title.clone())});}if !host.dock_menu.is_empty(){rows.push(Row::separator());}}}}rows.push(Row::label("Dock"));for (label,position) in [("Bottom",Position::Bottom),("Left",Position::Left),("Right",Position::Right)] {rows.push(Row::action(format!("{} {}",if p.position==position{"✓"}else{" "},label),Action::Dock(Change::Position(position))));}rows.push(Row::action(format!("{} Automatically hide and show",if p.autohide{"✓"}else{" "}),Action::Dock(Change::Autohide)));rows.push(Row::action("Smaller Icons",Action::Dock(Change::Size(-8.))));rows.push(Row::action("Larger Icons",Action::Dock(Change::Size(8.))));rows},
@@ -737,19 +873,19 @@ impl Shell {
     pub(super) fn desktop_popup_rect(&self)->Option<(usize,usize,usize,usize)> {
         let menu=self.desktop_menu?;if menu==Menu::Dock{return self.dock_popup_rect();}if menu==Menu::Arrange{
             // under the green button, kept on the screen like a context menu (the size is the drawn rows')
-            let a=self.desk.as_ref()?.arrange?;let rows=self.menu_rows(menu);let width=self.menu_width(&rows);let height=self.ui.pt(menu_spans(&rows).1).ceil() as usize;
+            let a=self.desk.as_ref()?.arrange?;let rows=self.menu_rows(menu);let width=self.menu_width(&rows);let height=self.ui.pt(self.menu_scroll_for(menu,&rows).height).ceil() as usize;
             let area=super::desk::Desk::area(&self.desk_metrics());
             let (x,y)=context_menu_origin((a.x,a.y),(width,height),(0,area.y,self.w,area.h));
             return Some((x,y,width,height));
         }if menu==Menu::Document{return self.doc_panel_rect();}if menu==Menu::Context{
             // the size is the drawn rows' (`menu_spans`, the same call the bar menus use), so the surface fits its items
-            let c=self.desktop_context.as_ref()?;let rows=self.menu_rows(menu);let width=self.menu_width(&rows);let height=self.ui.pt(menu_spans(&rows).1).ceil() as usize;
+            let c=self.desktop_context.as_ref()?;let rows=self.menu_rows(menu);let width=self.menu_width(&rows);let height=self.ui.pt(self.menu_scroll_for(menu,&rows).height).ceil() as usize;
             let area=super::desk::Desk::area(&self.desk_metrics());
             let (x,y)=context_menu_origin((c.x,c.y),(width,height),(0,area.y,self.w,area.h));
             return Some((x,y,width,height));
         }// the Recent Items submenu hangs from the system menu's bar item
-        let anchor=submenu_parent(menu).unwrap_or(menu);let (_,x,_,_)=self.menu_buttons().into_iter().find(|b|b.0==anchor)?;
-        let rows=self.menu_rows(menu);let width=self.menu_width(&rows);let height=self.ui.pt(menu_spans(&rows).1).ceil() as usize;
+        let anchor=self.bar_anchor(menu);let (_,x,_,_)=self.menu_buttons().into_iter().find(|b|b.0==anchor)?;
+        let rows=self.menu_rows(menu);let width=self.menu_width(&rows);let height=self.ui.pt(self.menu_scroll_for(menu,&rows).height).ceil() as usize;
         Some(((x as usize).min((self.w as usize).saturating_sub(width)),self.desktop_bar_height()+self.ui.pt(MENU_GAP_PT) as usize,width,height))
     }
     /// The parts of a desktop frame that are not transparent when the GPU presenter draws the
@@ -807,7 +943,7 @@ impl Shell {
         self.draw_desktop_bar_items(s,height);
     }
     fn draw_desktop_bar_items(&self,s:&mut Surface,height:usize) {
-        for (menu,x,width,label) in self.menu_buttons() {if self.desktop_menu==Some(menu)||self.desktop_menu.and_then(submenu_parent)==Some(menu){let h=height as f32-self.ui.pt(4.);s.fill_rrect(x,self.ui.pt(2.),width,h,h/2.,self.bar_ink().capsule);}if matches!(menu,Menu::System|Menu::Network|Menu::Power|Menu::ControlCenter|Menu::Bluetooth|Menu::Location)||self.status_item_is_icon(menu) {
+        for (menu,x,width,label) in self.menu_buttons() {if self.desktop_menu==Some(menu)||self.desktop_menu.map(|m|self.bar_anchor(m))==Some(menu){let h=height as f32-self.ui.pt(4.);s.fill_rrect(x,self.ui.pt(2.),width,h,h/2.,self.bar_ink().capsule);}if matches!(menu,Menu::System|Menu::Network|Menu::Power|Menu::ControlCenter|Menu::Bluetooth|Menu::Location)||self.status_item_is_icon(menu) {
             // the battery item with its percentage: the glyph stays at the item's left, the percentage follows it
             let percent=if menu==Menu::Power {self.battery_bar_label()} else {None};
             let glyph_x=if percent.is_some() {x+self.ui.pt(STATUS_ICON_PT)/2.} else {x+width/2.};
@@ -854,9 +990,13 @@ impl Shell {
         self.draw_popup_edge(s,x,y,w,h);
         if menu==Menu::Document{self.draw_doc_panel(s,x,y,w,h);return;}
         let sel=self.menu_row_of(menu);let rows=self.menu_rows(menu);let (spans,_)=menu_spans(&rows);
+        // a menu taller than its room shows the rows between its scroll arrows, moved up by the offset
+        let sc=self.menu_scroll_for(menu,&rows);
         // Golden Gate: a row's symbol sits at the text edge and pushes only that row's title right
         let lead=16.;
         for (i,row) in rows.iter().enumerate(){let (top,rh)=spans[i];
+            if !sc.shows(top,rh){continue;}
+            let top=top-sc.offset;
             if row.sep{s.fill_rect(x+self.ui.pt(12.) as usize,(y as f32+self.ui.pt(top+rh/2.)) as usize,w.saturating_sub(self.ui.pt(24.) as usize),1,super::ui::SEPARATOR_C.now());continue;}
             if row.search{self.draw_help_field(s,x,y,w,top,rh,&row.text);continue;}
             if row.header{self.label(&row.text,10.,Weight::Regular,SECONDARY,|im|s.blit(im,x as i32+self.ui.pt(lead) as i32,(y as f32+self.ui.pt(top+rh/2.)-im.h as f32/2.) as i32,255,255));continue;}
@@ -869,8 +1009,17 @@ impl Shell {
             let text_x=(if row.symbol.is_some(){lead+20.}else{lead})+if row.indent{12.}else{0.};
             self.label(&row.text,13.,Weight::Regular,ink,|im|s.blit(im,x as i32+self.ui.pt(text_x) as i32,(mid-im.h as f32/2.) as i32,255,255));
             // a row that opens a submenu ends in a chevron
-            if matches!(row.action,Some(Action::Submenu(Menu::Recent|Menu::Services))) {if let Some(im)=self.ui.symbols.render(crate::symbols::Symbol::ChevronRight,self.ui.pt(11.),ink) {s.blit(&im,(x+w) as i32-self.ui.pt(16.) as i32-im.w as i32,(mid-im.h as f32/2.) as i32,255,255);}}
+            if matches!(row.action,Some(Action::Submenu(Menu::Recent|Menu::Services|Menu::AppSub(..))))&&row.symbol.is_none() {if let Some(im)=self.ui.symbols.render(crate::symbols::Symbol::ChevronRight,self.ui.pt(11.),ink) {s.blit(&im,(x+w) as i32-self.ui.pt(16.) as i32-im.w as i32,(mid-im.h as f32/2.) as i32,255,255);}}
             if let Some(k)=&row.key{let k=shortcut_spaced(k);self.label(&k,13.,Weight::Regular,if hi{super::ui::MENU_HIGHLIGHT_TEXT}else{super::ui::MENU_SHORTCUT},|im|s.blit(im,(x+w) as i32-self.ui.pt(16.) as i32-im.w as i32,(mid-im.h as f32/2.) as i32,255,255));}}
+        if sc.up {self.draw_menu_arrow(s,x,y,w,0.,true);}
+        if sc.down {self.draw_menu_arrow(s,x,y,w,sc.height-MENU_ARROW_PT,false);}
+    }
+    /// A menu's scroll arrow (`NativeMenu` past the screen edge): a small filled triangle in the middle of the strip that
+    /// starts `top` pt below the popup's top edge, pointing up or down, in the secondary label colour.
+    fn draw_menu_arrow(&self,s:&mut Surface,x:usize,y:usize,w:usize,top:f32,up:bool) {
+        let rows=self.ui.pt(5.).round().max(2.) as usize;
+        let cx=x+w/2;let cy=(y as f32+self.ui.pt(top+MENU_ARROW_PT/2.)) as usize;let y0=cy.saturating_sub(rows/2);
+        for k in 0..rows {let half=if up{k}else{rows-1-k};s.fill_rect(cx.saturating_sub(half),y0+k,2*half+1,1,SECONDARY);}
     }
     /// The one-pixel edge every popup gets (a menu, the Dock's menu, an open panel), in the separator colour, so the
     /// translucent menu still has an outline over white content (E2E N6). Its shadow is `soft_shadow`, drawn before the fill.
@@ -889,14 +1038,14 @@ impl Shell {
         match event {
             // Golden Gate: the clock opens Notification Center (notifications and widgets), as on Golden Gate
             Event::Down(x,y) if self.clock_hit(x,y)&&self.desktop_menu.is_none()&&self.desk.is_some()=>{if self.notify.center.is_hidden(){self.open_notification_center(t);}else{self.notify.center.hide();}self.dirty=true;Some(vec![])},
-            Event::Down(x,y) if y<self.desktop_bar_height() as f32 && (!self.cc_reveal_zone(x,y)||self.menu_buttons().iter().any(|(_,left,w,_)|x>=*left&&x<*left+*w))=>{self.desktop_menu_row=None;self.help_reset();self.desktop_menu=self.menu_buttons().into_iter().find(|(_,left,w,_)|x>=*left&&x<*left+*w).map(|b|b.0);if self.desktop_menu==Some(Menu::ControlCenter){self.desktop_menu=None;self.toggle_desk_control_center(t);}else{self.close_desk_control_center(t);}self.dirty=true;Some(vec![])},
+            Event::Down(x,y) if y<self.desktop_bar_height() as f32 && (!self.cc_reveal_zone(x,y)||self.menu_buttons().iter().any(|(_,left,w,_)|x>=*left&&x<*left+*w))=>{self.desktop_menu_row=None;self.help_reset();self.desktop_menu_scroll=MenuScrollState::default();self.desktop_menu=self.menu_buttons().into_iter().find(|(_,left,w,_)|x>=*left&&x<*left+*w).map(|b|b.0);if self.desktop_menu==Some(Menu::ControlCenter){self.desktop_menu=None;self.toggle_desk_control_center(t);}else{self.close_desk_control_center(t);}self.dirty=true;Some(vec![])},
             // a press on the green button the menu hangs from is the button's own click (full screen), not a click outside
             Event::Down(x,y) if self.desktop_menu==Some(Menu::Arrange)&&self.arrange_on_button(x,y)=>{self.desktop_menu=None;self.dirty=true;None},
             Event::Down(x,y) if self.desktop_menu.is_some()=>{if !self.desktop_popup_rect().is_some_and(|(left,top,w,h)|x>=left as f32&&x<(left+w) as f32&&y>=top as f32&&y<(top+h) as f32){self.desktop_menu=None;self.dirty=true;}Some(vec![])},
             Event::Up(x,y) if self.desktop_menu.is_some()=>{let menu=self.desktop_menu.unwrap();if y<self.desktop_bar_height() as f32{return Some(vec![]);}
                 if self.desktop_menu==Some(Menu::Help)&&self.help_field_at(x,y) {return Some(vec![]);}
                 let action=self.desktop_popup_rect().and_then(|(left,top,w,h)|if x>=left as f32&&x<(left+w) as f32&&y>=top as f32&&y<(top+h) as f32 {self.menu_row_at(menu,y-top as f32).and_then(|i|self.menu_rows(menu).get(i).and_then(|r|r.action.clone()))}else{None});
-                self.desktop_menu=None;self.help_reset();self.dirty=true;let mut effects=Vec::new();self.desktop_menu_row=None;if let Some(action)=action {effects=self.run_menu_action(action,t);}Some(effects)
+                self.desktop_menu=None;self.help_reset();self.desktop_menu_scroll=MenuScrollState::default();self.dirty=true;let mut effects=Vec::new();self.desktop_menu_row=None;if let Some(action)=action {effects=self.run_menu_action(action,t);}Some(effects)
             },_=>None,
         }
     }
@@ -913,7 +1062,58 @@ impl Shell {
         need.max(self.ui.pt(264.)).ceil() as usize
     }
     /// The row under `rel` px below the popup's top edge (separators count as rows, but have no action).
-    fn menu_row_at(&self,menu:Menu,rel:f32)->Option<usize> {let (spans,_)=menu_spans(&self.menu_rows(menu));spans.iter().position(|(t,h)|{let t=self.ui.pt(*t);rel>=t&&rel<t+self.ui.pt(*h)})}
+    /// In a scrolled menu only rows that show whole count; the scroll arrows are no row.
+    fn menu_row_at(&self,menu:Menu,rel:f32)->Option<usize> {
+        let rows=self.menu_rows(menu);let (spans,_)=menu_spans(&rows);let sc=self.menu_scroll_for(menu,&rows);
+        let rel=rel/self.ui.pt(1.).max(f32::EPSILON);let (lo,hi)=sc.window();
+        if rel<lo||rel>=hi {return None;}
+        spans.iter().position(|(t,h)|sc.shows(*t,*h)&&rel+sc.offset>=*t&&rel+sc.offset<*t+*h)
+    }
+    /// The room (pt) an open menu has: the screen below the bar for a bar menu, the desktop area for a context menu.
+    fn menu_room_pt(&self,menu:Menu)->f32 {
+        let p=self.ui.pt(1.).max(f32::EPSILON);
+        match menu {
+            Menu::Context|Menu::Arrange=>super::desk::Desk::area(&self.desk_metrics()).h as f32/p,
+            _=>(self.h as f32-self.desktop_bar_height() as f32-self.ui.pt(MENU_GAP_PT)-self.ui.pt(6.))/p,
+        }
+    }
+    /// How menu `menu` with `rows` is scrolled now (`menu_scroll` against its room and the kept offset).
+    pub(super) fn menu_scroll_for(&self,menu:Menu,rows:&[Row])->MenuScroll {
+        let offset=if self.desktop_menu_scroll.menu==Some(menu) {self.desktop_menu_scroll.offset} else {0.};
+        menu_scroll(menu_spans(rows).1,self.menu_room_pt(menu),offset)
+    }
+    /// Scrolls the open menu so its row `i` shows (the keyboard and type-to-select move the highlight past the edge).
+    fn menu_reveal(&mut self,menu:Menu,i:usize) {
+        let rows=self.menu_rows(menu);let (spans,content)=menu_spans(&rows);
+        let Some(&(top,h))=spans.get(i) else{return;};
+        let offset=self.menu_scroll_for(menu,&rows).reveal(content,top,h);
+        self.desktop_menu_scroll=MenuScrollState{menu:Some(menu),offset,arrow:0,last_t:0.};
+    }
+    /// The wheel over an open menu scrolls it (when it is taller than its room) and is used up there.
+    pub(super) fn desktop_menu_wheel(&mut self,x:f32,y:f32,dy:f32)->bool {
+        let Some(menu)=self.desktop_menu else{return false;};if matches!(menu,Menu::Dock|Menu::Document){return false;}
+        let Some((l,t,w,h))=self.desktop_popup_rect() else{return false;};
+        if !(x>=l as f32&&x<(l+w) as f32&&y>=t as f32&&y<(t+h) as f32) {return false;}
+        if !dy.is_finite() {return true;}
+        let rows=self.menu_rows(menu);let sc=self.menu_scroll_for(menu,&rows);
+        if sc.up||sc.down {
+            let offset=menu_scroll(menu_spans(&rows).1,self.menu_room_pt(menu),sc.offset-dy/self.ui.pt(1.).max(f32::EPSILON)).offset;
+            self.desktop_menu_scroll=MenuScrollState{menu:Some(menu),offset,arrow:0,last_t:0.};self.dirty=true;
+        }
+        true
+    }
+    /// While the pointer rests on a scroll arrow of the open menu, the menu scrolls on every frame (`Shell::tick`) until its end.
+    pub(super) fn desktop_menu_autoscroll(&mut self,t:f64) {
+        let st=self.desktop_menu_scroll;if st.arrow==0 {return;}
+        let Some(menu)=self.desktop_menu.filter(|m|st.menu==Some(*m)) else{self.desktop_menu_scroll.arrow=0;return;};
+        if st.last_t<=0. {self.desktop_menu_scroll.last_t=t;self.dirty=true;return;}
+        let dt=((t-st.last_t)/1000.).clamp(0.,0.1) as f32;
+        let rows=self.menu_rows(menu);
+        let sc=menu_scroll(menu_spans(&rows).1,self.menu_room_pt(menu),st.offset+st.arrow as f32*MENU_AUTOSCROLL_PT_S*dt);
+        self.desktop_menu_scroll.offset=sc.offset;self.desktop_menu_scroll.last_t=t;
+        if (st.arrow<0&&!sc.up)||(st.arrow>0&&!sc.down) {self.desktop_menu_scroll.arrow=0;}
+        self.dirty=true;
+    }
     pub(super) fn menu_row_of(&self,menu:Menu)->Option<usize> {self.desktop_menu_row.filter(|(m,_)|*m==menu).map(|(_,i)|i)}
     /// Move the highlight to the next row with an action in direction `dir`, wrapping (Full Keyboard Access, HIG "The menu bar").
     pub(super) fn menu_step(&self,menu:Menu,dir:i32)->Option<usize> {
@@ -928,13 +1128,13 @@ impl Shell {
         let mut bar=vec![Menu::System,Menu::App];bar.extend(bar_after_app(self.app_menus(),self.photos_front()));
         self.dirty=true;
         // Left leaves the Recent Items submenu; Right opens the submenu of the highlighted row
-        if let (Some(parent),105)=(submenu_parent(menu),code) {self.desktop_menu=Some(parent);self.desktop_menu_row=None;return Some(vec![]);}
+        if let (Some(parent),105)=(self.menu_parent(menu),code) {self.desktop_menu=Some(parent);self.desktop_menu_row=None;return Some(vec![]);}
         if code==106 {if let Some(Action::Submenu(sub))=self.menu_row_of(menu).and_then(|i|self.menu_rows(menu).get(i).and_then(|r|r.action.clone())) {self.desktop_menu=Some(sub);self.desktop_menu_row=None;return Some(vec![]);}}
         match code {
-            103|108=>{if let Some(i)=self.menu_step(menu,if code==108{1}else{-1}){self.desktop_menu_row=Some((menu,i));}},
-            105|106=>{if let Some(at)=bar.iter().position(|m|*m==menu){let n=bar.len();self.desktop_menu=Some(bar[(at+if code==106{1}else{n-1})%n]);self.desktop_menu_row=None;self.help_reset();}},
+            103|108=>{if let Some(i)=self.menu_step(menu,if code==108{1}else{-1}){self.desktop_menu_row=Some((menu,i));self.menu_reveal(menu,i);}},
+            105|106=>{let anchor=self.bar_anchor(menu);if let Some(at)=bar.iter().position(|m|*m==anchor){let n=bar.len();self.desktop_menu=Some(bar[(at+if code==106{1}else{n-1})%n]);self.desktop_menu_row=None;self.help_reset();}},
             28|96=>{let action=self.menu_row_of(menu).and_then(|i|self.menu_rows(menu).get(i).and_then(|r|r.action.clone()));if let Some(action)=action{self.desktop_menu=None;self.desktop_menu_row=None;self.help_reset();return Some(self.run_menu_action(action,t));}},
-            1=>{self.desktop_menu=None;self.desktop_menu_row=None;self.help_reset();},
+            1=>{self.desktop_menu=None;self.desktop_menu_row=None;self.help_reset();self.desktop_menu_scroll=MenuScrollState::default();},
             _=>{if let Some(c)=super::evkeys::char_for(code,false).filter(|c|c.is_alphanumeric()){self.menu_type_select(menu,c,t);}},
         }
         Some(vec![])
@@ -946,7 +1146,7 @@ impl Shell {
         let items:Vec<MenuItem>=rows.iter().enumerate().map(|(i,r)|if r.sep{MenuItem::separator()}else{MenuItem::new(i as u32,r.text.trim_start_matches(|c:char|c=='\u{2713}'||c==' ')).enabled(r.action.is_some())}).collect();
         let mut model=self.desktop_menu_typed.take().unwrap_or_else(||Model::new(Vec::new()));
         model.items=items;model.highlighted=self.menu_row_of(menu);
-        if let Some(i)=model.type_select(c,t){self.desktop_menu_row=Some((menu,i));}
+        if let Some(i)=model.type_select(c,t){self.desktop_menu_row=Some((menu,i));self.menu_reveal(menu,i);}
         self.desktop_menu_typed=Some(model);
     }
     /// Pointer movement with a menu open: highlight the row under it, and a bar title switches the open menu (as Golden Gate does).
@@ -955,12 +1155,22 @@ impl Shell {
         // a context menu stays open when the pointer crosses the bar; only a bar menu follows the pointer to a neighbour
         if y<self.desktop_bar_height() as f32&&!matches!(menu,Menu::Context|Menu::Arrange) {
             // the Recent Items submenu sits under the System bar item: crossing that item is not a move to another menu
-            if let Some(b)=self.menu_buttons().into_iter().find(|(_,l,w,_)|x>=*l&&x<*l+*w) {let here=submenu_parent(menu).unwrap_or(menu);if b.0!=here&&b.0!=Menu::ControlCenter{self.desktop_menu=Some(b.0);self.desktop_menu_row=None;self.help_reset();self.dirty=true;}}
+            if let Some(b)=self.menu_buttons().into_iter().find(|(_,l,w,_)|x>=*l&&x<*l+*w) {let here=self.bar_anchor(menu);if b.0!=here&&b.0!=Menu::ControlCenter{self.desktop_menu=Some(b.0);self.desktop_menu_row=None;self.help_reset();self.dirty=true;}}
             return;
         }
+        // resting on a scroll arrow scrolls the menu (`desktop_menu_autoscroll`); leaving it stops
+        let arrow=self.desktop_popup_rect().filter(|(l,t,w,h)|x>=*l as f32&&x<(*l+*w) as f32&&y>=*t as f32&&y<(*t+*h) as f32).map_or(0,|(_,t,_,_)|{
+            let sc=self.menu_scroll_for(menu,&self.menu_rows(menu));let rel=(y-t as f32)/self.ui.pt(1.).max(f32::EPSILON);
+            if sc.up&&rel<MENU_ARROW_PT {-1} else if sc.down&&rel>=sc.height-MENU_ARROW_PT {1} else {0}
+        });
+        if arrow!=self.desktop_menu_scroll.arrow||self.desktop_menu_scroll.menu!=Some(menu) {
+            let offset=if self.desktop_menu_scroll.menu==Some(menu){self.desktop_menu_scroll.offset}else{0.};
+            self.desktop_menu_scroll=MenuScrollState{menu:Some(menu),offset,arrow,last_t:0.};
+        }
+        if arrow!=0 {if self.desktop_menu_row.is_some(){self.desktop_menu_row=None;}self.dirty=true;return;}
         let row=self.desktop_popup_rect().and_then(|(l,t,w,h)|if x>=l as f32&&x<(l+w) as f32&&y>=t as f32&&y<(t+h) as f32{self.menu_row_at(menu,y-t as f32)}else{None}).filter(|i|self.menu_rows(menu).get(*i).is_some_and(|r|r.action.is_some()));
         // a Menu Items result opens the menu it lives in and highlights its item there, with the pointer marker
-        if menu==Menu::Help {if let Some(i)=row {if let Some(Action::HelpItem(target,j))=self.menu_rows(menu).get(i).and_then(|r|r.action.clone()) {if target!=Menu::Help {self.help_reset();self.help_search.marker=true;self.desktop_menu=Some(target);self.desktop_menu_row=Some((target,j));self.dirty=true;return;}}}}
+        if menu==Menu::Help {if let Some(i)=row {if let Some(Action::HelpItem(target,j))=self.menu_rows(menu).get(i).and_then(|r|r.action.clone()) {if target!=Menu::Help {self.help_reset();self.help_search.marker=true;self.desktop_menu=Some(target);self.desktop_menu_row=Some((target,j));self.menu_reveal(target,j);self.dirty=true;return;}}}}
         let new=row.map(|i|(menu,i));if self.desktop_menu_row!=new{self.desktop_menu_row=new;self.dirty=true;}
     }
     /// Carry out a chosen menu row (a click or Return). The menu is already closed.
@@ -2035,6 +2245,213 @@ mod submenu_tests {
         assert!(fx.is_some());
         assert_eq!(sh.desktop_menu, Some(Menu::Recent), "the click opens the submenu instead of closing the menu");
         assert!(sh.desktop_popup_rect().is_some());
+    }
+}
+
+/// An app's submenus are levels of their own: the menu lists the header, the header's level its direct children.
+#[cfg(test)]
+mod app_level_tests {
+    use super::{app_item_parent, app_level_items, menu_scroll, MENU_ARROW_PT};
+    use bifrost_proto::{AppMenu, AppMenuItem};
+
+    fn format() -> AppMenu {
+        AppMenu { title: "Format".into(), items: vec![
+            AppMenuItem::submenu("Font"),                 // 0
+            AppMenuItem::new(1, "Show Fonts").depth(1),   // 1
+            AppMenuItem::submenu("Kern").depth(1),        // 2
+            AppMenuItem::new(2, "Use Default").depth(2),  // 3
+            AppMenuItem::new(3, "Tighten").depth(2),      // 4
+            AppMenuItem::new(4, "Bold").depth(1),         // 5
+            AppMenuItem::submenu("Text"),                 // 6
+            AppMenuItem::new(5, "Align Left").depth(1),   // 7
+            AppMenuItem::separator(),                     // 8
+            AppMenuItem::new(6, "Make Plain Text"),       // 9
+        ] }
+    }
+
+    #[test]
+    fn each_level_lists_its_own_items_only() {
+        let m = format();
+        assert_eq!(app_level_items(&m, None), vec![0, 6, 8, 9]);
+        assert_eq!(app_level_items(&m, Some(0)), vec![1, 2, 5], "Font: its items, Kern's header but not Kern's items");
+        assert_eq!(app_level_items(&m, Some(2)), vec![3, 4]);
+        assert_eq!(app_level_items(&m, Some(6)), vec![7]);
+        assert!(app_level_items(&m, Some(1)).is_empty(), "an item that is no submenu has no level");
+        assert!(app_level_items(&m, Some(99)).is_empty());
+    }
+
+    #[test]
+    fn an_item_knows_the_header_it_sits_under() {
+        let m = format();
+        assert_eq!(app_item_parent(&m, 0), None);
+        assert_eq!(app_item_parent(&m, 2), Some(0));
+        assert_eq!(app_item_parent(&m, 4), Some(2));
+        assert_eq!(app_item_parent(&m, 5), Some(0), "back out of Kern, still in Font");
+        assert_eq!(app_item_parent(&m, 7), Some(6));
+    }
+
+    #[test]
+    fn a_menu_that_fits_does_not_scroll() {
+        let sc = menu_scroll(300., 800., 50.);
+        assert_eq!((sc.height, sc.offset, sc.up, sc.down), (300., 0., false, false));
+    }
+
+    #[test]
+    fn a_tall_menu_scrolls_between_its_arrows() {
+        let (content, room) = (2000., 600.);
+        let top = menu_scroll(content, room, 0.);
+        assert_eq!((top.height, top.up, top.down), (room, false, true), "at the top: only the bottom arrow");
+        assert_eq!(top.window(), (0., room - MENU_ARROW_PT));
+        let mid = menu_scroll(content, room, 700.);
+        assert!(mid.up && mid.down);
+        let end = menu_scroll(content, room, 1e9);
+        assert_eq!((end.offset, end.up, end.down), (content - room, true, false), "clamped to the end: only the top arrow");
+        assert_eq!(menu_scroll(content, room, -5.).offset, 0.);
+        assert_eq!(menu_scroll(content, room, f32::NAN).offset, 0.);
+        // a row under the bottom arrow does not show; revealing it scrolls just enough
+        assert!(top.shows(0., 24.));
+        assert!(!top.shows(room - 20., 24.));
+        let o = top.reveal(content, 900., 24.);
+        let after = menu_scroll(content, room, o);
+        assert!(after.shows(900., 24.), "revealed at offset {o}");
+        // and back up: a row above the top arrow
+        let o = after.reveal(content, 100., 24.);
+        assert!(menu_scroll(content, room, o).shows(100., 24.), "revealed at offset {o}");
+        // the first and last rows scroll all the way, so no arrow covers them
+        assert_eq!(after.reveal(content, 5., 24.), 0.);
+        assert_eq!(top.reveal(content, content - 29., 24.), content - room);
+    }
+
+    #[test]
+    fn a_tiny_room_still_leaves_a_row_between_the_arrows() {
+        let sc = menu_scroll(1000., 10., 0.);
+        let (lo, hi) = sc.window();
+        assert!(hi - lo >= 24., "{lo}..{hi}");
+    }
+}
+
+/// An app's submenus open in place of their menu (Right in, Left out, a click on the header), nest, and are searched by Help.
+#[cfg(all(test, feature = "desktop-wayland"))]
+mod app_submenu_tests {
+    use super::*;
+    use bifrost_proto::{AppMenu, AppMenuItem};
+
+    fn with_menus(menus: Vec<AppMenu>) -> (Shell, bifrost_proto::sys::Channel) {
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.anim = None;
+        let (mine, theirs) = bifrost_proto::sys::socketpair_pair().unwrap();
+        let mut host = super::super::apphost::AppHost::with_channel("fixture", mine, None, bifrost_proto::Configure { w: 100, h: 100, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false });
+        host.app_menus = menus;
+        sh.ext.push(Some(host));
+        sh.ext_fg = Some(0);
+        sh.screen = Screen::App(AppId::External(0));
+        (sh, theirs)
+    }
+
+    fn format(families: usize) -> AppMenu {
+        let mut items = vec![AppMenuItem::submenu("Font"), AppMenuItem::new(1, "Show Fonts").depth(1), AppMenuItem::submenu("Kern").depth(1), AppMenuItem::new(2, "Use Default").depth(2), AppMenuItem::separator().depth(1)];
+        items.extend((0..families).map(|i| AppMenuItem::new(100 + i as u32, &format!("Family {i}")).depth(1)));
+        items.extend([AppMenuItem::submenu("Text"), AppMenuItem::new(3, "Align Left").depth(1), AppMenuItem::separator(), AppMenuItem::new(4, "Make Plain Text")]);
+        AppMenu { title: "Format".into(), items }
+    }
+
+    fn texts(sh: &Shell, menu: Menu) -> Vec<String> {
+        sh.menu_rows(menu).into_iter().map(|r| r.text).collect()
+    }
+
+    #[test]
+    fn nested_submenus_open_in_place_and_go_back() {
+        let (mut sh, _app) = with_menus(vec![format(3)]);
+        assert_eq!(texts(&sh, Menu::Custom(0)), ["Font", "Text", "", "Make Plain Text"]);
+        sh.desktop_menu = Some(Menu::Custom(0));
+        sh.desktop_menu_row = Some((Menu::Custom(0), 0));
+        let _ = sh.desktop_menu_key(106, 1.);
+        assert_eq!(sh.desktop_menu, Some(Menu::AppSub(0, 0)), "Right opens Font");
+        assert_eq!(texts(&sh, Menu::AppSub(0, 0)), ["Font", "", "Show Fonts", "Kern", "", "Family 0", "Family 1", "Family 2"]);
+        let kern = 3;
+        sh.desktop_menu_row = Some((Menu::AppSub(0, 0), kern));
+        let _ = sh.desktop_menu_key(106, 2.);
+        assert_eq!(sh.desktop_menu, Some(Menu::AppSub(0, 2)), "and Kern inside it");
+        assert_eq!(texts(&sh, Menu::AppSub(0, 2)), ["Kern", "", "Use Default"]);
+        assert_eq!(sh.bar_anchor(Menu::AppSub(0, 2)), Menu::Custom(0), "a nested submenu still hangs from Format's bar item");
+        let format_x = sh.menu_buttons().into_iter().find(|b| b.0 == Menu::Custom(0)).unwrap().1;
+        assert_eq!(sh.desktop_popup_rect().unwrap().0, (format_x as usize).min((sh.w as usize).saturating_sub(sh.desktop_popup_rect().unwrap().2)));
+        let _ = sh.desktop_menu_key(105, 3.);
+        assert_eq!(sh.desktop_menu, Some(Menu::AppSub(0, 0)), "Left goes back to Font");
+        let _ = sh.desktop_menu_key(105, 4.);
+        assert_eq!(sh.desktop_menu, Some(Menu::Custom(0)), "and to Format");
+    }
+
+    #[test]
+    fn a_click_on_a_submenu_item_reaches_the_app() {
+        let (mut sh, app) = with_menus(vec![format(3)]);
+        sh.desktop_menu = Some(Menu::AppSub(0, 0));
+        let rows = sh.menu_rows(Menu::AppSub(0, 0));
+        let at = rows.iter().position(|r| r.text == "Family 1").unwrap();
+        let (x, top, w, _) = sh.desktop_popup_rect().unwrap();
+        let (spans, _) = menu_spans(&rows);
+        let y = top as f32 + sh.ui.pt(spans[at].0 + spans[at].1 / 2.);
+        let _ = sh.desktop_bar_event(Event::Up((x + w / 2) as f32, y), 1.);
+        assert_eq!(sh.desktop_menu, None, "choosing an item closes the menu");
+        let bifrost_proto::sys::Recv::Packet(packet, _) = app.recv(false).unwrap() else { panic!("no menu action") };
+        assert_eq!(bifrost_proto::ToApp::decode(&packet), Ok(bifrost_proto::ToApp::MenuAction(101)));
+    }
+
+    #[test]
+    fn a_disabled_submenu_does_not_open() {
+        let (sh, _app) = with_menus(vec![AppMenu { title: "Playback".into(), items: vec![AppMenuItem::submenu("Speed").enabled(false), AppMenuItem::new(1, "1x").depth(1)] }]);
+        let rows = sh.menu_rows(Menu::Custom(0));
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].action.is_none());
+    }
+
+    #[test]
+    fn help_search_finds_items_inside_submenus() {
+        let (sh, _app) = with_menus(vec![format(3)]);
+        let entries = sh.help_entries();
+        let hit = entries.iter().find(|(_, _, item)| item.title == "Use Default").expect("a nested item is searched");
+        assert_eq!(hit.0, Menu::AppSub(0, 2));
+        assert!(hit.2.menu.contains("Kern"), "{}", hit.2.menu);
+        assert!(!entries.iter().any(|(m, i, _)| matches!(m, Menu::AppSub(..)) && *i == 0), "the rows back are not results");
+    }
+
+    #[test]
+    fn a_menu_taller_than_the_screen_scrolls_and_keeps_its_rows_reachable() {
+        let (mut sh, _app) = with_menus(vec![format(300)]);
+        let menu = Menu::AppSub(0, 0);
+        sh.desktop_menu = Some(menu);
+        let (x, top, w, h) = sh.desktop_popup_rect().unwrap();
+        assert!(top + h <= sh.h as usize, "the popup stays on the screen: {top}+{h} > {}", sh.h);
+        let rows = sh.menu_rows(menu);
+        let sc = sh.menu_scroll_for(menu, &rows);
+        assert!(sc.down && !sc.up, "a bottom arrow only");
+        // the last family is reachable by the keyboard: the highlight scrolls the menu
+        let last = rows.len() - 1;
+        sh.desktop_menu_row = Some((menu, last - 1));
+        let _ = sh.desktop_menu_key(108, 1.);
+        assert_eq!(sh.menu_row_of(menu), Some(last));
+        let sc = sh.menu_scroll_for(menu, &rows);
+        let (spans, _) = menu_spans(&rows);
+        assert!(sc.up && sc.shows(spans[last].0, spans[last].1), "the last row shows after Down");
+        // a click lands on the row drawn under the pointer, not the one the offset hides
+        let y = top as f32 + sh.ui.pt(spans[last].0 - sc.offset + spans[last].1 / 2.);
+        assert_eq!(sh.menu_row_at(menu, y - top as f32), Some(last));
+        // the wheel scrolls back up, and resting on the top arrow scrolls further each frame
+        assert!(sh.desktop_menu_wheel((x + w / 2) as f32, (top + h / 2) as f32, 240.));
+        let after = sh.menu_scroll_for(menu, &rows).offset;
+        assert!(after < sc.offset, "{after} < {}", sc.offset);
+        sh.desktop_menu_hover((x + w / 2) as f32, top as f32 + sh.ui.pt(MENU_ARROW_PT / 2.));
+        assert_eq!(sh.desktop_menu_scroll.arrow, -1);
+        assert!(sh.menu_autoscrolling());
+        sh.desktop_menu_autoscroll(10.);
+        sh.desktop_menu_autoscroll(60.);
+        assert!(sh.menu_scroll_for(menu, &rows).offset < after, "resting on the arrow scrolls");
+        for k in 0..2000 {
+            sh.desktop_menu_autoscroll(100. + k as f64 * 50.);
+        }
+        assert_eq!(sh.menu_scroll_for(menu, &rows).offset, 0.);
+        assert_eq!(sh.desktop_menu_scroll.arrow, 0, "it stops at the top");
+        assert!(!sh.menu_autoscrolling());
     }
 }
 

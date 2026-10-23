@@ -2990,7 +2990,13 @@
         let order:Vec<desktop_bar::Menu>=sh.menu_buttons().into_iter().map(|b|b.0).filter(|m|matches!(m,desktop_bar::Menu::App|desktop_bar::Menu::Custom(_)|desktop_bar::Menu::File)).collect();
         assert_eq!(order,vec![desktop_bar::Menu::App,desktop_bar::Menu::File,desktop_bar::Menu::Custom(0)],"the app's own menus follow View, not the app name");
         let rows=sh.menu_rows(desktop_bar::Menu::Custom(0));
-        assert_eq!(rows.iter().map(|r|r.text.as_str()).collect::<Vec<_>>(),vec!["New Note","","\u{2713} Pin","Lock","Sort By","    Name"]);
+        assert_eq!(rows.iter().map(|r|r.text.as_str()).collect::<Vec<_>>(),vec!["New Note","","\u{2713} Pin","Lock","Sort By"],"a submenu's items are in the submenu, not the menu");
+        assert!(matches!(rows[4].action,Some(desktop_bar::Action::Submenu(desktop_bar::Menu::AppSub(0,4)))),"Sort By opens its submenu");
+        let sub=sh.menu_rows(desktop_bar::Menu::AppSub(0,4));
+        assert_eq!(sub.iter().map(|r|r.text.as_str()).collect::<Vec<_>>(),vec!["Sort By","","Name"],"a row back, then the submenu's items");
+        assert!(matches!(sub[0].action,Some(desktop_bar::Action::Submenu(desktop_bar::Menu::Custom(0)))),"the first row goes back to the menu");
+        assert!(matches!(sub[2].action,Some(desktop_bar::Action::AppMenu(0,4))));
+        assert_eq!(sh.bar_anchor(desktop_bar::Menu::AppSub(0,4)),desktop_bar::Menu::Custom(0),"it opens under the menu's bar item");
         assert_eq!(sh.menu_row_keys(desktop_bar::Menu::Custom(0)),vec!["\u{2318}N".to_string(),"\u{21E7}\u{2318}L".to_string()]);
         // an app menu titled like a shell menu merges into it (NativeApp.mainMenu owns File on Golden Gate) instead of repeating it
         sh.ext[0].as_mut().unwrap().app_menus.push(AppMenu{title:"File".into(),items:vec![AppMenuItem::new(9,"Print...").key("cmd+p")]});

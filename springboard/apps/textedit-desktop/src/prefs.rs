@@ -29,8 +29,9 @@ pub struct Options {
     pub rewrap: bool,
     /// Whether File > New makes a plain text document
     pub new_plain: bool,
-    /// Preferences: the font family of new rich text (an index into the families), and the encoding new plain text
-    /// documents are saved in
+    /// Preferences: the font family of new rich text (an index into `text::families`, every installed family; stored by
+    /// its name, so the choice holds when the installed families change), and the encoding new plain text documents are
+    /// saved in
     pub default_font: u8,
     pub default_encoding: Encoding,
     /// Preferences > Open and Save: whether RTF and HTML files open as plain text showing their markup
@@ -83,7 +84,7 @@ impl Options {
             ("options.header_footer", v(self.header_footer)),
             ("options.rewrap", v(self.rewrap)),
             ("options.new_plain", v(self.new_plain)),
-            ("options.default_font", self.default_font.to_string()),
+            ("options.default_font", default_font_name(self.default_font).to_string()),
             ("options.default_encoding", self.default_encoding.id().to_string()),
             ("options.markup_as_code", v(self.markup_as_code)),
             ("options.encodings", self.encodings.to_string()),
@@ -125,12 +126,26 @@ impl Options {
             header_footer: flag("options.header_footer", d.header_footer),
             rewrap: flag("options.rewrap", d.rewrap),
             new_plain: flag("options.new_plain", d.new_plain),
-            default_font: get("options.default_font").and_then(|n| n.parse::<u8>().ok()).filter(|&n| (n as usize) < crate::text::FAMILIES.len()).unwrap_or(d.default_font),
+            default_font: get("options.default_font").and_then(|v| default_font_of(&v)).unwrap_or(d.default_font),
             default_encoding: get("options.default_encoding").and_then(|id| Encoding::from_id(&id)).unwrap_or(d.default_encoding),
             markup_as_code: flag("options.markup_as_code", d.markup_as_code),
             encodings: get("options.encodings").and_then(|n| n.parse::<u8>().ok()).map(|n| n & ALL_ENCODINGS).unwrap_or(d.encodings),
         }
     }
+}
+
+/// The name the default font `font` is stored under: its family's name (the default family for an index past them).
+fn default_font_name(font: u8) -> &'static str {
+    crate::text::families().get(font as usize).map_or(crate::text::FAMILIES[0], String::as_str)
+}
+
+/// The family a stored default font names: a family name (any case), as it is written now, or the index into the three
+/// base families that earlier versions wrote. None for a family that is not installed (the default then holds).
+fn default_font_of(stored: &str) -> Option<u8> {
+    if let Ok(index) = stored.trim().parse::<u8>() {
+        return ((index as usize) < crate::text::FAMILIES.len()).then_some(index);
+    }
+    crate::text::family_index(stored)
 }
 
 /// The settings the Preferences panel lists, in the order it shows them. Each one is a toggle or a choice that cycles.
@@ -198,7 +213,7 @@ impl Setting {
         let on = |b: bool| (if b { "On" } else { "Off" }).to_string();
         match self {
             Setting::NewPlain => (if o.new_plain { "Plain Text" } else { "Rich Text" }).to_string(),
-            Setting::DefaultFont => crate::text::FAMILIES[(o.default_font as usize).min(crate::text::FAMILIES.len() - 1)].to_string(),
+            Setting::DefaultFont => default_font_name(o.default_font).to_string(),
             Setting::DefaultEncoding => o.default_encoding.name().to_string(),
             Setting::MarkupAsCode => on(o.markup_as_code),
             Setting::SpellEnabled => on(o.spell_enabled),
@@ -219,7 +234,8 @@ impl Setting {
     pub fn change(self, o: &mut Options) {
         match self {
             Setting::NewPlain => o.new_plain = !o.new_plain,
-            Setting::DefaultFont => o.default_font = ((o.default_font as usize + 1) % crate::text::FAMILIES.len()) as u8,
+            // every installed family in turn (Preferences > Default Font lists them all)
+            Setting::DefaultFont => o.default_font = ((o.default_font as usize + 1) % crate::text::families().len().clamp(1, 256)) as u8,
             Setting::DefaultEncoding => {
                 let all = crate::encoding::ALL;
                 let at = all.iter().position(|e| *e == o.default_encoding).unwrap_or(0);
@@ -295,6 +311,21 @@ mod tests {
         assert_eq!(no_such_font.default_font, 0);
         assert!(Options::default().rewrap, "printing rewraps to the page by default");
         assert_eq!(Options::default().encodings, ALL_ENCODINGS, "every encoding is listed by default");
+    }
+
+    /// The default font is stored by family name; the index earlier versions stored still reads as its base family.
+    #[test]
+    fn the_default_font_is_stored_by_name_and_an_old_index_still_reads() {
+        let courier = Options { default_font: 2, ..Options::default() };
+        let stored: HashMap<String, String> = courier.entries().into_iter().map(|(k, v)| (k.to_string(), v)).collect();
+        assert_eq!(stored.get("options.default_font").map(String::as_str), Some("Courier"), "the name, not the index");
+        let read = |v: &str| Options::read(&|k| (k == "options.default_font").then(|| v.to_string())).default_font;
+        assert_eq!(read("Courier"), 2);
+        assert_eq!(read("times"), 1, "any case");
+        assert_eq!(read("1"), 1, "the index an earlier version wrote");
+        assert_eq!(read("7"), 0, "an old index past the base families is the default");
+        assert_eq!(read("No Such Family"), 0, "a family that is not installed is the default");
+        assert_eq!(Setting::DefaultFont.value(&courier), "Courier");
     }
 
     #[test]

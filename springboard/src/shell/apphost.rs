@@ -1337,6 +1337,12 @@ impl AppHost {
             }
             ToShell::Controls(nodes) => self.controls=nodes,
             ToShell::AppMenus(menus) => {if self.app_menus!=menus {self.app_menus=menus;out.chrome();}},
+            // the rest of a set that did not fit one packet (`proto::app_menu_packets`); never more than the bar takes
+            ToShell::AppMenusMore(menus) => {
+                let room=bifrost_proto::MAX_APP_MENUS.saturating_sub(self.app_menus.len());
+                if menus.len()>room {eprintln!("springboard: {} published more than {} menus; {} left out",self.id,bifrost_proto::MAX_APP_MENUS,menus.len()-room);}
+                if room>0&&!menus.is_empty() {self.app_menus.extend(menus.into_iter().take(room));out.chrome();}
+            },
             ToShell::ControlsTree(tree) => self.controls_tree=tree,
             ToShell::AxText(list) => self.ax_text=list,
             ToShell::AxMeta(list) => self.ax_meta=list,

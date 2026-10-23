@@ -611,7 +611,7 @@ impl TextEditApp {
                 return true;
             }
             Action::DefaultFont(index) => {
-                if (index as usize) >= text::FAMILIES.len() {
+                if (index as usize) >= text::families().len() {
                     return false;
                 }
                 self.opts.default_font = index;
@@ -2281,71 +2281,93 @@ impl TextEditApp {
         AppMenu { title: "Text".into(), items }
     }
 
+    /// Format, laid out as the reference TextEdit's: Font and Text submenus, then the document switches (Make Plain Text,
+    /// Prevent Editing, Wrap to Page, Allow Hyphenation) and, for plain text, the encoding. The Font submenu ends with every
+    /// installed family (`text::families`); a submenu has an item budget of its own (`proto::MAX_APP_MENU_ITEMS`) and the
+    /// shell scrolls a menu taller than the screen. Items the editor cannot do yet (Outline, Styles, Kern, Ligatures,
+    /// Tables, Allow Hyphenation) are shown disabled so the menu matches the reference.
     fn format_menu(&self) -> AppMenu {
         let status = self.status();
         let (style, align, rich) = (status.style, status.align, status.rich);
         let enabled = active_doc(&self.docs).is_some();
+        let unavailable = |title: &str| AppMenuItem::new(0, title).enabled(false);
         let mut items = vec![
-            menu_item(Action::Bold, "Bold", "cmd+b", rich).checked(style.bold),
-            menu_item(Action::Italic, "Italic", "cmd+i", rich).checked(style.italic),
-            menu_item(Action::Underline, "Underline", "cmd+u", rich).checked(style.underline),
-            menu_item(Action::Strike, "Strikethrough", "", rich).checked(style.strike),
-            AppMenuItem::separator(),
-            menu_item(Action::Bigger, "Bigger", "cmd+=", rich),
-            menu_item(Action::Smaller, "Smaller", "cmd+-", rich),
-            AppMenuItem::separator(),
-            AppMenuItem::submenu("Baseline"),
-            menu_item(Action::Superscript, "Superscript", "", rich).checked(style.script == 1).depth(1),
-            menu_item(Action::Subscript, "Subscript", "", rich).checked(style.script == -1).depth(1),
-            AppMenuItem::submenu("Highlight"),
+            AppMenuItem::submenu("Font"),
+            menu_item(Action::ShowFonts, "Show Fonts", "cmd+t", enabled).checked(self.fonts.is_some()).depth(1),
+            menu_item(Action::Bold, "Bold", "cmd+b", rich).checked(style.bold).depth(1),
+            menu_item(Action::Italic, "Italic", "cmd+i", rich).checked(style.italic).depth(1),
+            menu_item(Action::Underline, "Underline", "cmd+u", rich).checked(style.underline).depth(1),
+            menu_item(Action::Strike, "Strikethrough", "", rich).checked(style.strike).depth(1),
+            unavailable("Outline").depth(1),
+            unavailable("Styles\u{2026}").depth(1),
+            AppMenuItem::separator().depth(1),
+            menu_item(Action::Bigger, "Bigger", "cmd+=", rich).depth(1),
+            menu_item(Action::Smaller, "Smaller", "cmd+-", rich).depth(1),
+            AppMenuItem::separator().depth(1),
+            AppMenuItem::submenu("Kern").enabled(false).depth(1),
+            unavailable("Use Default").depth(2),
+            unavailable("Use None").depth(2),
+            unavailable("Tighten").depth(2),
+            unavailable("Loosen").depth(2),
+            AppMenuItem::submenu("Ligatures").enabled(false).depth(1),
+            unavailable("Use Default").depth(2),
+            unavailable("Use None").depth(2),
+            unavailable("Use All").depth(2),
+            AppMenuItem::submenu("Baseline").depth(1),
+            menu_item(Action::Superscript, "Superscript", "", rich).checked(style.script == 1).depth(2),
+            menu_item(Action::Subscript, "Subscript", "", rich).checked(style.script == -1).depth(2),
+            AppMenuItem::separator().depth(1),
+            menu_item(Action::ShowColors, "Show Colors", "cmd+shift+c", enabled).checked(self.colors_panel).depth(1),
+            AppMenuItem::submenu("Color").depth(1),
         ];
         for (index, (name, _)) in text::COLORS.iter().enumerate() {
-            let title = if index == 0 { "None" } else { *name };
-            items.push(menu_item(Action::Highlight(index as u8), title, "", rich).checked(style.highlight == index as u8).depth(1));
+            items.push(menu_item(Action::Color(index as u8), name, "", rich).checked(style.color == index as u8).depth(2));
         }
-        items.push(AppMenuItem::submenu("Font"));
-        items.push(menu_item(Action::ShowFonts, "Show Fonts", "cmd+t", enabled).checked(self.fonts.is_some()).depth(1));
-        items.push(menu_item(Action::ShowColors, "Show Colors", "cmd+shift+c", enabled).checked(self.colors_panel).depth(1));
+        items.push(AppMenuItem::submenu("Highlight").depth(1));
+        for (index, (name, _)) in text::COLORS.iter().enumerate() {
+            let title = if index == 0 { "None" } else { *name };
+            items.push(menu_item(Action::Highlight(index as u8), title, "", rich).checked(style.highlight == index as u8).depth(2));
+        }
         items.push(AppMenuItem::separator().depth(1));
-        for index in format_bar::font_menu_families(style.font) {
+        items.push(menu_item(Action::CopyStyle, "Copy Style", "cmd+alt+c", enabled).depth(1));
+        items.push(menu_item(Action::PasteStyle, "Paste Style", "cmd+alt+v", rich && self.copied_style.is_some()).depth(1));
+        // every installed family, the selection's checked (the Fonts panel and the format bar list them too)
+        items.push(AppMenuItem::separator().depth(1));
+        for index in 0..text::families().len().min(256) {
+            let index = index as u8;
             items.push(menu_item(Action::Font(index), view::family_name(index), "", rich).checked(style.font == index).depth(1));
         }
         items.push(AppMenuItem::submenu("Text"));
-        for (title, a) in [("Align Left", Align::Left), ("Center", Align::Center), ("Align Right", Align::Right), ("Justify", Align::Justified)] {
+        for (title, a) in [("Align Left", Align::Left), ("Center", Align::Center), ("Justify", Align::Justified), ("Align Right", Align::Right)] {
             items.push(menu_item(Action::Align(a), title, "", rich).checked(align == a).depth(1));
         }
         items.push(AppMenuItem::separator().depth(1));
-        items.push(menu_item(Action::Direction(false), "Left to Right", "", rich).checked(!style.rtl).depth(1));
-        items.push(menu_item(Action::Direction(true), "Right to Left", "", rich).checked(style.rtl).depth(1));
+        items.push(AppMenuItem::submenu("Writing Direction").depth(1));
+        items.push(menu_item(Action::Direction(false), "Left to Right", "", rich).checked(!style.rtl).depth(2));
+        items.push(menu_item(Action::Direction(true), "Right to Left", "", rich).checked(style.rtl).depth(2));
         items.push(AppMenuItem::separator().depth(1));
-        for index in 0..text::SPACINGS.len() as u8 {
-            let title = format!("Spacing {}", view::spacing_label(index));
-            items.push(menu_item(Action::Spacing(index), &title, "", rich).checked(style.spacing == index).depth(1));
-        }
-        items.push(menu_item(Action::ShowSpacing, "Spacing\u{2026}", "", rich).depth(1));
-        items.push(AppMenuItem::separator().depth(1));
+        let ruler = if self.opts.show_ruler { "Hide Ruler" } else { "Show Ruler" };
+        items.push(menu_item(Action::ShowRuler, ruler, "cmd+r", rich).depth(1));
         items.push(menu_item(Action::CopyRuler, "Copy Ruler", "", enabled && rich).depth(1));
         items.push(menu_item(Action::PasteRuler, "Paste Ruler", "", rich && self.ruler.is_some()).depth(1));
-        items.push(menu_item(Action::List(text::ListKind::Bullet), "Bullets", "", rich).checked(style.list == text::ListKind::Bullet).depth(1));
-        items.push(menu_item(Action::List(text::ListKind::Numbered), "Numbers", "", rich).checked(style.list == text::ListKind::Numbered).depth(1));
-        items.push(AppMenuItem::submenu("Color"));
-        for (index, (name, _)) in text::COLORS.iter().enumerate() {
-            items.push(menu_item(Action::Color(index as u8), name, "", rich).checked(style.color == index as u8).depth(1));
-        }
-        items.push(AppMenuItem::separator());
-        items.push(menu_item(Action::CopyStyle, "Copy Style", "cmd+alt+c", enabled));
-        items.push(menu_item(Action::PasteStyle, "Paste Style", "cmd+alt+v", rich && self.copied_style.is_some()));
+        items.push(AppMenuItem::separator().depth(1));
+        items.push(menu_item(Action::ShowSpacing, "Spacing\u{2026}", "", rich).depth(1));
+        items.push(AppMenuItem::submenu("Lists").depth(1));
+        items.push(menu_item(Action::List(text::ListKind::Bullet), "Bullets", "", rich).checked(style.list == text::ListKind::Bullet).depth(2));
+        items.push(menu_item(Action::List(text::ListKind::Numbered), "Numbers", "", rich).checked(style.list == text::ListKind::Numbered).depth(2));
+        items.push(unavailable("Tables\u{2026}").depth(1));
         items.push(AppMenuItem::separator());
         // the mode switch names the mode it switches to
         if rich {
-            items.push(menu_item(Action::MakePlain, "Make Plain Text", "", enabled));
+            items.push(menu_item(Action::MakePlain, "Make Plain Text", "cmd+shift+t", enabled));
         } else {
-            items.push(menu_item(Action::MakeRich, "Make Rich Text", "", enabled));
+            items.push(menu_item(Action::MakeRich, "Make Rich Text", "cmd+shift+t", enabled));
         }
         let read_only = active_doc(&self.docs).is_some_and(|d| d.read_only);
         items.push(menu_item(Action::PreventEditing, if read_only { "Allow Editing" } else { "Prevent Editing" }, "", enabled));
-        // the text column is the page's width unless Wrap to Window is on (View has the same item)
-        items.push(menu_item(Action::WrapToWindow, "Wrap to Page", "", enabled).checked(!self.opts.wrap_window));
+        // the text column is the page's width unless Wrap to Window is on; the item names the width it switches to
+        items.push(menu_item(Action::WrapToWindow, if self.opts.wrap_window { "Wrap to Page" } else { "Wrap to Window" }, "", enabled));
+        items.push(unavailable("Allow Hyphenation"));
         // the encoding is a plain text setting: it is saved with the file, and Reinterpret As repairs a wrong guess
         let current = active_doc(&self.docs).map(|d| d.encoding);
         items.push(AppMenuItem::separator());
@@ -2361,17 +2383,11 @@ impl TextEditApp {
         AppMenu { title: "Format".into(), items }
     }
 
-    /// View: the ruler, the wrapping width and the zoom.
+    /// View: the zoom and the window background. The ruler and the wrapping width are in Format, as in the reference.
     fn view_menu(&self) -> AppMenu {
         let doc = active_doc(&self.docs);
         let enabled = doc.is_some();
-        let rich = doc.is_some_and(|d| d.rich);
-        let ruler = if self.opts.show_ruler { "Hide Ruler" } else { "Show Ruler" };
-        let wrap = if self.opts.wrap_window { "Wrap to Page" } else { "Wrap to Window" };
         let items = vec![
-            menu_item(Action::ShowRuler, ruler, "cmd+r", rich),
-            menu_item(Action::WrapToWindow, wrap, "", enabled),
-            AppMenuItem::separator(),
             menu_item(Action::ZoomIn, "Zoom In", "cmd+alt+=", enabled && self.zoom < prefs::ZOOMS[prefs::ZOOMS.len() - 1]),
             menu_item(Action::ZoomOut, "Zoom Out", "cmd+alt+-", enabled && self.zoom > prefs::ZOOMS[0]),
             menu_item(Action::ActualSize, "Actual Size", "cmd+0", enabled && self.zoom != 1.0),
@@ -2396,8 +2412,10 @@ impl TextEditApp {
             items.push(menu_item(Action::DefaultEncoding(index as u8), e.name(), "", true).checked(self.opts.default_encoding == *e).depth(1));
         }
         items.push(menu_item(Action::ShowEncodings, "Customize Encodings List\u{2026}", "", true));
+        // every installed family (`text::families`), not only the three base ones
         items.push(AppMenuItem::submenu("Default Font"));
-        for index in 0..text::FAMILIES.len() as u8 {
+        for index in 0..text::families().len().min(256) {
+            let index = index as u8;
             items.push(menu_item(Action::DefaultFont(index), view::family_name(index), "", true).checked(self.opts.default_font == index).depth(1));
         }
         items.push(menu_item(Action::MarkupAsCode, "Show RTF and HTML Files as Code", "", true).checked(self.opts.markup_as_code));
@@ -3478,6 +3496,89 @@ mod tests {
         assert_eq!(doc.text.find_all("aa", true, 10), vec![0..2, 2..4]);
         assert_eq!(doc.text.find_all("aa", false, 1), vec![0..2], "the limit holds");
         assert!(doc.text.find_all("", false, 10).is_empty());
+    }
+
+    /// The titles of the direct children of submenu `header` of `menu` (its top level when `header` is None).
+    fn level_titles(menu: &AppMenu, header: Option<&str>) -> Vec<String> {
+        let (start, depth) = match header {
+            None => (0, 0),
+            Some(h) => {
+                let at = menu.items.iter().position(|i| i.submenu && i.title == h).unwrap_or_else(|| panic!("no {h} submenu"));
+                (at + 1, menu.items[at].depth + 1)
+            }
+        };
+        menu.items[start..].iter().take_while(|i| i.depth >= depth).filter(|i| i.depth == depth).map(|i| i.title.clone()).collect()
+    }
+
+    /// QA: Format reached the menu bar's old 48-item cap before Color, so Color, Copy and Paste Style, Make Plain Text and the
+    /// encodings were dropped. Format is now laid out as the reference's (Font and Text submenus), every item reaches the
+    /// shell, and the Font submenu lists every family.
+    #[test]
+    fn the_format_menu_has_font_and_text_submenus_and_nothing_is_cut() {
+        let app = app_with_text("Hello world", 0..5);
+        let format = app.format_menu();
+        let top = level_titles(&format, None);
+        assert_eq!(&top[..2], ["Font", "Text"], "{top:?}");
+        for want in ["Prevent Editing", "Allow Hyphenation", "Text Encoding", "Reinterpret As"] {
+            assert!(top.iter().any(|t| t == want), "{want} is in Format: {top:?}");
+        }
+        assert!(top.iter().any(|t| t == "Make Plain Text" || t == "Make Rich Text"));
+        assert!(top.iter().any(|t| t == "Wrap to Window" || t == "Wrap to Page"));
+        let font = level_titles(&format, Some("Font"));
+        for want in ["Show Fonts", "Bold", "Italic", "Underline", "Outline", "Styles\u{2026}", "Bigger", "Smaller", "Kern", "Ligatures", "Baseline", "Show Colors", "Color", "Copy Style", "Paste Style"] {
+            assert!(font.iter().any(|t| t == want), "{want} is in Format > Font: {font:?}");
+        }
+        for family in text::families() {
+            assert!(font.iter().any(|t| t == family), "the family {family} is in Format > Font");
+        }
+        let text = level_titles(&format, Some("Text"));
+        for want in ["Align Left", "Center", "Justify", "Align Right", "Writing Direction", "Copy Ruler", "Paste Ruler", "Spacing\u{2026}", "Lists", "Tables\u{2026}"] {
+            assert!(text.iter().any(|t| t == want), "{want} is in Format > Text: {text:?}");
+        }
+        assert!(text.iter().any(|t| t == "Show Ruler" || t == "Hide Ruler"));
+        assert_eq!(level_titles(&format, Some("Writing Direction")), ["Left to Right", "Right to Left"]);
+        assert_eq!(level_titles(&format, Some("Baseline")), ["Superscript", "Subscript"]);
+        // the shell takes every item of every menu, and they fit the packets
+        let menus = vec![app.file_menu(), app.text_menu(), format.clone(), app.view_menu(), app.preferences_menu()];
+        for m in &menus {
+            assert_eq!(m.dropped_items(), 0, "{} loses items", m.title);
+            assert!(m.items.iter().all(|i| i.depth <= bifrost_app::proto::MAX_APP_MENU_DEPTH), "{}", m.title);
+        }
+        assert!(bifrost_app::proto::app_menu_packets(&menus).dropped.is_empty());
+        // the ruler and the wrapping width moved to Format; View has the zoom
+        let view = level_titles(&app.view_menu(), None);
+        assert!(!view.iter().any(|t| t.contains("Ruler") || t.starts_with("Wrap")), "{view:?}");
+        // every enabled item's id is one the app reads back
+        for i in format.items.iter().filter(|i| i.enabled && !i.submenu && !i.separator) {
+            assert!(Action::from_id(i.id).is_some(), "{} has id {}", i.title, i.id);
+        }
+    }
+
+    /// Format > Font lists 256 families without losing an item: a submenu's own budget holds them.
+    #[test]
+    fn a_font_submenu_with_every_family_still_fits() {
+        let app = app_with_text("Hello", 0..0);
+        let mut format = app.format_menu();
+        let at = format.items.iter().position(|i| i.title == "Copy Style").unwrap();
+        for k in 0..256u32 {
+            format.items.insert(at + 1, AppMenuItem::new(1 + k, &format!("Installed Family {k}")).depth(1));
+        }
+        assert_eq!(format.dropped_items(), 0);
+        let out = bifrost_app::proto::app_menu_packets(&[app.file_menu(), app.text_menu(), format.clone(), app.view_menu(), app.preferences_menu()]);
+        assert!(out.dropped.is_empty(), "{:?}", out.dropped);
+    }
+
+    /// Preferences > Default Font lists every family a document can use, and choosing one keeps it.
+    #[test]
+    fn preferences_default_font_lists_every_family() {
+        let ctx = window(1200, 780);
+        let mut app = app_with_text("Hello", 0..0);
+        let prefs = app.preferences_menu();
+        assert_eq!(level_titles(&prefs, Some("Default Font")), text::families().to_vec());
+        let last = (text::families().len() - 1) as u8;
+        assert!(app.menu_action(&ctx, Action::DefaultFont(last).id().unwrap()));
+        assert_eq!(app.opts.default_font, last);
+        assert!(!app.perform(&ctx, Action::DefaultFont(last + 1)), "an index past the families is refused");
     }
 
     /// QA W2-11: Cmd+T did nothing and the Format menu had no Show Fonts or Show Colors.
