@@ -23,6 +23,9 @@ pub const MENU_TINT: Pair = Pair::new(pack(28, 28, 30, 240), pack(246, 246, 246,
 /// The tint of the Search field and its results card (and the assistant's panel): lighter than a menu's, so the desktop
 /// shows through the blur as in the reference.
 pub const SEARCH_TINT: Pair = Pair::new(pack(28, 28, 30, 170), pack(246, 246, 246, 160));
+/// The tint of the desktop Control Center's modules: glass the desktop shows through, as on the reference (the menus'
+/// near-opaque tint made the modules flat white in Light, W5-10).
+pub const CC_MODULE_TINT: Pair = Pair::new(pack(28, 28, 30, 190), pack(246, 246, 246, 150));
 /// Golden Gate menu bar: transparent over the wallpaper; titles and status items are white with a soft dark shadow.
 pub const BAR_TEXT: u32 = WHITE;
 pub const BAR_TEXT_SHADOW: u32 = pack(0, 0, 0, 255);

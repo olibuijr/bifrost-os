@@ -24,6 +24,9 @@ use crate::layout::Rect;
 use crate::scene::draw_status_right;
 use crate::status;
 
+mod desk_detail;
+use desk_detail::Detail;
+
 const SMALL_PT: f32 = 65.5;
 const GAP_PT: f32 = 10.5;
 const BIG_PT: f32 = 2.0 * SMALL_PT + GAP_PT;
@@ -206,6 +209,8 @@ enum Touch {
     Edit,
     /// a finger on a row of the Edit Controls list (the last row is Done)
     Gallery(usize),
+    /// a finger on a desktop module's label: released there, it opens the module's detail
+    Detail(Tile),
 }
 
 /// How long a finger rests on a module before it expands, like bifrost.
@@ -405,6 +410,8 @@ pub struct ControlCenter {
     pub headphones_present: bool,
     /// the Up Next picker opened from the Now Playing card
     pub up_next: Option<UpNext>,
+    /// the desktop module whose detail view shows in place of the modules
+    pub(crate) desk_detail: Option<Detail>,
 }
 
 /// The Up Next picker: the shown app's queue, picked from with `bifrost_ui::media_picker` (one choice).
@@ -466,6 +473,13 @@ fn route_chevron((x, y, w, _h): (f32, f32, f32, f32), ui: &Ui) -> (f32, f32, f32
     (x + w - ui.pt(DK_PAD_PT + 22.0), y + ui.pt(6.0), ui.pt(22.0), ui.pt(22.0))
 }
 
+/// Where a press opens the output menu: the Sound module's whole right end, from the end of the volume track to the
+/// module's edge and over its full height, so the chevron is not a 22 pt target (W5-11).
+fn route_chevron_hit((x, y, w, h): (f32, f32, f32, f32), ui: &Ui) -> (f32, f32, f32, f32) {
+    let left = x + w - ui.pt(DK_PAD_PT + 22.0);
+    (left, y, x + w - left, h)
+}
+
 /// The route a menu row's id stands for.
 fn route_of_id(id: &str) -> Option<crate::media::route::Route> {
     match id {
@@ -477,7 +491,7 @@ fn route_of_id(id: &str) -> Option<crate::media::route::Route> {
 
 impl Default for ControlCenter {
     fn default() -> Self {
-        ControlCenter { route_menu: None, route_choice: None, headphones_present: false, up_next: None, state: State::Hidden, touch: None, airplane: false, airplane_prior: None, volume: 0.6, route: Default::default(), backdrop: None, backlight: false, labels: None, expanded: None, press: None, bounce: None, app_controls: AppControls::new(), editing: false }
+        ControlCenter { desk_detail: None, route_menu: None, route_choice: None, headphones_present: false, up_next: None, state: State::Hidden, touch: None, airplane: false, airplane_prior: None, volume: 0.6, route: Default::default(), backdrop: None, backlight: false, labels: None, expanded: None, press: None, bounce: None, app_controls: AppControls::new(), editing: false }
     }
 }
 
@@ -533,6 +547,7 @@ impl ControlCenter {
         self.editing = false;
         self.route_menu = None;
         self.up_next = None;
+        self.desk_detail = None;
     }
 
     /// When a resting finger turns into an expansion.
@@ -2026,8 +2041,32 @@ fn desk_media_button((rx, _, rw, _): (f32, f32, f32, f32), x: f32) -> Tile {
     }
 }
 
-fn desk_backlight() -> bool {
+/// The icon disc of a capsule module, (x, y, w, h) in px.
+fn desk_disc((x, y, _w, h): (f32, f32, f32, f32), ui: &Ui) -> (f32, f32, f32, f32) {
+    let d = ui.pt(DK_DISC_PT);
+    (x + (h - d) / 2.0, y + (h - d) / 2.0, d, d)
+}
+
+/// Where a press toggles a capsule module: its left end up to just past the icon disc, over the full height. The rest
+/// of the capsule (the label) opens the module's detail, as on the reference.
+fn desk_disc_hit(r: (f32, f32, f32, f32), ui: &Ui) -> (f32, f32, f32, f32) {
+    let (dx, _, d, _) = desk_disc(r, ui);
+    (r.0, r.1, dx + d + ui.pt(4.0) - r.0, r.3)
+}
+
+/// The left edge of a capsule's text and the width it may take, in px: after the disc, up to a small inset from the
+/// right end. The inset was the full 12 pt padding, which cut "Not Connected" to "Not Conne..." (W5-10).
+fn desk_capsule_text(r: (f32, f32, f32, f32), ui: &Ui) -> (f32, f32) {
+    let (dx, _, d, _) = desk_disc(r, ui);
+    let tx = dx + d + ui.pt(7.0);
+    (tx, (r.0 + r.2 - tx - ui.pt(5.0)).max(0.0))
+}
+
+/// Whether the Display module has a brightness to drive: a panel backlight, or an external monitor on a DDC/CI bus
+/// (`bare::power::set_brightness` sends the level there when there is no backlight).
+fn desk_brightness_control() -> bool {
     std::fs::read_dir("/sys/class/backlight").is_ok_and(|mut d| d.next().is_some())
+        || bifrost_core::ddc_ci::external_bus_numbers(std::path::Path::new("/sys/class/drm")).iter().any(|n| std::path::Path::new(&format!("/dev/i2c-{n}")).exists())
 }
 
 /// The presenter's glass shape for a shell surface's reference material. Surfaces that float over the
@@ -2074,6 +2113,22 @@ pub(super) fn request_shell_material(req: MaterialRequest) -> u32 {
 /// A glass plate for a shell surface (see `request_shell_material`), filled with `alpha`.
 pub(super) fn desk_glass(s: &mut Surface, surface: ShellSurface, (x, y, w, h): (f32, f32, f32, f32), r: f32, alpha: u32) {
     let fill = request_shell_material(surface.request((x, y, w, h), r));
+    s.fill_rrect(x, y, w, h, r, scale(fill, alpha));
+}
+
+/// A Control Center module's glass: the presenter's blur under `CC_MODULE_TINT`, light enough in Light that the desktop
+/// shows through as on the reference (the menus' near-opaque tint made the modules flat white, W5-10). Solid under
+/// Reduce Transparency, and the menu tint on the CPU path, which has no blur under it.
+pub(super) fn desk_module_glass(s: &mut Surface, surface: ShellSurface, (x, y, w, h): (f32, f32, f32, f32), r: f32, alpha: u32) {
+    use super::ui::{CC_MODULE_TINT, MENU_SOLID, MENU_TINT};
+    let fill = if bifrost_render::appearance::reduce_transparency() {
+        MENU_SOLID.now()
+    } else if bifrost_render::glass::gpu() {
+        bifrost_render::glass::push(shell_glass_rect(&surface.request((x, y, w, h), r)));
+        bifrost_render::glass::tint(CC_MODULE_TINT.now())
+    } else {
+        MENU_TINT.now()
+    };
     s.fill_rrect(x, y, w, h, r, scale(fill, alpha));
 }
 
@@ -2229,6 +2284,15 @@ impl Shell {
         if self.cc.is_hidden() || !self.desk_active() {
             return None;
         }
+        if let Some(d) = self.cc.desk_detail {
+            // the detail replaces the modules, and may be taller than they are
+            let panel = self.desk_detail_layout(d).panel;
+            let t = self.cc_desk_tiles();
+            return Some(match (t.first(), t.last()) {
+                (Some(&(_, (x, y, ..))), Some(&(_, (lx, ly, lw, lh)))) => union_rect(panel, (x, y, lx + lw - x, ly + lh - y)),
+                _ => panel,
+            });
+        }
         let t = self.cc_desk_tiles();
         let (x, y, ..) = t.first()?.1;
         let (lx, ly, lw, lh) = t.last()?.1;
@@ -2244,8 +2308,8 @@ impl Shell {
     }
 
     /// The output menu under the Sound module: Speaker, and Headphones while the headset is in, with the active
-    /// output checked.
-    pub(crate) fn route_menu_below(&self, (x, y, w, _h): (f32, f32, f32, f32)) -> RouteMenu {
+    /// output checked. It hangs below the module, so it never covers the volume slider (W5-11).
+    pub(crate) fn route_menu_below(&self, (x, y, w, h): (f32, f32, f32, f32)) -> RouteMenu {
         let auth = bifrost_ui::route_auth::RouteAuth::new();
         let local: Vec<(&str, &str)> = if self.cc.headphones_present { vec![("speaker", "Speaker"), ("headphones", "Headphones")] } else { vec![("speaker", "Speaker")] };
         let rows = bifrost_ui::route_picker::destinations(&local, &[], &auth);
@@ -2260,7 +2324,7 @@ impl Shell {
             row.active = row.id == current;
         }
         let panel_w = self.ui.pt(220.0);
-        let panel = bifrost_ui::Rect { x: x + w - panel_w, y: y + self.ui.pt(30.0), w: panel_w, h: rows.len() as f32 * self.ui.pt(super::list::ROW_PT) };
+        let panel = bifrost_ui::Rect { x: x + w - panel_w, y: y + h + self.ui.pt(6.0), w: panel_w, h: rows.len() as f32 * self.ui.pt(super::list::ROW_PT) };
         RouteMenu { panel, rows }
     }
 
@@ -2280,6 +2344,24 @@ impl Shell {
         (x + ui.pt(DK_PAD_PT + 22.0), x + w - ui.pt(DK_PAD_PT + 22.0), y + h * 0.66)
     }
 
+    /// Whether a press is on a slider module's track: its band around the track, from the start to the end of the
+    /// track (a press on the low-end glyph reads as the start). The title above it and the right end (the output
+    /// chevron) are not the slider (W5-11).
+    fn desk_on_track(&self, rect: (f32, f32, f32, f32), x: f32, y: f32) -> bool {
+        let (_, r, cy) = self.desk_track(rect);
+        (y - cy).abs() <= self.ui.pt(12.0) && x >= rect.0 && x <= r
+    }
+
+    /// The type size of a capsule's subtitle: subhead, or footnote when the text does not fit `room` px at subhead.
+    fn capsule_sub_pt(&self, text: &str, room: f32) -> f32 {
+        use super::ui::{MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT};
+        if self.measure_chrome(text, MAC_SUBHEAD_PT, Weight::Regular) <= room {
+            MAC_SUBHEAD_PT
+        } else {
+            MAC_FOOTNOTE_PT
+        }
+    }
+
     fn desk_slider_at(&mut self, tile: Tile, rect: (f32, f32, f32, f32), x: f32) -> Vec<Effect> {
         let (l, r, _) = self.desk_track(rect);
         self.set_slider(tile, ((x - l) / (r - l)).clamp(0.0, 1.0))
@@ -2293,7 +2375,8 @@ impl Shell {
         self.notify.center.hide();
         self.cc.route_menu = None;
         self.cc.up_next = None;
-        self.cc.backlight = desk_backlight();
+        self.cc.desk_detail = None;
+        self.cc.backlight = desk_brightness_control();
         // a live overlay over the desktop, like the menu-bar menus: no snapshot
         self.cc.backdrop = None;
         self.cc.settle(0.0, true, t);
@@ -2321,6 +2404,7 @@ impl Shell {
         let from = self.cc.progress(t).clamp(0.0, 1.0);
         self.cc.route_menu = None;
         self.cc.up_next = None;
+        self.cc.desk_detail = None;
         self.cc.settle(from, false, t);
         self.dirty = true;
     }
@@ -2355,15 +2439,20 @@ impl Shell {
                 return vec![];
             }
         }
+        // an open module detail takes the pointer until a press beside it goes back to the modules
+        if let Some(d) = self.cc.desk_detail {
+            return self.desk_detail_event(d, ev, t);
+        }
         let tiles = self.cc_desk_tiles();
         let at = |x: f32, y: f32| tiles.iter().copied().find(|&(_, r)| inside(r, x, y));
         match ev {
             Event::Down(x, y) => match at(x, y) {
-                Some((Tile::MediaPlay, r)) if inside(self.up_next_button(r), x, y) => {
+                // the Up Next button exists only while the owner published a queue: an empty one opened a 1 px sliver
+                Some((Tile::MediaPlay, r)) if !now_playing::up_next().is_empty() && inside(self.up_next_button(r), x, y) => {
                     let row_h = self.ui.pt(super::list::ROW_PT);
                     let items = now_playing::up_next();
                     let panel_w = r.2;
-                    let panel = bifrost_ui::Rect { x: r.0, y: r.1 + r.3 + self.ui.pt(6.0), w: panel_w, h: items.len().max(1) as f32 * row_h + self.ui.pt(super::pickers::FOOTER_PT) };
+                    let panel = bifrost_ui::Rect { x: r.0, y: r.1 + r.3 + self.ui.pt(6.0), w: panel_w, h: items.len() as f32 * row_h + self.ui.pt(super::pickers::FOOTER_PT) };
                     self.cc.up_next = Some(UpNext::new(items, panel));
                     self.dirty = true;
                     vec![]
@@ -2373,21 +2462,35 @@ impl Shell {
                     let zone = (bx - self.ui.pt(6.0), by - self.ui.pt(6.0), bw + self.ui.pt(12.0), bh + self.ui.pt(12.0));
                     self.cc.touch = if now_playing::seek_length_ms().is_some() && inside(zone, x, y) {
                         Some(Touch::Scrub)
+                    } else if y < r.1 + r.3 * 0.5 {
+                        // the artwork and the title: the Now Playing detail
+                        Some(Touch::Detail(Tile::MediaPlay))
                     } else {
                         Some(Touch::Tile(desk_media_button(r, x)))
                     };
                     vec![]
                 }
-                Some((Tile::Volume, r)) if inside(route_chevron(r, &self.ui), x, y) => {
+                Some((Tile::Volume, r)) if inside(route_chevron_hit(r, &self.ui), x, y) => {
                     self.cc.route_menu = Some(self.route_menu_below(r));
                     self.dirty = true;
                     vec![]
                 }
+                // a slider module: the track sets the level, the rest of the module (its title) opens the detail
                 Some((tile @ (Tile::Brightness | Tile::Volume), r)) if tile == Tile::Volume || self.cc.backlight => {
-                    self.cc.touch = Some(Touch::Slider(tile));
-                    self.desk_slider_at(tile, r, x)
+                    if self.desk_on_track(r, x, y) {
+                        self.cc.touch = Some(Touch::Slider(tile));
+                        self.desk_slider_at(tile, r, x)
+                    } else {
+                        self.cc.touch = Some(Touch::Detail(tile));
+                        vec![]
+                    }
                 }
-                // no controller: the module does nothing, so it takes no pressed highlight either
+                // a capsule: the icon disc toggles, the label opens the detail
+                Some((tile, r)) if !inside(desk_disc_hit(r, &self.ui), x, y) => {
+                    self.cc.touch = Some(Touch::Detail(tile));
+                    vec![]
+                }
+                // no controller: the disc does nothing, so it takes no pressed highlight either
                 Some((Tile::Bluetooth, _)) if self.info.bt.state == crate::bare::bluetooth::State::Unavailable => vec![],
                 Some((tile, _)) => {
                     self.cc.touch = Some(Touch::Tile(tile));
@@ -2418,6 +2521,10 @@ impl Shell {
                 {
                     self.activate_tile(tile, t)
                 }
+                Some(Touch::Detail(tile)) if at(x, y).map(|a| a.0) == Some(tile) => {
+                    self.open_desk_detail(tile);
+                    vec![]
+                }
                 // a Bluetooth module with no controller has nothing to switch
                 Some(Touch::Tile(Tile::Bluetooth)) if self.info.bt.state == crate::bare::bluetooth::State::Unavailable => vec![],
                 Some(Touch::Tile(tile)) if at(x, y).map(|a| a.0) == Some(tile) => {
@@ -2446,7 +2553,7 @@ impl Shell {
 
     /// Draws the screen as it was and the glass modules over it.
     pub(super) fn draw_desk_cc(&mut self, s: &mut Surface, t: f64) {
-        use super::ui::{FIELD_BG, LABEL, LABEL_2, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, SYSTEM_BLUE, TRACK_C};
+        use super::ui::{FIELD_BG, LABEL, LABEL_2, MAC_HEADLINE_PT, SYSTEM_BLUE, TRACK_C};
         let p = self.cc.progress(t).clamp(0.0, 1.0);
         if let Some((x, y, w, h)) = self.cc_desk_rect().filter(|_| bifrost_render::glass::gpu()) {
             // the panel floats over the live desktop: clear only its own rect for the glass
@@ -2457,6 +2564,9 @@ impl Shell {
         let a = |c: u32| scale(c, alpha);
         let ui = &self.ui;
         let lift = (1.0 - p) * ui.pt(8.0);
+        if let Some(d) = self.cc.desk_detail {
+            return self.draw_desk_detail(s, d, lift, alpha);
+        }
         let pressed = match self.cc.touch {
             Some(Touch::Tile(k)) => Some(k),
             _ => None,
@@ -2466,7 +2576,7 @@ impl Shell {
             let y = y - lift;
             match tile {
                 Tile::Brightness | Tile::Volume if tile == Tile::Volume || self.cc.backlight => {
-                    desk_glass(s, ShellSurface::ControlCentre, (x, y, w, h), ui.pt(DK_SLIDER_R_PT), alpha);
+                    desk_module_glass(s, ShellSurface::ControlCentre, (x, y, w, h), ui.pt(DK_SLIDER_R_PT), alpha);
                     let name = if tile == Tile::Brightness { "Display" } else { "Sound" };
                     self.label(name, MAC_HEADLINE_PT, Weight::Semibold, label, |im| s.blit(im, (x + ui.pt(DK_PAD_PT + 4.0)) as i32, (y + ui.pt(10.0)) as i32, 255, alpha));
                     let (l, r, cy) = self.desk_track((x, y, w, h));
@@ -2488,13 +2598,16 @@ impl Shell {
                     }
                 }
                 Tile::MediaPlay => {
-                    desk_glass(s, ShellSurface::ControlCentre, (x, y, w, h), ui.pt(DK_SLIDER_R_PT), alpha);
+                    desk_module_glass(s, ShellSurface::ControlCentre, (x, y, w, h), ui.pt(DK_SLIDER_R_PT), alpha);
                     self.draw_media_tile(s, (x, y, w, h), alpha, None);
-                    let (bx, by, _, _) = self.up_next_button((x, y, w, h));
-                    self.label("Up Next", 12.0, Weight::Semibold, SYSTEM_BLUE, |im| s.blit(im, bx as i32, by as i32, 255, alpha));
+                    // no queue, no button: it opened an empty 1 px sliver (W5-12)
+                    if !now_playing::up_next().is_empty() {
+                        let (bx, by, _, _) = self.up_next_button((x, y, w, h));
+                        self.label("Up Next", 12.0, Weight::Semibold, SYSTEM_BLUE, |im| s.blit(im, bx as i32, by as i32, 255, alpha));
+                    }
                 }
                 _ => {
-                    desk_glass(s, ShellSurface::ControlCentre, (x, y, w, h), h / 2.0, alpha);
+                    desk_module_glass(s, ShellSurface::ControlCentre, (x, y, w, h), h / 2.0, alpha);
                     let (on, title, sub) = match tile {
                         Tile::Wifi => {
                             let (on, ssid) = self.desk_wifi().unwrap_or((false, None));
@@ -2536,15 +2649,16 @@ impl Shell {
                             super::glyphs::paint(s, (cx - radius, cy - radius, 2.0 * radius, 2.0 * radius), ink, |x, y| moon(x, y).max(-cut(x, y)));
                         }
                     }
-                    let tx = dx + d + ui.pt(8.0);
-                    let room = x + w - tx - ui.pt(DK_PAD_PT);
-                    let (f1, f2) = (self.fit_chrome(title, MAC_HEADLINE_PT, room), self.fit_chrome(&sub, MAC_SUBHEAD_PT, room));
+                    let (tx, room) = desk_capsule_text((x, y, w, h), ui);
+                    // a subtitle that does not fit at subhead size steps down to footnote before it is cut
+                    let sub_pt = self.capsule_sub_pt(&sub, room);
+                    let (f1, f2) = (self.fit_chrome(title, MAC_HEADLINE_PT, room), self.fit_chrome(&sub, sub_pt, room));
                     let sub_ink = LABEL_2.now();
                     let h1 = self.label(&f1, MAC_HEADLINE_PT, Weight::Semibold, label, |im| im.h);
-                    let h2 = self.label(&f2, MAC_SUBHEAD_PT, Weight::Regular, sub_ink, |im| im.h);
+                    let h2 = self.label(&f2, sub_pt, Weight::Regular, sub_ink, |im| im.h);
                     let top = y + (h - (h1 + h2) as f32) / 2.0;
                     self.label(&f1, MAC_HEADLINE_PT, Weight::Semibold, label, |im| s.blit(im, tx as i32, top as i32, 255, alpha));
-                    self.label(&f2, MAC_SUBHEAD_PT, Weight::Regular, sub_ink, |im| s.blit(im, tx as i32, (top + h1 as f32) as i32, 255, alpha));
+                    self.label(&f2, sub_pt, Weight::Regular, sub_ink, |im| s.blit(im, tx as i32, (top + h1 as f32) as i32, 255, alpha));
                 }
             }
         }

@@ -1047,6 +1047,13 @@ impl Settings {
         self.rebuild(ui);
     }
 
+    /// Night Shift changed outside Settings (Control Center's Display detail): show it, so a later edit here does not
+    /// save the old state back.
+    pub(super) fn set_night_shift(&mut self, ui: &Ui, night: NightShift) {
+        self.night = night;
+        self.rebuild(ui);
+    }
+
     /// Loads the notification state (schedule, muted apps) from the shell.
     pub(super) fn set_notify(&mut self, ui: &Ui, schedule: super::notify::Schedule, muted: Vec<super::AppId>, apps: Vec<(super::AppId, notify_page::AppNotif)>, focus_allowed: Vec<super::AppId>) {
         self.notify = NotifyPrefs { schedule, muted, clock_24h: self.opts.clock_24h, apps, focus_allowed, ..self.notify.clone() };
