@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.10.23 — 2026-10-23
+
+- The Dock sits close to its selected screen edge with a consistent inset instead of floating half its own height above it. The complete row, including Downloads and Trash, shrinks to fit smaller screens.
+- Magnified icons, launch bounce, hover labels and shadows have room on the Dock surface. The visible icon takes input above the resting plate, and context menus target its current position.
+- The Dock reserves the resting plate's space independently of its transparent animation area; the compositor no longer counts the edge gap twice. Auto-hide reserves no space, and Left and Right reserve their own edge.
+- Filled windows follow Dock size, position and auto-hide changes; ordinary windows keep their chosen size. Apps receive the same visible work area through the screens service.
+
 ## 0.10.22 — 2026-10-23
 
 - Text rendering no longer draws missing-glyph boxes for invisible formatting characters; soft hyphens stay invisible except at line breaks. Apps receive this fix when rebuilt with the updated renderer.

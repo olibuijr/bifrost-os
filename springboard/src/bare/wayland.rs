@@ -24,7 +24,10 @@ struct Lock { obj:lock::ExtSessionLockV1, surface:wl_surface::WlSurface, role:lo
 /// A chrome surface's pixels at screen (x, y). `input` limits the pointer to a part of the surface (x, y, w, h in
 /// surface px) when the surface is larger than what takes input: a popup is exported with room for its shadow, and a
 /// click on the shadow must reach what is below. `None` takes the whole surface.
-pub struct ChromeFrame {pub id:u32,pub x:i32,pub y:i32,pub width:usize,pub height:usize,pub pixels:Vec<u32>,pub input:Option<[i32;4]>}
+pub struct ChromeFrame {pub id:u32,pub x:i32,pub y:i32,pub width:usize,pub height:usize,pub pixels:Vec<u32>,pub input:Option<[i32;4]>,pub dock:Option<DockPlacement>}
+/// The Dock's edge and reserved depth, independent of the transparent room for its icons, labels and shadow.
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+pub struct DockPlacement {pub edge:DockEdge,pub reserve:i32}
 struct ChromeWindow {surface:wl_surface::WlSurface,layer:surface::ZwlrLayerSurfaceV1,slots:Vec<Slot>,configured:bool,frame:ChromeFrame,pending:Damage}
 #[derive(Clone)]
 pub struct WindowFrame { pub id:u32, pub title:&'static str, pub x:i32, pub y:i32, pub width:usize, pub height:usize, pub pixels:Option<std::sync::Arc<[u32]>>, pub damage:Damage, pub maximized:bool, pub floating:bool, pub title_height:i32,
@@ -650,13 +653,13 @@ impl Display {
 /// the bottom edge, each with an exclusive zone, so the compositor keeps maximized and snapped windows clear of them
 /// (an exclusive zone only counts for a surface anchored to one edge or to three). Everything else is placed from
 /// the top-left corner, reserves nothing and ignores the others' zones.
-fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u32)) {
+fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u32),top_reserved:i32) {
     match frame.id {
         0 => {l.set_anchor(surface::Anchor::Top|surface::Anchor::Left|surface::Anchor::Right);l.set_margin(frame.y,0,0,0);l.set_exclusive_zone(frame.height as i32+frame.y.max(0));}
-        2 if screen.0>0&&screen.1>0 => {
-            let (edge,m,zone)=dock_placement(frame.x,frame.y,frame.width,frame.height,screen);
+        2 if screen.0>0&&screen.1>0&&frame.dock.is_some() => {
+            let (edge,m,zone)=dock_placement(frame.x,frame.y,frame.width,frame.height,screen,frame.dock.unwrap(),top_reserved);
             l.set_anchor(match edge {
-                DockEdge::Bottom=>surface::Anchor::Bottom,
+                DockEdge::Bottom=>surface::Anchor::Bottom|surface::Anchor::Left|surface::Anchor::Right,
                 DockEdge::Left=>surface::Anchor::Left|surface::Anchor::Top|surface::Anchor::Bottom,
                 DockEdge::Right=>surface::Anchor::Right|surface::Anchor::Top|surface::Anchor::Bottom,
             });
@@ -691,6 +694,7 @@ fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_
 }
 
     pub fn chrome(&mut self, frames:Vec<ChromeFrame>) -> io::Result<()> {
+        let top_reserved=frames.iter().find(|f|f.id==0).map_or(0,|f|f.height as i32+f.y.max(0));
         let ids:Vec<_>=frames.iter().map(|f|f.id).collect();
         let removed:Vec<_>=self.state.chrome.keys().filter(|id|!ids.contains(id)).copied().collect();
         for id in removed {let w=self.state.chrome.remove(&id).unwrap();w.layer.destroy();w.surface.destroy();for slot in w.slots {slot.buffer.destroy();}
@@ -700,7 +704,7 @@ fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_
         for frame in frames {
             let screen=self.state.size;
             if let Some(w)=self.state.chrome.get_mut(&frame.id) {
-                Self::place_chrome(&w.layer,&frame,screen);
+                Self::place_chrome(&w.layer,&frame,screen,top_reserved);
                 if w.frame.input!=frame.input {Self::set_chrome_input(self.state.compositor.as_ref(),&w.surface,frame.input,&qh);}
                 if (w.frame.width,w.frame.height)!=(frame.width,frame.height) {
                     for slot in w.slots.drain(..) {slot.buffer.destroy();}
@@ -716,7 +720,7 @@ fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_
             } else {
                 let s=self.state.compositor.as_ref().unwrap().create_surface(&qh,());
                 let l=self.state.layer.as_ref().unwrap().get_layer_surface(&s,None,if frame.id==0 {layer::Layer::Top}else{layer::Layer::Overlay},"bifrost-desktop-chrome".into(),&qh,frame.id);
-                l.set_size(frame.width as u32,frame.height as u32);Self::place_chrome(&l,&frame,screen);
+                l.set_size(frame.width as u32,frame.height as u32);Self::place_chrome(&l,&frame,screen,top_reserved);
                 if frame.input.is_some() {Self::set_chrome_input(self.state.compositor.as_ref(),&s,frame.input,&qh);}
                 // id 3 is Search, id 6 the assistant panel, id 8 the Apps grid, id 9 Overview and id 11 the screenshot session
                 // (Space and Escape are its keys), id 15 the system sheets and alerts, id 14 the Force Quit, About and Log Out card (Esc, Return and the arrows are its
@@ -1430,27 +1434,24 @@ fn gpu_pool_step(busy: &[bool], need_frame: bool, idle_secs: f32, max: usize) ->
 fn pool_trim_in_ms(n: usize, spare_busy: bool, idle_secs: f32) -> Option<i32> {
     (n > GPU_POOL_MIN && !spare_busy).then(|| ((GPU_POOL_IDLE_SECS - idle_secs).max(0.0) * 1000.0).ceil() as i32 + 1)
 }
-/// The screen edge the Dock (chrome id 2) sits on, read from its rectangle: a tall narrow capsule is a side Dock.
+/// The screen edge the Dock (chrome id 2) sits on; padding does not change its edge.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum DockEdge {Bottom,Left,Right}
+pub enum DockEdge {Bottom,Left,Right}
 /// Where the Dock goes: its edge, the layer-surface margins (top, right, bottom, left) and the exclusive zone. A side Dock
 /// is anchored to three edges (the side plus top and bottom) so its zone counts, and the margins put it at its own y:
 /// with both opposite edges anchored and a fixed size the surface is centred in what the margins leave, so the margins
-/// are the gap above and below it. The zone is the Dock's own width plus its gap to the edge.
-fn dock_placement(x:i32,y:i32,width:usize,height:usize,screen:(u32,u32))->(DockEdge,[i32;4],i32) {
+/// are the gap above and below it. The explicit work-area reserve excludes transparent surface padding; anchored margins are counted separately.
+fn dock_placement(x:i32,y:i32,width:usize,height:usize,screen:(u32,u32),dock:DockPlacement,top_reserved:i32)->(DockEdge,[i32;4],i32) {
     let (w,h)=(width as i32,height as i32);let (sw,sh)=(screen.0 as i32,screen.1 as i32);
-    if h>w {
-        let (top,bottom)=(y.max(0),(sh-y-h).max(0));
-        if x+w/2<sw/2 {
-            let left=x.max(0);
-            (DockEdge::Left,[top,0,bottom,left],w+left)
-        } else {
-            let right=(sw-x-w).max(0);
-            (DockEdge::Right,[top,right,bottom,0],w+right)
-        }
-    } else {
-        let bottom=(sh-y-h).max(0);
-        (DockEdge::Bottom,[0,0,bottom,0],h+bottom)
+    // Positive exclusive zones are arranged below the menu bar. A non-reserving overlay uses the full output.
+    let top=(y-if dock.reserve>0{top_reserved}else{0}).max(0);
+    let bottom=(sh-y-h).max(0);let left=x.max(0);let right=(sw-x-w).max(0);
+    // The layer protocol adds the anchored margin to its zone; count the edge gap exactly once.
+    let zone=|margin:i32|if dock.reserve>0{(dock.reserve-margin).max(1)}else{-1};
+    match dock.edge{
+        DockEdge::Left=>(dock.edge,[top,0,bottom,left],zone(left)),
+        DockEdge::Right=>(dock.edge,[top,right,bottom,0],zone(right)),
+        DockEdge::Bottom=>(dock.edge,[0,right,bottom,left],zone(bottom)),
     }
 }
 /// Whether a configure of a toplevel tells the shell it has the focus: the first one (a new window is focused as it
@@ -1479,7 +1480,7 @@ fn window_buffer_count(count:usize, available:bool, dirty:bool) -> usize {
 }
 #[cfg(test)]
 mod tests {
-    use super::{dock_placement,DockEdge,focus_on_configure,min_size_of,DEFAULT_MIN_SIZE};
+    use super::{dock_placement,DockEdge,DockPlacement,focus_on_configure,min_size_of,DEFAULT_MIN_SIZE};
     #[test]
     fn a_toplevel_advertises_the_frames_minimum_or_the_default() {
         assert_eq!(min_size_of((940,600)),(940,600), "the app's own minimum, e.g. Settings' split width");
@@ -1513,15 +1514,24 @@ mod tests {
     #[test]
     fn the_dock_is_anchored_to_its_own_edge() {
         let screen=(1920,1080);
-        // bottom: a wide capsule a margin above the edge
-        assert_eq!(dock_placement(500,1000,900,70,screen),(DockEdge::Bottom,[0,0,10,0],80));
-        // left: a tall capsule at x=12, centred below the menu bar
-        assert_eq!(dock_placement(12,200,70,600,screen),(DockEdge::Left,[200,0,280,12],82));
-        // right: the zone is the width plus the gap to the right edge
-        assert_eq!(dock_placement(1838,200,70,600,screen),(DockEdge::Right,[200,12,280,0],82));
-        // a hidden side Dock (a thin strip) keeps its side
-        assert_eq!(dock_placement(0,30,3,1050,screen).0,DockEdge::Left);
-        assert_eq!(dock_placement(1917,30,3,1050,screen).0,DockEdge::Right);
+        let at=|x,y,w,h,edge,reserve|dock_placement(x,y,w,h,screen,DockPlacement{edge,reserve},30);
+        assert_eq!(at(500,1000,900,70,DockEdge::Bottom,80),(DockEdge::Bottom,[0,520,10,500],70));
+        assert_eq!(at(12,200,70,600,DockEdge::Left,82),(DockEdge::Left,[170,0,280,12],70));
+        assert_eq!(at(1838,200,70,600,DockEdge::Right,82),(DockEdge::Right,[170,12,280,0],70));
+        assert_eq!(at(0,30,3,1050,DockEdge::Left,0),(DockEdge::Left,[30,0,0,0],-1));
+        assert_eq!(at(1917,30,3,1050,DockEdge::Right,0),(DockEdge::Right,[30,0,0,0],-1));
+    }
+    #[test]
+    fn transparent_dock_room_never_changes_its_edge_or_reserved_depth() {
+        let screen=(1920,1080);
+        let side=DockPlacement{edge:DockEdge::Left,reserve:82};
+        // A label makes a side surface wider than it is tall: its edge still comes from the preference.
+        assert_eq!(dock_placement(0,400,600,300,screen,side,30),(DockEdge::Left,[370,0,380,0],82));
+        let bottom=DockPlacement{edge:DockEdge::Bottom,reserve:82};
+        for height in [80,160,320] {
+            assert_eq!(dock_placement(500,1080-height as i32,900,height,screen,bottom,30).2,82,
+                "transparent room for labels or bounce reserves no extra space");
+        }
     }
     #[test]
     fn a_frame_dropped_for_want_of_a_buffer_is_redrawn_on_the_next_release() {

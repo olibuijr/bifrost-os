@@ -61,7 +61,10 @@ protocol messages. About 35 are registered in `services::all()` (as of shell 0.7
 
 The `screens` service reports the displays: `list` answers with each screen's frame, visible frame, scale and main
 flag, and `changed` is pushed when the geometry changes. SDK client: `bifrost_app::screens` (`list`, `from_reply`,
-`changed`). Gaps (refresh rate, several displays) are in `docs/parity/wire-svc-screens.md`.
+`changed`). Since system 0.10.23, the visible frame reserves the Dock's selected edge
+(Bottom, Left or Right); an auto-hidden Dock reserves no space. Filled windows and
+this service use the same work area, independently of magnification and label padding.
+Gaps (refresh rate, several displays) are in `docs/parity/wire-svc-screens.md`.
 
 ## Thumbnail generator (`QLThumbnailGenerator`, `bifrost_app::thumbnails`)
 

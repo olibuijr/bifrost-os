@@ -4877,7 +4877,8 @@ impl Shell {
         if self.pip.showing() {
             damage.all();
             let m = self.desk_metrics();
-            let usable = bifrost_ui::Rect { x: 0.0, y: m.menubar as f32, w: self.w as f32, h: (self.h - m.menubar - m.dock_bottom).max(0) as f32 };
+            let area = desk::Desk::area(&m);
+            let usable = bifrost_ui::Rect { x: area.x as f32, y: area.y as f32, w: area.w as f32, h: area.h as f32 };
             pip::draw_window(s, &self.ui, self.pip.rect(usable), self.pip.frame.as_ref());
         }
         self.draw_announce(s);

@@ -23,9 +23,10 @@ const EDGE_PT: f32 = 6.0;
 const MIN_W_PT: f32 = 320.0;
 const MIN_H_PT: f32 = 220.0;
 /// Dock metrics, in pt.
-const DOCK_PAD_PT: f32 = 10.0;
+pub(super) const DOCK_PAD_PT: f32 = 10.0;
 const DOCK_GAP_PT: f32 = 10.0;
-const DOCK_MARGIN_PT: f32 = 10.0;
+/// Small screen-edge inset calibrated to the desktop reference, independent of plate depth.
+pub(super) const DOCK_MARGIN_PT: f32 = 4.0;
 const DOCK_SEP_PT: f32 = 14.0;
 /// Corner radius of a minimised window's Dock thumbnail, and the width of its app badge as a share of the Dock icon.
 const MINIMIZED_THUMB_RADIUS_PT: f32 = 6.0;
@@ -473,6 +474,8 @@ pub struct Metrics {
     pub light_gap: i32,
     pub light_x: i32,
     pub dock_bottom: i32,
+    pub dock_left: i32,
+    pub dock_right: i32,
     /// px per point
     pub pt: f32,
 }
@@ -931,9 +934,9 @@ impl Desk {
             .find_map(|(i, w)| w.hit(m, x, y).map(|h| (i, h)))
     }
 
-    /// The work area windows live in: below the menu bar, above the dock.
+    /// The work area windows live in: below the menu bar and inside the Dock's chosen edge.
     pub fn area(m: &Metrics) -> Rect {
-        Rect { x: 0, y: m.menubar, w: m.w, h: (m.h - m.menubar - m.dock_bottom).max(1) }
+        Rect { x: m.dock_left, y: m.menubar, w: (m.w - m.dock_left - m.dock_right).max(1), h: (m.h - m.menubar - m.dock_bottom).max(1) }
     }
 
     /// Opens (or raises) the window for `app`; `size` is the wanted outer size.
@@ -1285,11 +1288,14 @@ pub(super) fn dock_release_hits(pressed: Rect, now: Option<Rect>, now_entry: Opt
     pressed.contains(x, y) || (now_entry == Some(entry) && now.is_some_and(|r| r.contains(x, y)))
 }
 
+fn dock_span(icon: i32, pad: i32, gap: i32, n: usize, seps: &[usize], sep: i32) -> i32 {
+    n as i32 * icon + (n as i32 - 1).max(0) * gap + seps.len() as i32 * sep + 2 * pad
+}
+
 pub fn dock_rects_seps(m: &Metrics, icon: i32, pad: i32, gap: i32, n: usize, seps: &[usize], sep: i32) -> (Rect, Vec<Rect>) {
-    let extra = seps.len() as i32 * sep;
-    let total = n as i32 * icon + (n as i32 - 1).max(0) * gap + extra + 2 * pad;
+    let total = dock_span(icon, pad, gap, n, seps, sep);
     let x0 = (m.w - total) / 2;
-    let y0 = m.h - icon - 2 * pad - m.dock_bottom / 4;
+    let y0 = m.h - icon - 2 * pad - (m.pt * DOCK_MARGIN_PT).round() as i32;
     let bar = Rect { x: x0, y: y0, w: total, h: icon + 2 * pad };
     let mut x = x0 + pad;
     let mut out = Vec::with_capacity(n);
@@ -2139,11 +2145,9 @@ impl Shell {
     }
     pub(super) fn desk_metrics(&self) -> Metrics {
         let ui = &self.ui;
-        let icon = ui.pt(self.dock_preferences().size).round() as i32;
-        let pad = ui.pt(DOCK_PAD_PT).round() as i32;
-        Metrics {
-            w: self.w,
-            h: self.h,
+        let position = self.dock_preferences().position;
+        let mut m = Metrics {
+            w: self.w, h: self.h,
             title: ui.pt(TITLE_PT).round() as i32,
             menubar: self.desktop_bar_height() as i32,
             min_w: ui.pt(MIN_W_PT).round() as i32,
@@ -2152,9 +2156,20 @@ impl Shell {
             light: ui.pt(LIGHT_PT).round() as i32,
             light_gap: ui.pt(LIGHT_GAP_PT).round() as i32,
             light_x: ui.pt(LIGHT_X_PT).round() as i32,
-            dock_bottom: icon + 2 * pad + ui.pt(DOCK_MARGIN_PT).round() as i32 * 2,
+            dock_bottom: 0, dock_left: 0, dock_right: 0,
             pt: ui.pt(1.0),
+        };
+        let bar = self.desk_dock(&m).1;
+        let depth = if position == super::desktop_dock::Position::Bottom { bar.h } else { bar.w };
+        let reserve = if self.desk.as_ref().is_some_and(|d| d.dock_autohides()) { 0 } else {
+            depth + 2 * ui.pt(DOCK_MARGIN_PT).round() as i32
+        };
+        match position {
+            super::desktop_dock::Position::Bottom => m.dock_bottom = reserve,
+            super::desktop_dock::Position::Left => m.dock_left = reserve,
+            super::desktop_dock::Position::Right => m.dock_right = reserve,
         }
+        m
     }
 
     pub(super) fn desk_dock(&self, m: &Metrics) -> (Vec<usize>, Rect, Vec<Rect>) {
@@ -2172,21 +2187,21 @@ impl Shell {
         list.sort_by_key(|&i| self.dock_section(i));
         list.extend(desk.wins.iter().enumerate().filter(|(_, w)| self.overview.user_minimized(w) && !desk.is_hidden(w.app)).map(|(wi, _)| super::desktop_dock::DOCK_MIN_BASE - wi));
         let ui = &self.ui;
-        let icon = ui.pt(self.dock_preferences().size).round() as i32;
-        let pad = ui.pt(DOCK_PAD_PT).round() as i32;
-        let gap = ui.pt(DOCK_GAP_PT).round() as i32;
-        let sep = ui.pt(DOCK_SEP_PT).round() as i32;
-        let available=if self.dock_preferences().position==super::desktop_dock::Position::Bottom {m.w}else{m.h-m.menubar};
-        let icon=icon.min(((available-2*pad-2*ui.pt(DOCK_MARGIN_PT) as i32-2*sep)/(list.len().max(1) as i32)-gap).max(ui.pt(24.) as i32));
         // the Downloads stack and the Trash are last, after the last divider
         list.push(super::dock_stack::DOCK_STACK);
         list.push(DOCK_TRASH);
         let seps = self.dock_seps(&list);
+        let icon = ui.pt(self.dock_preferences().size).round() as i32;
+        let pad = ui.pt(DOCK_PAD_PT).round() as i32;
+        let gap = ui.pt(DOCK_GAP_PT).round() as i32;
+        let sep = ui.pt(DOCK_SEP_PT).round() as i32;
+        let available = if self.dock_preferences().position == super::desktop_dock::Position::Bottom { m.w } else { m.h - m.menubar };
+        // Fit the whole row, including the stack, Trash and every divider. Padding and gaps shrink with the icons.
+        let wanted = dock_span(icon, pad, gap, list.len(), &seps, sep).max(1);
+        let factor = ((available - 2 * ui.pt(DOCK_MARGIN_PT).round() as i32).max(1) as f32 / wanted as f32).min(1.0);
+        let scaled = |v: i32| (v as f32 * factor).floor() as i32;
+        let (icon, pad, gap, sep) = (scaled(icon).max(1), scaled(pad), scaled(gap), scaled(sep));
         let (bar, rects) = dock_rects_seps(m, icon, pad, gap, list.len(), &seps, sep);
-        // sit a margin above the bottom edge
-        let lift = ui.pt(DOCK_MARGIN_PT).round() as i32 - m.dock_bottom / 4;
-        let up = |r: Rect| Rect { y: r.y + lift, ..r };
-        let bar=up(bar);let rects:Vec<Rect>=rects.into_iter().map(up).collect();
         let position=self.dock_preferences().position;
         if position==super::desktop_dock::Position::Bottom {return (list,bar,rects);}
         let left=position==super::desktop_dock::Position::Left;let x=if left {ui.pt(DOCK_MARGIN_PT) as i32}else{m.w-bar.h-ui.pt(DOCK_MARGIN_PT) as i32};let y=m.menubar+(m.h-m.menubar-bar.w)/2;
@@ -3473,7 +3488,7 @@ impl Shell {
         }
     }
 
-    fn draw_desk_dock(&self, s: &mut Surface, m: &Metrics, t: f64) {
+    pub(super) fn draw_desk_dock(&self, s: &mut Surface, m: &Metrics, t: f64) {
         if !self.dock_is_visible(){self.note_dock_glass(None);return;}
         let (list, bar0, rects0) = self.desk_dock(m);
         // autohide slide, then magnification around the pointer (both pure functions of the clock)
@@ -3658,13 +3673,21 @@ impl Shell {
     pub(super) fn draw_dock_label(&self, s: &mut Surface, name: &str, r: Rect, pos: super::desktop_dock::Position, alpha: f32, plate: u32, ink: u32) {
         let ui = &self.ui;
         let a = (alpha * 255.0).round() as u32;
-        self.label(name, MAC_CALLOUT_PT, Weight::Regular, WHITE, |im| {
-            let (px, py) = (ui.pt(10.0), ui.pt(5.0));
+        let px = ui.pt(super::desktop_dock::DOCK_LABEL_PAD_X_PT);
+        let gap = ui.pt(super::desktop_dock::DOCK_LABEL_GAP_PT);
+        let room = match pos {
+            super::desktop_dock::Position::Bottom => s.w as f32 - 2.0 * px,
+            super::desktop_dock::Position::Left => s.w as f32 - (r.x + r.w) as f32 - gap - 2.0 * px,
+            super::desktop_dock::Position::Right => r.x as f32 - gap - 2.0 * px,
+        };
+        let name = ui.fit(name, MAC_CALLOUT_PT, ui.pt(super::desktop_dock::DOCK_LABEL_MAX_WIDTH_PT).min(room.max(1.0)));
+        self.label(&name, MAC_CALLOUT_PT, Weight::Regular, WHITE, |im| {
+            let (px, py) = (ui.pt(super::desktop_dock::DOCK_LABEL_PAD_X_PT), ui.pt(super::desktop_dock::DOCK_LABEL_PAD_Y_PT));
             let (w, h) = (im.w as f32 + 2.0 * px, im.h as f32 + 2.0 * py);
             let (x, y) = match pos {
-                super::desktop_dock::Position::Bottom => (((r.x + r.w / 2) as f32 - w / 2.0).clamp(0.0, (s.w as f32 - w).max(0.0)), r.y as f32 - h - ui.pt(8.0)),
-                super::desktop_dock::Position::Left => ((r.x + r.w) as f32 + ui.pt(8.0), (r.y + r.h / 2) as f32 - h / 2.0),
-                super::desktop_dock::Position::Right => (r.x as f32 - w - ui.pt(8.0), (r.y + r.h / 2) as f32 - h / 2.0),
+                super::desktop_dock::Position::Bottom => (((r.x + r.w / 2) as f32 - w / 2.0).clamp(0.0, (s.w as f32 - w).max(0.0)), r.y as f32 - h - ui.pt(super::desktop_dock::DOCK_LABEL_GAP_PT)),
+                super::desktop_dock::Position::Left => ((r.x + r.w) as f32 + ui.pt(super::desktop_dock::DOCK_LABEL_GAP_PT), (r.y + r.h / 2) as f32 - h / 2.0),
+                super::desktop_dock::Position::Right => (r.x as f32 - w - ui.pt(super::desktop_dock::DOCK_LABEL_GAP_PT), (r.y + r.h / 2) as f32 - h / 2.0),
             };
             s.fill_rrect(x, y, w, h, ui.pt(MENU_RADIUS_PT), super::desktop_dock::fade(plate, alpha));
             s.blit_colored(im, (x + px) as i32, (y + py) as i32, ink, a);
@@ -3992,7 +4015,7 @@ mod tests {
     }
 
     fn metrics() -> Metrics {
-        Metrics { w: 1920, h: 1080, title: 30, menubar: 28, min_w: 320, min_h: 220, edge: 6, light: 12, light_gap: 8, light_x: 12, dock_bottom: 100, pt: 1.0 }
+        Metrics { w: 1920, h: 1080, title: 30, menubar: 28, min_w: 320, min_h: 220, edge: 6, light: 12, light_gap: 8, light_x: 12, dock_left: 0, dock_right: 0, dock_bottom: 100, pt: 1.0 }
     }
 
     #[test]
@@ -4431,7 +4454,7 @@ mod tests {
     /// Metrics of an output of `w` x `h` px at `pt` px per point: the sizes scale with it, as the shell's do.
     fn metrics_for(w: i32, h: i32, pt: f32) -> Metrics {
         let px = |v: f32| (v * pt).round() as i32;
-        Metrics { w, h, title: px(30.0), menubar: px(28.0), min_w: px(320.0), min_h: px(220.0), edge: px(6.0), light: px(12.0), light_gap: px(8.0), light_x: px(12.0), dock_bottom: px(100.0), pt }
+        Metrics { w, h, title: px(30.0), menubar: px(28.0), min_w: px(320.0), min_h: px(220.0), edge: px(6.0), light: px(12.0), light_gap: px(8.0), light_x: px(12.0), dock_left: 0, dock_right: 0, dock_bottom: px(100.0), pt }
     }
 
     #[test]
@@ -5202,7 +5225,7 @@ mod resize_grab_tests {
     /// the size it is reopened at.
     #[test]
     fn settings_keeps_its_split_layout_width() {
-        let m = Metrics { w: 2560, h: 1440, title: 38, menubar: 35, min_w: 400, min_h: 275, edge: 8, light: 18, light_gap: 10, light_x: 15, dock_bottom: 120, pt: 1.25 };
+        let m = Metrics { w: 2560, h: 1440, title: 38, menubar: 35, min_w: 400, min_h: 275, edge: 8, light: 18, light_gap: 10, light_x: 15, dock_left: 0, dock_right: 0, dock_bottom: 120, pt: 1.25 };
         let (min_w, _, _, _) = size_range(AppId::Settings, &m);
         assert!(min_w as f32 >= super::super::settings::SPLIT_MIN_PT * m.pt, "{min_w} px is the split layout");
         assert_eq!(clamp_size(AppId::Settings, &m, (400, 549)).0, min_w, "the 400x549 of E2E-12 is held to the minimum");
@@ -5500,7 +5523,7 @@ mod w3_window_tests {
     /// W3-6: a window filled, taken full screen and back keeps the frame from before the Fill as its way back.
     #[test]
     fn full_screen_from_a_fill_keeps_the_frame_from_before_the_fill() {
-        let m = Metrics { w: 2560, h: 1440, title: 38, menubar: 35, min_w: 400, min_h: 275, edge: 8, light: 18, light_gap: 10, light_x: 15, dock_bottom: 120, pt: 1.25 };
+        let m = Metrics { w: 2560, h: 1440, title: 38, menubar: 35, min_w: 400, min_h: 275, edge: 8, light: 18, light_gap: 10, light_x: 15, dock_left: 0, dock_right: 0, dock_bottom: 120, pt: 1.25 };
         let mut d = Desk::new();
         d.open(&m, AppId::Photos, (923, 860));
         let before = d.wins[0].r;
@@ -5595,7 +5618,7 @@ mod w4_window_tests {
     use super::*;
 
     fn metrics() -> Metrics {
-        Metrics { w: 2560, h: 1440, title: 52, menubar: 35, min_w: 320, min_h: 220, edge: 6, light: 12, light_gap: 8, light_x: 12, dock_bottom: 172, pt: 1.25 }
+        Metrics { w: 2560, h: 1440, title: 52, menubar: 35, min_w: 320, min_h: 220, edge: 6, light: 12, light_gap: 8, light_x: 12, dock_left: 0, dock_right: 0, dock_bottom: 172, pt: 1.25 }
     }
 
     fn desktop() -> crate::shell::Shell {

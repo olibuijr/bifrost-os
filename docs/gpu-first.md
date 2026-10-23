@@ -234,3 +234,17 @@ presenter fades its own pass back to white and the CPU tint of SHM frames is ski
 bifrost-wm. Tests: `white_point::tests`, `drm::tests::night_shift_takes_the_ramp_first_then_the_gles_pass`,
 `window_level::tests`, `window_level_client::tests`. Open: a VT switch away leaves the warm ramp to the next DRM master
 (smithay drops the master before the pause event, so it cannot be restored there); the Vulkan scanout has no pass.
+
+## Dock surface bounds and work areas (0.10.23)
+
+Chrome surface 2 includes a stable transparent margin for magnification, bounce,
+hover labels and shadow. Its input region follows the visible plate and icons;
+the outer margin and labels allow clicks through. The menu bar owns the top strip,
+so side-Dock shadows are clipped there.
+
+`ChromeFrame::dock` supplies an explicit edge and resting work-area reservation.
+`dock_placement` does not infer either from the padded surface dimensions. Positive
+exclusive-zone placement accounts for the already reserved menu bar and subtracts
+the anchored margin from the zone, since the compositor adds that margin itself.
+An auto-hidden Dock uses zone -1 and reserves no work area. See
+[dock reference and validation](dock-reference.md).

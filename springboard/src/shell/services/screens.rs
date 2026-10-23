@@ -43,24 +43,27 @@ impl SystemService for Displays {
 /// The displays as the shell draws them now. Desktop mode insets the visible frame by the menu bar and the Dock;
 /// home by the status bar.
 fn current(shell: &Shell) -> Screens {
-    let (top, bottom) = if shell.desk_active() {
-        let m = shell.desk_metrics();
-        (m.menubar, m.dock_bottom)
+    if shell.desk_active() {
+        let a = crate::shell::desk::Desk::area(&shell.desk_metrics());
+        snapshot_visible(shell.w, shell.h, shell.layout.s, Rect { x: a.x as f32, y: a.y as f32, w: a.w as f32, h: a.h as f32 })
     } else {
-        (shell.layout.status_h, 0)
-    };
-    snapshot(shell.w, shell.h, shell.layout.s, top, bottom)
+        snapshot(shell.w, shell.h, shell.layout.s, shell.layout.status_h, 0)
+    }
 }
 
 /// The one display, from the framebuffer size in pixels, the pixels-per-point scale and the bars in pixels.
 pub fn snapshot(w_px: i32, h_px: i32, scale: f32, top_px: i32, bottom_px: i32) -> Screens {
+    snapshot_visible(w_px, h_px, scale, Rect { x: 0.0, y: top_px.max(0) as f32, w: w_px.max(0) as f32, h: (h_px - top_px - bottom_px).max(0) as f32 })
+}
+
+fn snapshot_visible(w_px: i32, h_px: i32, scale: f32, area: Rect) -> Screens {
     let s = if scale > 0.0 { scale } else { 1.0 };
     let frame = Rect { x: 0.0, y: 0.0, w: w_px.max(0) as f32 / s, h: h_px.max(0) as f32 / s };
     let visible = Rect {
-        x: 0.0,
-        y: top_px.max(0) as f32 / s,
-        w: frame.w,
-        h: (h_px - top_px - bottom_px).max(0) as f32 / s,
+        x: area.x / s,
+        y: area.y / s,
+        w: area.w / s,
+        h: area.h / s,
     };
     Screens::new(vec![Screen::new(DISPLAY_NAME, frame, s).with_visible_frame(visible)])
 }
@@ -106,6 +109,28 @@ pub fn next_event(last: &mut Option<Screens>, now: Screens) -> Option<Event> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_visible_frame_follows_the_dock_edge_and_returns_when_it_autohides() {
+        use crate::shell::desktop_dock::{Change, Position};
+        let mut sh = crate::shell::tests::desktop_shell();
+        for position in [Position::Bottom, Position::Left, Position::Right] {
+            sh.dock_change(Change::Position(position), 1000.0);
+            let visible = current(&sh).all()[0].visible_frame;
+            let frame = current(&sh).all()[0].frame;
+            match position {
+                Position::Bottom => assert!(visible.h < frame.h - visible.y && visible.x == 0.0),
+                Position::Left => assert!(visible.x > 0.0 && visible.w < frame.w),
+                Position::Right => assert!(visible.x == 0.0 && visible.w < frame.w),
+            }
+        }
+        sh.dock_change(Change::Autohide, 2000.0);
+        let screens = current(&sh);
+        let screen = &screens.all()[0];
+        assert_eq!(screen.visible_frame.x, 0.0);
+        assert_eq!(screen.visible_frame.w, screen.frame.w);
+        assert_eq!(screen.visible_frame.y + screen.visible_frame.h, screen.frame.h);
+    }
 
     fn field(v: &Json, k: &str) -> Json {
         v.get(k).cloned().unwrap_or(Json::Null)
