@@ -140,15 +140,30 @@ pub fn ppd_profiles(list: &str) -> Vec<String> {
         .collect()
 }
 
-/// Asks power-profiles-daemon for `profile` when it offers it. A machine whose daemon offers no profiles (no platform
-/// driver: `powerprofilesctl set` then fails with `invalid choice ... (choose from )`) or does not run is left alone.
-fn ppd_set(profile: Profile) {
-    let Ok(out) = std::process::Command::new("powerprofilesctl").arg("list").stderr(std::process::Stdio::null()).output() else { return };
-    let name = ppd_name(profile);
-    if !out.status.success() || !ppd_profiles(&String::from_utf8_lossy(&out.stdout)).iter().any(|p| p == name) {
-        return;
+/// The power-profiles-daemon profiles the shell knows and the daemon offers, in the daemon's order (from
+/// `powerprofilesctl list` output): what Control Center's power mode lists.
+pub fn ppd_offered(list: &str) -> Vec<String> {
+    ppd_profiles(list).into_iter().filter(|p| matches!(p.as_str(), "performance" | "balanced" | "power-saver")).collect()
+}
+
+/// Asks power-profiles-daemon for the profile `name` when it offers it. A machine whose daemon offers no profiles (no
+/// platform driver: `powerprofilesctl set` then fails with `invalid choice ... (choose from )`), offers others, or does
+/// not run is left alone, with the reason as the error.
+pub fn ppd_set_name(name: &str) -> Result<(), String> {
+    let out = std::process::Command::new("powerprofilesctl").arg("list").stderr(std::process::Stdio::null()).output().map_err(|e| format!("powerprofilesctl: {e}"))?;
+    if !out.status.success() {
+        return Err("power-profiles-daemon is not running".into());
     }
-    let _ = std::process::Command::new("powerprofilesctl").args(["set", name]).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).status();
+    if !ppd_offered(&String::from_utf8_lossy(&out.stdout)).iter().any(|p| p == name) {
+        return Err(format!("this computer does not offer the {name} power mode"));
+    }
+    let status = std::process::Command::new("powerprofilesctl").args(["set", name]).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).status().map_err(|e| format!("powerprofilesctl: {e}"))?;
+    if status.success() { Ok(()) } else { Err(format!("powerprofilesctl set {name} failed")) }
+}
+
+/// Asks power-profiles-daemon for `profile` when it offers it (`ppd_set_name`).
+fn ppd_set(profile: Profile) {
+    let _ = ppd_set_name(ppd_name(profile));
 }
 
 impl Boost {
@@ -293,6 +308,15 @@ mod tests {
         // a daemon without a platform driver lists only some or none, so `set performance` is skipped
         assert_eq!(ppd_profiles("* balanced:\n    PlatformDriver:\tplaceholder\n\n  power-saver:\n"), ["balanced", "power-saver"]);
         assert!(ppd_profiles("").is_empty());
+    }
+
+    #[test]
+    fn control_center_offers_only_the_known_profiles_the_daemon_lists() {
+        // a daemon without a platform driver: performance is not offered, so it is neither listed nor set
+        assert_eq!(ppd_offered("* balanced:\n    PlatformDriver:\tplaceholder\n\n  power-saver:\n"), ["balanced", "power-saver"]);
+        // a profile the shell has no row for is left out
+        assert_eq!(ppd_offered("  turbo:\n* balanced:\n"), ["balanced"]);
+        assert!(ppd_offered("").is_empty(), "no daemon output, no power modes");
     }
 
     #[test]

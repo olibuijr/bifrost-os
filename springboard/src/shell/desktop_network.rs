@@ -507,17 +507,9 @@ fn read() -> Snapshot {
     if let Ok(text) = output("nmcli", &["-t", "-f", "NAME,TYPE,ACTIVE", "connection", "show"]) {
         s.vpns = parse_vpn_connections(&text);
     }
+    // only the profiles the daemon offers are listed (a machine without a platform driver offers none)
     if let Ok(text) = output("powerprofilesctl", &["list"]) {
-        for line in text.lines() {
-            let name = line
-                .trim()
-                .trim_start_matches('*')
-                .trim()
-                .trim_end_matches(':');
-            if matches!(name, "performance" | "balanced" | "power-saver") {
-                s.power_profiles.push(name.into());
-            }
-        }
+        s.power_profiles = crate::bare::boost::ppd_offered(&text);
     }
     s.power = output("powerprofilesctl", &["get"])
         .unwrap_or_default()
@@ -568,7 +560,7 @@ fn saved_uuid(ssid: &str) -> Result<String, String> {
 }
 fn apply(request: Request) -> Result<(), String> {
     let result = match request {
-        Request::Power(name) => output("powerprofilesctl", &["set", &name]),
+        Request::Power(name) => crate::bare::boost::ppd_set_name(&name).map(|()| String::new()),
         Request::Offer(offer) => start_offer(&offer),
         Request::StopOffer => stop_offer(),
         Request::Vpn(action) => apply_vpn(action),
