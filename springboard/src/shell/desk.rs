@@ -573,7 +573,25 @@ pub fn drag_zone(w: &Win, m: &Metrics, controls: &[bifrost_proto::Node]) -> (i32
     if borderless(w.app) {
         return (0, Vec::new());
     }
-    zone_of(w, m, controls, full_size(w.app) && w.app != AppId::Settings)
+    // Settings is a built-in full-size window: it reports its toolbar controls the way an SDK app publishes them, so its
+    // empty toolbar drags and the back/forward pill (and the search field) take the press (W3-3)
+    let own = (w.app == AppId::Settings).then(|| settings_toolbar_controls(w, m));
+    zone_of(w, m, own.as_deref().unwrap_or(controls), full_size(w.app))
+}
+
+/// The Settings window's toolbar controls as semantic nodes in window points, laid out by `prefs_layout::Frame` as the
+/// window draws them: the two halves of the back/forward pill over the detail pane and the sidebar search field.
+pub fn settings_toolbar_controls(w: &Win, m: &Metrics) -> Vec<bifrost_proto::Node> {
+    use bifrost_proto::{Node, Role};
+    let pt = m.pt.max(0.01);
+    let f = bifrost_ui::prefs_layout::Frame::new(w.r.w as f32 / pt, w.r.h as f32 / pt);
+    let p = f.toolbar_pill;
+    let node = |id, role, label: &str, bounds| Node { id, role, label: label.into(), value: String::new(), bounds, enabled: true };
+    vec![
+        node(1, Role::Button, "Back", bifrost_ui::Rect { w: p.w / 2.0, ..p }),
+        node(2, Role::Button, "Forward", bifrost_ui::Rect { x: p.x + p.w / 2.0, w: p.w / 2.0, ..p }),
+        node(3, Role::TextField, "Search", f.search),
+    ]
 }
 
 /// Whether a published node of this role handles a press itself, so a press on it must reach the app instead of moving
@@ -711,13 +729,12 @@ impl Win {
                 // a full-size app: its unified toolbar band is the title bar; controls in it are sorted out on the press
                 return Some(if y < self.r.y as f32 + UNIFIED_BAR_PT * pt { Hit::Title } else { Hit::Content });
             }
-            // the drag strip: the top of the sidebar above the search field, and a thin band over the detail pane
-            let side = (bifrost_ui::prefs_layout::m::SIDEBAR_W * pt) as i32;
-            let strip = if (x as i32) < self.r.x + side { bifrost_ui::prefs_layout::m::SEARCH_Y - 8.0 } else { bifrost_ui::prefs_layout::m::TOOLBAR_Y };
-            if y < self.r.y as f32 + strip * pt {
-                return Some(Hit::Title);
-            }
-            return Some(Hit::Content);
+            // Settings: the same band and holes as the window server's drag zone (`drag_zone`), so the empty toolbar
+            // moves the window and the pill and search field get the press
+            let (band, holes) = drag_zone(self, m, &[]);
+            let (lx, ly) = (x as i32 - self.r.x, y as i32 - self.r.y);
+            let on_control = holes.iter().skip(1).any(|r| lx >= r[0] && lx < r[0] + r[2] && ly >= r[1] && ly < r[1] + r[3]);
+            return Some(if ly < band && !on_control { Hit::Title } else { Hit::Content });
         }
         if y < (self.r.y + m.title) as f32 {
             for (i, l) in [Light::Close, Light::Minimize, Light::Zoom].into_iter().enumerate() {
@@ -3732,6 +3749,38 @@ mod tests {
             let (x, y) = (l.x - w.r.x, l.y - w.r.y);
             assert!(x >= hole[0] && x + l.w <= hole[0] + hole[2] && y >= hole[1] && y + l.h <= hole[1] + hole[3], "light {i} at {x},{y} is inside the hole {hole:?}");
         }
+    }
+
+    #[test]
+    fn settings_drags_from_its_empty_toolbar_but_not_from_the_pill_or_search_field() {
+        use bifrost_ui::prefs_layout::m as pm;
+        let m = Metrics { pt: 1.5, ..metrics() };
+        let r = Rect { x: 100, y: 50, w: (740.0 * 1.5) as i32, h: (690.0 * 1.5) as i32 };
+        let w = Win { app: AppId::Settings, r, maximized: false, minimized: false, full: false, restore: r };
+        let (band, holes) = drag_zone(&w, &m, &[]);
+        assert_eq!(band, (UNIFIED_BAR_PT * 1.5).round() as i32, "Settings has the full-size toolbar band, not the title-bar one");
+        let px = |v: f32| (v * 1.5) as i32;
+        let pill_x = pm::SIDEBAR_W + pm::TOOLBAR_X;
+        let pill_mid_y = pm::TOOLBAR_Y + pm::TOOLBAR_PILL_H / 2.0;
+        // both halves of the pill, including their upper part that the old title band covered
+        for (x, y) in [(pill_x + 10.0, pill_mid_y), (pill_x + pm::TOOLBAR_PILL_W - 10.0, pill_mid_y), (pill_x + 10.0, pm::TOOLBAR_Y + 2.0), (pill_x + 50.0, pm::TOOLBAR_Y + 4.0)] {
+            assert!(!drags(band, &holes, px(x), px(y)), "({x},{y}) is on the pill");
+            let hit = w.hit(&m, (r.x + px(x)) as f32, (r.y + px(y)) as f32);
+            assert_eq!(hit, Some(Hit::Content), "({x},{y}) reaches Settings");
+        }
+        // empty toolbar space right of the pill and above the sidebar search field moves the window
+        for (x, y) in [(pill_x + pm::TOOLBAR_PILL_W + 200.0, pill_mid_y), (pill_x + pm::TOOLBAR_PILL_W + 200.0, 4.0), (150.0, 45.0)] {
+            assert!(drags(band, &holes, px(x), px(y)), "({x},{y}) drags");
+            assert_eq!(w.hit(&m, (r.x + px(x)) as f32, (r.y + px(y)) as f32), Some(Hit::Title), "({x},{y}) is title");
+        }
+        // the search field and the content below the band are Settings'
+        let s = pm::SEARCH_Y + pm::SEARCH_H / 2.0;
+        assert_eq!(w.hit(&m, (r.x + px(100.0)) as f32, (r.y + px(s)) as f32), Some(Hit::Content));
+        assert_eq!(w.hit(&m, (r.x + px(500.0)) as f32, (r.y + px(200.0)) as f32), Some(Hit::Content));
+        // the traffic lights stay lights
+        let (cx, cy) = bifrost_ui::prefs_layout::Frame::traffic_light(0);
+        assert_eq!(w.hit(&m, (r.x + px(cx)) as f32, (r.y + px(cy)) as f32), Some(Hit::Light(Light::Close)));
+        assert!(holes[0][0] == 0 && holes[0][2] > 0, "the lights are a hole");
     }
 
     fn kit_node(role: bifrost_proto::Role, label: &str, x: f32, y: f32, w: f32, h: f32) -> bifrost_proto::Node {
