@@ -1102,6 +1102,7 @@ impl Shell {
         }
         if self.cc_active() {
             self.cc.hide();
+            self.dirty = true;
             return vec![];
         }
         if self.center_active() {

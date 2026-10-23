@@ -1474,7 +1474,16 @@ impl Shell {
     pub fn needs_frame(&self) -> bool {
         let files = self.screen == Screen::App(AppId::Files) && self.files.as_ref().is_some_and(Files::animating);
         let desk_anim = self.desk_active() && self.desk_moving();
-        self.screen_on && (self.dirty || self.ext_frame || bifrost_render::appearance::fading() || self.anim.is_some() || self.turning() || self.pager.animating() || self.cc.animating() || self.switcher.animating() || self.keyboard.animating() || self.quicksearch.animating() || self.notify.animating() || self.lock_pager.animating() || self.today.animating() || self.home_animating() || files || desk_anim)
+        // a panel dropped at once (`cc.hide()` from Esc, Overview or a sheet) gets the frame that clears it even when
+        // the caller did not mark the shell dirty: otherwise its overlay surface stays over the desktop (E2E-14)
+        let panel_gone = self.desk_active() && self.desk_panels_open() != self.panels_were_open;
+        self.screen_on && (self.dirty || panel_gone || self.ext_frame || bifrost_render::appearance::fading() || self.anim.is_some() || self.turning() || self.pager.animating() || self.cc.animating() || self.switcher.animating() || self.keyboard.animating() || self.quicksearch.animating() || self.notify.animating() || self.lock_pager.animating() || self.today.animating() || self.home_animating() || files || desk_anim)
+    }
+
+    /// Whether a floating desktop panel is up (Control Center, Notification Center, the Cmd+Tab strip): the last drawn
+    /// frame keeps this in `panels_were_open`, and a change asks for a full frame.
+    pub(super) fn desk_panels_open(&self) -> bool {
+        self.center_active() || self.cc_active() || self.cmdtab_open()
     }
 
     /// Why `needs_frame` holds, for the frame trace: the first condition that does ("-" when none).
@@ -1501,6 +1510,7 @@ impl Shell {
             (self.home_animating(), "home"),
             (files, "files"),
             (desk_anim, "desk-anim"),
+            (self.desk_active() && self.desk_panels_open() != self.panels_were_open, "panel-gone"),
         ];
         let screen = format!("{:?}", self.screen).to_lowercase();
         let why: Vec<&str> = reasons.iter().filter(|r| r.0).map(|r| r.1).collect();
@@ -4381,6 +4391,12 @@ impl Shell {
         self.audio.arm();
         self.desk_t = t;
         let mut was_dirty = std::mem::replace(&mut self.dirty, false);
+        // every frame records whether a desktop panel is up, so `needs_frame` asks for at most one frame after a panel
+        // was dropped without a dirty mark (E2E-14); a change is a full frame, never the settled or bar-only shortcut
+        let panels_changed = panel_visibility_changed(&mut self.panels_were_open, self.desk_panels_open());
+        if panels_changed && self.desk_active() {
+            was_dirty = true;
+        }
         // new pixels from the foreground app: on a settled desktop that is a frame of windows alone; anywhere else, or with
         // another cause pending, it is the ordinary frame (which draws the windows too)
         let ext = std::mem::take(&mut self.ext_frame);
@@ -4413,7 +4429,7 @@ impl Shell {
         #[cfg(feature = "desktop-wayland")]
         if std::mem::take(&mut self.perf_only) && std::env::var_os("SPRINGBOARD_WAYLAND").is_some()
             && self.desk_active() && !self.is_locked() && self.anim.is_none()
-            && self.desktop_menu.is_none() && !self.cc_active() && !self.center_active() && !self.overlay_visible() && !self.quick_look.is_visible() && !self.utility_up()
+            && self.desktop_menu.is_none() && !self.cc_active() && !self.center_active() && !panels_changed && !self.overlay_visible() && !self.quick_look.is_visible() && !self.utility_up()
             && self.desk_drawn && self.windows_ready(s, ext, t) {
             let (_,y,_,h)=self.perf_rect();
             let top=y.floor().max(0.) as usize;
@@ -4640,8 +4656,7 @@ impl Shell {
                 }
                 // the same for the two panels and the Cmd+Tab strip: the panels slide, so the glass shapes of the frames before the last one sit at
                 // other positions than the shapes of the last frame, and a panel that closes must leave none of them (OV1)
-                let panels_now = self.center_active() || self.cc_active() || self.cmdtab_open();
-                if panel_visibility_changed(&mut self.panels_were_open, panels_now) {
+                if panels_changed {
                     damage.all();
                 }
                 match self.desk_clear.take() {

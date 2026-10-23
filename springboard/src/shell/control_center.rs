@@ -454,6 +454,13 @@ pub struct RouteMenu {
     pub rows: Vec<bifrost_ui::route_picker::Destination>,
 }
 
+/// The smallest (x, y, w, h) holding both rectangles.
+fn union_rect(a: (f32, f32, f32, f32), b: (f32, f32, f32, f32)) -> (f32, f32, f32, f32) {
+    let (x0, y0) = (a.0.min(b.0), a.1.min(b.1));
+    let (x1, y1) = ((a.0 + a.2).max(b.0 + b.2), (a.1 + a.3).max(b.1 + b.3));
+    (x0, y0, x1 - x0, y1 - y0)
+}
+
 /// The output chevron's square at the top right of the Sound module (x, y, w, h in px).
 fn route_chevron((x, y, w, _h): (f32, f32, f32, f32), ui: &Ui) -> (f32, f32, f32, f32) {
     (x + w - ui.pt(DK_PAD_PT + 22.0), y + ui.pt(6.0), ui.pt(22.0), ui.pt(22.0))
@@ -524,6 +531,8 @@ impl ControlCenter {
         self.expanded = None;
         self.press = None;
         self.editing = false;
+        self.route_menu = None;
+        self.up_next = None;
     }
 
     /// When a resting finger turns into an expansion.
@@ -1049,6 +1058,11 @@ impl Shell {
                 } else {
                     self.cc.hide();
                 }
+                // the frame after the last step of the slide: the last animated frame was drawn just before the end
+                // (still pushing the modules' glass shapes, at an alpha near 0), and without this no frame followed,
+                // so the presenter kept their blur and the panel's overlay surface over the desktop (E2E-14). The
+                // Notification Center's tick has always marked this frame.
+                self.dirty = true;
             }
         }
         vec![]
@@ -2218,7 +2232,15 @@ impl Shell {
         let t = self.cc_desk_tiles();
         let (x, y, ..) = t.first()?.1;
         let (lx, ly, lw, lh) = t.last()?.1;
-        Some((x, y, lx + lw - x, ly + lh - y))
+        let mut r = (x, y, lx + lw - x, ly + lh - y);
+        // the output menu and the Up Next picker hang below their module, past the last row: they are part of the
+        // panel's bounds, so the presenter clears them again once they close (E2E-14) and the overlay surface (which
+        // takes the pointer above the windows) includes them
+        let menus = [self.cc.route_menu.as_ref().map(|m| m.panel), self.cc.up_next.as_ref().map(|u| u.panel)];
+        for m in menus.into_iter().flatten() {
+            r = union_rect(r, (m.x, m.y, m.w, m.h));
+        }
+        Some(r)
     }
 
     /// The output menu under the Sound module: Speaker, and Headphones while the headset is in, with the active
@@ -2275,6 +2297,29 @@ impl Shell {
         // a live overlay over the desktop, like the menu-bar menus: no snapshot
         self.cc.backdrop = None;
         self.cc.settle(0.0, true, t);
+        self.dirty = true;
+    }
+
+    /// The panel's menu-bar icon: a press opens a hidden (or closing) panel and closes a shown (or opening) one, as the
+    /// Notification Center clock does (E2E-13). The bar sees the press before the panel does, so without this the
+    /// press that should close the panel opened it again.
+    pub(crate) fn toggle_desk_control_center(&mut self, t: f64) {
+        match self.cc.state {
+            State::Hidden => self.open_control_center(t),
+            State::Settling { to, .. } if to < 1.0 => self.open_control_center(t),
+            _ => self.close_desk_control_center(t),
+        }
+    }
+
+    /// Slides the desktop panel away from where it is now (a press elsewhere in the menu bar, the icon again).
+    pub(crate) fn close_desk_control_center(&mut self, t: f64) {
+        if self.cc.is_hidden() {
+            return;
+        }
+        let from = self.cc.progress(t).clamp(0.0, 1.0);
+        self.cc.route_menu = None;
+        self.cc.up_next = None;
+        self.cc.settle(from, false, t);
         self.dirty = true;
     }
 
@@ -2795,5 +2840,137 @@ mod module_list_tests {
         assert!(battery_percent_shown(Some(" 1 ")));
         assert!(!battery_percent_shown(Some("0")));
         assert!(!battery_percent_shown(None));
+    }
+}
+
+/// The desktop panel's menu-bar toggle (E2E-13) and the frames and bounds that clear it on close (E2E-14).
+#[cfg(test)]
+mod desk_panel_close_tests {
+    use super::super::tests::{desktop_shell, settle};
+    use super::super::{Event, Screen, Shell};
+    use super::*;
+    use crate::gfx::Surface;
+
+    fn desk() -> Shell {
+        let mut sh = desktop_shell();
+        // the fixture starts on the lock screen
+        sh.screen = Screen::Home;
+        sh.anim = None;
+        sh
+    }
+
+    /// E2E-13: the bar sees the press before the panel, and it used to open the shown panel again.
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn the_menu_bar_icon_closes_the_open_panel_and_opens_it_again() {
+        use super::super::desktop_bar::Menu;
+        let mut sh = desk();
+        // a width where the Control Center extra fits in the bar
+        sh.w = 1920;
+        let (_, x, w, _) = sh.menu_buttons().into_iter().find(|b| b.0 == Menu::ControlCenter).expect("the Control Center item fits");
+        let (cx, cy) = (x + w / 2.0, sh.desktop_bar_height() as f32 / 2.0);
+        sh.event(Event::Down(cx, cy), 1000.0);
+        sh.event(Event::Up(cx, cy), 1010.0);
+        settle(&mut sh, 1000.0);
+        assert!(sh.cc.is_shown(), "the first press opens it: cc={}", sh.cc.describe());
+        sh.event(Event::Down(cx, cy), 3000.0);
+        assert_eq!(sh.cc.describe(), "closing", "the second press closes it");
+        sh.event(Event::Up(cx, cy), 3010.0);
+        assert_eq!(sh.cc.describe(), "closing", "the release does not open it again");
+        settle(&mut sh, 3000.0);
+        assert!(sh.cc.is_hidden(), "cc={}", sh.cc.describe());
+        sh.event(Event::Down(cx, cy), 5000.0);
+        assert_eq!(sh.cc.describe(), "opening", "a third press opens it again");
+    }
+
+    /// A press on another bar item closes the panel as it opens that menu, as a click anywhere else does.
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn a_press_on_another_menu_bar_item_closes_the_panel() {
+        use super::super::desktop_bar::Menu;
+        let mut sh = desk();
+        sh.w = 1920;
+        sh.open_desk_control_center(1000.0);
+        settle(&mut sh, 1000.0);
+        assert!(sh.cc.is_shown());
+        let (_, x, w, _) = sh.menu_buttons().into_iter().find(|b| b.0 == Menu::System).expect("the system menu");
+        sh.event(Event::Down(x + w / 2.0, sh.desktop_bar_height() as f32 / 2.0), 3000.0);
+        assert_eq!(sh.desktop_menu, Some(Menu::System));
+        assert_eq!(sh.cc.describe(), "closing");
+    }
+
+    /// The end of the close slide marks a frame: the last animated frame still pushed the modules' glass at an alpha
+    /// near 0, and with no frame after it the presenter kept their blur and the panel's overlay surface.
+    #[test]
+    fn the_end_of_the_slide_marks_the_frame_that_removes_the_panel() {
+        let mut sh = desk();
+        sh.open_desk_control_center(1000.0);
+        settle(&mut sh, 1000.0);
+        sh.close_desk_control_center(3000.0);
+        sh.dirty = false;
+        settle(&mut sh, 3000.0);
+        assert!(sh.cc.is_hidden());
+        assert!(sh.dirty, "the tick that ends the slide asks for one more frame");
+    }
+
+    /// A panel dropped at once without a dirty mark (Esc, Overview, a sheet) still gets the frame that clears it, and
+    /// only one.
+    #[test]
+    fn a_panel_dropped_without_a_dirty_mark_gets_one_frame() {
+        let mut sh = desk();
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let mut buf = vec![0u32; w * h];
+        sh.open_desk_control_center(1000.0);
+        settle(&mut sh, 1000.0);
+        sh.draw(&mut Surface { w, h, stride: w, px: &mut buf, y0: 0 }, 2100.0);
+        assert!(!sh.frame_reason().contains("panel-gone"), "{}", sh.frame_reason());
+        sh.cc.hide();
+        sh.dirty = false;
+        assert!(sh.needs_frame());
+        assert!(sh.frame_reason().contains("panel-gone"), "{}", sh.frame_reason());
+        sh.draw(&mut Surface { w, h, stride: w, px: &mut buf, y0: 0 }, 2200.0);
+        assert!(!sh.frame_reason().contains("panel-gone"), "the frame that cleared it ends the request: {}", sh.frame_reason());
+    }
+
+    /// E2E-14: the Up Next picker and the output menu hang below the panel's last row. They were outside the panel's
+    /// bounds, so the presenter never cleared them (pixels left on the desktop after the panel closed) and the overlay
+    /// surface above the windows cut them off. The bounds and the surface now hold them with the shadow around.
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn the_close_damage_and_the_overlay_cover_the_pickers_and_the_shadow() {
+        use super::super::services::now_playing::QueueItem;
+        let mut sh = desk();
+        sh.open_desk_control_center(1000.0);
+        settle(&mut sh, 1000.0);
+        let base = sh.cc_desk_rect().expect("the open panel has bounds");
+        let item = |t: String| QueueItem { title: t, artist: String::new(), playable: true };
+        let panel = bifrost_ui::Rect { x: base.0, y: base.1 + base.3 + sh.ui.pt(6.0), w: base.2, h: sh.ui.pt(240.0) };
+        sh.cc.up_next = Some(UpNext::new((0..8).map(|i| item(format!("Track {i}"))).collect(), panel));
+        let r = sh.cc_desk_rect().unwrap();
+        assert!(r.1 + r.3 >= panel.y + panel.h, "the bounds reach the picker's bottom: {r:?} vs {panel:?}");
+        assert!(r.0 <= base.0 && r.1 <= base.1 && r.0 + r.2 >= base.0 + base.2, "and still hold the modules");
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let pixels = vec![0u32; w * h];
+        let f = sh.desktop_chrome_frames(&pixels, w, h).into_iter().find(|f| f.id == 4).expect("the open panel is an overlay surface");
+        let reach = sh.ui.pt(crate::shell::desk::SHADOW_REACH_PT);
+        let (fx0, fy0) = (f.x as f32, f.y as f32);
+        let (fx1, fy1) = (fx0 + f.width as f32, fy0 + f.height as f32);
+        assert!(fy1 + 1.0 >= (panel.y + panel.h + reach).min(h as f32), "the surface holds the picker and its shadow below");
+        assert!(fx0 <= (r.0 - reach).max(0.0) + 1.0, "and the shadow left of the panel");
+        assert!(fx1 + 1.0 >= (r.0 + r.2 + reach).min(w as f32), "and right of it");
+        assert!(fy0 <= (r.1 - reach).max(sh.desktop_bar_height() as f32) + 1.0, "and above it, down from the bar");
+        // the frame that removes the panel clears the same region: the presenter keeps the last frame's regions
+        if bifrost_render::glass::gpu() {
+            let regions = sh.desk_regions_now().unwrap();
+            let covers = |&(x, y, rw, rh): &(i32, i32, i32, i32)| {
+                x as f32 <= r.0 - reach + 1.0 && y as f32 <= r.1 - reach + 1.0 && (x + rw) as f32 + 1.0 >= r.0 + r.2 + reach && (y + rh) as f32 + 1.0 >= r.1 + r.3 + reach
+            };
+            assert!(regions.iter().any(covers), "a region holds the panel, its pickers and the shadow");
+        }
+        // closed: the pickers go with the panel, and so does its surface
+        sh.cc.hide();
+        assert!(sh.cc.up_next.is_none() && sh.cc.route_menu.is_none());
+        assert!(sh.cc_desk_rect().is_none());
+        assert!(sh.desktop_chrome_frames(&pixels, w, h).iter().all(|f| f.id != 4), "no panel surface is left");
     }
 }
