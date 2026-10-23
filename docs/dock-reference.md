@@ -119,4 +119,40 @@ BIFROST_LEAD_BUILD=1 ../tools/lead-run.sh cargo test --offline --profile fast -p
 ```
 
 The full workspace already passed in this batch before the shell-only follow-up.
-Device verification of 0.10.24 follows publication.
+0.10.24 device verification is recorded below.
+
+### 0.10.24 on Midget
+
+Guard accepted `0.10.24.1792779718-1`; build-info is `ea92e2228609`, service active,
+zero restarts. After explicitly maximizing Settings (session restoration keeps
+its rectangle as a floating window), the real Settings content-event path passed:
+
+| Dock position | Settings frame, compositor pixels |
+| --- | --- |
+| Left | 96, 35, 2464, 1405 |
+| Right | 0, 35, 2464, 1405 |
+| Bottom | 0, 35, 2560, 1309 |
+
+Captures 18–20 and `08-actions.log` show no repeated subtraction. Midget checks
+use the repository-prescribed window-local `tap-window` input path. Temporary
+uinput pointer clicks were unreliable even in Settings; this limits attribution
+of the Mail input findings. Hover is also checked through shell hover events.
+Appearance and auto-hide results are recorded below.
+
+Auto-hide was verified with the same filled Settings window: it expands to
+`0,35,2560,1405`, hides after leaving, reveals at the edge, and stays visible for
+more than the hide delay while hovering the enlarged App Store icon above the
+plate. Leaving hides it again; disabling auto-hide returns to `2560×1309`.
+Captures 21–24 and `autohide-verified.log` retain the evidence. The context menu
+at the enlarged icon's top identifies App Store (capture 25).
+
+Dock hover surfaces were inspected on Midget in Light (capture 26) and Dark
+(capture 27). The original Dock preferences compare byte-for-byte equal after
+restoration: Bottom, size 48, auto-hide off, magnification on, size 80 and the
+same pin order. Dark was restored, Settings returned to a floating window, and
+the temporary pointer device was removed. Final desktop: capture 28.
+
+The external parity database connector is unavailable in this session. The
+updated export is retained in `out/dock-2026-10-23/followup-parity-db/`; no database
+publication is claimed. The row remains partial because multi-display support
+is still incomplete. These checks do not establish full reference-OS parity.

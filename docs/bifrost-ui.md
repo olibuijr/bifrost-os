@@ -64,6 +64,8 @@ flag, and `changed` is pushed when the geometry changes. SDK client: `bifrost_ap
 `changed`). Since system 0.10.23, the visible frame reserves the Dock's selected edge
 (Bottom, Left or Right); an auto-hidden Dock reserves no space. Filled windows and
 this service use the same work area, independently of magnification and label padding.
+Since 0.10.24, Settings changes apply after window-local input handling returns,
+so filled-window reflow uses the full output dimensions.
 Gaps (refresh rate, several displays) are in `docs/parity/wire-svc-screens.md`.
 
 ## Thumbnail generator (`QLThumbnailGenerator`, `bifrost_app::thumbnails`)
