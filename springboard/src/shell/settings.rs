@@ -526,16 +526,19 @@ impl Settings {
         }
     }
 
-    fn build_sidebar(&self, ui: &Ui) -> ListPage {
-        let pane = Pane { margin_pt: SIDEBAR_MARGIN_PT, nav_pt: 0.0, sidebar: true, status_pt: 0.0, header: false };
+    /// The sidebar's rows: the root page's, which a desktop arranges in the Golden Gate groups with Appearance and
+    /// Keyboard as panes of their own (`pages::desktop_sidebar`).
+    fn sidebar_spec(&self) -> super::list::Spec {
         let mut root = spec(PageId::Root, &self.model());
         if self.info.display_mode.is_some() {
-            for group in &mut root.groups { group.items.retain(|item|item.label != "Airplane Mode"); }
-            for item in root.groups.iter_mut().flat_map(|g| g.items.iter_mut()) {
-                if item.label == "Display & Brightness" { item.label = "Displays".into(); }
-                if item.label == "Home Screen & Dock" { item.label = "Desktop & Dock".into(); }
-            }
+            root = super::pages::desktop_sidebar(root, self.info.desktop_network.is_some());
         }
+        root
+    }
+
+    fn build_sidebar(&self, ui: &Ui) -> ListPage {
+        let pane = Pane { margin_pt: SIDEBAR_MARGIN_PT, nav_pt: 0.0, sidebar: true, status_pt: 0.0, header: false };
+        let mut root = self.sidebar_spec();
         // like bifrost, the sidebar shows a value only for Wi-Fi and Bluetooth; the rest is plain
         for item in root.groups.iter_mut().flat_map(|g| g.items.iter_mut()) {
             if item.label != "Network" && item.label != "Wi-Fi" && item.label != "Bluetooth" {
@@ -792,8 +795,9 @@ impl Settings {
             PageId::PrivacyPermissions => super::pages::permissions_page(&super::services::privacy_permissions::rows()),
             PageId::AppPanes(slot) => super::settings_panes::spec(slot),
             PageId::Root => {
-                // the root lists the apps that declare settings panes after the built-in groups
-                let mut s = spec(id, &self.model());
+                // the root lists the apps that declare settings panes after the built-in groups; in the split layout the
+                // root is the sidebar, so Search and the page paths see the panes it lists (Appearance, Keyboard)
+                let mut s = if self.side_w > 0 { self.sidebar_spec() } else { spec(id, &self.model()) };
                 s.groups.extend(super::settings_panes::root_groups());
                 s
             }
@@ -5187,5 +5191,35 @@ mod e2e_w3_tests {
         let spec = st.list().expect("list").spec();
         assert!(spec.groups.iter().any(|g| g.header.as_deref() == Some("OUTPUT") && !g.items.is_empty()), "the output devices are listed");
         assert!(spec.groups[0].items.iter().any(|i| i.label == "Play sound effects through"));
+    }
+
+    /// W3-12: the desktop sidebar was one flat list; it follows the Golden Gate groups, with Appearance and Keyboard as
+    /// panes of their own.
+    #[test]
+    fn the_desktop_sidebar_follows_the_golden_gate_groups() {
+        let ui = crate::shell::tests::ui();
+        let desk = Info { display_mode: Some((2560, 1440, 60)), ..info() };
+        let mut st = Settings::new(&ui, &desk, &Prefs::memory(), 1200, 1920, Rc::new(vec![]));
+        let groups: Vec<Vec<String>> = st.sidebar_list().expect("split").spec().groups.iter().map(|g| g.items.iter().map(|i| i.label.clone()).collect()).collect();
+        assert_eq!(groups[0], ["BifrOSt Account"]);
+        assert_eq!(groups[1][..2], ["Wi-Fi", "Bluetooth"], "connections first; no Airplane Mode on a desktop");
+        assert_eq!(groups[2], ["General", "Sharing", "Accessibility", "Appearance", "Desktop & Dock", "Overview", "Displays", "Menu Bar", "Control Center", "Assistant", "Search", "Wallpaper", "Screen Saver"]);
+        assert_eq!(groups[3], ["Notifications", "Sound", "Focus", "Screen Time"]);
+        assert_eq!(groups[4][..2], ["Lock Screen", "Privacy & Security"]);
+        assert_eq!(groups[4].last().map(String::as_str), Some("Users & Groups"));
+        assert_eq!(groups[5], ["Passwords", "Internet Accounts"]);
+        assert_eq!(groups[6], ["Keyboard", "Keyboard Shortcuts", "Mouse", "Trackpad", "Printers & Scanners"]);
+        assert_eq!(groups.last().expect("groups"), &["Developer"]);
+        // Appearance and Keyboard open as first-level panes (their sidebar row selected), not under Displays or General
+        st.open_page(&ui, "Appearance", 0.0);
+        settle(&mut st, &ui);
+        assert_eq!(st.stack(), vec![PageId::Appearance]);
+        st.open_page(&ui, "Keyboard", 0.0);
+        settle(&mut st, &ui);
+        assert_eq!(st.stack(), vec![PageId::Keyboard]);
+        // the tablet's root list keeps its own order
+        let tablet = Settings::new(&ui, &info(), &Prefs::memory(), 1200, 1920, Rc::new(vec![]));
+        let first = tablet.sidebar_list().expect("split").spec().groups[1].items[0].label.clone();
+        assert_eq!(first, "Airplane Mode");
     }
 }
