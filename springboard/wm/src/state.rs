@@ -337,8 +337,15 @@ impl WmState {
             // a client's layer surface may claim an exclusive zone of any size: the area stays a sane part of the output
             area = crate::wm::clamp_area(area, whole);
         }
-        self.wm.set_area(area);
+        let resized = self.wm.set_area(area);
         self.apply_frames();
+        // a maximized or tiled window that grew or shrank with the area is configured to its new size, or its client
+        // keeps drawing the old one (filled windows kept the Dock's strip after a full-screen exit, W3-6)
+        for id in resized {
+            if let Some(window) = self.window(id) {
+                self.configure_frame(&window, id);
+            }
+        }
         // a full-screen window follows an output change: its client is told the new size (not on every menu bar commit)
         if output_changed {
             let full: Vec<crate::wm::WindowId> = self.wm.stack().into_iter().filter(|id| self.wm.is_full_screen(*id)).collect();

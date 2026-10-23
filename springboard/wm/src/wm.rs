@@ -213,22 +213,30 @@ impl Wm {
         Some(rect)
     }
 
-    /// The usable area changed (output mode, menu bar): maximized windows fill it, others are pulled back on screen.
-    pub fn set_area(&mut self, area: Rect) {
+    /// The usable area changed (output mode, menu bar, the Dock coming back after full screen): maximized and tiled
+    /// windows fill their part of it, others are pulled back on screen. Returns the windows whose size changed: their
+    /// clients must be told (a window maximized while the Dock was away kept the Dock's strip, W3-6).
+    pub fn set_area(&mut self, area: Rect) -> Vec<WindowId> {
         self.area = area;
         let output = self.output;
+        let mut resized = Vec::new();
         for w in &mut self.windows {
             // a full-screen window fills the output; what it held is fitted to the new area when it leaves
             if w.full.is_some() {
                 w.rect = output;
                 continue;
             }
+            let before = (w.rect.w, w.rect.h);
             w.rect = match (w.restore.is_some(), w.tiled) {
                 (_, Some(layout)) => tiling::frame(area, layout),
                 (true, None) => area,
                 (false, None) => keep_on_screen(w.rect, area),
             };
+            if (w.rect.w, w.rect.h) != before {
+                resized.push(w.id);
+            }
         }
+        resized
     }
 
     /// Tiles `id` into `layout` (a half, a quarter, or maximize): the Fn+Ctrl arrow keys and a drag to an edge. The
@@ -796,5 +804,39 @@ mod tests {
         assert_eq!(wm.place(1, Placement::Layout(Layout::Maximize)), Some(AREA));
         assert!(wm.is_maximized(1));
         assert_eq!(wm.place(9, Placement::Centre), None, "an unknown window");
+    }
+
+    /// W3-6: a window filled while the Dock was away (full screen hides it) is resized when the Dock's strip comes back,
+    /// and its client is told; a free window that still fits keeps its size.
+    #[test]
+    fn an_area_change_reports_the_windows_it_resized() {
+        let (without_dock, output) = screen(1920, 1080);
+        let area = Rect::new(without_dock.x, without_dock.y, without_dock.w, without_dock.h - 100);
+        let mut wm = Wm::new(without_dock);
+        wm.set_output(output);
+        wm.map(1, 800, 600);
+        wm.map(2, 800, 600);
+        wm.toggle_maximize(1);
+        assert_eq!(wm.rect(1), Some(without_dock));
+        let resized = wm.set_area(area);
+        assert_eq!(resized, vec![1], "only the filled window changed size");
+        assert_eq!(wm.rect(1), Some(area));
+        assert!(wm.set_area(area).is_empty(), "the same area again resizes nothing");
+    }
+
+    /// W3-6: Fill, full screen in and out, then Return to Previous Size comes back to the frame from before the Fill.
+    #[test]
+    fn previous_size_survives_full_screen_after_a_fill() {
+        let (area, output) = screen(1920, 1080);
+        let mut wm = Wm::new(area);
+        wm.set_output(output);
+        let r = wm.map(1, 800, 600);
+        wm.toggle_maximize(1);
+        wm.enter_full_screen(1);
+        assert_eq!(wm.rect(1), Some(output));
+        assert_eq!(wm.leave_full_screen(1), Some(area), "it comes back filled");
+        assert!(wm.is_maximized(1));
+        assert_eq!(wm.place(1, Placement::Previous), Some(r), "and goes back to the frame from before the Fill");
+        assert!(!wm.is_maximized(1));
     }
 }

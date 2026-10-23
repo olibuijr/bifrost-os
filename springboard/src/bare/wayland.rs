@@ -1248,9 +1248,17 @@ impl Dispatch<xdg_surface::XdgSurface,u32> for State {
 impl Dispatch<xdg_toplevel::XdgToplevel,u32> for State {
     fn event(s: &mut Self, _: &xdg_toplevel::XdgToplevel, e:xdg_toplevel::Event, id: &u32, _: &Connection, _: &QueueHandle<Self>) {
         match e {
-            xdg_toplevel::Event::Configure {width,height,states} => { let has=|state:xdg_toplevel::State|states.chunks_exact(4).any(|bytes|u32::from_ne_bytes(bytes.try_into().unwrap())==state as u32); let maximized=has(xdg_toplevel::State::Maximized); s.window_events.push(WindowEvent::Maximized(*id,maximized)); if let Some(w)=s.windows.get_mut(id) {w.act=has(xdg_toplevel::State::Activated);}
-                // full screen: the answer to our own request settles it; any other configure is the window server's own decision
-                if let Some(w)=s.windows.get_mut(id) { let fullscreen=has(xdg_toplevel::State::Fullscreen); match w.fs_pending { Some(want) if want==fullscreen => w.fs_pending=None, Some(_) => {}, None if w.frame.fullscreen!=fullscreen => { w.frame.fullscreen=fullscreen; s.window_events.push(WindowEvent::Fullscreen(*id,fullscreen)); }, None => {} } } if width>0 && height>0 {s.window_events.push(WindowEvent::Resize(*id,width,height));} },
+            xdg_toplevel::Event::Configure {width,height,states} => { let has=|state:xdg_toplevel::State|states.chunks_exact(4).any(|bytes|u32::from_ne_bytes(bytes.try_into().unwrap())==state as u32); let maximized=has(xdg_toplevel::State::Maximized); if let Some(w)=s.windows.get_mut(id) {w.act=has(xdg_toplevel::State::Activated);}
+                // full screen: the answer to our own request settles it; any other configure is the window server's own decision.
+                // It goes before the maximize state: a window leaving full screen comes back filled, and the shell must
+                // see it leave full screen first, or it takes the maximize as a new zoom and saves the full-screen frame
+                // as the way back (W3-6)
+                let fullscreen=has(xdg_toplevel::State::Fullscreen);
+                // a configure sent before the window server saw our own full-screen request (or one of a full-screen
+                // window, which is never maximized) says nothing about the zoom
+                let mut zoom_known=!fullscreen;
+                if let Some(w)=s.windows.get_mut(id) { match w.fs_pending { Some(want) if want==fullscreen => w.fs_pending=None, Some(_) => zoom_known=false, None if w.frame.fullscreen!=fullscreen => { w.frame.fullscreen=fullscreen; s.window_events.push(WindowEvent::Fullscreen(*id,fullscreen)); }, None => {} } }
+                if zoom_known {s.window_events.push(WindowEvent::Maximized(*id,maximized));} if width>0 && height>0 {s.window_events.push(WindowEvent::Resize(*id,width,height));} },
             xdg_toplevel::Event::Close => s.window_events.push(WindowEvent::Close(*id)),
             _=>{}
         }

@@ -1205,7 +1205,7 @@ impl Shell {
                     Action::Desktop=>self.desk_show_desktop(),
                     Action::Open(super::AppId::ExternalWindow(slot,id))=>{let _=self.desk_focus_extra_window(slot,id);},
                     Action::Open(app)=>self.desk_open(app,t),
-                    Action::ShowAll=>{if let Some(d)=&mut self.desk {for w in &mut d.wins {w.minimized=false;}}self.desk_refocus();},
+                    Action::ShowAll=>self.desk_bring_all_to_front(),
                     Action::Close|Action::Minimize=>effects.extend(self.desk_window_close_or_minimize(matches!(action,Action::Minimize))),
                     Action::Quit=>effects.extend(self.desk_quit_front()),
                     Action::About=>self.about_front_app(),

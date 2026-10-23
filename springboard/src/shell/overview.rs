@@ -48,6 +48,10 @@ const TILE_GAP_PT: f32 = 26.0;
 const AREA_PAD_PT: f32 = 28.0;
 const DRAG_SLOP_PT: f32 = 8.0;
 const DOCK_CLEAR_PT: f32 = 24.0;
+/// The close control on a desktop thumbnail (pt): a circle on its top-left corner, shown while the pointer is on it.
+const CLOSE_PT: f32 = 20.0;
+/// How many desktops there are, kept across restarts (the windows' desktops are not: they start on the first).
+pub(super) const DESKTOPS_PREF: &str = "overview.desktops";
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) struct FRect {
@@ -128,6 +132,8 @@ pub(super) struct Spaces {
     of: HashMap<AppId, usize>,
     away: HashSet<AppId>,
     user_min: HashMap<AppId, bool>,
+    /// the count was read from the prefs (`DESKTOPS_PREF`)
+    loaded: bool,
 }
 
 impl Spaces {
@@ -171,6 +177,41 @@ impl Spaces {
         }
     }
 
+    /// Takes the count kept in the prefs, once (a value out of range is ignored).
+    fn load(&mut self, saved: Option<&str>) {
+        if std::mem::replace(&mut self.loaded, true) {
+            return;
+        }
+        if let Some(n) = saved.and_then(|v| v.trim().parse::<usize>().ok()).filter(|n| (1..=MAX_DESKTOPS).contains(n)) {
+            self.count = self.count.max(n);
+        }
+        self.ensure();
+    }
+
+    /// Removes desktop `i` (the close control on its thumbnail): its windows move to the desktop before it (the first
+    /// desktop's to the one after it, which becomes the first), the desktops after it move down one, and the current
+    /// desktop stays the one the person was on, or becomes the one that took the windows. The last desktop stays.
+    fn remove(&mut self, i: usize) -> bool {
+        self.ensure();
+        if self.count <= 1 || i >= self.count {
+            return false;
+        }
+        let to = i.saturating_sub(1);
+        for d in self.of.values_mut() {
+            if *d == i {
+                *d = to;
+            } else if *d > i {
+                *d -= 1;
+            }
+        }
+        self.count -= 1;
+        if self.current > i || (self.current == i && i > 0) {
+            self.current -= 1;
+        }
+        self.ensure();
+        true
+    }
+
     fn windows_on(&self, i: usize, wins: &[super::desk::Win]) -> Vec<AppId> {
         wins.iter().filter(|w| self.of.get(&w.app).copied().unwrap_or(self.current) == i).map(|w| w.app).collect()
     }
@@ -180,6 +221,8 @@ impl Spaces {
 enum Target {
     Tile(usize),
     Desk(usize),
+    /// the close control of desktop `i`
+    Close(usize),
     Add,
     Back,
 }
@@ -378,6 +421,12 @@ impl Overview {
         (0..n).map(|i| FRect { x: x0 + i as f32 * (g.thumb.0 + gap), y: g.strip_y, w: g.thumb.0, h: g.thumb.1 }).collect()
     }
 
+    /// The close control of the desktop thumbnail `r`: a circle centred a little inside its top-left corner.
+    fn close_rect(r: FRect, g: &Geo) -> FRect {
+        let d = CLOSE_PT * g.pt;
+        FRect { x: r.x - d / 3.0, y: r.y - d / 3.0, w: d, h: d }
+    }
+
     fn add_rect(&self, g: &Geo) -> FRect {
         let rs = self.desk_rects(g);
         let last = rs.last().copied().unwrap_or(FRect { x: 0.0, y: g.strip_y, w: 0.0, h: g.thumb.1 });
@@ -418,6 +467,12 @@ impl Overview {
     fn target_at(&self, g: &Geo, x: f32, y: f32) -> Target {
         if self.add_rect(g).contains(x, y) && self.spaces.count < MAX_DESKTOPS {
             return Target::Add;
+        }
+        // with more than one desktop each can be closed; its control sits over the corner, so it is tested first
+        if self.spaces.count > 1 {
+            if let Some(i) = self.desk_rects(g).iter().position(|r| Self::close_rect(*r, g).contains(x, y)) {
+                return Target::Close(i);
+            }
         }
         if let Some(i) = self.desk_rects(g).iter().position(|r| r.contains(x, y)) {
             return Target::Desk(i);
@@ -478,6 +533,7 @@ impl Overview {
         if self.open {
             return;
         }
+        self.load_count(sh);
         let foreign = sh.foreign_front_window();
         let Some(d) = sh.desk.as_mut() else { return };
         self.spaces.sync(&d.wins);
@@ -572,13 +628,45 @@ impl Overview {
         sh.dirty = true;
     }
 
-    fn add_desktop(&mut self) -> Option<usize> {
+    fn add_desktop(&mut self, sh: &mut Shell) -> Option<usize> {
         self.spaces.ensure();
         if self.spaces.count >= MAX_DESKTOPS {
             return None;
         }
         self.spaces.count += 1;
+        self.save_count(sh);
         Some(self.spaces.count - 1)
+    }
+
+    /// Reads the desktop count kept in the prefs, once.
+    fn load_count(&mut self, sh: &Shell) {
+        self.spaces.load(sh.prefs.get(DESKTOPS_PREF));
+    }
+
+    fn save_count(&self, sh: &mut Shell) {
+        if let Err(e) = sh.prefs.set(DESKTOPS_PREF, &self.spaces.count.to_string()) {
+            eprintln!("overview: desktops not saved: {e}");
+        }
+    }
+
+    /// Closes desktop `i` from its thumbnail (W3-7): its windows join the desktop before it, as `Spaces::remove` says.
+    fn remove_desktop(&mut self, sh: &mut Shell, i: usize) {
+        if let Some(d) = sh.desk.as_ref() {
+            self.spaces.sync(&d.wins);
+        }
+        if !self.spaces.remove(i) {
+            return;
+        }
+        self.save_count(sh);
+        self.hover = None;
+        if self.open {
+            self.selected = None;
+            self.layout(sh);
+        } else if let Some(d) = sh.desk.as_mut() {
+            self.spaces.apply(&mut d.wins);
+            sh.desk_refocus();
+        }
+        sh.dirty = true;
     }
 
     /// Makes desktop `target` the current one. Inside Overview only the tiles change; outside, windows swap and
@@ -713,9 +801,9 @@ impl Overview {
                     let app = self.tiles.get(d.tile).and_then(|t| match t.key { TileKey::App(app) => Some(app), TileKey::Foreign(_) => None });
                     if let Some(app) = app {
                         match tg {
-                            Target::Desk(i) => self.move_window(sh, app, i),
+                            Target::Desk(i) | Target::Close(i) => self.move_window(sh, app, i),
                             Target::Add => {
-                                if let Some(i) = self.add_desktop() {
+                                if let Some(i) = self.add_desktop(sh) {
                                     self.move_window(sh, app, i);
                                 }
                             }
@@ -727,8 +815,9 @@ impl Overview {
                         match tg {
                             Target::Tile(i) => self.pick(sh, Some(i), t),
                             Target::Desk(i) => self.go_to(sh, i, t),
+                            Target::Close(i) => self.remove_desktop(sh, i),
                             Target::Add => {
-                                if let Some(i) = self.add_desktop() {
+                                if let Some(i) = self.add_desktop(sh) {
                                     self.go_to(sh, i, t);
                                 }
                             }
@@ -799,7 +888,7 @@ impl Overview {
         let wins: Vec<super::desk::Win> = sh.desk.as_ref().map(|d| d.wins.clone()).unwrap_or_default();
         let rects = self.desk_rects(&g);
         let drop_desk = match (&self.drag, self.hover) {
-            (Some(d), Some(Target::Desk(i))) if d.moved => Some(i),
+            (Some(d), Some(Target::Desk(i) | Target::Close(i))) if d.moved => Some(i),
             _ => None,
         };
         self.ensure_wall(sh, g.thumb);
@@ -827,6 +916,12 @@ impl Overview {
             sh.label(&name, MAC_FOOTNOTE_PT, Weight::Semibold, WHITE, |im| {
                 s.blit_colored(im, (r.x + (r.w - im.w as f32) / 2.0) as i32, (y + r.h - im.h as f32 - ui.pt(5.0)) as i32, LABEL_2.now(), alpha);
             });
+            // the close control shows on the thumbnail the pointer is on, while there is another desktop to keep (W3-7)
+            let hovered = matches!(self.hover, Some(Target::Desk(h) | Target::Close(h)) if h == i);
+            if hovered && self.spaces.count > 1 && self.drag.as_ref().is_none_or(|d| !d.moved) {
+                let c = Self::close_rect(FRect { y, ..*r }, &g);
+                draw_close(s, c, ui.pt(1.5), alpha, self.hover == Some(Target::Close(i)));
+            }
         }
         if self.spaces.count < MAX_DESKTOPS {
             let a = self.add_rect(&g);
@@ -945,6 +1040,21 @@ impl Overview {
             let c = if selected { TINT } else { SELECTION.now() };
             s.stroke_rrect(r.x - 2.0, r.y - 2.0, r.w + 4.0, r.h + 4.0, rad + 2.0, ui.pt(3.0), crate::gfx::scale(c, alpha));
         }
+    }
+}
+
+/// The close control of a desktop thumbnail: a circle with an "x" of two strokes of `th` px, drawn as overlapping dots
+/// (the surface has no line primitive); `on` is the pointer on the control itself.
+fn draw_close(s: &mut Surface, c: FRect, th: f32, alpha: u32, on: bool) {
+    let fill = if on { FIELD_BG.now() } else { CARD_BG.now() };
+    s.fill_rrect(c.x, c.y, c.w, c.h, c.w / 2.0, crate::gfx::scale(fill, alpha));
+    let ink = crate::gfx::scale(LABEL.now(), alpha);
+    let (cx, cy, arm) = (c.cx(), c.cy(), c.w * 0.2);
+    let steps = (2.0 * arm / (th / 2.0).max(0.5)).ceil().max(2.0) as i32;
+    for k in 0..=steps {
+        let d = -arm + 2.0 * arm * k as f32 / steps as f32;
+        s.fill_rrect(cx + d - th / 2.0, cy + d - th / 2.0, th, th, th / 2.0, ink);
+        s.fill_rrect(cx + d - th / 2.0, cy - d - th / 2.0, th, th, th / 2.0, ink);
     }
 }
 
@@ -1192,6 +1302,7 @@ impl Shell {
             return;
         }
         let mut ov = std::mem::take(&mut self.overview);
+        ov.load_count(self);
         ov.spaces.ensure();
         let target = (ov.spaces.current as i32 + delta).clamp(0, ov.spaces.count as i32 - 1) as usize;
         ov.go_to(self, target, t);
@@ -1947,5 +2058,87 @@ mod tests {
         let (w, h) = foreign_natural(Some((4000, 100)), screen);
         assert!(w <= 1920.0 * 0.6 + 0.5 && h > 0.0, "an extreme aspect is clamped: {w}x{h}");
         assert_eq!(foreign_natural(Some((0, 0)), screen), foreign_natural(None, screen), "an empty picture is none");
+    }
+    // ---- closing a desktop (W3-7) ---------------------------------------------------------------------------------------
+
+    /// Removing a desktop moves its windows to the one before it (the first desktop's to the one after it), shifts the
+    /// later desktops down, keeps the current desktop the person was on, and never removes the last one.
+    #[test]
+    fn removing_a_desktop_moves_its_windows_to_the_one_before() {
+        let (a, b, c) = (AppId::Settings, AppId::AppStore, AppId::Files);
+        let mut sp = Spaces { count: 3, current: 2, ..Default::default() };
+        sp.of.insert(a, 0);
+        sp.of.insert(b, 1);
+        sp.of.insert(c, 2);
+        assert!(sp.remove(1));
+        assert_eq!((sp.count, sp.current), (2, 1), "the person stays on the desktop that was third, now second");
+        assert_eq!((sp.of[&a], sp.of[&b], sp.of[&c]), (0, 0, 1), "the closed desktop's window joins the one before it");
+        assert!(sp.remove(1), "closing the desktop the person is on");
+        assert_eq!((sp.count, sp.current, sp.of[&c]), (1, 0, 0), "they land on the desktop that took its windows");
+        assert!(!sp.remove(0), "the last desktop stays");
+        let mut sp = Spaces { count: 2, current: 0, ..Default::default() };
+        sp.of.insert(a, 0);
+        sp.of.insert(b, 1);
+        assert!(sp.remove(0));
+        assert_eq!((sp.count, sp.current, sp.of[&a], sp.of[&b]), (1, 0, 0, 0), "the first desktop's windows join the next");
+        assert!(!sp.remove(5), "out of range");
+    }
+
+    /// The desktop count comes back from the prefs once, and a bad value is ignored.
+    #[test]
+    fn the_desktop_count_is_read_once_from_the_prefs() {
+        let mut sp = Spaces::default();
+        sp.load(Some("3"));
+        assert_eq!(sp.count, 3);
+        sp.count = 2;
+        sp.load(Some("4"));
+        assert_eq!(sp.count, 2, "read once: the live count wins afterwards");
+        for bad in ["0", "99", "x", ""] {
+            let mut sp = Spaces::default();
+            sp.load(Some(bad));
+            assert_eq!(sp.count, 1, "{bad:?} is ignored");
+        }
+    }
+
+    /// W3-7: a desktop added in Overview shows a close control on hover and the control removes it; the count is kept.
+    #[test]
+    fn a_desktop_added_in_overview_can_be_closed_from_its_thumbnail() {
+        let mut sh = desk_with(1, 1920, 1080, 1.0);
+        let app = sh.desk.as_ref().unwrap().wins[0].app;
+        sh.overview_toggle(1000.0);
+        let g = sh.overview.geo(&sh);
+        let add = sh.overview.add_rect(&g);
+        let (ax, ay) = (add.x + add.w / 2.0, add.y + add.h / 2.0);
+        assert!(sh.overview_event(Event::Down(ax, ay), 1100.0).is_some());
+        assert!(sh.overview_event(Event::Up(ax, ay), 1110.0).is_some());
+        assert_eq!(sh.overview.spaces.count, 2);
+        assert_eq!(sh.prefs.get(DESKTOPS_PREF), Some("2"), "the new desktop is kept");
+        // the window of the first desktop is put on the new one
+        sh.overview.spaces.of.insert(app, 1);
+        let g = sh.overview.geo(&sh);
+        let r = sh.overview.desk_rects(&g)[1];
+        let c = Overview::close_rect(r, &g);
+        let (cx, cy) = (c.x + c.w / 2.0, c.y + c.h / 2.0);
+        assert!(sh.overview_hover(r.x + r.w / 2.0, r.y + r.h / 2.0));
+        draw_mid_open(&mut sh);
+        assert!(sh.overview_hover(cx, cy));
+        assert_eq!(sh.overview.hover, Some(Target::Close(1)), "the control is under the pointer");
+        assert!(sh.overview_event(Event::Down(cx, cy), 1200.0).is_some());
+        assert!(sh.overview_event(Event::Up(cx, cy), 1210.0).is_some());
+        assert_eq!(sh.overview.spaces.count, 1, "the desktop is gone");
+        assert_eq!(sh.overview.spaces.current, 0);
+        assert_eq!(sh.overview.spaces.of[&app], 0, "its window moved to the desktop before it");
+        assert_eq!(sh.prefs.get(DESKTOPS_PREF), Some("1"));
+        let g = sh.overview.geo(&sh);
+        let r = sh.overview.desk_rects(&g)[0];
+        let c = Overview::close_rect(r, &g);
+        assert_ne!(sh.overview.target_at(&g, c.x + c.w / 2.0, c.y + c.h / 2.0), Target::Close(0), "the last desktop has no close control");
+    }
+
+    /// Draws one Overview frame with Overview still open, so the close control is drawn for the hovered thumbnail.
+    fn draw_mid_open(sh: &mut Shell) {
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let mut px = vec![0u32; w * h];
+        sh.draw_overview(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 1150.0);
     }
 }
