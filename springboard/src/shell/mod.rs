@@ -3090,8 +3090,11 @@ impl Shell {
             let focus_allowed = apps().iter().map(|a| a.id).filter(|&a| self.notify.store().is_focus_allowed(a)).collect();
             let schedule = self.notify.store().schedule();
             let (mode_names, mode_on) = self.focus_mode_view();
+            let active = self.notify.active_mode().map(|m| m.name);
+            let center = self.notify_center_prefs();
             if let Some(st) = &mut self.settings {
-                st.set_focus_modes(mode_names, mode_on);
+                st.set_focus_modes(mode_names, mode_on, active);
+                st.set_notify_center(center);
                 st.set_notify(&self.ui, schedule, muted, app_notifs, focus_allowed);
             }
         }
@@ -3865,6 +3868,13 @@ impl Shell {
                         notify_page::NotifyChange::App(a, n) => {
                             let _ = self.prefs.set(&notify_page::pref_key(a), &n.encode());
                             self.store_changed();
+                        }
+                        notify_page::NotifyChange::Center(c) => {
+                            let _ = self.prefs.set(notify_page::CENTER_PREF, &c.encode());
+                            self.store_changed();
+                        }
+                        notify_page::NotifyChange::AddMode(name) => {
+                            self.add_focus_mode(&name);
                         }
                     }
                 }

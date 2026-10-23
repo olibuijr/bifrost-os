@@ -25,6 +25,69 @@ pub struct NotifyPrefs {
     pub modes: Vec<String>,
     /// the index into `modes` of the mode that is on by hand
     pub mode_on: Option<usize>,
+    /// Settings > Notifications > Notification Center: the options every app shares
+    pub center: CenterPrefs,
+    /// the name of the Focus that is on now, by hand or by its schedule (Focus Status)
+    pub active: Option<String>,
+}
+
+/// Settings > Notifications > Notification Center: the system-wide options above the app list (the reference's
+/// "Show previews" and "Allow notifications when ..." rows).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CenterPrefs {
+    /// 0 Always, 1 When Unlocked, 2 Never (`PREVIEWS`); an app's own Show Previews can only hide more
+    pub previews: u8,
+    /// a notification may wake the display that is asleep
+    pub sleeping: bool,
+    /// notifications are listed on the lock screen (and may wake the display onto it)
+    pub locked: bool,
+    /// banners show while the screen is recorded or shared
+    pub mirroring: bool,
+}
+
+impl Default for CenterPrefs {
+    /// What the shell did before the group existed: previews always, waking and listing on the lock screen, and (the
+    /// reference's default) no banners while the screen is recorded or shared.
+    fn default() -> Self {
+        CenterPrefs { previews: 0, sleeping: true, locked: true, mirroring: false }
+    }
+}
+
+/// The `prefs` key of the Notification Center options.
+pub const CENTER_PREF: &str = "notif.center";
+
+/// A row of the Notification Center group.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum CenterField {
+    Previews,
+    Sleeping,
+    Locked,
+    Mirroring,
+}
+
+impl CenterPrefs {
+    /// `prefs` value: four digits (previews, sleeping, locked, mirroring); anything malformed is the default.
+    pub fn encode(&self) -> String {
+        let b = |v: bool| if v { '1' } else { '0' };
+        format!("{}{}{}{}", self.previews, b(self.sleeping), b(self.locked), b(self.mirroring))
+    }
+
+    pub fn decode(s: &str) -> CenterPrefs {
+        let d: Vec<u8> = s.bytes().map(|c| c.wrapping_sub(b'0')).collect();
+        if d.len() != 4 || d[0] > 2 || d[1..].iter().any(|&x| x > 1) {
+            return CenterPrefs::default();
+        }
+        CenterPrefs { previews: d[0], sleeping: d[1] == 1, locked: d[2] == 1, mirroring: d[3] == 1 }
+    }
+
+    pub fn apply(&mut self, f: CenterField) {
+        match f {
+            CenterField::Previews => self.previews = (self.previews + 1) % 3,
+            CenterField::Sleeping => self.sleeping = !self.sleeping,
+            CenterField::Locked => self.locked = !self.locked,
+            CenterField::Mirroring => self.mirroring = !self.mirroring,
+        }
+    }
 }
 
 /// One app's page of Settings > Notifications (bifrost defaults: everything on, Temporary banners).
@@ -157,10 +220,14 @@ pub enum NotifyEdit {
     FocusAllowed(AppId),
     /// a row of the Focus mode list (an index into `NotifyPrefs::modes`)
     Mode(usize),
+    /// a row of the Notification Center group
+    Center(CenterField),
+    /// Add Focus…: adds the next of `FOCUS_PRESETS` the list does not have yet
+    AddMode,
 }
 
 /// An edit the shell must apply to its notification store.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum NotifyChange {
     Schedule(Schedule),
     ToggleMute(AppId),
@@ -170,6 +237,20 @@ pub enum NotifyChange {
     FocusAllowed(AppId, bool),
     /// a Focus mode was switched on by hand (an index into the mode list), or Focus was switched off
     Mode(Option<usize>),
+    /// the Notification Center options changed (persisted by the shell under `CENTER_PREF`)
+    Center(CenterPrefs),
+    /// a Focus mode of this name was added (Add Focus…)
+    AddMode(String),
+}
+
+/// The modes Add Focus… offers, in order (the reference's list of Focus types). Each is added once; a name the list
+/// already has is skipped.
+pub const FOCUS_PRESETS: [&str; 6] = ["Reading", "Fitness", "Gaming", "Mindfulness", "Driving", "Custom"];
+
+/// The next Focus Add Focus… would add: the first preset whose name is not in `modes` (case is ignored), or None when
+/// every preset is there.
+pub fn next_preset(modes: &[String]) -> Option<&'static str> {
+    FOCUS_PRESETS.iter().copied().find(|p| !modes.iter().any(|m| m.trim().eq_ignore_ascii_case(p)))
 }
 
 fn clock(minute: u16, h24: bool) -> String {
@@ -195,6 +276,18 @@ pub fn modes_group(p: &NotifyPrefs) -> Group {
         .footer(super::pages::by_form("A mode holds back the notifications of every app and person it does not allow. Tap the mode that is on to turn Focus off.", "A mode holds back the notifications of every app and person it does not allow. Click the mode that is on to turn Focus off."))
 }
 
+/// Add Focus…, under the mode list: adds the next Focus type the list does not have (no group once all are there).
+pub fn add_mode_group(p: &NotifyPrefs) -> Option<Group> {
+    next_preset(&p.modes)?;
+    Some(Group::new(vec![Item::new("Add Focus\u{2026}").action(Action::Notify(NotifyEdit::AddMode))]))
+}
+
+/// Focus status, at the top of the Focus page: the Focus that is on now (by hand or by its schedule), or Off.
+pub fn status_group(active: Option<&str>) -> Group {
+    Group::new(vec![Item::new("Focus Status").value(active.unwrap_or("Off"))])
+        .footer("While a Focus is on, the menu bar shows the moon and Notification Center says which Focus it is. Sharing the status with apps or other devices is not available yet.")
+}
+
 /// The Scheduled switch with its From and To rows, for the Focus page.
 pub fn schedule_group(p: &NotifyPrefs) -> Group {
     Group::new(vec![
@@ -216,14 +309,14 @@ fn app_icon_id(app: AppId) -> Option<&'static str> {
     apps().iter().find(|a| a.id == app).map(|a| a.icon)
 }
 
-/// What an app's row says about its notifications: "Banners, Sounds, Badges" for what is on, "Off" when the app is
-/// muted.
+/// What an app's row says about its notifications, in the reference's order: "Badges, Sounds, Banners" for what is
+/// on (Alerts for the persistent style), "Off" when the app is muted.
 pub fn summary(p: &NotifyPrefs, app: AppId) -> String {
     if p.is_muted(app) {
         return "Off".into();
     }
     let n = p.app(app);
-    let on: Vec<&str> = [(n.style() == 1, "Banners"), (n.style() == 2, "Alerts"), (n.sounds, "Sounds"), (n.badges, "Badges")].into_iter().filter(|(on, _)| *on).map(|(_, label)| label).collect();
+    let on: Vec<&str> = [(n.badges, "Badges"), (n.sounds, "Sounds"), (n.style() == 1, "Banners"), (n.style() == 2, "Alerts")].into_iter().filter(|(on, _)| *on).map(|(_, label)| label).collect();
     if on.is_empty() { "On".into() } else { on.join(", ") }
 }
 
@@ -238,7 +331,20 @@ pub fn spec(p: &NotifyPrefs) -> Spec {
             }
         })
         .collect();
-    Spec { id: PageId::Notifications, title: "Notifications".into(), large: false, groups: vec![Group::new(rows).header("NOTIFICATION STYLE")] }
+    Spec { id: PageId::Notifications, title: "Notifications".into(), large: false, groups: vec![center_group(&p.center), Group::new(rows).header("APPLICATION NOTIFICATIONS")] }
+}
+
+/// The Notification Center group above the apps: Show Previews, and when notifications may show at all.
+pub fn center_group(c: &CenterPrefs) -> Group {
+    let f = |f| Action::Notify(NotifyEdit::Center(f));
+    Group::new(vec![
+        Item::new("Show Previews").value(PREVIEWS[c.previews as usize % 3]).action(f(CenterField::Previews)),
+        Item::new("Allow When the Display Is Sleeping").switch(c.sleeping, f(CenterField::Sleeping)),
+        Item::new("Allow When the Screen Is Locked").switch(c.locked, f(CenterField::Locked)),
+        Item::new("Allow When Mirroring or Sharing the Display").switch(c.mirroring, f(CenterField::Mirroring)),
+    ])
+    .header("NOTIFICATION CENTER")
+    .footer("These apply to every app; an app's own Show Previews can hide more, never less.")
 }
 
 /// Settings › Notifications › one app. Rows are the bifrost ones; the phone mockups of the
@@ -312,8 +418,8 @@ mod tests {
     fn every_posting_app_gets_a_row_and_a_page() {
         let p = NotifyPrefs { muted: vec![AppId::Photos], ..Default::default() };
         let s = spec(&p);
-        assert_eq!(s.groups[0].items.len(), posting_apps().count());
-        assert!(s.groups[0].items.iter().all(|i| i.label != "Settings"));
+        assert_eq!(s.groups[1].items.len(), posting_apps().count());
+        assert!(s.groups[1].items.iter().all(|i| i.label != "Settings"));
         assert_eq!(app_spec(&p, "Photos").groups.len(), 1);
         assert!(app_spec(&NotifyPrefs::default(), "Photos").groups.len() > 4);
     }
@@ -322,11 +428,11 @@ mod tests {
     fn each_app_row_has_its_icon_and_says_what_is_on() {
         let p = NotifyPrefs { muted: vec![AppId::Photos], apps: vec![(AppId::Camera, AppNotif { sounds: false, persistent: true, ..AppNotif::default() })], ..Default::default() };
         let s = spec(&p);
-        assert!(s.groups[0].items.iter().all(|i| i.app_icon.is_some()), "every row has an icon slot");
-        let row = |name: &str| s.groups[0].items.iter().find(|i| i.label == name).expect("a row").value.clone();
+        assert!(s.groups[1].items.iter().all(|i| i.app_icon.is_some()), "every row has an icon slot");
+        let row = |name: &str| s.groups[1].items.iter().find(|i| i.label == name).expect("a row").value.clone();
         assert_eq!(row("Photos"), "Off", "a muted app");
-        assert_eq!(row("Camera"), "Alerts, Badges");
-        assert_eq!(summary(&NotifyPrefs::default(), AppId::Files), "Banners, Sounds, Badges");
+        assert_eq!(row("Camera"), "Badges, Alerts");
+        assert_eq!(summary(&NotifyPrefs::default(), AppId::Files), "Badges, Sounds, Banners", "the reference's order");
         let quiet = NotifyPrefs { apps: vec![(AppId::Files, AppNotif { banners: false, sounds: false, badges: false, ..AppNotif::default() })], ..Default::default() };
         assert_eq!(summary(&quiet, AppId::Files), "On", "allowed, but nothing shows or sounds");
     }
@@ -398,6 +504,40 @@ mod tests {
         assert_eq!(g.items[2].action, Action::Notify(NotifyEdit::Mode(2)));
         let none = modes_group(&NotifyPrefs { modes: vec!["Work".into()], ..Default::default() });
         assert!(none.items.iter().all(|i| i.accessory == super::super::list::Accessory::Check(false)));
+    }
+
+    /// E2E W5-9: the page opens with the Notification Center group (Show Previews and the three Allow switches) above
+    /// Application Notifications, and its rows edit the shared options.
+    #[test]
+    fn the_notification_center_group_comes_before_the_apps_and_round_trips() {
+        let s = spec(&NotifyPrefs::default());
+        assert_eq!(s.groups[0].header.as_deref(), Some("NOTIFICATION CENTER"));
+        assert_eq!(s.groups[1].header.as_deref(), Some("APPLICATION NOTIFICATIONS"));
+        let labels: Vec<&str> = s.groups[0].items.iter().map(|i| i.label.as_str()).collect();
+        assert_eq!(labels, ["Show Previews", "Allow When the Display Is Sleeping", "Allow When the Screen Is Locked", "Allow When Mirroring or Sharing the Display"]);
+        assert_eq!(s.groups[0].items[0].value, "Always");
+        assert_eq!(s.groups[0].items[3].accessory, super::super::list::Accessory::Switch(false), "no banners while sharing by default");
+        assert_eq!(s.groups[0].items[1].action, Action::Notify(NotifyEdit::Center(CenterField::Sleeping)));
+        let mut c = CenterPrefs::default();
+        c.apply(CenterField::Previews);
+        c.apply(CenterField::Locked);
+        c.apply(CenterField::Mirroring);
+        assert_eq!((c.previews, c.locked, c.mirroring), (1, false, true));
+        assert_eq!(CenterPrefs::decode(&c.encode()), c);
+        assert_eq!(CenterPrefs::decode("9x"), CenterPrefs::default());
+        assert_eq!(spec(&NotifyPrefs { center: c, ..Default::default() }).groups[0].items[0].value, "When Unlocked");
+    }
+
+    /// E2E W5-9: Settings > Focus has Focus Status and Add Focus…, which offers each Focus type once.
+    #[test]
+    fn add_focus_offers_each_preset_once_and_the_status_names_the_focus_on() {
+        let mut p = NotifyPrefs { modes: vec!["Do Not Disturb".into(), "Work".into(), "reading".into()], ..Default::default() };
+        assert_eq!(next_preset(&p.modes), Some("Fitness"), "Reading is there already");
+        assert_eq!(add_mode_group(&p).unwrap().items[0].action, Action::Notify(NotifyEdit::AddMode));
+        p.modes.extend(FOCUS_PRESETS.iter().map(|s| s.to_string()));
+        assert!(next_preset(&p.modes).is_none() && add_mode_group(&p).is_none(), "nothing left to add");
+        assert_eq!(status_group(Some("Work")).items[0].value, "Work");
+        assert_eq!(status_group(None).items[0].value, "Off");
     }
 
     #[test]

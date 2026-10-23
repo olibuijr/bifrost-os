@@ -31,6 +31,12 @@ pub const BAR_TEXT_SHADOW_ALPHA: u32 = 90;
 /// The Weather card in the Notification Center column: a blue plate laid over the glass (the same in Light and Dark,
 /// white text on it).
 pub const NC_WEATHER_TINT: u32 = pack(52, 108, 190, 225);
+/// Notification Center tiles (cards, Calendar, widget rows) and the desktop notification banners: lighter than a
+/// menu's tint so the desktop shows through the blur, light translucent tiles in Light as in the reference
+/// (27-Golden-Gate-Notification-Center.png). Straight alpha, as `glass::tint` takes it.
+pub const NC_TILE_TINT: Pair = Pair::new(pack(40, 40, 42, 175), pack(250, 250, 250, 160));
+/// The Focus moon (systemIndigo): Control Center's Focus module and Notification Center's Focus line.
+pub const FOCUS_INDIGO: u32 = pack(88, 86, 214, 255);
 /// The quiet "No Notifications" line sits at this share (0..255) of the bar text's strength.
 pub const NC_QUIET_ALPHA: u32 = 190;
 /// Over a light wallpaper the bar's titles and status items are near-black (85%), with a faint light halo.

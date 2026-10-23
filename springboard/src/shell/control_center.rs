@@ -2538,13 +2538,19 @@ impl Shell {
                     }
                     let tx = dx + d + ui.pt(8.0);
                     let room = x + w - tx - ui.pt(DK_PAD_PT);
-                    let (f1, f2) = (self.fit_chrome(title, MAC_HEADLINE_PT, room), self.fit_chrome(&sub, MAC_SUBHEAD_PT, room));
-                    let sub_ink = LABEL_2.now();
-                    let h1 = self.label(&f1, MAC_HEADLINE_PT, Weight::Semibold, label, |im| im.h);
-                    let h2 = self.label(&f2, MAC_SUBHEAD_PT, Weight::Regular, sub_ink, |im| im.h);
-                    let top = y + (h - (h1 + h2) as f32) / 2.0;
-                    self.label(&f1, MAC_HEADLINE_PT, Weight::Semibold, label, |im| s.blit(im, tx as i32, top as i32, 255, alpha));
-                    self.label(&f2, MAC_SUBHEAD_PT, Weight::Regular, sub_ink, |im| s.blit(im, tx as i32, (top + h1 as f32) as i32, 255, alpha));
+                    // a Focus that is on is named by the module itself ("Do Not Disturb"), wrapped onto two lines rather
+                    // than cut short as "Do Not Dis..." under a "Focus" title (E2E W5-8); the lit disc says it is on
+                    let lines: Vec<(String, f32, Weight, u32)> = if tile == Tile::Focus && on {
+                        self.ui.wrap_capped(&sub, MAC_HEADLINE_PT, Weight::Semibold, room, 2).into_iter().map(|l| (l, MAC_HEADLINE_PT, Weight::Semibold, label)).collect()
+                    } else {
+                        vec![(self.fit_chrome(title, MAC_HEADLINE_PT, room), MAC_HEADLINE_PT, Weight::Semibold, label), (self.fit_chrome(&sub, MAC_SUBHEAD_PT, room), MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now())]
+                    };
+                    let heights: Vec<f32> = lines.iter().map(|(text, pt, weight, ink)| self.label(text, *pt, *weight, *ink, |im| im.h as f32)).collect();
+                    let mut top = y + (h - heights.iter().sum::<f32>()) / 2.0;
+                    for ((text, pt, weight, ink), lh) in lines.iter().zip(heights) {
+                        self.label(text, *pt, *weight, *ink, |im| s.blit(im, tx as i32, top as i32, 255, alpha));
+                        top += lh;
+                    }
                 }
             }
         }

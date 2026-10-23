@@ -2208,7 +2208,9 @@ impl Shell {
             self.desk_fx_start(app, FxCall::Restore, t);
         }
         self.quicksearch.note_launch(app);
-        self.clear_notifications(app);
+        // Opening an app on the desktop leaves its notifications in Notification Center, as on the reference: a click on
+        // one card or banner clears that one, a stack clears from its X or Clear All (E2E W5-6). The tablet's `open`
+        // still clears them.
         self.fullscreen = false;
         if !self.is_locked() {
             self.screen = Screen::App(app);
