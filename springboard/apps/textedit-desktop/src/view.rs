@@ -150,7 +150,7 @@ pub enum Action {
     DarkBackground,
     /// Edit > Substitutions > Text Replacement
     TextReplacement,
-    /// Preferences > New Documents > Default Font (index into `FAMILIES`)
+    /// Preferences > New Documents > Default Font (index into `text::families`, every installed family)
     DefaultFont(u8),
     /// Edit > Find > Select Line: the panel's Select and Cancel buttons
     LineDone,
@@ -189,6 +189,9 @@ const MENU_BASE: u32 = 0x4E00;
 /// The ids of the families (`Action::Font`), one per `Style::font` index 0 to 255, after every other item's id.
 const FONT_IDS: u32 = 0x100;
 const FONT_IDS_END: u32 = FONT_IDS + u8::MAX as u32;
+/// The ids of Preferences > Default Font (`Action::DefaultFont`), one per family index, after the families' ids.
+const DEFAULT_FONT_IDS: u32 = FONT_IDS_END + 1;
+const DEFAULT_FONT_IDS_END: u32 = DEFAULT_FONT_IDS + u8::MAX as u32;
 
 impl Action {
     /// The menu id of this action, or `None` for document commands (they have the controller's ids).
@@ -288,7 +291,7 @@ impl Action {
             Action::Rewrap => MENU_BASE + 0xbb,
             Action::DarkBackground => MENU_BASE + 0xbc,
             Action::TextReplacement => MENU_BASE + 0xbd,
-            Action::DefaultFont(i) => MENU_BASE + 0xc0 + i as u32,
+            Action::DefaultFont(i) => MENU_BASE + DEFAULT_FONT_IDS + i as u32,
             Action::LineDone => MENU_BASE + 0xbe,
             Action::LineCancel => MENU_BASE + 0xbf,
             Action::ShowSpelling => MENU_BASE + 0xc3,
@@ -409,7 +412,6 @@ impl Action {
             0xbb => Action::Rewrap,
             0xbc => Action::DarkBackground,
             0xbd => Action::TextReplacement,
-            0xc0..=0xc2 => Action::DefaultFont((offset - 0xc0) as u8),
             0xbe => Action::LineDone,
             0xbf => Action::LineCancel,
             0xc3 => Action::ShowSpelling,
@@ -434,6 +436,7 @@ impl Action {
             0xfd => Action::FontsDone,
             0xfe => Action::ColorsDone,
             FONT_IDS..=FONT_IDS_END => Action::Font((offset - FONT_IDS) as u8),
+            DEFAULT_FONT_IDS..=DEFAULT_FONT_IDS_END => Action::DefaultFont((offset - DEFAULT_FONT_IDS) as u8),
             _ => return None,
         })
     }
@@ -1335,13 +1338,17 @@ mod tests {
             assert_eq!(Action::from_id(id), Some(a));
         }
         // every family index has an id of its own, after all the other items' ids
-        let others: Vec<u32> = all.iter().filter(|a| !matches!(a, Action::Font(_))).filter_map(|a| a.id()).collect();
+        let others: Vec<u32> = all.iter().filter(|a| !matches!(a, Action::Font(_) | Action::DefaultFont(_))).filter_map(|a| a.id()).collect();
         for i in [0u8, 3, 8, 9, 100, 255] {
             let id = Action::Font(i).id().unwrap();
             assert_eq!(Action::from_id(id), Some(Action::Font(i)));
             assert!(others.iter().all(|other| *other < id), "family {i}");
+            // Preferences > Default Font has an id for every family as well, after the families'
+            let default = Action::DefaultFont(i).id().unwrap();
+            assert_eq!(Action::from_id(default), Some(Action::DefaultFont(i)));
+            assert!(default > Action::Font(255).id().unwrap(), "default font {i}");
         }
-        assert_eq!(Action::from_id(MENU_BASE + FONT_IDS_END + 1), None);
+        assert_eq!(Action::from_id(MENU_BASE + DEFAULT_FONT_IDS_END + 1), None);
         assert_eq!(Action::Document(item::NEW).id(), None, "document commands use the controller's ids");
         assert_eq!(Action::from_id(item::SAVE), None);
     }
