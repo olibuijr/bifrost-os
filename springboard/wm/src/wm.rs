@@ -83,6 +83,35 @@ impl Wm {
     /// asks for the position it had, `origin`: the cascade is skipped and the frame is only kept on screen the way a
     /// drag keeps it (`keep_on_screen`), so the window returns exactly where the person left it.
     pub fn map_at(&mut self, id: WindowId, w: i32, h: i32, origin: Option<(i32, i32)>) -> Rect {
+        let (rect, level) = self.new_frame(id, w, h, origin);
+        self.insert_top(Window { id, rect, restore: None, tiled: None, minimized: false, level, full: None });
+        self.key = Some(id);
+        rect
+    }
+
+    /// Like `map_at`, but the window does not take the front: the shell stacks and activates its own windows
+    /// (xdg-activation), and a window it brings back while another is in front (Overview, a minimize) maps just under
+    /// the key window (or, when the key window is in another band, under the topmost shown window of its own band); the
+    /// key window keeps the keyboard. In a band with nothing shown it goes to the top of the band, still without it.
+    /// `level` is the band it maps into.
+    pub fn map_behind(&mut self, id: WindowId, w: i32, h: i32, origin: Option<(i32, i32)>, level: Level) -> Rect {
+        let (rect, _) = self.new_frame(id, w, h, origin);
+        // under the key window when it is in this band, else under the topmost shown window of the band
+        let key = self
+            .key
+            .filter(|&k| self.visible(k))
+            .and_then(|k| self.windows.iter().position(|o| o.id == k && o.level == level))
+            .or_else(|| self.windows.iter().rposition(|o| !o.minimized && o.level == level));
+        let win = Window { id, rect, restore: None, tiled: None, minimized: false, level, full: None };
+        match key {
+            Some(at) => self.windows.insert(at, win),
+            None => self.insert_top(win),
+        }
+        rect
+    }
+
+    /// The frame and level a newly mapped `w` x `h` window takes (`map_at`); the window is taken out of the stack.
+    fn new_frame(&mut self, id: WindowId, w: i32, h: i32, origin: Option<(i32, i32)>) -> (Rect, Level) {
         let a = self.area;
         let (w, h) = (w.min(a.w), h.min(a.h));
         let step = CASCADE * self.windows.iter().filter(|w| !w.minimized).count() as i32;
@@ -100,9 +129,8 @@ impl Wm {
         let rect = Rect::new(x, y, w, h);
         let level = self.level(id).unwrap_or_default();
         self.windows.retain(|w| w.id != id);
-        self.insert_top(Window { id, rect, restore: None, tiled: None, minimized: false, level, full: None });
-        self.key = Some(id);
-        rect
+        if self.key == Some(id) { self.key = None; }
+        (rect, level)
     }
 
     pub fn unmap(&mut self, id: WindowId) {
@@ -280,9 +308,14 @@ impl Wm {
     /// The tiled layout the window is in, if any.
     pub fn snapped(&self, id: WindowId) -> Option<Layout> { self.get(id).and_then(|w| w.tiled) }
 
-    /// The client settled on a frame of its own (it chose its size, or finished a resize).
-    pub fn set_frame(&mut self, id: WindowId, rect: Rect) {
-        if let Some(w) = self.get_mut(id).filter(|w| w.full.is_none()) { w.rect = rect; w.tiled = None; }
+    /// The client settled on a frame of its own (it chose its size, or finished a resize). Returns whether the frame
+    /// changed; the caller keeps the toplevel's pending configure size in step (`WmState::set_frame`).
+    pub fn set_frame(&mut self, id: WindowId, rect: Rect) -> bool {
+        let Some(w) = self.get_mut(id).filter(|w| w.full.is_none()) else { return false };
+        let changed = w.rect != rect || w.tiled.is_some();
+        w.rect = rect;
+        w.tiled = None;
+        changed
     }
 
     /// Goes back to the frame from before the last maximize or tile and leaves the tile; a window that never left its
@@ -838,5 +871,94 @@ mod tests {
         assert!(wm.is_maximized(1));
         assert_eq!(wm.place(1, Placement::Previous), Some(r), "and goes back to the frame from before the Fill");
         assert!(!wm.is_maximized(1));
+    }
+
+    /// W4-1/W4-5: a window the shell brings back while another one is in front maps under it, and the front window
+    /// keeps the keyboard; the shell's later activation raises it like any other window.
+    #[test]
+    fn a_window_mapped_behind_goes_under_the_key_window_and_leaves_the_focus() {
+        let mut wm = Wm::new(AREA);
+        wm.map(1, 800, 600);
+        wm.map(2, 800, 600);
+        wm.raise(1);
+        assert_eq!(wm.stack(), vec![2, 1]);
+        let r = wm.map_behind(3, 640, 480, Some((100, 100)), Level::Normal);
+        assert_eq!((r.x, r.y, r.w, r.h), (100, 100, 640, 480), "it maps where the shell asked");
+        assert_eq!(wm.stack(), vec![2, 3, 1], "just under the key window, over the others");
+        assert_eq!(wm.focused(), Some(1), "the front window keeps the keyboard");
+        wm.raise(3);
+        assert_eq!(wm.stack(), vec![2, 1, 3]);
+        assert_eq!(wm.focused(), Some(3));
+    }
+
+    #[test]
+    fn a_window_mapped_behind_stays_in_its_own_band() {
+        let mut wm = Wm::new(AREA);
+        wm.map(1, 800, 600);
+        wm.map(2, 300, 200);
+        wm.set_level(2, Level::Floating);
+        wm.map(3, 800, 600);
+        wm.raise(2);
+        // the key window floats: a normal window goes under the topmost normal one
+        wm.map_behind(4, 640, 480, None, Level::Normal);
+        assert_eq!(wm.stack(), vec![1, 4, 3, 2]);
+        assert_eq!(wm.focused(), Some(2));
+        // a floating window goes under the floating key window
+        wm.map_behind(5, 200, 100, None, Level::Floating);
+        assert_eq!(wm.stack(), vec![1, 4, 3, 5, 2]);
+        assert_eq!(wm.level(5), Some(Level::Floating));
+        // nothing else shown: the top of the band
+        let mut empty = Wm::new(AREA);
+        empty.map_behind(7, 640, 480, None, Level::Normal);
+        assert_eq!(empty.stack(), vec![7]);
+        assert_eq!(empty.focused(), Some(7), "the only window shown is the topmost");
+    }
+
+    /// W4-3: the window server keeps the toplevel's pending size in step only when the frame really changed.
+    #[test]
+    fn settling_on_a_frame_reports_whether_it_changed() {
+        let mut wm = Wm::new(AREA);
+        let r = wm.map(1, 800, 600);
+        assert!(!wm.set_frame(1, r), "the same frame again");
+        assert!(wm.set_frame(1, Rect { w: 640, ..r }));
+        wm.tile(1, Layout::Left);
+        let tile = wm.rect(1).unwrap();
+        assert!(wm.set_frame(1, tile), "the same frame still leaves the tile");
+        assert_eq!(wm.snapped(1), None);
+        assert!(!wm.set_frame(9, r), "an unknown window");
+        wm.enter_full_screen(1);
+        assert!(!wm.set_frame(1, r), "a full-screen window keeps the output");
+    }
+
+    /// W3-6: after a Fill, a tile or full screen, Return to Previous Size and Center go back to the frame from before.
+    #[test]
+    fn previous_size_and_centre_return_after_fill_tile_and_full_screen() {
+        let (area, output) = screen(1920, 1080);
+        let mut wm = Wm::new(area);
+        wm.set_output(output);
+        let r = wm.map_at(1, 800, 600, Some((100, 100)));
+        // Fill (the shell's zoom), then Previous
+        wm.toggle_maximize(1);
+        assert_eq!(wm.place(1, Placement::Previous), Some(r));
+        // a tile, then Centre: the size from before the tile, centred
+        wm.tile(1, Layout::Left);
+        let centred = Rect::new(area.x + (area.w - 800) / 2, area.y + (area.h - 600) / 2, 800, 600);
+        assert_eq!(wm.place(1, Placement::Centre), Some(centred));
+        assert_eq!(wm.place(1, Placement::Previous), Some(centred), "nothing left to go back to: it stays");
+        // a tile, full screen in and out, then Previous
+        wm.tile(1, Layout::Right);
+        wm.enter_full_screen(1);
+        assert_eq!(wm.place(1, Placement::Previous), None, "nothing moves a full-screen window");
+        wm.leave_full_screen(1);
+        assert_eq!(wm.snapped(1), Some(Layout::Right), "it comes back tiled");
+        assert_eq!(wm.place(1, Placement::Previous), Some(centred));
+        // Fill, then a tile, then Previous: the frame from before the Fill
+        wm.toggle_maximize(1);
+        wm.tile(1, Layout::Left);
+        assert_eq!(wm.place(1, Placement::Previous), Some(centred));
+        // a frame the client settled on after a tile keeps the way back to the frame before the tile
+        wm.tile(1, Layout::Left);
+        wm.set_frame(1, Rect::new(0, area.y, 700, 500));
+        assert_eq!(wm.place(1, Placement::Previous), Some(centred));
     }
 }

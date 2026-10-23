@@ -51,6 +51,19 @@ pub fn exclusive_keyboard_allowed(locked: bool, privileged: bool) -> bool { !loc
 #[derive(Default)]
 pub struct ResizeTarget(pub RefCell<Option<(Edges, Rect)>>);
 
+/// The shell asked to activate a toplevel that had no buffer yet (`activate_surface`): it takes the front when it maps.
+#[derive(Default)]
+pub struct ActivateOnMap(pub std::cell::Cell<bool>);
+
+/// Whether a toplevel that just got its first buffer is raised and focused as it maps. A window the shell stacks itself
+/// (`WmState::shell_stacks`) takes the front only when the shell asked for it (an activation that came before the
+/// buffer) or when nothing else is shown; otherwise the shell's choice of front window stands, and a window it brings
+/// back behind that one (Overview, a minimize) maps under it without the keyboard (W4-1, W4-5). Without the shell (an
+/// app's own window, a session without the shell) every new window takes the front, as before.
+pub fn map_takes_front(shell_stacks: bool, activation_asked: bool, others_shown: bool) -> bool {
+    !shell_stacks || activation_asked || !others_shown
+}
+
 impl CompositorHandler for WmState {
     fn compositor_state(&mut self) -> &mut CompositorState { &mut self.compositor_state }
 
@@ -106,7 +119,8 @@ impl CompositorHandler for WmState {
 }
 
 impl WmState {
-    /// A new toplevel gets its initial configure; once it has a buffer, `wm` places, raises and focuses it.
+    /// A new toplevel gets its initial configure; once it has a buffer, `wm` places it. It is raised and focused unless
+    /// the shell stacks it (`map_takes_front`).
     fn place_pending(&mut self, root: &WlSurface) {
         let Some(i) = self.pending.iter().position(|w| w.toplevel().is_some_and(|t| t.wl_surface() == root)) else { return };
         let window = self.pending[i].clone();
@@ -127,19 +141,37 @@ impl WmState {
         let id = self.id_of(&window);
         // a window the shell brought back maps where it was (`bifrost_window_level_v1` set_origin), not at the cascade
         let origin = window.wl_surface().and_then(|s| crate::window_level::origin(&s));
-        let r = self.wm.map_at(id, size.w, size.h, origin);
+        let activation_asked = window.user_data().get::<ActivateOnMap>().is_some_and(|a| a.0.get());
+        let others_shown = self.wm.stack().into_iter().any(|o| o != id && self.wm.visible(o));
+        let takes_front = map_takes_front(self.shell_stacks(&window), activation_asked, others_shown);
         // the level the shell asked for this surface before it mapped (`bifrost_window_level_v1`)
-        if let Some(surface) = window.wl_surface() {
-            self.wm.set_level(id, crate::window_level::level(&surface));
-        }
+        let level = window.wl_surface().map(|s| crate::window_level::level(&s)).unwrap_or_default();
+        let r = if takes_front {
+            let r = self.wm.map_at(id, size.w, size.h, origin);
+            self.wm.set_level(id, level);
+            r
+        } else {
+            self.wm.map_behind(id, size.w, size.h, origin, level)
+        };
         if (r.w, r.h) != (size.w, size.h) {
             toplevel.with_pending_state(|s| s.size = Some((r.w, r.h).into()));
         }
         window.user_data().insert_if_missing(ResizeTarget::default);
-        self.space.map_element(window, (r.x, r.y), false);
-        // the owner hears the frame the window server chose for it (a lock keeps `focus` from running)
-        self.report_frames();
-        self.focus(Some(id), smithay::utils::SERIAL_COUNTER.next_serial());
+        self.space.map_element(window.clone(), (r.x, r.y), false);
+        if takes_front {
+            // the owner hears the frame the window server chose for it (a lock keeps `focus` from running)
+            self.report_frames();
+            self.focus(Some(id), smithay::utils::SERIAL_COUNTER.next_serial());
+            // `focus` configures only a change of activation: a size `wm` fitted the window to still has to be sent
+            toplevel.send_pending_configure();
+        } else {
+            // the shell's window goes under the one in front, inactive, and the keyboard stays where it was; the space
+            // follows the `wm` order, and the shell activates the window when it brings it forward
+            window.set_activated(false);
+            toplevel.send_pending_configure();
+            self.apply_frames();
+            self.sync_toplevels();
+        }
     }
 
     /// After a commit: a resizing window is anchored at the edges that do not move; any other size change the
@@ -158,10 +190,12 @@ impl WmState {
             // a tiled or full-screen window is sized by the window server (the client was configured to it): a commit made
             // before the client applied that configure must not turn the old size back into its frame
             None if self.wm.snapped(id).is_some() || self.wm.is_full_screen(id) => return,
+            // nor does a commit drawn before the client saw a resize it was sent (a maximize, a centre)
+            None if awaiting_resize(window, (size.w, size.h)) => return,
             None if (size.w, size.h) != (frame.w, frame.h) && size.w > 0 && size.h > 0 => Rect { w: size.w, h: size.h, ..frame },
             None => return,
         };
-        self.wm.set_frame(id, rect);
+        self.set_frame(window, id, rect);
         self.place(window, (rect.x, rect.y));
     }
 
@@ -477,6 +511,27 @@ impl WlrLayerShellHandler for WmState {
     }
 }
 
+/// Whether `window` committed `committed` while a configure that resizes it is still unacknowledged: one whose size is
+/// neither the size it was last configured to nor the size it just committed (`resize_in_flight`).
+fn awaiting_resize(window: &Window, committed: (i32, i32)) -> bool {
+    let Some(t) = window.toplevel() else { return false };
+    with_states(t.wl_surface(), |states| {
+        states.data_map.get::<XdgToplevelSurfaceData>().is_some_and(|d| {
+            let d = d.lock().unwrap_or_else(|p| p.into_inner());
+            let unacked: Vec<Option<(i32, i32)>> = d.pending_configures().iter().map(|c| c.state.size.map(|s| (s.w, s.h))).collect();
+            resize_in_flight(d.current.size.map(|s| (s.w, s.h)), &unacked, committed)
+        })
+    })
+}
+
+/// Whether one of the `unacked` configure sizes asks the client for a new size (not the `current` configured one) that
+/// its `committed` buffer does not have yet: that commit was drawn before the client saw the request (a maximize, a
+/// centre), and taking it as the window's own frame would put the old size back into the pending state, to go out with
+/// the next configure. A configure that only repeats the size (an activation change) never holds a commit back.
+pub fn resize_in_flight(current: Option<(i32, i32)>, unacked: &[Option<(i32, i32)>], committed: (i32, i32)) -> bool {
+    unacked.iter().any(|&size| size.is_some() && size != current && size != Some(committed))
+}
+
 /// The pointer grab a move or resize request may start from: the client must hold a button press on its surface.
 fn check_grab(seat: &Seat<WmState>, surface: &WlSurface, serial: Serial) -> Option<GrabStartData<WmState>> {
     let pointer = seat.get_pointer()?;
@@ -540,6 +595,28 @@ delegate_layer_shell!(WmState);
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_window_the_shell_stacks_takes_the_front_only_when_the_shell_asks() {
+        assert!(map_takes_front(false, false, true), "an app's window, or no shell: every new window comes forward");
+        assert!(map_takes_front(false, false, false));
+        assert!(!map_takes_front(true, false, true), "the shell's window mapped behind the front one stays behind (W4-1)");
+        assert!(map_takes_front(true, true, true), "the shell activated it before its first buffer");
+        assert!(map_takes_front(true, false, false), "the first window on an empty desktop takes the keyboard");
+    }
+
+    /// W4-3: a commit drawn before the client saw a resize is not its own frame; one that only crosses an activation
+    /// configure is.
+    #[test]
+    fn a_commit_older_than_a_resize_request_is_not_the_windows_own_frame() {
+        let old = Some((923, 861));
+        assert!(!resize_in_flight(old, &[], (800, 600)), "nothing in flight: the client chose its size");
+        assert!(resize_in_flight(old, &[Some((2560, 1233))], (923, 861)), "a maximize not applied yet");
+        assert!(!resize_in_flight(old, &[Some((2560, 1233))], (2560, 1233)), "the maximize applied before its ack");
+        assert!(!resize_in_flight(old, &[old], (700, 500)), "an activation change repeats the size: the resize is the client's");
+        assert!(!resize_in_flight(old, &[None], (700, 500)), "a configure without a size asks for none");
+        assert!(resize_in_flight(old, &[old, Some((1280, 1233))], (923, 861)), "any resize in flight counts");
+    }
 
     #[test]
     fn only_the_shell_takes_the_keyboard_exclusively_and_never_under_a_lock() {

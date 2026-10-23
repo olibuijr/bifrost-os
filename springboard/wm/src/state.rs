@@ -439,7 +439,30 @@ impl WmState {
         self.frame_reports.send(&now);
     }
 
-    /// Raises `id`, gives it keyboard focus and marks it active; every other window is marked inactive.
+    /// The client settled on a frame of its own (a size it chose, a resize it finished): `wm` keeps it, and the
+    /// toplevel's pending size follows. Smithay sends the whole pending state with every configure, so a size left
+    /// behind there (an old tile) came back with the next activation change and resized the window to it (W4-3).
+    /// Nothing is sent here: the size rides along with the next configure that carries a real change.
+    pub fn set_frame(&mut self, window: &Window, id: WindowId, rect: Rect) {
+        if !self.wm.set_frame(id, rect) {
+            return;
+        }
+        if let (Some(t), Some(r)) = (window.toplevel(), self.wm.rect(id)) {
+            t.with_pending_state(|s| s.size = Some((r.w, r.h).into()));
+        }
+    }
+
+    /// Whether the shell stacks and activates `window` itself: its client connected through the privileged socket and
+    /// follows the frames the window server reports (`bifrost_window_level_v1`). The window server then does not
+    /// raise or focus it when it maps; the shell asks for that with xdg-activation (`activate_surface`).
+    pub fn shell_stacks(&self, window: &Window) -> bool {
+        let Some(surface) = window.wl_surface() else { return false };
+        let privileged = smithay::reexports::wayland_server::Resource::client(surface.as_ref()).is_some_and(|c| crate::privileged::is_privileged(&c));
+        privileged && self.frame_reports.bound_by_owner_of(&surface)
+    }
+
+    /// Raises `id`, gives it keyboard focus and marks it active; every other window is marked inactive. Only a window
+    /// whose activation changed is sent a configure: the others have nothing new to hear.
     pub fn focus(&mut self, id: Option<WindowId>, serial: smithay::utils::Serial) {
         if self.locked {
             return;
@@ -453,9 +476,10 @@ impl WmState {
         let windows: Vec<Window> = self.space.elements().cloned().collect();
         for w in &windows {
             let active = Self::known_id(w) == focused && focused.is_some();
-            w.set_activated(active);
-            if let Some(t) = w.toplevel() {
-                t.send_pending_configure();
+            if w.set_activated(active) {
+                if let Some(t) = w.toplevel() {
+                    t.send_pending_configure();
+                }
             }
         }
         let surface = focused.and_then(|id| self.window(id)).and_then(|w| w.wl_surface().map(|s| s.into_owned()));
