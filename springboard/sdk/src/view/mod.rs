@@ -292,6 +292,12 @@ pub trait View: 'static {
     }
     /// A pointer event (window points, translated like `handle` sees it) from a view below this one; see `observes_pointer`.
     fn observe_pointer(&mut self, _ev: &ViewEvent) {}
+    /// `scrollWheel:`: the wheel moved the content under the pointer by `dx`, `dy` points (the content's travel, so a
+    /// wheel turned down is a negative `dy`). True when this view scrolled; otherwise the wheel goes on to its
+    /// ancestors (`Window::wheel`). The default takes none.
+    fn scroll_wheel(&mut self, _dx: f32, _dy: f32) -> bool {
+        false
+    }
     /// Frame time in seconds (called by `Window::tick` before drawing); mark the view dirty to animate.
     fn tick(&mut self, _t: f64) {}
     /// True while the view advances on `tick` by itself (a fling, a spinner), so the window asks for the next wake.
@@ -886,6 +892,23 @@ impl<S: Responder> Window<S> {
                 v.observe_pointer(&offset_event(ev, ox, oy));
             }
         }
+    }
+
+    /// The scroll wheel at window point (`x`, `y`) moved the content `dx`, `dy` points (`App::pointer` and
+    /// `App::window_pointer`, after `PointerEvent::to_points` for the main window). The deepest view under the pointer
+    /// and then its ancestors are offered it (`View::scroll_wheel`) until one scrolls, so the scroll view the pointer is
+    /// over moves, in the main window and in an extra window alike. True when a new frame is needed.
+    pub fn wheel(&mut self, x: f32, y: f32, dx: f32, dy: f32) -> bool {
+        let mut p = Vec::new();
+        if !pick(self.root(), x, y, &mut p) {
+            return false;
+        }
+        for depth in (0..=p.len()).rev() {
+            if at_mut(self.root.as_mut(), &p[..depth]).scroll_wheel(dx, dy) {
+                return self.needs_display();
+            }
+        }
+        false
     }
 
     /// Delivers `ev`; true when a new frame is needed. Pointer: the deepest view under the pointer (which becomes first

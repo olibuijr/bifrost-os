@@ -67,9 +67,10 @@ pub enum KeyInput {
     Code(u32),
 }
 
-/// Input for the key window of an app (`ToApp::WindowInput`): the keys, menu items, commands and text edits that go
-/// to the window with key focus. The main window gets the same input in the messages every app already handles
-/// (`WindowInput::to_app` with window 0), so an app without extra windows is unchanged.
+/// Input for one window of an app (`ToApp::WindowInput`): the keys, menu items, commands and text edits that go to the
+/// window with key focus, and the pointer events (wheel, hover, gestures) that go to the window under the pointer. The
+/// main window gets the same input in the messages every app already handles (`WindowInput::to_app` with window 0), so
+/// an app without extra windows is unchanged.
 #[derive(Clone, Debug, PartialEq)]
 pub enum WindowInput {
     Key(KeyInput),
@@ -81,6 +82,10 @@ pub enum WindowInput {
     UnmarkText { commit: bool },
     /// as `ToApp::DeleteSurrounding`
     DeleteSurrounding { before: u32, after: u32 },
+    /// as `ToApp::Pointer`, for the window under the pointer (not the key window), sent only when the app asked for
+    /// that kind (`ToShell::PointerInterest`). An extra window's locations and wheel deltas are window points, like
+    /// `ToApp::WindowTouch`; window 0 gets `ToApp::Pointer` in surface pixels as before.
+    Pointer(bifrost_ui::pointer_event::PointerEvent),
 }
 
 impl WindowInput {
@@ -97,6 +102,7 @@ impl WindowInput {
             WindowInput::SetMarkedText { text, sel_start, sel_len } => ToApp::SetMarkedText { text, sel_start, sel_len },
             WindowInput::UnmarkText { commit } => ToApp::UnmarkText { commit },
             WindowInput::DeleteSurrounding { before, after } => ToApp::DeleteSurrounding { before, after },
+            WindowInput::Pointer(ev) => ToApp::Pointer(ev),
         }
     }
 }
@@ -1334,7 +1340,7 @@ fn checked_title(title: String) -> Result<String, DecodeError> {
 }
 
 /// `WindowInput` after the window id: a kind byte, then the payload (`0` key, `1` command, `2` menu item, `3` marked
-/// text, `4` unmark, `5` delete surrounding).
+/// text, `4` unmark, `5` delete surrounding, `6` pointer: the `ToApp::Pointer` kind byte and payload, see `pointer`).
 fn window_input_encode(b: &mut Vec<u8>, input: &WindowInput) {
     match input {
         WindowInput::Key(KeyInput::Text(s)) => {
@@ -1370,6 +1376,10 @@ fn window_input_encode(b: &mut Vec<u8>, input: &WindowInput) {
             u32_(b, *before);
             u32_(b, *after);
         }
+        WindowInput::Pointer(ev) => {
+            b.push(6);
+            pointer::encode_event(ev, b);
+        }
     }
 }
 
@@ -1393,6 +1403,7 @@ fn window_input_decode(r: &mut Reader) -> Result<WindowInput, DecodeError> {
         }
         4 => WindowInput::UnmarkText { commit: r.u8()? != 0 },
         5 => WindowInput::DeleteSurrounding { before: r.u32()?, after: r.u32()? },
+        6 => WindowInput::Pointer(pointer::decode_event(r)?),
         _ => return Err(DecodeError::BadValue),
     })
 }
@@ -3315,6 +3326,20 @@ mod quick_action_tests {
             ToApp::WindowInput { window: 3, input: WindowInput::SetMarkedText { text: "にほん".into(), sel_start: 3, sel_len: 3 } },
             ToApp::WindowInput { window: 3, input: WindowInput::UnmarkText { commit: true } },
             ToApp::WindowInput { window: 3, input: WindowInput::DeleteSurrounding { before: 2, after: 0 } },
+            ToApp::WindowInput {
+                window: 3,
+                input: WindowInput::Pointer(bifrost_ui::pointer_event::PointerEvent::Wheel {
+                    x: 12.5,
+                    y: 40.0,
+                    dx: 0.0,
+                    dy: -19.2,
+                    precise: false,
+                    phase: bifrost_ui::wheel::Phase::None,
+                    momentum: bifrost_ui::wheel::Phase::None,
+                }),
+            },
+            ToApp::WindowInput { window: 3, input: WindowInput::Pointer(bifrost_ui::pointer_event::PointerEvent::Hover { x: 1.0, y: 2.0 }) },
+            ToApp::WindowInput { window: 3, input: WindowInput::Pointer(bifrost_ui::pointer_event::PointerEvent::HoverExit) },
         ];
         for m in app {
             assert_eq!(ToApp::decode(&m.encode()), Ok(m.clone()), "{m:?}");
@@ -3342,6 +3367,26 @@ mod quick_action_tests {
         assert_eq!(WindowInput::MenuAction(4).to_app(0), ToApp::MenuAction(4));
         assert_eq!(WindowInput::UnmarkText { commit: false }.to_app(0), ToApp::UnmarkText { commit: false });
         assert_eq!(WindowInput::MenuAction(4).to_app(2), ToApp::WindowInput { window: 2, input: WindowInput::MenuAction(4) });
+        let hover = bifrost_ui::pointer_event::PointerEvent::Hover { x: 3.0, y: 4.0 };
+        assert_eq!(WindowInput::Pointer(hover).to_app(0), ToApp::Pointer(hover));
+        assert_eq!(WindowInput::Pointer(hover).to_app(5), ToApp::WindowInput { window: 5, input: WindowInput::Pointer(hover) });
+    }
+
+    #[test]
+    fn a_window_pointer_event_has_the_pointer_layout_after_kind_six() {
+        use bifrost_ui::pointer_event::PointerEvent;
+        let ev = PointerEvent::Hover { x: 1.5, y: 2.5 };
+        let bytes = ToApp::WindowInput { window: 4, input: WindowInput::Pointer(ev) }.encode();
+        assert_eq!(&bytes[..4], &0x250u32.to_le_bytes());
+        assert_eq!(&bytes[4..8], &4u32.to_le_bytes());
+        // kind 6, then the `ToApp::Pointer` bytes without their tag: kind 1 (hover) and the two floats
+        let main = ToApp::Pointer(ev).encode();
+        assert_eq!(bytes[8], 6);
+        assert_eq!(&bytes[9..], &main[4..]);
+        // a NaN location is refused here as it is for the main window
+        let mut bad = bytes.clone();
+        bad[10..14].copy_from_slice(&f32::NAN.to_le_bytes());
+        assert_eq!(ToApp::decode(&bad), Err(DecodeError::BadValue));
     }
 
     #[test]

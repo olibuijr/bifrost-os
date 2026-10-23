@@ -1134,6 +1134,19 @@ impl AppHost {
         true
     }
 
+    /// Sends a pointer event (wheel, hover, gesture) to one of the app's extra windows, in window points
+    /// (`WindowInput::Pointer`), when the app asked for that kind and the window is open. True when it was sent.
+    pub fn pointer_window(&mut self, id: u32, ev: bifrost_ui::pointer_event::PointerEvent) -> bool {
+        if id == 0 {
+            return self.pointer(ev);
+        }
+        if self.pointer_interest & ev.interest() == 0 || !self.window_open(id) {
+            return false;
+        }
+        self.send(&WindowInput::Pointer(ev).to_app(id));
+        true
+    }
+
     /// A wheel event went to the app at `t` ms: the drag emulated for it (a down, a move and an up) is dropped.
     pub(super) fn swallow_wheel_drag(&mut self, t: f64) {
         self.wheel_swallow = (3, t + WHEEL_DRAG_MS);
@@ -3455,6 +3468,31 @@ mod window_table_tests {
                 ToApp::Touch { kind: TouchKind::Down, id: 0, x: 4.0, y: 5.0, t_ms: 7, mods: F::SHIFT },
                 ToApp::WindowTouch { id: 3, touch: 1, kind: TouchKind::Down, x: 1.0, y: 2.0, t_ms: 8, mods: F::COMMAND },
             ]
+        );
+    }
+
+    /// E2E: the wheel over an extra window reaches that window with its id, only when the app asked for the wheel and
+    /// the window is open, and the drag emulated for it is then dropped.
+    #[test]
+    fn the_wheel_over_an_extra_window_carries_the_window_id() {
+        use bifrost_ui::pointer_event::{PointerEvent, WHEEL};
+        use bifrost_ui::wheel::Phase;
+        let (channel, peer) = sys::socketpair_pair().unwrap();
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
+        let mut out = Pumped::default();
+        host.handle(ToShell::WindowOpen { id: 3, title: "Editor".into(), w: 10.0, h: 10.0, position: None, flags: 0 }, Vec::new(), &mut out);
+        let wheel = PointerEvent::Wheel { x: 4.0, y: 5.0, dx: 0.0, dy: -20.0, precise: false, phase: Phase::None, momentum: Phase::None };
+        assert!(!host.pointer_window(3, wheel), "an app that did not ask for the wheel keeps the emulated drag");
+        host.handle(ToShell::PointerInterest { mask: WHEEL }, Vec::new(), &mut out);
+        assert!(host.pointer_window(3, wheel));
+        assert!(!host.pointer_window(9, wheel), "no window 9 is open");
+        assert!(host.pointer_window(0, wheel), "window 0 is the main window");
+        host.swallow_wheel_drag(100.0);
+        assert!(host.swallows_touch(100.0) && host.swallows_touch(116.0) && host.swallows_touch(132.0));
+        assert!(!host.swallows_touch(140.0), "only the three emulated touches are dropped");
+        assert_eq!(
+            sent(&peer),
+            vec![ToApp::WindowInput { window: 3, input: WindowInput::Pointer(wheel) }, ToApp::Pointer(wheel)]
         );
     }
 }

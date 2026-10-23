@@ -273,7 +273,8 @@ pub(crate) fn deliver_window<A: crate::App>(app: &mut A, ctx: &crate::Ctx, msg: 
 
 /// What `App::window_input` does unless the app overrides it: keys and commands go to `window_event` of the window
 /// (as `Input::Key` and `Input::Command`); a menu item and a text edit go to the main window's `menu_action` and
-/// `text_input`, and drop for an extra window. An app that handles its own keys calls this for the rest.
+/// `text_input`, and drop for an extra window; a pointer event goes to `window_pointer` when the app asked for its kind.
+/// An app that handles its own keys calls this for the rest.
 pub fn default_window_input<A: crate::App + ?Sized>(app: &mut A, ctx: &crate::Ctx, window: WindowId, input: crate::proto::WindowInput) -> bool {
     use crate::proto::WindowInput;
     match input {
@@ -283,6 +284,8 @@ pub fn default_window_input<A: crate::App + ?Sized>(app: &mut A, ctx: &crate::Ct
         text @ (WindowInput::SetMarkedText { .. } | WindowInput::UnmarkText { .. } | WindowInput::DeleteSurrounding { .. }) if window.is_main() => {
             app.text_input(ctx, text.to_app(0))
         }
+        // the wheel, hover and gestures of the window under the pointer, of a kind the app asked for
+        WindowInput::Pointer(ev) if app.pointer_interest() & ev.interest() != 0 => app.window_pointer(ctx, window, &ev),
         _ => false,
     }
 }
@@ -570,6 +573,75 @@ mod tests {
         assert_eq!(over_the_wire(&mut app, &ctx, &key), Some(false));
         assert_eq!(ctx.key_window(), WindowId::MAIN, "a closed key window falls back to the main window");
         assert!(app.log.is_empty());
+    }
+
+    /// An app that takes the wheel and logs which window each pointer event reaches.
+    #[derive(Default)]
+    struct WheelFake {
+        interest: u32,
+        log: Vec<String>,
+    }
+
+    impl crate::App for WheelFake {
+        fn id(&self) -> &str {
+            "is.test.wheel"
+        }
+        fn draw(&mut self, _: &crate::Ctx, s: &mut crate::kit::Surface, _: f64) -> crate::kit::Damage {
+            crate::kit::Damage::new(s.w, s.h)
+        }
+        fn pointer_interest(&self) -> u32 {
+            self.interest
+        }
+        fn pointer(&mut self, _: &crate::Ctx, ev: &crate::pointer_events::PointerEvent) -> bool {
+            self.log.push(format!("main {ev:?}"));
+            true
+        }
+        fn window_pointer(&mut self, ctx: &crate::Ctx, window: WindowId, ev: &crate::pointer_events::PointerEvent) -> bool {
+            if window.is_main() {
+                return self.pointer(ctx, ev);
+            }
+            if let crate::pointer_events::PointerEvent::Wheel { dy, .. } = ev {
+                self.log.push(format!("wheel {dy} on {}", window.0));
+            }
+            true
+        }
+    }
+
+    #[test]
+    fn the_wheel_reaches_the_extra_window_it_is_over_with_its_id() {
+        use crate::pointer_events::{Phase, PointerEvent, HOVER, WHEEL};
+        let ctx = crate::runtime::test_ctx();
+        let mut app = WheelFake { interest: WHEEL, log: Vec::new() };
+        let id = ctx.open_window(WindowSpec::new("Editor", 480.0, 560.0)).unwrap();
+        let wheel = PointerEvent::Wheel { x: 10.0, y: 20.0, dx: 0.0, dy: -18.0, precise: false, phase: Phase::None, momentum: Phase::None };
+        let msg = |window: u32, ev: PointerEvent| ToApp::WindowInput { window, input: crate::proto::WindowInput::Pointer(ev) };
+        // over the wire, with no key focus on the window: the wheel goes to the window under the pointer
+        assert_eq!(over_the_wire_any(&mut app, &ctx, &msg(id.0, wheel)), Some(true));
+        assert_eq!(app.log, vec![format!("wheel -18 on {}", id.0)]);
+        // a kind the app did not ask for is dropped, and so is a closed window's wheel
+        app.log.clear();
+        assert_eq!(over_the_wire_any(&mut app, &ctx, &msg(id.0, PointerEvent::Hover { x: 1.0, y: 1.0 })), Some(false));
+        app.interest = WHEEL | HOVER;
+        ctx.close_window(id).unwrap();
+        assert_eq!(over_the_wire_any(&mut app, &ctx, &msg(id.0, wheel)), Some(false));
+        assert!(app.log.is_empty(), "{:?}", app.log);
+    }
+
+    #[test]
+    fn an_extra_windows_wheel_is_dropped_by_default_and_the_main_windows_goes_to_pointer() {
+        use crate::pointer_events::{Phase, PointerEvent};
+        let ctx = crate::runtime::test_ctx();
+        let mut app = KeyFake::default();
+        let wheel = PointerEvent::Wheel { x: 1.0, y: 2.0, dx: 0.0, dy: 3.0, precise: false, phase: Phase::None, momentum: Phase::None };
+        assert!(!crate::App::window_pointer(&mut app, &ctx, WindowId(1), &wheel));
+        let mut wheel_app = WheelFake::default();
+        assert!(crate::App::window_pointer(&mut wheel_app, &ctx, WindowId::MAIN, &wheel));
+        assert_eq!(wheel_app.log.len(), 1);
+    }
+
+    fn over_the_wire_any<A: crate::App>(app: &mut A, ctx: &crate::Ctx, m: &ToApp) -> Option<bool> {
+        let decoded = ToApp::decode(&m.encode()).expect("the message decodes");
+        deliver_window(app, ctx, &decoded, 0.0)
     }
 
     #[test]
