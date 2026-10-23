@@ -688,6 +688,12 @@ fn form() -> bifrost_ui::form_factor::FormFactor {
     }
 }
 
+/// Whether Settings is used with a pointer (a desktop or laptop) rather than a finger: a click on a switch row then flips
+/// it only on the switch or its label (`ListPage::on_switch_or_label`).
+pub fn pointer_form() -> bool {
+    !form().is_tablet()
+}
+
 #[cfg(test)]
 thread_local! {
     static TEST_FORM: std::cell::Cell<bifrost_ui::form_factor::FormFactor> = const { std::cell::Cell::new(bifrost_ui::form_factor::FormFactor::Tablet) };

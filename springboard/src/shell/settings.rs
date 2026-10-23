@@ -2050,6 +2050,12 @@ impl Settings {
             View::List(page) => match ev {
                 Event::Down(..) => {
                     self.pressed = page.hit(ui, x, y);
+                    // with a pointer only the switch (or its label) flips a switch row, not a click on its empty middle
+                    if let Some(Hit::Row(g, i)) = self.pressed {
+                        if super::pages::pointer_form() && !page.on_switch_or_label(ui, g, i, x) {
+                            self.pressed = None;
+                        }
+                    }
                     if let Some(Hit::Slider(g, i)) = self.pressed {
                         self.drag = Some((g, i));
                         return Outcome::Slide(g, i, false);
@@ -5043,5 +5049,30 @@ mod e2e_w3_tests {
         st.open_page(&ui, "About", 0.0);
         settle(&mut st, &ui);
         assert_eq!(st.stack(), vec![PageId::Root, PageId::General, PageId::About]);
+    }
+
+    /// W3-13: with a pointer a click on the empty middle of a switch row did flip the switch; now only the switch or its
+    /// label does. A finger (the tablet form) still flips it from anywhere on the row.
+    #[test]
+    fn a_pointer_flips_a_switch_only_on_the_switch_or_its_label() {
+        use bifrost_ui::form_factor::FormFactor;
+        let ui = crate::shell::tests::ui();
+        let (mut st, mut prefs) = split(&ui);
+        st.open_page(&ui, "Focus", 0.0);
+        settle(&mut st, &ui);
+        let (g, i) = st.list().expect("list").find("Do Not Disturb").expect("the switch row");
+        let (rx, ry, rw, rh) = st.list().expect("list").row_rect(&ui, g, i);
+        let (px, mid) = (st.pane_x(), ry + rh / 2.0);
+        let middle = px + rx + rw * 0.55;
+        let switch = px + rx + rw - ui.pt(16.0 + 19.0);
+        let before = st.options().dnd;
+        super::super::pages::set_test_form(FormFactor::Desktop);
+        tap(&mut st, &ui, &mut prefs, middle, mid);
+        assert_eq!(st.options().dnd, before, "a click on the row's empty middle does nothing");
+        tap(&mut st, &ui, &mut prefs, switch, mid);
+        assert_eq!(st.options().dnd, !before, "a click on the switch flips it");
+        super::super::pages::set_test_form(FormFactor::Tablet);
+        tap(&mut st, &ui, &mut prefs, middle, mid);
+        assert_eq!(st.options().dnd, before, "a finger flips it from anywhere on the row");
     }
 }

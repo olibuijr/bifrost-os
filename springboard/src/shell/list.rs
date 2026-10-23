@@ -883,6 +883,25 @@ impl ListPage {
         ui.pt(self.status_pt + self.nav_pt)
     }
 
+    /// Whether a pointer click at `x` (page px) on row (g, i) lands on what a click flips on a switch row: the switch, or
+    /// its label. The empty middle of a switch row takes no click (a finger still flips the switch from anywhere on the
+    /// row). Rows without a switch take the click anywhere.
+    pub fn on_switch_or_label(&self, ui: &Ui, g: usize, i: usize, x: f32) -> bool {
+        let item = self.item(g, i);
+        if !matches!(item.accessory, Accessory::Switch(_)) || !matches!(item.body, Body::Row) || self.sidebar.is_some() {
+            return true;
+        }
+        let m = self.margin;
+        let right = self.w as f32 - m - ui.pt(TEXT_INSET_PT);
+        let slop = ui.pt(4.0);
+        if x >= right - ui.pt(SWITCH_W_PT) - slop && x <= right + slop {
+            return true;
+        }
+        let (_, text_left) = leading_x(ui, m, item, false);
+        let label_w = self.images[self.row_index(g, i)].label.iter().map(|l| l.w as f32).fold(0.0, f32::max);
+        x >= text_left - slop && x <= text_left + label_w + slop
+    }
+
     /// Enables or dims the forward half of the toolbar pill (see `NavBar::set_forward`).
     pub fn set_forward(&mut self, on: bool) {
         if self.nav.has_forward() != on {
