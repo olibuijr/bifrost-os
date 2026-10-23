@@ -25,7 +25,7 @@ impl Shell {
             // the window cycle exists in the desktop build (the tablet desktop is one); a build without it ignores the gesture
             DeskGesture::CycleWindow => {
                 #[cfg(any(test, feature = "desktop-wayland"))]
-                self.desk_cycle_window();
+                self.desk_cycle_window(false);
             }
             DeskGesture::Back => self.desk_back(t),
             DeskGesture::Pinch { scale, focal_px } => self.desk_pinch(scale, focal_px),

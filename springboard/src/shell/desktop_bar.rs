@@ -918,7 +918,7 @@ impl Shell {
                     Action::Arrange(app,what)=>self.desk_arrange(app,what,t),
                     Action::Tile(t)=>{if self.foreign_active().is_none(){self.desk_tile_front(t);}},
                     Action::RestoreSize=>{if self.foreign_active().is_none(){self.desk_restore_front();}},
-                    Action::CycleWindow=>{self.desk_cycle_window();let t=self.last_input;self.cmdtab_release(t);},
+                    Action::CycleWindow=>{self.desk_cycle_window(false);let t=self.last_input;self.cmdtab_release(t);},
                     Action::Script(i)=>{if let Some(dir)=super::scripts_menu::folder(){if let Some(name)=super::scripts_menu::list(&dir).get(i as usize){if let Err(e)=super::scripts_menu::run(&dir,name){eprintln!("springboard: script {name}: {e}");}}}self.dirty=true;},
                     Action::InputSource(i)=>{if let Some(l)=super::kb_layouts::Layout::ALL.get(i as usize) {super::kb_layouts::set_active(*l);self.input_layout_selected(*l);self.show_input_source(*l,t);}self.dirty=true;},
                     Action::InputMethod(id)=>{let commits=self.input_providers.select(&id);self.apply_provider_commits(commits);},

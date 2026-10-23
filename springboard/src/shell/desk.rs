@@ -320,6 +320,9 @@ pub struct Desk {
     pub(super) lights_hover:Option<AppId>,
     /// the open Cmd/Alt+Tab switcher: the windows most recent first, and the selected one
     pub(super) cmdtab: Option<(Vec<AppId>, usize)>,
+    /// the front app's windows as Cmd+` found them (front first) and the one it brought forward last: consecutive
+    /// presses walk this order, so raising one window at a time still visits every window (W2-25)
+    pub(super) window_cycle: Option<(Vec<AppId>, usize)>,
     /// the dock slot under the pointer, whose name shows above it
     pub(super) dock_hover:Option<usize>,
     /// the pointer while it magnifies the dock (None when magnification is off or the pointer is away)
@@ -997,6 +1000,25 @@ pub fn dock_rects(m: &Metrics, icon: i32, pad: i32, gap: i32, n: usize, sep_afte
 }
 
 /// Like `dock_rects` with a divider after each index in `seps` (pinned | recents | minimized and Trash).
+/// One step through `n` items from `i`, wrapping: forwards, or backwards when `reverse`.
+pub(super) fn cycle_step(i: usize, n: usize, reverse: bool) -> usize {
+    if n == 0 { 0 } else if reverse { (i + n - 1) % n } else { (i + 1) % n }
+}
+
+/// The next Cmd+` stop: the order to walk and the window to bring forward. `stack` is the front app's windows, front
+/// first. A walk continues while the window in front is the one it raised last and the app has the same windows;
+/// otherwise a new walk starts from the stack as it is. None with fewer than two windows.
+pub(super) fn window_cycle_next(prev: Option<(Vec<AppId>, usize)>, stack: &[AppId], reverse: bool) -> Option<(Vec<AppId>, usize)> {
+    if stack.len() < 2 { return None; }
+    let same = |order: &Vec<AppId>| order.len() == stack.len() && stack.iter().all(|a| order.contains(a));
+    let (order, at) = match prev {
+        Some((order, at)) if same(&order) && order.get(at) == stack.first() => (order, at),
+        _ => (stack.to_vec(), 0),
+    };
+    let next = cycle_step(at, order.len(), reverse);
+    Some((order, next))
+}
+
 /// Whether the release of a Dock press at (`x`, `y`) opens the pressed icon: the icon as it was hit at the press
 /// (`pressed`) decides, so a row that re-centred under a still pointer cannot drop the click or move it to a neighbour
 /// (W2-23); the slot's current rect counts too while it still holds the same entry (`now`, `now_entry`).
@@ -1981,16 +2003,18 @@ impl Shell {
     /// Alt/Ctrl/Meta+Tab on the desktop: raises the visible window behind the front one,
     /// so repeated presses toggle between the two most recent windows.
     #[cfg(any(test, feature = "desktop-wayland"))]
-    pub(super) fn desk_cycle_window(&mut self) {
+    /// Cmd+` (`reverse`: Shift+Cmd+`) brings the front app's next (previous) window forward, its extra windows
+    /// included; minimized windows are skipped. While the Cmd+Tab strip is open it moves the selection instead.
+    pub(super) fn desk_cycle_window(&mut self, reverse: bool) {
         if let Some(d) = &mut self.desk {
-            // Cmd+` walks the windows of the front app, its extra windows included
-            let front = d.front().map(|w| w.app.parent());
             match &mut d.cmdtab {
-                Some((order, sel)) => *sel = (*sel + 1) % order.len(),
+                Some((order, sel)) => *sel = cycle_step(*sel, order.len(), reverse),
                 None => {
-                    let order: Vec<AppId> = d.wins.iter().rev().map(|w| w.app).filter(|a| Some(a.parent()) == front).collect();
-                    if order.len() >= 2 {
-                        d.cmdtab = Some((order, 1));
+                    let front = d.front().map(|w| w.app.parent());
+                    let stack: Vec<AppId> = d.wins.iter().rev().filter(|w| !w.minimized && Some(w.app.parent()) == front).map(|w| w.app).collect();
+                    if let Some((order, sel)) = window_cycle_next(d.window_cycle.take(), &stack, reverse) {
+                        d.window_cycle = Some((order.clone(), sel));
+                        d.cmdtab = Some((order, sel));
                     }
                 }
             }
@@ -4244,6 +4268,33 @@ mod tests {
         assert!(!d.dock_grab_magnifies());
         d.grab = Some(Grab::Content(0));
         assert!(!d.dock_grab_magnifies());
+    }
+
+    /// W2-25: Cmd+` visits every window of the app in turn although each press only raises one, and Shift+Cmd+`
+    /// walks the other way; a window brought forward some other way starts a new walk.
+    #[test]
+    fn cmd_grave_walks_every_window_of_the_app_both_ways() {
+        let (a, b, c) = (AppId::External(3), AppId::ExternalWindow(3, 1), AppId::ExternalWindow(3, 2));
+        // raising only: the window raised goes in front, the rest keep their order
+        let raise = |stack: &[AppId], w: AppId| { let mut s: Vec<AppId> = stack.iter().copied().filter(|x| *x != w).collect(); s.insert(0, w); s };
+        let mut stack = vec![a, b, c];
+        let mut cycle = None;
+        let mut seen = vec![];
+        for _ in 0..3 {
+            let (order, sel) = window_cycle_next(cycle.take(), &stack, false).expect("three windows cycle");
+            stack = raise(&stack, order[sel]);
+            seen.push(order[sel]);
+            cycle = Some((order, sel));
+        }
+        assert_eq!(seen, vec![b, c, a], "forwards: every window once, then back to the first");
+        let (order, sel) = window_cycle_next(None, &[a, b, c], true).unwrap();
+        assert_eq!(order[sel], c, "Shift+Cmd+` brings the last window forward");
+        // the person clicked b: a new walk from the stack as it is now
+        let (order, sel) = window_cycle_next(Some((vec![a, b, c], 0)), &[b, a, c], false).unwrap();
+        assert_eq!(order[sel], a);
+        assert!(window_cycle_next(None, &[a], false).is_none(), "one window: nothing to cycle");
+        assert_eq!(cycle_step(0, 3, true), 2);
+        assert_eq!(cycle_step(2, 3, false), 0);
     }
 
     #[test]

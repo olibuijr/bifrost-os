@@ -105,7 +105,7 @@ pub fn binding_of(sc: Shortcut) -> Option<usize> {
         Shortcut::Minimize => 3,
         Shortcut::FullScreen => 4,
         Shortcut::Tile(_) => 5,
-        Shortcut::CycleWindow => 6,
+        Shortcut::CycleWindow | Shortcut::CycleWindowBack => 6,
         Shortcut::InputSource => 7,
         Shortcut::Settings => 8,
         Shortcut::Home => 9,
