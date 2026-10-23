@@ -352,6 +352,8 @@ pub enum Pick {
     ScreenSaverModule(usize),
     /// Settings > Sound > Alert Sound: the n-th `options::ALERT_SOUNDS` entry
     AlertSound(usize),
+    /// Settings > Sound > Play sound effects through: 0 the selected output device, n the (n-1)th output
+    EffectsOutput(usize),
     /// Settings > Screen Saver > Start After: the index into `screensaver::START_AFTER`
     ScreenSaverStart(usize),
     /// Settings > Screen Saver: the n-th option of the chosen saver, set to its c-th choice (see `screensaver::load_sheet`)
@@ -382,6 +384,14 @@ impl Pick {
             Pick::ScreenSaverModule(_) => Pick::ScreenSaverModule(k),
             Pick::ScreenSaverStart(_) => Pick::ScreenSaverStart(k),
             Pick::ScreenSaverOption(n, _) => Pick::ScreenSaverOption(n, k),
+            Pick::AlertSound(_) => Pick::AlertSound(k),
+            Pick::EffectsOutput(_) => Pick::EffectsOutput(k),
+            Pick::Appearance(_) => Pick::Appearance(k),
+            Pick::Accent(_) => Pick::Accent(k),
+            Pick::Highlight(_) => Pick::Highlight(k),
+            Pick::SidebarIcons(_) => Pick::SidebarIcons(k),
+            Pick::ScrollBars(_) => Pick::ScrollBars(k),
+            Pick::IconStyle(_) => Pick::IconStyle(k),
             _ => return None,
         })
     }
@@ -688,6 +698,12 @@ fn form() -> bifrost_ui::form_factor::FormFactor {
     }
 }
 
+/// Whether Settings is used with a pointer (a desktop or laptop) rather than a finger: a click on a switch row then flips
+/// it only on the switch or its label (`ListPage::on_switch_or_label`).
+pub fn pointer_form() -> bool {
+    !form().is_tablet()
+}
+
 #[cfg(test)]
 thread_local! {
     static TEST_FORM: std::cell::Cell<bifrost_ui::form_factor::FormFactor> = const { std::cell::Cell::new(bifrost_ui::form_factor::FormFactor::Tablet) };
@@ -887,6 +903,85 @@ const KEYWORDS: &[(&str, &str)] = &[
 pub fn keywords(label: &str) -> &'static str {
     let key = label.trim().to_lowercase();
     KEYWORDS.iter().find(|(k, _)| *k == key).map_or("", |(_, words)| words)
+}
+
+/// The desktop Settings sidebar's groups, in the Golden Gate order (`docs/settings-layout-spec.md`, the
+/// 27-Golden-Gate-Settings references): account; connections; the system's look and behaviour; notifications and sound;
+/// security; accounts; input devices; Developer. Panes the reference does not list sit beside their nearest neighbour.
+const SIDEBAR_GROUPS: &[&[PageId]] = &[
+    &[PageId::Account],
+    &[PageId::Wifi, PageId::Bluetooth, PageId::Network, PageId::Vpn, PageId::Battery, PageId::Energy],
+    &[
+        PageId::General,
+        PageId::Sharing,
+        PageId::Accessibility,
+        PageId::Appearance,
+        PageId::HomeScreen,
+        PageId::Overview,
+        PageId::Display,
+        PageId::MenuBar,
+        PageId::ControlCentre,
+        PageId::Assistant,
+        PageId::Spotlight,
+        PageId::Wallpaper,
+        PageId::ScreenSaver,
+    ],
+    &[PageId::Notifications, PageId::Sounds, PageId::Focus, PageId::ScreenTime],
+    &[PageId::LockScreen, PageId::Privacy, PageId::Passcode, PageId::Users],
+    &[PageId::Passwords, PageId::InternetAccounts],
+    &[PageId::Keyboard, PageId::Shortcuts, PageId::Mouse, PageId::Trackpad, PageId::PrintScan],
+    &[PageId::Developer],
+];
+
+/// The sidebar's names for panes whose root row says it the tablet way.
+const SIDEBAR_NAMES: &[(PageId, &str)] = &[
+    (PageId::Display, "Displays"),
+    (PageId::HomeScreen, "Desktop & Dock"),
+    (PageId::Sounds, "Sound"),
+    (PageId::Privacy, "Privacy & Security"),
+    (PageId::PrintScan, "Printers & Scanners"),
+];
+
+/// The desktop Settings sidebar from the root page: Airplane Mode left out, Appearance and Keyboard (and VPN, with the
+/// desktop network) as panes of their own, the rows renamed the desktop way and arranged in `SIDEBAR_GROUPS`, each group
+/// apart. Rows no group names (an installed app's panes) follow in their own group.
+pub fn desktop_sidebar(root: Spec, vpn: bool) -> Spec {
+    let (id, title, large) = (root.id, root.title.clone(), root.large);
+    let mut items: Vec<Item> = root.groups.into_iter().flat_map(|g| g.items).filter(|i| i.label != "Airplane Mode").collect();
+    let has = |items: &[Item], id: PageId| items.iter().any(|i| i.action == Action::Push(id));
+    if !has(&items, PageId::Appearance) {
+        items.push(Item::new("Appearance").icon(Icon::Display).link(PageId::Appearance));
+    }
+    if !has(&items, PageId::Keyboard) {
+        items.push(Item::new("Keyboard").icon(Icon::Keyboard).link(PageId::Keyboard));
+    }
+    if vpn && !has(&items, PageId::Vpn) {
+        items.push(Item::new("VPN").icon(Icon::Vpn).link(PageId::Vpn));
+    }
+    for item in &mut items {
+        if let Some((_, name)) = SIDEBAR_NAMES.iter().find(|(id, _)| item.action == Action::Push(*id)) {
+            item.label = (*name).to_string();
+        }
+    }
+    let mut groups: Vec<Group> = Vec::new();
+    for ids in SIDEBAR_GROUPS {
+        let mut group = Vec::new();
+        for id in ids.iter() {
+            if let Some(k) = items.iter().position(|i| i.action == Action::Push(*id)) {
+                group.push(items.remove(k));
+            }
+        }
+        if !group.is_empty() {
+            groups.push(Group::new(group));
+        }
+    }
+    if !items.is_empty() {
+        // Developer stays last
+        let developer_last = groups.last().is_some_and(|g| g.items.first().is_some_and(|i| i.action == Action::Push(PageId::Developer)));
+        let at = if developer_last { groups.len() - 1 } else { groups.len() };
+        groups.insert(at, Group::new(items));
+    }
+    Spec { id, title, large, groups }
 }
 
 /// Settings > Sharing: the computer name and services (`None` while they are read), then Nearby Share and AirPlay & Handoff.
@@ -1097,17 +1192,20 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         }
         PageId::Wallpaper => page("Wallpaper", false, vec![]),
         PageId::ScreenSaver => screen_saver_page(o, &super::screensaver::manifest(o.screensaver_module).map(|m| m.sheet().clone()).unwrap_or_default()),
+        // the Golden Gate Sound pane: Sound Effects (alert sound, where effects play, the effect switches), then the
+        // output devices with the live output volume, then the input devices
         PageId::Sounds => page(
-            "Sounds",
+            "Sound",
             false,
             {
-                let mut groups = vec![
-                    Group::new(vec![Item::slider(Ends::Volume, o.volume, Action::Slider(Slider::Volume))]).header("RINGER AND ALERTS"),
-                    Group::new(super::options::ALERT_SOUNDS.iter().enumerate().map(|(i, l)| Item::new(*l).check(i == o.alert_sound, Action::Pick(Pick::AlertSound(i)))).collect())
-                        .header("ALERT SOUND")
-                        .footer("The sound that plays when an alert arrives."),
-                    Group::new(sound_switches(o, m.haptics)),
+                let alert = o.alert_sound.min(super::options::ALERT_SOUNDS.len() - 1);
+                let through = m.sound.effects_choice();
+                let mut effects = vec![
+                    Item::new("Alert sound").popup(choice_labels(&super::options::ALERT_SOUNDS), alert, Action::Pick(Pick::AlertSound(alert))),
+                    Item::new("Play sound effects through").popup(m.sound.effects_choices(), through, Action::Pick(Pick::EffectsOutput(through))),
                 ];
+                effects.extend(sound_switches(o, m.haptics));
+                let mut groups = vec![Group::new(effects).header("SOUND EFFECTS").footer("The alert sound plays when a timer or an alarm goes off and for the terminal bell.")];
                 groups.extend(super::sound_page::groups(m.sound));
                 groups
             },
@@ -1974,27 +2072,35 @@ fn icon_style_index() -> usize {
     bifrost_render::icon_doc::current_style().0 as usize
 }
 
-/// Appearance: the scheme, accent and highlight colour, sidebar icon size, scroll bars and transparency.
+/// Appearance, laid out like the Golden Gate pane: Light, Dark and Auto as pictures; the accent colours as a row of
+/// dots; the highlight colour, icon style, sidebar icon size and scroll bars as pop-ups; then transparency.
 pub fn appearance_page(m: &Model<'_>, d: &DeskPrefs) -> Spec {
     use bifrost_render::appearance::{accent, mode, mode_label, Accent, Mode};
-    let now = mode();
-    let highlights = std::iter::once(Item::new("Accent Colour").check(d.highlight == 0, Action::Pick(Pick::Highlight(0))))
-        .chain(Accent::ALL.into_iter().enumerate().skip(1).map(|(i, a)| Item::new(a.label()).glyph(Glyph::Swatch(i as u8)).check(d.highlight == i, Action::Pick(Pick::Highlight(i)))))
-        .collect();
+    let modes = [Mode::Light, Mode::Dark, Mode::Auto];
+    let now = modes.iter().position(|md| *md == mode()).unwrap_or(0);
+    let accent_now = Accent::ALL.iter().position(|a| *a == accent()).unwrap_or(0);
+    // each dot in the colour the controls take in the look on screen
+    let light = bifrost_render::appearance::target_is_light();
+    let dots: Vec<u32> = Accent::ALL.iter().map(|a| if light { a.colours().1 } else { a.colours().0 }).collect();
+    let highlight_names: Vec<String> = std::iter::once("Accent Colour".to_string()).chain(Accent::ALL.into_iter().skip(1).map(|a| a.label().to_string())).collect();
+    let highlight = d.highlight.min(highlight_names.len() - 1);
+    let icon_style = icon_style_index().min(ICON_STYLES.len() - 1);
+    let sidebar_icons = d.sidebar_icons.min(SIDEBAR_ICON_SIZES.len() - 1);
+    let scroll_bars = d.scroll_bars.min(SCROLL_BAR_MODES.len() - 1);
     Spec { id: PageId::Appearance, title: "Appearance".into(), large: false, groups: vec![
-        Group::new([Mode::Light, Mode::Dark, Mode::Auto].into_iter().enumerate().map(|(i, md)| Item::new(mode_label(md)).check(md == now, Action::Pick(Pick::Appearance(i)))).collect())
-            .header("APPEARANCE")
+        Group::new(vec![Item::tiles("Appearance", modes.iter().map(|md| mode_label(*md).to_string()).collect(), now, Action::Pick(Pick::Appearance(now)))])
             .footer("Light and Dark change the look of the whole desktop and fade between them. Auto is light from 07:00 to 19:00 and dark at night."),
-        Group::new(Accent::ALL.into_iter().enumerate().map(|(i, a)| Item::new(a.label()).glyph(Glyph::Swatch(i as u8)).check(a == accent(), Action::Pick(Pick::Accent(i)))).collect())
-            .header("ACCENT COLOUR")
-            .footer("The colour of buttons, links, switches, sliders and the selected sidebar row. Multicolour uses blue for controls."),
-        Group::new(highlights).header("HIGHLIGHT COLOUR").footer("The colour of selected text."),
-        Group::new(SIDEBAR_ICON_SIZES.iter().enumerate().map(|(i, l)| Item::new(*l).check(i == d.sidebar_icons, Action::Pick(Pick::SidebarIcons(i)))).collect())
-            .header("SIDEBAR ICON SIZE"),
-        Group::new(SCROLL_BAR_MODES.iter().enumerate().map(|(i, l)| Item::new(*l).check(i == d.scroll_bars, Action::Pick(Pick::ScrollBars(i)))).collect())
-            .header("SHOW SCROLL BARS"),
-        Group::new(ICON_STYLES.iter().enumerate().map(|(i, l)| Item::new(*l).check(i == icon_style_index(), Action::Pick(Pick::IconStyle(i)))).collect())
-            .header("ICON & WIDGET STYLE")
+        Group::new(vec![
+            Item::swatches("Colour", dots, Accent::ALL.iter().map(|a| a.label().to_string()).collect(), accent_now, Action::Pick(Pick::Accent(accent_now))),
+            Item::new("Text highlight colour").popup(highlight_names, highlight, Action::Pick(Pick::Highlight(highlight))),
+        ])
+            .header("THEME")
+            .footer("The colour of buttons, links, switches, sliders and the selected sidebar row, and of selected text. Multicolour uses blue for controls."),
+        Group::new(vec![
+            Item::new("Icon & widget style").popup(choice_labels(&ICON_STYLES), icon_style, Action::Pick(Pick::IconStyle(icon_style))),
+            Item::new("Sidebar icon size").popup(choice_labels(&SIDEBAR_ICON_SIZES), sidebar_icons, Action::Pick(Pick::SidebarIcons(sidebar_icons))),
+            Item::new("Show scroll bars").popup(choice_labels(&SCROLL_BAR_MODES), scroll_bars, Action::Pick(Pick::ScrollBars(scroll_bars))),
+        ])
             .footer("Dark draws app icons on a dark tile. Tinted draws them in the accent colour over grey."),
         Group::new(vec![
             Item::slider(Ends::Glass, bifrost_render::glass::clarity(), Action::Slider(Slider::LiquidGlass)),
@@ -2926,7 +3032,9 @@ mod tests {
         let h = spec(PageId::HomeScreen, &m);
         assert_eq!(h.groups[0].items[1].accessory, Accessory::Check(true));
         let s = spec(PageId::Sounds, &m);
-        assert_eq!(s.groups[0].items[0].body, super::super::list::Body::Slider { ends: Ends::Volume, value: 0.25 });
+        assert_eq!(s.groups[0].items[0].accessory, Accessory::Popup, "Alert sound is a pop-up");
+        let volume = s.groups.iter().find(|g| g.header.as_deref() == Some("OUTPUT VOLUME")).expect("the output volume");
+        assert_eq!(volume.items[0].body, super::super::list::Body::Slider { ends: Ends::Volume, value: m.sound.volume }, "the live level, not the saved pref");
         let b = spec(PageId::Battery, &m);
         assert_eq!(b.groups[0].items[0].value, "63%");
         assert_eq!(b.groups[0].items[1].value, "Charging");

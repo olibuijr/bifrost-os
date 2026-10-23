@@ -973,6 +973,7 @@ impl Shell {
     /// was used; false leaves it to `hw_chord`.
     pub fn hw_builtin_chord(&mut self, code: u16, mods: u32, t: f64) -> bool {
         const KEY_LEFTBRACE: u16 = 26;
+        const KEY_RIGHTBRACE: u16 = 27;
         // Cmd+Return in Search shows the selected file in its folder (Show in Finder on the reference platform)
         if code == KEY_ENTER && mods == CHORD_META && self.screen_on && !self.card_alert_up() && self.quicksearch_reveal(t) {
             self.last_input = t;
@@ -983,6 +984,16 @@ impl Shell {
         }
         if code == KEY_LEFTBRACE && mods == CHORD_META && self.screen == Screen::App(AppId::Settings) {
             let stepped = self.settings.as_mut().is_some_and(|s| s.back_page(t));
+            if stepped {
+                self.last_input = t;
+                self.dirty = true;
+            }
+            return stepped;
+        }
+        // Cmd+] goes Forward to the page Back left, as the pill's forward half does
+        if code == KEY_RIGHTBRACE && mods == CHORD_META && self.screen == Screen::App(AppId::Settings) {
+            let ui = &self.ui;
+            let stepped = self.settings.as_mut().is_some_and(|s| s.forward_page(ui, t));
             if stepped {
                 self.last_input = t;
                 self.dirty = true;
@@ -1209,7 +1220,9 @@ impl Shell {
                     },
                     _ => false,
                 };
-                if !stepped {
+                // on the desktop an app is a window: Escape with nothing to step back from does nothing (it never
+                // minimises the windows to show the desktop, as `go_home` does there); the touch presentation leaves the app
+                if !stepped && !self.desk_active() {
                     self.go_home(t);
                 }
             }
@@ -1478,6 +1491,30 @@ mod tests {
         assert!(!sh.hw_builtin_chord(27, CHORD_META, 6000.0), "Cmd+] is not Back");
         assert!(sh.hw_builtin_chord(26, CHORD_META, 6000.0), "Cmd+[ goes Back");
         assert_eq!(sh.settings.as_ref().unwrap().stack().len(), depth - 1);
+        // the page Back left is ahead now: Cmd+] opens it again
+        let (ui, st) = (&sh.ui, sh.settings.as_mut().expect("Settings is open"));
+        st.tick(ui, 9000.0);
+        assert!(sh.hw_builtin_chord(27, CHORD_META, 9500.0), "Cmd+] goes Forward");
+        assert_eq!(sh.settings.as_ref().unwrap().stack().len(), depth);
+    }
+
+    /// E2E W3-4: Escape in Settings on a first-level page minimised every desktop window (Back fell through to
+    /// `go_home`, which shows the desktop). On the desktop it does nothing when there is no page to pop.
+    #[test]
+    fn escape_at_a_settings_root_page_leaves_the_desktop_windows_alone() {
+        let mut sh = crate::shell::tests::shell();
+        sh.desk = Some(super::super::desk::Desk::new());
+        sh.screen = Screen::Home;
+        sh.anim = None;
+        sh.desk_open(AppId::Terminal, 0.0);
+        sh.desk_open(AppId::Settings, 0.0);
+        // Settings in front with its first-level page (no page to pop)
+        sh.screen = Screen::App(AppId::Settings);
+        let before = sh.screen;
+        sh.hw_shortcut(Shortcut::Back, 1000.0);
+        let d = sh.desk.as_ref().expect("desk");
+        assert!(d.wins.iter().all(|w| !w.minimized), "no window is minimised by Escape");
+        assert_eq!(sh.screen, before, "Settings stays in front");
     }
 
     #[test]

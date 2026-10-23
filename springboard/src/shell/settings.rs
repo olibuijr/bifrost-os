@@ -318,6 +318,9 @@ pub struct Settings {
     /// Live Look (`wallpaper_look` pref): the desktop's animated or time-of-day wallpaper, or the still
     wallpaper_look: Look,
     stack: Vec<Entry>,
+    /// the pages Back left, the next one last: the toolbar pill's forward half opens them again; any other navigation
+    /// clears them (a browser's forward list)
+    forward: Vec<PageId>,
     transition: Option<Slide>,
     sheet: Option<Sheet>,
     /// the Time Zone picker over Date & Time
@@ -357,6 +360,11 @@ pub struct Settings {
     /// Displays > Resolution: the size in the display-resolution file (None is Native), read when the Displays pages open
     resolution: Option<(u32, u32)>,
     sound: super::sound_page::SoundView,
+    /// Sound: the saved output, input and sound-effects device UIDs (`sound_page::PREF_*`), chosen again when the
+    /// device list is read
+    sound_saved: (String, String, String),
+    /// the headphones are plugged in (the output route), so the analog output is listed as Headphones
+    headphones: bool,
     login_out: Vec<String>,
     /// the Focus time row the time-of-day picker is editing
     notify_edge: Option<NotifyEdit>,
@@ -518,16 +526,19 @@ impl Settings {
         }
     }
 
-    fn build_sidebar(&self, ui: &Ui) -> ListPage {
-        let pane = Pane { margin_pt: SIDEBAR_MARGIN_PT, nav_pt: 0.0, sidebar: true, status_pt: 0.0, header: false };
+    /// The sidebar's rows: the root page's, which a desktop arranges in the Golden Gate groups with Appearance and
+    /// Keyboard as panes of their own (`pages::desktop_sidebar`).
+    fn sidebar_spec(&self) -> super::list::Spec {
         let mut root = spec(PageId::Root, &self.model());
         if self.info.display_mode.is_some() {
-            for group in &mut root.groups { group.items.retain(|item|item.label != "Airplane Mode"); }
-            for item in root.groups.iter_mut().flat_map(|g| g.items.iter_mut()) {
-                if item.label == "Display & Brightness" { item.label = "Displays".into(); }
-                if item.label == "Home Screen & Dock" { item.label = "Desktop & Dock".into(); }
-            }
+            root = super::pages::desktop_sidebar(root, self.info.desktop_network.is_some());
         }
+        root
+    }
+
+    fn build_sidebar(&self, ui: &Ui) -> ListPage {
+        let pane = Pane { margin_pt: SIDEBAR_MARGIN_PT, nav_pt: 0.0, sidebar: true, status_pt: 0.0, header: false };
+        let mut root = self.sidebar_spec();
         // like bifrost, the sidebar shows a value only for Wi-Fi and Bluetooth; the rest is plain
         for item in root.groups.iter_mut().flat_map(|g| g.items.iter_mut()) {
             if item.label != "Network" && item.label != "Wi-Fi" && item.label != "Bluetooth" {
@@ -569,6 +580,7 @@ impl Settings {
             wallpaper_dynamic: prefs.get("wallpaper_dynamic") == Some("1"),
             wallpaper_look: Look::parse(prefs.get(LOOK_PREF).unwrap_or("")),
             stack: vec![],
+            forward: Vec::new(),
             transition: None,
             sheet: None,
             zone_picker: None,
@@ -594,6 +606,12 @@ impl Settings {
             refresh: super::services::display_services::RefreshChoice::Max,
             resolution: None,
             sound: Default::default(),
+            sound_saved: (
+                prefs.get(super::sound_page::PREF_OUTPUT).unwrap_or("").to_string(),
+                prefs.get(super::sound_page::PREF_INPUT).unwrap_or("").to_string(),
+                prefs.get(super::sound_page::PREF_EFFECTS).unwrap_or("").to_string(),
+            ),
+            headphones: false,
             notify_edge: None,
             night: NightShift::load(prefs),
             night_edge: None,
@@ -777,8 +795,9 @@ impl Settings {
             PageId::PrivacyPermissions => super::pages::permissions_page(&super::services::privacy_permissions::rows()),
             PageId::AppPanes(slot) => super::settings_panes::spec(slot),
             PageId::Root => {
-                // the root lists the apps that declare settings panes after the built-in groups
-                let mut s = spec(id, &self.model());
+                // the root lists the apps that declare settings panes after the built-in groups; in the split layout the
+                // root is the sidebar, so Search and the page paths see the panes it lists (Appearance, Keyboard)
+                let mut s = if self.side_w > 0 { self.sidebar_spec() } else { spec(id, &self.model()) };
                 s.groups.extend(super::settings_panes::root_groups());
                 s
             }
@@ -916,6 +935,7 @@ impl Settings {
             }
             self.stack[k] = entry;
         }
+        self.sync_forward();
     }
 
     fn rebuild_sidebar(&mut self, ui: &Ui) {
@@ -934,9 +954,45 @@ impl Settings {
             self.brightness = info.brightness;
         }
         if self.info != *info {
+            let sink_changed = self.info.bt.audio_sink() != info.bt.audio_sink();
             self.info = info.clone();
+            // a Bluetooth headset that connects or leaves is an output that comes or goes on Sound
+            if sink_changed && self.page() == PageId::Sounds {
+                self.reload_sound();
+            }
             self.rebuild_visible(ui);
         }
+    }
+
+    /// The live output level and route, from the shell (the Control Center slider, the volume keys, the headphone
+    /// jack). Sound's Output volume shows it, not the saved pref, and follows it while the page is open.
+    pub fn set_audio(&mut self, ui: &Ui, level: f32, headphones: bool) {
+        let level = level.clamp(0.0, 1.0);
+        let route = self.headphones != headphones;
+        if (self.sound.volume - level).abs() < 1e-4 && !route {
+            return;
+        }
+        self.sound.volume = level;
+        self.headphones = headphones;
+        // the page follows a level set elsewhere, but not the drag of its own slider (which set the level)
+        if self.page() == PageId::Sounds && self.drag.is_none() {
+            if route {
+                self.reload_sound();
+            }
+            self.rebuild_visible(ui);
+        }
+    }
+
+    /// Reads the Sound page's devices again (ALSA, the jack, Bluetooth) and selects the saved ones.
+    fn reload_sound(&mut self) {
+        let (volume, level) = (self.sound.volume, self.sound.level);
+        self.sound = super::sound_page::read_view(self.headphones, self.info.bt.audio_sink());
+        self.sound.volume = volume;
+        self.sound.level = level;
+        let (o, i, e) = &self.sound_saved;
+        let some = |s: &str| (!s.is_empty()).then(|| s.to_string());
+        let (o, i, e) = (some(o), some(i), some(e));
+        self.sound.choose(o.as_deref(), i.as_deref(), e.as_deref());
     }
 
     /// Re-renders after a text size or weight change.
@@ -1469,12 +1525,6 @@ impl Settings {
     /// Jumps to the page a row name stands for (rows without a page of
     /// their own show the root), dropping any sheet; Wi-Fi starts a scan.
     pub fn open_page(&mut self, ui: &Ui, name: &str, t: f64) -> Vec<Effect> {
-        self.sheet = None;
-        self.zone_picker = None;
-        self.time_picker = None;
-        self.pressed = None;
-        self.transition = None;
-        self.stack.truncate(usize::from(self.side_w == 0));
         let id = match name {
             "Network" => PageId::Network,
             "Assistant" => PageId::Assistant,
@@ -1487,22 +1537,18 @@ impl Settings {
             "Wallpaper" => PageId::Wallpaper,
             "Screen Saver" => PageId::ScreenSaver,
             "About" => PageId::About,
-            // a computer without a battery has no Battery pane: its power settings are Energy
-            "Battery" => if super::pages::has_battery(&self.info) { PageId::Battery } else { PageId::Energy },
+            "Battery" => PageId::Battery,
             "Focus" | "Do Not Disturb" => PageId::Focus,
             "Notifications" => PageId::Notifications,
-            "Software Update" => {
-                self.push(ui, PageId::General, t);
-                PageId::SoftwareUpdate
-            }
-            "Fonts" => {
-                self.push(ui, PageId::General, t);
-                PageId::Fonts
-            }
+            "Software Update" => PageId::SoftwareUpdate,
+            "Fonts" => PageId::Fonts,
+            "Appearance" => PageId::Appearance,
+            "Keyboard" => PageId::Keyboard,
             "Accessibility" | "AssistiveTouch" => PageId::Accessibility,
             _ => match settings_search::alias(name).or_else(|| settings_search::find_page(&self.build_index(), name)) {
                 Some(id) => id,
                 None => {
+                    self.reset_overlays();
                     if self.stack.is_empty() {
                         self.push(ui, PageId::General, t);
                     }
@@ -1510,35 +1556,48 @@ impl Settings {
                 }
             },
         };
-        self.push(ui, id, t);
-        match id {
-            PageId::Wifi => vec![Effect::Wifi(WifiAction::Scan)],
-            PageId::Bluetooth => vec![Effect::Bluetooth(BtCmd::Scan)],
-            _ => vec![],
-        }
+        self.open_page_id(ui, id, t)
     }
 
-    /// Opens the pane `id` directly, for an App Intent of the Settings panes (`settings_intents`, opened from Search).
-    /// It goes on top of the current stack like `open_page` does; the root is the base and is not pushed twice.
-    pub fn open_page_id(&mut self, ui: &Ui, id: PageId, t: f64) -> Vec<Effect> {
-        // a computer without a battery has no Battery pane: its power settings are Energy
-        let id = if id == PageId::Battery && !super::pages::has_battery(&self.info) { PageId::Energy } else { id };
+    /// Drops the sheet, pickers, press and slide before a jump to another page.
+    fn reset_overlays(&mut self) {
         self.sheet = None;
         self.zone_picker = None;
         self.time_picker = None;
         self.pressed = None;
         self.transition = None;
-        self.stack.truncate(usize::from(self.side_w == 0));
+    }
+
+    /// The pages from a first-level pane (a sidebar row) down to `id`, the pane first and `id` last: what Back walks up
+    /// through. `id` alone when no page links to it.
+    fn path_to(&self, id: PageId) -> Vec<PageId> {
+        settings_search::path_to(|p| self.spec_for(p), id).unwrap_or_else(|| vec![id])
+    }
+
+    /// Opens the pane `id` directly (a deep link, an App Intent of the Settings panes, a Search result). The pages that
+    /// lead to it go under it, so Back walks up to its pane: in the split layout the pane's sidebar row is selected and
+    /// the pane is the detail's first page; the single column stacks them on the root.
+    pub fn open_page_id(&mut self, ui: &Ui, id: PageId, t: f64) -> Vec<Effect> {
+        // a computer without a battery has no Battery pane: its power settings are Energy
+        let id = if id == PageId::Battery && !super::pages::has_battery(&self.info) { PageId::Energy } else { id };
+        self.reset_overlays();
         if id == PageId::Root {
-            if self.stack.is_empty() {
-                self.push(ui, PageId::Root, t);
+            // the root is the single column's base; the split layout keeps its pane
+            if self.side_w == 0 {
+                self.stack.truncate(1);
+                if self.stack.is_empty() {
+                    self.push(ui, PageId::Root, t);
+                }
+                self.forward.clear();
+                self.sync_forward();
             }
             return vec![];
         }
-        if matches!(id, PageId::SoftwareUpdate | PageId::Fonts) {
-            self.push(ui, PageId::General, t);
+        let path = self.path_to(id);
+        self.stack.truncate(usize::from(self.side_w == 0));
+        for p in path {
+            self.push(ui, p, t);
         }
-        self.push(ui, id, t);
         match id {
             PageId::Wifi => vec![Effect::Wifi(WifiAction::Scan)],
             PageId::Bluetooth => vec![Effect::Bluetooth(BtCmd::Scan)],
@@ -1714,6 +1773,8 @@ impl Settings {
     }
 
     fn push(&mut self, ui: &Ui, id: PageId, t: f64) {
+        // a page opened by any way but Forward starts a new history: nothing is ahead of it
+        self.forward.clear();
         self.start_loads(id);
         match id {
             PageId::Storage => self.scan.start(self.data_dir.clone()),
@@ -1725,6 +1786,7 @@ impl Settings {
             PageId::SoftwareUpdate if matches!(self.updater.state, update::State::Idle | update::State::UpToDate | update::State::Failed(_)) => self.updater.check(),
             PageId::Backup => self.backup_note.clear(),
             PageId::Users => self.users_note.clear(),
+            PageId::Sounds => self.reload_sound(),
             _ => {}
         }
         let back = self.stack.last().map(|e| e.title.clone());
@@ -1733,6 +1795,7 @@ impl Settings {
         if self.stack.len() > 1 {
             self.transition = Some(Slide { push: true, start: t, leaving: None, imgs: None });
         }
+        self.sync_forward();
     }
 
     /// Esc: backs out of the page on top (an open sheet or picker swallows it); false at the root.
@@ -1741,16 +1804,57 @@ impl Settings {
             return false;
         }
         if self.transition.is_none() && !self.overlay_open() {
-            self.pop(t);
+            self.go_back(t);
         }
         true
     }
 
+    /// Back (the pill's back half, Esc, Cmd+[): pops the top page and keeps it for Forward.
+    fn go_back(&mut self, t: f64) {
+        if self.stack.len() > 1 {
+            let id = self.page();
+            self.pop(t);
+            self.forward.push(id);
+            self.sync_forward();
+        }
+    }
+
+    /// Forward (the pill's forward half, Cmd+]): opens again the page Back left last; false when there is none.
+    pub fn forward_page(&mut self, ui: &Ui, t: f64) -> bool {
+        if self.transition.is_some() || self.overlay_open() {
+            return !self.forward.is_empty();
+        }
+        let Some(id) = self.forward.pop() else { return false };
+        let ahead = std::mem::take(&mut self.forward);
+        self.push(ui, id, t);
+        self.forward = ahead;
+        self.sync_forward();
+        true
+    }
+
+    /// Whether the pill's forward half is enabled (a page Back left can be opened again).
+    pub fn can_go_forward(&self) -> bool {
+        !self.forward.is_empty()
+    }
+
+    /// Shows the forward state on the top page's toolbar pill.
+    fn sync_forward(&mut self) {
+        let on = !self.forward.is_empty();
+        if let Some(top) = self.stack.last_mut() {
+            top.nav.set_forward(on);
+            if let View::List(p) = &mut top.view {
+                p.set_forward(on);
+            }
+        }
+    }
+
+    /// Takes the top page off the stack (Back, or a page whose subject is gone, which Forward must not bring back).
     fn pop(&mut self, t: f64) {
         if self.stack.len() > 1 {
             let leaving = self.stack.pop();
             self.transition = Some(Slide { push: false, start: t, leaving, imgs: None });
         }
+        self.sync_forward();
     }
 
     /// Handles a touch; `prefs` receives every persisted change.
@@ -1897,7 +2001,7 @@ impl Settings {
         match self.page_touch(ui, ev, x, y, t) {
             Outcome::Nothing => vec![],
             Outcome::Pop => {
-                self.pop(t);
+                self.go_back(t);
                 vec![]
             }
             Outcome::Slide(g, i, release) => self.slide(ui, prefs, g, i, x, release),
@@ -1941,6 +2045,8 @@ impl Settings {
         let Hit::Row(g, i) = hit else { return vec![] };
         let Some(item) = self.sidebar.as_ref().map(|p| p.item(g, i).clone()) else { return vec![] };
         match item.action {
+            // a Search result may be a page inside a pane (Night Shift): it goes on its pane, so Back leads there
+            Action::Push(id) if !self.search.query().trim().is_empty() => self.open_page_id(ui, id, t),
             Action::Push(id) => self.select(ui, id, t),
             Action::Toggle(which) => self.toggle(ui, prefs, which, g, i, t),
             _ => vec![],
@@ -1953,6 +2059,8 @@ impl Settings {
         self.transition = None;
         if self.stack.first().is_some_and(|e| e.id == id) {
             self.stack.truncate(1);
+            self.forward.clear();
+            self.sync_forward();
             return vec![];
         }
         self.stack.clear();
@@ -1996,6 +2104,12 @@ impl Settings {
             View::List(page) => match ev {
                 Event::Down(..) => {
                     self.pressed = page.hit(ui, x, y);
+                    // with a pointer only the switch (or its label) flips a switch row, not a click on its empty middle
+                    if let Some(Hit::Row(g, i)) = self.pressed {
+                        if super::pages::pointer_form() && !page.on_switch_or_label(ui, g, i, x) {
+                            self.pressed = None;
+                        }
+                    }
                     if let Some(Hit::Slider(g, i)) = self.pressed {
                         self.drag = Some((g, i));
                         return Outcome::Slide(g, i, false);
@@ -2122,8 +2236,13 @@ impl Settings {
             return vec![];
         }
         if self.sheet.is_none() && self.search.active && (self.stack.len() == 1 || self.side_w > 0) {
+            // Return opens the first match (the field keeps its query, so the results stay in the sidebar)
+            let first = matches!(out, Out::Enter).then(|| settings_search::first_hit(self.index.as_deref().unwrap_or(&[]), self.search.query())).flatten();
             if self.search.edit(ui, out, t) {
                 self.requery(ui);
+            }
+            if let Some(id) = first {
+                return self.open_page_id(ui, id, t);
             }
             return vec![];
         }
@@ -2487,6 +2606,7 @@ impl Settings {
             }
             Slider::Volume => {
                 self.opts.volume = v;
+                self.sound.volume = v;
                 self.list_mut().expect("list").set_slider(g, i, v);
                 if release {
                     self.opts.save(prefs);
@@ -2600,7 +2720,11 @@ impl Settings {
         // (group, item, the pop-up choice when the touch chose one from an open menu)
         let (g, i, choice) = match hit {
             Hit::Back => {
-                self.pop(t);
+                self.go_back(t);
+                return vec![];
+            }
+            Hit::Forward => {
+                self.forward_page(ui, t);
                 return vec![];
             }
             Hit::Row(g, i) => (g, i, None),
@@ -3100,8 +3224,25 @@ impl Settings {
                             if let Err(e) = prefs.set(key, &uid) {
                                 eprintln!("settings: {key}: {e}");
                             }
-                            if input { self.sound.input = Some(k) } else { self.sound.output = Some(k) }
+                            if input {
+                                self.sound.input = Some(k);
+                                self.sound_saved.1 = uid;
+                            } else {
+                                self.sound.output = Some(k);
+                                self.sound_saved.0 = uid;
+                            }
+                            // the check moves to the chosen device
+                            self.rebuild_visible(ui);
                         }
+                        vec![]
+                    }
+                    Pick::EffectsOutput(k) => {
+                        let uid = super::sound_page::effects_pref(&self.sound, k);
+                        if let Err(e) = prefs.set(super::sound_page::PREF_EFFECTS, &uid) {
+                            eprintln!("settings: {}: {e}", super::sound_page::PREF_EFFECTS);
+                        }
+                        self.sound.effects = k.checked_sub(1).filter(|&i| i < self.sound.outputs.len());
+                        self.sound_saved.2 = uid;
                         vec![]
                     }
                     Pick::IconSize(k) => {
@@ -4540,7 +4681,8 @@ mod tests {
         assert_eq!(prefs.get("keyboard_clicks"), Some("0"));
         tap_row(&mut st, &ui, &mut prefs, "Lock Sound");
         assert_eq!(prefs.get("lock_sound"), Some("0"));
-        assert_eq!(tap_row(&mut st, &ui, &mut prefs, "Chime"), vec![Effect::AlertSound(1)], "choosing an alert sound plays it once");
+        // Alert sound is a pop-up (the Golden Gate Sound pane): its second choice is Chime
+        assert_eq!(pick(&mut st, &ui, &mut prefs, "Alert sound", 1), vec![Effect::AlertSound(1)], "choosing an alert sound plays it once");
         assert_eq!(prefs.get("alert_sound"), Some("1"));
         assert_eq!(st.options().alert_sound, 1);
         back(&mut st, &ui, &mut prefs);
@@ -4796,7 +4938,9 @@ mod tests {
         assert_eq!(st.options().text_scale, TEXT_SIZES[0]);
         back(&mut st, &ui, &mut prefs);
         tap_row(&mut st, &ui, &mut prefs, "Sounds");
-        let fx = drag_slider(&mut st, &ui, &mut prefs, None, 0, 0, 0.5, 0.0);
+        // the Output volume slider sits under the output devices
+        let g = st.list().unwrap().spec().groups.iter().position(|g| g.header.as_deref() == Some("OUTPUT VOLUME")).expect("Output volume");
+        let fx = drag_slider(&mut st, &ui, &mut prefs, None, g, 0, 0.5, 0.0);
         assert_eq!(fx.last(), Some(&Effect::Volume(0.0)));
         assert_eq!(prefs.get("volume"), Some("0.00"));
     }
@@ -4884,5 +5028,222 @@ mod read_on_worker_tests {
         let (value, worker) = rx.recv().expect("the worker sends its result");
         assert_eq!(value, 7);
         assert_ne!(worker, caller, "the read must not run on the calling thread");
+    }
+}
+
+/// E2E wave 3 (Settings): navigation history, Escape, the Sound page, search and the sidebar order.
+#[cfg(test)]
+mod e2e_w3_tests {
+    use super::*;
+    use bifrost_ui::prefs_layout::m;
+
+    fn info() -> Info {
+        Info { battery: 42, wifi: "Home".into(), wifi_on: true, model: "Midget".into(), brightness: 0.5, ..Info::default() }
+    }
+
+    /// The desktop split layout (sidebar + detail).
+    fn split(ui: &Ui) -> (Settings, Prefs) {
+        let st = Settings::new(ui, &info(), &Prefs::memory(), 1200, 1920, Rc::new(vec![]));
+        assert!(st.sidebar_list().is_some(), "1200 px at this scale is wide enough for the split layout");
+        (st, Prefs::memory())
+    }
+
+    fn settle(st: &mut Settings, ui: &Ui) {
+        st.tick(ui, 1e9);
+    }
+
+    fn tap(st: &mut Settings, ui: &Ui, prefs: &mut Prefs, x: f32, y: f32) -> Vec<Effect> {
+        let mut fx = st.touch(ui, prefs, Event::Down(x, y), 0.0);
+        fx.extend(st.touch(ui, prefs, Event::Up(x, y), 10.0));
+        settle(st, ui);
+        fx
+    }
+
+    /// The centre of the back (`false`) or forward (`true`) half of the toolbar pill, in window px.
+    fn pill(st: &Settings, ui: &Ui, forward: bool) -> (f32, f32) {
+        let k = if forward { 0.75 } else { 0.25 };
+        (st.pane_x() + ui.pt(m::TOOLBAR_X + m::TOOLBAR_PILL_W * k), ui.pt(m::TOOLBAR_Y + m::TOOLBAR_PILL_H / 2.0))
+    }
+
+    /// W3-3: a page opened in the split layout (a deep link, a Search hit) had no back target, so the pill and Esc did
+    /// nothing; it now goes on its pane, and the pill walks back and forward through the history.
+    #[test]
+    fn the_split_layout_pill_goes_back_and_forward() {
+        let ui = crate::shell::tests::ui();
+        let (mut st, mut prefs) = split(&ui);
+        st.open_page(&ui, "About", 0.0);
+        settle(&mut st, &ui);
+        assert_eq!(st.stack(), vec![PageId::General, PageId::About], "About goes on its pane");
+        let nav = st.list().expect("list").nav();
+        assert!(nav.has_back() && !nav.has_forward(), "only the back half is enabled");
+        let (bx, by) = pill(&st, &ui, false);
+        tap(&mut st, &ui, &mut prefs, bx, by);
+        assert_eq!(st.stack(), vec![PageId::General], "the back half pops About");
+        assert!(st.can_go_forward() && st.list().expect("list").nav().has_forward(), "About is ahead now");
+        assert!(!st.list().expect("list").nav().has_back(), "General is the first page: nothing behind it");
+        let (fx, fy) = pill(&st, &ui, true);
+        tap(&mut st, &ui, &mut prefs, fx, fy);
+        assert_eq!(st.stack(), vec![PageId::General, PageId::About], "the forward half opens About again");
+        assert!(!st.can_go_forward());
+        // a tap on the dimmed forward half does nothing
+        tap(&mut st, &ui, &mut prefs, fx, fy);
+        assert_eq!(st.page(), PageId::About);
+    }
+
+    /// W3-3: Esc pops a sub-page in the split layout, and is not used at the pane (so the shell leaves it alone).
+    #[test]
+    fn escape_pops_a_split_sub_page_and_stops_at_its_pane() {
+        let ui = crate::shell::tests::ui();
+        let (mut st, _) = split(&ui);
+        st.open_page(&ui, "Software Update", 0.0);
+        settle(&mut st, &ui);
+        assert_eq!(st.stack(), vec![PageId::General, PageId::SoftwareUpdate]);
+        assert!(st.back_page(0.0));
+        settle(&mut st, &ui);
+        assert_eq!(st.stack(), vec![PageId::General]);
+        assert!(!st.back_page(0.0), "nothing to pop at the pane");
+    }
+
+    /// A new navigation (a sidebar row, a deep link) clears what was ahead.
+    #[test]
+    fn a_new_page_clears_the_forward_history() {
+        let ui = crate::shell::tests::ui();
+        let (mut st, _) = split(&ui);
+        st.open_page(&ui, "About", 0.0);
+        settle(&mut st, &ui);
+        st.back_page(0.0);
+        settle(&mut st, &ui);
+        assert!(st.can_go_forward());
+        st.open_page(&ui, "Bluetooth", 0.0);
+        settle(&mut st, &ui);
+        assert!(!st.can_go_forward());
+        assert!(!st.forward_page(&ui, 0.0));
+    }
+
+    /// The single column stacks the same way, on the root.
+    #[test]
+    fn the_single_column_stacks_a_deep_link_on_its_pane() {
+        let ui = crate::shell::tests::ui();
+        let (mut st, _) = split(&ui);
+        st.allow_split(&ui, false);
+        st.open_page(&ui, "About", 0.0);
+        settle(&mut st, &ui);
+        assert_eq!(st.stack(), vec![PageId::Root, PageId::General, PageId::About]);
+    }
+
+    /// W3-13: with a pointer a click on the empty middle of a switch row did flip the switch; now only the switch or its
+    /// label does. A finger (the tablet form) still flips it from anywhere on the row.
+    #[test]
+    fn a_pointer_flips_a_switch_only_on_the_switch_or_its_label() {
+        use bifrost_ui::form_factor::FormFactor;
+        let ui = crate::shell::tests::ui();
+        let (mut st, mut prefs) = split(&ui);
+        st.open_page(&ui, "Focus", 0.0);
+        settle(&mut st, &ui);
+        let (g, i) = st.list().expect("list").find("Do Not Disturb").expect("the switch row");
+        let (rx, ry, rw, rh) = st.list().expect("list").row_rect(&ui, g, i);
+        let (px, mid) = (st.pane_x(), ry + rh / 2.0);
+        let middle = px + rx + rw * 0.55;
+        let switch = px + rx + rw - ui.pt(16.0 + 19.0);
+        let before = st.options().dnd;
+        super::super::pages::set_test_form(FormFactor::Desktop);
+        tap(&mut st, &ui, &mut prefs, middle, mid);
+        assert_eq!(st.options().dnd, before, "a click on the row's empty middle does nothing");
+        tap(&mut st, &ui, &mut prefs, switch, mid);
+        assert_eq!(st.options().dnd, !before, "a click on the switch flips it");
+        super::super::pages::set_test_form(FormFactor::Tablet);
+        tap(&mut st, &ui, &mut prefs, middle, mid);
+        assert_eq!(st.options().dnd, before, "a finger flips it from anywhere on the row");
+    }
+
+    /// W3-11: Return in the search field did nothing; it opens the first match.
+    #[test]
+    fn return_in_search_opens_the_first_match() {
+        let ui = crate::shell::tests::ui();
+        let (mut st, _) = split(&ui);
+        st.search.active = true;
+        st.key(&ui, Out::Text("about".into()), 0.0);
+        let first = settings_search::first_hit(st.index.as_deref().unwrap_or(&[]), "about").expect("a match");
+        st.key(&ui, Out::Enter, 0.0);
+        settle(&mut st, &ui);
+        assert_eq!(st.page(), first, "Return opened the first match");
+        assert_eq!(first, PageId::About);
+    }
+
+    /// The Output volume slider's value on the open Sound page.
+    fn sound_slider(st: &Settings) -> f32 {
+        let spec = st.list().expect("list").spec();
+        let g = spec.groups.iter().find(|g| g.header.as_deref() == Some("OUTPUT VOLUME")).expect("the output volume group");
+        match g.items[0].body {
+            super::super::list::Body::Slider { value, .. } => value,
+            _ => panic!("not a slider"),
+        }
+    }
+
+    /// W3-9: Sound showed the saved "volume" pref (0) while the system played at 0.644; it shows the live level, and
+    /// follows it while open.
+    #[test]
+    fn sound_shows_and_follows_the_live_output_level() {
+        let ui = crate::shell::tests::ui();
+        let (mut st, _) = split(&ui);
+        st.set_audio(&ui, 0.644, false);
+        st.open_page(&ui, "Sound", 0.0);
+        settle(&mut st, &ui);
+        assert_eq!(st.page(), PageId::Sounds);
+        assert!((sound_slider(&st) - 0.644).abs() < 1e-4, "the live level");
+        st.set_audio(&ui, 0.25, false);
+        assert!((sound_slider(&st) - 0.25).abs() < 1e-4, "a level set by the keys or Control Center shows at once");
+        let spec = st.list().expect("list").spec();
+        assert!(spec.groups.iter().any(|g| g.header.as_deref() == Some("OUTPUT") && !g.items.is_empty()), "the output devices are listed");
+        assert!(spec.groups[0].items.iter().any(|i| i.label == "Play sound effects through"));
+    }
+
+    /// W3-12: the desktop sidebar was one flat list; it follows the Golden Gate groups, with Appearance and Keyboard as
+    /// panes of their own.
+    #[test]
+    fn the_desktop_sidebar_follows_the_golden_gate_groups() {
+        let ui = crate::shell::tests::ui();
+        let desk = Info { display_mode: Some((2560, 1440, 60)), ..info() };
+        let mut st = Settings::new(&ui, &desk, &Prefs::memory(), 1200, 1920, Rc::new(vec![]));
+        let groups: Vec<Vec<String>> = st.sidebar_list().expect("split").spec().groups.iter().map(|g| g.items.iter().map(|i| i.label.clone()).collect()).collect();
+        assert_eq!(groups[0], ["BifrOSt Account"]);
+        assert_eq!(groups[1][..2], ["Wi-Fi", "Bluetooth"], "connections first; no Airplane Mode on a desktop");
+        assert_eq!(groups[2], ["General", "Sharing", "Accessibility", "Appearance", "Desktop & Dock", "Overview", "Displays", "Menu Bar", "Control Center", "Assistant", "Search", "Wallpaper", "Screen Saver"]);
+        assert_eq!(groups[3], ["Notifications", "Sound", "Focus", "Screen Time"]);
+        assert_eq!(groups[4][..2], ["Lock Screen", "Privacy & Security"]);
+        assert_eq!(groups[4].last().map(String::as_str), Some("Users & Groups"));
+        assert_eq!(groups[5], ["Passwords", "Internet Accounts"]);
+        assert_eq!(groups[6], ["Keyboard", "Keyboard Shortcuts", "Mouse", "Trackpad", "Printers & Scanners"]);
+        assert_eq!(groups.last().expect("groups"), &["Developer"]);
+        // Appearance and Keyboard open as first-level panes (their sidebar row selected), not under Displays or General
+        st.open_page(&ui, "Appearance", 0.0);
+        settle(&mut st, &ui);
+        assert_eq!(st.stack(), vec![PageId::Appearance]);
+        st.open_page(&ui, "Keyboard", 0.0);
+        settle(&mut st, &ui);
+        assert_eq!(st.stack(), vec![PageId::Keyboard]);
+        // the tablet's root list keeps its own order
+        let tablet = Settings::new(&ui, &info(), &Prefs::memory(), 1200, 1920, Rc::new(vec![]));
+        let first = tablet.sidebar_list().expect("split").spec().groups[1].items[0].label.clone();
+        assert_eq!(first, "Airplane Mode");
+    }
+
+    /// W3-3: a Search result in the sidebar that is a page inside a pane (Night Shift) opens on its pane, with a back
+    /// target, instead of as a first page with none.
+    #[test]
+    fn a_sidebar_search_hit_inside_a_pane_has_a_back_target() {
+        let ui = crate::shell::tests::ui();
+        let (mut st, mut prefs) = split(&ui);
+        st.search.active = true;
+        st.key(&ui, Out::Text("night shift".into()), 0.0);
+        let label = st.sidebar_list().expect("split").spec().groups[0].items[0].label.clone();
+        let want = settings_search::first_hit(st.index.as_deref().unwrap_or(&[]), "night shift").expect("a match");
+        assert_eq!(want, PageId::NightShift);
+        let (x, y) = st.sidebar_centre(&ui, &label).expect("the result row");
+        tap(&mut st, &ui, &mut prefs, x, y);
+        assert_eq!(st.page(), PageId::NightShift);
+        assert!(st.stack().len() >= 2, "Night Shift sits on its pane: {:?}", st.stack());
+        assert!(st.list().expect("list").nav().has_back());
+        assert!(st.back_page(0.0), "Esc goes back to the pane");
     }
 }

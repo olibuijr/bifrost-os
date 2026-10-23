@@ -108,7 +108,25 @@ pub enum Body {
     Bar(super::storage_page::Bar),
     /// the Screen Time usage chart
     Chart(super::screentime::chart::Chart),
+    /// picture choices right of the label (Appearance: Light, Dark, Auto), each a small window in that look with its name
+    /// under it; the row's `segments` hold the names and the choice, a click on a picture chooses it (`Hit::Segment`)
+    Tiles,
+    /// colour dots right of the label (the accent colour), the chosen one ringed and named under it; the row's
+    /// `segments` hold the names and the choice, the colours are the dots' (Multicolour is drawn as rings of colour)
+    Swatches(Vec<u32>),
 }
+
+/// Appearance tiles and accent dots, in pt (measured from the Golden Gate Appearance reference).
+const TILE_W_PT: f32 = 68.0;
+const TILE_H_PT: f32 = 46.0;
+const TILE_GAP_PT: f32 = 12.0;
+const TILES_ROW_PT: f32 = 96.0;
+const DOT_PT: f32 = 22.0;
+const DOT_GAP_PT: f32 = 10.0;
+const SWATCH_ROW_PT: f32 = 66.0;
+/// the top of the pictures and dots below the row's top edge, and of the name below them
+const CHOICE_TOP_PT: f32 = 12.0;
+const CAPTION_GAP_PT: f32 = 4.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Tint {
@@ -224,6 +242,16 @@ impl Item {
         Item { body: Body::Slider { ends, value }, action, ..Item::new("") }
     }
 
+    /// A row of picture choices (Appearance's Light, Dark and Auto): `choices` are their names.
+    pub fn tiles(label: &str, choices: Vec<String>, selected: usize, action: Action) -> Self {
+        Item { body: Body::Tiles, segments: Some(Popup { choices, selected }), action, ..Item::new(label) }
+    }
+
+    /// A row of colour dots (the accent colour): `colors` and `names` in the same order.
+    pub fn swatches(label: &str, colors: Vec<u32>, names: Vec<String>, selected: usize, action: Action) -> Self {
+        Item { body: Body::Swatches(colors), segments: Some(Popup { choices: names, selected }), action, ..Item::new(label) }
+    }
+
     pub fn chart(chart: super::screentime::chart::Chart) -> Self {
         Item { body: Body::Chart(chart), ..Item::new("") }
     }
@@ -244,6 +272,8 @@ impl Item {
             Body::Graph(_) => GRAPH_ROW_PT,
             Body::Bar(_) => BAR_ROW_PT,
             Body::Chart(_) => CHART_ROW_PT,
+            Body::Tiles => TILES_ROW_PT,
+            Body::Swatches(_) => SWATCH_ROW_PT,
         }
     }
 }
@@ -285,6 +315,8 @@ pub struct Spec {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Hit {
     Back,
+    /// the forward half of the desktop toolbar's back/forward pill
+    Forward,
     /// group, item
     Row(usize, usize),
     Slider(usize, usize),
@@ -312,6 +344,8 @@ struct RowImages {
     icon: Option<Image>,
     /// a pop-up button's chosen label (white, drawn in the label colour)
     popup: Option<Image>,
+    /// the names under a row's pictures or dots (white, drawn in the label colours)
+    captions: Vec<Image>,
 }
 
 /// The pop-up menu open on a row: the row, its menu, and the menu's label images and width in px.
@@ -624,6 +658,8 @@ pub struct NavBar {
     status_pt: f32,
     /// desktop toolbar: back and forward in one pill instead of a labelled button
     pill: bool,
+    /// there is a page to go forward to: the pill's forward half is enabled
+    forward: bool,
 }
 
 impl NavBar {
@@ -635,7 +671,23 @@ impl NavBar {
             nav_pt: NAV_PT,
             status_pt: STATUS_PT,
             pill: false,
+            forward: false,
         }
+    }
+
+    /// Enables the pill's forward half (there is a page Back left that Forward opens again).
+    pub fn set_forward(&mut self, on: bool) {
+        self.forward = on;
+    }
+
+    /// Whether the pill's back half is enabled (there is a page to go back to).
+    pub fn has_back(&self) -> bool {
+        self.back.is_some()
+    }
+
+    /// Whether the pill's forward half is enabled.
+    pub fn has_forward(&self) -> bool {
+        self.forward
     }
 
     /// Draws back and forward as one pill (the desktop toolbar). The title then sits left-aligned beside the pill in the
@@ -674,6 +726,17 @@ impl NavBar {
         self.back.is_some() && y < self.bottom(ui) && x < ui.pt(150.0)
     }
 
+    /// Whether (x, y) is on the enabled forward half of the pill (the desktop toolbar only).
+    pub fn hit_forward(&self, ui: &Ui, x: f32, y: f32) -> bool {
+        use bifrost_ui::prefs_layout::m;
+        self.pill
+            && self.forward
+            && x >= ui.pt(m::TOOLBAR_X + m::TOOLBAR_PILL_W / 2.0)
+            && x < ui.pt(m::TOOLBAR_X + m::TOOLBAR_PILL_W)
+            && y >= ui.pt(m::TOOLBAR_Y)
+            && y < ui.pt(m::TOOLBAR_Y + m::TOOLBAR_PILL_H)
+    }
+
     /// Draws the bar `alpha` (0..=1) solid over the content, with the title
     /// shown at `title_alpha`.
     pub fn draw(&self, s: &mut Surface, ui: &Ui, w: i32, alpha: f32, title_alpha: f32) {
@@ -694,10 +757,10 @@ impl NavBar {
             let bx = px + pw * 0.27;
             icons::line(s, (bx + a * 0.5, cy - a), (bx - a * 0.5, cy), th, col(self.back.is_some()));
             icons::line(s, (bx - a * 0.5, cy), (bx + a * 0.5, cy + a), th, col(self.back.is_some()));
-            // there is no forward history yet: the forward half stays dimmed
+            // each half is enabled only while there is history that way (a page Back left, for forward)
             let fx = px + pw * 0.73;
-            icons::line(s, (fx - a * 0.5, cy - a), (fx + a * 0.5, cy), th, col(false));
-            icons::line(s, (fx + a * 0.5, cy), (fx - a * 0.5, cy + a), th, col(false));
+            icons::line(s, (fx - a * 0.5, cy - a), (fx + a * 0.5, cy), th, col(self.forward));
+            icons::line(s, (fx + a * 0.5, cy), (fx - a * 0.5, cy + a), th, col(self.forward));
         } else if let Some((chev, label)) = &self.back {
             let x = ui.pt(12.0);
             let lw = chev.w as f32 + ui.pt(2.0) + label.w as f32;
@@ -814,6 +877,10 @@ impl ListPage {
                     value: value_img,
                     icon: icon_img,
                     popup: popup_img,
+                    captions: match (&item.body, &item.segments) {
+                        (Body::Tiles | Body::Swatches(_), Some(seg)) => seg.choices.iter().map(|c| ui.text(c, bifrost_render::ui::MAC_CALLOUT_PT, Weight::Regular, WHITE)).collect(),
+                        _ => Vec::new(),
+                    },
                 });
                 y += rh;
             }
@@ -856,6 +923,38 @@ impl ListPage {
 
     fn nav_bottom(&self, ui: &Ui) -> f32 {
         ui.pt(self.status_pt + self.nav_pt)
+    }
+
+    /// Whether a pointer click at `x` (page px) on row (g, i) lands on what a click flips on a switch row: the switch, or
+    /// its label. The empty middle of a switch row takes no click (a finger still flips the switch from anywhere on the
+    /// row). Rows without a switch take the click anywhere.
+    pub fn on_switch_or_label(&self, ui: &Ui, g: usize, i: usize, x: f32) -> bool {
+        let item = self.item(g, i);
+        if !matches!(item.accessory, Accessory::Switch(_)) || !matches!(item.body, Body::Row) || self.sidebar.is_some() {
+            return true;
+        }
+        let m = self.margin;
+        let right = self.w as f32 - m - ui.pt(TEXT_INSET_PT);
+        let slop = ui.pt(4.0);
+        if x >= right - ui.pt(SWITCH_W_PT) - slop && x <= right + slop {
+            return true;
+        }
+        let (_, text_left) = leading_x(ui, m, item, false);
+        let label_w = self.images[self.row_index(g, i)].label.iter().map(|l| l.w as f32).fold(0.0, f32::max);
+        x >= text_left - slop && x <= text_left + label_w + slop
+    }
+
+    /// Enables or dims the forward half of the toolbar pill (see `NavBar::set_forward`).
+    pub fn set_forward(&mut self, on: bool) {
+        if self.nav.has_forward() != on {
+            self.nav.set_forward(on);
+            self.gen = next_gen();
+        }
+    }
+
+    /// The page's navigation bar (its back and forward state).
+    pub fn nav(&self) -> &NavBar {
+        &self.nav
     }
 
     /// Marks the sidebar row that opens `page` as selected.
@@ -1037,6 +1136,9 @@ impl ListPage {
 
     pub fn hit(&self, ui: &Ui, x: f32, y: f32) -> Option<Hit> {
         if y < self.nav_bottom(ui) {
+            if self.nav.hit_forward(ui, x, y) {
+                return Some(Hit::Forward);
+            }
             return self.nav.hit_back(ui, x, y).then_some(Hit::Back);
         }
         // an open menu takes the touch: a row of it chooses, its rim does nothing, anything else closes it
@@ -1059,6 +1161,15 @@ impl ListPage {
             let (tx, _, tw, _) = self.segment_track(ui, (m, 0.0, self.w as f32 - 2.0 * m, 0.0));
             let k = (((x - tx) / (tw / seg.choices.len().max(1) as f32)).floor().max(0.0) as usize).min(seg.choices.len().saturating_sub(1));
             return Some(Hit::Segment(r.g, r.i, k));
+        }
+        if let (Body::Tiles | Body::Swatches(_), Some(seg)) = (&item.body, &item.segments) {
+            // a picture or a dot chooses; the rest of the row (its label) does nothing
+            let (x0, pitch, w) = self.choice_strip(ui, item, seg.choices.len());
+            let k = ((x - x0) / pitch).floor();
+            if x >= x0 && k >= 0.0 && (k as usize) < seg.choices.len() && x - x0 - k * pitch <= w {
+                return Some(Hit::Segment(r.g, r.i, k as usize));
+            }
+            return Some(Hit::Row(r.g, r.i));
         }
         Some(match item.body {
             Body::Slider { .. } => Hit::Slider(r.g, r.i),
@@ -1293,6 +1404,17 @@ impl ListPage {
             Body::Graph(graph) => graph.draw(s, ui, (m + ui.pt(TEXT_INSET_PT), ry + ui.pt(12.0), cw - ui.pt(2.0 * TEXT_INSET_PT), rh - ui.pt(24.0))),
             Body::Bar(bar) => bar.draw(s, ui, (m + ui.pt(TEXT_INSET_PT), ry, cw - ui.pt(2.0 * TEXT_INSET_PT), rh)),
             Body::Chart(chart) => chart.draw(s, ui, (m + ui.pt(TEXT_INSET_PT), ry + ui.pt(12.0), cw - ui.pt(2.0 * TEXT_INSET_PT), rh - ui.pt(24.0))),
+            Body::Tiles | Body::Swatches(_) => {
+                // the label at the top left, as the reference's tall rows have it
+                let mut ly = ry + ui.pt(CHOICE_TOP_PT);
+                for label in &self.images[k].label {
+                    s.blit_colored(label, lx as i32, ly as i32, LABEL.now(), 255);
+                    ly += label.h as f32;
+                }
+                if let Some(seg) = &item.segments {
+                    self.draw_choices(s, ui, item, seg, &self.images[k].captions, ry);
+                }
+            }
             Body::Row => {
                 let (icon_left, text_left) = leading_x(ui, m, item, self.sidebar.is_some());
                 lx = text_left;
@@ -1401,6 +1523,86 @@ impl ListPage {
         let (x, y, w, h) = row;
         let (inset, th) = (ui.pt(pm::SEGMENT_INSET), ui.pt(pm::SEGMENT_H));
         (x + inset, y + (h - th) / 2.0, (w - 2.0 * inset).max(0.0), th)
+    }
+
+    /// Where a row's pictures or dots sit: (left x of the first, pitch from one to the next, width of one) in page px. They
+    /// end at the row's right inset.
+    fn choice_strip(&self, ui: &Ui, item: &Item, n: usize) -> (f32, f32, f32) {
+        let (w, gap) = match item.body {
+            Body::Tiles => (ui.pt(TILE_W_PT), ui.pt(TILE_GAP_PT)),
+            _ => (ui.pt(DOT_PT), ui.pt(DOT_GAP_PT)),
+        };
+        let right = self.w as f32 - self.margin - ui.pt(TEXT_INSET_PT);
+        let n = n.max(1) as f32;
+        (right - n * w - (n - 1.0) * gap, w + gap, w)
+    }
+
+    /// Draws a row's pictures (`Body::Tiles`) or dots (`Body::Swatches`) with their names, the chosen one marked.
+    fn draw_choices(&self, s: &mut Surface, ui: &Ui, item: &Item, seg: &Popup, captions: &[Image], ry: f32) {
+        use bifrost_render::ui::{CARD_BG as CARD, SIDEBAR_BG as DESK, SYSTEM_GREEN, SYSTEM_RED, SYSTEM_YELLOW};
+        let (x0, pitch, w) = self.choice_strip(ui, item, seg.choices.len());
+        let top = ry + ui.pt(CHOICE_TOP_PT);
+        let accent = bifrost_render::appearance::accent_now();
+        let caption = |s: &mut Surface, img: &Image, cx: f32, y: f32, on: bool| {
+            s.blit_colored(img, (cx - img.w as f32 / 2.0) as i32, y as i32, if on { LABEL.now() } else { LABEL_2.now() }, 255);
+        };
+        match &item.body {
+            Body::Tiles => {
+                let h = ui.pt(TILE_H_PT);
+                let rad = ui.pt(6.0);
+                for k in 0..seg.choices.len() {
+                    let x = x0 + k as f32 * pitch;
+                    // a desktop in the look: its backdrop, a window with a title strip in the accent and its traffic lights
+                    let (light, dark) = (k != 1, k != 0);
+                    s.fill_rrect(x, top, w, h, rad, if light { DESK.light } else { DESK.dark });
+                    let (wx, wy, ww, wh) = (x + w * 0.14, top + h * 0.24, w * 0.72, h * 0.6);
+                    s.fill_rrect(wx, wy, ww, wh, ui.pt(3.0), if light { CARD.light } else { CARD.dark });
+                    if light && dark {
+                        // Auto: the right half is the Dark look
+                        s.fill_rrect(x + w / 2.0, top, w / 2.0, h, rad, DESK.dark);
+                        s.fill_rrect(x + w / 2.0, top, rad, h, 0.0, DESK.dark);
+                        s.fill_rrect(x + w / 2.0, wy, wx + ww - (x + w / 2.0), wh, ui.pt(3.0), CARD.dark);
+                        s.fill_rrect(x + w / 2.0, wy, ui.pt(3.0), wh, 0.0, CARD.dark);
+                    }
+                    s.fill_rrect(wx + ui.pt(4.0), wy + ui.pt(4.0), ww * 0.55, ui.pt(4.0), ui.pt(2.0), accent);
+                    let dot = ui.pt(4.0);
+                    for (j, c) in [SYSTEM_RED, SYSTEM_YELLOW, SYSTEM_GREEN].into_iter().enumerate() {
+                        s.fill_rrect(wx + ww - ui.pt(6.0) - (3 - j) as f32 * (dot + ui.pt(2.0)), wy + wh - dot - ui.pt(4.0), dot, dot, dot / 2.0, c);
+                    }
+                    let on = k == seg.selected;
+                    if on {
+                        let g = ui.pt(3.0);
+                        s.stroke_rrect(x - g, top - g, w + 2.0 * g, h + 2.0 * g, rad + g, ui.pt(2.5), accent);
+                    }
+                    if let Some(img) = captions.get(k) {
+                        caption(s, img, x + w / 2.0, top + h + ui.pt(CAPTION_GAP_PT + 3.0), on);
+                    }
+                }
+            }
+            Body::Swatches(colors) => {
+                for (k, &c) in colors.iter().enumerate().take(seg.choices.len()) {
+                    let x = x0 + k as f32 * pitch;
+                    if k == 0 && seg.choices.first().is_some_and(|n| n.starts_with("Multicolo")) {
+                        // Multicolour: rings of the accent colours, outside in
+                        let rings = [SYSTEM_RED, SYSTEM_YELLOW, SYSTEM_GREEN, c];
+                        for (j, rc) in rings.into_iter().enumerate() {
+                            let inset = j as f32 * w / 8.0;
+                            s.fill_rrect(x + inset, top + inset, w - 2.0 * inset, w - 2.0 * inset, (w - 2.0 * inset) / 2.0, rc);
+                        }
+                    } else {
+                        s.fill_rrect(x, top, w, w, w / 2.0, c);
+                    }
+                    if k == seg.selected {
+                        let g = ui.pt(3.0);
+                        s.stroke_rrect(x - g, top - g, w + 2.0 * g, w + 2.0 * g, w / 2.0 + g, ui.pt(2.0), accent);
+                        if let Some(img) = captions.get(k) {
+                            caption(s, img, x + w / 2.0, top + w + ui.pt(CAPTION_GAP_PT + 2.0), true);
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
     }
 
     /// The segmented control: a grey track with the chosen segment filled in the accent colour, a label in each.
@@ -1903,5 +2105,38 @@ mod tests {
         assert_eq!(page.spec().groups[0].header.as_deref(), Some("DOCK POSITION"), "the spec keeps what it wrote");
         let hd = page.headers[0].as_ref().expect("header image");
         assert_eq!(hd.w as f32, ui.text("Dock Position", MAC_HEADLINE_PT, Weight::Semibold, WHITE).w as f32, "rendered as a title-case headline");
+    }
+
+    /// W3-12: Appearance's Light, Dark and Auto are pictures and the accent colours a row of dots; a click on one chooses
+    /// it (a `Hit::Segment` with its index), the label beside them chooses nothing, and every row draws.
+    #[test]
+    fn picture_and_dot_rows_choose_by_the_one_clicked() {
+        let ui = crate::shell::tests::ui();
+        use crate::shell::pages::Pick;
+        let names = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let spec = Spec {
+            id: PageId::Appearance,
+            title: "Appearance".into(),
+            large: false,
+            groups: vec![Group::new(vec![
+                Item::tiles("Appearance", names(&["Light", "Dark", "Auto"]), 0, Action::Pick(Pick::Appearance(0))),
+                Item::swatches("Colour", vec![0xff00_00ff, 0xff00_ff00, 0xffff_0000], names(&["Multicolour", "Green", "Blue"]), 1, Action::Pick(Pick::Accent(1))),
+            ])],
+        };
+        let page = ListPage::new(&ui, spec, 1200, 1920, None);
+        for (i, n) in [(0usize, 3usize), (1, 3)] {
+            let item = page.item(0, i);
+            let (x0, pitch, w) = page.choice_strip(&ui, item, n);
+            let (_, ry, _, _) = page.row_rect(&ui, 0, i);
+            let y = ry + ui.pt(CHOICE_TOP_PT) + w.min(ui.pt(TILE_H_PT)) / 2.0;
+            for k in 0..n {
+                assert_eq!(page.hit(&ui, x0 + k as f32 * pitch + w / 2.0, y), Some(Hit::Segment(0, i, k)), "row {i} choice {k}");
+            }
+            let (lx, _) = leading_x(&ui, page.margin, item, false);
+            assert_eq!(page.hit(&ui, lx + ui.pt(4.0), y), Some(Hit::Row(0, i)), "the label chooses nothing");
+        }
+        assert_eq!(page.item(0, 0).height_pt(), TILES_ROW_PT);
+        let mut px = vec![0u32; 1200 * 1920];
+        page.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut px, y0: 0 }, &ui, None, 1e9);
     }
 }
