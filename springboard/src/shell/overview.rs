@@ -30,6 +30,8 @@ pub const KEY_UP: u16 = 103;
 pub const KEY_LEFT: u16 = 105;
 pub const KEY_RIGHT: u16 = 106;
 pub const KEY_DOWN: u16 = 108;
+/// The forward Delete key (evdev KEY_DELETE).
+pub const KEY_DELETE: u16 = 111;
 
 /// The modifier state a key event arrives with.
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
@@ -50,7 +52,8 @@ const DRAG_SLOP_PT: f32 = 8.0;
 const DOCK_CLEAR_PT: f32 = 24.0;
 /// The close control on a desktop thumbnail (pt): a circle on its top-left corner, shown while the pointer is on it.
 const CLOSE_PT: f32 = 20.0;
-/// How many desktops there are, kept across restarts (the windows' desktops are not: they start on the first).
+/// How many desktops there are, kept across restarts. Which desktop each window is on is kept with the window in the
+/// session file (`session::WindowRec::desktop`), by the app id the session keeps its frame by.
 pub(super) const DESKTOPS_PREF: &str = "overview.desktops";
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -210,6 +213,25 @@ impl Spaces {
         }
         self.ensure();
         true
+    }
+
+    /// What the session file keeps of window `app` (`session::WindowRec`): the desktop it is on and its own minimized
+    /// state. A window of another desktop is minimized only to hide it, so what is kept is what the person had.
+    pub(super) fn saved_state(&self, app: AppId, minimized: bool) -> (usize, bool) {
+        let desktop = self.of.get(&app).copied().unwrap_or(self.current);
+        let minimized = if self.away.contains(&app) { self.user_min.get(&app).copied().unwrap_or(false) } else { minimized };
+        (desktop, minimized)
+    }
+
+    /// Puts windows the session reopened back on their desktops: the count kept in the prefs is read first (`saved`),
+    /// a desktop past it adds desktops up to `MAX_DESKTOPS`, and later ones are held to the last.
+    fn restore(&mut self, saved: Option<&str>, placed: &[(AppId, usize)]) {
+        self.load(saved);
+        for &(app, d) in placed {
+            self.count = self.count.max((d + 1).min(MAX_DESKTOPS));
+            self.of.insert(app, d.min(self.count - 1));
+        }
+        self.ensure();
     }
 
     fn windows_on(&self, i: usize, wins: &[super::desk::Win]) -> Vec<AppId> {
@@ -754,10 +776,29 @@ impl Overview {
             KEY_RIGHT => self.navigate(1.0, 0.0),
             KEY_UP => self.navigate(0.0, -1.0),
             KEY_DOWN => self.navigate(0.0, 1.0),
+            // Delete and Backspace close a desktop as its close control does
+            KEY_BACKSPACE | KEY_DELETE => {
+                if let Some(i) = self.delete_target() {
+                    self.remove_desktop(sh, i);
+                }
+            }
             _ => return false,
         }
         sh.dirty = true;
         true
+    }
+
+    /// The desktop Delete closes: the thumbnail under the pointer (or its close control), else the current desktop (the
+    /// one the keyboard selects with Ctrl+Left and Ctrl+Right). None while there is only one desktop or a window is being
+    /// dragged, the same rules as the close control.
+    fn delete_target(&self) -> Option<usize> {
+        if self.spaces.count <= 1 || self.drag.as_ref().is_some_and(|d| d.moved) {
+            return None;
+        }
+        match self.hover {
+            Some(Target::Desk(i) | Target::Close(i)) => Some(i),
+            _ => Some(self.spaces.current),
+        }
     }
 
     /// Leaves Overview for tile `i` (none: for no window): a desk window is opened, a window of another client is
@@ -1294,6 +1335,17 @@ impl Shell {
         if !self.overview.grid.visible() {
             self.appgrid_toggle(t);
         }
+    }
+
+    /// The session reopened windows (`session_restore`) that were on desktops (`placed`: window, desktop): each goes back
+    /// to its desktop and the windows of the other desktops are hidden, as a desktop switch hides them. The first
+    /// desktop is the current one.
+    pub(super) fn overview_restore_desktops(&mut self, placed: &[(AppId, usize)]) {
+        self.overview.spaces.restore(self.prefs.get(DESKTOPS_PREF), placed);
+        if let Some(d) = self.desk.as_mut() {
+            self.overview.spaces.apply(&mut d.wins);
+        }
+        self.dirty = true;
     }
 
     /// Ctrl+Left / Ctrl+Right: the neighbouring desktop, with a slide.
@@ -2098,6 +2150,86 @@ mod tests {
             sp.load(Some(bad));
             assert_eq!(sp.count, 1, "{bad:?} is ignored");
         }
+    }
+
+    /// Delete and Backspace close the desktop under the pointer, else the current one (Ctrl+arrows select it), by the
+    /// close control's rules: its windows join the desktop before it, the count is kept, the last desktop stays.
+    #[test]
+    fn delete_and_backspace_close_the_hovered_desktop_else_the_current_one() {
+        let mut sh = desk_with(1, 1920, 1080, 1.0);
+        let app = sh.desk.as_ref().unwrap().wins[0].app;
+        sh.overview_toggle(1000.0);
+        sh.overview.spaces.count = 3;
+        sh.overview.spaces.of.insert(app, 2);
+        let g = sh.overview.geo(&sh);
+        let r = sh.overview.desk_rects(&g)[2];
+        assert!(sh.overview_hover(r.x + r.w / 2.0, r.y + r.h / 2.0));
+        assert_eq!(sh.overview.hover, Some(Target::Desk(2)));
+        assert!(sh.overview_key(KEY_DELETE, true, NO_MODS, 1100.0));
+        assert_eq!(sh.overview.spaces.count, 2, "the hovered desktop is gone");
+        assert_eq!(sh.overview.spaces.of[&app], 1, "its window joined the desktop before it");
+        assert_eq!(sh.prefs.get(DESKTOPS_PREF), Some("2"), "the count is kept");
+        assert!(sh.overview.open, "Delete does not leave Overview");
+        // nothing under the pointer: Backspace closes the current desktop, the second after Ctrl+Right
+        sh.overview.hover = None;
+        assert!(sh.overview_key(KEY_RIGHT, true, KeyMods { ctrl: true, ..NO_MODS }, 1200.0));
+        assert_eq!(sh.overview.spaces.current, 1);
+        assert!(sh.overview_key(KEY_BACKSPACE, true, NO_MODS, 1300.0));
+        assert_eq!((sh.overview.spaces.count, sh.overview.spaces.current), (1, 0), "the person lands on the desktop that took its windows");
+        assert_eq!(sh.overview.spaces.of[&app], 0);
+        // the last desktop stays
+        assert!(sh.overview_key(KEY_DELETE, true, NO_MODS, 1400.0), "the key is still Overview's");
+        assert_eq!(sh.overview.spaces.count, 1);
+        assert_eq!(sh.prefs.get(DESKTOPS_PREF), Some("1"));
+    }
+
+    /// What the session file keeps of a window: its desktop and the person's own minimized state; restoring puts it back
+    /// on that desktop, adding desktops up to the most there may be.
+    #[test]
+    fn a_window_keeps_its_desktop_and_its_own_minimized_state_for_the_session() {
+        let (a, b) = (AppId::Settings, AppId::AppStore);
+        let mut sp = Spaces { count: 2, ..Default::default() };
+        sp.of.insert(a, 1);
+        sp.away.insert(a);
+        sp.user_min.insert(a, false);
+        assert_eq!(sp.saved_state(a, true), (1, false), "hidden by the desktop switch, not minimized by the person");
+        assert_eq!(sp.saved_state(b, true), (0, true), "a window of the current desktop keeps its own state");
+        let mut sp = Spaces::default();
+        sp.restore(Some("2"), &[(a, 1), (b, 0)]);
+        assert_eq!((sp.count, sp.of[&a], sp.of[&b]), (2, 1, 0));
+        let mut sp = Spaces::default();
+        sp.restore(None, &[(a, 3), (b, 40)]);
+        assert_eq!(sp.count, MAX_DESKTOPS, "a desktop past the kept count adds desktops, up to the most");
+        assert_eq!((sp.of[&a], sp.of[&b]), (3, MAX_DESKTOPS - 1));
+    }
+
+    /// Across a shell restart: the snapshot names each window's desktop, and the restore hides the windows of the other
+    /// desktops until the person switches to them.
+    #[test]
+    fn the_session_keeps_which_desktop_each_window_is_on() {
+        let mut sh = desk_with(2, 1920, 1080, 1.0);
+        let (a, b) = {
+            let w = &sh.desk.as_ref().unwrap().wins;
+            (w[0].app, w[1].app)
+        };
+        sh.overview.spaces.count = 2;
+        sh.overview.spaces.of.insert(b, 1);
+        let mut wins = std::mem::take(&mut sh.desk.as_mut().unwrap().wins);
+        sh.overview.spaces.apply(&mut wins);
+        sh.desk.as_mut().unwrap().wins = wins;
+        let snap = sh.session_snapshot(true);
+        assert_eq!(snap.windows.iter().map(|r| (r.desktop, r.minimized)).collect::<Vec<_>>(), [(0, false), (1, false)], "b is on the second desktop and was not minimized");
+        let text = snap.to_text();
+        let back = crate::shell::session::Session::parse(&text);
+        // a new shell reopens both windows and puts them back
+        let mut sh2 = desk_with(2, 1920, 1080, 1.0);
+        let placed: Vec<(AppId, usize)> = [a, b].into_iter().zip(back.windows.iter().map(|r| r.desktop)).collect();
+        sh2.overview_restore_desktops(&placed);
+        let shown = |sh: &Shell, app: AppId| !sh.desk.as_ref().unwrap().wins.iter().find(|w| w.app == app).unwrap().minimized;
+        assert!(shown(&sh2, a) && !shown(&sh2, b), "b waits on its own desktop");
+        assert_eq!(sh2.overview.spaces.count, 2);
+        sh2.switch_desktop(1, 2000.0);
+        assert!(shown(&sh2, b) && !shown(&sh2, a), "switching to it shows b as it was");
     }
 
     /// W3-7: a desktop added in Overview shows a close control on hover and the control removes it; the count is kept.
