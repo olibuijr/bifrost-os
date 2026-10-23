@@ -122,6 +122,12 @@ impl FrameReports {
         self.reporters.is_empty()
     }
 
+    /// Whether the client that owns `surface` has a live manager bound: it follows the frames the window server reports
+    /// and stacks its own windows (the shell).
+    pub fn bound_by_owner_of(&self, surface: &WlSurface) -> bool {
+        self.reporters.iter().any(|r| r.manager.is_alive() && r.manager.id().same_client_as(&surface.id()))
+    }
+
     /// Tells every manager bound at version 5 or later how the white point is applied now (`white_point_mode`), after
     /// the backend changed the way (a refused gamma ramp falls back to the compositor pass).
     pub fn send_white_point_mode(&mut self, mode: crate::white_point::Mode) {

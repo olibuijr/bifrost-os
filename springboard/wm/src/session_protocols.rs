@@ -569,6 +569,15 @@ impl WmState {
         if !activation_allowed(has_serial, age) {
             return;
         }
+        // a toplevel without a buffer yet takes the front when it maps (`place_pending`): the shell activates a window it
+        // opens in the same turn it creates it, before the window has drawn
+        if let Some(window) = self.pending.iter().find(|w| w.wl_surface().is_some_and(|s| s.as_ref() == surface)) {
+            window.user_data().insert_if_missing(crate::handlers::ActivateOnMap::default);
+            if let Some(a) = window.user_data().get::<crate::handlers::ActivateOnMap>() {
+                a.0.set(true);
+            }
+            return;
+        }
         // a minimized window is not in the space: activation shows it again
         let Some(window) = self.window_for_surface(surface).or_else(|| self.hidden_for_surface(surface)) else { return };
         let Some(id) = WmState::known_id(&window) else { return };

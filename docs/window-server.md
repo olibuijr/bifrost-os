@@ -424,6 +424,15 @@ ordinary client's registry does not list them and a bind is refused (`GlobalDisp
   on the usable area) on its own surfaces; `set_level` floating and `tile` are privileged-only (the shell). A client keeps at
   most four managers bound. The shell must be on the privileged socket for floating windows and tiling to work; the ordinary
   socket fallback of a development session loses them.
+- **Who stacks the shell's windows.** A toplevel of a privileged client that bound `bifrost_window_level_v1` (the shell) is not
+  raised or focused when it maps (`handlers::map_takes_front`): it goes just under the key window of its band (`Wm::map_behind`)
+  and the keyboard stays where it was, unless the shell activated it before its first buffer (`ActivateOnMap`, set by
+  `activate_surface`) or nothing else is shown. The shell activates its front window with xdg-activation. Every other client's
+  window, and every window of a session without the shell, still comes forward with the keyboard when it maps (W4-1, W4-5).
+- **Configures carry the current frame.** Smithay sends a toplevel's whole pending state with every configure, so a frame the
+  client settled on itself (`settle`, `WmState::set_frame`) also becomes the pending size; an activation change no longer
+  re-sends an old tile size (W4-3). `focus` sends a configure only to windows whose activation changed, and a commit drawn
+  before the client saw a resize it was sent (`resize_in_flight`) is not taken as its own frame.
 - **Tests.** `wm/tests/window_capture.rs` (an ordinary client sees none of the four capture globals, a privileged one sees all
   four, and the socket file is owner-only), `privileged::tests` (the environment parsing and the mode), `bare/privileged.rs` tests
   (the helper descriptor reaches a child in `WAYLAND_SOCKET`).
