@@ -28,6 +28,7 @@ use springboard::shell::glyphs;
 use springboard::shell::keyboard::Out;
 use springboard::shell::textfield::TextField;
 use springboard::shell::Effect;
+use bifrost_app::proto::ContextItem;
 use alarm::{Alarm, Alarms};
 use picker::Picker;
 use stopwatch::Stopwatch;
@@ -68,9 +69,12 @@ const POP_LIST_Y_PT: f32 = 68.0;
 const POP_GROUP_GAP_PT: f32 = 35.0;
 const PRESET_Y_PT: f32 = 440.0;
 const PRESET_H_PT: f32 = 30.0;
-const TIMER_ROW_Y_PT: f32 = 478.0;
-const TIMER_ROW_PT: f32 = 34.0;
-const TIMER_ROWS: usize = 2;
+/// The running timers, shown instead of the picker (E2E W4-10): cards of `TIMER_ROW_PT` from `TIMER_ROW_Y_PT` down,
+/// at most `TIMER_ROWS` of them.
+const TIMER_ROW_Y_PT: f32 = 88.0;
+const TIMER_ROW_PT: f32 = 84.0;
+const TIMER_ROW_GAP_PT: f32 = 12.0;
+const TIMER_ROWS: usize = 4;
 const SWIPE_PT: f32 = 10.0;
 const SWIPE_DELETE: f32 = 0.35;
 /// Toolbar item ids: the four tab segments are 1..=4, then Edit and Add.
@@ -90,8 +94,18 @@ const ALARM_SKIP_W_PT: f32 = 100.0;
 /// Alarm card text rows and the switch row, measured from the card's top.
 const ALARM_LABEL_Y_PT: f32 = 123.0;
 const ALARM_REPEAT_Y_PT: f32 = 150.0;
-const ALARM_SWITCH_Y_PT: f32 = 195.0;
 const ALARM_SKIP_Y_PT: f32 = 210.0;
+/// Alarm card: the on/off switch sits at the trailing edge of the time row (Golden Gate Clock), this far in.
+const ALARM_SWITCH_INSET_PT: f32 = 16.0;
+/// Alarm card: where the time, label and repeat text start, and where while the delete badges show.
+const ALARM_TEXT_PT: f32 = 20.0;
+const ALARM_EDIT_TEXT_PT: f32 = 52.0;
+/// Alarm card: the time row's centre, measured from the card's top.
+const ALARM_TIME_Y_PT: f32 = 75.0;
+/// Context menu items of an alarm card.
+const CTX_ALARM_EDIT: u32 = 1;
+const CTX_ALARM_TOGGLE: u32 = 2;
+const CTX_ALARM_DELETE: u32 = 3;
 /// World Clock card: the digital time and the relative-day line, measured from the card's top.
 const WORLD_TIME_Y_PT: f32 = 205.0;
 const WORLD_REL_Y_PT: f32 = 238.0;
@@ -239,11 +253,22 @@ pub struct Clock {
     /// the wall second last drawn, to repaint faces and countdowns once a second
     drawn_sec: i64,
     cache: TextCache,
+    /// the alarm card last clicked or right-clicked (by alarm id): Delete removes it, and it shows a selection ring
+    selected_alarm: Option<u32>,
+    /// the alarm a context menu was opened on (by alarm id), until its answer comes back
+    ctx_alarm: Option<u32>,
+    /// Timers: the picker shows for a new timer although timers run (the toolbar's or the right button's New)
+    timer_new: bool,
+    /// the last `tick` asked for a frame only because a countdown second passed: `draw` repaints the timer cards alone
+    rows_only: bool,
+    /// the card colour of the last full frame: an appearance change forces a full repaint
+    drawn_card: u32,
 }
 
 impl Clock {
     /// Lays the app out for a pane of `w` x `h` px (Split View, Slide Over).
     pub fn set_size(&mut self, w: i32, h: i32) {
+        self.rows_only = false;
         self.w = w;
         self.h = h;
     }
@@ -273,6 +298,11 @@ impl Clock {
             pending_export: None,
             drawn_sec: -1,
             cache: TextCache::default(),
+            selected_alarm: None,
+            ctx_alarm: None,
+            timer_new: false,
+            rows_only: false,
+            drawn_card: 0,
         }
     }
 
@@ -327,6 +357,7 @@ impl Clock {
 
     /// Shows `tab` next time the app is on screen.
     pub fn set_tab(&mut self, tab: Tab) {
+        self.rows_only = false;
         self.tab = tab;
     }
 
@@ -337,6 +368,7 @@ impl Clock {
     /// Changes the stopwatch (the App Intents path) and saves it when `change` reports a change, as the buttons do.
     pub fn change_stopwatch(&mut self, t: f64, change: impl FnOnce(&mut Stopwatch) -> bool) -> bool {
         let changed = change(&mut self.stopwatch);
+        self.rows_only = false;
         if changed {
             self.persist_stopwatch(t);
         }
@@ -348,6 +380,7 @@ impl Clock {
     }
 
     pub fn timers_mut(&mut self) -> &mut Timers {
+        self.rows_only = false;
         &mut self.timers
     }
 
@@ -364,6 +397,7 @@ impl Clock {
     /// Adds `alarm` (an App Intent: `set-alarm`) and writes the alarm file. The shell's headless Clock service reads that
     /// file when it changes, arms the RTC wake and rings the alarm with this app closed. Returns the new alarm's id.
     pub fn add_alarm(&mut self, alarm: Alarm, t: f64) -> u32 {
+        self.rows_only = false;
         let id = self.alarms.add(alarm);
         self.persist(t);
         id
@@ -532,7 +566,9 @@ impl Clock {
                     if card.1 + card.3 <= Self::content_top(ui) || card.1 >= self.h as f32 { continue }
                     let time = a.time_text();
                     push(200 + i as u64, Role::Row, format!("Alarm {time}"), a.label.clone(), card, true);
-                    push(300 + i as u64, Role::Toggle, format!("{time} alarm"), on_off(a.on), (card.0 + ui.pt(30.0), card.1 + ui.pt(ALARM_ACTION_Y_PT), ui.pt(81.0), ui.pt(61.0)), true);
+                    if !self.editing {
+                        push(300 + i as u64, Role::Toggle, format!("{time} alarm"), on_off(a.on), Self::alarm_switch_hit(card, ui), true);
+                    }
                     if self.editing {
                         push(400 + i as u64, Role::Button, format!("Delete alarm {time}"), String::new(), circle((card.0 + ui.pt(SPACE_XXL), card.1 + ui.pt(75.0)), ui.pt(SPACE_XXL)), true);
                     }
@@ -554,16 +590,20 @@ impl Clock {
                 let left = self.button_centre(ui, false);
                 let right = self.button_centre(ui, true);
                 let r = ui.pt(BUTTON_R_PT + 8.0);
-                push(610, Role::Button, "Cancel".into(), String::new(), circle(left, r), true);
+                push(610, Role::Button, "Cancel".into(), String::new(), circle(left, r), !self.timers.list.is_empty());
+                if self.timer_list() {
+                    push(611, Role::Button, "New Timer".into(), String::new(), circle(right, r), true);
+                    for (i, item) in self.timers.list.iter().take(TIMER_ROWS).enumerate() {
+                        let row = self.timer_row(ui, i);
+                        let state = if item.running() { "running" } else { "paused" };
+                        push(630 + i as u64, Role::Row, format!("Timer {}", item.label), state.into(), row, true);
+                        push(640 + i as u64, Role::Button, format!("Delete timer {}", item.label), String::new(), (row.0 + row.2 - ui.pt(56.0), row.1, ui.pt(56.0), row.3), true);
+                    }
+                    return out;
+                }
                 push(611, Role::Button, "Start".into(), String::new(), circle(right, r), self.picked_ms() > 0);
                 for (i, (name, _)) in timer::PRESETS.iter().enumerate() {
                     push(620 + i as u64, Role::Button, format!("{name} timer"), String::new(), self.preset_rect(ui, i), true);
-                }
-                for (i, item) in self.timers.list.iter().take(TIMER_ROWS).enumerate() {
-                    let row = self.timer_row(ui, i);
-                    let state = if item.running() { "running" } else { "paused" };
-                    push(630 + i as u64, Role::Row, format!("Timer {}", item.label), state.into(), row, true);
-                    push(640 + i as u64, Role::Button, format!("Delete timer {}", item.label), String::new(), (row.0 + row.2 - ui.pt(56.0), row.1, ui.pt(56.0), row.3), true);
                 }
                 for (i, name) in ["Hours", "Minutes", "Seconds"].iter().enumerate() {
                     let (cx, cw, cy) = self.timer_column(ui, i);
@@ -591,9 +631,33 @@ impl Clock {
         (m + (i % 3) as f32 * (cw + g), Self::content_top(ui) + ui.pt(SPACE_M) + (i / 3) as f32 * (ch + g) - self.world.scroll.offset(), cw, ch)
     }
 
+    /// Alarm card `i`: (x, y, w, h), three to a row inside the window's margin like the World Clock cards (the first
+    /// card sat flush against the window's edge before).
     fn alarm_card(ui: &Ui, i: usize) -> (f32, f32, f32, f32) {
-        let (cw, ch, g) = (ui.pt(ALARM_CARD_PT), ui.pt(ALARM_CARD_H_PT), ui.pt(ALARM_GAP_PT));
-        ((i % 3) as f32 * (cw + g), Self::content_top(ui) + (i / 3) as f32 * (ch + g), cw, ch)
+        let (cw, ch, g, m) = (ui.pt(ALARM_CARD_PT), ui.pt(ALARM_CARD_H_PT), ui.pt(ALARM_GAP_PT + SPACE_S), ui.pt(CARD_MARGIN_PT));
+        (m + (i % 3) as f32 * (cw + g), Self::content_top(ui) + ui.pt(SPACE_M) + (i / 3) as f32 * (ch + g), cw, ch)
+    }
+
+    /// The on/off switch of the alarm card at `card`: (x, y, w, h), at the trailing end of the time row.
+    fn alarm_switch((cx, cy, cw, _): (f32, f32, f32, f32), ui: &Ui) -> (f32, f32, f32, f32) {
+        use springboard::shell::controls::{SWITCH_H_PT, SWITCH_W_PT};
+        let (w, h) = (ui.pt(SWITCH_W_PT), ui.pt(SWITCH_H_PT));
+        (cx + cw - ui.pt(ALARM_SWITCH_INSET_PT) - w, cy + ui.pt(ALARM_TIME_Y_PT) - h / 2.0, w, h)
+    }
+
+    /// The switch's hit box: the switch with a margin, so a click near it still flips it.
+    fn alarm_switch_hit(card: (f32, f32, f32, f32), ui: &Ui) -> (f32, f32, f32, f32) {
+        let (x, y, w, h) = Self::alarm_switch(card, ui);
+        let pad = ui.pt(SPACE_S);
+        (x - pad, y - pad, w + 2.0 * pad, h + 2.0 * pad)
+    }
+
+    /// The alarm card under (`x`, `y`) on the Alarms tab, by index.
+    fn alarm_at(&self, ui: &Ui, x: f32, y: f32) -> Option<usize> {
+        if self.tab != Tab::Alarm || self.add.is_some() || y < Self::content_top(ui) {
+            return None;
+        }
+        (0..self.alarms.list.len()).find(|&i| Self::within(x, y, Self::alarm_card(ui, i)))
     }
 
     /// Timer picker column `i`: (x, w) and the shared centre y.
@@ -639,10 +703,16 @@ impl Clock {
         (margin + i as f32 * (cw + gap), ui.pt(PRESET_Y_PT), cw, ui.pt(PRESET_H_PT))
     }
 
-    /// Row `i` of the running-timer list: (x, y, w, h); its right 56 pt delete it.
+    /// Card `i` of the timer list: (x, y, w, h); its right 56 pt delete it.
     fn timer_row(&self, ui: &Ui, i: usize) -> (f32, f32, f32, f32) {
         let x = ui.pt(TABLE_X_PT) - ui.pt(SPACE_HUGE);
-        (x, ui.pt(TIMER_ROW_Y_PT) + i as f32 * ui.pt(TIMER_ROW_PT), self.w as f32 - 2.0 * x, ui.pt(TIMER_ROW_PT))
+        (x, ui.pt(TIMER_ROW_Y_PT) + i as f32 * ui.pt(TIMER_ROW_PT + TIMER_ROW_GAP_PT), self.w as f32 - 2.0 * x, ui.pt(TIMER_ROW_PT))
+    }
+
+    /// Whether the Timers tab lists the timers (some exist and no new one is being set up). The picker and the
+    /// presets show only otherwise, so they never sit above a running countdown (E2E W4-10).
+    fn timer_list(&self) -> bool {
+        !self.timers.list.is_empty() && !self.timer_new
     }
 
     /// The label field's text box, after the "Label" caption.
@@ -719,7 +789,7 @@ impl Clock {
                     if self.editing && Self::near((cx + ui.pt(SPACE_XXL), cy + ui.pt(75.0)), ui.pt(SPACE_XXL), x, y) {
                         return Some(Target::Delete(i));
                     }
-                    if Self::within(x, y, (cx + ui.pt(30.0), cy + ui.pt(ALARM_ACTION_Y_PT), ui.pt(81.0), ui.pt(61.0))) {
+                    if !self.editing && Self::within(x, y, Self::alarm_switch_hit(Self::alarm_card(ui, i), ui)) {
                         return Some(Target::Switch(i));
                     }
                     let a = &self.alarms.list[i];
@@ -740,16 +810,17 @@ impl Clock {
                 if Self::near(self.button_centre(ui, true), r, x, y) {
                     return Some(Target::Right);
                 }
-                if self.tab == Tab::Timer {
-                    for i in 0..timer::PRESETS.len() {
-                        if Self::within(x, y, self.preset_rect(ui, i)) {
-                            return Some(Target::Preset(i));
-                        }
-                    }
+                if self.tab == Tab::Timer && self.timer_list() {
                     for i in 0..self.timers.list.len().min(TIMER_ROWS) {
                         let (rx, ry, rw, rh) = self.timer_row(ui, i);
                         if Self::within(x, y, (rx, ry, rw, rh)) {
                             return Some(if x > rx + rw - ui.pt(56.0) { Target::TimerDelete(i) } else { Target::TimerRow(i) });
+                        }
+                    }
+                } else if self.tab == Tab::Timer {
+                    for i in 0..timer::PRESETS.len() {
+                        if Self::within(x, y, self.preset_rect(ui, i)) {
+                            return Some(Target::Preset(i));
                         }
                     }
                     for i in 0..3 {
@@ -783,6 +854,7 @@ impl Clock {
     // ----- input -----
 
     pub fn touch(&mut self, ui: &Ui, ev: Event, t: f64) -> Vec<Effect> {
+        self.rows_only = false;
         if let Some(effects) = self.world_event(ui, ev, t) { return effects }
         let (x, y) = match ev {
             Event::Down(x, y) | Event::Move(x, y) | Event::Up(x, y) => (x, y),
@@ -798,6 +870,10 @@ impl Clock {
         match ev {
             Event::Down(..) => {
                 self.pressed = self.hit(ui, x, y);
+                // a press on a card selects it (Delete removes the selected alarm); one on the empty area clears it
+                if self.tab == Tab::Alarm && self.add.is_none() && y >= Self::content_top(ui) {
+                    self.selected_alarm = self.alarm_at(ui, x, y).map(|i| self.alarms.list[i].id);
+                }
                 self.swipe = match self.pressed {
                     Some(Target::EditAlarm(idx)) => Some(Swipe { idx, x0: x, dx: 0.0, active: false }),
                     _ => None,
@@ -863,6 +939,7 @@ impl Clock {
 
     /// A typed key for the add-alarm popover's label field.
     pub fn key(&mut self, ui: &Ui, out: Out, t: f64) {
+        self.rows_only = false;
         let Some(a) = &mut self.add else { return };
         match out {
             Out::Hide => {
@@ -876,6 +953,62 @@ impl Clock {
                 a.label.edit(ui, &out, t);
             }
         }
+    }
+
+    /// A secondary click at (`x`, `y`): the context menu of the alarm card under it (Edit, Turn On/Off, Delete), which
+    /// also selects the card. The choice comes back through `context_action`.
+    pub fn alarm_context(&mut self, ui: &Ui, x: f32, y: f32) -> Option<Vec<ContextItem>> {
+        self.rows_only = false;
+        let i = self.alarm_at(ui, x, y)?;
+        let a = &self.alarms.list[i];
+        self.ctx_alarm = Some(a.id);
+        self.selected_alarm = Some(a.id);
+        let item = |id: u32, label: &str| ContextItem { id, label: label.to_string(), enabled: true };
+        Some(vec![
+            item(CTX_ALARM_EDIT, "Edit Alarm"),
+            item(CTX_ALARM_TOGGLE, if a.on { "Turn Off" } else { "Turn On" }),
+            item(CTX_ALARM_DELETE, "Delete Alarm"),
+        ])
+    }
+
+    /// The user chose item `id` of an alarm card's context menu: the effects to apply (the RTC wake after a change),
+    /// or `None` when nothing changed.
+    pub fn context_action(&mut self, ui: &Ui, id: u32, t: f64) -> Option<Vec<Effect>> {
+        self.rows_only = false;
+        let alarm = self.ctx_alarm.take()?;
+        let i = self.alarms.index_of(alarm)?;
+        Some(match id {
+            CTX_ALARM_EDIT => self.activate(ui, Target::EditAlarm(i), 0.0, t),
+            CTX_ALARM_TOGGLE => self.activate(ui, Target::Switch(i), 0.0, t),
+            CTX_ALARM_DELETE => self.remove_alarm(alarm, t),
+            _ => return None,
+        })
+    }
+
+    /// The Delete key: removes the alarm being edited in the sheet (unless its label field has the keyboard), else the
+    /// selected alarm card on the Alarms tab. `None` when the key is not for an alarm, so it goes on to the field.
+    pub fn delete_key(&mut self, t: f64) -> Option<Vec<Effect>> {
+        self.rows_only = false;
+        let target = match &self.add {
+            Some(a) if a.label.focused || a.page != SheetPage::Main => return None,
+            Some(a) => a.edit?,
+            None if self.tab == Tab::Alarm => self.selected_alarm?,
+            None => return None,
+        };
+        self.alarms.index_of(target)?;
+        self.add = None;
+        Some(self.remove_alarm(target, t))
+    }
+
+    /// Removes the alarm with `id`, clears its selection and writes the list.
+    fn remove_alarm(&mut self, id: u32, t: f64) -> Vec<Effect> {
+        let Some(i) = self.alarms.index_of(id) else { return vec![] };
+        self.alarms.list.remove(i);
+        if self.selected_alarm == Some(id) {
+            self.selected_alarm = None;
+        }
+        self.editing &= !self.alarms.list.is_empty();
+        self.persist(t)
     }
 
     fn open_sheet(&mut self, ui: &Ui, hour: usize, min: usize, alarm: Option<&Alarm>) {
@@ -914,8 +1047,10 @@ impl Clock {
                     self.persist_stopwatch(t);
                 }
                 Tab::Timer => {
-                    // cancel the newest timer
-                    if self.timers.list.pop().is_some() {
+                    // setting up another timer: Cancel goes back to the list; else it cancels the newest timer
+                    if self.timer_new && !self.timers.list.is_empty() {
+                        self.timer_new = false;
+                    } else if self.timers.list.pop().is_some() {
                         return self.persist_timers(t);
                     }
                 }
@@ -926,9 +1061,12 @@ impl Clock {
                     self.stopwatch.toggle(t);
                     self.persist_stopwatch(t);
                 }
+                // over the list the right button is New: it shows the picker for another timer
+                Tab::Timer if self.timer_list() => self.timer_new = true,
                 Tab::Timer => {
                     let ms = self.picked_ms();
                     if self.timers.start("", ms, t, self.wall.now_ms(t)).is_some() {
+                        self.timer_new = false;
                         return self.persist_timers(t);
                     }
                 }
@@ -937,6 +1075,7 @@ impl Clock {
             Target::Preset(i) => {
                 let (name, ms) = timer::PRESETS[i];
                 if self.timers.start(name, ms, t, self.wall.now_ms(t)).is_some() {
+                    self.timer_new = false;
                     return self.persist_timers(t);
                 }
             }
@@ -1098,9 +1237,11 @@ impl Clock {
         }
         let sec = self.wall.now(t);
         let per_second = self.tab == Tab::World || (self.tab == Tab::Timer && self.timers.any_running());
-        if per_second && sec != self.drawn_sec {
-            dirty = true;
-        }
+        let second = per_second && sec != self.drawn_sec;
+        // a countdown second with nothing else to show repaints only the timer cards, not the whole window (E2E W4-10:
+        // slow full-window CPU frames at a timer's start)
+        self.rows_only = second && !dirty && self.tab == Tab::Timer && self.timer_list() && self.add.is_none() && self.world.sheet.is_none();
+        dirty |= second;
         dirty |= self.tab == Tab::Stopwatch && self.stopwatch.running();
         dirty
     }
@@ -1164,9 +1305,26 @@ impl Clock {
         self.cache.draw_chars(s, ui, text, pt, weight, color, x - w * align, mid - h / 2.0);
     }
 
-    pub fn draw(&mut self, s: &mut Surface, ui: &Ui, t: f64) {
-        s.fill_rect(0, 0, self.w as usize, self.h as usize, CONTENT_BG.now());
+    /// Draws a frame. Returns the rectangles (pixels) it repainted when it repainted only part of the window (the
+    /// timer cards on a countdown second), `None` after a full repaint.
+    pub fn draw(&mut self, s: &mut Surface, ui: &Ui, t: f64) -> Option<Vec<(f32, f32, f32, f32)>> {
+        let rows_only = std::mem::take(&mut self.rows_only)
+            && self.drawn_card == CARD_BG.now()
+            && self.tab == Tab::Timer
+            && self.timer_list()
+            && self.add.is_none()
+            && self.world.sheet.is_none();
         self.drawn_sec = self.wall.now(t);
+        if rows_only {
+            return Some(self.draw_timer_cards(s, ui, t));
+        }
+        self.drawn_card = CARD_BG.now();
+        self.draw_full(s, ui, t);
+        None
+    }
+
+    fn draw_full(&mut self, s: &mut Surface, ui: &Ui, t: f64) {
+        s.fill_rect(0, 0, self.w as usize, self.h as usize, CONTENT_BG.now());
         match self.tab {
             Tab::World => self.draw_world(s, ui, t),
             Tab::Alarm => self.draw_alarms(s, ui, t),
@@ -1290,14 +1448,25 @@ impl Clock {
                 self.label(s, ui, "Delete", MAC_BODY_PT, Weight::Semibold, WHITE, cx + w - ui.pt(SPACE_XL), y + h / 2.0, 1.0);
             }
             let x = cx + dx;
+            // the selected card (last clicked or right-clicked; Delete removes it) carries an accent ring
+            if self.selected_alarm == Some(a.id) && dx == 0.0 {
+                let ring = ui.pt(2.0);
+                s.fill_rrect(x - ring, y - ring, w + 2.0 * ring, h + 2.0 * ring, ui.pt(m::CARD_RADIUS) + ring, LINK);
+            }
             s.fill_rrect(x, y, w, h, ui.pt(m::CARD_RADIUS), CARD_BG.now());
-            let left = x + ui.pt(45.0);
+            // the text starts at the card's inset, or after the delete badge while editing
+            let left = x + ui.pt(if self.editing { ALARM_EDIT_TEXT_PT } else { ALARM_TEXT_PT });
             let ink = if a.on { LABEL.now() } else { LABEL_3.now() };
-            self.dynamic(s, ui, &a.time_text(), DISPLAY_MEDIUM_PT, Weight::Regular, ink, left, y + ui.pt(75.0), 0.0);
+            // the large time and the switch share the top row; the label and the repeat days are under the time
+            self.dynamic(s, ui, &a.time_text(), DISPLAY_MEDIUM_PT, Weight::Regular, ink, left, y + ui.pt(ALARM_TIME_Y_PT), 0.0);
             self.dynamic(s, ui, &ui.fit(&a.label, MAC_TITLE3_PT, w - ui.pt(60.0)), MAC_TITLE3_PT, Weight::Regular, ink, left, y + ui.pt(ALARM_LABEL_Y_PT), 0.0);
             let repeat = format!("Repeat: {}", a.repeat_text());
             self.dynamic(s, ui, &ui.fit(&repeat, MAC_BODY_PT, w - ui.pt(60.0)), MAC_BODY_PT, Weight::Regular, LABEL_2.now(), left, y + ui.pt(ALARM_REPEAT_Y_PT), 0.0);
-            draw_switch(s, ui, left, y + ui.pt(ALARM_SWITCH_Y_PT), if a.on { 1.0 } else { 0.0 });
+            // while editing the delete badge pushes the time right, over where the switch sits: the switch hides
+            if !self.editing {
+                let (sx, sy, _, _) = Self::alarm_switch((x, y, w, h), ui);
+                draw_switch(s, ui, sx, sy, if a.on { 1.0 } else { 0.0 });
+            }
             if a.on && a.repeat != 0 {
                 let (word, color) = if a.skip_day.is_some() { ("Skipped", LABEL_2.now()) } else { ("Skip", LINK) };
                 self.label(s, ui, word, MAC_BODY_PT, Weight::Regular, color, x + ui.pt(ALARM_SKIP_X_PT), y + ui.pt(ALARM_SKIP_Y_PT), 0.0);
@@ -1380,6 +1549,13 @@ impl Clock {
     }
 
     fn draw_timer(&mut self, s: &mut Surface, ui: &Ui, t: f64) {
+        if self.timer_list() {
+            self.draw_timer_cards(s, ui, t);
+            let fill = CONTROL_PRESSED.now();
+            self.draw_button(s, ui, false, "Cancel", fill, LABEL.now());
+            self.draw_button(s, ui, true, "New", CARD_BG.now(), LINK);
+            return;
+        }
         let cy = ui.pt(PICKER_Y_PT);
         let (x0, _, _) = self.timer_column(ui, 0);
         let band_h = ui.pt(PICKER_ROW_PT);
@@ -1396,19 +1572,37 @@ impl Clock {
             s.fill_rrect(px, py, pw, ph, 1.0e4, CARD_BG.now());
             self.label(s, ui, name, MAC_SUBHEAD_PT, Weight::Regular, LINK, px + pw / 2.0, py + ph / 2.0, 0.5);
         }
+        // Cancel goes back to the running timers while another one is being set up
+        let (fill, ink) = if self.timers.list.is_empty() { (CARD_BG.now(), LABEL_3.now()) } else { (CONTROL_PRESSED.now(), LABEL.now()) };
+        self.draw_button(s, ui, false, "Cancel", fill, ink);
+        if self.picked_ms() > 0 {
+            self.draw_button(s, ui, true, "Start", CARD_BG.now(), LINK);
+        } else {
+            self.draw_button(s, ui, true, "Start", CARD_BG.now(), LABEL_3.now());
+        }
+    }
+
+    /// The running timers as cards: the label (the preset's name, or "Timer"), the large countdown, the progress bar
+    /// along the bottom, Paused when paused, and the delete cross at the trailing edge. Returns the cards' rectangles.
+    fn draw_timer_cards(&mut self, s: &mut Surface, ui: &Ui, t: f64) -> Vec<(f32, f32, f32, f32)> {
         let items: Vec<(String, f64, f32, bool)> = self.timers.list.iter().map(|i| (i.label.clone(), i.remaining(t), i.fraction(t), i.running())).collect();
+        let mut rects = Vec::new();
         for (i, (label, rem, frac, running)) in items.iter().take(TIMER_ROWS).enumerate() {
             let (rx, ry, rw, rh) = self.timer_row(ui, i);
-            let body = rh - ui.pt(SPACE_XS);
-            s.fill_rrect(rx, ry, rw, body, ui.pt(m::CARD_RADIUS), CARD_BG.now());
-            s.fill_rrect(rx, ry + body - ui.pt(SPACE_XS), rw * frac, ui.pt(SPACE_XS), 0.0, if *running { LINK } else { LABEL_3.now() });
-            let mid = ry + (body - ui.pt(SPACE_XS)) / 2.0;
-            self.dynamic(s, ui, &ui.fit(label, MAC_BODY_PT, rw * 0.4), MAC_BODY_PT, Weight::Regular, LABEL.now(), rx + ui.pt(SPACE_L), mid, 0.0);
+            rects.push((rx, ry, rw, rh));
+            s.fill_rect(rx as usize, ry as usize, rw.ceil() as usize, rh.ceil() as usize, CONTENT_BG.now());
+            let bar = ui.pt(SPACE_XS);
+            s.fill_rrect(rx, ry, rw, rh, ui.pt(m::CARD_RADIUS), CARD_BG.now());
+            s.fill_rrect(rx + ui.pt(SPACE_L), ry + rh - bar - ui.pt(SPACE_S), (rw - ui.pt(SPACE_XXL + SPACE_XXL)) * frac, bar, bar / 2.0, if *running { LINK } else { LABEL_3.now() });
+            let left = rx + ui.pt(SPACE_L);
+            let label = if label.is_empty() { "Timer" } else { label.as_str() };
+            self.label(s, ui, &ui.fit(label, MAC_BODY_PT, rw * 0.5), MAC_BODY_PT, Weight::Regular, LABEL_2.now(), left, ry + ui.pt(SPACE_XL), 0.0);
+            let ink = if *running { LABEL.now() } else { LABEL_3.now() };
+            self.dynamic(s, ui, &timer::format(*rem), MAC_LARGE_TITLE_PT, Weight::Regular, ink, left, ry + rh / 2.0 + ui.pt(SPACE_XS), 0.0);
             if !*running {
-                self.label(s, ui, "Paused", MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), rx + rw * 0.5, mid, 0.5);
+                self.label(s, ui, "Paused", MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), rx + rw * 0.5, ry + rh / 2.0, 0.5);
             }
-            self.dynamic(s, ui, &timer::format(*rem), MAC_TITLE1_PT, Weight::Regular, if *running { LABEL.now() } else { LABEL_3.now() }, rx + rw - ui.pt(70.0), mid, 1.0);
-            let c = (rx + rw - ui.pt(28.0), mid);
+            let c = (rx + rw - ui.pt(28.0), ry + rh / 2.0);
             let k = ui.pt(SPACE_S);
             let cross = glyphs::either(glyphs::segment((c.0 - k, c.1 - k), (c.0 + k, c.1 + k), ui.pt(SPACE_XXS)), glyphs::segment((c.0 - k, c.1 + k), (c.0 + k, c.1 - k), ui.pt(SPACE_XXS)));
             glyphs::paint(s, (c.0 - k - 2.0, c.1 - k - 2.0, 2.0 * k + 4.0, 2.0 * k + 4.0), LABEL_2.now(), cross);
@@ -1417,13 +1611,7 @@ impl Clock {
             let (_, ry, _, _) = self.timer_row(ui, TIMER_ROWS);
             self.label(s, ui, &format!("+{} more", items.len() - TIMER_ROWS), MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), self.w as f32 / 2.0, ry + ui.pt(SPACE_S), 0.5);
         }
-        let (fill, ink) = if items.is_empty() { (CARD_BG.now(), LABEL_3.now()) } else { (CONTROL_PRESSED.now(), LABEL.now()) };
-        self.draw_button(s, ui, false, "Cancel", fill, ink);
-        if self.picked_ms() > 0 {
-            self.draw_button(s, ui, true, "Start", CARD_BG.now(), LINK);
-        } else {
-            self.draw_button(s, ui, true, "Start", CARD_BG.now(), LABEL_3.now());
-        }
+        rects
     }
 
     fn draw_add(&mut self, s: &mut Surface, ui: &Ui, t: f64) {
@@ -1661,8 +1849,14 @@ pub(crate) mod tests {
         // several at once: each gets its own label, the left button cancels the newest
         let left = c.button_centre(&ui, false);
         tap(&mut c, &ui, right.0, right.1, 6000.0);
+        // a timer runs: the picker hides and the right button is New, which brings the picker back
+        assert!(c.timer_list());
+        assert_eq!(c.hit(&ui, sx + sw / 2.0, cy), None, "no picker over the running timers");
         tap(&mut c, &ui, right.0, right.1, 6100.0);
+        assert!(!c.timer_list() && c.timers().list.len() == 1, "New shows the picker without starting a timer");
+        tap(&mut c, &ui, right.0, right.1, 6150.0);
         assert_eq!(c.timers().list.iter().map(|i| i.label.as_str()).collect::<Vec<_>>(), ["Timer", "Timer 2"]);
+        assert!(c.timer_list());
         tap(&mut c, &ui, left.0, left.1, 6200.0);
         assert_eq!(c.timers().list.len(), 1, "cancel");
         // the row pauses and resumes, its cross deletes
@@ -1846,7 +2040,8 @@ pub(crate) mod tests {
         assert_eq!(c.alarms().list[0].label, "q");
         assert!(std::fs::read_to_string(path).unwrap().contains("alarm.0.time=23:33"));
         let (cx, cy, _, _) = Clock::alarm_card(&ui, 0);
-        let fx = tap(&mut c, &ui, cx + ui.pt(60.0), cy + ui.pt(210.0), 5000.0);
+        let (sx, sy, sw, sh) = Clock::alarm_switch(Clock::alarm_card(&ui, 0), &ui);
+        let fx = tap(&mut c, &ui, sx + sw / 2.0, sy + sh / 2.0, 5000.0);
         assert!(!c.alarms().list[0].on);
         assert_eq!(fx, vec![Effect::WakeAt(0)]);
         draw(&mut c, &ui, 5100.0);
@@ -1885,5 +2080,72 @@ pub(crate) mod tests {
         draw(&mut c, &ui, 1500.0);
         assert!(!c.tick(&ui, 1600.0), "same second, nothing to repaint");
         assert!(c.tick(&ui, 2100.0), "next second repaints the faces");
+    }
+
+    /// E2E W4-9: an alarm card has its switch beside the large time; right-click and the Delete key remove an alarm.
+    #[test]
+    fn alarm_cards_switch_beside_the_time_and_delete_from_the_menu_or_the_delete_key() {
+        let ui = ui();
+        let path = scratch("w4-9");
+        let mut c = clock(&ui);
+        c.load(&path, 1000.0);
+        c.alarms.add(Alarm::new(7, 0));
+        let second = c.alarms.add(Alarm::new(8, 30));
+        select_tab(&mut c, &ui, 1);
+        let card = Clock::alarm_card(&ui, 0);
+        assert!(card.0 > 0.0, "the first card keeps the window margin");
+        let (sx, sy, sw, sh) = Clock::alarm_switch(card, &ui);
+        assert!(sx + sw <= card.0 + card.2 && sy >= card.1, "the switch is inside the card");
+        tap(&mut c, &ui, sx + sw / 2.0, sy + sh / 2.0, 2000.0);
+        assert!(!c.alarms().list[0].on, "the switch turns the alarm off");
+        assert!(c.add.is_none(), "the switch does not open the editor");
+        draw(&mut c, &ui, 2050.0);
+        // right-click: Edit Alarm, Turn On, Delete Alarm; Delete removes that card
+        let items = c.alarm_context(&ui, card.0 + ui.pt(100.0), card.1 + ui.pt(130.0)).expect("a menu on the card");
+        assert_eq!(items.iter().map(|i| i.label.as_str()).collect::<Vec<_>>(), ["Edit Alarm", "Turn On", "Delete Alarm"]);
+        assert!(c.context_action(&ui, CTX_ALARM_DELETE, 2100.0).is_some());
+        assert_eq!(c.alarms().list.iter().map(|a| a.id).collect::<Vec<_>>(), [second]);
+        assert_eq!(Alarms::parse(&std::fs::read_to_string(&path).unwrap()).list.len(), 1, "the deletion is written");
+        assert!(c.alarm_context(&ui, 2.0, ui.pt(UNIFIED_BAR_PT) + 4.0).is_none(), "no menu off the cards");
+        // Delete in the editor of an existing alarm removes it (its label field does not have the keyboard)
+        let card = Clock::alarm_card(&ui, 0);
+        tap(&mut c, &ui, card.0 + ui.pt(150.0), card.1 + ui.pt(40.0), 3000.0);
+        assert_eq!(c.add.as_ref().and_then(|a| a.edit), Some(second));
+        assert!(c.delete_key(3100.0).is_some());
+        assert!(c.alarms().list.is_empty() && c.add.is_none());
+        // a pressed card is selected and Delete removes it; with nothing selected the key is not for the alarms
+        let third = c.alarms.add(Alarm::new(9, 15));
+        c.touch(&ui, Event::Down(card.0 + ui.pt(150.0), card.1 + ui.pt(40.0)), 4000.0);
+        c.touch(&ui, Event::Up(2.0, card.1 + ui.pt(40.0)), 4020.0);
+        assert!(c.add.is_none(), "released off the card: no editor");
+        assert_eq!(c.selected_alarm, Some(third));
+        draw(&mut c, &ui, 4050.0);
+        assert!(c.delete_key(4100.0).is_some());
+        assert!(c.alarms().list.is_empty());
+        assert!(c.delete_key(4200.0).is_none());
+    }
+
+    /// E2E W4-10: running timers replace the picker, their cards carry a label, and a countdown second repaints only
+    /// the cards instead of the whole window.
+    #[test]
+    fn running_timers_replace_the_picker_and_a_second_repaints_only_their_cards() {
+        let ui = ui();
+        let mut c = clock(&ui);
+        select_tab(&mut c, &ui, 3);
+        let (px, py, pw, ph) = c.preset_rect(&ui, 2);
+        tap(&mut c, &ui, px + pw / 2.0, py + ph / 2.0, 1000.0);
+        assert!(c.timer_list());
+        let controls = c.controls(&ui);
+        assert!(controls.iter().all(|n| n.role != Role::Slider), "no picker while the timer runs");
+        assert!(controls.iter().any(|n| n.label == "Timer 5 min"));
+        assert!(controls.iter().any(|n| n.label == "New Timer"));
+        let mut buf = vec![0u32; 1200 * 1920];
+        assert!(c.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, &ui, 1100.0).is_none(), "a full frame first");
+        assert!(c.tick(&ui, 2100.0), "the next second needs a frame");
+        let rects = c.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, &ui, 2100.0).expect("a partial repaint");
+        assert_eq!(rects, vec![c.timer_row(&ui, 0)]);
+        // input repaints the whole window again
+        tap(&mut c, &ui, 4.0, 1900.0, 2200.0);
+        assert!(c.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, &ui, 2300.0).is_none());
     }
 }
