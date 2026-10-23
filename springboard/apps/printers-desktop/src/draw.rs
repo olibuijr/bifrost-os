@@ -6,9 +6,9 @@ use crate::discover::{detail_line, is_added};
 use crate::model::{
     created_text, document_tag, info_lines, job_progress, option_lines, pages_text, printer_detail, problem_line, row_summary, share_label, size_text, supply_rgb, supply_text, wrap_words, Level, Pane, HELP,
 };
-use crate::window::{Field, PrintCenter, COLS_PT, JOB_ROW_PT, PAD_PT, ROW_PT, SIDE_PT};
+use crate::window::{Field, PrintCenter, B_TITLE, COLS_PT, JOB_ROW_PT, PAD_PT, ROW_PT, SIDE_PT, TITLE};
 use bifrost_app::controls::{Node, Rect, Role};
-use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, SELECTION, SEPARATOR_C, SYSTEM_ORANGE, SYSTEM_RED, TINT, WHITE};
+use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, MAC_TITLE2_PT, MAC_TITLE3_PT, SELECTION, SEPARATOR_C, SYSTEM_ORANGE, SYSTEM_RED, TINT, WHITE};
 use bifrost_app::kit::{pack, Surface, TextCache, Ui, Weight};
 use bifrost_app::widgets;
 
@@ -43,6 +43,17 @@ fn text_mid(labels: &mut TextCache, s: &mut Surface, ui: &Ui, label: &str, pt: f
     s.blit(img, ui.pt(x) as i32, top as i32, 255, 255);
 }
 
+/// The label of the empty window's add button (the reference's wording).
+pub const ADD_FIRST: &str = "Add Printer, Scanner, or Fax\u{2026}";
+
+/// A text run centred on `(cx, mid)`, cut to `max` points.
+#[allow(clippy::too_many_arguments)]
+fn centred(labels: &mut TextCache, s: &mut Surface, ui: &Ui, label: &str, pt: f32, weight: Weight, color: u32, cx: f32, mid: f32, max: f32) {
+    let fitted = ui.fit(label, pt, ui.pt(max.max(0.0)));
+    let img = labels.get(ui, &fitted, pt, weight, color);
+    s.blit(img, (ui.pt(cx) - img.w as f32 / 2.0) as i32, (ui.pt(mid) - img.h as f32 / 2.0) as i32, 255, 255);
+}
+
 /// The width of queue column `i` in points: up to the next column (or `right`), less a gutter.
 fn column_width(cols: &[f32; 7], i: usize, right: f32) -> f32 {
     let end = cols.get(i + 1).copied().unwrap_or(right);
@@ -55,7 +66,11 @@ pub fn paint(p: &mut PrintCenter, s: &mut Surface, ui: &Ui) {
     let bar = p.bar_rect();
     widgets::toolbar_band(s, ui, bar);
     let tb = p.toolbar();
-    widgets::toolbar(s, ui, bar, &tb, None);
+    let placed = widgets::toolbar(s, ui, bar, &tb, None);
+    // the window title sits in its toolbar slot, like the other full-size windows
+    if let Some(r) = placed.rect_of(B_TITLE) {
+        text_mid(&mut p.labels, s, ui, TITLE, MAC_TITLE3_PT, Weight::Bold, LABEL.now(), r.x, r.y + r.h / 2.0, r.w);
+    }
     paint_printers(p, s, ui);
     paint_queue(p, s, ui);
     paint_footer(p, s, ui);
@@ -69,7 +84,7 @@ fn paint_printers(p: &mut PrintCenter, s: &mut Surface, ui: &Ui) {
     let printers = p.model.printers.clone();
     let selected = p.model.selected.clone();
     if printers.is_empty() {
-        text_mid(&mut p.labels, s, ui, "No printers", MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), 16.0, side.y + 24.0, SIDE_PT - 32.0);
+        text_mid(&mut p.labels, s, ui, "No Printers", MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), 16.0, side.y + 24.0, SIDE_PT - 32.0);
         return;
     }
     for (i, printer) in printers.iter().enumerate() {
@@ -123,6 +138,16 @@ fn paint_queue(p: &mut PrintCenter, s: &mut Surface, ui: &Ui) {
     let x0 = d.x + PAD_PT;
     let w = (d.w - 2.0 * PAD_PT).max(0.0);
     let printer = p.model.selected_printer().cloned();
+    if let Some(button) = p.add_first_rect() {
+        // nothing set up yet: say so in the middle of the pane and offer the way to add one, as the Printers & Scanners
+        // settings do
+        let mid = d.y + d.h / 2.0;
+        centred(&mut p.labels, s, ui, "No Printers", MAC_TITLE2_PT, Weight::Semibold, LABEL_2.now(), d.x + d.w / 2.0, mid - 30.0, w);
+        centred(&mut p.labels, s, ui, "Add a printer on this network, or one by its address.", MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), d.x + d.w / 2.0, mid - 4.0, w);
+        fill(s, ui, button, button.h / 2.0, TINT);
+        centred(&mut p.labels, s, ui, ADD_FIRST, MAC_BODY_PT, Weight::Semibold, WHITE, button.x + button.w / 2.0, button.y + button.h / 2.0, button.w - 24.0);
+        return;
+    }
     let Some(printer) = printer else {
         text_mid(&mut p.labels, s, ui, "No printer is selected", MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), x0, d.y + 40.0, w);
         return;
@@ -316,7 +341,13 @@ pub fn controls(p: &PrintCenter, ui: &Ui) -> Vec<Node> {
     for (id, r) in p.toolbar_layout(ui).visible {
         let label = bar.items.iter().find(|i| i.id == id).map(|i| i.label.clone()).unwrap_or_default();
         let enabled = bar.items.iter().any(|i| i.id == id && i.enabled);
-        nodes.push(Node { id: id as u64, role: Role::Button, label, value: String::new(), bounds: r, enabled });
+        // the title is text, not a control
+        let role = if id == B_TITLE { Role::StaticText } else { Role::Button };
+        nodes.push(Node { id: id as u64, role, label, value: String::new(), bounds: r, enabled });
+    }
+    if let Some(r) = p.add_first_rect() {
+        // the published id runs the same action as the toolbar's Add Printer (`Input::Activate`)
+        nodes.push(Node { id: crate::window::B_ADD as u64, role: Role::Button, label: ADD_FIRST.into(), value: String::new(), bounds: r, enabled: true });
     }
     nodes
 }
