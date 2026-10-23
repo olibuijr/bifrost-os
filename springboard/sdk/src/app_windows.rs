@@ -243,12 +243,12 @@ pub(crate) fn deliver_window<A: crate::App>(app: &mut A, ctx: &crate::Ctx, msg: 
                 None => false,
             }
         }
-        ToApp::WindowTouch { id, touch, kind, x, y, t_ms } => {
+        ToApp::WindowTouch { id, touch, kind, x, y, t_ms, mods } => {
             let routed = ctx.windows.borrow().route(WindowId(*id));
             match routed {
                 Some(window) => {
                     let t = crate::runtime::event_time(now, *t_ms);
-                    app.window_event(ctx, window, crate::Input::Touch { kind: *kind, id: *touch, x: *x, y: *y, t })
+                    app.window_event(ctx, window, crate::Input::Touch { kind: *kind, id: *touch, x: *x, y: *y, t, mods: *mods })
                 }
                 None => false,
             }
@@ -426,8 +426,9 @@ mod tests {
             crate::kit::Damage::new(s.w, s.h)
         }
         fn window_event(&mut self, _: &crate::Ctx, window: WindowId, ev: crate::Input) -> bool {
-            if let crate::Input::Touch { id, .. } = ev {
-                self.log.push(format!("touch {id} on {}", window.0));
+            if let crate::Input::Touch { id, mods, .. } = ev {
+                let held = if mods.is_empty() { String::new() } else { format!(" mods {:#x}", mods.bits()) };
+                self.log.push(format!("touch {id} on {}{held}", window.0));
             }
             true
         }
@@ -588,7 +589,7 @@ mod tests {
     }
 
     fn touch_down(id: u32) -> ToApp {
-        ToApp::WindowTouch { id, touch: 7, kind: TouchKind::Down, x: 1.0, y: 2.0, t_ms: 0 }
+        ToApp::WindowTouch { id, touch: 7, kind: TouchKind::Down, x: 1.0, y: 2.0, t_ms: 0, mods: crate::proto::ModifierFlags::EMPTY }
     }
 
     #[test]
@@ -606,6 +607,18 @@ mod tests {
         let id = ctx.open_window(WindowSpec::new("Ada", 480.0, 560.0)).unwrap();
         assert_eq!(deliver_window(&mut app, &ctx, &touch_down(id.0), 0.0), Some(true));
         assert_eq!(app.log, vec!["touch 7 on 1".to_string()]);
+    }
+
+    #[test]
+    fn a_window_touch_keeps_the_modifier_keys_held_for_it() {
+        let ctx = crate::runtime::test_ctx();
+        let mut app = Fake::default();
+        let id = ctx.open_window(WindowSpec::new("Ada", 480.0, 560.0)).unwrap();
+        let mods = crate::proto::ModifierFlags::SHIFT | crate::proto::ModifierFlags::COMMAND;
+        let touch = ToApp::WindowTouch { id: id.0, touch: 7, kind: TouchKind::Down, x: 1.0, y: 2.0, t_ms: 0, mods };
+        let wire = ToApp::decode(&touch.encode()).unwrap();
+        assert_eq!(deliver_window(&mut app, &ctx, &wire, 0.0), Some(true));
+        assert_eq!(app.log, vec![format!("touch 7 on 1 mods {:#x}", mods.bits())]);
     }
 
     #[test]

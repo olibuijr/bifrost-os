@@ -562,7 +562,7 @@ mod tests {
     /// A click (press and release) on the main window at `t` milliseconds.
     fn click(app: &mut MailApp, ctx: &Ctx, (x, y): (f32, f32), t: f64) {
         for kind in [TouchKind::Down, TouchKind::Up] {
-            app.event(ctx, Input::Touch { kind, id: 0, x, y, t });
+            app.event(ctx, Input::Touch { kind, id: 0, x, y, t, mods: bifrost_app::ModifierFlags::EMPTY });
         }
     }
 
@@ -654,7 +654,7 @@ mod tests {
         // a click on Subject moves the focus there, and typing follows it
         let (x, y) = field_centre(&app, &ctx.ui, "Subject", COMPOSE_W, COMPOSE_H);
         for kind in [TouchKind::Down, TouchKind::Up] {
-            app.window_event(&ctx, id, Input::Touch { kind, id: 0, x, y, t: 10.0 });
+            app.window_event(&ctx, id, Input::Touch { kind, id: 0, x, y, t: 10.0, mods: bifrost_app::ModifierFlags::EMPTY });
         }
         app.window_event(&ctx, id, Input::Key(KeyInput::Text("Fundur".into())));
         assert_eq!(compose_field(&app, "Subject"), "Fundur");

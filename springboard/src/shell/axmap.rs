@@ -221,9 +221,9 @@ impl Shell {
             let t_ms = t as u32;
             let sample = synthetic_sample(x, y);
             host.feed_touch(Raw::Down, sample, t);
-            host.send(&ToApp::Touch { kind: TouchKind::Down, id: 0, x, y, t_ms });
+            host.send(&ToApp::Touch { kind: TouchKind::Down, id: 0, x, y, t_ms, mods: bifrost_proto::ModifierFlags::EMPTY });
             host.feed_touch(Raw::Up, sample, t + 40.0);
-            host.send(&ToApp::Touch { kind: TouchKind::Up, id: 0, x, y, t_ms: t_ms.wrapping_add(40) });
+            host.send(&ToApp::Touch { kind: TouchKind::Up, id: 0, x, y, t_ms: t_ms.wrapping_add(40), mods: bifrost_proto::ModifierFlags::EMPTY });
             return Ok((el.address, Vec::new()));
         }
         Err(format!("{} cannot be pressed yet", el.address))

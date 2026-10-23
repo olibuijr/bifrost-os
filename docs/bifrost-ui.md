@@ -1074,6 +1074,24 @@ The keyboard becomes a system app (`docs/keyboard-system-app.md`). The SDK API e
 `Ctx::keyboard_insert_text / keyboard_delete_backward / keyboard_height`, wire types `KeyboardConfig`, `ReturnKey`,
 `KeyboardLayout`, `KeyboardOut`. Marked text, selection, the full `UIReturnKeyType` set and `inputAccessoryView` are now on the wire: see "Text input client" below.
 
+## Event modifier flags (`NSEvent.modifierFlags`, E2E-3)
+Every press, drag and release an app gets carries the modifier keys held at the time, so a click can be a Shift-click
+(extend a selection from its anchor) or a Cmd-click (toggle one item), as `NSEvent.modifierFlags` on a mouse event.
+
+- Wire: `bifrost_proto::ModifierFlags`, re-exported as `bifrost_app::ModifierFlags`. The bits are the reference's
+  `NSEventModifierFlags` raw values (`CAPS_LOCK` 1<<16, `SHIFT` 1<<17, `CONTROL` 1<<18, `OPTION` 1<<19, `COMMAND` 1<<20);
+  unknown bits are dropped on decode. `ToApp::Touch` and `ToApp::WindowTouch` end with the flags as a `u32`; a packet
+  from a sender built before them decodes as none held, and a decoder built before them stops at `t_ms`.
+- Shell: `HwKeys::modifier_flags` (Shift, Ctrl, Option without AltGr, Cmd, and Caps Lock while it is on) is copied to
+  the shell on every key event (`Shell::set_key_mods`) and stamped on each press it forwards to an external app
+  (`ext_touch`, `ext_window_touch`). Presses the shell synthesizes (accessibility actions, the keyboard app) carry none.
+- SDK: `Input::Touch { kind, id, x, y, t, mods }`, on the main window and on extra windows (`App::window_event`). The
+  direct Wayland path (`sdk::wl::input`) fills `mods` from `wl_keyboard.modifiers`.
+- Gaps: there is no `flagsChanged:` event and no class-level `NSEvent.modifierFlags` (the state at any moment, outside
+  an event); an app reads the flags from the press only. Key events carry modifiers only as chords (`CHORD_*`): the
+  arrows with a modifier reach an app as chords when its manifest declares `edit_keys` or a text field is focused
+  (Mail declares it for Shift-Up and Shift-Down). Touch frames (`App::touches`) do not carry the flags yet.
+
 ## Text input client (`NSTextInputClient`, `UITextInput`, `UITextInputTraits`)
 
 Apple parity: an IME composes in the field (marked text), the candidate window follows the caret, and predictive text sees

@@ -169,7 +169,7 @@ impl App for MapsApp {
         let now = bifrost_app::proto::sys::now_ms();
         let Some(w) = self.focused_mut() else { return false };
         let handled = match ev {
-            Input::Touch { kind, id, x, y, t } => {
+            Input::Touch { kind, id, x, y, t, .. } => {
                 w.finger(ctx, &ctx.ui, id, kind, x, y, t);
                 true
             }
@@ -209,7 +209,7 @@ impl App for MapsApp {
         }
         let Some(e) = self.extra.iter_mut().find(|e| e.id == window) else { return false };
         match ev {
-            Input::Touch { kind, id, x, y, t } => {
+            Input::Touch { kind, id, x, y, t, .. } => {
                 e.win.finger(ctx, &ctx.ui, id, kind, x, y, t);
                 true
             }

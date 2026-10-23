@@ -110,6 +110,93 @@ pub const CHORD_SHIFT: u32 = 2;
 pub const CHORD_ALT: u32 = 4;
 pub const CHORD_META: u32 = 8;
 
+/// The modifier keys held when a pointer press or touch happened (`NSEvent.modifierFlags`). The shell sets them from its
+/// live keyboard state on every `ToApp::Touch` and `ToApp::WindowTouch`, so a click can be a Shift-click (extend a
+/// selection) or a Cmd-click (toggle one item). The bits are the reference's `NSEventModifierFlags` raw values; a bit
+/// this crate does not name is dropped on decode.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct ModifierFlags(u32);
+
+impl ModifierFlags {
+    pub const EMPTY: ModifierFlags = ModifierFlags(0);
+    /// `NSEventModifierFlagCapsLock`: Caps Lock is on.
+    pub const CAPS_LOCK: ModifierFlags = ModifierFlags(1 << 16);
+    /// `NSEventModifierFlagShift`
+    pub const SHIFT: ModifierFlags = ModifierFlags(1 << 17);
+    /// `NSEventModifierFlagControl`
+    pub const CONTROL: ModifierFlags = ModifierFlags(1 << 18);
+    /// `NSEventModifierFlagOption` (Alt)
+    pub const OPTION: ModifierFlags = ModifierFlags(1 << 19);
+    /// `NSEventModifierFlagCommand` (Meta, Super)
+    pub const COMMAND: ModifierFlags = ModifierFlags(1 << 20);
+    /// `NSEventModifierFlagDeviceIndependentFlagsMask` restricted to the flags above.
+    pub const ALL: ModifierFlags = ModifierFlags(0x1f << 16);
+
+    /// The wire value.
+    pub const fn bits(self) -> u32 {
+        self.0
+    }
+    /// The flags of a wire value; unknown bits are dropped.
+    pub const fn from_bits_truncate(bits: u32) -> ModifierFlags {
+        ModifierFlags(bits & Self::ALL.0)
+    }
+    pub const fn contains(self, other: ModifierFlags) -> bool {
+        self.0 & other.0 == other.0
+    }
+    pub const fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+    pub const fn union(self, other: ModifierFlags) -> ModifierFlags {
+        ModifierFlags(self.0 | other.0)
+    }
+    /// The flags of a set of `CHORD_*` bits (a chord's modifiers).
+    pub const fn from_chord(mods: u32) -> ModifierFlags {
+        let mut f = 0;
+        if mods & CHORD_SHIFT != 0 {
+            f |= Self::SHIFT.0;
+        }
+        if mods & CHORD_CTRL != 0 {
+            f |= Self::CONTROL.0;
+        }
+        if mods & CHORD_ALT != 0 {
+            f |= Self::OPTION.0;
+        }
+        if mods & CHORD_META != 0 {
+            f |= Self::COMMAND.0;
+        }
+        ModifierFlags(f)
+    }
+    /// The flags held as named keys: (shift, control, option, command, caps lock).
+    pub fn from_held(shift: bool, control: bool, option: bool, command: bool, caps_lock: bool) -> ModifierFlags {
+        [(shift, Self::SHIFT), (control, Self::CONTROL), (option, Self::OPTION), (command, Self::COMMAND), (caps_lock, Self::CAPS_LOCK)]
+            .into_iter()
+            .filter(|(on, _)| *on)
+            .fold(Self::EMPTY, |all, (_, f)| all.union(f))
+    }
+    pub const fn shift(self) -> bool {
+        self.contains(Self::SHIFT)
+    }
+    pub const fn control(self) -> bool {
+        self.contains(Self::CONTROL)
+    }
+    pub const fn option(self) -> bool {
+        self.contains(Self::OPTION)
+    }
+    pub const fn command(self) -> bool {
+        self.contains(Self::COMMAND)
+    }
+    pub const fn caps_lock(self) -> bool {
+        self.contains(Self::CAPS_LOCK)
+    }
+}
+
+impl std::ops::BitOr for ModifierFlags {
+    type Output = ModifierFlags;
+    fn bitor(self, other: ModifierFlags) -> ModifierFlags {
+        self.union(other)
+    }
+}
+
 /// The `KeyInput::Code` the SDK delivers for Escape (the direct Wayland path and the shell's app protocol send 1).
 pub const KEY_ESCAPE: u32 = 1;
 /// ASCII ESC. Nothing sends it today; an app matches it next to `KEY_ESCAPE` so either reading cancels.
@@ -456,7 +543,8 @@ pub mod window_flags {
 #[derive(Clone, Debug, PartialEq)]
 pub enum ToApp {
     Configure(Configure),
-    Touch { kind: TouchKind, id: u32, x: f32, y: f32, t_ms: u32 },
+    /// A pointer press, drag or release (or a finger), with the modifier keys held at the time (`ModifierFlags`).
+    Touch { kind: TouchKind, id: u32, x: f32, y: f32, t_ms: u32, mods: ModifierFlags },
     /// Every touch of one frame, with phases, previous locations, tap counts and optional force and radius (see the
     /// `touch` module). The shell sends it ahead of the matching `Touch`. Tag 0x1f0.
     Touches(TouchEvent),
@@ -475,7 +563,7 @@ pub enum ToApp {
     /// Several windows: the shell resized window `id` to `w` x `h` points.
     WindowConfigure { id: u32, w: f32, h: f32 },
     /// Several windows: a touch on window `id`, with the same fields as `Touch` (`touch` is the touch id).
-    WindowTouch { id: u32, touch: u32, kind: TouchKind, x: f32, y: f32, t_ms: u32 },
+    WindowTouch { id: u32, touch: u32, kind: TouchKind, x: f32, y: f32, t_ms: u32, mods: ModifierFlags },
     /// Several windows: buffer `buf` of window `id`'s set `generation` is free again (as `Release` for the main window).
     WindowRelease { id: u32, buf: u32, generation: u32 },
     /// Several windows: the person dragged window `window` to (x, y) points relative to the visible desktop area (the
@@ -1329,6 +1417,13 @@ impl<'a> Reader<'a> {
     fn f32(&mut self) -> Result<f32, DecodeError> {
         Ok(f32::from_le_bytes(self.take(4)?.try_into().unwrap()))
     }
+    /// The trailing `ModifierFlags` of a touch; none held when a sender built before them left them out.
+    fn modifiers(&mut self) -> Result<ModifierFlags, DecodeError> {
+        if self.0.is_empty() {
+            return Ok(ModifierFlags::EMPTY);
+        }
+        Ok(ModifierFlags::from_bits_truncate(self.u32()?))
+    }
     fn items(&mut self) -> Result<Vec<(String, Vec<u8>)>, DecodeError> {
         let n = self.u32()? as usize;
         if n > 16 {
@@ -1425,13 +1520,15 @@ impl ToApp {
             ToApp::ContextAction(id)=>{u32_(&mut b,tag::CONTEXT_ACTION);u32_(&mut b,*id);},
             ToApp::MenuAction(id)=>{u32_(&mut b,tag::MENU_ACTION);u32_(&mut b,*id);},
             ToApp::QuickAction{kind,user_info}=>{u32_(&mut b,tag::QUICK_ACTION);str_(&mut b,kind);u32_(&mut b,user_info.len() as u32);for (k,v) in user_info {str_(&mut b,k);str_(&mut b,v);}},
-            ToApp::Touch { kind, id, x, y, t_ms } => {
+            ToApp::Touch { kind, id, x, y, t_ms, mods } => {
                 u32_(&mut b, tag::TOUCH);
                 b.push(*kind as u8);
                 u32_(&mut b, *id);
                 f32_(&mut b, *x);
                 f32_(&mut b, *y);
                 u32_(&mut b, *t_ms);
+                // the modifiers ride at the end: a decoder built before them stops at `t_ms`
+                u32_(&mut b, mods.bits());
             }
             ToApp::Key(k) => {
                 u32_(&mut b, tag::KEY);
@@ -1475,7 +1572,7 @@ impl ToApp {
                 f32_(&mut b, *w);
                 f32_(&mut b, *h);
             }
-            ToApp::WindowTouch { id, touch, kind, x, y, t_ms } => {
+            ToApp::WindowTouch { id, touch, kind, x, y, t_ms, mods } => {
                 u32_(&mut b, tag::WINDOW_TOUCH);
                 u32_(&mut b, *id);
                 u32_(&mut b, *touch);
@@ -1488,6 +1585,7 @@ impl ToApp {
                 f32_(&mut b, *x);
                 f32_(&mut b, *y);
                 u32_(&mut b, *t_ms);
+                u32_(&mut b, mods.bits());
             }
             ToApp::WindowRelease { id, buf, generation } => {
                 u32_(&mut b, tag::WINDOW_RELEASE);
@@ -1637,7 +1735,8 @@ impl ToApp {
                     3 => TouchKind::Cancel,
                     _ => return Err(DecodeError::BadValue),
                 };
-                ToApp::Touch { kind, id: r.u32()?, x: r.f32()?, y: r.f32()?, t_ms: r.u32()? }
+                let (id, x, y, t_ms) = (r.u32()?, r.f32()?, r.f32()?, r.u32()?);
+                ToApp::Touch { kind, id, x, y, t_ms, mods: r.modifiers()? }
             }
             tag::KEY => match r.u8()? {
                 0 => ToApp::Key(KeyInput::Text(r.str()?)),
@@ -1677,7 +1776,8 @@ impl ToApp {
                 if !x.is_finite() || !y.is_finite() {
                     return Err(DecodeError::BadValue);
                 }
-                ToApp::WindowTouch { id, touch, kind, x, y, t_ms: r.u32()? }
+                let t_ms = r.u32()?;
+                ToApp::WindowTouch { id, touch, kind, x, y, t_ms, mods: r.modifiers()? }
             }
             tag::WINDOW_RELEASE => ToApp::WindowRelease { id: r.u32()?, buf: r.u32()?, generation: r.u32()? },
             tag::WINDOW_FOCUS => {
@@ -2646,8 +2746,9 @@ mod tests {
         let cfg = Configure { w: 1200, h: 1920, scale: 1.5625, safe_top: 24.0, safe_bottom: 20.0, dark: true, text_scale: 1.1, reduce_motion: false };
         let all = vec![
             ToApp::Configure(cfg),
-            ToApp::Touch { kind: TouchKind::Down, id: 3, x: 10.5, y: -2.0, t_ms: 123456 },
-            ToApp::Touch { kind: TouchKind::Cancel, id: 0, x: 0.0, y: 0.0, t_ms: 0 },
+            ToApp::Touch { kind: TouchKind::Down, id: 3, x: 10.5, y: -2.0, t_ms: 123456, mods: ModifierFlags::EMPTY },
+            ToApp::Touch { kind: TouchKind::Down, id: 3, x: 1.0, y: 2.0, t_ms: 7, mods: ModifierFlags::SHIFT | ModifierFlags::COMMAND },
+            ToApp::Touch { kind: TouchKind::Cancel, id: 0, x: 0.0, y: 0.0, t_ms: 0, mods: ModifierFlags::EMPTY },
             ToApp::Key(KeyInput::Text("héllo ✓".into())),
             ToApp::Key(KeyInput::Code(66)),
             ToApp::Release { buf: 1, generation: 5 },
@@ -3194,7 +3295,7 @@ mod quick_action_tests {
             ToApp::WindowClosed { id: 3 },
             ToApp::FullScreen { on: true },
             ToApp::WindowConfigure { id: 3, w: 320.0, h: 240.0 },
-            ToApp::WindowTouch { id: 3, touch: 1, kind: TouchKind::Move, x: 10.5, y: -2.0, t_ms: 99 },
+            ToApp::WindowTouch { id: 3, touch: 1, kind: TouchKind::Move, x: 10.5, y: -2.0, t_ms: 99, mods: ModifierFlags::OPTION },
             ToApp::WindowRelease { id: 3, buf: 1, generation: 5 },
         ];
         for m in app {
@@ -3317,8 +3418,51 @@ mod quick_action_tests {
         let mut bad = ToShell::WindowResize { id: 1, w: 1.0, h: 1.0 }.encode();
         bad[8..12].copy_from_slice(&f32::NAN.to_le_bytes());
         assert!(ToShell::decode(&bad).is_err());
-        let mut bad_touch = ToApp::WindowTouch { id: 1, touch: 0, kind: TouchKind::Down, x: 0.0, y: 0.0, t_ms: 0 }.encode();
+        let mut bad_touch = ToApp::WindowTouch { id: 1, touch: 0, kind: TouchKind::Down, x: 0.0, y: 0.0, t_ms: 0, mods: ModifierFlags::EMPTY }.encode();
         bad_touch[12] = 9;
         assert!(ToApp::decode(&bad_touch).is_err());
+    }
+}
+
+#[cfg(test)]
+mod modifier_flag_tests {
+    use super::*;
+
+    #[test]
+    fn modifier_flags_use_the_reference_raw_values() {
+        assert_eq!(ModifierFlags::CAPS_LOCK.bits(), 1 << 16);
+        assert_eq!(ModifierFlags::SHIFT.bits(), 1 << 17);
+        assert_eq!(ModifierFlags::CONTROL.bits(), 1 << 18);
+        assert_eq!(ModifierFlags::OPTION.bits(), 1 << 19);
+        assert_eq!(ModifierFlags::COMMAND.bits(), 1 << 20);
+        assert_eq!(ModifierFlags::from_bits_truncate(u32::MAX), ModifierFlags::ALL, "unknown bits are dropped");
+        let both = ModifierFlags::SHIFT | ModifierFlags::COMMAND;
+        assert!(both.shift() && both.command() && !both.option() && !both.control() && !both.caps_lock());
+        assert!(ModifierFlags::default().is_empty());
+    }
+
+    #[test]
+    fn chord_bits_and_held_keys_map_to_the_same_flags() {
+        assert_eq!(ModifierFlags::from_chord(CHORD_SHIFT | CHORD_META), ModifierFlags::SHIFT | ModifierFlags::COMMAND);
+        assert_eq!(ModifierFlags::from_chord(CHORD_CTRL | CHORD_ALT), ModifierFlags::CONTROL | ModifierFlags::OPTION);
+        assert_eq!(ModifierFlags::from_held(true, false, false, true, false), ModifierFlags::SHIFT | ModifierFlags::COMMAND);
+        assert_eq!(ModifierFlags::from_held(false, false, false, false, true), ModifierFlags::CAPS_LOCK);
+    }
+
+    #[test]
+    fn a_touch_carries_its_modifiers_and_one_without_them_decodes_as_none_held() {
+        let m = ToApp::Touch { kind: TouchKind::Down, id: 0, x: 4.0, y: 5.0, t_ms: 9, mods: ModifierFlags::SHIFT };
+        assert_eq!(ToApp::decode(&m.encode()), Ok(m.clone()));
+        // a sender built before the flags stops after `t_ms`
+        let mut old = m.encode();
+        old.truncate(old.len() - 4);
+        let Ok(ToApp::Touch { mods, t_ms, .. }) = ToApp::decode(&old) else { panic!() };
+        assert_eq!((mods, t_ms), (ModifierFlags::EMPTY, 9));
+        let w = ToApp::WindowTouch { id: 2, touch: 1, kind: TouchKind::Up, x: 1.0, y: 1.0, t_ms: 3, mods: ModifierFlags::COMMAND };
+        assert_eq!(ToApp::decode(&w.encode()), Ok(w.clone()));
+        let mut old = w.encode();
+        old.truncate(old.len() - 4);
+        let Ok(ToApp::WindowTouch { mods, .. }) = ToApp::decode(&old) else { panic!() };
+        assert!(mods.is_empty());
     }
 }
