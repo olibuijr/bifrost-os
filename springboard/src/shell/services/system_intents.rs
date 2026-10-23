@@ -352,7 +352,10 @@ mod tests {
         assert!(!first_party("com.example.app"));
         assert!(!first_party("is.olibuijr"), "the prefix needs its dot");
         for (id, _) in INTENTS {
-            let params = obj(&[("profile", "Office"), ("folder", "Scans")]);
+            // every intent's required parameter: a VPN profile, a scan folder, a timer's duration (a number of seconds)
+            let Json::Obj(mut params) = obj(&[("profile", "Office"), ("folder", "Scans")]) else { unreachable!() };
+            params.push(("duration".into(), Json::Num(60.0)));
+            let params = Json::Obj(params);
             assert!(parse(id, &params).is_ok(), "{id}");
         }
     }
