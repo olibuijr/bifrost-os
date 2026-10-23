@@ -104,7 +104,8 @@ impl Calendar {
         }
         let (top, hh) = self.hours_geometry(ui);
         let (gut, col_w) = self.col_geometry(ui);
-        if x < gut || y < ui.pt(GRID0).max(top) || y >= self.bottom(ui) {
+        // the all-day band stays put over the hours that scrolled under it (`timeview::time_rects`)
+        if x < gut || y < ui.pt(GRID0 + ALLDAY_H).max(top) || y >= self.bottom(ui) {
             return None;
         }
         let days = self.view_days().len();
@@ -121,7 +122,12 @@ impl Calendar {
         if !self.time_view() {
             return;
         }
-        let under = self.time_rects(ui).into_iter().find(|r| within(x, y, (r.1, r.2, r.3, r.4)));
+        // in the all-day band only its events are under the press; below it only the timed ones
+        let in_band = y < ui.pt(GRID0 + ALLDAY_H);
+        let under = self
+            .time_rects(ui)
+            .into_iter()
+            .find(|r| within(x, y, (r.1, r.2, r.3, r.4)) && self.events.iter().any(|e| e.id == r.0 && e.all_day) == in_band);
         // an all-day event in the band above the hours: it moves between days
         if let Some((id, ..)) = under {
             if self.events.iter().any(|e| e.id == id && e.all_day) {
@@ -287,7 +293,7 @@ impl Calendar {
         let (x, w) = layout::slot_x(layout::Slot { col: 0, cols: 1 }, gut + col_w * col as f32, col_w, ui.pt(SPACE_XXS));
         // an all-day event is drawn in the band above the hours
         if let Kind::AllDay { id } = d.kind {
-            let (y, h) = (hours_top - ui.pt(ALLDAY_H) + ui.pt(SPACE_XXS), ui.pt(ALLDAY_H - 4.0));
+            let (y, h) = (ui.pt(GRID0 + SPACE_XXS), ui.pt(ALLDAY_H - 4.0));
             g.fill_rrect(x, y, w, h, ui.pt(SPACE_XS), FIELD_BG.now());
             let accent = self.event_colour(id);
             g.fill_rrect(x, y, ui.pt(SPACE_XS), h, ui.pt(SPACE_XS) / 2.0, accent);

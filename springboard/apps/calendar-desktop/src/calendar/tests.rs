@@ -2435,3 +2435,126 @@ fn print_draws_the_grid_of_what_the_window_shows() {
     assert!(c.print_job().1.contains("Standup"));
     assert!(c.enabled(Command::Print) && !c.perform(&ui, Command::Print, 0.0), "the app runs the print job");
 }
+
+#[test]
+fn the_day_view_has_one_column_and_one_day_chip() {
+    // E2E W2-15: the Day view drew the whole week's chips over its single column
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.set_size(1200, 780);
+    c.activate(&ui, Target::View(View::Day), 0.0);
+    assert_eq!(c.view_days(), vec![c.selected]);
+    // a press anywhere on the header row picks the shown day, never another day of its week
+    let y = ui.pt(150.0);
+    for x in [0.1, 0.5, 0.95] {
+        assert_eq!(c.hit_view(&ui, c.w as f32 * x, y), Some(Target::Pick(c.selected)));
+    }
+    draw_once(&mut c, &ui);
+}
+
+#[test]
+fn a_selected_event_is_deleted_with_backspace_delete_and_the_event_menu() {
+    // E2E W2-16: a clicked event could only be deleted from its form
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut a = event(1, "Standup");
+    a.minute = 9 * 60;
+    let mut b = event(2, "Lunch");
+    b.minute = 12 * 60;
+    let mut d = event(3, "Review");
+    d.minute = 15 * 60;
+    store::save(&temp.file(), &[a, b, d]).unwrap();
+    let mut c = week_calendar(&ui, temp.file());
+    assert!(!c.enabled(Command::Delete), "nothing selected");
+    c.tap_event(1, 0.0);
+    assert!(c.enabled(Command::Delete), "Event > Delete Event is on for the selected event");
+    c.key(&ui, Out::Backspace, 1000.0);
+    assert!(!c.events.iter().any(|e| e.id == 1), "Backspace deleted it");
+    assert!(c.undo.is_some(), "with the Undo bar");
+    c.tap_event(2, 2000.0);
+    c.key(&ui, Out::Named("Delete"), 2100.0);
+    assert!(!c.events.iter().any(|e| e.id == 2), "the Delete key too");
+    c.tap_event(3, 3000.0);
+    assert!(c.perform(&ui, Command::Delete, 3100.0));
+    assert!(c.events.is_empty(), "and the menu");
+    assert_eq!(store::load(&temp.file()).unwrap(), vec![]);
+    c.key(&ui, Out::Backspace, 4000.0);
+    assert!(c.events.is_empty() && c.error.is_none(), "nothing selected: nothing happens");
+}
+
+#[test]
+fn deleting_the_event_of_an_editor_window_closes_that_window() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    store::save(&temp.file(), &[event(1, "Standup")]).unwrap();
+    let mut c = week_calendar(&ui, temp.file());
+    c.tap_event(1, 0.0);
+    c.tap_event(1, 100.0);
+    assert_eq!(c.take_open_request(), Some(1), "a double-click asks for the window");
+    assert!(c.open_pane(&ui, 7, 1));
+    assert!(c.editor.is_none(), "the main window has no form");
+    c.picked = Some(1);
+    assert!(c.enabled(Command::Delete), "Event > Delete Event works while the editor window is open");
+    assert!(c.perform(&ui, Command::Delete, 200.0));
+    assert!(c.events.is_empty());
+    assert_eq!(c.take_closed_windows(), vec![7], "the app closes the editor window");
+    assert!(!c.editing_in_window(1));
+    assert!(c.take_closed_windows().is_empty());
+}
+
+#[test]
+fn return_in_the_title_saves_the_new_event() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.open(&ui, None);
+    c.key(&ui, Out::Text("Dentist".into()), 0.0);
+    c.key(&ui, Out::Enter, 10.0);
+    assert!(c.editor.is_none(), "Return is Save");
+    assert_eq!(c.events.iter().map(|e| e.title.as_str()).collect::<Vec<_>>(), ["Dentist"]);
+}
+
+#[test]
+fn the_hour_grid_keeps_its_scroll_when_a_form_closes() {
+    // E2E W2-18: 8 AM was at the top before the form and 5 AM after it
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.set_size(1200, 780);
+    c.activate(&ui, Target::View(View::Week), 0.0);
+    let morning = c.scroll.offset();
+    assert!(morning > 0.0);
+    c.open(&ui, None);
+    c.activate(&ui, Target::Cancel, 10.0);
+    assert!((c.scroll.offset() - morning).abs() < 1.0, "Cancel");
+    c.open(&ui, None);
+    c.key(&ui, Out::Text("Gym".into()), 20.0);
+    c.activate(&ui, Target::Save, 30.0);
+    assert!(c.editor.is_none());
+    assert!((c.scroll.offset() - morning).abs() < 1.0, "Save");
+}
+
+#[test]
+fn the_time_zone_button_is_a_glyph_and_the_all_day_band_stays_put() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut offsite = event(1, "Offsite");
+    offsite.all_day = true;
+    offsite.minute = 0;
+    offsite.duration = 1440;
+    store::save(&temp.file(), &[offsite]).unwrap();
+    let mut c = new(&ui, temp.file());
+    c.set_size(1200, 780);
+    c.activate(&ui, Target::View(View::Week), 0.0);
+    let zone = c.bars(&ui).into_iter().flat_map(|(bar, _)| bar.items).find(|i| i.id == super::chrome::B_ZONE).expect("the Time Zone button");
+    assert_eq!(zone.symbol.as_deref(), Some("globe"));
+    assert_eq!(zone.label, "Time Zone", "its name is its accessibility label");
+    let band_y = |c: &Calendar| c.time_rects(&ui).into_iter().find(|r| r.0 == 1).unwrap().2;
+    c.scroll.jump_top();
+    let top = band_y(&c);
+    c.scroll_to_morning(&ui);
+    assert!(c.scroll.offset() > 0.0);
+    assert_eq!(band_y(&c), top, "the all-day event does not scroll away with the hours");
+    draw_once(&mut c, &ui);
+}

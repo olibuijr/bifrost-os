@@ -108,6 +108,10 @@ const MENU_LAST_IMPORT: u32 = 27;
 const MENU_FIELD: u32 = 30;
 /// Card > Open in Separate Window: the open card gets a window of its own (`take_card_request`).
 const MENU_OPEN_WINDOW: u32 = 60;
+/// File > New Card (Cmd+N) and New Group (Shift+Cmd+N); View > Contacts Settings.
+const MENU_NEW_CARD: u32 = 61;
+const MENU_NEW_GROUP: u32 = 62;
+const MENU_SETTINGS: u32 = 63;
 /// Two presses on one row this close together (ms) open its card in a window.
 const DOUBLE_CLICK_MS: f64 = 400.0;
 /// Sidebar rows.
@@ -246,6 +250,9 @@ const ROW_NODE: u64 = 10_000;
 
 /// Windows at least this wide (points) open with the lists sidebar shown, as the stock Contacts app does.
 const SIDEBAR_AUTO_PT: f32 = 600.0;
+/// The lists sidebar's width (points): wide enough for its longest stock label ("Possible Duplicates", "Suggested
+/// Contacts") with its symbol, so no row is truncated (E2E W2-19). Never narrower than the SDK's minimum.
+const SIDEBAR_PT: f32 = 212.0;
 const ROW: f32 = 44.0;
 const HEADER: f32 = 24.0;
 const SEARCH_H: f32 = 28.0;
@@ -1053,7 +1060,7 @@ impl Contacts {
     // ---- geometry (points) ----
 
     fn side(&self) -> f32 {
-        if self.sidebar_shown { SIDEBAR_MIN_PT } else { 0.0 }
+        if self.sidebar_shown { SIDEBAR_PT.max(SIDEBAR_MIN_PT) } else { 0.0 }
     }
     fn list_w(&self) -> f32 {
         ((self.w - self.side()) * 0.36).clamp(220.0, 340.0)
@@ -1086,7 +1093,20 @@ impl Contacts {
             items.push(ToolbarItem::button(BAR_SELECT_DONE, "Done"));
             return Toolbar::new(items);
         }
+        // As the stock app: the list column's bar holds only the sidebar toggle and "+", so "+" never overflows (E2E
+        // W2-19). Import, Export, New Group and Settings live in the File and View menus; the list's own actions (a
+        // group's, Merge All, Edit List) lead the detail bar.
         items.push(ToolbarItem::flexible_space());
+        items.push(ToolbarItem::icon(BAR_ADD, "New Contact", "plus").enabled(!self.load_failed));
+        Toolbar::new(items)
+    }
+    /// The list's own actions for the sidebar list shown: a group's, Merge All for duplicates, Edit List for a smart list.
+    fn list_actions(&self) -> Vec<ToolbarItem> {
+        let groups_ok = !self.load_failed && !self.groups_failed;
+        let mut items = vec![];
+        if self.renaming.is_some() || self.picking.is_some() || self.selecting {
+            return items;
+        }
         if let Filter::Group(_) = self.filter {
             items.push(ToolbarItem::button(BAR_ADD_PEOPLE, "Add People").enabled(groups_ok));
             items.push(ToolbarItem::button(BAR_RENAME, "Rename Group").enabled(groups_ok));
@@ -1098,13 +1118,7 @@ impl Contacts {
         if matches!(self.filter, Filter::UserList(_)) {
             items.push(ToolbarItem::button(BAR_EDIT_LIST, "Edit List").enabled(!self.load_failed));
         }
-        items.push(ToolbarItem::button(BAR_IMPORT, "Import").enabled(!self.load_failed));
-        items.push(ToolbarItem::button(BAR_EXPORT, "Export 3.0").enabled(!self.load_failed));
-        items.push(ToolbarItem::button(BAR_EXPORT_V4, "Export 4.0").enabled(!self.load_failed));
-        items.push(ToolbarItem::button(BAR_NEW_GROUP, "New Group").enabled(groups_ok));
-        items.push(ToolbarItem::icon(BAR_SETTINGS, "Settings", "gearshape"));
-        items.push(ToolbarItem::icon(BAR_ADD, "New Contact", "plus").enabled(!self.load_failed));
-        Toolbar::new(items)
+        items
     }
     fn list_bar_bounds(&self) -> Rect {
         let x = if self.sidebar_shown { self.side() + SPACE_M } else { traffic_lights_trailing() + widgets::TOOLBAR_GAP_PT };
@@ -1112,7 +1126,8 @@ impl Contacts {
         rect(x, (UNIFIED_BAR_PT - h) / 2.0, (self.detail_x() - SPACE_M - x).max(0.0), h)
     }
     fn detail_bar(&self) -> Toolbar {
-        let mut items = vec![ToolbarItem::flexible_space()];
+        let mut items = if matches!(self.screen, Screen::List | Screen::Detail(_)) { self.list_actions() } else { vec![] };
+        items.push(ToolbarItem::flexible_space());
         match self.screen {
             Screen::List => {}
             Screen::Detail(id) => {
@@ -2176,6 +2191,9 @@ impl Contacts {
             AppMenu {
                 title: "File".into(),
                 items: vec![
+                    AppMenuItem::new(MENU_NEW_CARD, "New Card").key("cmd+n").enabled(ready),
+                    AppMenuItem::new(MENU_NEW_GROUP, "New Group").key("shift+cmd+n").enabled(groups_ok),
+                    AppMenuItem::separator(),
                     AppMenuItem::new(MENU_IMPORT, "Import Contacts...").enabled(ready),
                     AppMenuItem::new(MENU_RESTORE_ARCHIVE, "Restore from Archive...").enabled(ready),
                     AppMenuItem::separator(),
@@ -2186,7 +2204,9 @@ impl Contacts {
                     AppMenuItem::new(MENU_EXPORT_V4, "Export vCard 4.0...").enabled(ready),
                     AppMenuItem::new(MENU_EXPORT_ARCHIVE, "Export Contacts Archive...").enabled(ready),
                     AppMenuItem::separator(),
-                    AppMenuItem::new(MENU_PRINT, "Print...").key("cmd+p").enabled(ready),
+                    // the shell's File menu ends with Print... (Cmd+P); a second "Print..." here was a duplicate
+                    // (E2E W2-19), so the app's text printout is named for what it prints
+                    AppMenuItem::new(MENU_PRINT, "Print Contact List...").enabled(ready),
                     AppMenuItem::new(MENU_PRINT_LABELS, "Print Address Labels...").enabled(ready),
                     AppMenuItem::new(MENU_EXPORT_PDF, "Export as PDF...").enabled(ready),
                     AppMenuItem::separator(),
@@ -2202,6 +2222,8 @@ impl Contacts {
                     AppMenuItem::new(MENU_LAST_FIRST, "Last Name First").checked(self.name_order == names::NameOrder::LastFirst),
                     AppMenuItem::separator(),
                     AppMenuItem::new(MENU_LAST_IMPORT, "Show Last Import").enabled(!self.last_import_ids().is_empty()),
+                    AppMenuItem::separator(),
+                    AppMenuItem::new(MENU_SETTINGS, "Contacts Settings...").enabled(!self.editing()),
                 ],
             },
             AppMenu { title: "Card".into(), items: card },
@@ -2224,6 +2246,9 @@ impl Contacts {
             MENU_PRINT_LABELS => self.print_labels(),
             MENU_EXPORT_PDF => self.export_pdf(),
             MENU_SIDEBAR => self.bar(ui, BAR_SIDEBAR),
+            MENU_NEW_CARD => self.bar(ui, BAR_ADD),
+            MENU_NEW_GROUP => self.bar(ui, BAR_NEW_GROUP),
+            MENU_SETTINGS => self.bar(ui, BAR_SETTINGS),
             MENU_FIRST_LAST => self.set_name_order(names::NameOrder::FirstLast),
             MENU_LAST_FIRST => self.set_name_order(names::NameOrder::LastFirst),
             MENU_LAST_IMPORT => self.show_list(ui, Filter::LastImport),
@@ -4459,8 +4484,8 @@ mod tests {
         assert_eq!(menus.iter().map(|m| m.title.as_str()).collect::<Vec<_>>(), ["File", "View", "Card"]);
         assert_eq!(
             menus[0].items.iter().filter(|i| !i.separator).count(),
-            11,
-            "import, restore, new and edit smart list, export 3.0, 4.0 and archive, print, labels, PDF, refresh"
+            13,
+            "new card and group, import, restore, new and edit smart list, export 3.0, 4.0 and archive, print, labels, PDF, refresh"
         );
         assert_eq!(menus[1].items[0].title, "Hide Sidebar", "the sidebar starts shown on a wide window");
         assert!(menus[1].items[2].checked, "first name first is the default");
@@ -5220,6 +5245,65 @@ BEGIN:VCARD\r\nVERSION:4.0\r\nFN:Bo Berg\r\nN:Berg;Bo;;;\r\nEND:VCARD\r\n",
         let last = *copies.last().unwrap();
         assert!(app.activate_control(&ui, last), "the last row's control is found and pressed");
         assert!(app.toast_until.is_some(), "its value was copied");
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn new_contact_plus_is_always_on_the_list_bar_and_cmd_n_makes_a_card() {
+        // E2E W2-19: "+" sat behind six other buttons and always overflowed, and there was no New Card command.
+        let path = file_with("plus-visible", &[contact(1, "Anna As")]);
+        let ui = test_ui();
+        for (w, h) in [(1200, 780), (1920, 1080), (900, 600), (2560, 1440)] {
+            let app = Contacts::new(&ui, w, h, path.clone());
+            let ids: Vec<u32> = app.list_bar().items.iter().filter(|i| i.id != 0).map(|i| i.id).collect();
+            assert_eq!(ids, [BAR_SIDEBAR, BAR_ADD], "the list bar is the sidebar toggle and New Contact, as the stock app");
+            let [list, _] = app.bar_layouts(&ui);
+            assert!(list.visible.iter().any(|(id, _)| *id == BAR_ADD), "\"+\" is shown at {w}x{h}");
+            assert!(list.overflow_button.is_none(), "nothing overflows the list bar at {w}x{h}");
+        }
+        let mut app = Contacts::new(&ui, 1200, 780, path.clone());
+        let file = app.main_menu().into_iter().find(|m| m.title == "File").unwrap();
+        let new_card = file.items.iter().find(|i| i.id == MENU_NEW_CARD).expect("File > New Card");
+        assert_eq!((new_card.title.as_str(), new_card.key.as_str()), ("New Card", "cmd+n"));
+        assert!(new_card.enabled);
+        assert!(app.menu_action(&ui, MENU_NEW_CARD));
+        assert_eq!(app.screen, Screen::Editor(None), "Cmd+N opens a new card");
+        assert_eq!(app.focus, Some(0), "typing goes into the first name");
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn group_actions_lead_the_detail_bar_and_file_has_one_print() {
+        let path = file_with("group-actions", &[contact(1, "Anna As")]);
+        let ui = test_ui();
+        let mut app = Contacts::new(&ui, 1200, 780, path.clone());
+        app.filter = Filter::Duplicates;
+        assert!(app.detail_bar().items.iter().any(|i| i.id == BAR_MERGE_ALL), "Merge All moved to the detail bar");
+        assert!(!app.list_bar().items.iter().any(|i| i.id == BAR_MERGE_ALL));
+        let file = app.main_menu().into_iter().find(|m| m.title == "File").unwrap();
+        // the shell appends its own Print... (Cmd+P) to File, so the app must not add another
+        assert!(!file.items.iter().any(|i| i.title == "Print..." || i.title == "Print\u{2026}" || i.key == "cmd+p"));
+        assert!(file.items.iter().any(|i| i.id == MENU_NEW_GROUP && i.key == "shift+cmd+n"));
+        assert!(app.menu_action(&ui, MENU_SETTINGS));
+        assert_eq!(app.screen, Screen::Settings, "View > Contacts Settings replaces the toolbar gear");
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn sidebar_labels_fit_without_truncation() {
+        // E2E W2-19: "Possible Duplica..." and "Suggested Cont..." were cut at 1200 px.
+        let path = file_with("sidebar-fit", &[contact(1, "Anna As")]);
+        let ui = test_ui();
+        let app = Contacts::new(&ui, 1200, 780, path.clone());
+        assert!(app.sidebar_shown);
+        let mut labels: Vec<String> = app.sidebar_rows().into_iter().filter(|r| r.0 != 0).map(|r| r.1).collect();
+        labels.extend(["Suggested Contacts".to_string(), "Last Import".to_string()]);
+        // plate inset, symbol, gaps and trailing room as the SDK source list draws a row
+        let chrome = 2.0 * (SPACE_S + SPACE_XS / 2.0) + 20.0 + 3.0 * SPACE_S;
+        for label in labels {
+            let need = ui.measure(&label, MAC_BODY_PT, Weight::Regular) / ui.pt(1.0) + chrome;
+            assert!(need <= app.side(), "{label} needs {need} pt, the sidebar is {} pt", app.side());
+        }
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 }

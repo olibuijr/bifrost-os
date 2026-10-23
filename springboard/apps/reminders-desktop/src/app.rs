@@ -82,6 +82,8 @@ enum Target {
     Restore(u64),
     List(u64),
     ListInfo(u64),
+    /// The toolbar's "..." button: the open list's menu, shown at window pixel (x, y).
+    ListMenu(f32, f32),
     /// A tag in the sidebar's Tags section, by its `model::tag_key`.
     Tag(u64),
     /// A custom smart list in the sidebar, by id.
@@ -217,7 +219,15 @@ struct ListEdit {
     mode: EditMode,
     /// The smart list's rules while its form is open.
     rules: model::SmartRules,
+    /// Delete was pressed once on a list's form: the next press deletes the list and its reminders (E2E W2-21).
+    confirm_delete: bool,
 }
+
+/// The rows of a list's menu (the toolbar's "..." and a right click on a list in the sidebar).
+pub const CTX_LIST_INFO: u32 = 1;
+pub const CTX_PIN: u32 = 2;
+pub const CTX_NEW_SECTION: u32 = 3;
+pub const CTX_DELETE_LIST: u32 = 4;
 
 struct UndoBar {
     label: String,
@@ -344,6 +354,9 @@ pub struct Reminders {
     /// The tip's `mark_shown` was recorded for this session.
     tip_marked: bool,
     list_edit: Option<ListEdit>,
+    /// A menu for the shell to show (window pixels and rows), and the list or smart list its choice acts on.
+    menu_request: Option<(f32, f32, Vec<bifrost_proto::ContextItem>)>,
+    menu_view: Option<View>,
     title: TextField,
     title_hint: &'static str,
     title_max: usize,
@@ -487,6 +500,8 @@ impl Reminders {
             tips: None,
             tip_marked: false,
             list_edit: None,
+            menu_request: None,
+            menu_view: None,
             title: mk_field(ui, "Reminder", model::MAX_TITLE, ""),
             title_hint: "Reminder",
             title_max: model::MAX_TITLE,
@@ -1675,18 +1690,33 @@ impl Reminders {
         self.url = mk_field(ui, "URL", model::MAX_URL, &draft.url);
         let month = month_start(draft.due.unwrap_or(self.today));
         self.editor = Some(Editor { id: id.filter(|_| draft.id != 0), draft, month, added: vec![] });
+        self.list_edit = None;
         self.screen = Screen::Editor;
         self.swipe = None;
         self.scroll.jump_top();
         self.set_focus(if id.is_none() { Some(Field::Title) } else { None }, t);
         self.dirty = true;
     }
+    /// Another form is about to replace a reminder's Details: the reminder keeps its edits (saved when its title is
+    /// not empty, as Done would) and its form closes, so Done on the new form saves that form and never the reminder
+    /// (E2E W2-20: Add List while Details was open renamed the reminder to the list's name).
+    fn close_item_editor(&mut self, ui: &Ui, t: f64) {
+        if self.editor.is_none() {
+            return;
+        }
+        self.save_editor(ui, t);
+        if self.editor.is_some() {
+            self.discard_new_pictures();
+            self.close_form(ui, t);
+        }
+    }
     fn open_list_editor(&mut self, ui: &Ui, id: Option<u64>, t: f64) {
+        self.close_item_editor(ui, t);
         let found = id.and_then(|i| self.data.lists.iter().find(|l| l.id == i)).cloned();
         let (name, color, icon) = found.as_ref().map_or((String::new(), (self.data.lists.len() % view::COLORS.len()) as u8, 0), |l| (l.name.clone(), l.color, l.icon));
         let (pinned, group) = found.as_ref().map_or((false, None), |l| (l.pinned, l.group));
         self.set_title_field(ui, "List Name", model::MAX_NAME, &name);
-        self.list_edit = Some(ListEdit { id: found.map(|l| l.id), color, icon, pinned, group, mode: EditMode::List, rules: Default::default() });
+        self.list_edit = Some(ListEdit { id: found.map(|l| l.id), color, icon, pinned, group, mode: EditMode::List, rules: Default::default(), confirm_delete: false });
         self.screen = Screen::ListEditor;
         self.scroll.jump_top();
         self.set_focus(if id.is_none() { Some(Field::Title) } else { None }, t);
@@ -1695,11 +1725,12 @@ impl Reminders {
     /// The list editor form for a section of `list` (a new one when `id` is `None`): a name and, for an existing
     /// section, Delete.
     fn open_section_editor(&mut self, ui: &Ui, list: u64, id: Option<u64>, t: f64) {
+        self.close_item_editor(ui, t);
         let name = id
             .and_then(|sid| self.data.lists.iter().flat_map(|l| l.sections.iter()).find(|s| s.id == sid))
             .map_or(String::new(), |s| s.name.clone());
         self.set_title_field(ui, "Section Name", model::MAX_NAME, &name);
-        self.list_edit = Some(ListEdit { id, color: 0, icon: 0, pinned: false, group: None, mode: EditMode::Section(list), rules: Default::default() });
+        self.list_edit = Some(ListEdit { id, color: 0, icon: 0, pinned: false, group: None, mode: EditMode::Section(list), rules: Default::default(), confirm_delete: false });
         self.screen = Screen::ListEditor;
         self.scroll.jump_top();
         self.set_focus(if id.is_none() { Some(Field::Title) } else { None }, t);
@@ -1707,9 +1738,10 @@ impl Reminders {
     }
     /// The list editor form for a list group (a new one when `id` is `None`).
     fn open_group_editor(&mut self, ui: &Ui, id: Option<u64>, t: f64) {
+        self.close_item_editor(ui, t);
         let name = id.and_then(|gid| self.data.groups.iter().find(|g| g.id == gid)).map_or(String::new(), |g| g.name.clone());
         self.set_title_field(ui, "Group Name", model::MAX_NAME, &name);
-        self.list_edit = Some(ListEdit { id, color: 0, icon: 0, pinned: false, group: None, mode: EditMode::Group, rules: Default::default() });
+        self.list_edit = Some(ListEdit { id, color: 0, icon: 0, pinned: false, group: None, mode: EditMode::Group, rules: Default::default(), confirm_delete: false });
         self.screen = Screen::ListEditor;
         self.scroll.jump_top();
         self.set_focus(if id.is_none() { Some(Field::Title) } else { None }, t);
@@ -1720,7 +1752,7 @@ impl Reminders {
         if self.has_draft() {
             return false;
         }
-        self.list_edit = Some(ListEdit { id: None, color: 0, icon: 0, pinned: false, group: None, mode: EditMode::Settings, rules: Default::default() });
+        self.list_edit = Some(ListEdit { id: None, color: 0, icon: 0, pinned: false, group: None, mode: EditMode::Settings, rules: Default::default(), confirm_delete: false });
         self.screen = Screen::ListEditor;
         self.searching = false;
         self.options_open = false;
@@ -1761,12 +1793,13 @@ impl Reminders {
 
     /// The form for a custom smart list (a new one when `id` is `None`).
     fn open_smart_editor(&mut self, ui: &Ui, id: Option<u64>, t: f64) {
+        self.close_item_editor(ui, t);
         let found = id.and_then(|sid| self.data.smarts.iter().find(|m| m.id == sid)).cloned();
         let color = found.as_ref().map_or((self.data.smarts.len() % view::COLORS.len()) as u8, |m| m.color);
         let name = found.as_ref().map_or(String::new(), |m| m.name.clone());
         let rules = found.as_ref().map_or_else(Default::default, |m| m.rules);
         self.set_title_field(ui, "Smart List Name", model::MAX_NAME, &name);
-        self.list_edit = Some(ListEdit { id: found.map(|m| m.id), color, icon: 0, pinned: false, group: None, mode: EditMode::Smart, rules });
+        self.list_edit = Some(ListEdit { id: found.map(|m| m.id), color, icon: 0, pinned: false, group: None, mode: EditMode::Smart, rules, confirm_delete: false });
         self.screen = Screen::ListEditor;
         self.scroll.jump_top();
         self.set_focus(if id.is_none() { Some(Field::Title) } else { None }, t);
@@ -2206,6 +2239,78 @@ impl Reminders {
         });
     }
 
+    /// The rows of the menu of `view` (a list or a custom smart list); none for the built-in smart lists and tags.
+    fn list_menu(&self, view: View) -> Option<Vec<bifrost_proto::ContextItem>> {
+        use bifrost_proto::ContextItem as Item;
+        match view {
+            View::List(id) => {
+                let pinned = self.data.lists.iter().any(|l| l.id == id && l.pinned);
+                Some(vec![
+                    Item::new(CTX_LIST_INFO, "Show List Info"),
+                    Item::new(CTX_PIN, if pinned { "Unpin List" } else { "Pin List" }),
+                    Item::new(CTX_NEW_SECTION, "New Section"),
+                    Item::separator(),
+                    Item::new(CTX_DELETE_LIST, "Delete List...").enabled(self.data.lists.len() > 1),
+                ])
+            }
+            View::Custom(_) => Some(vec![Item::new(CTX_LIST_INFO, "Show List Info"), Item::separator(), Item::new(CTX_DELETE_LIST, "Delete Smart List")]),
+            View::Smart(_) | View::Tag(_) => None,
+        }
+    }
+
+    /// A right click at window pixel (x, y): the menu of the list or custom smart list under it in the sidebar, if any.
+    pub fn context_menu_at(&mut self, ui: &Ui, x: f32, y: f32) -> Option<Vec<bifrost_proto::ContextItem>> {
+        if self.has_draft() {
+            return None;
+        }
+        self.layout_columns(ui);
+        let view = match self.hit(ui, x - self.x0, y)? {
+            Target::List(id) | Target::ListInfo(id) => View::List(id),
+            Target::Custom(id) | Target::SmartInfo(id) => View::Custom(id),
+            _ => return None,
+        };
+        let items = self.list_menu(view)?;
+        self.menu_view = Some(view);
+        Some(items)
+    }
+
+    /// A menu the app asked for (the toolbar's "..."), for the shell to show; taken once.
+    pub fn take_menu_request(&mut self) -> Option<(f32, f32, Vec<bifrost_proto::ContextItem>)> {
+        self.menu_request.take()
+    }
+
+    /// Runs the row `id` chosen from a list's menu. True when something changed.
+    pub fn context_action(&mut self, ui: &Ui, id: u32, t: f64) -> bool {
+        let Some(view) = self.menu_view.take() else { return false };
+        if self.has_draft() && id != CTX_LIST_INFO {
+            return false;
+        }
+        match (id, view) {
+            (CTX_LIST_INFO, View::List(l)) => self.activate(ui, Target::ListInfo(l), t),
+            (CTX_LIST_INFO, View::Custom(c)) => self.activate(ui, Target::SmartInfo(c), t),
+            (CTX_PIN, View::List(l)) => {
+                self.open_view(ui, View::List(l));
+                self.toggle_pin();
+            }
+            (CTX_NEW_SECTION, View::List(l)) => {
+                self.open_view(ui, View::List(l));
+                self.new_section(ui, t);
+            }
+            // the list's form opens with Delete pressed once: it asks before the list and its reminders go
+            (CTX_DELETE_LIST, View::List(l)) => {
+                self.activate(ui, Target::ListInfo(l), t);
+                self.activate(ui, Target::Delete, t);
+            }
+            (CTX_DELETE_LIST, View::Custom(c)) => {
+                self.activate(ui, Target::SmartInfo(c), t);
+                self.activate(ui, Target::Delete, t);
+            }
+            _ => return false,
+        }
+        self.dirty = true;
+        true
+    }
+
     fn activate(&mut self, ui: &Ui, target: Target, t: f64) {
         if !matches!(target, Target::OptExport) {
             self.notice = None;
@@ -2279,6 +2384,12 @@ impl Reminders {
                 }
             }
             Target::ListInfo(id) => self.open_list_editor(ui, Some(id), t),
+            Target::ListMenu(x, y) => {
+                if let Some(items) = self.list_menu(self.view) {
+                    self.menu_view = Some(self.view);
+                    self.menu_request = Some((x, y, items));
+                }
+            }
             Target::NewList => self.open_list_editor(ui, None, t),
             Target::Search => self.begin_search(ui, t),
             Target::Sidebar => {
@@ -2485,6 +2596,15 @@ impl Reminders {
                 }
                 Some(None) => {}
                 None => {
+                    // a list goes with its reminders, so the first press only asks (E2E W2-21)
+                    if let Some(e) = self.list_edit.as_mut().filter(|e| e.mode == EditMode::List && e.id.is_some() && !e.confirm_delete) {
+                        e.confirm_delete = true;
+                        let list = e.id;
+                        let n = self.data.items.iter().filter(|r| Some(r.list) == list).count();
+                        self.notice = Some(delete_list_question(n));
+                        self.dirty = true;
+                        return;
+                    }
                     let edit = self.list_edit.as_ref().and_then(|e| e.id.map(|id| (id, e.mode)));
                     if let Some((id, mode)) = edit {
                         let mut next = self.data.clone();
@@ -2539,6 +2659,12 @@ impl Reminders {
             return;
         }
         let Some(f) = self.focus else { return };
+        // Return in a form's name field is Done, as on the stock app (E2E W2-21: New Reminder and New List)
+        if matches!(out, Out::Enter) && f == Field::Title && matches!(self.screen, Screen::Editor | Screen::ListEditor) {
+            self.set_focus(None, t);
+            self.activate(ui, Target::Save, t);
+            return;
+        }
         if matches!(out, Out::Hide | Out::Enter) {
             self.set_focus(None, t);
         } else {
@@ -2563,6 +2689,7 @@ impl Reminders {
                 | Target::ListInfo(_)
                 | Target::New
                 | Target::NewList
+                | Target::ListMenu(..)
                 | Target::Search
                 | Target::Options
                 | Target::Undo
@@ -2724,6 +2851,14 @@ impl Reminders {
                             self.swipe = None;
                             return;
                         }
+                        // a click selects a reminder; a click on the selected one opens its Details (E2E W2-21)
+                        if let Target::Row(row) = target {
+                            let id = self.item_id(row);
+                            if self.screen == Screen::Items && id.is_some() && self.selected != id {
+                                self.selected = id;
+                                return;
+                            }
+                        }
                         self.activate(ui, target, t);
                     }
                 }
@@ -2803,3 +2938,12 @@ impl Reminders {
 #[cfg(test)]
 #[path = "actions_tests.rs"]
 mod actions_tests;
+
+/// What a first press on a list's Delete says: the list goes with its reminders.
+pub(crate) fn delete_list_question(reminders: usize) -> String {
+    match reminders {
+        0 => "Delete this list? Press Delete List again to delete it.".to_string(),
+        1 => "Delete this list and its reminder? Press Delete List again to delete them.".to_string(),
+        n => format!("Delete this list and its {n} reminders? Press Delete List again to delete them."),
+    }
+}

@@ -231,9 +231,12 @@ impl Reminders {
             B_SIDEBAR => Target::Sidebar,
             B_EXPORT => Target::OptExport,
             B_OPTIONS => Target::Options,
+            // "..." opens the list's menu under the button (Show List Info is one of its rows), E2E W2-21
             B_INFO => match self.view {
-                View::List(l) => Target::ListInfo(l),
-                View::Custom(id) => Target::SmartInfo(id),
+                View::List(_) | View::Custom(_) => {
+                    let (bx, by, _, bh) = self.bar_px(ui, B_INFO)?;
+                    Target::ListMenu(bx, by + bh)
+                }
                 View::Smart(_) | View::Tag(_) => return None,
             },
             B_ADD => Target::New,

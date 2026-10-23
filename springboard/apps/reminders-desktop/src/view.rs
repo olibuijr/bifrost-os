@@ -150,7 +150,7 @@ impl Reminders {
         let h = ui.pt(ITEM_H);
         let indent = ui.pt(30.0) * depth as f32;
         let accent = list_color(&self.data, r.list);
-        c.fill_rrect(x, y, w + shift, h, 0.0, if self.selected == Some(r.id) { CARD_BG.now() } else { bifrost_app::kit::ui::CONTENT_BG.now() });
+        c.fill_rrect(x, y, w + shift, h, 0.0, if self.selected == Some(r.id) { bifrost_app::kit::ui::SELECTION_INACTIVE.now() } else { bifrost_app::kit::ui::CONTENT_BG.now() });
         let (cx, cy, rad) = (x + ui.pt(26.0) + indent, y + h / 2.0, ui.pt(SPACE_M));
         paint(c, (cx - rad - 2.0, cy - rad - 2.0, 2.0 * rad + 4.0, 2.0 * rad + 4.0), if r.completed { BLUE } else { accent }, ring((cx, cy), rad, ui.pt(1.5)));
         if r.completed {
@@ -606,6 +606,8 @@ impl Reminders {
                     (false, Some(EditMode::Section(_))) => "Delete Section",
                     (false, Some(EditMode::Group)) => "Delete Group",
                     (false, Some(EditMode::Smart)) => "Delete Smart List",
+                    // pressed once: the button asks before the list and its reminders go
+                    (false, _) if self.list_edit.as_ref().is_some_and(|e| e.confirm_delete) => "Confirm Delete List",
                     (false, _) => "Delete List",
                 };
                 self.center(c, ui, label, MAC_BODY_PT, Weight::Regular, DESTRUCTIVE, x + w / 2.0, y + h / 2.0);

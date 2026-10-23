@@ -147,7 +147,8 @@ impl Calendar {
             let spans: Vec<(u32, u32)> = all.iter().map(|_| (0, 1)).collect();
             for (e, slot) in all.iter().zip(layout::layout(&spans, 1)) {
                 let (x, w) = layout::slot_x(slot, x0, col_w, ui.pt(SPACE_XXS));
-                out.push((e.id, x, top + ui.pt(SPACE_XXS), w, ui.pt(ALLDAY_H - 4.0)));
+                // the all-day band stays under the header while the hours scroll (as the stock Day and Week views)
+                out.push((e.id, x, ui.pt(GRID0 + SPACE_XXS), w, ui.pt(ALLDAY_H - 4.0)));
             }
             let spans: Vec<(u32, u32)> = timed.iter().map(|e| self.grid_span(e)).collect();
             for ((e, span), slot) in timed.iter().zip(&spans).zip(layout::layout(&spans, 30)) {
@@ -180,17 +181,19 @@ impl Calendar {
             return None;
         }
         if (134.0..GRID0).contains(&yp) {
-            if self.view == View::Week {
-                let (gut, col_w) = self.col_geometry(ui);
-                let days = self.view_days();
-                let col = (((x - gut) / col_w).floor() as i32).clamp(0, days.len() as i32 - 1);
-                return days.get(col as usize).map(|d| Target::Pick(*d));
-            }
-            let col = ((x / (self.w as f32 / 7.0)) as i32).clamp(0, 6);
-            return Some(Target::Pick(self.week_start().shift_days(col)));
+            let (gut, col_w) = self.col_geometry(ui);
+            let days = self.view_days();
+            let col = (((x - gut) / col_w).floor() as i32).clamp(0, days.len() as i32 - 1);
+            return days.get(col as usize).map(|d| Target::Pick(*d));
         }
         if yp >= GRID0 {
+            // the all-day band is over the hours that scrolled under it: there only its events are hit
+            let in_band = yp < GRID0 + ALLDAY_H;
+            let all_day = |id: u64| self.shown_events().any(|e| e.id == id && e.all_day);
             for (id, rx, ry, rw, rh) in self.time_rects(ui) {
+                if in_band != all_day(id) {
+                    continue;
+                }
                 if within(x, y, (rx, ry, rw, rh)) {
                     return Some(Target::Row(id));
                 }
@@ -259,8 +262,6 @@ impl Calendar {
                     self.text(&mut g, ui, &hour_label(h), MAC_SUBHEAD_PT, LABEL_2.now(), ui.pt(SPACE_S), y);
                 }
             }
-            g.fill_rrect(gut, top + ui.pt(ALLDAY_H), w - gut, ui.pt(0.5), 0.0, SEPARATOR_C.now());
-            self.text(&mut g, ui, "all-day", MAC_SUBHEAD_PT, LABEL_2.now(), ui.pt(SPACE_S), top + ui.pt(ALLDAY_H / 2.0));
             if n > 1 {
                 for i in 0..=n {
                     g.fill_rrect(
@@ -282,7 +283,24 @@ impl Calendar {
                 super::drag::Kind::Move { id, .. } | super::drag::Kind::Resize { id, .. } | super::drag::Kind::AllDay { id } => Some(id),
                 super::drag::Kind::Create { .. } => None,
             });
-            for (id, x, y, rw, rh) in rects {
+            // timed events first; the all-day band is drawn over the hours below
+            let (band_rects, timed_rects): (Vec<_>, Vec<_>) =
+                rects.into_iter().partition(|r| by_id.iter().any(|e| e.0 == r.0 && e.3));
+            for (id, x, y, rw, rh) in timed_rects.into_iter().chain(std::iter::once((u64::MAX, 0.0, 0.0, 0.0, 0.0))).chain(band_rects) {
+                if id == u64::MAX {
+                    // the pinned all-day band: it covers the hours scrolled under it, with its label and day lines
+                    self.draw_now_line(&mut g, ui, &days, now_min, hours_top, hh, gut, col_w);
+                    let band = ui.pt(GRID0);
+                    g.fill_rrect(0.0, band, w, ui.pt(ALLDAY_H), 0.0, CONTENT_BG.now());
+                    self.text(&mut g, ui, "all-day", MAC_SUBHEAD_PT, LABEL_2.now(), ui.pt(SPACE_S), band + ui.pt(ALLDAY_H / 2.0));
+                    if n > 1 {
+                        for i in 0..=n {
+                            g.fill_rrect(gut + col_w * i as f32, band, ui.pt(0.5), ui.pt(ALLDAY_H), 0.0, SEPARATOR_C.now());
+                        }
+                    }
+                    g.fill_rrect(0.0, band + ui.pt(ALLDAY_H), w, ui.pt(0.5), 0.0, SEPARATOR_C.now());
+                    continue;
+                }
                 if lifted == Some(id) {
                     continue;
                 }
@@ -302,31 +320,13 @@ impl Calendar {
                 }
             }
             self.draw_drag(&mut g, ui, hours_top, hh, gut, col_w, &days);
-            if let Some(i) = days.iter().position(|d| *d == self.today) {
-                if let Some(y) = layout::now_line_y(now_min, hours_top, hh) {
-                    g.fill_rrect(gut + col_w * i as f32, y, col_w, ui.pt(1.5), 0.0, red());
-                    g.fill_rrect(
-                        gut + col_w * i as f32 - ui.pt(SPACE_XS),
-                        y - ui.pt(SPACE_XS),
-                        ui.pt(SPACE_S),
-                        ui.pt(SPACE_S),
-                        ui.pt(SPACE_XS),
-                        red(),
-                    );
-                }
-            }
         }
         s.fill_rrect(0.0, ui.pt(top_inset()), w, ui.pt(GRID0 - top_inset()), 0.0, CONTENT_BG.now());
         self.draw_header(s, ui);
-        // the Week view's chips are its columns; the Day view's are the seven days of the week around the selected day
-        let start = self.week_start();
-        let chips: Vec<Date> = if self.view == View::Week { days.clone() } else { (0..7).map(|i| start.shift_days(i)).collect() };
-        for (i, d) in chips.iter().copied().enumerate() {
-            let cx = if self.view == View::Week {
-                gut + col_w * (i as f32 + 0.5)
-            } else {
-                w / 7.0 * (i as f32 + 0.5)
-            };
+        // one chip over each day column: the Week view's days, the Day view's one day at the start of its column (the Day
+        // view showed the whole week's chips over its single column, E2E W2-15)
+        for (i, d) in days.iter().copied().enumerate() {
+            let cx = if self.view == View::Week { gut + col_w * (i as f32 + 0.5) } else { gut + ui.pt(SPACE_XL) };
             let name = &WEEKDAYS[d.weekday()][..3].to_uppercase();
             self.centre(s, ui, name, MAC_SUBHEAD_PT, Weight::Medium, LABEL_2.now(), cx, ui.pt(WEEKDAY_Y_PT));
             let sel = d == self.selected;
@@ -353,6 +353,21 @@ impl Calendar {
             );
         }
         s.fill_rrect(0.0, ui.pt(GRID0) - ui.pt(0.5), w, ui.pt(0.5), 0.0, SEPARATOR_C.now());
+    }
+
+    /// The current-time line: a hairline across the days in the time grid and a red line with a dot in today's column, and
+    /// the time in red in the hour gutter (as the stock Day and Week views).
+    #[allow(clippy::too_many_arguments)]
+    fn draw_now_line(&mut self, g: &mut Surface, ui: &Ui, days: &[Date], now_min: u32, hours_top: f32, hh: f32, gut: f32, col_w: f32) {
+        let Some(i) = days.iter().position(|d| *d == self.today) else { return };
+        let Some(y) = layout::now_line_y(now_min, hours_top, hh) else { return };
+        g.fill_rrect(gut, y, col_w * days.len() as f32, ui.pt(0.5), 0.0, red());
+        g.fill_rrect(gut + col_w * i as f32, y, col_w, ui.pt(1.5), 0.0, red());
+        g.fill_rrect(gut + col_w * i as f32 - ui.pt(SPACE_XS), y - ui.pt(SPACE_XS), ui.pt(SPACE_S), ui.pt(SPACE_S), ui.pt(SPACE_XS), red());
+        let label = super::time_label((now_min % (24 * 60)) as u16);
+        // the label covers the hour label it would overlap
+        g.fill_rrect(0.0, y - ui.pt(SPACE_S), gut - ui.pt(SPACE_XS), ui.pt(SPACE_L), 0.0, CONTENT_BG.now());
+        self.text(g, ui, &label, MAC_SUBHEAD_PT, red(), ui.pt(SPACE_S), y);
     }
 
     pub(super) fn draw_year(&mut self, s: &mut Surface, ui: &Ui) {

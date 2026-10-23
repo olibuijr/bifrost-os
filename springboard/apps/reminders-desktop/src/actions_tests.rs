@@ -1071,3 +1071,114 @@ fn create_list_item_adds_to_the_named_list_and_add_reminder_keeps_the_default_li
     assert_eq!(app.data.items.iter().find(|r| r.id == plain).unwrap().list, 2, "add-reminder still uses the default list");
     cleanup(&path);
 }
+
+#[test]
+fn add_list_while_a_reminders_details_are_open_makes_a_list() {
+    // E2E W2-20: Done on the New List form saved the open reminder under the list's name
+    let (mut app, ui, path) = app("addlist-over-details");
+    add(&mut app, &ui, "Milk", 0.0);
+    let id = app.data.items[0].id;
+    app.screen = Screen::Items;
+    app.rebuild(&ui);
+    let row = app.rows.iter().position(|r| matches!(r, Row::Item { .. })).expect("the reminder's row");
+    app.activate(&ui, Target::Row(row), 10.0);
+    assert_eq!(app.editor.as_ref().and_then(|e| e.id), Some(id), "Details are open");
+    let lists = app.data.lists.len();
+    app.activate(&ui, Target::NewList, 11.0);
+    assert!(app.editor.is_none(), "the Details form gave way to the list form");
+    assert_eq!(app.list_edit_title(), "New List");
+    app.key(&ui, Out::Text("E2E test list".into()), 12.0);
+    app.activate(&ui, Target::Save, 13.0);
+    assert_eq!(app.data.lists.len(), lists + 1);
+    assert_eq!(app.data.lists.last().unwrap().name, "E2E test list");
+    assert_eq!(app.data.items.iter().find(|r| r.id == id).unwrap().title, "Milk", "the reminder keeps its name");
+    cleanup(&path);
+}
+
+#[test]
+fn return_in_the_name_field_commits_new_reminder_and_new_list() {
+    let (mut app, ui, path) = app("enter-commits");
+    app.screen = Screen::Items;
+    app.activate(&ui, Target::New, 0.0);
+    app.key(&ui, Out::Text("Call Anna".into()), 1.0);
+    app.key(&ui, Out::Enter, 2.0);
+    assert!(app.editor.is_none(), "Return is Done");
+    assert_eq!(titles(&app), ["Call Anna"]);
+    let lists = app.data.lists.len();
+    app.activate(&ui, Target::NewList, 3.0);
+    app.key(&ui, Out::Text("Errands".into()), 4.0);
+    app.key(&ui, Out::Enter, 5.0);
+    assert!(app.list_edit.is_none());
+    assert_eq!(app.data.lists.len(), lists + 1);
+    cleanup(&path);
+}
+
+#[test]
+fn a_click_selects_a_row_and_a_second_click_opens_its_details() {
+    let (mut app, ui, path) = app("click-selects");
+    add(&mut app, &ui, "Feed cat", 0.0);
+    app.screen = Screen::Items;
+    app.rebuild(&ui);
+    let id = app.data.items[0].id;
+    let (x, y, w, h) = row_of(&app, &ui, "Feed cat");
+    let (cx, cy) = (x + w / 2.0, y + h / 2.0);
+    app.touch(&ui, Event::Down(cx, cy), 10.0);
+    app.touch(&ui, Event::Up(cx, cy), 30.0);
+    assert_eq!(app.selected, Some(id), "one click selects");
+    assert!(app.editor.is_none(), "and does not open the Details form");
+    app.touch(&ui, Event::Down(cx, cy), 900.0);
+    app.touch(&ui, Event::Up(cx, cy), 920.0);
+    assert_eq!(app.editor.as_ref().and_then(|e| e.id), Some(id), "a click on the selected row opens it");
+    cleanup(&path);
+}
+
+#[test]
+fn deleting_a_list_asks_first_and_the_more_button_and_right_click_open_its_menu() {
+    let (mut app, ui, path) = app("list-menu");
+    app.activate(&ui, Target::NewList, 0.0);
+    app.key(&ui, Out::Text("Work".into()), 1.0);
+    app.activate(&ui, Target::Save, 2.0);
+    let work = app.data.lists.last().unwrap().id;
+    app.activate(&ui, Target::List(work), 3.0);
+    add(&mut app, &ui, "Report", 4.0);
+
+    // Delete on the form: the first press asks, the second deletes
+    app.activate(&ui, Target::ListInfo(work), 10.0);
+    app.activate(&ui, Target::Delete, 11.0);
+    assert!(app.data.lists.iter().any(|l| l.id == work), "the first press only asks");
+    assert!(app.list_edit.as_ref().unwrap().confirm_delete);
+    assert_eq!(app.notice.as_deref(), Some(delete_list_question(1).as_str()));
+    app.activate(&ui, Target::Cancel, 12.0);
+    app.activate(&ui, Target::ListInfo(work), 13.0);
+    assert!(!app.list_edit.as_ref().unwrap().confirm_delete, "a new form asks again");
+    app.activate(&ui, Target::Cancel, 14.0);
+
+    // the toolbar's "..." is a menu, not List Info
+    app.activate(&ui, Target::List(work), 20.0);
+    render(&mut app, &ui);
+    let more = app.controls(&ui).into_iter().find(|n| n.label == "Show List Info").expect("the ... button");
+    let (mx, my) = (ui.pt(more.bounds.x + more.bounds.w / 2.0), ui.pt(more.bounds.y + more.bounds.h / 2.0));
+    app.touch(&ui, Event::Down(mx, my), 21.0);
+    app.touch(&ui, Event::Up(mx, my), 40.0);
+    assert!(app.list_edit.is_none(), "\"...\" no longer opens List Info by itself");
+    let (_, _, items) = app.take_menu_request().expect("a menu is asked for");
+    let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+    assert_eq!(labels, ["Show List Info", "Pin List", "New Section", "", "Delete List..."]);
+    assert!(app.context_action(&ui, CTX_LIST_INFO, 41.0));
+    assert_eq!(app.list_edit_title(), "List Info");
+    app.activate(&ui, Target::Cancel, 42.0);
+
+    // a right click on the list in the sidebar opens the same menu; Delete List asks before deleting
+    render(&mut app, &ui);
+    let index = app.data.lists.iter().position(|l| l.id == work).unwrap() as u64;
+    let row = app.controls(&ui).into_iter().find(|n| n.id == 1000 + index).expect("the sidebar row");
+    let (rx, ry) = (ui.pt(row.bounds.x + row.bounds.w / 2.0), ui.pt(row.bounds.y + row.bounds.h / 2.0));
+    assert!(app.context_menu_at(&ui, rx, ry).is_some(), "right click on a list");
+    assert!(app.context_action(&ui, CTX_DELETE_LIST, 50.0));
+    assert!(app.data.lists.iter().any(|l| l.id == work), "Delete List from the menu asks first");
+    assert!(app.list_edit.as_ref().is_some_and(|e| e.confirm_delete));
+    app.activate(&ui, Target::Delete, 51.0);
+    assert!(!app.data.lists.iter().any(|l| l.id == work), "the second press deletes the list");
+    assert!(app.data.items.is_empty(), "with its reminders");
+    cleanup(&path);
+}
