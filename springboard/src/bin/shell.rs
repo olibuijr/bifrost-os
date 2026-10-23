@@ -653,6 +653,8 @@ fn run() -> std::io::Result<()> {
         kms::wait_precise(&fds, wait_ms, &mut ready);
         let ready = &ready;
         let t = sys::now_ms();
+        // notifications posted while the sockets are served below start their banner now, not at the last tick (W5-4)
+        shell.notify_note_time(t);
         // the chrome clients: their menu items run on the shell, and the menu bar follows the shell's menus
         #[cfg(feature = "desktop-wayland")]
         let chrome_fx = chrome_server.as_mut().map_or_else(Vec::new, |s| s.serve_shell(&mut shell, t));

@@ -1285,6 +1285,18 @@ impl Shell {
         }
     }
 
+    /// The settled desktop frame draws nothing of its own, but the window server is still handed every window's frame
+    /// (`take_wayland_windows`): an empty list destroys the toplevels. True when they are kept as the last frame left
+    /// them; false when only a full desktop frame can publish them (W5-1). Off the window server's path there is
+    /// nothing to keep.
+    pub(super) fn desk_windows_kept(&mut self) -> bool {
+        #[cfg(feature = "desktop-wayland")]
+        if std::env::var_os("SPRINGBOARD_WAYLAND").is_some() {
+            return self.retain_wayland_windows();
+        }
+        true
+    }
+
     /// Whether a frame for an external app's new pixels may draw the windows alone: the settled desktop on the window
     /// server's path (the conditions of the bar-only frame), nothing animating and nothing floating over the windows.
     #[cfg(feature = "desktop-wayland")]

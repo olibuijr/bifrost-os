@@ -1181,6 +1181,27 @@ impl Shell {
     pub(super) fn notify_damage_all(&self) -> bool {
         self.notify.banner_damage()
     }
+
+    /// The pixels the banner covers at `t`, with room for a card shadow, in whole px: the desktop's partial frame
+    /// clears this region before it draws (`desk_regions_now`) and clears it once more on the frame after the banner is
+    /// gone, so no slide frame is left behind on the desktop (W5-4). None while no banner is drawn.
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+    pub(super) fn banner_damage_rect(&self, t: f64) -> Option<(i32, i32, i32, i32)> {
+        let (x, y, w, h) = self.banner_rect(t)?;
+        let g = self.ui.pt(super::desk::SHADOW_REACH_PT).ceil() + 2.0;
+        let (x0, y0) = ((x - g).floor().max(0.0), (y - g).floor().max(0.0));
+        let (x1, y1) = ((x + w + g).ceil().min(self.w as f32), (y + h + g).ceil().min(self.h as f32));
+        (x1 > x0 && y1 > y0).then(|| (x0 as i32, y0 as i32, (x1 - x0) as i32, (y1 - y0) as i32))
+    }
+
+    /// The main loop's clock before it serves the shell's sockets: a notification posted there (an app's post, the
+    /// terminal's exit) starts its banner now, not at the last tick, which on an idle desktop could be seconds ago
+    /// and made the banner leave after half its rest (W5-4).
+    pub fn notify_note_time(&mut self, t: f64) {
+        if t > self.notify.t {
+            self.notify.t = t;
+        }
+    }
 }
 
 #[cfg(test)]

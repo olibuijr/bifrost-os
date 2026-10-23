@@ -1032,6 +1032,10 @@ impl Shell {
         // rows cleared again on the frame after it is gone
         if self.desk_keyboard_visible(){let top=self.kb_top().max(0.) as i32;v.push((0,top,self.w,self.h-top));}
         if self.perf.enabled||self.perf_drawn{let (x,y,w,h)=self.perf_rect();let g=self.ui.pt(2.) as i32;v.push((x as i32-g,y as i32-g,w as i32+2*g,h as i32+2*g));}
+        // a notification banner is drawn into this surface over the wallpaper: each slide frame clears the card's rect
+        // (the previous frame's rect too, through `desk_regions`), and the frame after it leaves clears its last one;
+        // without it every slide-out frame was painted over the one before and the smeared card stayed (W5-4)
+        if let Some(r)=self.banner_damage_rect(self.desk_t){v.push(r);}
         Some(v)
     }
     pub(super) fn draw_desktop_bar(&self,s:&mut Surface) {

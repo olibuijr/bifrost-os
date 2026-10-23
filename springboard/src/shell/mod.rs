@@ -1463,7 +1463,10 @@ impl Shell {
     /// as the Cmd+Tab strip does, so an idle one costs no frames. Overview and the Apps grid keep themselves going
     /// through `draw_overview`, which marks the shell dirty while they animate.
     pub fn desk_animating(&self, t: f64) -> bool {
-        bifrost_render::appearance::fading()
+        // the Dock's own motion (magnify, the hover label, an app's attention bounce or indeterminate progress bar) asks for
+        // frames through `desk_moving`; the settled-desktop frame must not skip them (W5-1)
+        self.dock_animating(t)
+            || bifrost_render::appearance::fading()
             || self.anim.is_some()
             || self.turning()
             || self.cc.animating()
@@ -4458,13 +4461,22 @@ impl Shell {
         #[cfg_attr(not(feature = "desktop-wayland"), allow(unused_variables))]
         let bar_rects = std::mem::take(&mut self.bar_rects);
         if self.desk_active() && self.desk_drawn && !was_dirty && !self.desk_animating(t) {
-            // the shell's own surface is unchanged; the windows are separate surfaces for the presenter
-            if ext_windows {
+            // the shell's own surface is unchanged; the windows are separate surfaces for the presenter. Every frame
+            // hands the window server the full window list (an empty list destroys every toplevel): drawn afresh for an
+            // app's new pixels, else kept as the last frame left them. A frame asked for by motion the settled check
+            // does not know (a Dock progress bar, W5-1) used to publish no windows, so the desktop showed none of them
+            // while a Clock timer ran; when they cannot be kept, the ordinary frame below draws them
+            let kept = if ext_windows {
                 self.draw_desk_windows(s, t);
+                true
+            } else {
+                self.desk_windows_kept()
+            };
+            if kept {
+                self.damage = damage;
+                self.rows = rows;
+                return &self.damage;
             }
-            self.damage = damage;
-            self.rows = rows;
-            return &self.damage;
         }
         if self.saver_draw(s, t) {
             damage.all();
@@ -4475,7 +4487,7 @@ impl Shell {
         }
         #[cfg(feature = "desktop-wayland")]
         if std::mem::take(&mut self.perf_only) && std::env::var_os("SPRINGBOARD_WAYLAND").is_some()
-            && self.desk_active() && !self.is_locked() && self.anim.is_none()
+            && self.desk_active() && !self.is_locked() && self.anim.is_none() && !self.notify_damage_all()
             && self.desktop_menu.is_none() && !self.cc_active() && !self.center_active() && !panels_changed && !self.overlay_visible() && !self.quick_look.is_visible() && !self.utility_up()
             && self.desk_drawn && self.windows_ready(s, ext, t) {
             let (_,y,_,h)=self.perf_rect();
@@ -4490,7 +4502,7 @@ impl Shell {
         // a changed CPU or RAM reading repaints the menu bar's rows alone, under the conditions of the performance band above
         #[cfg(feature = "desktop-wayland")]
         if std::mem::take(&mut self.bar_only) && std::env::var_os("SPRINGBOARD_WAYLAND").is_some()
-            && self.desk_active() && !self.is_locked() && self.anim.is_none()
+            && self.desk_active() && !self.is_locked() && self.anim.is_none() && !self.notify_damage_all()
             && self.desktop_menu.is_none() && !self.cc_active() && !self.center_active() && !self.overlay_visible() && !self.quick_look.is_visible() && !self.utility_up()
             && !self.overview_active()
             && self.desk_drawn && self.windows_ready(s, ext, t) {
@@ -4566,7 +4578,13 @@ impl Shell {
             return &self.damage;
         }
         if self.notify_damage_all() {
+            // the banner is painted over whatever the screen draws: a screen that repaints only what changed (an app's
+            // damaged rectangles, the terminal's rows, the home rows) would keep each slide frame under the next, so
+            // while it is up or just left the screen is drawn whole (the desktop clears its rect instead, W5-4)
             damage.all();
+            if !self.desk_active() {
+                self.drawn = Drawn::Nothing;
+            }
         }
         if self.announce_damage() || self.reader_damage() || self.voice_overlay_damage() {
             damage.all();

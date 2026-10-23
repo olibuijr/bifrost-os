@@ -179,9 +179,21 @@ pub fn enable(on: bool) {
     ON.store(on, Relaxed);
 }
 
+thread_local! {
+    /// This thread's own answer to `gpu()` (None: the process-wide switch). A test draws the GPU presenter's desktop
+    /// frame with it without turning the presenter path on for the tests running on other threads.
+    static THREAD_GPU: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
+}
+
+/// Overrides `gpu()` on the calling thread only (None restores the process-wide switch). For tests.
+#[doc(hidden)]
+pub fn set_thread_gpu(on: Option<bool>) {
+    THREAD_GPU.with(|c| c.set(on));
+}
+
 /// True when glass is drawn by the GPU presenter.
 pub fn gpu() -> bool {
-    ON.load(Relaxed)
+    THREAD_GPU.with(|c| c.get()).unwrap_or_else(|| ON.load(Relaxed))
 }
 
 /// Records a glass shape in frame pixels. A shape with the same geometry and kind replaces the stored one.
@@ -294,6 +306,16 @@ mod merge_tests {
 
     fn r(x: f32, y: f32, w: f32, h: f32) -> Rect {
         Rect { x, y, w, h, r: 4.0, ..Default::default() }
+    }
+
+    #[test]
+    fn a_thread_override_of_the_gpu_switch_stays_on_its_thread() {
+        let global = gpu();
+        set_thread_gpu(Some(!global));
+        assert_eq!(gpu(), !global);
+        assert_eq!(std::thread::spawn(gpu).join().unwrap(), global, "other threads keep the process-wide switch");
+        set_thread_gpu(None);
+        assert_eq!(gpu(), global);
     }
 
     #[test]

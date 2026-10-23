@@ -3524,4 +3524,132 @@ mod live_wallpaper_tests {
         sh.screen_on = false;
         assert!(!sh.live_wallpaper_tick(0.0), "the screen is off");
     }
+
+    /// W5-4: on the GPU presenter's path the shell's surface is transparent over the wallpaper and a desktop frame clears
+    /// only the regions it redraws. A banner sliding in and out over the desktop must clear its own rect each frame (and
+    /// its last one after it left): every frame equals the same frame drawn whole, so no slide frame of the card stays.
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn a_banner_sliding_out_over_the_desktop_leaves_no_card_behind() {
+        use crate::shell::notify::banner::{HOLD_MS, SLIDE_MS};
+        struct Cpu;
+        impl Drop for Cpu {
+            fn drop(&mut self) {
+                bifrost_render::glass::set_thread_gpu(None);
+            }
+        }
+        let _cpu = Cpu;
+        bifrost_render::glass::set_thread_gpu(Some(true));
+        let mut sh = desktop_shell();
+        sh.anim = None;
+        sh.screen_on = true;
+        sh.screen = Screen::Home;
+        sh.drawn = Drawn::App;
+        sh.desk.as_mut().unwrap().wins.clear();
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let mut px = vec![0u32; w * h];
+        sh.tick(1000.0);
+        sh.draw(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 1000.0);
+        sh.keyboard.tick(1.0e6);
+        sh.notify(crate::shell::notify::Notification::new(AppId::Terminal, "Term", "The shell exited.", 0));
+        assert!(sh.notify.banner().is_some(), "the desktop shows a banner");
+        let whole = |sh: &mut Shell, t: f64| {
+            sh.force_full_redraw();
+            let mut fresh = vec![0u32; w * h];
+            sh.draw(&mut Surface { w, h, stride: w, px: &mut fresh, y0: 0 }, t);
+            fresh
+        };
+        let out = 1000.0 + SLIDE_MS + HOLD_MS;
+        let mut card = None;
+        for t in [1000.0 + SLIDE_MS / 2.0, 1000.0 + SLIDE_MS + 10.0, out + SLIDE_MS * 0.2, out + SLIDE_MS * 0.4, out + SLIDE_MS * 0.6, out + SLIDE_MS * 0.8] {
+            sh.tick(t);
+            sh.draw(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, t);
+            card = card.or(sh.banner_damage_rect(t));
+            let expected = whole(&mut sh, t);
+            let off = px.iter().zip(&expected).filter(|(a, b)| a != b).count();
+            assert_eq!(off, 0, "frame at {t}: {off} px differ from the same frame drawn whole");
+        }
+        // gone: the frame after it left clears its last rect
+        let end = out + SLIDE_MS + 1.0;
+        sh.tick(end);
+        assert!(sh.notify.banner().is_none());
+        sh.draw(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, end);
+        assert!(!sh.notify_damage_all(), "nothing of the banner is left to repaint");
+        let expected = whole(&mut sh, end);
+        let (x, y, cw, ch) = card.expect("the card was on screen");
+        for row in y.max(0) as usize..((y + ch) as usize).min(h) {
+            for col in x.max(0) as usize..((x + cw) as usize).min(w) {
+                assert_eq!(px[row * w + col], expected[row * w + col], "a pixel of the old card at ({col}, {row})");
+            }
+        }
+        assert!(px == expected, "the desktop is as if no banner had been there");
+    }
+
+    /// W5-4: a notification posted between ticks (a terminal exit or an app's post, served before the loop's tick) starts
+    /// its banner at the loop's clock, not at the last tick: on an idle desktop that was seconds earlier, and the banner
+    /// left after half its rest while `state` and the screen disagreed.
+    #[test]
+    fn a_banner_posted_after_an_idle_gap_rests_its_full_time() {
+        use crate::shell::notify::banner::{Phase, HOLD_MS, SLIDE_MS};
+        let mut sh = desktop_shell();
+        sh.anim = None;
+        sh.screen_on = true;
+        sh.screen = Screen::Home;
+        sh.tick(1000.0);
+        // idle for 3 s, then the loop wakes for the post
+        sh.notify_note_time(4000.0);
+        sh.notify(crate::shell::notify::Notification::new(AppId::Terminal, "Term", "The shell exited.", 0));
+        sh.tick(4000.0 + SLIDE_MS + HOLD_MS - 1.0);
+        assert_eq!(sh.notify.banner().map(|b| b.phase()), Some(Phase::Hold), "still resting just before its five seconds are up");
+        assert!(sh.describe().contains("banner=hold"), "and `state` says so");
+        sh.tick(4000.0 + SLIDE_MS + HOLD_MS + 1.0);
+        assert_eq!(sh.notify.banner().map(|b| b.phase()), Some(Phase::Out));
+        // the loop's clock never takes the notification clock back
+        let before = sh.notify.t;
+        sh.notify_note_time(10.0);
+        assert_eq!(sh.notify.t, before);
+    }
+
+    /// W5-1: a desktop frame asked for by motion the settled check did not count (a Dock tile's indeterminate progress bar
+    /// while a Clock timer runs, the hover label's fade) still hands the window server every window: an empty window
+    /// list destroys all the toplevels, and the desktop showed only the wallpaper, the menu bar and the Dock.
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn every_desktop_frame_publishes_the_windows() {
+        let _lock = crate::test_support::global_lock();
+        let saved = std::env::var_os("SPRINGBOARD_WAYLAND");
+        std::env::set_var("SPRINGBOARD_WAYLAND", "1");
+        let mut sh = desktop_shell();
+        sh.anim = None;
+        sh.screen_on = true;
+        sh.screen = Screen::Home;
+        sh.drawn = Drawn::App;
+        let m = sh.desk_metrics();
+        sh.desk.as_mut().unwrap().wins.clear();
+        sh.desk.as_mut().unwrap().open(&m, AppId::Settings, (600, 400));
+        let id = crate::shell::desk::win_id(AppId::Settings).unwrap();
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let mut px = vec![0u32; w * h];
+        sh.draw(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 0.0);
+        assert!(sh.take_wayland_windows().iter().any(|f| f.id == id), "the first frame publishes the window");
+        sh.keyboard.tick(1.0e6);
+        sh.dirty = false;
+        // the Dock's hover label fades: the shell asks for frames without being dirty
+        sh.desk.as_mut().unwrap().dock_label_ms = 1000.0;
+        sh.desk_t = 1100.0;
+        assert!(sh.dock_animating(1100.0) && sh.needs_frame(), "Dock motion asks for frames");
+        assert!(sh.desk_animating(1100.0), "and counts as desktop motion, so the frame is not the settled one");
+        sh.draw(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 1100.0);
+        assert!(sh.take_wayland_windows().iter().any(|f| f.id == id), "a frame for Dock motion keeps the window");
+        // the settled frame (nothing new) keeps the windows as the last frame left them
+        sh.dirty = false;
+        sh.ext_frame = false;
+        sh.draw(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 5000.0);
+        assert!(sh.take_wayland_windows().iter().any(|f| f.id == id), "a settled frame never publishes an empty window list");
+        if let Some(v) = saved {
+            std::env::set_var("SPRINGBOARD_WAYLAND", v)
+        } else {
+            std::env::remove_var("SPRINGBOARD_WAYLAND")
+        };
+    }
 }
