@@ -35,7 +35,7 @@ use bifrost_app::kit::{clipboard, Scroller, TextCache, Ui};
 use bifrost_app::passwords::{self, Error as KeyError};
 use bifrost_app::text_services;
 use bifrost_app::usernotif::{self, Request};
-use bifrost_app::{AppMenu, AppMenuItem, Ctx, DocumentEvent, KeyInput, OpenOptions, TouchKind};
+use bifrost_app::{AppMenu, AppMenuItem, ContextItem, Ctx, DocumentEvent, KeyInput, OpenOptions, TouchKind};
 use bifrost_app::proto::{DocErrorCode, DocMode, CHORD_ALT, CHORD_CTRL, CHORD_META};
 use bifrost_core::json::Json;
 use springboard::deildu::http::Transport;
@@ -349,6 +349,49 @@ fn open_body_loaded(mail: &Mail) -> bool {
 /// True when the open message carries files.
 fn open_has_files(mail: &Mail) -> bool {
     mail.open.and_then(|uid| mail.attachments.get(&uid)).is_some_and(|files| !files.is_empty())
+}
+
+/// What a right-click on a message offers, in the order of macOS Mail's message context menu: the Message and Move menu
+/// items that act on one message (`None` is a separator line).
+const CONTEXT_MENU: [Option<u32>; 21] = [
+    Some(MENU_NEW_VIEWER),
+    None,
+    Some(MENU_REPLY),
+    Some(MENU_REPLY_ALL),
+    Some(MENU_FORWARD),
+    Some(MENU_FORWARD_ATTACHMENT),
+    Some(MENU_REDIRECT),
+    None,
+    Some(MENU_UNREAD),
+    Some(MENU_FLAG),
+    Some(MENU_MUTE),
+    Some(MENU_REMIND),
+    None,
+    Some(MENU_ARCHIVE),
+    Some(MENU_TRASH),
+    Some(MENU_JUNK),
+    Some(MENU_MOVE_AGAIN),
+    None,
+    Some(MENU_ADD_TO_CONTACTS),
+    Some(MENU_SAVE_AS),
+    Some(MENU_PRINT),
+];
+
+/// The context menu of the open message: the rows of [`CONTEXT_MENU`] with the titles and enabled state the menu bar
+/// has for the same state (Mute or Unmute, Move Again to the last mailbox), so a choice runs the same menu action.
+pub fn context_items(mail: &Mail, undo_pending: bool) -> Vec<ContextItem> {
+    let menus = menus(mail, undo_pending);
+    let item = |id: u32| menus.iter().flat_map(|m| &m.items).find(|i| i.id == id && !i.separator && !i.submenu);
+    CONTEXT_MENU
+        .iter()
+        .filter_map(|row| match row {
+            None => Some(ContextItem::separator()),
+            Some(id) => item(*id).map(|i| {
+                let title = if *id == MENU_NEW_VIEWER { "Open in New Window" } else { i.title.as_str() };
+                ContextItem::new(*id, title).enabled(i.enabled)
+            }),
+        })
+        .collect()
 }
 
 /// The menus of the window, for the state in `mail`. `undo_pending` is true while a sent message can still be taken back.
@@ -1435,6 +1478,21 @@ impl MailWindow {
             files,
             loaded: raw.is_some(),
         }
+    }
+
+    /// A right-click at (`x`, `y`): on a message, it becomes the selection (as in macOS Mail) and its context menu opens
+    /// there; the choice comes back as a menu action (`Input::ContextAction`). False anywhere else or under a sheet.
+    pub fn context(&mut self, ctx: &Ctx, x: f32, y: f32) -> bool {
+        if self.mail.sheet.is_some() {
+            return false;
+        }
+        let crate::draw::Hit::Message(uid) = self.hit(&ctx.ui, x, y) else { return false };
+        if self.mail.open != Some(uid) {
+            self.open_message(uid);
+        }
+        ctx.context_menu(x, y, context_items(&self.mail, self.undo_pending()));
+        self.dirty = true;
+        true
     }
 
     pub fn menu_items(&self) -> Vec<AppMenu> {
@@ -3414,6 +3472,24 @@ mod tests {
             mail.open_compose(None);
         }
         mail
+    }
+
+    #[test]
+    fn the_context_menu_of_a_message_offers_the_message_actions() {
+        let items = context_items(&busy_mail(false), false);
+        assert!(items.len() <= 32, "the shell shows 32 rows at most");
+        let row = |id: u32| items.iter().find(|i| i.id == id).cloned().expect("a row");
+        assert_eq!(row(MENU_NEW_VIEWER).title(), "Open in New Window");
+        for id in [MENU_REPLY, MENU_FORWARD, MENU_UNREAD, MENU_FLAG, MENU_ARCHIVE, MENU_TRASH, MENU_JUNK, MENU_PRINT] {
+            assert!(row(id).enabled, "{}", row(id).title());
+        }
+        assert_eq!(row(MENU_MOVE_AGAIN).title(), "Move Again to Box 3", "the menu bar's title");
+        assert!(items.iter().any(ContextItem::is_separator));
+        assert!(!items.first().unwrap().is_separator() && !items.last().unwrap().is_separator());
+        // the actions that need a message are off without one
+        let mut idle = busy_mail(false);
+        idle.open = None;
+        assert!(!context_items(&idle, false).iter().find(|i| i.id == MENU_REPLY).unwrap().enabled);
     }
 
     #[test]

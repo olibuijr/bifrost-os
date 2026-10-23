@@ -150,6 +150,10 @@ impl App for MailApp {
                     mail.touch(ctx, kind, x, y, t)
                 }
                 Input::Key(_) | Input::Command(_) => key_or_command(mail, ctx, ev),
+                // a right-click on the main window, and the item chosen from its context menu: both act on the main
+                // window's message, so a compose window gives the sheet slot back first
+                Input::Context { x, y } => self.composes.deactivate(mail) && mail.context(ctx, x, y),
+                Input::ContextAction(id) => self.composes.deactivate(mail) && mail.menu(ctx, id),
                 Input::Open(url) => {
                     mail.open_handoff(&url);
                     true
@@ -584,6 +588,32 @@ mod tests {
         click(&mut app, &ctx, at, 9000.0);
         click(&mut app, &ctx, other, 9100.0);
         assert!(app.window.as_mut().unwrap().take_viewers().is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_right_click_on_a_message_selects_it_and_offers_its_actions() {
+        let dir = std::env::temp_dir().join(format!("bifrost-mail-context-{}", std::process::id()));
+        let ctx = ctx(&dir);
+        let mut app = app_with_inbox(&ctx);
+        let _ = ctx.take_sent();
+        let (x, y) = row_point(&app, &ctx.ui, 3);
+        assert!(app.event(&ctx, Input::Context { x, y }));
+        assert_eq!(app.window.as_ref().unwrap().mail.open, Some(3), "the clicked message is the one the menu acts on");
+        let menu = ctx.take_sent().into_iter().find_map(|m| match m {
+            ToShell::ContextMenu { items, .. } => Some(items),
+            _ => None,
+        });
+        let items = menu.expect("a context menu");
+        assert!(items.iter().any(|i| i.id == bifrost_mail::window::MENU_REPLY && i.enabled));
+        // the choice runs the menu action: Open in New Window
+        app.event(&ctx, Input::ContextAction(bifrost_mail::window::MENU_NEW_VIEWER));
+        let viewers: Vec<u32> = app.window.as_mut().unwrap().take_viewers().iter().map(|v| v.uid).collect();
+        assert_eq!(viewers, vec![3]);
+        // a right-click on no message opens nothing
+        let _ = ctx.take_sent();
+        assert!(!app.event(&ctx, Input::Context { x: 1.0, y: 599.0 }));
+        assert!(!ctx.take_sent().iter().any(|m| matches!(m, ToShell::ContextMenu { .. })));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
