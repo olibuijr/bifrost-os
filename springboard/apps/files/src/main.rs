@@ -410,6 +410,12 @@ impl App for Files {
     fn tick(&mut self, ctx: &Ctx, _: f64) -> bool {
         self.request_thumbnails(ctx);
         let mut changed = self.poll_search();
+        // the shell would not open an app from the Applications place (not installed any more, or not an app)
+        if let Some(name) = self.sys.take_app_open_failure() {
+            self.notice = Some(format!("\u{201C}{name}\u{201D} can\u{2019}t be opened."));
+            self.revision += 1;
+            changed = true;
+        }
         if self.poll_server() {
             changed = true;
         }

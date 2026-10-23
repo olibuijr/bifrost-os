@@ -62,6 +62,15 @@ pub fn launchable(kind: &str) -> bool {
     super::kinds::Kind::of(kind).on_home_grid()
 }
 
+/// The app `OpenApplication` launches for `id`: an installed, not removed package that is an app a person launches
+/// (`launchable`). The id is matched exactly; it is never a path or a command, so an app cannot start anything else.
+pub fn application_to_open<'a>(installed: &'a [apphost::Installed], id: &str) -> Option<&'a apphost::Installed> {
+    if id.is_empty() || id.contains('/') || id.chars().any(char::is_control) {
+        return None;
+    }
+    installed.iter().find(|a| a.manifest.id == id && !a.is_removed() && launchable(&a.manifest.kind))
+}
+
 /// The folder Reveal opens for `path`: the folder itself, or the folder that holds the file.
 pub fn reveal_target(path: &Path) -> PathBuf {
     if path.is_dir() {
@@ -182,6 +191,7 @@ impl super::Shell {
                 None => (WorkspaceStatus::NotFound, Vec::new()),
             },
             WorkspaceOp::OpenUrl => self.workspace_open_url(arg, t),
+            WorkspaceOp::OpenApplication => self.workspace_open_application(arg, t),
             WorkspaceOp::OpenFile | WorkspaceOp::OpenWith | WorkspaceOp::Reveal | WorkspaceOp::Recycle => {
                 #[cfg(feature = "desktop-wayland")]
                 {
@@ -194,6 +204,18 @@ impl super::Shell {
                 }
             }
         }
+    }
+
+    /// `openApplication`: the installed app `id` opens the way the Dock opens it (a running app comes to the front).
+    pub(super) fn workspace_open_application(&mut self, id: &str, t: f64) -> Reply {
+        let installed = apphost::installed();
+        if application_to_open(&installed, id).is_none() {
+            return (WorkspaceStatus::NotFound, Vec::new());
+        }
+        // an app key is the manifest id for installed apps (`AppDef::icon`)
+        let Some(def) = super::apps::apps().iter().find(|a| a.icon == id).map(|a| a.id) else { return (WorkspaceStatus::NotFound, Vec::new()) };
+        self.desk_open_or_start(def, t);
+        (WorkspaceStatus::Ok, Vec::new())
     }
 
     pub(super) fn workspace_open_url(&mut self, url: &str, t: f64) -> Reply {
@@ -414,6 +436,24 @@ mod tests {
         assert!(!launchable("service"));
         assert!(!launchable("system"));
         assert!(!launchable("unknown"));
+    }
+
+    #[test]
+    fn open_application_launches_only_installed_apps_by_exact_id() {
+        let app = |id: &str, kind: &str| apphost::Installed {
+            manifest: apphost::Manifest { id: id.into(), name: id.into(), kind: kind.into(), exec: "x".into(), ..Default::default() },
+            dir: PathBuf::from("/var/lib/springboard/apps").join(id).join("current"),
+        };
+        let installed = [app("is.example.notes", "app"), app("is.example.sync", "service"), app("is.example.base", "system")];
+        assert_eq!(application_to_open(&installed, "is.example.notes").map(|a| a.manifest.id.as_str()), Some("is.example.notes"));
+        // services and system packages are never started on an app's say-so
+        assert!(application_to_open(&installed, "is.example.sync").is_none());
+        assert!(application_to_open(&installed, "is.example.base").is_none());
+        // an unknown id, a path or a command line names nothing
+        assert!(application_to_open(&installed, "is.example.missing").is_none());
+        assert!(application_to_open(&installed, "/usr/bin/is.example.notes").is_none());
+        assert!(application_to_open(&installed, "is.example.notes\n").is_none());
+        assert!(application_to_open(&installed, "").is_none());
     }
 
     fn scratch(tag: &str) -> PathBuf {

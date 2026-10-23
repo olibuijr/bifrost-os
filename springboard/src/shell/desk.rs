@@ -1082,7 +1082,7 @@ impl Shell {
             let Some(id)=win_id(w.app) else{return false};
             // a covered window has no cache entry by design (see `hidden_ids`); anything else without one needs a full draw
             if !desk.window_cache.contains_key(&id) && !desk.hidden_ids.contains(&id) {return false;}
-            frames.push(crate::bare::wayland::WindowFrame {id,title:frame_title(id),x:w.r.x,y:w.r.y,width:w.r.w as usize,height:w.r.h as usize,pixels:None,damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize),maximized:w.maximized,fullscreen:w.full,title_height,drag_height:0,no_drag:Vec::new(),floating:false,fx:bifrost_render::glass::Fx::IDENTITY,opaque:!matches!(w.app,AppId::External(_)),origin:None});
+            frames.push(crate::bare::wayland::WindowFrame {id,title:frame_title(id),x:w.r.x,y:w.r.y,width:w.r.w as usize,height:w.r.h as usize,pixels:None,damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize),maximized:w.maximized,fullscreen:w.full,title_height,drag_height:0,no_drag:Vec::new(),floating:false,fx:bifrost_render::glass::Fx::IDENTITY,opaque:!matches!(w.app,AppId::External(_)),origin:None,min_size:(0,0)});
             let controls=match w.app {AppId::External(slot)=>ext.get(slot as usize).and_then(Option::as_ref).map_or(&[][..],|h|&h.controls[..]),_=>&[][..]};
             let (dh,nd)=drag_zone(w,&m,controls);
             if let Some(f)=frames.last_mut(){f.drag_height=dh;f.no_drag=nd;}
@@ -1156,6 +1156,7 @@ impl Shell {
     #[cfg(feature = "desktop-wayland")]
     pub fn take_wayland_windows(&mut self) -> Vec<crate::bare::wayland::WindowFrame> {
         let floating = self.floating_apps();
+        let m = self.desk_metrics();
         self.desk.as_mut().map(|d| {
             d.sync_levels(floating);
             let mut frames = std::mem::take(&mut d.frames);
@@ -1166,6 +1167,8 @@ impl Shell {
             frames.sort_by_key(|f| f.floating);
             for f in frames.iter_mut() {
                 f.origin = frame_app(f.id).and_then(|a| origin_hint(&d.placed, a, f.x, f.y));
+                // the toplevel advertises the app's own minimum (outer px, as its window geometry), not a fixed one
+                f.min_size = frame_app(f.id).map_or((0, 0), |a| { let (w, h, _, _) = size_range(a, &m); (w, h) });
             }
             // Lock/overlays destroy the backend's windows; rebuilding must send
             // complete pixels rather than a cached unchanged-window sentinel.
@@ -2789,7 +2792,7 @@ impl Shell {
                         id, title: frame_title(id), x:w.r.x, y:w.r.y,
                         width:w.r.w as usize, height:w.r.h as usize, pixels:None,
                         damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize), maximized:w.maximized, fullscreen:w.full, title_height:m.title,
-                        drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None,
+                        drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None, min_size:(0,0),
                     });
                     continue;
                 }
@@ -2798,7 +2801,7 @@ impl Shell {
                         id, title: frame_title(id), x:w.r.x, y:w.r.y,
                         width:w.r.w as usize, height:w.r.h as usize, pixels:None,
                         damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize), maximized:w.maximized, fullscreen:w.full, title_height:m.title,
-                        drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None,
+                        drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None, min_size:(0,0),
                     });
                     self.desk.as_mut().unwrap().window_cache.insert(id,cached.unwrap());
                     continue;
@@ -2822,7 +2825,7 @@ impl Shell {
                             desk.frames.push(crate::bare::wayland::WindowFrame {
                                 id, title: frame_title(id), x:w.r.x, y:w.r.y, width:cw, height:ch, pixels:None,
                                 damage:crate::gfx::Damage::new(cw,ch), maximized:w.maximized, fullscreen:w.full, title_height:m.title,
-                                drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None,
+                                drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None, min_size:(0,0),
                             });
                             continue;
                         }
@@ -2873,7 +2876,7 @@ impl Shell {
                         let desk=self.desk.as_mut().unwrap();
                         desk.body_cache.remove(&w.app);
                         desk.window_cache.insert(id,retained);
-                        desk.frames.push(crate::bare::wayland::WindowFrame{id,title:frame_title(id),x:w.r.x,y:w.r.y,width,height,pixels:outgoing,damage,maximized:w.maximized,fullscreen:w.full,title_height:m.title,drag_height,no_drag,fx:bifrost_render::glass::Fx::IDENTITY,opaque,floating:false,origin:None});
+                        desk.frames.push(crate::bare::wayland::WindowFrame{id,title:frame_title(id),x:w.r.x,y:w.r.y,width,height,pixels:outgoing,damage,maximized:w.maximized,fullscreen:w.full,title_height:m.title,drag_height,no_drag,fx:bifrost_render::glass::Fx::IDENTITY,opaque,floating:false,origin:None,min_size:(0,0)});
                         continue;
                     }
                 }
@@ -2908,7 +2911,7 @@ impl Shell {
                 desk.frames.push(crate::bare::wayland::WindowFrame {
                     id, title: frame_title(id), x:w.r.x, y:w.r.y,
                     width:w.r.w as usize, height:w.r.h as usize, pixels, damage, maximized:w.maximized, fullscreen:w.full, title_height:m.title,
-                    drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None,
+                    drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None, min_size:(0,0),
                 });
                 continue;
             }
@@ -4012,13 +4015,18 @@ mod tests {
         assert_eq!((rect(&sh, placed).x, rect(&sh, placed).y), (1065, 524), "the shell follows the reported frame");
         let frames: Vec<_> = [placed, fresh].iter().map(|&app| {
             let r = rect(&sh, app);
-            crate::bare::wayland::WindowFrame { id: win_id(app).unwrap(), title: "", x: r.x, y: r.y, width: r.w as usize, height: r.h as usize, pixels: None, damage: crate::gfx::Damage::new(1, 1), maximized: false, fullscreen: false, title_height: 0, drag_height: 0, no_drag: Vec::new(), floating: false, fx: bifrost_render::glass::Fx::IDENTITY, opaque: true, origin: None }
+            crate::bare::wayland::WindowFrame { id: win_id(app).unwrap(), title: "", x: r.x, y: r.y, width: r.w as usize, height: r.h as usize, pixels: None, damage: crate::gfx::Damage::new(1, 1), maximized: false, fullscreen: false, title_height: 0, drag_height: 0, no_drag: Vec::new(), floating: false, fx: bifrost_render::glass::Fx::IDENTITY, opaque: true, origin: None, min_size: (0, 0) }
         }).collect();
         sh.desk.as_mut().unwrap().frames = frames;
         let out = sh.take_wayland_windows();
         let of = |app| out.iter().find(|f| Some(f.id) == win_id(app)).unwrap();
         assert_eq!(of(placed).origin, Some((1065, 524)));
         assert_eq!(of(fresh).origin, None, "a window the window server never placed is cascaded by it");
+        // each toplevel advertises its app's own minimum: Settings' split width, the desk minimum for the others
+        let (sw, sh_min, _, _) = size_range(placed, &m);
+        assert_eq!(of(placed).min_size, (sw, sh_min));
+        assert!(sw >= (crate::shell::settings::SPLIT_MIN_PT * m.pt) as i32 || sw == m.w, "Settings' minimum is its split layout width");
+        assert_eq!(of(fresh).min_size, (m.min_w, m.min_h + title_of(fresh, &m)));
         // closing forgets the place: the window opened again is a new one
         let d = sh.desk.as_mut().unwrap();
         let i = d.index_of(placed).unwrap();

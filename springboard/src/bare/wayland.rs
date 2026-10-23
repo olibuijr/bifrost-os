@@ -41,7 +41,15 @@ pub struct WindowFrame { pub id:u32, pub title:&'static str, pub x:i32, pub y:i3
     pub fx:bifrost_render::glass::Fx,
     /// The content is opaque inside its corner radius (a shell-drawn window without vibrancy). An opaque window
     /// that covers another one lets the presenter skip drawing the hidden one (`gpu::occlusion`).
-    pub opaque:bool }
+    pub opaque:bool,
+    /// The smallest outer size (window px, title bar included) the window may be resized to: the app's own minimum
+    /// (`desk::size_range`, Settings' split width), advertised with xdg_toplevel `set_min_size` so the window server's
+    /// interactive resize stops where the shell's does. (0, 0) falls back to `DEFAULT_MIN_SIZE`.
+    pub min_size:(i32,i32) }
+/// The minimum a toplevel advertises when its frame names none.
+const DEFAULT_MIN_SIZE:(i32,i32)=(320,220);
+/// The `set_min_size` a toplevel sends for `min`: the frame's own minimum, or the default when it has none.
+fn min_size_of(min:(i32,i32)) -> (i32,i32) { if min.0>0 && min.1>0 { min } else { DEFAULT_MIN_SIZE } }
 /// What a shell window's toplevel reported. `Frame` is the window server's own frame of the toplevel (x, y, width,
 /// height in desktop px, `bifrost_window_level_v1` version 2): the window server places and moves toplevels, so this
 /// is where the window really is.
@@ -409,6 +417,8 @@ impl Display {
                 if w.pending.size()==frame.damage.size() { w.pending.union(&frame.damage); } else { w.pending=Damage::new(frame.width,frame.height); w.pending.all(); }
                 // a moved window with vibrancy shows a different part of the wallpaper
                 if (w.frame.x,w.frame.y)!=(frame.x,frame.y) && self.state.materials.contains_key(&frame.id) { w.pending=Damage::new(frame.width,frame.height); w.pending.all(); }
+                // the app's minimum can change with the scale or the screen (a minimum never exceeds the screen)
+                if min_size_of(w.frame.min_size)!=min_size_of(frame.min_size) { let (mw,mh)=min_size_of(frame.min_size); w.top.set_min_size(mw,mh); }
                 let pixels = frame.pixels.take().or_else(||w.frame.pixels.take());
                 w.frame = frame;
                 w.frame.pixels = pixels;
@@ -416,7 +426,7 @@ impl Display {
                 let surface = self.state.compositor.as_ref().unwrap().create_surface(&qh,());
                 let xdg = self.state.wm.as_ref().ok_or_else(||err("xdg-shell unavailable"))?.get_xdg_surface(&surface,&qh,frame.id);
                 let top = xdg.get_toplevel(&qh,frame.id); top.set_title(frame.title.to_string()); top.set_app_id(format!("is.olibuijr.bifrost.{}",frame.id));
-                top.set_min_size(320,220);
+                let (mw,mh)=min_size_of(frame.min_size); top.set_min_size(mw,mh);
                 // a window coming back from Overview or a minimize maps where it was, not at the cascade
                 if let (Some((ox,oy)),Some(mgr))=(frame.origin,self.state.level_mgr.as_ref()) {
                     if mgr.version()>=super::window_level_client::ORIGIN_SINCE { mgr.set_origin(&surface,ox,oy); }
@@ -1335,7 +1345,13 @@ fn window_buffer_count(count:usize, available:bool, dirty:bool) -> usize {
 }
 #[cfg(test)]
 mod tests {
-    use super::{dock_placement,DockEdge,focus_on_configure};
+    use super::{dock_placement,DockEdge,focus_on_configure,min_size_of,DEFAULT_MIN_SIZE};
+    #[test]
+    fn a_toplevel_advertises_the_frames_minimum_or_the_default() {
+        assert_eq!(min_size_of((940,600)),(940,600), "the app's own minimum, e.g. Settings' split width");
+        assert_eq!(min_size_of((0,0)),DEFAULT_MIN_SIZE, "a frame without one keeps the default");
+        assert_eq!(min_size_of((500,0)),DEFAULT_MIN_SIZE, "a half-set minimum is not sent");
+    }
     #[test]
     fn a_plain_configure_does_not_take_the_focus() {
         assert!(focus_on_configure(true,false,false), "a new window is focused");

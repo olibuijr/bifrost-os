@@ -31,6 +31,8 @@ pub enum WorkspaceOp {
     Frontmost,
     /// the ids of the running apps
     Running,
+    /// launch the installed app `arg` (an app id, never a path), or bring it to the front when it is running
+    OpenApplication,
 }
 
 impl WorkspaceOp {
@@ -44,6 +46,7 @@ impl WorkspaceOp {
             5 => Self::UrlForApp,
             6 => Self::Frontmost,
             7 => Self::Running,
+            8 => Self::OpenApplication,
             _ => return None,
         })
     }
@@ -224,6 +227,10 @@ mod tests {
         let g: crate::GrantId = [3; 16];
         let m = ToShell::WorkspaceRequest { request: 9, op: WorkspaceOp::Recycle, grants: vec![g, [4; 16]], arg: "x y".into() };
         assert_eq!(ToShell::decode(&m.encode()), Ok(m));
+        let o = ToShell::WorkspaceRequest { request: 10, op: WorkspaceOp::OpenApplication, grants: vec![], arg: "is.example.notes".into() };
+        assert_eq!(ToShell::decode(&o.encode()), Ok(o));
+        assert_eq!(WorkspaceOp::from_wire(8), Some(WorkspaceOp::OpenApplication));
+        assert_eq!(WorkspaceOp::from_wire(9), None);
         let s = ToShell::WorkspaceSubscribe { mask: WorkspaceEventKind::DidWake.bit() };
         assert_eq!(ToShell::decode(&s.encode()), Ok(s));
         let r = ToApp::WorkspaceReply { request: 9, status: WorkspaceStatus::Denied, items: vec!["a".into(), "b".into()] };
