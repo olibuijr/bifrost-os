@@ -48,6 +48,10 @@ pub struct Manifest {
     /// (`KeyInput::chord(105, CHORD_SHIFT)` for Shift+Left), so it can extend the selection and move by word and line. Any other
     /// app gets those keys as the plain arrow codes, as before (see `Shell::hw_nav`).
     pub edit_keys: bool,
+    /// `records_audio = true`: a native `audio` app that records from the microphone by opening the capture PCM itself
+    /// (the upstream SoundCraft). The shell shows the microphone Allow sheet at launch while the person has not answered,
+    /// since the app's first take cannot ask (`app_policy::ask_microphone_at_launch`). SDK apps ask through the SDK.
+    pub records_audio: bool,
     /// `index_extension = true`: the app answers the shell's reindex requests (`CSIndexExtensionRequestHandler`). The
     /// shell asks once per run, when the app has no items in the Search index (see `request_index_extensions`).
     pub index_extension: bool,
@@ -221,6 +225,7 @@ impl Manifest {
                 "game" => m.game = unquote(v) == "true",
                 "index_extension" => m.index_extension = unquote(v) == "true",
                 "edit_keys" => m.edit_keys = unquote(v) == "true",
+                "records_audio" => m.records_audio = unquote(v) == "true",
                 "file_manager_folders" => m.file_manager_folders = strs(),
                 "permissions" => m.permissions = strs(),
                 "keychain_groups" => m.keychain_groups = strs(),
@@ -2785,6 +2790,14 @@ mod tests {
         let none = Manifest::parse("id = \"is.a.edit\"\nname = \"Edit\"\nexec = \"x\"\n").unwrap();
         assert!(none.package_types.is_empty());
     }
+    #[test]
+    fn records_audio_is_off_unless_declared() {
+        let m = Manifest::parse("id = \"is.a.rec\"\nname = \"Rec\"\nexec = \"x\"\nrecords_audio = true\n").unwrap();
+        assert!(m.records_audio);
+        let no = Manifest::parse("id = \"is.a.rec\"\nname = \"Rec\"\nexec = \"x\"\n").unwrap();
+        assert!(!no.records_audio);
+    }
+
     #[test]
     fn edit_keys_is_declared_by_text_editors_only() {
         let m = Manifest::parse("id = \"is.a.edit\"\nname = \"Edit\"\nexec = \"x\"\nedit_keys = true\n").unwrap();

@@ -446,14 +446,23 @@ pub fn command(
         "/var/lib/springboard/account",
         "/var/lib/springboard/account",
     ]);
-    // `audio`: the media service socket only. No `/dev/snd` node: an app opening the capture PCM directly would bypass
-    // the microphone permission, which the service enforces for every take (only the audio server owns the devices).
+    // `audio`: the media service socket. An SDK app gets no `/dev/snd` node: an app opening the capture PCM directly would
+    // bypass the microphone permission, which the service enforces for every take. A native app (the upstream prebuilt
+    // ArtCraft apps) drives ALSA itself, so it gets the playback side of every card, and the capture PCMs only when the
+    // person has allowed it the microphone. The grant is read at launch: a microphone allowed later is bound at the next
+    // launch.
     if policy.audio {
         c.args([
             "--bind-try",
             "/var/lib/springboard/run/is.olibuijr.audio.sock",
             "/var/lib/springboard/run/is.olibuijr.audio.sock",
         ]);
+        if native {
+            for node in alsa_nodes(Path::new(ALSA_DIR), microphone_allowed(id)) {
+                // `-try`: a card unplugged between the listing and the launch is skipped, not a failed launch
+                c.arg("--dev-bind-try").arg(&node).arg(&node);
+            }
+        }
     }
     // Unified Logging: every app may write to the journald native socket (world-writable datagram socket).
     c.args(["--ro-bind-try", "/run/systemd/journal/socket", "/run/systemd/journal/socket"]);
@@ -560,6 +569,69 @@ fn camera_capture_devices() -> Vec<PathBuf> {
             Some(path)
         })
         .collect()
+}
+
+/// Where the kernel's ALSA character devices are.
+const ALSA_DIR: &str = "/dev/snd";
+
+/// Whether a native `audio` app may open the ALSA node `name` (a file name under `/dev/snd`). Playback is always
+/// allowed: the card controls (`controlC<n>`), the playback PCMs (`pcmC<n>D<m>p`), the timer and the sequencer. A capture
+/// PCM (`pcmC<n>D<m>c`) only with `capture`, the person's microphone grant. Anything else (hwdep, rawmidi, the `by-id`
+/// and `by-path` folders) is not bound: playback does not need it.
+fn alsa_node_allowed(name: &str, capture: bool) -> bool {
+    let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+    if name == "timer" || name == "seq" {
+        return true;
+    }
+    if let Some(card) = name.strip_prefix("controlC") {
+        return digits(card);
+    }
+    let Some(rest) = name.strip_prefix("pcmC") else { return false };
+    let Some((card, device)) = rest.split_once('D') else { return false };
+    let device = match (device.strip_suffix('p'), device.strip_suffix('c')) {
+        (Some(d), _) => d,
+        (None, Some(d)) if capture => d,
+        _ => return false,
+    };
+    digits(card) && digits(device)
+}
+
+/// The ALSA nodes under `dir` a native `audio` app is given, read at launch (cards can come and go). Only character
+/// devices whose names pass [`alsa_node_allowed`]; a missing `dir` (no sound card) gives none.
+fn alsa_nodes(dir: &Path, capture: bool) -> Vec<PathBuf> {
+    use std::os::unix::fs::FileTypeExt;
+    let Ok(entries) = fs::read_dir(dir) else { return Vec::new() };
+    let mut nodes: Vec<PathBuf> = entries
+        .flatten()
+        .filter(|e| e.file_name().to_str().is_some_and(|n| alsa_node_allowed(n, capture)))
+        .filter(|e| fs::symlink_metadata(e.path()).is_ok_and(|m| m.file_type().is_char_device()))
+        .map(|e| e.path())
+        .collect();
+    nodes.sort();
+    nodes
+}
+
+/// Whether the person allowed app `id` the microphone (the shell's privacy store, saved in `privacy-grants.tsv`, the
+/// same answer the media service checks). Not answered, denied and restricted all refuse.
+fn microphone_allowed(id: &str) -> bool {
+    use bifrost_ui::capture_access::{Media, Status};
+    crate::shell::services::privacy_permissions::access(id).status(Media::Audio) == Status::Authorized
+}
+
+/// Whether launching an app should first ask for the microphone: a native `audio` app that declares
+/// `records_audio = true` and has no answer yet. Such an app opens the capture PCM itself, so its first take cannot ask;
+/// the sheet is shown at launch instead, and an Allow takes effect at the next launch.
+pub fn asks_microphone_at_launch(policy: Policy, native: bool, records_audio: bool, status: bifrost_ui::capture_access::Status) -> bool {
+    policy.audio && native && records_audio && status == bifrost_ui::capture_access::Status::NotDetermined
+}
+
+/// Queues the shell's microphone Allow sheet for `id` when [`asks_microphone_at_launch`] says so.
+pub fn ask_microphone_at_launch(id: &str, name: &str, policy: Policy, native: bool, records_audio: bool) {
+    use crate::shell::services::privacy_permissions as privacy;
+    use bifrost_ui::capture_access::Media;
+    if asks_microphone_at_launch(policy, native, records_audio, privacy::access(id).status(Media::Audio)) {
+        privacy::queue_prompt(id, name, privacy::Kind::Media(Media::Audio), "");
+    }
 }
 
 fn is_video_node_path(path: &Path) -> bool {
@@ -741,6 +813,48 @@ mod tests {
             assert!(!is_video_node_path(Path::new(path)), "unexpected camera mount path: {path}");
         }
     }
+    #[test]
+    fn a_native_audio_app_gets_playback_nodes_and_capture_only_with_the_microphone() {
+        for name in ["controlC0", "controlC12", "pcmC0D0p", "pcmC1D3p", "timer", "seq"] {
+            assert!(alsa_node_allowed(name, false), "playback node refused: {name}");
+            assert!(alsa_node_allowed(name, true), "playback node refused with the microphone: {name}");
+        }
+        for name in ["pcmC0D0c", "pcmC1D10c"] {
+            assert!(!alsa_node_allowed(name, false), "capture node bound without the microphone: {name}");
+            assert!(alsa_node_allowed(name, true), "capture node refused with the microphone: {name}");
+        }
+        for name in ["hwC0D0", "midiC0D0", "by-id", "by-path", "controlC", "controlCx", "pcmC0D0", "pcmCD0p", "pcmC0Dp", "pcmC0D0x",
+            "pcmC0D0pc", "pcmC0D0\u{e9}", "timer1", "pcm"] {
+            assert!(!alsa_node_allowed(name, true), "unexpected ALSA node: {name}");
+        }
+    }
+
+    #[test]
+    fn alsa_nodes_are_char_devices_only_and_a_missing_dir_gives_none() {
+        let dir = std::env::temp_dir().join(format!("app-policy-snd-{}", std::process::id()));
+        assert!(alsa_nodes(&dir, true).is_empty(), "no /dev/snd is no sound, not an error");
+        fs::create_dir_all(&dir).unwrap();
+        // regular files named like nodes are not devices
+        for name in ["controlC0", "pcmC0D0p", "pcmC0D0c"] {
+            fs::write(dir.join(name), b"").unwrap();
+        }
+        assert!(alsa_nodes(&dir, true).is_empty());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_microphone_sheet_shows_at_launch_only_for_an_unanswered_native_recorder() {
+        use bifrost_ui::capture_access::Status;
+        let audio = Policy { audio: true, ..Policy::default() };
+        assert!(asks_microphone_at_launch(audio, true, true, Status::NotDetermined));
+        assert!(!asks_microphone_at_launch(audio, true, true, Status::Authorized), "already allowed");
+        assert!(!asks_microphone_at_launch(audio, true, true, Status::Denied), "a denial is not asked again");
+        assert!(!asks_microphone_at_launch(audio, true, true, Status::Restricted));
+        assert!(!asks_microphone_at_launch(audio, true, false, Status::NotDetermined), "plays sound only");
+        assert!(!asks_microphone_at_launch(audio, false, true, Status::NotDetermined), "an SDK app asks through the service");
+        assert!(!asks_microphone_at_launch(Policy::default(), true, true, Status::NotDetermined), "no audio permission");
+    }
+
     #[test]
     fn a_plain_app_unshares_every_namespace_and_gets_its_own_proc() {
         let args = namespace_args(Policy::default());

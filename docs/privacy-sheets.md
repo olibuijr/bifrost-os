@@ -15,8 +15,20 @@ All sheets default to refusal: an unanswered question never grants.
 - Grants are saved to `privacy-grants.tsv` beside the other shell files, including the contacts answers.
 - The microphone is enforced for every app by the media service (`audiod`, `is.olibuijr.audio`): a `RecordStart` is
   refused unless `privacy-grants.tsv` has `media <app> microphone 1` for the app whose `appdata/<id>` the take is written
-  to. Sandboxed apps get no `/dev/snd`, so the service is the only way to the microphone. Voice Memos asks with
-  `privacy_permissions::request` on Record and starts the take only after Allow.
+  to. Sandboxed SDK apps get no `/dev/snd`, so for them the service is the only way to the microphone. Voice Memos asks
+  with `privacy_permissions::request` on Record and starts the take only after Allow.
+- Native `audio` apps (`window = "native"`: the upstream prebuilt SoundCraft, FilmCraft and EffectCraft) drive ALSA
+  themselves, so `app_policy::command` binds the `/dev/snd` nodes it finds at launch (`alsa_nodes`): the playback side
+  always (`controlC<n>`, `pcmC<n>D<m>p`, `timer`, `seq`), and the capture PCMs (`pcmC<n>D<m>c`) only when the shell's
+  privacy store says the person allowed that app the microphone (the answer saved in `privacy-grants.tsv`). hwdep,
+  rawmidi and the `by-id`/`by-path` folders are not bound. No `/dev/snd` (no sound card) binds nothing.
+- The grant is read at launch and the sandbox is not re-bound while the app runs: a microphone allowed (in Settings or
+  on the sheet) while a native app is open takes effect the next time it is opened, and a microphone switched off
+  likewise only after the app quits.
+- Such an app opens the capture PCM itself, so its first take cannot show a sheet. A native `audio` app that declares
+  `records_audio = true` in its manifest (SoundCraft) gets the microphone sheet at launch while the person has not
+  answered (`app_policy::ask_microphone_at_launch`); that launch runs without the capture nodes. Denied apps are not
+  asked again; the Settings switch changes the answer.
 
 ## Password (`auth_sheet.rs`, `services/local_auth.rs`)
 
