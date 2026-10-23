@@ -7,11 +7,12 @@ use super::doc::Doc;
 use super::obj::{Dict, Obj, Parser, Stream};
 use super::page::Matrix;
 use super::sink::{PathSeg, PdfPath};
+use super::standard::{self, Builtin, Standard};
 use super::tables::{GLYPHS, MAC_80, WIN_80};
 use super::type1::Type1;
 use crate::cff::{Cff, Sink};
 use crate::font::Font as Face;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -74,6 +75,12 @@ pub struct Font {
     has_widths: bool,
     dw: f32,
     cid_widths: HashMap<u32, f32>,
+    /// the standard face that draws a font with no embedded program
+    standard: Option<Standard>,
+    /// the built-in encoding a non-embedded simple font falls back to
+    builtin: Builtin,
+    /// a "nothing drawn" warning was logged for this font
+    warned: Cell<bool>,
 }
 
 /// One shown character code: its text, advance in 1/1000 em, and whether it
@@ -158,7 +165,13 @@ impl Font {
                         f.symbolic = false;
                         f.program = load_program(doc, &desc);
                     }
+                    if f.program.is_none() {
+                        f.standard = Some(standard_for(doc, &f.base_font, doc.field(dd, "FontDescriptor").dict()));
+                    }
                 }
+            }
+            if f.program.is_none() && f.standard.is_none() {
+                f.standard = Some(standard_for(doc, &f.base_font, None));
             }
         } else if f.kind == FontType::Type3 {
             f.load_simple(doc, d);
@@ -181,10 +194,28 @@ impl Font {
             f.type3 = Some(Type3 { matrix: m, procs, resources });
         } else {
             f.load_simple(doc, d);
-            if let Obj::Dict(desc) = doc.field(d, "FontDescriptor") {
-                let flags = doc.field(&desc, "Flags").int().unwrap_or(0);
+            let desc = doc.field(d, "FontDescriptor");
+            if let Obj::Dict(desc) = &desc {
+                let flags = doc.field(desc, "Flags").int().unwrap_or(0);
                 f.symbolic = flags & 4 != 0 && flags & 32 == 0;
-                f.program = load_program(doc, &desc);
+                f.program = load_program(doc, desc);
+            }
+            if f.program.is_none() {
+                // not embedded: one of the standard 14 or a font the reader is expected to have
+                let s = standard_for(doc, &f.base_font, desc.dict());
+                f.standard = Some(s);
+                let base_named = match doc.field(d, "Encoding") {
+                    Obj::Name(_) => true,
+                    Obj::Dict(e) => doc.field(&e, "BaseEncoding").name().is_some(),
+                    _ => false,
+                };
+                let type1 = matches!(subtype.name(), Some("Type1") | Some("MMType1") | None);
+                f.builtin = match s.family {
+                    standard::Family::Symbol if !base_named => Builtin::Symbol,
+                    standard::Family::Dingbats if !base_named => Builtin::Dingbats,
+                    _ if type1 && !base_named && !f.symbolic && !s.is_symbol() => Builtin::Standard,
+                    _ => Builtin::None,
+                };
             }
         }
         f
@@ -313,6 +344,9 @@ impl Font {
         if let Some(t) = self.diff.get(&code) {
             return Some(t.clone());
         }
+        if self.builtin != Builtin::None {
+            return self.builtin.text(code).map(|c| c.to_string());
+        }
         let c = match code {
             0x80..=0x9f if !self.mac => WIN_80[(code - 0x80) as usize],
             0x80..=0xff if self.mac => MAC_80[(code - 0x80) as usize],
@@ -325,7 +359,10 @@ impl Font {
 
     fn simple_width(&self, code: u8) -> f32 {
         if !self.has_widths {
-            return 500.0;
+            let Some(s) = self.standard else { return 500.0 };
+            // the standard faces' AFM metrics, else the (metric-compatible) fallback face's own advance
+            let text = self.uni.get(&(code as u32)).cloned().or_else(|| self.simple_text(code)).unwrap_or_default();
+            return s.width(&text).or_else(|| self.fallback_advance(s, code, &text)).unwrap_or(s.default_width());
         }
         let i = (code as u32).checked_sub(self.first_char).map(|i| i as usize);
         i.and_then(|i| self.widths.get(i)).copied().unwrap_or(self.missing_width)
@@ -610,20 +647,60 @@ impl Font {
                 Some(Outline { path, advance: Some(w * m[0]) })
             }
             None => {
-                let face = Face::parse(fallback?)?;
-                let ch = g.text.chars().next()?;
-                let gid = face.glyph(ch);
-                if gid == 0 {
-                    return None;
+                let ch = g.text.chars().next();
+                let s = self.standard.unwrap_or(Standard::SANS);
+                let name = if self.two_byte { None } else { self.glyph_name(g.code as u8, None) };
+                let code = if self.two_byte { 0 } else { g.code as u8 };
+                if let Some(bytes) = standard::face_bytes(s).or_else(|| fallback.cloned()) {
+                    if let Some(face) = Face::parse(&bytes) {
+                        let gid = standard::glyph_in(&face, s, ch, name.as_deref(), code);
+                        if gid != 0 {
+                            return face_outline(&face, gid);
+                        }
+                    }
                 }
-                face_outline(&face, gid)
+                // the system cascade: any installed face that has the character
+                let ch = ch?;
+                let faces = crate::fontfallback::faces();
+                let face = faces.iter().find(|f| f.glyph(ch) != 0)?;
+                face_outline(face, face.glyph(ch))
             }
         }
     }
+
+    /// The advance (1/1000 em) the fallback face gives a non-embedded simple font's code.
+    fn fallback_advance(&self, s: Standard, code: u8, text: &str) -> Option<f32> {
+        let bytes = standard::face_bytes(s)?;
+        let face = Face::parse(&bytes)?;
+        let name = self.glyph_name(code, None);
+        let gid = standard::glyph_in(&face, s, text.chars().next(), name.as_deref(), code);
+        (gid != 0).then(|| face.advance(gid) * 1000.0 / face.upem.max(1.0))
+    }
+
+    /// Logs once per font that its text cannot be drawn (no embedded program and no installed face has the glyph),
+    /// so a blank page is never silent.
+    pub fn warn_undrawn(&self, text: &str) {
+        if !self.warned.replace(true) {
+            eprintln!("pdf: font {:?} has no drawable glyph for {:?} (not embedded, no fallback face); its text is not drawn", self.base_font, text);
+        }
+    }
+
+    /// The standard face a non-embedded font is drawn with.
+    pub fn standard(&self) -> Option<Standard> {
+        self.standard
+    }
+}
+
+/// The standard face for a non-embedded font, from its name and descriptor.
+fn standard_for(doc: &Doc, base_font: &str, desc: Option<&Dict>) -> Standard {
+    let flags = desc.and_then(|d| doc.field(d, "Flags").int()).unwrap_or(0);
+    let weight = desc.and_then(|d| doc.field(d, "FontWeight").num());
+    let angle = desc.and_then(|d| doc.field(d, "ItalicAngle").num()).unwrap_or(0.0);
+    Standard::from_name(base_font, flags, weight, angle)
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     #[test]
@@ -659,6 +736,72 @@ mod tests {
         assert!(g[2].is_space);
         let m = Font { mac: true, ..Default::default() };
         assert_eq!(m.glyphs(&[0x8e])[0].text, "é");
+    }
+
+    /// A one-page PDF whose `/F1` is `font` (a dictionary body), showing `content`.
+    pub(crate) fn pdf_with_font(font: &str, content: &str) -> Vec<u8> {
+        let mut out = b"%PDF-1.4\n".to_vec();
+        let mut offs = vec![];
+        let objs: Vec<String> = vec![
+            "<< /Type /Catalog /Pages 2 0 R >>".into(),
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 /Resources << /Font << /F1 5 0 R >> >> >>".into(),
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 100] /Contents 4 0 R >>".into(),
+            format!("<< /Length {} >>\nstream\n{}\nendstream", content.len(), content),
+            font.into(),
+        ];
+        for (i, o) in objs.iter().enumerate() {
+            offs.push(out.len());
+            out.extend_from_slice(format!("{} 0 obj\n{}\nendobj\n", i + 1, o).as_bytes());
+        }
+        let xref = out.len();
+        out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+        for o in &offs {
+            out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+        }
+        out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{}\n%%EOF\n", objs.len() + 1, xref).as_bytes());
+        out
+    }
+
+    fn font_of(dict: &str) -> Font {
+        let doc = Doc::open(pdf_with_font(dict, "BT ET")).unwrap();
+        let d = doc.load(5);
+        Font::load(&doc, d.dict().unwrap())
+    }
+
+    #[test]
+    fn non_embedded_standard_fonts_get_afm_widths_and_a_face() {
+        let f = font_of("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
+        assert!(!f.embedded());
+        assert_eq!(f.standard(), Some(Standard::SANS));
+        let w: f32 = f.glyphs(b"Hello").iter().map(|g| g.width).sum();
+        assert_eq!(w, 722.0 + 556.0 + 222.0 + 222.0 + 556.0, "Helvetica's AFM advances, not a flat 500");
+        let c = font_of("<< /Type /Font /Subtype /Type1 /BaseFont /Courier-Bold >>");
+        assert!(c.glyphs(b"iW").iter().all(|g| g.width == 600.0));
+        // a /Widths array still wins over the AFM table
+        let given = font_of("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /FirstChar 72 /LastChar 72 /Widths [100] >>");
+        assert_eq!(given.glyphs(b"H")[0].width, 100.0);
+    }
+
+    #[test]
+    fn standard_encoding_applies_when_no_encoding_is_named_and_differences_override_it() {
+        let t = font_of("<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman >>");
+        let text: String = t.glyphs(b"it'\xae").iter().map(|g| g.text.as_str()).collect();
+        assert_eq!(text, "it\u{2019}\u{fb01}", "StandardEncoding: quoteright and the fi ligature");
+        let w = font_of("<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman /Encoding /WinAnsiEncoding >>");
+        assert_eq!(w.glyphs(b"'\xe9")[0].text, "'", "WinAnsi keeps quotesingle");
+        assert_eq!(w.glyphs(b"\xe9")[0].text, "é");
+        let d = font_of("<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman /Encoding << /Differences [39 /quotesingle 65 /eacute] >> >>");
+        let text: String = d.glyphs(b"'AB").iter().map(|g| g.text.as_str()).collect();
+        assert_eq!(text, "'éB");
+    }
+
+    #[test]
+    fn symbol_and_dingbats_use_their_builtin_encodings() {
+        let s = font_of("<< /Type /Font /Subtype /Type1 /BaseFont /Symbol >>");
+        let text: String = s.glyphs(b"abp").iter().map(|g| g.text.as_str()).collect();
+        assert_eq!(text, "αβπ");
+        let z = font_of("<< /Type /Font /Subtype /Type1 /BaseFont /ZapfDingbats >>");
+        assert_eq!(z.glyphs(b"l")[0].text, "●");
     }
 
     #[test]

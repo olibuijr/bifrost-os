@@ -22,6 +22,7 @@ pub mod outline_tree;
 pub mod page;
 pub mod shading;
 pub mod sink;
+pub mod standard;
 mod tables;
 pub mod type1;
 pub mod writer;

@@ -487,6 +487,34 @@ mod tests {
     }
 
     #[test]
+    fn non_embedded_standard_fonts_draw_their_text() {
+        use crate::cg::pdf::standard::{self, Family, Standard};
+        // W4-19: a text PDF in the standard 14 fonts (nothing embedded) rendered blank
+        let faces = [
+            ("/Helvetica /Encoding /WinAnsiEncoding", Standard::SANS),
+            ("/Times-Bold", Standard { family: Family::Serif, bold: true, italic: false }),
+            ("/Courier-Oblique", Standard { family: Family::Mono, bold: false, italic: true }),
+        ];
+        for (font, std) in faces {
+            if standard::face_bytes(std).is_none() && crate::fontfallback::faces().is_empty() {
+                eprintln!("skipped {font}: no open fallback face installed");
+                continue;
+            }
+            let dict = format!("<< /Type /Font /Subtype /Type1 /BaseFont {font} >>");
+            let data = crate::cg::pdf::font::tests::pdf_with_font(&dict, "BT /F1 40 Tf 10 30 Td (Hello) Tj ET");
+            let doc = Doc::open(data).unwrap();
+            let list = page::pages(&doc);
+            let img = render_page(&doc, &list[0], 200, 100).unwrap();
+            let white = rgba(255, 255, 255, 255);
+            let inked = img.px.iter().filter(|p| **p != white).count();
+            assert!(inked > 200, "{font}: the text is drawn ({inked} inked pixels)");
+            // and only where the text is: the right edge of the page past the word stays paper
+            let right = (0..img.h).flat_map(|y| (190..200).map(move |x| (x, y))).filter(|(x, y)| img.px[y * img.w + x] != white).count();
+            assert_eq!(right, 0, "{font}: nothing past the word");
+        }
+    }
+
+    #[test]
     fn a_file_page_comes_out_scaled_and_bad_indexes_are_errors() {
         let data = tiny_pdf("0 0 1 rg 0 0 612 792 re f");
         let img = render_file_page(data.clone(), 0, 30, 40).unwrap();
