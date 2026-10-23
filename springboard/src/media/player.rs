@@ -900,7 +900,14 @@ mod tests {
         p.play();
         assert_eq!(p.state(), State::Playing);
         // Wait for 400 ms of media within a long budget; the strict player shows every frame, late or not.
-        let frames = pump(&mut p, 15_000, |p| p.position_ms() > at + 400.0);
+        let mut frames = pump(&mut p, 15_000, |p| p.position_ms() > at + 400.0);
+        // The clock follows wall time, but the strict video thread only hands a frame over when it gets the CPU: a thread
+        // starved for the whole 400 ms (a loaded run) delivers its first frame after the position was reached, so the
+        // stretch above can end with none yet. Frames still have to continue after the resume: wait for one.
+        let deadline = Instant::now() + Duration::from_secs(15);
+        while frames.is_empty() && Instant::now() < deadline {
+            frames = pump(&mut p, 100, |_| false);
+        }
         assert!(!frames.is_empty());
         p.stop();
         assert_eq!(p.state(), State::Ended);
