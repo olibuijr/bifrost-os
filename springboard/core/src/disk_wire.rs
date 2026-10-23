@@ -60,6 +60,31 @@ pub fn encode_volume(v: &Volume) -> Json {
     j
 }
 
+/// The space on a mounted volume, measured by the shell (`statvfs` on the host mount point, which an app sandbox
+/// cannot see): an entry of the `volumes` answer's `usage` list. `free` is what an unprivileged write can still use.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VolumeUsage {
+    pub bsd_name: String,
+    pub total: u64,
+    pub used: u64,
+    pub free: u64,
+}
+
+pub fn encode_usage(u: &VolumeUsage) -> Json {
+    Json::Obj(vec![
+        ("bsd_name".into(), Json::Str(u.bsd_name.clone())),
+        ("total".into(), Json::Num(u.total as f64)),
+        ("used".into(), Json::Num(u.used as f64)),
+        ("free".into(), Json::Num(u.free as f64)),
+    ])
+}
+
+/// A usage entry from JSON. None when the name is missing or a number is not a whole, non-negative one.
+pub fn decode_usage(j: &Json) -> Option<VolumeUsage> {
+    let n = |k: &str| j.get(k).and_then(Json::number).filter(|n| *n >= 0.0 && n.fract() == 0.0).map(|n| n as u64);
+    Some(VolumeUsage { bsd_name: j.str_field("bsd_name").filter(|s| !s.is_empty())?, total: n("total")?, used: n("used")?, free: n("free")? })
+}
+
 /// A volume from JSON. None when its disk part is malformed.
 pub fn decode_volume(j: &Json) -> Option<Volume> {
     Some(Volume { disk: decode_disk(j)?, parent: j.str_field("parent"), fs_type: j.str_field("fs_type"), label: j.str_field("label") })
@@ -94,6 +119,14 @@ pub fn decode_event(service: &str, event: &str, body: &Json) -> Option<DiskEvent
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn usage_round_trips_and_malformed_entries_are_dropped() {
+        let u = VolumeUsage { bsd_name: "nvme0n1p2".into(), total: 512_000_000_000, used: 100_000_000_000, free: 400_000_000_000 };
+        assert_eq!(decode_usage(&encode_usage(&u)), Some(u));
+        let bad = Json::Obj(vec![("bsd_name".into(), Json::Str("sda1".into())), ("total".into(), Json::Num(-1.0))]);
+        assert_eq!(decode_usage(&bad), None);
+    }
 
     fn usb() -> Disk {
         Disk { bsd_name: "sdb1".into(), size: 8_000_000_000, removable: true, read_only: false, model: "Flash".into(), mount_point: Some("/media/usb".into()) }

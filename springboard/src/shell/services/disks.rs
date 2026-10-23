@@ -144,8 +144,9 @@ impl Disks {
             // `/sys`, no udev database and no host mount table, so it asks the shell what they hold
             "volumes" => {
                 let text = std::fs::read_to_string(&self.mounts).unwrap_or_default();
-                let volumes = disk_scan::scan_volumes(&self.sys_block, &self.udev, &text).iter().map(disk_wire::encode_volume).collect();
-                Ok(obj(vec![("volumes", Json::Arr(volumes))]))
+                let scanned = disk_scan::scan_volumes(&self.sys_block, &self.udev, &text);
+                let volumes = scanned.iter().map(disk_wire::encode_volume).collect();
+                Ok(obj(vec![("volumes", Json::Arr(volumes)), ("usage", Json::Arr(usage_of(&scanned)))]))
             }
             "describe" => {
                 let name = name_param(params)?;
@@ -222,6 +223,20 @@ fn obj(fields: Vec<(&str, Json)>) -> Json {
     Json::Obj(fields.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
 }
 
+/// The space on each mounted volume, measured here on the host mount point (an app sandbox sees its own mount table
+/// and cannot `statvfs` the host's). A volume whose mount point cannot be read is left out. `free` is the space an
+/// unprivileged write can use, as `df` reports it.
+fn usage_of(volumes: &[disk_scan::Volume]) -> Vec<Json> {
+    volumes
+        .iter()
+        .filter_map(|v| {
+            let point = v.disk.mount_point.as_ref()?;
+            let c = bifrost_core::volume::capacity(std::path::Path::new(point)).ok()?;
+            Some(disk_wire::encode_usage(&disk_wire::VolumeUsage { bsd_name: v.disk.bsd_name.clone(), total: c.total, used: c.used(), free: c.available }))
+        })
+        .collect()
+}
+
 fn name_param(params: &Json) -> Result<String, String> {
     params.str_field("bsd_name").filter(|n| !n.is_empty()).ok_or_else(|| "disks: a bsd_name is needed".to_string())
 }
@@ -278,6 +293,29 @@ mod tests {
         assert_eq!(volumes.iter().map(|v| v.disk.bsd_name.as_str()).collect::<Vec<_>>(), vec!["sda", "sda1"]);
         assert_eq!(volumes[1].parent.as_deref(), Some("sda"));
         assert_eq!(volumes[1].disk.mount_point.as_deref(), Some("/media/data"));
+        // /media/data does not exist on the test host, so no usage is measured for it
+        let usage = r.get("usage").and_then(Json::as_array).unwrap();
+        assert!(usage.iter().filter_map(disk_wire::decode_usage).all(|u| u.bsd_name != "sda1"));
+    }
+
+    #[test]
+    fn mounted_volumes_get_their_usage_from_the_host_mount_point() {
+        let (sys, mounts) = fixture("usage");
+        let part = sys.join("sda").join("sda1");
+        fs::create_dir_all(&part).unwrap();
+        fs::write(part.join("partition"), "1").unwrap();
+        fs::write(part.join("size"), "50000").unwrap();
+        // the root of the test host is always mounted and readable
+        fs::write(&mounts, "/dev/sda1 /var/log btrfs rw 0 0\n/dev/sda1 / btrfs rw 0 0\n").unwrap();
+        let mut s = Disks::at(&sys, &mounts);
+        let r = s.handle("a", "volumes", &Json::Null).unwrap();
+        let volumes: Vec<_> = r.get("volumes").and_then(Json::as_array).unwrap().iter().filter_map(disk_wire::decode_volume).collect();
+        assert_eq!(volumes[1].disk.mount_point.as_deref(), Some("/"), "the system volume reads as /, not a subvolume");
+        let usage: Vec<_> = r.get("usage").and_then(Json::as_array).unwrap().iter().filter_map(disk_wire::decode_usage).collect();
+        let root = bifrost_core::volume::capacity(std::path::Path::new("/")).unwrap();
+        let u = usage.iter().find(|u| u.bsd_name == "sda1").expect("usage for the mounted volume");
+        assert_eq!(u.total, root.total);
+        assert!(u.used <= u.total && u.free <= u.total);
     }
 
     #[test]

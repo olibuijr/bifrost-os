@@ -446,11 +446,10 @@ pub fn command(
         "/var/lib/springboard/account",
         "/var/lib/springboard/account",
     ]);
+    // `audio`: the media service socket only. No `/dev/snd` node: an app opening the capture PCM directly would bypass
+    // the microphone permission, which the service enforces for every take (only the audio server owns the devices).
     if policy.audio {
         c.args([
-            "--dev-bind-try",
-            "/dev/snd",
-            "/dev/snd",
             "--bind-try",
             "/var/lib/springboard/run/is.olibuijr.audio.sock",
             "/var/lib/springboard/run/is.olibuijr.audio.sock",

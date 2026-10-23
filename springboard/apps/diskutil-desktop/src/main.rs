@@ -70,15 +70,18 @@ impl App for DiskUtility {
         let ejectable = self.can_eject();
         let has = idle && node.is_some();
         let renamable = has && node.is_some_and(|n| n.fs_type.is_some());
-        let whole_disk = idle && node.is_some_and(|n| n.kind == Kind::Disk);
+        // the running system's volume and disk cannot be erased, restored over, partitioned or repaired in place
+        let system = self.selected_is_system();
+        let whole_disk = idle && node.is_some_and(|n| n.kind == Kind::Disk) && !system;
+        let has_other = has && !system;
         let fs = self.erase_fs;
         let mut disk = vec![
             AppMenuItem::new(MENU_RENAME, "Rename\u{2026}").enabled(renamable),
-            AppMenuItem::new(MENU_ERASE, "Erase\u{2026}").key("cmd+shift+e").enabled(has),
-            AppMenuItem::new(MENU_RESTORE, "Restore\u{2026}").enabled(has),
+            AppMenuItem::new(MENU_ERASE, "Erase\u{2026}").key("cmd+shift+e").enabled(has_other),
+            AppMenuItem::new(MENU_RESTORE, "Restore\u{2026}").enabled(has_other),
             AppMenuItem::new(MENU_RAID, "RAID Assistant\u{2026}").enabled(idle),
             AppMenuItem::separator(),
-            AppMenuItem::new(MENU_FIRST_AID, "Run First Aid\u{2026}").key("cmd+shift+a").enabled(has),
+            AppMenuItem::new(MENU_FIRST_AID, "Run First Aid\u{2026}").key("cmd+shift+a").enabled(has_other),
             AppMenuItem::separator(),
             AppMenuItem::new(MENU_FS_EXT4, "Format as ext4").checked(fs == Personality::Ext4),
             AppMenuItem::new(MENU_FS_EXFAT, "Format as exFAT").checked(fs == Personality::ExFat),

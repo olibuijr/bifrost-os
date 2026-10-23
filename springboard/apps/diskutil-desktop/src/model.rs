@@ -191,6 +191,25 @@ pub fn nodes_from_volumes(volumes: &[bifrost_core::disk_scan::Volume]) -> Vec<No
         .collect()
 }
 
+/// Mount points that make a volume part of the running system.
+const SYSTEM_POINTS: [&str; 8] = ["/", "/boot", "/boot/efi", "/efi", "/home", "/usr", "/var", "/var/lib/springboard"];
+
+/// Whether `node` holds the running system: a volume mounted at a system point, or a disk with such a volume on it.
+/// Erase, First Aid, Restore and Partition are refused for it (the reference's startup disk cannot be erased or
+/// repaired in place either).
+pub fn is_system(node: &Node, nodes: &[Node]) -> bool {
+    let system = |n: &Node| n.mount_point.as_deref().is_some_and(|p| SYSTEM_POINTS.contains(&p));
+    system(node) || (node.kind == Kind::Disk && nodes.iter().any(|n| n.parent.as_deref() == Some(node.name.as_str()) && system(n)))
+}
+
+/// Copies the shell's usage measurements (`volumes` answer, by device name) into the nodes. A node without one keeps
+/// no usage.
+pub fn apply_shell_usage(nodes: &mut [Node], usage: &[bifrost_core::disk_wire::VolumeUsage]) {
+    for node in nodes.iter_mut() {
+        node.usage = usage.iter().find(|u| u.bsd_name == node.name).map(|u| Usage { total: u.total, used: u.used, free: u.free });
+    }
+}
+
 /// Keeps the usage the last full read measured, for the volumes that are still mounted at the same point.
 pub fn carry_usage(nodes: &mut [Node], previous: &[Node]) {
     for node in nodes.iter_mut() {
@@ -398,6 +417,29 @@ pub fn info_lines(node: &Node, extra: &[(String, String)]) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_running_system_volume_and_its_disk_are_system() {
+        let nodes = vec![
+            Node { name: "nvme0n1".into(), ..Node::default() },
+            Node { name: "nvme0n1p1".into(), kind: Kind::Partition, parent: Some("nvme0n1".into()), mount_point: Some("/boot".into()), ..Node::default() },
+            Node { name: "nvme0n1p2".into(), kind: Kind::Partition, parent: Some("nvme0n1".into()), mount_point: Some("/".into()), ..Node::default() },
+            Node { name: "sdb".into(), removable: true, ..Node::default() },
+            Node { name: "sdb1".into(), kind: Kind::Partition, parent: Some("sdb".into()), mount_point: Some("/run/media/stick".into()), ..Node::default() },
+        ];
+        assert!(is_system(&nodes[0], &nodes), "the disk the system is on");
+        assert!(is_system(&nodes[1], &nodes) && is_system(&nodes[2], &nodes));
+        assert!(!is_system(&nodes[3], &nodes) && !is_system(&nodes[4], &nodes), "a USB stick is not");
+    }
+
+    #[test]
+    fn shell_usage_lands_on_the_matching_device() {
+        let mut nodes = vec![Node { name: "sda1".into(), ..Node::default() }, Node { name: "sda2".into(), ..Node::default() }];
+        let u = bifrost_core::disk_wire::VolumeUsage { bsd_name: "sda2".into(), total: 10, used: 4, free: 6 };
+        apply_shell_usage(&mut nodes, &[u]);
+        assert_eq!(nodes[0].usage, None);
+        assert_eq!(nodes[1].usage, Some(Usage { total: 10, used: 4, free: 6 }));
+    }
 
     fn disk(name: &str) -> Node {
         Node { name: name.into(), size: 4_000_000_000, ..Node::default() }

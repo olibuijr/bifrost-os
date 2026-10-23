@@ -449,6 +449,8 @@ impl<'a, 'd> Interp<'a, 'd> {
                 if let Some(outline) = font.outline(&g, None) {
                     let (fill, alpha, blend) = (self.st.fill, self.st.fill_alpha, self.st.blend);
                     self.sink.fill(&outline.path, &trm, FillRule::NonZero, fill, alpha, blend);
+                } else if !g.text.trim().is_empty() {
+                    font.warn_undrawn(&g.text);
                 }
             }
             let mut w = g.width as f64 / 1000.0 * fs + self.st.char_space;

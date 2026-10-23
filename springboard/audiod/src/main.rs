@@ -152,6 +152,44 @@ fn validate_record_path(path: &str, root: &Path) -> Result<PathBuf, String> {
     Ok(dir.join(name))
 }
 
+/// The saved privacy answers the shell writes beside the app data (`privacy_permissions::persist_grants`).
+const GRANTS_FILE: &str = "privacy-grants.tsv";
+const GRANTS_HEADER: &str = "springboard-privacy-grants-v1";
+
+/// The app a validated recording path belongs to: the first directory under the (canonical) `root`, which is the
+/// app's data directory `appdata/<id>`. None for a path directly in `root`.
+fn record_app(path: &Path, root: &Path) -> Option<String> {
+    let rel = path.strip_prefix(root).ok()?;
+    let mut parts = rel.components();
+    let first = parts.next()?;
+    // the file itself is the last component; a path straight in `root` names no app
+    parts.next()?;
+    match first {
+        Component::Normal(id) => id.to_str().map(str::to_string),
+        _ => None,
+    }
+}
+
+/// Whether the saved grants say the person allowed `app` the microphone. Anything else (no file, another header, not
+/// answered, denied) refuses: an unanswered question never grants.
+fn microphone_granted(grants: &str, app: &str) -> bool {
+    let mut lines = grants.lines();
+    lines.next() == Some(GRANTS_HEADER) && lines.any(|l| l.split('\t').eq(["media", app, "microphone", "1"]))
+}
+
+/// Refuses a take for an app the person has not allowed the microphone (Settings > Privacy > App Permissions, or the
+/// shell's Allow sheet). Every app's recording comes through this service, so this is where consent is enforced.
+fn check_microphone(path: &Path, appdata: &Path) -> Result<(), String> {
+    let root = std::fs::canonicalize(appdata).map_err(|e| format!("the recordings area is not available: {e}"))?;
+    let app = record_app(path, &root).ok_or_else(|| "recordings can only be saved inside an app's data directory".to_string())?;
+    let grants = appdata.parent().map(|r| std::fs::read_to_string(r.join(GRANTS_FILE)).unwrap_or_default()).unwrap_or_default();
+    if microphone_granted(&grants, &app) {
+        Ok(())
+    } else {
+        Err(format!("microphone access is not allowed for {app}"))
+    }
+}
+
 /// Writes `bytes` to `path` without ever following a link or replacing a file in place: a new temporary file next to
 /// it (created exclusively, so a link at that name is refused), synced, then renamed over the target. A crash leaves
 /// the old file or none, never a truncated one.
@@ -271,7 +309,8 @@ fn record_error(message: String) -> Evt {
 /// `RecordStart` from connection `conn`. The audio server round trips (connect, default device, start) run with the
 /// core lock released, so a slow server cannot freeze the other clients. True when this connection now owns a take.
 fn start_recording(core: &Mutex<Core>, conn: u32, path: &str, out: &Mutex<UnixStream>) -> bool {
-    let path = match validate_record_path(path, &record_root()) {
+    let appdata = record_root();
+    let path = match validate_record_path(path, &appdata).and_then(|p| check_microphone(&p, &appdata).map(|_| p)) {
         Ok(p) => p,
         Err(e) => {
             eprintln!("audio.player: connection {conn}: record refused: {e}");
@@ -567,6 +606,41 @@ fn main() -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_take_needs_the_apps_saved_microphone_grant() {
+        let grants = "springboard-privacy-grants-v1\nmedia\tis.a\tmicrophone\t1\nmedia\tis.b\tmicrophone\t0\nmedia\tis.c\tcamera\t1\n";
+        assert!(microphone_granted(grants, "is.a"));
+        assert!(!microphone_granted(grants, "is.b"), "a denial refuses");
+        assert!(!microphone_granted(grants, "is.c"), "a camera grant is not a microphone grant");
+        assert!(!microphone_granted(grants, "is.d"), "not answered refuses");
+        assert!(!microphone_granted("", "is.a"), "no grants file refuses");
+        assert!(!microphone_granted("other-header\nmedia\tis.a\tmicrophone\t1\n", "is.a"));
+        assert!(!microphone_granted(grants, "is"), "a prefix of an id is not the id");
+    }
+
+    #[test]
+    fn the_recording_app_is_the_data_directory_the_take_lands_in() {
+        let root = Path::new("/srv/appdata");
+        assert_eq!(record_app(Path::new("/srv/appdata/is.a/Voice Memo.wav"), root).as_deref(), Some("is.a"));
+        assert_eq!(record_app(Path::new("/srv/appdata/is.a/sub/x.wav"), root).as_deref(), Some("is.a"));
+        assert_eq!(record_app(Path::new("/srv/appdata/x.wav"), root), None, "a file straight in appdata names no app");
+        assert_eq!(record_app(Path::new("/elsewhere/is.a/x.wav"), root), None);
+    }
+
+    #[test]
+    fn check_microphone_reads_the_grants_beside_appdata() {
+        let base = std::env::temp_dir().join(format!("audiod-mic-{}", std::process::id()));
+        let appdata = base.join("appdata");
+        std::fs::create_dir_all(appdata.join("is.yes")).unwrap();
+        std::fs::create_dir_all(appdata.join("is.no")).unwrap();
+        std::fs::write(base.join(GRANTS_FILE), format!("{GRANTS_HEADER}\nmedia\tis.yes\tmicrophone\t1\n")).unwrap();
+        let canon = std::fs::canonicalize(&appdata).unwrap();
+        assert!(check_microphone(&canon.join("is.yes").join("m.wav"), &appdata).is_ok());
+        let refused = check_microphone(&canon.join("is.no").join("m.wav"), &appdata).unwrap_err();
+        assert!(refused.contains("is.no"), "{refused}");
+        let _ = std::fs::remove_dir_all(&base);
+    }
 
     #[test]
     fn wire_track_with_url_is_live_and_without_is_a_file() {

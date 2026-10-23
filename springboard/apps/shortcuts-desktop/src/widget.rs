@@ -23,6 +23,7 @@ use bifrost_app::kit::{Event, Surface, TextCache};
 use springboard::shortcuts::flow::{self, Step};
 use springboard::shortcuts::{Action, Daily, Shortcut, FOLDERS, GLYPHS, KINDS, MAX_ACTIONS, MAX_SHORTCUTS};
 use bifrost_app::proto::LoginStatus as Status;
+use bifrost_app::proto::ContextItem;
 use bifrost_app::intents::Snippet;
 use bifrost_core::json::Json;
 use springboard::shell::intents::AppShortcut;
@@ -50,6 +51,18 @@ pub const PALETTE: [u32; 9] = [
 ];
 /// How long a finger rests on a tile before its menu opens, in milliseconds.
 const LONG_PRESS_MS: f64 = 500.0;
+/// Two clicks on the same tile this close together (ms) are a double-click, which opens the editor.
+const DOUBLE_CLICK_MS: f64 = 500.0;
+/// The play button on a tile, in points.
+const PLAY_PT: f32 = 28.0;
+/// The most lines one step of the result panel wraps to.
+const RESULT_ROW_LINES: usize = 4;
+/// Context menu row ids (right-click on a tile).
+pub const CTX_RUN: u32 = 1;
+pub const CTX_EDIT: u32 = 2;
+pub const CTX_RENAME: u32 = 3;
+pub const CTX_DUPLICATE: u32 = 4;
+pub const CTX_DELETE: u32 = 5;
 /// The most variables the Insert Variable rows of an open text step offer.
 const MAX_CHIPS: usize = 6;
 /// The width of a tile's menu, in points, and the height of one of its rows.
@@ -123,7 +136,10 @@ enum Edit {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Target {
+    /// a click selects the tile; a second click on it within [`DOUBLE_CLICK_MS`] opens its editor
     Tile(usize),
+    /// the play button on a tile: runs the shortcut
+    Play(usize),
     Create,
     EditToggle,
     Back,
@@ -191,6 +207,7 @@ enum Target {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Choice {
     Run,
+    Edit,
     Rename,
     Duplicate,
     Delete,
@@ -240,7 +257,10 @@ fn help_snippet() -> Snippet {
 }
 
 enum Look {
-    Tile { name: String, color: u32, count: usize, glyph: usize },
+    /// `selected`: the tile the last click selected, drawn with a ring
+    Tile { name: String, color: u32, count: usize, glyph: usize, selected: bool },
+    /// the play button on a tile
+    Play,
     CreateTile,
     Header(String),
     Row { text: String, value: String, tint: u32, pos: u8, chevron: bool, centre: bool, indent: f32, inset: f32 },
@@ -322,6 +342,12 @@ pub struct Shortcuts {
     import_request: bool,
     /// the shortcut whose menu a long press opened on the grid, while the menu is showing
     choice_menu: Option<usize>,
+    /// the tile a click selected (Edit opens it, Return runs it)
+    selected: Option<usize>,
+    /// the tile and time of the last click, for the double-click that opens the editor
+    last_click: Option<(usize, f64)>,
+    /// the tile a right-click opened the context menu on, until a row is chosen
+    context_tile: Option<usize>,
     /// when the finger went down, in milliseconds, for the long press
     press_t: f64,
     /// the step a grip is dragging, and where it would land
@@ -378,6 +404,9 @@ impl Shortcuts {
             export_request: None,
             import_request: false,
             choice_menu: None,
+            selected: None,
+            last_click: None,
+            context_tile: None,
             press_t: 0.0,
             reorder: None,
         }
@@ -462,7 +491,9 @@ impl Shortcuts {
             })
             .collect();
         self.toast = None;
-        self.result = Some(ResultPanel { title: name.to_string(), dialog: Some(dialog), rows, follow: None, until: t + RESULT_MS });
+        // a run that stopped stays until Done, so its reason can be read; a finished one times out
+        let until = if stopped.is_some() { f64::INFINITY } else { t + RESULT_MS };
+        self.result = Some(ResultPanel { title: name.to_string(), dialog: Some(dialog), rows, follow: None, until });
         self.dirty = true;
     }
 
@@ -726,8 +757,14 @@ impl Shortcuts {
                     let rect = (m + cx * (tw + gap), y + cy * (th + gap), tw, th);
                     if let Some(&idx) = shown.get(i) {
                         let s = &self.list[idx];
-                        let look = Look::Tile { name: s.name.clone(), color: PALETTE[s.color % PALETTE.len()], count: s.actions.len(), glyph: s.glyph };
+                        let look = Look::Tile { name: s.name.clone(), color: PALETTE[s.color % PALETTE.len()], count: s.actions.len(), glyph: s.glyph, selected: self.selected == Some(idx) };
                         cells.push(Cell { target: Some(Target::Tile(idx)), rect, look });
+                        if !self.edit_mode {
+                            // the play button in the tile's lower right corner runs it; it is pushed after the tile, so it wins the hit
+                            let d = ui.pt(PLAY_PT);
+                            let play = (rect.0 + rect.2 - ui.pt(SPACE_M) - d, rect.1 + rect.3 - ui.pt(SPACE_M) - d, d, d);
+                            cells.push(Cell { target: Some(Target::Play(idx)), rect: play, look: Look::Play });
+                        }
                     } else {
                         cells.push(Cell { target: Some(Target::Create), rect, look: Look::CreateTile });
                     }
@@ -929,14 +966,38 @@ impl Shortcuts {
     /// when the rows are capped, and the button row.
     fn result_box(&self, ui: &Ui, p: &ResultPanel) -> Rect {
         let x0 = Self::side(ui);
-        let pw = ui.pt(RESULT_W).min(self.w as f32 - x0 - 2.0 * ui.pt(SPACE_L));
-        let shown = p.rows.len().min(RESULT_MAX_ROWS);
-        let more = usize::from(p.rows.len() > shown);
-        let lines = 2 + usize::from(p.dialog.is_some()) + shown + more;
-        let ph = ui.pt(SPACE_L) * 2.0 + ui.pt(SPACE_XXXL) * lines as f32;
+        let pw = self.result_width(ui);
+        let (dialog, rows) = self.result_lines(ui, p);
+        let more = usize::from(p.rows.len() > rows.len());
+        let (row_h, cont_h) = (ui.pt(SPACE_XXXL), Self::cont_h(ui));
+        // the title and the button row, the "and N more" line, then the dialog and each step with their wrapped lines
+        let block = |n: usize| row_h + cont_h * n.saturating_sub(1) as f32;
+        let ph = ui.pt(SPACE_L) * 2.0
+            + row_h * (2 + more) as f32
+            + if p.dialog.is_some() { block(dialog.len()) } else { 0.0 }
+            + rows.iter().map(|(_, l)| block(l.len())).sum::<f32>();
         let x = x0 + (self.w as f32 - x0 - pw) / 2.0;
         let y = self.h as f32 - ph - ui.pt(SPACE_XXL);
         (x, y, pw, ph)
+    }
+
+    /// The result panel's width in pixels.
+    fn result_width(&self, ui: &Ui) -> f32 {
+        ui.pt(RESULT_W).min(self.w as f32 - Self::side(ui) - 2.0 * ui.pt(SPACE_L))
+    }
+
+    /// The height of a wrapped line after the first of a dialog or step, in pixels.
+    fn cont_h(ui: &Ui) -> f32 {
+        ui.pt(MAC_BODY_PT + SPACE_XS)
+    }
+
+    /// The result panel's dialog and step texts wrapped to its width: an error reads in full instead of being cut.
+    fn result_lines(&self, ui: &Ui, p: &ResultPanel) -> (Vec<String>, Vec<(String, Vec<String>)>) {
+        let inner = self.result_width(ui) - 2.0 * ui.pt(SPACE_L);
+        let col = ui.pt(SPACE_XXXL);
+        let dialog = p.dialog.as_deref().map(|d| wrap_text(ui, d, MAC_FOOTNOTE_PT, Weight::Regular, inner, RESULT_ROW_LINES)).unwrap_or_default();
+        let rows = p.rows.iter().take(RESULT_MAX_ROWS).map(|(label, text)| (label.clone(), wrap_text(ui, text, MAC_BODY_PT, Weight::Regular, inner - col, RESULT_ROW_LINES))).collect();
+        (dialog, rows)
     }
 
     /// The follow-on button's rect (only when the result opens an intent) and the Done button's rect, in pixels.
@@ -999,7 +1060,7 @@ impl Shortcuts {
             return None;
         }
         match self.hit(ui, x, y) {
-            Some(Target::Tile(i)) if self.list.get(i).is_some_and(droplet::accepts) => Some(i),
+            Some(Target::Tile(i) | Target::Play(i)) if self.list.get(i).is_some_and(droplet::accepts) => Some(i),
             _ => None,
         }
     }
@@ -1093,10 +1154,55 @@ impl Shortcuts {
             .map(|(k, _)| k)
     }
 
+    /// The context menu a right-click at (`x`, `y`) pixels opens: on a tile (or its play button) it selects the tile
+    /// and offers Run, Edit, Rename, Duplicate and Delete; anywhere else it is empty and nothing opens.
+    pub fn context_items(&mut self, ui: &Ui, x: f32, y: f32) -> Vec<ContextItem> {
+        self.context_tile = None;
+        if self.view != View::Grid {
+            return Vec::new();
+        }
+        let Some(Target::Tile(i) | Target::Play(i)) = self.hit(ui, x, y) else { return Vec::new() };
+        self.selected = Some(i);
+        self.context_tile = Some(i);
+        self.dirty = true;
+        let runnable = self.list.get(i).is_some_and(|s| !s.actions.is_empty());
+        vec![
+            ContextItem::new(CTX_RUN, "Run").enabled(runnable),
+            ContextItem::new(CTX_EDIT, "Edit"),
+            ContextItem::separator(),
+            ContextItem::new(CTX_RENAME, "Rename"),
+            ContextItem::new(CTX_DUPLICATE, "Duplicate"),
+            ContextItem::separator(),
+            ContextItem::new(CTX_DELETE, "Delete"),
+        ]
+    }
+
+    /// The row the person chose in the context menu. True when the window changed.
+    pub fn context_action(&mut self, id: u32) -> bool {
+        let Some(i) = self.context_tile.take() else { return false };
+        let choice = match id {
+            CTX_RUN => Choice::Run,
+            CTX_EDIT => Choice::Edit,
+            CTX_RENAME => Choice::Rename,
+            CTX_DUPLICATE => Choice::Duplicate,
+            CTX_DELETE => Choice::Delete,
+            _ => return false,
+        };
+        self.choose(i, choice);
+        self.dirty = true;
+        true
+    }
+
     /// Does what a row of the tile menu asks for the shortcut at `i`.
     fn choose(&mut self, i: usize, choice: Choice) {
         match choice {
             Choice::Run => self.run_all(i),
+            Choice::Edit => {
+                if i < self.list.len() {
+                    self.view = View::Editor(i);
+                    self.scroll = 0.0;
+                }
+            }
             Choice::Rename => {
                 if i < self.list.len() {
                     self.view = View::Editor(i);
@@ -1114,6 +1220,8 @@ impl Shortcuts {
             Choice::Delete => {
                 if i < self.list.len() {
                     self.list.remove(i);
+                    self.selected = None;
+                    self.last_click = None;
                     self.save();
                 }
             }
@@ -1314,7 +1422,23 @@ impl Shortcuts {
                 self.view = View::Editor(i);
                 self.scroll = 0.0;
             }
-            Target::Tile(i) => self.run_all(i),
+            Target::Tile(i) => {
+                // a click selects; a second click on the same tile soon after opens its editor (Run is the play button)
+                let double = self.last_click.is_some_and(|(j, at)| j == i && self.now - at <= DOUBLE_CLICK_MS);
+                self.selected = Some(i);
+                if double {
+                    self.last_click = None;
+                    self.view = View::Editor(i);
+                    self.scroll = 0.0;
+                } else {
+                    self.last_click = Some((i, self.now));
+                }
+            }
+            Target::Play(i) => {
+                self.selected = Some(i);
+                self.last_click = None;
+                self.run_all(i);
+            }
             Target::Create => {
                 if self.list.len() < MAX_SHORTCUTS {
                     let name = (1..).map(|n| format!("Shortcut {n}")).find(|n| self.list.iter().all(|s| &s.name != n)).unwrap_or_default();
@@ -1343,7 +1467,14 @@ impl Shortcuts {
                 }
                 self.scroll = 0.0;
             }
-            Target::EditToggle => self.edit_mode = !self.edit_mode,
+            Target::EditToggle => match self.selected.filter(|i| *i < self.list.len() && !self.edit_mode) {
+                // Edit opens the selected shortcut; with nothing selected it switches the grid's edit mode
+                Some(i) => {
+                    self.view = View::Editor(i);
+                    self.scroll = 0.0;
+                }
+                None => self.edit_mode = !self.edit_mode,
+            },
             Target::Back => {
                 self.view = match self.view {
                     View::Picker(i) => View::Editor(i),
@@ -1625,7 +1756,7 @@ impl Shortcuts {
 
     pub fn next_wake(&self, _t: f64) -> Option<f64> {
         let toast = self.toast.as_ref().map(|(_, until)| *until);
-        let panel = self.result.as_ref().map(|p| p.until);
+        let panel = self.result.as_ref().map(|p| p.until).filter(|u| u.is_finite());
         // a tile under a resting finger opens its menu when the long press time has passed
         let press = match self.pressed {
             Some(Target::Tile(_)) if !self.dragging && self.choice_menu.is_none() => Some(self.press_t + LONG_PRESS_MS),
@@ -1644,6 +1775,17 @@ impl Shortcuts {
         s.blit(img, ix as i32, (y + (h - img.h as f32) / 2.0) as i32, 255, 255);
     }
 
+    /// Draws one wrapped block of the result panel at `*ty` and moves `*ty` past it: the first line sits in a full row,
+    /// the wrapped lines follow at the text's own spacing.
+    fn put_lines(&mut self, s: &mut Surface, ui: &Ui, lines: &[String], pt: f32, color: u32, x: f32, ty: &mut f32) {
+        let (row_h, cont_h) = (ui.pt(SPACE_XXXL), Self::cont_h(ui));
+        for (k, line) in lines.iter().enumerate() {
+            let h = if k == 0 { row_h } else { cont_h };
+            self.put(s, ui, line, pt, Weight::Regular, color, x, *ty, h, 0);
+            *ty += h;
+        }
+    }
+
     /// Draws the result panel: the title, the dialog, the step rows, then the follow-on button and Done.
     fn draw_result(&mut self, s: &mut Surface, ui: &Ui, p: &ResultPanel) {
         let (x, y, w, h) = self.result_box(ui, p);
@@ -1655,18 +1797,15 @@ impl Shortcuts {
         let title = ui.fit(&p.title, MAC_TITLE3_PT, inner);
         self.put(s, ui, &title, MAC_TITLE3_PT, Weight::Bold, LABEL.now(), x + pad, ty, row_h, 0);
         ty += row_h;
-        if let Some(d) = &p.dialog {
-            let text = ui.fit(d, MAC_FOOTNOTE_PT, inner);
-            self.put(s, ui, &text, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), x + pad, ty, row_h, 0);
-            ty += row_h;
+        let (dialog, rows) = self.result_lines(ui, p);
+        if p.dialog.is_some() {
+            self.put_lines(s, ui, &dialog, MAC_FOOTNOTE_PT, LABEL_2.now(), x + pad, &mut ty);
         }
         // the step number in a narrow column, the step text beside it
         let col = ui.pt(SPACE_XXXL);
-        for (label, text) in p.rows.iter().take(RESULT_MAX_ROWS) {
+        for (label, text) in &rows {
             self.put(s, ui, label, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), x + pad, ty, row_h, 0);
-            let fitted = ui.fit(text, MAC_BODY_PT, inner - col);
-            self.put(s, ui, &fitted, MAC_BODY_PT, Weight::Regular, LABEL.now(), x + pad + col, ty, row_h, 0);
-            ty += row_h;
+            self.put_lines(s, ui, text, MAC_BODY_PT, LABEL.now(), x + pad + col, &mut ty);
         }
         if p.rows.len() > RESULT_MAX_ROWS {
             let more = format!("and {} more", p.rows.len() - RESULT_MAX_ROWS);
@@ -1701,10 +1840,15 @@ impl Shortcuts {
             let pressed = c.target.is_some() && c.target == self.pressed;
             match &c.look {
                 Look::Header(t) => self.put(s, ui, t, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), x, y, ch, 0),
-                Look::Tile { name, color, count, glyph } => {
+                Look::Tile { name, color, count, glyph, selected } => {
                     s.fill_rrect(x, y, cw, ch, ui.pt(CARD_RADIUS_PT), *color);
                     if pressed {
                         s.fill_rrect(x, y, cw, ch, ui.pt(CARD_RADIUS_PT), PRESSED);
+                    }
+                    if *selected {
+                        // the selection ring, outside the tile like the reference's focus ring
+                        let o = ui.pt(SPACE_XS);
+                        s.stroke_rrect(x - o, y - o, cw + 2.0 * o, ch + 2.0 * o, ui.pt(CARD_RADIUS_PT) + o, ui.pt(SPACE_XXS) * 1.5, LINK);
                     }
                     draw_mark(s, ui, *glyph, x + ui.pt(SPACE_L), y + ui.pt(SPACE_L), ui.pt(SPACE_XXL), WHITE);
                     if self.edit_mode {
@@ -1713,8 +1857,15 @@ impl Shortcuts {
                         let n = format!("{count} {}", if *count == 1 { "action" } else { "actions" });
                         self.put(s, ui, &n, MAC_CAPTION1_PT, Weight::Regular, WHITE, x + cw - ui.pt(SPACE_L), y + ui.pt(SPACE_M), ui.pt(SPACE_XL), 2);
                     }
-                    let fitted = ui.fit(name, MAC_BODY_PT, cw - ui.pt(28.0));
+                    // the name leaves room for the play button in the corner
+                    let fitted = ui.fit(name, MAC_BODY_PT, cw - ui.pt(SPACE_L) * 2.0 - ui.pt(PLAY_PT));
                     self.put(s, ui, &fitted, MAC_BODY_PT, Weight::Semibold, WHITE, x + ui.pt(SPACE_L), y + ch - ui.pt(SPACE_HUGE), ui.pt(28.0), 0);
+                }
+                Look::Play => {
+                    s.fill_rrect(x, y, cw, ch, cw / 2.0, if pressed { CONTROL_PRESSED.now() } else { PRESSED });
+                    let inset = cw * 0.28;
+                    let at = PtRect { x: (x + inset) / ui.s, y: (y + inset) / ui.s, w: (cw - 2.0 * inset) / ui.s, h: (ch - 2.0 * inset) / ui.s };
+                    glyphs::glyph(s, ui, "play.fill", at, WHITE);
                 }
                 Look::CreateTile => {
                     s.fill_rrect(x, y, cw, ch, ui.pt(CARD_RADIUS_PT), if pressed { CONTROL_PRESSED.now() } else { CARD_BG.now() });
@@ -1868,6 +2019,31 @@ impl Shortcuts {
 
 /// Draws a shortcut's glyph in a box of side `g` pixels at (`x`, `y`): the plain Shortcuts mark (two overlapping
 /// rounded squares) for glyph 0, otherwise the symbol with that number in `GLYPHS`.
+/// `text` broken at spaces into lines no wider than `max_px` at `pt`: at most `max_lines`, the last one cut with an
+/// ellipsis when there is more. A word wider than a line is cut the same way.
+fn wrap_text(ui: &Ui, text: &str, pt: f32, weight: Weight, max_px: f32, max_lines: usize) -> Vec<String> {
+    let mut lines: Vec<String> = Vec::new();
+    let mut line = String::new();
+    for word in text.split_whitespace() {
+        let next = if line.is_empty() { word.to_string() } else { format!("{line} {word}") };
+        if line.is_empty() || ui.measure(&next, pt, weight) <= max_px {
+            line = next;
+        } else {
+            lines.push(std::mem::take(&mut line));
+            line = word.to_string();
+        }
+    }
+    if !line.is_empty() || lines.is_empty() {
+        lines.push(line);
+    }
+    if lines.len() > max_lines.max(1) {
+        let rest = lines[max_lines.max(1) - 1..].join(" ");
+        lines.truncate(max_lines.max(1) - 1);
+        lines.push(rest);
+    }
+    lines.into_iter().map(|l| if ui.measure(&l, pt, weight) > max_px { ui.fit(&l, pt, max_px) } else { l }).collect()
+}
+
 fn draw_mark(s: &mut Surface, ui: &Ui, glyph: usize, x: f32, y: f32, g: f32, color: u32) {
     match GLYPHS.get(glyph) {
         Some(name) if !name.is_empty() => {
@@ -2358,6 +2534,87 @@ mod tests {
         );
         w.show_run("Fine", &steps[..1], 100.0);
         assert_eq!(w.result.as_ref().unwrap().dialog.as_deref(), Some("Finished"));
+    }
+
+    #[test]
+    fn a_stopped_run_stays_until_done_and_its_reason_wraps_instead_of_being_cut() {
+        let mut w = window("run-wrap");
+        let ui = ui();
+        let long = "Start Timer: 10 min - Start Timer did not run because the shell refused the request for a reason that is long";
+        let steps = vec![Step { line: "Start Timer: 10 min".into(), outcome: Err(long["Start Timer: 10 min - ".len()..].into()) }];
+        w.show_run("Quick Timer", &steps, 100.0);
+        let p = w.result.clone().unwrap();
+        assert!(p.until.is_infinite(), "an error is not timed out");
+        assert!(w.next_wake(200.0).is_none(), "no wake at infinity");
+        w.tick(&ui, 100.0 + RESULT_MS + 1.0);
+        assert!(w.result.is_some(), "still there after the usual time");
+        let (_, rows) = w.result_lines(&ui, &p);
+        assert!(rows[0].1.len() > 1, "the step text wraps: {:?}", rows[0].1);
+        assert_eq!(rows[0].1.join(" "), long, "every word is shown");
+        let one_line = { let mut q = p.clone(); q.rows[0].1 = "short".into(); w.result_box(&ui, &q).3 };
+        assert!(w.result_box(&ui, &p).3 > one_line, "the panel grows with the wrapped lines");
+    }
+
+    #[test]
+    fn wrapping_breaks_at_spaces_and_caps_the_lines() {
+        let ui = ui();
+        let lines = wrap_text(&ui, "one two three four five six seven eight nine ten", MAC_BODY_PT, Weight::Regular, ui.pt(60.0), 3);
+        assert_eq!(lines.len(), 3);
+        assert!(lines.iter().all(|l| ui.measure(l, MAC_BODY_PT, Weight::Regular) <= ui.pt(60.0) + 0.5), "{lines:?}");
+        assert_eq!(wrap_text(&ui, "", MAC_BODY_PT, Weight::Regular, 100.0, 3), vec![String::new()]);
+    }
+
+    #[test]
+    fn a_click_selects_a_double_click_opens_the_editor_and_play_runs() {
+        let mut w = window("click");
+        let ui = ui();
+        let (x, y) = centre_of(&w, &ui, Target::Tile(0));
+        w.touch(&ui, Event::Down(x, y), 1000.0);
+        w.touch(&ui, Event::Up(x, y), 1050.0);
+        assert_eq!(w.selected, Some(0), "a click selects");
+        assert!(w.run_requests.is_empty(), "a click does not run");
+        assert_eq!(w.view, View::Grid);
+        w.touch(&ui, Event::Down(x, y), 1200.0);
+        w.touch(&ui, Event::Up(x, y), 1250.0);
+        assert_eq!(w.view, View::Editor(0), "a double-click opens the editor");
+        assert!(w.run_requests.is_empty());
+        // back on the grid: two clicks far apart only select
+        w.activate(Target::Back);
+        w.touch(&ui, Event::Down(x, y), 5000.0);
+        w.touch(&ui, Event::Up(x, y), 5010.0);
+        w.touch(&ui, Event::Down(x, y), 6000.0);
+        w.touch(&ui, Event::Up(x, y), 6010.0);
+        assert_eq!(w.view, View::Grid);
+        // the play button runs it
+        let (px, py) = centre_of(&w, &ui, Target::Play(1));
+        assert_eq!(w.hit(&ui, px, py), Some(Target::Play(1)), "the play button wins over its tile");
+        w.touch(&ui, Event::Down(px, py), 7000.0);
+        w.touch(&ui, Event::Up(px, py), 7010.0);
+        assert_eq!(w.take_run_requests().len(), 1);
+        assert_eq!(w.selected, Some(1));
+        // Edit opens the selected shortcut
+        w.activate(Target::EditToggle);
+        assert_eq!(w.view, View::Editor(1));
+    }
+
+    #[test]
+    fn a_right_click_on_a_tile_offers_its_actions() {
+        let mut w = window("context");
+        let ui = ui();
+        let (x, y) = centre_of(&w, &ui, Target::Tile(2));
+        let items = w.context_items(&ui, x, y);
+        let labels: Vec<&str> = items.iter().filter(|i| i.id != 0).map(|i| i.title()).collect();
+        assert_eq!(labels, vec!["Run", "Edit", "Rename", "Duplicate", "Delete"]);
+        assert_eq!(w.selected, Some(2), "the tile under the click is selected");
+        assert!(w.context_action(CTX_RUN));
+        assert_eq!(w.take_run_requests().len(), 1);
+        assert!(!w.context_action(CTX_RUN), "the menu acts once");
+        w.context_items(&ui, x, y);
+        assert!(w.context_action(CTX_EDIT));
+        assert_eq!(w.view, View::Editor(2));
+        w.activate(Target::Back);
+        assert_eq!(w.hit(&ui, 1198.0, 778.0), None, "the window's far corner is empty");
+        assert!(w.context_items(&ui, 1198.0, 778.0).is_empty(), "nothing off a tile");
     }
 
     #[test]

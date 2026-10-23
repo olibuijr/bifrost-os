@@ -18,6 +18,9 @@ use bifrost_core::json::Json;
 pub enum Want {
     /// Ask the privacy service for the microphone status.
     MicStatus,
+    /// Ask the person for the microphone (the shell shows its Allow sheet while the answer is open); the reply is the
+    /// status as it is now, and the answer shows in later `MicStatus` replies.
+    MicRequest,
     /// Ask the audio-devices service for the device list and the defaults.
     ListDevices,
     /// Publish the playing recording to the media tile (the body from `now_playing::publish_body`).
@@ -49,6 +52,7 @@ impl Bus {
     pub fn send(&mut self, ctx: &Ctx, want: Want) {
         let id = match want {
             Want::MicStatus => Some((privacy_permissions::status(ctx, Media::Audio), Ask::Mic)),
+            Want::MicRequest => Some((privacy_permissions::request(ctx, Media::Audio), Ask::Mic)),
             Want::ListDevices => Some((audio_devices::list(ctx), Ask::Devices)),
             Want::Publish(body) => {
                 service::call(ctx, now_playing::SERVICE, "publish", &body);
@@ -79,13 +83,24 @@ impl Bus {
     }
 }
 
-/// Refuses a recording the microphone permission does not allow. A status not answered yet (or unknown because the
-/// privacy service is missing) allows it, the same as before the services existed.
-pub fn record_gate(mic: Option<Status>) -> Result<(), &'static str> {
+/// What a Record press may do with the microphone permission as last answered.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Gate {
+    /// the person allowed the microphone: record
+    Record,
+    /// not answered yet (or not known yet): ask the person first, and record only once they allow it
+    Ask,
+    /// refused, with the line to show
+    Refuse(&'static str),
+}
+
+/// The microphone gate for a recording. Only an authorized answer records: nothing is captured before consent.
+pub fn record_gate(mic: Option<Status>) -> Gate {
     match mic {
-        Some(Status::Denied) => Err("Microphone access is off. Turn it on in Settings > Privacy > App Permissions."),
-        Some(Status::Restricted) => Err("Microphone access is restricted on this PC."),
-        _ => Ok(()),
+        Some(Status::Authorized) => Gate::Record,
+        Some(Status::Denied) => Gate::Refuse("Microphone access is off. Turn it on in Settings > Privacy > App Permissions."),
+        Some(Status::Restricted) => Gate::Refuse("Microphone access is restricted on this PC."),
+        Some(Status::NotDetermined) | None => Gate::Ask,
     }
 }
 
@@ -100,7 +115,7 @@ pub fn caption(mic: Option<Status>, input: Option<&str>, notice: &str) -> String
             Some(name) => format!("Microphone on. Input: {name}"),
             None => "Microphone on".into(),
         },
-        Some(Status::NotDetermined) => "Microphone access is not answered yet".into(),
+        Some(Status::NotDetermined) => "Press Record to allow microphone access".into(),
         Some(Status::Denied) => "Microphone access is off".into(),
         Some(Status::Restricted) => "Microphone access is restricted on this PC".into(),
     }
@@ -168,12 +183,24 @@ mod tests {
     }
 
     #[test]
-    fn a_denied_or_restricted_microphone_refuses_the_recording_and_the_rest_allows_it() {
-        assert!(record_gate(Some(Status::Denied)).unwrap_err().contains("Settings"));
-        assert!(record_gate(Some(Status::Restricted)).is_err());
-        assert!(record_gate(Some(Status::Authorized)).is_ok());
-        assert!(record_gate(Some(Status::NotDetermined)).is_ok());
-        assert!(record_gate(None).is_ok(), "a missing privacy service does not block recording");
+    fn only_an_authorized_microphone_records_and_an_open_answer_asks_first() {
+        assert!(matches!(record_gate(Some(Status::Denied)), Gate::Refuse(m) if m.contains("Settings")));
+        assert!(matches!(record_gate(Some(Status::Restricted)), Gate::Refuse(_)));
+        assert_eq!(record_gate(Some(Status::Authorized)), Gate::Record);
+        assert_eq!(record_gate(Some(Status::NotDetermined)), Gate::Ask, "not answered: ask, never record");
+        assert_eq!(record_gate(None), Gate::Ask, "unknown: ask, never record");
+    }
+
+    #[test]
+    fn a_mic_request_calls_the_privacy_request_method() {
+        let ctx = ctx();
+        let mut bus = Bus::default();
+        bus.send(&ctx, Want::MicRequest);
+        let sent = ctx.take_sent();
+        let ToShell::ServiceCall { request, service, method, body } = &sent[0] else { panic!("a service call") };
+        assert_eq!((service.as_str(), method.as_str()), ("privacy", "request"));
+        assert!(body.contains("microphone"), "{body}");
+        assert_eq!(bus.take(*request), Some(Ask::Mic));
     }
 
     #[test]

@@ -152,6 +152,10 @@ pub struct DiskUtility {
     pub volumes_request: Option<u32>,
     /// Whether the last `volumes` answer failed, so the footer sentence it set is cleared by the next good one.
     pub scan_failed: bool,
+    /// The shell's `volumes` answer: None until the first one, then whether it came. The shell reads the host mount
+    /// table and measures usage on the host mount points, so its answer is the source of both; this sandbox's own
+    /// `/proc/mounts` lists the sandbox's binds (a system subvolume at `/var/log`) and `df` cannot see the host.
+    pub shell_ok: Option<bool>,
     /// The slow reads (`df`, `smartctl`, `lsblk`) run on a worker and answer here (`probe.rs`), so a stalled disk
     /// never freezes the window.
     probe_tx: Sender<probe::Done>,
@@ -190,6 +194,7 @@ impl DiskUtility {
             shell_scan: false,
             volumes_request: None,
             scan_failed: false,
+            shell_ok: None,
             probe_tx,
             probe_rx,
             usage_pending: false,
@@ -201,6 +206,13 @@ impl DiskUtility {
     /// Reads the disks, the mount table and (when due) usage. True when anything the window shows changed.
     pub fn refresh(&mut self, t: f64, force_usage: bool) -> bool {
         self.last_refresh = t;
+        if self.shell_ok != Some(false) {
+            // the shell's answer is the source of the disks, mount points and usage (`on_volumes`)
+            self.shell_scan = true;
+            if self.shell_ok == Some(true) {
+                return false;
+            }
+        }
         let before = self.nodes.clone();
         let mut nodes = sysfs::read_nodes(Path::new("/sys"), Path::new("/run/udev/data"));
         if nodes.is_empty() && !Path::new("/sys/block").is_dir() {
@@ -208,6 +220,16 @@ impl DiskUtility {
             self.shell_scan = true;
             return false;
         }
+        if self.shell_ok.is_none() {
+            // until the shell answers, the rows come from `/sys` without this sandbox's (wrong) mount table
+            model::carry_usage(&mut nodes, &self.nodes);
+            for node in nodes.iter_mut().filter(|n| n.kind == Kind::Disk) {
+                node.smart = self.smart.get(&node.name).cloned();
+            }
+            self.nodes = nodes;
+            return self.nodes != before;
+        }
+        // no shell service (a host run outside the sandbox): this process sees the real mount table and `df` works
         model::apply_mounts(&mut nodes, &model::parse_mounts(&probe::read_mounts()));
         // usage is measured on a worker; the rows keep the last measurement until the new one arrives
         model::carry_usage(&mut nodes, &self.nodes);
@@ -239,13 +261,18 @@ impl DiskUtility {
         self.volumes_request = Some(service::call(ctx, disk_wire::SERVICE, "volumes", &Json::Null));
     }
 
-    /// Takes the shell's answer to the `volumes` call. True when the window changed. Usage is not part of the answer
-    /// (a mount point is not visible in this sandbox), so the rows show capacity, file system and mount point only.
+    /// Takes the shell's answer to the `volumes` call. True when the window changed. The answer carries the usage the
+    /// shell measured on the host mount points (`usage`), since a mount point is not visible in this sandbox.
     pub fn on_volumes(&mut self, result: &Result<Json, String>) -> bool {
         self.volumes_request = None;
         let list = result.as_ref().ok().and_then(|body| body.get("volumes")).and_then(Json::as_array);
         let volumes: Option<Vec<Volume>> = list.and_then(|l| l.iter().map(disk_wire::decode_volume).collect());
         let Some(volumes) = volumes else {
+            if !self.nodes.is_empty() && self.shell_ok != Some(true) {
+                // this process reads `/sys` itself: fall back to its own mount table and `df` (`refresh`)
+                self.shell_ok = Some(false);
+                return false;
+            }
             let why = result.as_ref().err().map(|e| format!(" ({e})")).unwrap_or_default();
             self.error = Some(format!("The disks could not be listed: the disk service is not available{why}."));
             self.scan_failed = true;
@@ -254,9 +281,18 @@ impl DiskUtility {
         if std::mem::take(&mut self.scan_failed) {
             self.error = None;
         }
+        self.shell_ok = Some(true);
         let before = self.nodes.clone();
         let mut nodes = model::nodes_from_volumes(&volumes);
-        model::carry_usage(&mut nodes, &self.nodes);
+        // usage measured by the shell on the host mount points
+        let usage: Vec<_> = result
+            .as_ref()
+            .ok()
+            .and_then(|body| body.get("usage"))
+            .and_then(Json::as_array)
+            .map(|l| l.iter().filter_map(bifrost_core::disk_wire::decode_usage).collect())
+            .unwrap_or_default();
+        model::apply_shell_usage(&mut nodes, &usage);
         for node in nodes.iter_mut().filter(|n| n.kind == Kind::Disk) {
             node.smart = self.smart.get(&node.name).cloned();
         }
@@ -407,6 +443,11 @@ impl DiskUtility {
             return false;
         }
         let Some(node) = self.selected_node().cloned() else { return false };
+        if matches!(ask, Ask::Erase | Ask::FirstAid | Ask::Partition(_)) && self.selected_is_system() {
+            // the menu items and buttons are off for it; a shortcut lands here
+            self.error = Some(format!("{} holds the running system, so it cannot be erased, partitioned or repaired while it is in use.", model::display_name(&node)));
+            return true;
+        }
         let name = node.name.clone();
         let (title, message, buttons, requests) = match ask {
             // the name, format and scheme are asked for in a form sheet, which then confirms
@@ -514,6 +555,12 @@ impl DiskUtility {
         }
     }
 
+    /// Whether the selected row holds the running system (see `model::is_system`): Erase, First Aid, Restore and
+    /// Partition are refused for it.
+    pub fn selected_is_system(&self) -> bool {
+        self.selected_node().is_some_and(|n| model::is_system(n, &self.nodes))
+    }
+
     /// Whether Mount can run on the selected row: an unmounted volume with a file system, and no running action. The
     /// toolbar and the File menu both ask these three predicates, so they always agree.
     pub fn can_mount(&self) -> bool {
@@ -539,8 +586,8 @@ impl DiskUtility {
             ToolbarItem::button(B_UNMOUNT, "Unmount").enabled(self.can_unmount()),
             ToolbarItem::button(B_EJECT, "Eject").enabled(self.can_eject()),
             ToolbarItem::button(B_DETACH, "Detach").enabled(idle && self.selected_image()),
-            ToolbarItem::button(B_ERASE, "Erase").enabled(idle && node.is_some()),
-            ToolbarItem::button(B_FIRST_AID, "First Aid").enabled(idle && node.is_some()),
+            ToolbarItem::button(B_ERASE, "Erase").enabled(idle && node.is_some() && !self.selected_is_system()),
+            ToolbarItem::button(B_FIRST_AID, "First Aid").enabled(idle && node.is_some() && !self.selected_is_system()),
             ToolbarItem::flexible_space(),
             ToolbarItem::icon(B_REFRESH, "Refresh", "arrow.clockwise"),
         ])
@@ -732,6 +779,40 @@ mod tests {
         let enabled = |id: u32| bar.items.iter().find(|i| i.id == id).is_some_and(|i| i.enabled);
         assert!(enabled(B_UNMOUNT));
         assert!(!enabled(B_EJECT));
+    }
+
+    #[test]
+    fn the_shells_answer_gives_the_host_mount_point_and_usage() {
+        let mut w = DiskUtility::new();
+        let body = bifrost_core::json::parse(
+            r#"{"volumes":[{"bsd_name":"nvme0n1","size":512000000000,"removable":false,"read_only":false,"model":"SSD"},
+                {"bsd_name":"nvme0n1p2","size":511000000000,"removable":false,"read_only":false,"model":"","mount_point":"/","parent":"nvme0n1","fs_type":"btrfs"}],
+               "usage":[{"bsd_name":"nvme0n1p2","total":511000000000,"used":100000000000,"free":400000000000}]}"#,
+        )
+        .unwrap();
+        assert!(w.on_volumes(&Ok(body)));
+        assert_eq!(w.shell_ok, Some(true));
+        let vol = w.nodes.iter().find(|n| n.name == "nvme0n1p2").unwrap();
+        assert_eq!(vol.mount_point.as_deref(), Some("/"));
+        assert_eq!(vol.usage.map(|u| u.used), Some(100_000_000_000));
+        let rows = model::info_rows(vol);
+        assert!(rows.iter().any(|(k, v)| *k == "Used" && v != "Not mounted"), "{rows:?}");
+        // the running system's volume and its disk: no Erase, no First Aid, and a shortcut is refused
+        for name in ["nvme0n1p2", "nvme0n1"] {
+            w.selected = Some(name.into());
+            let bar = w.toolbar();
+            let enabled = |id: u32| bar.items.iter().find(|i| i.id == id).is_some_and(|i| i.enabled);
+            assert!(!enabled(B_ERASE) && !enabled(B_FIRST_AID), "{name}");
+        }
+        w.selected = Some("nvme0n1p2".into());
+        assert!(w.activate(Target::Toolbar(B_ERASE), 1.0) || w.form.is_none());
+        assert!(w.ask_menu(Ask::FirstAid));
+        assert!(w.sheet.is_none() && w.form.is_none(), "nothing opens for the system volume");
+        assert!(w.error.as_deref().is_some_and(|e| e.contains("running system")));
+        // later refreshes keep the shell's answer instead of this sandbox's mount table
+        w.refresh(2.0, true);
+        assert!(w.shell_scan);
+        assert_eq!(w.nodes.iter().find(|n| n.name == "nvme0n1p2").and_then(|n| n.mount_point.as_deref()), Some("/"));
     }
 
     #[test]
