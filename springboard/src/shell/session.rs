@@ -27,7 +27,7 @@ pub const SYNC_MS: f64 = 2000.0;
 pub const SCALE: i64 = 10_000;
 const HEADER: &str = "bifrost-session 1";
 
-/// One window: the app's stable id and its frame in parts of the screen.
+/// One window: the app's stable id, its frame in parts of the screen, and the desktop (Overview) it is on.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WindowRec {
     pub app: String,
@@ -36,8 +36,13 @@ pub struct WindowRec {
     pub w: i32,
     pub h: i32,
     pub maximized: bool,
+    /// the person's own minimized state (a window of another desktop is hidden, not minimized)
     pub minimized: bool,
+    /// the desktop it is on, from 0 (`overview::Spaces`); a line written before desktops were kept has none: 0
+    pub desktop: usize,
 }
+/// The highest desktop a session line may name (Overview holds fewer; a larger number is junk).
+const MAX_DESKTOP: usize = 63;
 
 fn rel(v: i32, whole: i32) -> i32 {
     (v as i64 * SCALE / whole.max(1) as i64) as i32
@@ -49,7 +54,7 @@ fn abs(v: i32, whole: i32) -> i32 {
 impl WindowRec {
     /// A record from a frame in px on a screen of `screen` px.
     pub fn from_px(app: &str, (x, y, w, h): (i32, i32, i32, i32), screen: (i32, i32), maximized: bool, minimized: bool) -> Self {
-        WindowRec { app: app.to_string(), x: rel(x, screen.0), y: rel(y, screen.1), w: rel(w, screen.0), h: rel(h, screen.1), maximized, minimized }
+        WindowRec { app: app.to_string(), x: rel(x, screen.0), y: rel(y, screen.1), w: rel(w, screen.0), h: rel(h, screen.1), maximized, minimized, desktop: 0 }
     }
     /// The frame in px on a screen of `screen` px.
     pub fn to_px(&self, screen: (i32, i32)) -> (i32, i32, i32, i32) {
@@ -73,13 +78,14 @@ impl Session {
         let mut out = format!("{HEADER}\n");
         for w in &self.windows {
             let flags = u8::from(w.maximized) | u8::from(w.minimized) << 1;
-            out.push_str(&format!("window\t{}\t{}\t{}\t{}\t{}\t{}\n", w.app, w.x, w.y, w.w, w.h, flags));
+            out.push_str(&format!("window\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n", w.app, w.x, w.y, w.w, w.h, flags, w.desktop));
         }
         out
     }
 
     /// Reads a file's text. Anything unknown (header, a bad line, an app id with odd characters, a size that is not
-    /// positive) is skipped; a repeated app keeps its first window; at most [`MAX_WINDOWS`].
+    /// positive) is skipped; a repeated app keeps its first window; at most [`MAX_WINDOWS`]. The desktop column is
+    /// optional: a line without it, or with a desktop that is not a small number, is on the first desktop.
     pub fn parse(text: &str) -> Session {
         let mut lines = text.lines();
         if lines.next().map(str::trim) != Some(HEADER) {
@@ -88,7 +94,7 @@ impl Session {
         let mut windows: Vec<WindowRec> = Vec::new();
         for line in lines {
             let f: Vec<&str> = line.split('\t').collect();
-            if f.len() != 7 || f[0] != "window" || !valid_id(f[1]) {
+            if !(7..=8).contains(&f.len()) || f[0] != "window" || !valid_id(f[1]) {
                 continue;
             }
             let n = |i: usize| f[i].parse::<i32>().ok();
@@ -100,7 +106,8 @@ impl Session {
             if windows.iter().any(|r| r.app == f[1]) {
                 continue;
             }
-            windows.push(WindowRec { app: f[1].to_string(), x, y, w, h, maximized: flags & 1 != 0, minimized: flags & 2 != 0 });
+            let desktop = f.get(7).and_then(|d| d.parse::<usize>().ok()).filter(|d| *d <= MAX_DESKTOP).unwrap_or(0);
+            windows.push(WindowRec { app: f[1].to_string(), x, y, w, h, maximized: flags & 1 != 0, minimized: flags & 2 != 0, desktop });
             if windows.len() == MAX_WINDOWS {
                 break;
             }
@@ -167,14 +174,18 @@ fn app_of(key: &str) -> Option<AppId> {
 }
 
 impl Shell {
-    /// The layout now, back to front; empty when `reopen` is false.
+    /// The layout now, back to front, with the desktop each window is on; empty when `reopen` is false.
     pub(super) fn session_snapshot(&self, reopen: bool) -> Session {
         let Some(desk) = self.desk.as_ref().filter(|_| reopen) else { return Session::default() };
         let m = self.desk_metrics();
         let windows = desk
             .wins
             .iter()
-            .filter_map(|w| Some(WindowRec::from_px(&key_of(w.app)?, (w.r.x, w.r.y, w.r.w, w.r.h), (m.w, m.h), w.maximized, w.minimized)))
+            .filter_map(|w| {
+                let (desktop, minimized) = self.overview.spaces.saved_state(w.app, w.minimized);
+                let rec = WindowRec::from_px(&key_of(w.app)?, (w.r.x, w.r.y, w.r.w, w.r.h), (m.w, m.h), w.maximized, minimized);
+                Some(WindowRec { desktop, ..rec })
+            })
             .take(MAX_WINDOWS)
             .collect();
         Session { windows }
@@ -195,6 +206,7 @@ impl Shell {
         }
         self.session.restoring = true;
         let m = self.desk_metrics();
+        let mut placed = Vec::new();
         for rec in &plan {
             let Some(app) = app_of(&rec.app) else { continue };
             self.desk_open(app, t);
@@ -207,7 +219,12 @@ impl Shell {
                 }
                 d.wins[i].minimized = rec.minimized;
             }
+            placed.push((app, rec.desktop));
             self.desk_layout(i);
+        }
+        // each window goes back to the desktop it was on; the other desktops' windows stay hidden until switched to
+        if placed.iter().any(|(_, d)| *d > 0) {
+            self.overview_restore_desktops(&placed);
         }
         self.session.restoring = false;
         self.desk_refocus();
@@ -253,7 +270,18 @@ mod tests {
     use super::*;
 
     fn rec(app: &str, x: i32) -> WindowRec {
-        WindowRec { app: app.into(), x, y: 500, w: 6000, h: 5000, maximized: false, minimized: false }
+        WindowRec { app: app.into(), x, y: 500, w: 6000, h: 5000, maximized: false, minimized: false, desktop: 0 }
+    }
+
+    #[test]
+    fn the_desktop_round_trips_and_a_line_without_it_is_on_the_first() {
+        let mut s = Session { windows: vec![rec("a.one", 0), rec("a.two", 0)] };
+        s.windows[1].desktop = 3;
+        assert_eq!(Session::parse(&s.to_text()), s);
+        let text = format!("{HEADER}\nwindow\ta.old\t0\t0\t5000\t5000\t0\nwindow\ta.bad\t0\t0\t5000\t5000\t0\tx\nwindow\ta.far\t0\t0\t5000\t5000\t0\t9999\n");
+        let s = Session::parse(&text);
+        assert_eq!(s.windows.iter().map(|w| (w.app.as_str(), w.desktop)).collect::<Vec<_>>(), [("a.old", 0), ("a.bad", 0), ("a.far", 0)]);
+        assert!(Session::parse(&format!("{HEADER}\nwindow\ta.b\t0\t0\t5000\t5000\t0\t1\textra\n")).windows.is_empty(), "a line with more columns is junk");
     }
 
     #[test]

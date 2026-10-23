@@ -28,9 +28,9 @@ fn status_icon_lift(battery:bool,ethernet:bool)->f32 {if battery{0.}else if ethe
 #[derive(Clone,Copy,PartialEq,Eq,Debug)] pub(super) enum Menu {
     /// the leading system menu (the menu equivalent), drawn as the BifrOSt mark
     System,
-    /// the system menu's Recent Items submenu: it opens in place of the system menu, under the same bar item
+    /// the system menu's Recent Items submenu: it cascades beside the system menu's Recent Items row (`menu_level_rects`)
     Recent,
-    /// the application menu's Services submenu: it opens in place of the application menu, under the same bar item
+    /// the application menu's Services submenu: it cascades beside the application menu's Services row
     Services,
     App,File,Edit,View,Window,Help,Network,Power,
     /// Photos' Image menu: shown on the bar only while Photos is in front
@@ -50,7 +50,7 @@ fn status_icon_lift(battery:bool,ethernet:bool)->f32 {if battery{0.}else if ethe
     /// the n-th menu the frontmost SDK app published (`ToShell::AppMenus`)
     Custom(u8),
     /// a submenu of the front app's menu `.0` (index in `app_menus`): the children of its submenu header at item index
-    /// `.1`. It opens in place of the menu it hangs from, under the same bar item, with a row back (as Recent Items does)
+    /// `.1`. It cascades beside its header row while the menu it hangs from stays open (as Recent Items does)
     AppSub(u8,u16),
     /// the n-th menu extra an app published (`NativeStatusItem`), in the order of `status_entries_now`
     Status(u8),
@@ -178,6 +178,17 @@ pub(super) fn popup_surface_rect(popup:(usize,usize,usize,usize),bar_h:i32,reach
     let right=(x+w).min(screen.0 as i32);let bottom=(y+h).min(screen.1 as i32);
     ((x as usize,y as usize,(right-x).max(0) as usize,(bottom-y).max(0) as usize),[popup.0 as i32-x,popup.1 as i32-y,popup.2 as i32,popup.3 as i32])
 }
+/// Clears to transparent the part of a surface's `pixels` (`surface`: screen x, y and its width and height) that the
+/// screen rectangle `cover` (x, y, w, h px) covers: the part a cascading submenu's own surface shows above it.
+#[cfg(any(test, feature = "desktop-wayland"))]
+pub(super) fn clear_covered(pixels:&mut [u32],surface:(i32,i32,usize,usize),cover:(usize,usize,usize,usize)) {
+    let (sx,sy,w,h)=surface;
+    if pixels.len()<w*h {return;}
+    let span=|from:usize,len:usize,origin:i32,size:usize|((from as i64-origin as i64).clamp(0,size as i64) as usize,(from as i64+len as i64-origin as i64).clamp(0,size as i64) as usize);
+    let (x0,x1)=span(cover.0,cover.2,sx,w);let (y0,y1)=span(cover.1,cover.3,sy,h);
+    if x0>=x1 {return;}
+    for row in y0..y1 {pixels[row*w+x0..row*w+x1].fill(0);}
+}
 /// Where a context menu of `size` (w, h in px) opens for a pointer at `at`, inside `area` (x, y, w, h in px: the screen
 /// below the menu bar and above the Dock). Its top-left corner is the pointer. A menu that would pass the right edge of
 /// the area opens to the left of the pointer instead, and one that would pass the bottom edge opens above it; a menu
@@ -190,6 +201,74 @@ pub(super) fn context_menu_origin(at:(f32,f32),size:(usize,usize),area:(i32,i32,
     let x=fit(at.0 as i32,size.0 as i32,ax,ax+aw);
     let y=fit(at.1 as i32,size.1 as i32,ay,ay+ah);
     (x.max(0) as usize,y.max(0) as usize)
+}
+/// How long the pointer rests on a row that opens a submenu before the submenu cascades beside it, in ms (`NativeMenu`'s
+/// submenu delay: a pointer passing over the row on its way down does not open it).
+#[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+pub(super) const FLYOUT_OPEN_MS:f64=200.;
+/// How long a pointer heading for the open submenu across other rows of its parent (inside the safe triangle,
+/// `in_safe_triangle`) may stop before the row under it takes over and the submenu closes, in ms.
+#[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+pub(super) const FLYOUT_SAFE_MS:f64=300.;
+/// How far a cascading submenu overlaps the edge of its parent, in pt.
+#[cfg(feature = "desktop-wayland")]
+const FLYOUT_OVERLAP_PT:f32=3.;
+/// The chrome surface of the first cascading submenu (the menu it cascades from is id 1); a submenu of a submenu is
+/// the next id. Each level is its own overlay surface above the windows, cut from the shell's frame as id 1 is.
+#[cfg(feature = "desktop-wayland")]
+pub(super) const FLYOUT_CHROME_ID:u32=17;
+/// The pointer's dealings with the cascading submenus (`NativeMenu`): a submenu waiting out `FLYOUT_OPEN_MS`, a row of
+/// a parent the pointer crosses on its way into the open submenu (it takes over only after `FLYOUT_SAFE_MS` at rest),
+/// and the pointer's last position (the apex of the safe triangle).
+#[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+#[derive(Clone,Copy,Debug,Default,PartialEq)]
+pub(super) struct Flyout {
+    /// (the menu whose highlighted row opens it, the submenu, since ms)
+    pub(super) pending:Option<(Menu,Menu,f64)>,
+    /// (a parent menu, the row under the pointer there, since ms)
+    pub(super) deferred:Option<(Menu,Option<usize>,f64)>,
+    pub(super) last:Option<(f32,f32)>,
+}
+#[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+impl Flyout {
+    /// When the shell next needs a tick for the flyouts (`Shell::next_wake`): the end of the open delay or of the safe rest.
+    pub(super) fn due(&self)->Option<f64> {
+        let open=self.pending.map(|(_,_,since)|since+FLYOUT_OPEN_MS);
+        let safe=self.deferred.map(|(_,_,since)|since+FLYOUT_SAFE_MS);
+        match (open,safe) {(Some(a),Some(b))=>Some(a.min(b)),(a,b)=>a.or(b)}
+    }
+}
+/// Where a cascading submenu of `size` (w, h px) opens beside its `parent` popup (x, y, w, h px) for the header row whose
+/// top is at `row_top` px, inside `area` (x, y, w, h px). It opens to the right, overlapping the parent's edge by
+/// `overlap` px, with its first row level with the header (`pad` px of the menu's top padding above it); it opens to
+/// the left when the right has no room, and keeps the side its parent opened to (`right`) while that side has room, so a
+/// cascade that flipped left keeps going left. A submenu that fits on neither side goes to the side with more room,
+/// held inside the area; vertically it is held inside the area too. Returns the origin and the side it opened to.
+#[cfg(any(test, feature = "desktop-wayland"))]
+pub(super) fn flyout_origin(parent:(i32,i32,i32,i32),row_top:i32,size:(i32,i32),area:(i32,i32,i32,i32),overlap:i32,pad:i32,right:bool)->(i32,i32,bool) {
+    let (px,_,pw,_)=parent;let (w,h)=size;let (ax,ay,aw,ah)=area;
+    let (rx,lx)=(px+pw-overlap,px-w+overlap);
+    let fits_right=rx+w<=ax+aw;let fits_left=lx>=ax;
+    let (x,right)=match (right,fits_right,fits_left) {
+        (true,true,_)|(false,true,false)=>(rx,true),
+        (false,_,true)|(true,false,true)=>(lx,false),
+        _=>if ax+aw-(px+pw)>=px-ax {(rx.min(ax+aw-w).max(ax),true)} else {(lx.max(ax),false)},
+    };
+    let y=(row_top-pad).min(ay+ah-h).max(ay);
+    (x,y,right)
+}
+/// The safe triangle (`NativeMenu`): whether the pointer, moving from `apex` to `p`, heads for the open submenu `sub`
+/// (x, y, w, h) that opened to the right (`right`) or left of its parent. It does while `p` lies in the triangle from
+/// `apex` to the submenu's two near corners; then the rows it crosses on the way do not switch the submenu.
+#[cfg(any(test, feature = "desktop-wayland"))]
+pub(super) fn in_safe_triangle(apex:(f32,f32),p:(f32,f32),sub:(f32,f32,f32,f32),right:bool)->bool {
+    let ex=if right {sub.0} else {sub.0+sub.2};
+    let (a,b,c)=(apex,(ex,sub.1),(ex,sub.1+sub.3));
+    let cross=|o:(f32,f32),u:(f32,f32),v:(f32,f32)|(u.0-o.0)*(v.1-o.1)-(u.1-o.1)*(v.0-o.0);
+    let area=cross(a,b,c);
+    if !area.is_finite()||area.abs()<1e-3 {return false;}
+    let s=area.signum();
+    cross(a,b,p)*s>=0.&&cross(b,c,p)*s>=0.&&cross(c,a,p)*s>=0.
 }
 /// Top and height in pt (from the popup's top edge) of each row, and the popup's total height.
 #[cfg(feature = "desktop-wayland")]
@@ -217,24 +296,16 @@ fn photo_row(p:&super::photos::Photos,c:super::photos::commands::PhotoCommand)->
 impl Row {pub(super) fn is_separator(&self)->bool {self.sep} pub(super) fn key_text(&self)->Option<&str> {self.key.as_deref()}}
 #[cfg(feature = "desktop-wayland")]
 impl Row {
-    /// The submenu this row opens (Recent Items, Services, an app's submenu); None for a row back to a parent menu
-    /// (it carries the left chevron) and for every other row.
+    /// The submenu this row opens (Recent Items, Services, an app's submenu); None for every other row.
     pub(super) fn opens(&self)->Option<Menu> {
-        match &self.action {Some(Action::Submenu(m)) if !matches!(self.symbol,Some(crate::symbols::Symbol::ChevronLeft))=>Some(*m),_=>None}
+        match &self.action {Some(Action::Submenu(m))=>Some(*m),_=>None}
     }
 }
 #[cfg(feature = "desktop-wayland")]
 impl Shell {
-    /// The rows of submenu `menu` without its row back to the parent and the separator after it: the items as a
-    /// nested menu shows them (`chrome_host::menubar`).
-    pub(super) fn submenu_rows(&self,menu:Menu)->Vec<Row> {
-        let mut rows=self.menu_rows(menu);
-        if rows.first().is_some_and(|r|matches!(r.action,Some(Action::Submenu(_)))&&matches!(r.symbol,Some(crate::symbols::Symbol::ChevronLeft))) {
-            rows.remove(0);
-            if rows.first().is_some_and(|r|r.sep) {rows.remove(0);}
-        }
-        rows
-    }
+    /// The rows of submenu `menu`, as a nested menu shows them (`chrome_host::menubar`). A cascading submenu has no row
+    /// back to its parent (the parent stays open beside it), so these are its `menu_rows`.
+    pub(super) fn submenu_rows(&self,menu:Menu)->Vec<Row> {self.menu_rows(menu)}
 }
 /// Rows of one app-published menu (`ToShell::AppMenus`), the `mi`-th of the app's menus: its top level only. Disabled
 /// items are labels, a checked item starts with a check mark, and a submenu header is a row that opens the submenu
@@ -350,8 +421,8 @@ pub(super) fn quit_step(foreign:&[(u32,&str,bool)],sdk_slot:impl Fn(&str)->Optio
         None=>QuitStep::Nothing,
     }
 }
-/// The bar menu a submenu hangs from and opens in place of: Recent Items under the system menu, Services under the
-/// application menu. None for a menu of its own.
+/// The bar menu a submenu cascades from: Recent Items from the system menu, Services from the application menu. None
+/// for a menu of its own.
 #[cfg(feature = "desktop-wayland")]
 pub(super) fn submenu_parent(menu:Menu)->Option<Menu> {
     match menu {Menu::Recent=>Some(Menu::System),Menu::Services=>Some(Menu::App),_=>None}
@@ -374,11 +445,11 @@ pub(super) fn application_menu(name:&str,settings:Option<Action>,front:bool,othe
     rows.push(row(front,format!("Quit {name}"),Action::Quit).key("cmd+q"));
     rows
 }
-/// The Services submenu: a row back to the application menu, then the services that take the selection now
-/// (`services_route::menu_entries`), or "No Services Apply" when none does.
+/// The Services submenu: the services that take the selection now (`services_route::menu_entries`), or "No Services
+/// Apply" when none does. It cascades beside the application menu's Services row, so it has no row back.
 #[cfg(feature = "desktop-wayland")]
 pub(super) fn services_rows(entries:Vec<(u8,String)>)->Vec<Row> {
-    let mut rows=vec![Row::action("Services",Action::Submenu(Menu::App)).symbol(crate::symbols::Symbol::ChevronLeft),Row::separator()];
+    let mut rows=Vec::new();
     if entries.is_empty() {rows.push(Row::label("No Services Apply"));}
     rows.extend(entries.into_iter().map(|(i,title)|Row::action(title,Action::Service(i))));
     rows
@@ -708,13 +779,12 @@ impl Shell {
         menus.extend([(Menu::View,"View"),(Menu::Window,"Window"),(Menu::Help,"Help")].map(|(m,t)|(m,t.to_string())));
         menus.extend(self.app_menus().iter().enumerate().filter(|(_,m)|shell_menu(&m.title).is_none()).map(|(i,m)|(Menu::Custom(i as u8),m.title.clone())));
         let mut out=Vec::new();
-        // an app's submenus are searched too, under "Menu > Submenu" (their rows back to the parent are not)
+        // an app's submenus are searched too, under "Menu > Submenu"
         let mut todo:Vec<(Menu,String)>=menus.into_iter().rev().collect();
         while let Some((menu,title))=todo.pop() {
             for (i,row) in self.plain_rows(menu).iter().enumerate() {
                 if row.is_separator()||row.text.trim().is_empty() {continue;}
                 if let Some(Action::Submenu(sub@Menu::AppSub(..)))=&row.action {
-                    if row.symbol.is_some() {continue;}
                     todo.push((*sub,format!("{title} \u{203a} {}",row.text)));
                 }
                 out.push((menu,i,help_item(&title,&row.text,row.action.is_some())));
@@ -786,15 +856,12 @@ impl Shell {
             Menu::Input=>{let mut v:Vec<Row>=super::kb_layouts::Layout::ALL.iter().enumerate().filter(|(_,l)|super::kb_layouts::is_enabled(**l)).map(|(i,l)|Row::action(format!("{} {}",if *l==super::kb_layouts::active()&&!self.input_providers.is_method_active(){"✓"}else{" "},l.name()),Action::InputSource(i as u8))).collect();v.extend(self.input_providers.modes().into_iter().map(|(id,label,on)|Row::action(format!("{} {}",if on{"✓"}else{" "},label),Action::InputMethod(id))));v.extend([Row::separator(),Row::action("Show Keyboard Viewer",Action::KeyboardViewer),Row::action(if self.keyboard_opened_explicitly(){"Hide On-Screen Keyboard"}else{"Show On-Screen Keyboard"},Action::OnScreenKeyboard)]);v},
             Menu::Status(i)=>self.status_entries_now().get(i as usize).map(|e|e.menu.iter().map(|m|if m.separator{Row::separator()}else if m.enabled{Row::action(format!("{} {}",if m.checked{"✓"}else{" "},m.title),Action::StatusItem(e.slot,e.item,m.id))}else{Row::label(format!("{} {}",if m.checked{"✓"}else{" "},m.title))}).collect()).unwrap_or_default(),
             Menu::Custom(i)=>{let slot=match self.screen {Screen::App(AppId::External(n))=>n,_=>return Vec::new()};self.app_menus().get(i as usize).map(|m|app_menu_rows(slot,i,m)).unwrap_or_default()},
-            // an app's submenu: a row back to the menu it hangs from, then the submenu's own items (its submenus open the same way)
+            // an app's submenu: the submenu's own items, cascading beside its header (its submenus cascade the same way)
             Menu::AppSub(mi,h)=>{
                 let slot=match self.screen {Screen::App(AppId::External(n))=>n,_=>return Vec::new()};
                 let Some(m)=self.app_menus().get(mi as usize) else{return Vec::new();};
-                let Some(head)=m.items.get(h as usize).filter(|i|i.submenu) else{return Vec::new();};
-                let back=self.menu_parent(menu).unwrap_or(Menu::Custom(mi));
-                let mut rows=vec![Row::action(head.title.clone(),Action::Submenu(back)).symbol(crate::symbols::Symbol::ChevronLeft),Row::separator()];
-                rows.extend(app_level_rows(slot,mi,m,Some(h as usize)));
-                rows
+                if !m.items.get(h as usize).is_some_and(|i|i.submenu) {return Vec::new();}
+                app_level_rows(slot,mi,m,Some(h as usize))
             },
             Menu::Context=>self.desktop_context.as_ref().map(|c|context_rows(c.slot,&c.items)).unwrap_or_default(),
             Menu::Arrange=>self.arrange_rows(),
@@ -804,8 +871,8 @@ impl Shell {
             // About This Computer, the settings and the store, Recent Items (a submenu), Force Quit, the power rows, then Lock Screen
             // and Log Out with the account's name (Golden Gate's system menu)
             Menu::System=>{use super::power_menu::PowerAction;use super::utility_window::Kind;let user=self.fit_chrome(super::utility_window::user_name(),13.,self.ui.pt(180.));vec![Row::action("About This Computer",Action::Window(Kind::About)),Row::separator(),Row::action("System Settings…",Action::Settings("")),Row::action("App Store…",Action::Open(AppId::AppStore)),Row::separator(),Row::action("Recent Items",Action::Submenu(Menu::Recent)),Row::separator(),Row::action("Force Quit…",Action::Window(Kind::ForceQuit)).key("alt+cmd+escape"),Row::separator(),Row::action("Sleep",Action::Sleep),Row::action("Restart…",Action::Halt(PowerAction::Restart)),Row::action("Shut Down…",Action::Halt(PowerAction::Off)),Row::separator(),Row::action("Lock Screen",Action::Lock).key("ctrl+cmd+q"),Row::action(format!("Log Out {user}…"),Action::Window(Kind::LogOut)).key("shift+cmd+q")]},
-            // the Recent Items submenu: a way back, the apps opened last (newest first), then Clear Menu
-            Menu::Recent=>{let recent=self.recent_titles();let mut rows=vec![Row::action("Recent Items",Action::Submenu(Menu::System)).symbol(crate::symbols::Symbol::ChevronLeft),Row::separator()];if recent.is_empty(){rows.push(Row::label("No Recent Items"));}for (i,title) in recent.iter().enumerate(){rows.push(Row::action(title.clone(),Action::Recent(i as u8)));}rows.push(Row::separator());rows.push(if recent.is_empty(){Row::label("Clear Menu")}else{Row::action("Clear Menu",Action::ClearRecent)});rows},
+            // the Recent Items submenu: the apps opened last (newest first), then Clear Menu
+            Menu::Recent=>{let recent=self.recent_titles();let mut rows=Vec::new();if recent.is_empty(){rows.push(Row::label("No Recent Items"));}for (i,title) in recent.iter().enumerate(){rows.push(Row::action(title.clone(),Action::Recent(i as u8)));}rows.push(Row::separator());rows.push(if recent.is_empty(){Row::label("Clear Menu")}else{Row::action("Clear Menu",Action::ClearRecent)});rows},
             Menu::ControlCenter=>Vec::new(),
             Menu::Recording=>vec![Row::action("Stop Recording",Action::RecordStop)],
             Menu::GameMode=>vec![Row::action("Turn Off Game Mode",Action::GameModeOff)],
@@ -870,8 +937,56 @@ impl Shell {
             ArrangeLine::Item(t,what)=>{let r=Row::action(t,Action::Arrange(a.app,what));if under_header{r.indented()}else{r}},
         }).collect()
     }
+    /// The rectangle (px) of the open menu: the deepest level when submenus cascade (`menu_level_rects`), the menu
+    /// itself otherwise.
     pub(super) fn desktop_popup_rect(&self)->Option<(usize,usize,usize,usize)> {
-        let menu=self.desktop_menu?;if menu==Menu::Dock{return self.dock_popup_rect();}if menu==Menu::Arrange{
+        self.menu_level_rects().pop().map(|(_,r,_)|r)
+    }
+    /// The open menus from the bar menu (or context menu) to the deepest cascading submenu, `desktop_menu` last: the
+    /// submenus hang from their parents (`menu_parent`), and every parent stays open beside its submenu.
+    pub(super) fn menu_chain(&self)->Vec<Menu> {
+        let Some(mut m)=self.desktop_menu else{return Vec::new();};
+        let mut chain=vec![m];
+        for _ in 0..=bifrost_proto::MAX_APP_MENU_DEPTH as usize+1 {match self.menu_parent(m) {Some(p)=>{chain.push(p);m=p;},None=>break}}
+        chain.reverse();
+        chain
+    }
+    /// Each open menu level (`menu_chain`) with its popup rectangle (x, y, w, h px) and the side it cascaded to (true:
+    /// right of its parent; the first level is true). A submenu opens beside the row of its parent that opens it, its
+    /// first row level with that row (`flyout_origin`).
+    pub(super) fn menu_level_rects(&self)->Vec<(Menu,(usize,usize,usize,usize),bool)> {
+        let chain=self.menu_chain();
+        let Some(&root)=chain.first() else{return Vec::new();};
+        let Some(first)=self.root_popup_rect(root) else{return Vec::new();};
+        let mut out=vec![(root,first,true)];
+        let area=self.flyout_area(root);
+        for &sub in &chain[1..] {
+            let (parent,(px,py,pw,ph),right)=*out.last().unwrap();
+            let prow=self.menu_rows(parent);
+            let (spans,_)=menu_spans(&prow);let sc=self.menu_scroll_for(parent,&prow);
+            let top=prow.iter().position(|r|r.opens()==Some(sub)).map_or(py as i32,|i|py as i32+self.ui.pt(spans[i].0-sc.offset) as i32);
+            let rows=self.menu_rows(sub);let w=self.menu_width(&rows);let h=self.ui.pt(self.menu_scroll_for(sub,&rows).height).ceil() as usize;
+            let (x,y,right)=flyout_origin((px as i32,py as i32,pw as i32,ph as i32),top,(w as i32,h as i32),area,self.ui.pt(FLYOUT_OVERLAP_PT) as i32,self.ui.pt(MENU_PAD_PT) as i32,right);
+            out.push((sub,(x.max(0) as usize,y.max(0) as usize,w,h),right));
+        }
+        out
+    }
+    /// The room cascading submenus of `root` are held in (x, y, w, h px): the desktop area for a context menu, the screen
+    /// under the bar for a bar menu (the room `menu_room_pt` gives a menu's height).
+    fn flyout_area(&self,root:Menu)->(i32,i32,i32,i32) {
+        if matches!(root,Menu::Context|Menu::Arrange) {let a=super::desk::Desk::area(&self.desk_metrics());return (0,a.y,self.w,a.h);}
+        let top=self.desktop_bar_height() as i32+self.ui.pt(MENU_GAP_PT) as i32;
+        (0,top,self.w,(self.h-top-self.ui.pt(6.) as i32).max(0))
+    }
+    /// The open level (`menu_level_rects`) under (x, y), the deepest first: its index, menu and rectangle.
+    pub(super) fn menu_level_at(&self,x:f32,y:f32)->Option<(usize,Menu,(usize,usize,usize,usize))> {
+        let levels=self.menu_level_rects();
+        levels.iter().enumerate().rev().find(|(_,(_,(l,t,w,h),_))|x>=*l as f32&&x<(*l+*w) as f32&&y>=*t as f32&&y<(*t+*h) as f32).map(|(k,(m,r,_))|(k,*m,*r))
+    }
+    /// The rectangle (px) of the first menu level, `menu`: under its bar item, under the green button, at the pointer
+    /// for a context menu, or the Dock's menu and the open or save panel.
+    fn root_popup_rect(&self,menu:Menu)->Option<(usize,usize,usize,usize)> {
+        if menu==Menu::Dock{return self.dock_popup_rect();}if menu==Menu::Arrange{
             // under the green button, kept on the screen like a context menu (the size is the drawn rows')
             let a=self.desk.as_ref()?.arrange?;let rows=self.menu_rows(menu);let width=self.menu_width(&rows);let height=self.ui.pt(self.menu_scroll_for(menu,&rows).height).ceil() as usize;
             let area=super::desk::Desk::area(&self.desk_metrics());
@@ -898,7 +1013,8 @@ impl Shell {
         let mut v=vec![(0,0,self.w,self.desktop_bar_height() as i32)];
         // the open menu owes its shadow on every side, the top one up into the gap under the bar; the same rect is
         // cleared on the frame after it closes (desk_regions keeps it), so no shadow line is left behind
-        if let Some(popup)=self.desktop_popup_rect(){let g=self.ui.pt(super::desk::SHADOW_REACH_PT) as i32+2;v.push(popup_damage_rect(popup,self.desktop_bar_height() as i32,g,self.ui.pt(2.) as i32));}
+        // (each cascading submenu as well)
+        for (_,popup,_) in self.menu_level_rects(){let g=self.ui.pt(super::desk::SHADOW_REACH_PT) as i32+2;v.push(popup_damage_rect(popup,self.desktop_bar_height() as i32,g,self.ui.pt(2.) as i32));}
         let d=self.dock_surface_rect();let m=self.ui.pt(120.) as i32;
         v.push(((d.x-m).max(0),(d.y-m).max(0),d.w+2*m,d.h+2*m));
         // the desktop Control Center and Notification Center panels, with room for their shadow
@@ -971,8 +1087,16 @@ impl Shell {
         let width=self.measure_chrome(&self.clock_text(),12.,Weight::Medium);let left=self.w as f32-self.ui.pt(16.)-width;
         y<self.desktop_bar_height() as f32&&x>=left-self.ui.pt(8.)&&x<self.w as f32
     }
+    /// Draws the open menu and each cascading submenu beside it, parents first so a submenu's shadow falls on its parent.
+    /// A parent keeps the row that opens the submenu highlighted; the deepest level shows the pointer's or keyboard's row.
     pub(super) fn draw_desktop_popup(&self,s:&mut Surface) {
-        let Some((x,y,w,h))=self.desktop_popup_rect() else{return;};let menu=self.desktop_menu.unwrap();
+        let levels=self.menu_level_rects();
+        for (k,&(menu,rect,_)) in levels.iter().enumerate() {
+            let sel=match levels.get(k+1) {Some(&(child,_,_))=>self.menu_rows(menu).iter().position(|r|r.opens()==Some(child)),None=>self.menu_row_of(menu)};
+            self.draw_menu_level(s,menu,rect,sel);
+        }
+    }
+    fn draw_menu_level(&self,s:&mut Surface,menu:Menu,(x,y,w,h):(usize,usize,usize,usize),sel:Option<usize>) {
         if menu==Menu::Document{self.draw_doc_dim(s);}
         if bifrost_render::glass::gpu()&&bifrost_render::appearance::reduce_transparency() {
             let r=self.ui.pt(MENU_RADIUS_PT);
@@ -989,7 +1113,7 @@ impl Shell {
         }
         self.draw_popup_edge(s,x,y,w,h);
         if menu==Menu::Document{self.draw_doc_panel(s,x,y,w,h);return;}
-        let sel=self.menu_row_of(menu);let rows=self.menu_rows(menu);let (spans,_)=menu_spans(&rows);
+        let rows=self.menu_rows(menu);let (spans,_)=menu_spans(&rows);
         // a menu taller than its room shows the rows between its scroll arrows, moved up by the offset
         let sc=self.menu_scroll_for(menu,&rows);
         // Golden Gate: a row's symbol sits at the text edge and pushes only that row's title right
@@ -1041,11 +1165,15 @@ impl Shell {
             Event::Down(x,y) if y<self.desktop_bar_height() as f32 && (!self.cc_reveal_zone(x,y)||self.menu_buttons().iter().any(|(_,left,w,_)|x>=*left&&x<*left+*w))=>{self.desktop_menu_row=None;self.help_reset();self.desktop_menu_scroll=MenuScrollState::default();self.desktop_menu=self.menu_buttons().into_iter().find(|(_,left,w,_)|x>=*left&&x<*left+*w).map(|b|b.0);if self.desktop_menu==Some(Menu::ControlCenter){self.desktop_menu=None;self.toggle_desk_control_center(t);}else{self.close_desk_control_center(t);}self.dirty=true;Some(vec![])},
             // a press on the green button the menu hangs from is the button's own click (full screen), not a click outside
             Event::Down(x,y) if self.desktop_menu==Some(Menu::Arrange)&&self.arrange_on_button(x,y)=>{self.desktop_menu=None;self.dirty=true;None},
-            Event::Down(x,y) if self.desktop_menu.is_some()=>{if !self.desktop_popup_rect().is_some_and(|(left,top,w,h)|x>=left as f32&&x<(left+w) as f32&&y>=top as f32&&y<(top+h) as f32){self.desktop_menu=None;self.dirty=true;}Some(vec![])},
-            Event::Up(x,y) if self.desktop_menu.is_some()=>{let menu=self.desktop_menu.unwrap();if y<self.desktop_bar_height() as f32{return Some(vec![]);}
+            // a press inside any open level (a menu or a submenu cascading beside it) keeps the menus open
+            Event::Down(x,y) if self.desktop_menu.is_some()=>{if self.menu_level_at(x,y).is_none(){self.desktop_menu=None;self.desktop_flyout=Flyout::default();self.dirty=true;}Some(vec![])},
+            Event::Up(x,y) if self.desktop_menu.is_some()=>{if y<self.desktop_bar_height() as f32{return Some(vec![]);}
                 if self.desktop_menu==Some(Menu::Help)&&self.help_field_at(x,y) {return Some(vec![]);}
-                let action=self.desktop_popup_rect().and_then(|(left,top,w,h)|if x>=left as f32&&x<(left+w) as f32&&y>=top as f32&&y<(top+h) as f32 {self.menu_row_at(menu,y-top as f32).and_then(|i|self.menu_rows(menu).get(i).and_then(|r|r.action.clone()))}else{None});
-                self.desktop_menu=None;self.help_reset();self.desktop_menu_scroll=MenuScrollState::default();self.dirty=true;let mut effects=Vec::new();self.desktop_menu_row=None;if let Some(action)=action {effects=self.run_menu_action(action,t);}Some(effects)
+                // the release lands on a row of whichever level is under it: a parent's row as well as the submenu's
+                let action=self.menu_level_at(x,y).and_then(|(_,menu,(_,top,_,_))|self.menu_row_at(menu,y-top as f32).and_then(|i|self.menu_rows(menu).get(i).and_then(|r|r.action.clone())));
+                // a click on a row that opens a submenu opens it at once, beside its row, and the menus stay open
+                if let Some(Action::Submenu(sub))=action {self.flyout_open(sub,false);return Some(vec![]);}
+                self.desktop_menu=None;self.desktop_flyout=Flyout::default();self.help_reset();self.desktop_menu_scroll=MenuScrollState::default();self.dirty=true;let mut effects=Vec::new();self.desktop_menu_row=None;if let Some(action)=action {effects=self.run_menu_action(action,t);}Some(effects)
             },_=>None,
         }
     }
@@ -1091,9 +1219,9 @@ impl Shell {
     }
     /// The wheel over an open menu scrolls it (when it is taller than its room) and is used up there.
     pub(super) fn desktop_menu_wheel(&mut self,x:f32,y:f32,dy:f32)->bool {
-        let Some(menu)=self.desktop_menu else{return false;};if matches!(menu,Menu::Dock|Menu::Document){return false;}
-        let Some((l,t,w,h))=self.desktop_popup_rect() else{return false;};
-        if !(x>=l as f32&&x<(l+w) as f32&&y>=t as f32&&y<(t+h) as f32) {return false;}
+        let Some(deepest)=self.desktop_menu else{return false;};if matches!(deepest,Menu::Dock|Menu::Document){return false;}
+        // the wheel over any open level is the menus'; it scrolls the level under the pointer
+        let Some((_,menu,_))=self.menu_level_at(x,y) else{return false;};
         if !dy.is_finite() {return true;}
         let rows=self.menu_rows(menu);let sc=self.menu_scroll_for(menu,&rows);
         if sc.up||sc.down {
@@ -1127,9 +1255,12 @@ impl Shell {
         if menu==Menu::Help {if let Some(fx)=self.help_key(code) {return Some(fx);}}
         let mut bar=vec![Menu::System,Menu::App];bar.extend(bar_after_app(self.app_menus(),self.photos_front()));
         self.dirty=true;
-        // Left leaves the Recent Items submenu; Right opens the submenu of the highlighted row
-        if let (Some(parent),105)=(self.menu_parent(menu),code) {self.desktop_menu=Some(parent);self.desktop_menu_row=None;return Some(vec![]);}
-        if code==106 {if let Some(Action::Submenu(sub))=self.menu_row_of(menu).and_then(|i|self.menu_rows(menu).get(i).and_then(|r|r.action.clone())) {self.desktop_menu=Some(sub);self.desktop_menu_row=None;return Some(vec![]);}}
+        // Left and Esc close the submenu (one level), back to the parent's row that opened it; Right opens the submenu
+        // of the highlighted row with its first item highlighted, or moves into a submenu the pointer opened
+        if let (Some(_),105|1)=(self.menu_parent(menu),code) {self.flyout_back();return Some(vec![]);}
+        let chosen=self.menu_row_of(menu).and_then(|i|self.menu_rows(menu).get(i).and_then(|r|r.action.clone()));
+        if let (106|28|96,Some(Action::Submenu(sub)))=(code,&chosen) {self.flyout_open(*sub,true);return Some(vec![]);}
+        if code==106&&self.menu_parent(menu).is_some()&&chosen.is_none() {if let Some(i)=self.menu_step(menu,1){self.desktop_menu_row=Some((menu,i));self.menu_reveal(menu,i);return Some(vec![]);}}
         match code {
             103|108=>{if let Some(i)=self.menu_step(menu,if code==108{1}else{-1}){self.desktop_menu_row=Some((menu,i));self.menu_reveal(menu,i);}},
             105|106=>{let anchor=self.bar_anchor(menu);if let Some(at)=bar.iter().position(|m|*m==anchor){let n=bar.len();self.desktop_menu=Some(bar[(at+if code==106{1}else{n-1})%n]);self.desktop_menu_row=None;self.help_reset();}},
@@ -1149,15 +1280,47 @@ impl Shell {
         if let Some(i)=model.type_select(c,t){self.desktop_menu_row=Some((menu,i));self.menu_reveal(menu,i);}
         self.desktop_menu_typed=Some(model);
     }
-    /// Pointer movement with a menu open: highlight the row under it, and a bar title switches the open menu (as Golden Gate does).
-    pub(super) fn desktop_menu_hover(&mut self,x:f32,y:f32) {
+    /// Pointer movement with a menu open, at the time of the last input (`desktop_menu_hover_at`).
+    pub(super) fn desktop_menu_hover(&mut self,x:f32,y:f32) {let t=self.last_input;self.desktop_menu_hover_at(x,y,t);}
+    /// Pointer movement with a menu open at `t` ms: highlight the row under it, and a bar title switches the open menu (as
+    /// Golden Gate does). A row that opens a submenu opens it beside the row once the pointer rested there for
+    /// `FLYOUT_OPEN_MS` (`desktop_menu_flyout_tick`). Moving onto another row of a parent closes its submenu, unless the
+    /// pointer heads for the submenu (`in_safe_triangle`): then that row takes over only after a rest of `FLYOUT_SAFE_MS`.
+    pub(super) fn desktop_menu_hover_at(&mut self,x:f32,y:f32,t:f64) {
         let Some(menu)=self.desktop_menu else{return;};if matches!(menu,Menu::Dock|Menu::Document){return;}
+        // the pointer left a surface: each menu level is a surface of its own, and the window server sends a Leave when
+        // the pointer crosses from a menu onto the submenu beside it, before the first motion there. A Leave is no move
+        // away from the menus (the green-button menu's W3-5); the next real motion says where the pointer is.
+        if x<0.&&y<0. {return;}
+        let levels=self.menu_level_rects();
+        let under=levels.iter().enumerate().rev().find(|(_,(_,(l,t,w,h),_))|x>=*l as f32&&x<(*l+*w) as f32&&y>=*t as f32&&y<(*t+*h) as f32).map(|(k,_)|k);
+        let apex=self.desktop_flyout.last.replace((x,y));
         // a context menu stays open when the pointer crosses the bar; only a bar menu follows the pointer to a neighbour
-        if y<self.desktop_bar_height() as f32&&!matches!(menu,Menu::Context|Menu::Arrange) {
-            // the Recent Items submenu sits under the System bar item: crossing that item is not a move to another menu
-            if let Some(b)=self.menu_buttons().into_iter().find(|(_,l,w,_)|x>=*l&&x<*l+*w) {let here=self.bar_anchor(menu);if b.0!=here&&b.0!=Menu::ControlCenter{self.desktop_menu=Some(b.0);self.desktop_menu_row=None;self.help_reset();self.dirty=true;}}
+        if under.is_none()&&y<self.desktop_bar_height() as f32&&!matches!(menu,Menu::Context|Menu::Arrange) {
+            // a submenu hangs from its bar item's menu: crossing that item is not a move to another menu
+            if let Some(b)=self.menu_buttons().into_iter().find(|(_,l,w,_)|x>=*l&&x<*l+*w) {let here=self.bar_anchor(menu);if b.0!=here&&b.0!=Menu::ControlCenter{self.desktop_menu=Some(b.0);self.desktop_menu_row=None;self.desktop_flyout=Flyout::default();self.help_reset();self.dirty=true;}}
             return;
         }
+        // on a parent of the open submenu
+        if let Some(k)=under.filter(|k|k+1<levels.len()) {
+            let (parent,(_,top,_,_),_)=levels[k];let (child,(cx,cy,cw,ch),right)=levels[k+1];
+            let rows=self.menu_rows(parent);
+            let row=self.menu_row_at(parent,y-top as f32).filter(|i|rows.get(*i).is_some_and(|r|r.action.is_some()));
+            if row.is_some_and(|i|rows[i].opens()==Some(child)) {
+                // back on the row that opened the submenu: it stays open, a submenu of it closes
+                if self.desktop_menu!=Some(child) {self.desktop_menu=Some(child);self.desktop_menu_row=None;self.dirty=true;}
+                self.desktop_flyout.pending=None;self.desktop_flyout.deferred=None;
+                return;
+            }
+            // crossing other rows on the way into the submenu does not switch it; a rest on one of them does
+            if apex.is_some_and(|a|in_safe_triangle(a,(x,y),(cx as f32,cy as f32,cw as f32,ch as f32),right)) {
+                if self.desktop_flyout.deferred.map(|(m,r,_)|(m,r))!=Some((parent,row)) {self.desktop_flyout.deferred=Some((parent,row,t));}
+                return;
+            }
+            self.flyout_take_row(parent,row,t);
+            return;
+        }
+        self.desktop_flyout.deferred=None;
         // resting on a scroll arrow scrolls the menu (`desktop_menu_autoscroll`); leaving it stops
         let arrow=self.desktop_popup_rect().filter(|(l,t,w,h)|x>=*l as f32&&x<(*l+*w) as f32&&y>=*t as f32&&y<(*t+*h) as f32).map_or(0,|(_,t,_,_)|{
             let sc=self.menu_scroll_for(menu,&self.menu_rows(menu));let rel=(y-t as f32)/self.ui.pt(1.).max(f32::EPSILON);
@@ -1172,6 +1335,44 @@ impl Shell {
         // a Menu Items result opens the menu it lives in and highlights its item there, with the pointer marker
         if menu==Menu::Help {if let Some(i)=row {if let Some(Action::HelpItem(target,j))=self.menu_rows(menu).get(i).and_then(|r|r.action.clone()) {if target!=Menu::Help {self.help_reset();self.help_search.marker=true;self.desktop_menu=Some(target);self.desktop_menu_row=Some((target,j));self.menu_reveal(target,j);self.dirty=true;return;}}}}
         let new=row.map(|i|(menu,i));if self.desktop_menu_row!=new{self.desktop_menu_row=new;self.dirty=true;}
+        // a row that opens a submenu opens it once the pointer has rested on it (`desktop_menu_flyout_tick`)
+        match row.and_then(|i|self.menu_rows(menu).get(i).and_then(Row::opens)) {
+            Some(sub) if self.desktop_flyout.pending.map(|(m,s,_)|(m,s))!=Some((menu,sub))=>self.desktop_flyout.pending=Some((menu,sub,t)),
+            Some(_)=>{},
+            None=>self.desktop_flyout.pending=None,
+        }
+    }
+    /// The pointer settled on row `row` of the open level `menu`, a parent of the open submenu: the deeper levels close and
+    /// the row is highlighted; a row that opens another submenu opens it after the delay.
+    fn flyout_take_row(&mut self,menu:Menu,row:Option<usize>,t:f64) {
+        self.desktop_menu=Some(menu);self.desktop_menu_row=row.map(|i|(menu,i));self.desktop_flyout.deferred=None;
+        self.desktop_flyout.pending=row.and_then(|i|self.menu_rows(menu).get(i).and_then(Row::opens)).map(|sub|(menu,sub,t));
+        self.dirty=true;
+    }
+    /// Opens submenu `sub` beside the row of the open menu that opens it (a click on the row, Return or Right, the end of
+    /// the hover delay); any deeper submenu closes. From the keyboard its first item is highlighted.
+    pub(super) fn flyout_open(&mut self,sub:Menu,keyboard:bool) {
+        self.desktop_menu=Some(sub);self.desktop_menu_row=None;self.desktop_flyout.pending=None;self.desktop_flyout.deferred=None;
+        if keyboard {if let Some(i)=self.menu_step(sub,1){self.desktop_menu_row=Some((sub,i));self.menu_reveal(sub,i);}}
+        self.dirty=true;
+    }
+    /// Closes the deepest submenu (Left, Esc): its parent is the open menu again, the row that opened it highlighted.
+    fn flyout_back(&mut self) {
+        let Some(menu)=self.desktop_menu else{return;};let Some(parent)=self.menu_parent(menu) else{return;};
+        let row=self.menu_rows(parent).iter().position(|r|r.opens()==Some(menu));
+        self.desktop_menu=Some(parent);self.desktop_menu_row=row.map(|i|(parent,i));self.desktop_flyout=Flyout::default();self.dirty=true;
+    }
+    /// Per tick: opens the submenu whose hover delay is over while its row is still highlighted, and lets a row of a
+    /// parent the pointer came to rest on inside the safe triangle take over.
+    pub(super) fn desktop_menu_flyout_tick(&mut self,t:f64) {
+        if let Some((parent,sub,since))=self.desktop_flyout.pending {
+            let still=self.desktop_menu==Some(parent)&&self.menu_row_of(parent).and_then(|i|self.menu_rows(parent).get(i).and_then(Row::opens))==Some(sub);
+            if !still {self.desktop_flyout.pending=None;} else if t-since>=FLYOUT_OPEN_MS {self.flyout_open(sub,false);}
+        }
+        if let Some((menu,row,since))=self.desktop_flyout.deferred {
+            if self.desktop_menu.is_none()||!self.menu_chain().contains(&menu) {self.desktop_flyout.deferred=None;}
+            else if t-since>=FLYOUT_SAFE_MS {self.flyout_take_row(menu,row,t);}
+        }
     }
     /// Carry out a chosen menu row (a click or Return). The menu is already closed.
     pub(super) fn run_menu_action(&mut self,action:Action,t:f64)->Vec<Effect> {
@@ -1461,9 +1662,27 @@ impl Shell {
         // The popup (id 1) is exported with room for its shadow: a crop at the menu's own edge cut the shadow off, so a
         // menu over white content had no edge at all (E2E N6). Only the menu itself takes the pointer (`input`); a click
         // on the shadow reaches the window below, as when the surface was the menu's size.
-        let popup=self.desktop_popup_rect().map(|p|popup_surface_rect(p,self.desktop_bar_height() as i32,self.ui.pt(super::desk::SHADOW_REACH_PT) as i32+2,self.ui.pt(2.) as i32,(width,height)));
+        // Each cascading submenu is a surface of its own the same way (ids from FLYOUT_CHROME_ID, below).
+        let surface_of=|p|popup_surface_rect(p,self.desktop_bar_height() as i32,self.ui.pt(super::desk::SHADOW_REACH_PT) as i32+2,self.ui.pt(2.) as i32,(width,height));
+        let levels=self.menu_level_rects();
+        let popup=levels.first().map(|&(_,p,_)|surface_of(p));
+        let flyouts:Vec<_>=levels.iter().skip(1).map(|&(_,p,_)|surface_of(p)).collect();
         let mut frames=Vec::new();for (id,x,y,w,h) in std::iter::once((0,0,0,width,self.desktop_bar_height())).chain({let r=self.dock_surface_rect();std::iter::once((2,r.x.max(0) as usize,r.y.max(0) as usize,r.w.max(0) as usize,r.h.max(0) as usize))}).chain(popup.map(|(r,_)|(1,r.0,r.1,r.2,r.3))).chain(self.desk_panel_overlays()) {
             let w=w.min(width.saturating_sub(x));let h=h.min(height.saturating_sub(y));if w==0||h==0{continue;}let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}if id==2&&!self.dock_is_visible(){data.fill(0);}let input=match id {1=>popup.map(|(_,menu)|menu),2=>self.dock_input_rect(self.dock_surface_rect()),_=>None};frames.push(crate::bare::wayland::ChromeFrame{id,x:x as i32,y:y as i32,width:w,height:h,pixels:data,input});
+        }
+        // The cascading submenus: ids FLYOUT_CHROME_ID onwards, overlay surfaces above the menu they cascade from (each is
+        // created after its parent, so it stacks above it), cut with room for the shadow and taking the pointer over the
+        // submenu only. Where a deeper level's surface covers a shallower one, the shallower surface is left clear: the
+        // frame there already holds both menus and the submenu's shadow, and composing it twice would double the shadow
+        // and the translucent material.
+        for (k,&((x,y,w,h),input)) in flyouts.iter().enumerate() {
+            let w=w.min(width.saturating_sub(x));let h=h.min(height.saturating_sub(y));if w==0||h==0{continue;}
+            let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
+            frames.push(crate::bare::wayland::ChromeFrame{id:FLYOUT_CHROME_ID+k as u32,x:x as i32,y:y as i32,width:w,height:h,pixels:data,input:Some(input)});
+        }
+        for f in frames.iter_mut() {
+            let level=if f.id==1 {0} else if f.id>=FLYOUT_CHROME_ID&&((f.id-FLYOUT_CHROME_ID) as usize)<flyouts.len() {(f.id-FLYOUT_CHROME_ID) as usize+1} else {continue};
+            for &(cover,_) in flyouts.iter().skip(level) {clear_covered(&mut f.pixels,(f.x,f.y,f.width,f.height),cover);}
         }
         // Search: id 3, an overlay surface above every window that takes the keyboard while it is open
         if let Some(((x,y,ow,oh),mask))=self.quicksearch.desk_overlay(&self.ui,self.w) {
@@ -2330,14 +2549,103 @@ mod app_level_tests {
     }
 }
 
-/// An app's submenus open in place of their menu (Right in, Left out, a click on the header), nest, and are searched by Help.
+/// Where a cascading submenu opens, the safe triangle, and the parent surface cleared under a submenu's surface.
+#[cfg(test)]
+mod flyout_geometry_tests {
+    use super::{clear_covered, flyout_origin, in_safe_triangle, Flyout, Menu, FLYOUT_OPEN_MS, FLYOUT_SAFE_MS};
+
+    const AREA: (i32, i32, i32, i32) = (0, 40, 1000, 700);
+
+    #[test]
+    fn a_submenu_opens_right_of_its_parent_with_its_first_row_level_with_the_header() {
+        // a 200 px menu at x 100, header row at y 160, a 180 x 120 submenu
+        assert_eq!(flyout_origin((100, 50, 200, 300), 160, (180, 120), AREA, 4, 8, true), (296, 152, true));
+    }
+
+    #[test]
+    fn it_opens_left_without_room_on_the_right_and_keeps_going_left() {
+        assert_eq!(flyout_origin((700, 50, 200, 300), 160, (180, 120), AREA, 4, 8, true), (524, 152, false), "no room right of 900");
+        // the next level keeps the left side while it has room, even though the right would fit too
+        assert_eq!(flyout_origin((400, 50, 200, 300), 160, (180, 120), AREA, 4, 8, false), (224, 152, false));
+        // and turns right again once the left runs out
+        assert_eq!(flyout_origin((100, 50, 200, 300), 160, (180, 120), AREA, 4, 8, false), (296, 152, true));
+    }
+
+    #[test]
+    fn a_submenu_that_fits_on_neither_side_goes_where_there_is_more_room_inside_the_area() {
+        let (x, _, right) = flyout_origin((300, 50, 500, 300), 160, (600, 120), AREA, 4, 8, true);
+        assert!(!right, "300 px on the left, 200 on the right");
+        assert_eq!(x, 0);
+        let (x, _, right) = flyout_origin((100, 50, 500, 300), 160, (600, 120), AREA, 4, 8, true);
+        assert!(right);
+        assert_eq!(x, 400, "held inside the area: 1000 - 600");
+    }
+
+    #[test]
+    fn a_submenu_is_held_inside_the_area_vertically() {
+        assert_eq!(flyout_origin((100, 50, 200, 700), 680, (180, 120), AREA, 4, 8, true).1, 620, "pushed up from the bottom edge");
+        assert_eq!(flyout_origin((100, 50, 200, 300), 20, (180, 120), AREA, 4, 8, true).1, 40, "never above the area");
+        assert_eq!(flyout_origin((100, 50, 200, 300), 20, (180, 900), AREA, 4, 8, true).1, 40, "a submenu taller than the area starts at its top");
+    }
+
+    #[test]
+    fn the_safe_triangle_covers_moves_toward_the_submenu_only() {
+        let sub = (300., 100., 200., 300.);
+        let apex = (150., 120.);
+        assert!(in_safe_triangle(apex, (250., 200.), sub, true), "down and toward the near edge");
+        assert!(in_safe_triangle(apex, (280., 110.), sub, true), "up and toward it, below its top corner");
+        assert!(!in_safe_triangle(apex, (140., 200.), sub, true), "away from it");
+        assert!(!in_safe_triangle(apex, (200., 60.), sub, true), "above its top corner");
+        assert!(!in_safe_triangle(apex, (200., 400.), sub, true), "steeper than its bottom corner");
+        // a submenu on the left: the near edge is its right side
+        let left = (0., 100., 100., 300.);
+        assert!(in_safe_triangle((250., 120.), (150., 200.), left, false));
+        assert!(!in_safe_triangle((250., 120.), (260., 200.), left, false));
+        // a degenerate triangle (the apex on the edge's line) holds nothing
+        assert!(!in_safe_triangle((300., 120.), (300., 150.), sub, true));
+        assert!(!in_safe_triangle((f32::NAN, 0.), (1., 1.), sub, true));
+    }
+
+    #[test]
+    fn the_part_a_submenu_surface_covers_is_cleared_and_nothing_else() {
+        // a 10 x 6 surface at (100, 50); the submenu's surface from (106, 52), running past the surface's right edge
+        let mut px = vec![1u32; 60];
+        clear_covered(&mut px, (100, 50, 10, 6), (106, 52, 50, 3));
+        for y in 0..6 {
+            for x in 0..10 {
+                let want = if x >= 6 && (2..5).contains(&y) { 0 } else { 1 };
+                assert_eq!(px[y * 10 + x], want, "({x}, {y})");
+            }
+        }
+        // a cover outside the surface changes nothing, nor does a buffer of the wrong size
+        let mut px = vec![1u32; 60];
+        clear_covered(&mut px, (100, 50, 10, 6), (300, 52, 50, 3));
+        clear_covered(&mut px[..30], (100, 50, 10, 6), (100, 50, 10, 6));
+        assert!(px.iter().all(|&p| p == 1));
+    }
+
+    #[test]
+    fn the_flyout_wakes_the_shell_at_the_earliest_of_its_timers() {
+        let mut f = Flyout::default();
+        assert_eq!(f.due(), None);
+        f.pending = Some((Menu::File, Menu::Recent, 100.));
+        assert_eq!(f.due(), Some(100. + FLYOUT_OPEN_MS));
+        f.deferred = Some((Menu::File, Some(2), 50.));
+        assert_eq!(f.due(), Some((50. + FLYOUT_SAFE_MS).min(100. + FLYOUT_OPEN_MS)));
+    }
+}
+
+/// An app's submenus cascade beside their row (Right in, Left or Esc out, a click or a rest on the header), nest, and are searched by Help.
 #[cfg(all(test, feature = "desktop-wayland"))]
 mod app_submenu_tests {
     use super::*;
     use bifrost_proto::{AppMenu, AppMenuItem};
 
     fn with_menus(menus: Vec<AppMenu>) -> (Shell, bifrost_proto::sys::Channel) {
-        let mut sh = crate::shell::tests::desktop_shell();
+        // a landscape desktop, so a menu and two submenus fit side by side
+        let mut sh = crate::shell::tests::shell_sized(1920, 1200);
+        sh.desk = Some(crate::shell::desk::Desk::new());
+        sh.form = bifrost_ui::form_factor::FormFactor::Desktop;
         sh.anim = None;
         let (mine, theirs) = bifrost_proto::sys::socketpair_pair().unwrap();
         let mut host = super::super::apphost::AppHost::with_channel("fixture", mine, None, bifrost_proto::Configure { w: 100, h: 100, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false });
@@ -2360,26 +2668,178 @@ mod app_submenu_tests {
     }
 
     #[test]
-    fn nested_submenus_open_in_place_and_go_back() {
+    fn nested_submenus_cascade_beside_their_rows_and_close_one_level_at_a_time() {
         let (mut sh, _app) = with_menus(vec![format(3)]);
         assert_eq!(texts(&sh, Menu::Custom(0)), ["Font", "Text", "", "Make Plain Text"]);
         sh.desktop_menu = Some(Menu::Custom(0));
         sh.desktop_menu_row = Some((Menu::Custom(0), 0));
         let _ = sh.desktop_menu_key(106, 1.);
         assert_eq!(sh.desktop_menu, Some(Menu::AppSub(0, 0)), "Right opens Font");
-        assert_eq!(texts(&sh, Menu::AppSub(0, 0)), ["Font", "", "Show Fonts", "Kern", "", "Family 0", "Family 1", "Family 2"]);
-        let kern = 3;
+        assert_eq!(texts(&sh, Menu::AppSub(0, 0)), ["Show Fonts", "Kern", "", "Family 0", "Family 1", "Family 2"], "no row back: Format stays open beside it");
+        assert_eq!(sh.menu_row_of(Menu::AppSub(0, 0)), Some(0), "the keyboard lands on Font's first item");
+        let kern = 1;
         sh.desktop_menu_row = Some((Menu::AppSub(0, 0), kern));
         let _ = sh.desktop_menu_key(106, 2.);
         assert_eq!(sh.desktop_menu, Some(Menu::AppSub(0, 2)), "and Kern inside it");
-        assert_eq!(texts(&sh, Menu::AppSub(0, 2)), ["Kern", "", "Use Default"]);
+        assert_eq!(texts(&sh, Menu::AppSub(0, 2)), ["Use Default"]);
         assert_eq!(sh.bar_anchor(Menu::AppSub(0, 2)), Menu::Custom(0), "a nested submenu still hangs from Format's bar item");
+        assert_eq!(sh.menu_chain(), vec![Menu::Custom(0), Menu::AppSub(0, 0), Menu::AppSub(0, 2)]);
+        let levels = sh.menu_level_rects();
+        assert_eq!(levels.len(), 3, "Format, Font and Kern are all open");
+        // Format stays under its bar item; each submenu cascades beside its parent, its first row level with the header
         let format_x = sh.menu_buttons().into_iter().find(|b| b.0 == Menu::Custom(0)).unwrap().1;
-        assert_eq!(sh.desktop_popup_rect().unwrap().0, (format_x as usize).min((sh.w as usize).saturating_sub(sh.desktop_popup_rect().unwrap().2)));
+        assert_eq!(levels[0].1 .0, (format_x as usize).min((sh.w as usize).saturating_sub(levels[0].1 .2)));
+        let overlap = sh.ui.pt(FLYOUT_OVERLAP_PT) as usize;
+        for k in 1..3 {
+            let ((px, _, pw, _), (cx, _, cw, _), right) = (levels[k - 1].1, levels[k].1, levels[k].2);
+            if right { assert_eq!(cx + overlap, px + pw, "level {k} opens right of its parent"); } else { assert_eq!(cx + cw, px + overlap, "level {k} opens left of its parent"); }
+        }
+        let (spans, _) = menu_spans(&sh.menu_rows(Menu::Custom(0)));
+        assert_eq!(levels[1].1 .1 as i32, levels[0].1 .1 as i32 + sh.ui.pt(spans[0].0) as i32 - sh.ui.pt(MENU_PAD_PT) as i32, "Font's first row is level with its header");
+        assert_eq!(sh.desktop_popup_rect(), Some(levels[2].1), "the open menu is the deepest level");
         let _ = sh.desktop_menu_key(105, 3.);
-        assert_eq!(sh.desktop_menu, Some(Menu::AppSub(0, 0)), "Left goes back to Font");
-        let _ = sh.desktop_menu_key(105, 4.);
-        assert_eq!(sh.desktop_menu, Some(Menu::Custom(0)), "and to Format");
+        assert_eq!(sh.desktop_menu, Some(Menu::AppSub(0, 0)), "Left closes Kern");
+        assert_eq!(sh.menu_row_of(Menu::AppSub(0, 0)), Some(kern), "Kern's row in Font stays highlighted");
+        let _ = sh.desktop_menu_key(1, 4.);
+        assert_eq!(sh.desktop_menu, Some(Menu::Custom(0)), "Esc closes one level");
+        assert_eq!(sh.menu_row_of(Menu::Custom(0)), Some(0), "back on Font's row");
+        let _ = sh.desktop_menu_key(1, 5.);
+        assert_eq!(sh.desktop_menu, None, "Esc on the menu itself closes it");
+    }
+
+    /// Opens Format, then Font beside its row by the keyboard, and returns the two levels.
+    fn format_and_font(sh: &mut Shell) -> ((usize, usize, usize, usize), (usize, usize, usize, usize), bool) {
+        sh.desktop_menu = Some(Menu::Custom(0));
+        sh.desktop_menu_row = Some((Menu::Custom(0), 0));
+        let _ = sh.desktop_menu_key(106, 1.);
+        let levels = sh.menu_level_rects();
+        assert_eq!(levels.len(), 2);
+        (levels[0].1, levels[1].1, levels[1].2)
+    }
+
+    /// The centre of row `i` of `menu` drawn at `rect`, in screen px.
+    fn row_point(sh: &Shell, menu: Menu, rect: (usize, usize, usize, usize), i: usize) -> (f32, f32) {
+        let (spans, _) = menu_spans(&sh.menu_rows(menu));
+        (rect.0 as f32 + rect.2 as f32 / 2., rect.1 as f32 + sh.ui.pt(spans[i].0 + spans[i].1 / 2.))
+    }
+
+    #[test]
+    fn hovering_a_header_opens_its_submenu_after_the_delay_and_the_parent_stays_highlighted() {
+        let (mut sh, _app) = with_menus(vec![format(3)]);
+        sh.desktop_menu = Some(Menu::Custom(0));
+        let format = sh.desktop_popup_rect().unwrap();
+        let (x, y) = row_point(&sh, Menu::Custom(0), format, 0);
+        sh.desktop_menu_hover_at(x, y, 1000.);
+        assert_eq!(sh.menu_row_of(Menu::Custom(0)), Some(0), "the header row is highlighted at once");
+        assert_eq!(sh.desktop_menu, Some(Menu::Custom(0)), "the submenu waits for the delay");
+        assert_eq!(sh.desktop_flyout.due(), Some(1000. + FLYOUT_OPEN_MS), "the shell wakes for it");
+        sh.desktop_menu_flyout_tick(1000. + FLYOUT_OPEN_MS - 1.);
+        assert_eq!(sh.desktop_menu, Some(Menu::Custom(0)));
+        sh.desktop_menu_flyout_tick(1000. + FLYOUT_OPEN_MS);
+        assert_eq!(sh.desktop_menu, Some(Menu::AppSub(0, 0)), "resting on Font opens it");
+        assert_eq!(sh.desktop_flyout.due(), None);
+        assert_eq!(sh.menu_level_rects().len(), 2, "Format stays open beside it");
+        // a pointer that only passes over a header does not open it
+        let (tx, ty) = row_point(&sh, Menu::Custom(0), format, 1);
+        sh.desktop_menu_hover_at(tx + sh.ui.pt(60.), ty, 2000.);
+        sh.desktop_menu_hover_at(tx + sh.ui.pt(60.), row_point(&sh, Menu::Custom(0), format, 3).1, 2050.);
+        sh.desktop_menu_flyout_tick(2050. + FLYOUT_OPEN_MS);
+        assert_eq!(sh.desktop_menu, Some(Menu::Custom(0)), "Font closed and Text never opened");
+        assert_eq!(sh.menu_row_of(Menu::Custom(0)), Some(3), "Make Plain Text is highlighted");
+    }
+
+    #[test]
+    fn a_diagonal_move_toward_the_submenu_keeps_it_open_and_a_rest_lets_the_row_take_over() {
+        let (mut sh, _app) = with_menus(vec![format(3)]);
+        let (format, font, right) = format_and_font(&mut sh);
+        let (hx, hy) = row_point(&sh, Menu::Custom(0), format, 0);
+        // from the far side of the header row, heading down toward the submenu's near edge
+        let start = if right { (format.0 as f32 + sh.ui.pt(20.), hy) } else { ((format.0 + format.2) as f32 - sh.ui.pt(20.), hy) };
+        sh.desktop_menu_hover_at(start.0, start.1, 100.);
+        assert_eq!(sh.desktop_menu, Some(Menu::AppSub(0, 0)), "back on Font's row: Font stays open");
+        let text_y = row_point(&sh, Menu::Custom(0), format, 1).1;
+        let near = if right { (font.0 as f32 - 2., text_y) } else { ((font.0 + font.2) as f32 + 2., text_y) };
+        let step = (start.0 + (near.0 - start.0) * 0.9, text_y);
+        assert!(in_safe_triangle(start, step, (font.0 as f32, font.1 as f32, font.2 as f32, font.3 as f32), right), "the move heads for Font");
+        sh.desktop_menu_hover_at(step.0, step.1, 120.);
+        assert_eq!(sh.desktop_menu, Some(Menu::AppSub(0, 0)), "crossing Text on the way does not switch the submenu");
+        assert_eq!(sh.menu_level_rects().len(), 2);
+        sh.desktop_menu_flyout_tick(120. + FLYOUT_SAFE_MS - 1.);
+        assert_eq!(sh.desktop_menu, Some(Menu::AppSub(0, 0)));
+        // stopping there lets Text take over: Font closes, Text is highlighted and opens after its own delay
+        sh.desktop_menu_flyout_tick(120. + FLYOUT_SAFE_MS);
+        assert_eq!(sh.desktop_menu, Some(Menu::Custom(0)), "a rest on Text closes Font");
+        assert_eq!(sh.menu_row_of(Menu::Custom(0)), Some(1));
+        sh.desktop_menu_flyout_tick(120. + FLYOUT_SAFE_MS + FLYOUT_OPEN_MS);
+        assert_eq!(sh.desktop_menu, Some(Menu::AppSub(0, 8)), "and Text opens");
+    }
+
+    #[test]
+    fn moving_away_from_the_submenu_switches_rows_at_once() {
+        let (mut sh, _app) = with_menus(vec![format(3)]);
+        let (format, _, right) = format_and_font(&mut sh);
+        let (_, hy) = row_point(&sh, Menu::Custom(0), format, 0);
+        // near the edge away from Font, then straight down: away from the submenu
+        let far = if right { format.0 as f32 + sh.ui.pt(8.) } else { (format.0 + format.2) as f32 - sh.ui.pt(8.) };
+        sh.desktop_menu_hover_at(far, hy, 100.);
+        let (_, py) = row_point(&sh, Menu::Custom(0), format, 3);
+        let back = if right { far - sh.ui.pt(2.) } else { far + sh.ui.pt(2.) };
+        sh.desktop_menu_hover_at(back, py, 110.);
+        assert_eq!(sh.desktop_menu, Some(Menu::Custom(0)), "Font closes");
+        assert_eq!(sh.menu_row_of(Menu::Custom(0)), Some(3), "Make Plain Text is highlighted");
+    }
+
+    #[test]
+    fn a_pointer_leave_between_the_menu_surfaces_closes_nothing() {
+        let (mut sh, _app) = with_menus(vec![format(3)]);
+        let (_, font, _) = format_and_font(&mut sh);
+        let (x, y) = row_point(&sh, Menu::AppSub(0, 0), font, 0);
+        sh.desktop_menu_hover_at(x, y, 100.);
+        sh.desktop_menu_hover_at(-100., -100., 110.);
+        assert_eq!(sh.desktop_menu, Some(Menu::AppSub(0, 0)));
+        assert_eq!(sh.menu_row_of(Menu::AppSub(0, 0)), Some(0), "the highlight stays");
+        assert_eq!(sh.menu_level_rects().len(), 2);
+    }
+
+    #[test]
+    fn a_click_on_a_parent_row_or_a_header_works_while_a_submenu_is_open() {
+        let (mut sh, app) = with_menus(vec![format(3)]);
+        let (format, _, _) = format_and_font(&mut sh);
+        // a click on Text, another header, opens Text in place of Font
+        let (tx, ty) = row_point(&sh, Menu::Custom(0), format, 1);
+        let _ = sh.desktop_bar_event(Event::Up(tx, ty), 2.);
+        assert_eq!(sh.desktop_menu, Some(Menu::AppSub(0, 8)), "the click opens Text at once");
+        assert_eq!(sh.menu_chain(), vec![Menu::Custom(0), Menu::AppSub(0, 8)]);
+        // a press inside either level keeps the menus open
+        let _ = sh.desktop_bar_event(Event::Down(tx, ty), 3.);
+        assert_eq!(sh.desktop_menu, Some(Menu::AppSub(0, 8)));
+        // a click on Make Plain Text in Format reaches the app
+        let (px, py) = row_point(&sh, Menu::Custom(0), format, 3);
+        let _ = sh.desktop_bar_event(Event::Up(px, py), 4.);
+        assert_eq!(sh.desktop_menu, None, "choosing an item closes every level");
+        let bifrost_proto::sys::Recv::Packet(packet, _) = app.recv(false).unwrap() else { panic!("no menu action") };
+        assert_eq!(bifrost_proto::ToApp::decode(&packet), Ok(bifrost_proto::ToApp::MenuAction(4)));
+    }
+
+    #[test]
+    fn each_submenu_is_an_overlay_surface_of_its_own_that_takes_the_pointer_over_the_submenu() {
+        let (mut sh, _app) = with_menus(vec![format(3)]);
+        let (_, font, _) = format_and_font(&mut sh);
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let pixels = vec![0xff10_2030u32; w * h];
+        let frames = sh.desktop_chrome_frames(&pixels, w, h);
+        let menu = frames.iter().find(|f| f.id == 1).expect("the menu's surface");
+        let sub = frames.iter().find(|f| f.id == FLYOUT_CHROME_ID).expect("the submenu's surface");
+        assert!(frames.iter().all(|f| f.id != FLYOUT_CHROME_ID + 1), "one surface per open submenu");
+        let [ix, iy, iw, ih] = sub.input.expect("only the submenu takes the pointer");
+        assert_eq!(((sub.x + ix) as usize, (sub.y + iy) as usize, iw as usize, ih as usize), font);
+        // where the submenu's surface lies over the menu's, the menu's surface is clear
+        let (mx, my) = ((sub.x - menu.x).max(0) as usize, (sub.y - menu.y).max(0) as usize);
+        if mx < menu.width && my < menu.height { assert_eq!(menu.pixels[my * menu.width + mx], 0); }
+        assert!(menu.pixels.iter().any(|&p| p != 0), "the rest of the menu shows");
+        // closing the submenu drops its surface
+        let _ = sh.desktop_menu_key(105, 2.);
+        assert!(sh.desktop_chrome_frames(&pixels, w, h).iter().all(|f| f.id != FLYOUT_CHROME_ID));
     }
 
     #[test]
@@ -2412,7 +2872,7 @@ mod app_submenu_tests {
         let hit = entries.iter().find(|(_, _, item)| item.title == "Use Default").expect("a nested item is searched");
         assert_eq!(hit.0, Menu::AppSub(0, 2));
         assert!(hit.2.menu.contains("Kern"), "{}", hit.2.menu);
-        assert!(!entries.iter().any(|(m, i, _)| matches!(m, Menu::AppSub(..)) && *i == 0), "the rows back are not results");
+        assert_eq!(hit.1, 0, "Use Default is Kern's first row: a cascading submenu has no row back");
     }
 
     #[test]

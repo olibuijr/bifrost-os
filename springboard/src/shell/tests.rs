@@ -2993,10 +2993,9 @@
         assert_eq!(rows.iter().map(|r|r.text.as_str()).collect::<Vec<_>>(),vec!["New Note","","\u{2713} Pin","Lock","Sort By"],"a submenu's items are in the submenu, not the menu");
         assert!(matches!(rows[4].action,Some(desktop_bar::Action::Submenu(desktop_bar::Menu::AppSub(0,4)))),"Sort By opens its submenu");
         let sub=sh.menu_rows(desktop_bar::Menu::AppSub(0,4));
-        assert_eq!(sub.iter().map(|r|r.text.as_str()).collect::<Vec<_>>(),vec!["Sort By","","Name"],"a row back, then the submenu's items");
-        assert!(matches!(sub[0].action,Some(desktop_bar::Action::Submenu(desktop_bar::Menu::Custom(0)))),"the first row goes back to the menu");
-        assert!(matches!(sub[2].action,Some(desktop_bar::Action::AppMenu(0,4))));
-        assert_eq!(sh.bar_anchor(desktop_bar::Menu::AppSub(0,4)),desktop_bar::Menu::Custom(0),"it opens under the menu's bar item");
+        assert_eq!(sub.iter().map(|r|r.text.as_str()).collect::<Vec<_>>(),vec!["Name"],"the submenu's items, no row back: it cascades beside the menu");
+        assert!(matches!(sub[0].action,Some(desktop_bar::Action::AppMenu(0,4))));
+        assert_eq!(sh.bar_anchor(desktop_bar::Menu::AppSub(0,4)),desktop_bar::Menu::Custom(0),"it hangs from the menu's bar item");
         assert_eq!(sh.menu_row_keys(desktop_bar::Menu::Custom(0)),vec!["\u{2318}N".to_string(),"\u{21E7}\u{2318}L".to_string()]);
         // an app menu titled like a shell menu merges into it (NativeApp.mainMenu owns File on Golden Gate) instead of repeating it
         sh.ext[0].as_mut().unwrap().app_menus.push(AppMenu{title:"File".into(),items:vec![AppMenuItem::new(9,"Print...").key("cmd+p")]});
@@ -3265,7 +3264,7 @@
         assert!(row("Hide Others").is_none(),"no other app shows a window");
         assert!(row("Show All").is_none(),"nothing is hidden");
         assert!(matches!(row("Services"),Some(Action::Submenu(Menu::Services))),"Services is a submenu");
-        assert_eq!(sh.menu_row_texts(Menu::Services)[0],"Services","the submenu leads back to the application menu");
+        assert!(!sh.menu_rows(Menu::Services).iter().any(|r|matches!(r.action,Some(Action::Submenu(_)))),"the submenu cascades beside the application menu: no row leads back");
     }
 
     /// Hide (Cmd+H) puts away every window of the app in front without a Dock thumbnail, Hide Others the windows of every
