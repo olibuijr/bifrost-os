@@ -1570,6 +1570,24 @@ mod tests {
         assert!(c.next_wake().is_none());
     }
 
+    /// QA W2-14: the autosave `suspend` starts (the app went to the background) finishes while the app is suspended; the
+    /// title and the shell's document state lose "Edited" with it.
+    #[test]
+    fn an_autosave_started_by_suspend_clears_edited_in_the_title_and_the_window_state() {
+        let m = Mock::new("suspend-title");
+        let mut c = DocumentController::<Text>::new();
+        let id = open(&mut c, &m, "a.txt", 6, "a");
+        c.note_change(id, count(1));
+        c.sync(&m);
+        assert_eq!(c.window_title(id).as_deref(), Some("a.txt \u{2013} Edited"));
+        c.suspend(&m);
+        let req = m.next.get();
+        c.handle(&m, DocumentEvent::SaveTo(m.file(req, "a.txt", 6, ""))).unwrap();
+        c.handle(&m, DocumentEvent::Saved(m.file(req, "a.txt", 6, "a"))).unwrap();
+        assert_eq!(c.window_title(id).as_deref(), Some("a.txt"));
+        assert_eq!(m.state.borrow().as_ref().map(|s| s.1), Some(false), "the shell is told the document is clean");
+    }
+
     #[test]
     fn every_save_keeps_a_revision_of_the_bytes_written() {
         let m = Mock::new("revisions");

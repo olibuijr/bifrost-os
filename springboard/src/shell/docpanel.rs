@@ -1,20 +1,26 @@
 //! The open and save panel (`NativeOpenPanel` / `NativeSavePanel`), phase 3 of `docs/file-portal-design.md`.
 //!
-//! An app asks with `ToShell::DocOpen` or `DocSave`; the shell shows this panel over the desktop (it is a desktop popup,
-//! so it sits on the menu layer above every window). The app never sees the listing. When the user chooses, the broker
-//! (`bare::docbroker`) opens the file as the account and the app receives one descriptor (`ToApp::DocGranted`).
+//! An app asks with `ToShell::DocOpen` or `DocSave`; the shell shows this panel as a sheet that hangs from under the
+//! window's title bar (or toolbar band) and dims the window. The app never sees the listing. When the user chooses, the
+//! broker (`bare::docbroker`) opens the file as the account and the app receives one descriptor (`ToApp::DocGranted`).
 //!
 //! Behaviour follows the Golden Gate panels: it starts in Documents, lists names alphabetically (case-insensitive), files the
 //! filters do not allow are shown dimmed and cannot be chosen, Return or a double click is the default button, Esc
-//! cancels, Left goes up a folder. In a save panel the name field takes typing and a click on a file copies its name.
+//! cancels, Left goes up a folder (Cmd+Up in a save panel, whose Left and Right move the caret in the name field).
+//!
+//! The toolbar row has back and forward (the folders visited in this panel), the list or icon view switcher, the location
+//! pop-up (the folder and the folders that enclose it) and a search field that filters the folder shown by name.
+//! The save panel's name field is a real text field (the kit's `TextBuffer`): caret, selection, Shift and Option
+//! movement, Cmd+A, Cut, Copy and Paste.
 //!
 //! `NativeOpenPanel` options (`bifrost_proto::docopt`): several files (`allowsMultipleSelection`; a click toggles a row),
 //! folders (`canChooseDirectories`, `canChooseFiles`) and New Folder (`canCreateDirectories`, always on in a save
-//! panel). The sidebar lists Recents (the app's recent grants, newest first), Home and the common folders that exist.
-//! The folder last used by the app is where its next panel starts.
+//! panel). The sidebar lists Recents (the app's recent grants, newest first), then Favorites (the common folders that
+//! exist) and Locations (Home). The folder last used by the app is where its next panel starts.
 
 use crate::bare::docbroker::{self, valid_name, Grants, Opener, PendingSave};
 use bifrost_proto::{DocErrorCode, DocMode, GrantId, ToApp, ToShell};
+use bifrost_ui::text::TextBuffer;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
@@ -58,15 +64,58 @@ impl Options {
     }
 }
 
+/// The sidebar group a place belongs to: Recents stands alone at the top, then Favorites and Locations under headings.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Section {
+    Top,
+    Favorites,
+    Locations,
+}
+
+impl Section {
+    pub fn heading(self) -> Option<&'static str> {
+        match self {
+            Section::Top => None,
+            Section::Favorites => Some("Favorites"),
+            Section::Locations => Some("Locations"),
+        }
+    }
+}
+
 /// A sidebar row: Recents (`path` is `None`) or a folder in the home.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Place {
     pub label: String,
     pub path: Option<PathBuf>,
+    pub section: Section,
+}
+
+/// A row of the sidebar as drawn: a group heading or the place at this index of `places`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SideRow {
+    Heading(&'static str),
+    Place(usize),
+}
+
+/// Where the panel is: Recents or a folder of the home. Back and forward step through these.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Loc {
+    Recents,
+    Dir(PathBuf),
+}
+
+/// The text field with the keyboard: the save panel's name, the search field, or none (the list takes the keys).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Focus {
+    Name,
+    Search,
+    List,
 }
 
 /// Recents shows at most this many documents.
 pub const MAX_RECENTS: usize = 20;
+/// How many folders back and forward remember.
+const MAX_HISTORY: usize = 50;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Outcome {
@@ -79,6 +128,9 @@ pub enum Outcome {
 
 /// Rows the list shows at once; it scrolls to keep the selection in view.
 pub const VISIBLE_ROWS: usize = 10;
+/// One item of the icon view, in points.
+pub const CELL_W: f32 = 96.0;
+pub const CELL_H: f32 = 92.0;
 /// Clicks on the same row closer than this are a double click (ms).
 const DOUBLE_CLICK_MS: f64 = 400.0;
 
@@ -111,7 +163,13 @@ pub struct Layout {
     pub sidebar_row_h: f32,
     pub new_folder: R,
     pub back: R,
+    pub forward: R,
+    /// the view switcher: list, then icons
+    pub view_list: R,
+    pub view_icons: R,
+    /// the location pop-up
     pub location: R,
+    pub search: R,
     pub list: R,
     pub row_h: f32,
     pub cancel: R,
@@ -126,7 +184,10 @@ pub struct Panel {
     filters: Vec<String>,
     /// the folder shown, relative to the home ("" is the home)
     pub dir: PathBuf,
+    /// what the list shows: the folder's rows that match the search
     pub entries: Vec<Entry>,
+    /// every row of the folder, before the search
+    all: Vec<Entry>,
     pub selected: Option<usize>,
     /// every chosen row (`selected` is the one with focus); one row unless the panel allows several
     pub marked: BTreeSet<usize>,
@@ -140,14 +201,24 @@ pub struct Panel {
     recents: Vec<PathBuf>,
     /// the name being typed for a new folder
     pub creating: Option<String>,
-    /// the save panel's file name
-    pub name: String,
-    /// the part of the name that is selected (byte offsets): the base name without its extension when the panel opens or a
-    /// file is chosen, so typing replaces it and keeps the extension. Cleared by the first edit.
-    pub name_sel: Option<std::ops::Range<usize>>,
-    /// first row shown
+    /// the save panel's file name, with its caret and selection
+    pub name: TextBuffer,
+    /// the search field's text: the list shows the rows whose name contains it (any case)
+    pub search: TextBuffer,
+    /// which field has the keyboard
+    pub focus: Focus,
+    /// the icon view instead of the list
+    pub icons: bool,
+    /// the location pop-up is open
+    pub loc_menu: bool,
+    /// where back and forward go, nearest last
+    back_stack: Vec<Loc>,
+    fwd_stack: Vec<Loc>,
+    /// first row shown (the first item of a row of icons in the icon view)
     pub top: usize,
     last_click: Option<(usize, f64)>,
+    /// the last click in a text field (field, time), for a double click that selects a word
+    last_field_click: Option<(Focus, f64)>,
 }
 
 impl Panel {
@@ -159,6 +230,7 @@ impl Panel {
         } else {
             "Open".into()
         };
+        let name: String = if kind == Kind::Save { suggested.chars().filter(|c| *c != '/' && !c.is_control()).take(255).collect() } else { String::new() };
         let mut p = Panel {
             slot,
             request,
@@ -167,6 +239,7 @@ impl Panel {
             filters,
             dir: PathBuf::new(),
             entries: Vec::new(),
+            all: Vec::new(),
             selected: None,
             marked: BTreeSet::new(),
             opts: Options::default(),
@@ -175,10 +248,16 @@ impl Panel {
             in_recents: false,
             recents: Vec::new(),
             creating: None,
-            name: if kind == Kind::Save { suggested.chars().filter(|c| *c != '/' && !c.is_control()).take(255).collect() } else { String::new() },
-            name_sel: None,
+            name: TextBuffer::from_text(&name),
+            search: TextBuffer::new(),
+            focus: if kind == Kind::Save { Focus::Name } else { Focus::List },
+            icons: false,
+            loc_menu: false,
+            back_stack: Vec::new(),
+            fwd_stack: Vec::new(),
             top: 0,
             last_click: None,
+            last_field_click: None,
         };
         // Golden Gate starts in the last folder, else Documents (the shell moves the panel to the app's last folder after this)
         if opener.list(Path::new("Documents")).is_ok() {
@@ -190,30 +269,68 @@ impl Panel {
         p
     }
 
+    /// The save panel's file name.
+    pub fn name(&self) -> &str {
+        self.name.text()
+    }
+
+    /// The selected part of the name (byte offsets), when something is selected.
+    pub fn name_sel(&self) -> Option<std::ops::Range<usize>> {
+        self.name.has_selection().then(|| self.name.selection())
+    }
+
     /// Selects the base name in the name field (everything before the last dot, or the whole name when there is no
     /// extension), as a save panel opens on it: typing replaces the name and keeps the extension.
     pub fn select_base_name(&mut self) {
-        if self.kind != Kind::Save || self.name.is_empty() {
-            self.name_sel = None;
+        if self.kind != Kind::Save {
             return;
         }
-        let end = self.name.rfind('.').filter(|i| *i > 0).unwrap_or(self.name.len());
-        self.name_sel = Some(0..end);
+        let name = self.name.text();
+        let end = name.rfind('.').filter(|i| *i > 0).unwrap_or(name.len());
+        self.name.set_selection(0, end);
     }
 
-    /// Recents, Home and the common folders that exist.
+    /// Replaces the whole name (a file chosen in the list), with its base name selected.
+    fn set_name(&mut self, name: &str) {
+        self.name.set_text(name);
+        self.select_base_name();
+    }
+
+    /// Recents, then Favorites (the common folders that exist) and Locations (Home).
     fn places_in(opener: &Opener) -> Vec<Place> {
-        let mut v = vec![Place { label: "Recents".into(), path: None }, Place { label: "Home".into(), path: Some(PathBuf::new()) }];
+        let mut v = vec![Place { label: "Recents".into(), path: None, section: Section::Top }];
         let top = opener.list(Path::new("")).unwrap_or_default();
         for name in ["Desktop", "Documents", "Downloads"] {
             if top.iter().any(|(n, d)| *d && n == name) {
-                v.push(Place { label: name.into(), path: Some(name.into()) });
+                v.push(Place { label: name.into(), path: Some(name.into()), section: Section::Favorites });
             }
         }
+        v.push(Place { label: "Home".into(), path: Some(PathBuf::new()), section: Section::Locations });
         v
     }
 
-    /// What the panel may choose (`allowsMultipleSelection`, `canChooseDirectories`, ...).
+    /// The sidebar as drawn: each group's heading before its first place.
+    pub fn sidebar_rows(&self) -> Vec<SideRow> {
+        let mut rows = Vec::new();
+        let mut last = None;
+        for (i, pl) in self.places.iter().enumerate() {
+            if last != Some(pl.section) {
+                if let Some(h) = pl.section.heading() {
+                    rows.push(SideRow::Heading(h));
+                }
+                last = Some(pl.section);
+            }
+            rows.push(SideRow::Place(i));
+        }
+        rows
+    }
+
+    /// The sidebar row (from the top) where place `i` is drawn.
+    pub fn sidebar_row_of(&self, i: usize) -> Option<usize> {
+        self.sidebar_rows().iter().position(|r| *r == SideRow::Place(i))
+    }
+
+    /// What an open panel may choose (`allowsMultipleSelection`, `canChooseDirectories`, ...).
     pub fn with_options(mut self, opts: Options, opener: &Opener) -> Self {
         self.opts = opts;
         self.load(opener);
@@ -249,7 +366,7 @@ impl Panel {
         self
     }
 
-    /// Shows folder `dir` when it can be read (the folder the app used last).
+    /// Shows folder `dir` when it can be read (the folder the app used last). Not a step back can return to.
     pub fn go_to(&mut self, dir: &Path, opener: &Opener) -> bool {
         if opener.list(dir).is_err() {
             return false;
@@ -260,6 +377,86 @@ impl Panel {
         true
     }
 
+    /// Where the panel is now.
+    pub fn loc(&self) -> Loc {
+        if self.in_recents {
+            Loc::Recents
+        } else {
+            Loc::Dir(self.dir.clone())
+        }
+    }
+
+    fn show(&mut self, loc: Loc, opener: &Opener) {
+        match loc {
+            Loc::Recents => self.in_recents = true,
+            Loc::Dir(d) => {
+                self.in_recents = false;
+                self.dir = d;
+            }
+        }
+        self.creating = None;
+        self.loc_menu = false;
+        // a search belongs to the folder it was typed in
+        self.search.set_text("");
+        if self.focus == Focus::Search {
+            self.focus = if self.kind == Kind::Save { Focus::Name } else { Focus::List };
+        }
+        self.load(opener);
+    }
+
+    /// Goes to `loc`, remembering where the panel was for Back. Going where it already is does nothing.
+    pub fn navigate(&mut self, loc: Loc, opener: &Opener) {
+        let here = self.loc();
+        if loc == here {
+            self.loc_menu = false;
+            return;
+        }
+        self.back_stack.push(here);
+        if self.back_stack.len() > MAX_HISTORY {
+            self.back_stack.remove(0);
+        }
+        self.fwd_stack.clear();
+        self.show(loc, opener);
+    }
+
+    pub fn can_go_back(&self) -> bool {
+        !self.back_stack.is_empty()
+    }
+
+    pub fn can_go_forward(&self) -> bool {
+        !self.fwd_stack.is_empty()
+    }
+
+    /// Back: the folder shown before (folders that went away are skipped).
+    pub fn go_back(&mut self, opener: &Opener) -> bool {
+        while let Some(loc) = self.back_stack.pop() {
+            if let Loc::Dir(d) = &loc {
+                if opener.list(d).is_err() {
+                    continue;
+                }
+            }
+            self.fwd_stack.push(self.loc());
+            self.show(loc, opener);
+            return true;
+        }
+        false
+    }
+
+    /// Forward: undoes a Back.
+    pub fn go_forward(&mut self, opener: &Opener) -> bool {
+        while let Some(loc) = self.fwd_stack.pop() {
+            if let Loc::Dir(d) = &loc {
+                if opener.list(d).is_err() {
+                    continue;
+                }
+            }
+            self.back_stack.push(self.loc());
+            self.show(loc, opener);
+            return true;
+        }
+        false
+    }
+
     /// The sidebar row that matches what is shown.
     pub fn active_place(&self) -> Option<usize> {
         self.places.iter().position(|pl| if self.in_recents { pl.path.is_none() } else { pl.path.as_deref() == Some(self.dir.as_path()) })
@@ -268,14 +465,7 @@ impl Panel {
     pub fn go_place(&mut self, i: usize, opener: &Opener) {
         let Some(pl) = self.places.get(i).cloned() else { return };
         self.creating = None;
-        match pl.path {
-            None => self.in_recents = true,
-            Some(path) => {
-                self.in_recents = false;
-                self.dir = path;
-            }
-        }
-        self.load(opener);
+        self.navigate(pl.path.map_or(Loc::Recents, Loc::Dir), opener);
     }
 
     /// The filters allow `name`: an extension equal to a filter, or a type that conforms to a filter UTI.
@@ -312,19 +502,43 @@ impl Panel {
             v.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()).then_with(|| a.name.cmp(&b.name)));
             v
         };
-        self.entries = entries;
+        self.all = entries;
+        self.filter();
+    }
+
+    /// Shows the rows that match the search; the selection and the scroll start over.
+    fn filter(&mut self) {
+        let q = self.search.text().trim().to_lowercase();
+        self.entries = self.all.iter().filter(|e| q.is_empty() || e.name.to_lowercase().contains(&q)).cloned().collect();
         self.marked.clear();
         self.selected = None;
         self.top = 0;
         self.last_click = None;
     }
 
-    /// The folder's name for the location bar ("Home" at the top).
+    /// The folder's name for the location pop-up ("Home" at the top).
     pub fn location(&self) -> String {
         if self.in_recents {
             return "Recents".into();
         }
         self.dir.file_name().map_or_else(|| "Home".into(), |n| n.to_string_lossy().into_owned())
+    }
+
+    /// The location pop-up's rows: the folder shown, then each folder that encloses it, up to Home.
+    pub fn location_items(&self) -> Vec<(String, Loc)> {
+        if self.in_recents {
+            return vec![("Recents".into(), Loc::Recents)];
+        }
+        let mut v = Vec::new();
+        let mut d = self.dir.clone();
+        loop {
+            let label = d.file_name().map_or_else(|| "Home".into(), |n| n.to_string_lossy().into_owned());
+            v.push((label, Loc::Dir(d.clone())));
+            if !d.pop() {
+                break;
+            }
+        }
+        v
     }
 
     pub fn can_go_up(&self) -> bool {
@@ -337,8 +551,9 @@ impl Panel {
             return;
         }
         let Some(left) = self.dir.file_name().map(|n| n.to_string_lossy().into_owned()) else { return };
-        self.dir.pop();
-        self.load(opener);
+        let mut parent = self.dir.clone();
+        parent.pop();
+        self.navigate(Loc::Dir(parent), opener);
         if let Some(i) = self.entries.iter().position(|e| e.name == left) {
             self.select(i);
         }
@@ -346,9 +561,8 @@ impl Panel {
 
     fn enter(&mut self, i: usize, opener: &Opener) {
         if let Some(e) = self.entries.get(i).filter(|e| e.dir) {
-            self.dir = self.path_of(e);
-            self.in_recents = false;
-            self.load(opener);
+            let to = self.path_of(e);
+            self.navigate(Loc::Dir(to), opener);
         }
     }
 
@@ -418,6 +632,25 @@ impl Panel {
         true
     }
 
+    /// Icons per row of the icon view (1 in the list).
+    pub fn columns(&self) -> usize {
+        if !self.icons {
+            return 1;
+        }
+        ((self.layout().list.w / CELL_W).floor() as usize).max(1)
+    }
+
+    /// Items the list or the icon grid shows at once.
+    pub fn visible(&self) -> usize {
+        let offset = self.row_offset();
+        if !self.icons {
+            return VISIBLE_ROWS - offset;
+        }
+        let l = self.layout();
+        let rows = (((l.list.h - offset as f32 * l.row_h) / CELL_H).floor() as usize).max(1);
+        rows * self.columns()
+    }
+
     /// Selects row `i` and scrolls it into view. In a save panel a file's name goes into the field.
     pub fn select(&mut self, i: usize) {
         if i >= self.entries.len() {
@@ -425,18 +658,21 @@ impl Panel {
         }
         self.selected = Some(i);
         self.marked = BTreeSet::from([i]);
+        let (cols, vis) = (self.columns(), self.visible());
         if i < self.top {
-            self.top = i;
-        } else if i >= self.top + VISIBLE_ROWS {
-            self.top = i + 1 - VISIBLE_ROWS;
+            self.top = i - i % cols;
+        } else if i >= self.top + vis {
+            let row = i / cols;
+            let rows = vis / cols;
+            self.top = (row + 1 - rows) * cols;
         }
         if self.kind == Kind::Save && !self.entries[i].dir {
-            self.name = self.entries[i].name.clone();
-            self.select_base_name();
+            let name = self.entries[i].name.clone();
+            self.set_name(&name);
         }
     }
 
-    /// Up/Down: the next row, stopping at the ends.
+    /// Up/Down: the next row (a row of icons in the icon view), stopping at the ends.
     pub fn step(&mut self, by: i32) {
         if self.entries.is_empty() {
             return;
@@ -456,7 +692,7 @@ impl Panel {
             return true;
         }
         match self.kind {
-            Kind::Save => self.selected.and_then(|i| self.entries.get(i)).is_some_and(|e| e.dir) || valid_name(&self.name),
+            Kind::Save => self.selected.and_then(|i| self.entries.get(i)).is_some_and(|e| e.dir) || valid_name(self.name()),
             Kind::Open(_) => {
                 let rows: Vec<&Entry> = self.chosen().into_iter().map(|i| &self.entries[i]).collect();
                 match rows[..] {
@@ -485,7 +721,7 @@ impl Panel {
                 self.enter(self.selected.unwrap(), opener);
                 None
             }
-            (Kind::Save, _) => Some(Outcome::Save { dir: self.dir.clone(), name: self.name.clone() }),
+            (Kind::Save, _) => Some(Outcome::Save { dir: self.dir.clone(), name: self.name().to_string() }),
             (Kind::Open(_), _) => {
                 let rows = self.chosen();
                 if rows.is_empty() {
@@ -514,7 +750,26 @@ impl Panel {
         self.confirm(opener)
     }
 
-    /// Typing into the save panel's name field (`/` and control characters are dropped; at most 255 bytes).
+    /// The text field with the keyboard, if any (the New Folder field is handled apart).
+    fn field_mut(&mut self) -> Option<&mut TextBuffer> {
+        match self.focus {
+            Focus::Name if self.kind == Kind::Save => Some(&mut self.name),
+            Focus::Search => Some(&mut self.search),
+            _ => None,
+        }
+    }
+
+    /// A text field has the keyboard: Left, Right, Home, End and Backspace edit it instead of moving in the list.
+    pub fn field_focused(&self) -> bool {
+        self.creating.is_none() && match self.focus {
+            Focus::Name => self.kind == Kind::Save,
+            Focus::Search => true,
+            Focus::List => false,
+        }
+    }
+
+    /// Typing (`/` and control characters are dropped; at most 255 bytes). It goes to the New Folder field while that is
+    /// open, else to the field with the keyboard; in an open panel with no field focused it starts a search.
     pub fn type_text(&mut self, text: &str) -> bool {
         if let Some(n) = self.creating.as_mut() {
             for c in text.chars().filter(|c| *c != '/' && !c.is_control()) {
@@ -524,52 +779,150 @@ impl Panel {
             }
             return true;
         }
-        if self.kind != Kind::Save {
-            return false;
-        }
-        let typed: Vec<char> = text.chars().filter(|c| *c != '/' && !c.is_control()).collect();
+        let typed: String = text.chars().filter(|c| *c != '/' && !c.is_control()).collect();
         if typed.is_empty() {
-            return true;
+            return !text.is_empty() && self.field_focused();
         }
-        // typing over a selection replaces it; otherwise it goes in at the end
-        let mut at = self.name.len();
-        if let Some(sel) = self.name_sel.take() {
-            let sel = sel.start.min(self.name.len())..sel.end.min(self.name.len());
-            at = sel.start;
-            self.name.replace_range(sel, "");
-        }
-        for c in typed {
-            if self.name.len() + c.len_utf8() <= 255 {
-                self.name.insert(at, c);
-                at += c.len_utf8();
+        if !self.field_focused() {
+            if self.kind == Kind::Save {
+                self.focus = Focus::Name;
+            } else {
+                self.focus = Focus::Search;
             }
+        }
+        let search = self.focus == Focus::Search;
+        let Some(f) = self.field_mut() else { return false };
+        let room = 255usize.saturating_sub(f.len() - f.selection().len());
+        let mut fit = String::new();
+        for c in typed.chars() {
+            if fit.len() + c.len_utf8() > room {
+                break;
+            }
+            fit.push(c);
+        }
+        f.insert_text(&fit);
+        if search {
+            self.filter();
         }
         true
     }
 
+    /// Backspace: the New Folder field, else the focused field (the selection, or the character before the caret).
     pub fn backspace(&mut self) -> bool {
         if let Some(n) = self.creating.as_mut() {
             n.pop();
             return true;
         }
-        if self.kind != Kind::Save {
+        let search = self.focus == Focus::Search;
+        let Some(f) = self.field_mut() else { return false };
+        let changed = f.delete_backward().is_some();
+        if search && changed {
+            self.filter();
+        }
+        changed
+    }
+
+    /// An editing key for the focused field, as the shell's text fields name them (`keyboard::Out`): movement with
+    /// Shift and Option, Home and End, Delete, Select All, Cut, Copy and Paste. True when the panel took it.
+    pub fn edit(&mut self, out: &super::keyboard::Out) -> bool {
+        use super::keyboard::Out;
+        match out {
+            Out::Text(t) => return self.type_text(t),
+            Out::Backspace => {
+                self.backspace();
+                return true;
+            }
+            _ => {}
+        }
+        if self.creating.is_some() {
             return false;
         }
-        // Backspace over a selection deletes it and keeps the rest (the extension)
-        if let Some(sel) = self.name_sel.take() {
-            let sel = sel.start.min(self.name.len())..sel.end.min(self.name.len());
-            let had = !sel.is_empty();
-            self.name.replace_range(sel, "");
-            return had;
+        let Out::Named(name) = out else { return false };
+        let name = *name;
+        let search = self.focus == Focus::Search;
+        // Select All in the list of a panel that allows several files
+        if name == "SelectAll" && !self.field_focused() {
+            self.select_all();
+            return true;
         }
-        self.name.pop().is_some()
+        let Some(f) = self.field_mut() else { return false };
+        let mut changed = false;
+        match name {
+            "Left" => f.move_char(false, false),
+            "Right" => f.move_char(true, false),
+            "ShiftLeft" => f.move_char(false, true),
+            "ShiftRight" => f.move_char(true, true),
+            "WordLeft" => f.move_word(false, false),
+            "WordRight" => f.move_word(true, false),
+            "ShiftWordLeft" => f.move_word(false, true),
+            "ShiftWordRight" => f.move_word(true, true),
+            "Home" => f.move_document(false, false),
+            "End" => f.move_document(true, false),
+            "ShiftHome" => f.move_document(false, true),
+            "ShiftEnd" => f.move_document(true, true),
+            "SelectAll" => f.select_all(),
+            "DeleteForward" => changed = f.delete_forward().is_some(),
+            "DeleteWord" => changed = f.delete_word_backward().is_some(),
+            "DeleteWordForward" => changed = f.delete_word_forward().is_some(),
+            "DeleteLine" => {
+                let caret = f.caret();
+                changed = f.replace_range(0..caret, "").is_some();
+            }
+            "Copy" => {
+                if f.has_selection() {
+                    super::clipboard::set_text(f.selected_text());
+                }
+            }
+            "Cut" => {
+                if f.has_selection() {
+                    super::clipboard::set_text(f.selected_text());
+                    changed = f.insert_text("").is_some();
+                }
+            }
+            "Paste" => {
+                // one line, without the characters a file name cannot hold
+                let text: String = super::clipboard::text().unwrap_or_default().lines().next().unwrap_or("").chars().filter(|c| *c != '/' && !c.is_control()).collect();
+                let room = 255usize.saturating_sub(f.len() - f.selection().len());
+                let mut fit = String::new();
+                for c in text.chars() {
+                    if fit.len() + c.len_utf8() > room {
+                        break;
+                    }
+                    fit.push(c);
+                }
+                changed = f.insert_text(&fit).is_some();
+            }
+            _ => return false,
+        }
+        if search && changed {
+            self.filter();
+        }
+        true
+    }
+
+    /// A click in a text field placed the caret at byte `at` (the shell measures the text), at time `t` ms. A double
+    /// click selects the word there.
+    pub fn click_field(&mut self, field: Focus, at: usize, t: f64) {
+        if self.creating.is_some() || (field == Focus::Name && self.kind != Kind::Save) {
+            return;
+        }
+        self.loc_menu = false;
+        self.focus = field;
+        let double = self.last_field_click.is_some_and(|(f, t0)| f == field && t - t0 <= DOUBLE_CLICK_MS);
+        self.last_field_click = if double { None } else { Some((field, t)) };
+        let Some(f) = self.field_mut() else { return };
+        if double {
+            f.select_word_at(at);
+        } else {
+            f.set_selection(at, at);
+        }
     }
 
     /// The panel's geometry in points. Width and row count are fixed tokens; nothing depends on the screen size
-    /// except where the shell centres it.
+    /// except where the shell places it.
     pub fn layout(&self) -> Layout {
-        use super::ui::{SPACE_M, SPACE_S, SPACE_XL};
-        let (w, row_h, bar_h, button_w, side_w) = (720.0, 28.0, 28.0, 96.0, 150.0);
+        use super::ui::{SPACE_M, SPACE_S, SPACE_XL, SPACE_XXS};
+        let (w, row_h, bar_h, button_w, side_w, search_w) = (720.0, 28.0, 28.0, 96.0, 150.0, 150.0);
         let pad = SPACE_XL;
         let title = R { x: pad, y: pad, w: w - 2.0 * pad, h: 20.0 };
         let mut y = title.y + title.h + SPACE_M;
@@ -578,10 +931,15 @@ impl Panel {
             y += bar_h + SPACE_M;
             f
         });
-        // the sidebar runs along the left from the location bar down to the end of the list
+        // the toolbar row: back and forward, the view switcher, the location pop-up and the search field; the sidebar
+        // runs along the left from this row down to the end of the list
         let x0 = pad + side_w + SPACE_M;
         let back = R { x: x0, y, w: bar_h, h: bar_h };
-        let location = R { x: x0 + bar_h + SPACE_S, y, w: w - pad - x0 - bar_h - SPACE_S, h: bar_h };
+        let forward = R { x: back.x + bar_h + SPACE_XXS, y, w: bar_h, h: bar_h };
+        let view_list = R { x: forward.x + bar_h + SPACE_S, y, w: bar_h, h: bar_h };
+        let view_icons = R { x: view_list.x + bar_h + SPACE_XXS, y, w: bar_h, h: bar_h };
+        let search = R { x: w - pad - search_w, y, w: search_w, h: bar_h };
+        let location = R { x: view_icons.x + bar_h + SPACE_S, y, w: search.x - SPACE_S - (view_icons.x + bar_h + SPACE_S), h: bar_h };
         let top = y;
         y += bar_h + SPACE_S;
         let list = R { x: x0, y, w: w - pad - x0, h: row_h * VISIBLE_ROWS as f32 };
@@ -590,7 +948,12 @@ impl Panel {
         let ok = R { x: w - pad - button_w, y, w: button_w, h: bar_h };
         let cancel = R { x: ok.x - SPACE_M - button_w, y, w: button_w, h: bar_h };
         let new_folder = R { x: pad, y, w: 120.0, h: bar_h };
-        Layout { w, h: y + bar_h + pad, title, field, sidebar, sidebar_row_h: row_h, new_folder, back, location, list, row_h, cancel, ok }
+        Layout { w, h: y + bar_h + pad, title, field, sidebar, sidebar_row_h: row_h, new_folder, back, forward, view_list, view_icons, location, search, list, row_h, cancel, ok }
+    }
+
+    /// The location pop-up's row `i`, under the location control.
+    pub fn location_row(&self, l: &Layout, i: usize) -> R {
+        R { x: l.location.x, y: l.location.y + l.location.h + 2.0 + l.row_h * i as f32, w: l.location.w, h: l.row_h }
     }
 
     /// Rows the list leaves for entries: the New Folder field takes the first row while it is open.
@@ -598,9 +961,50 @@ impl Panel {
         usize::from(self.creating.is_some())
     }
 
+    /// Where entry `i` is drawn (a list row or an icon cell), when it is in view.
+    pub fn item_rect(&self, l: &Layout, i: usize) -> Option<R> {
+        if i < self.top || i >= self.top + self.visible() {
+            return None;
+        }
+        let k = i - self.top;
+        let y0 = l.list.y + l.row_h * self.row_offset() as f32;
+        if !self.icons {
+            return Some(R { x: l.list.x + 4.0, y: y0 + l.row_h * k as f32, w: l.list.w - 8.0, h: l.row_h });
+        }
+        let cols = self.columns();
+        let gap = (l.list.w - CELL_W * cols as f32) / 2.0;
+        Some(R { x: l.list.x + gap + CELL_W * (k % cols) as f32, y: y0 + CELL_H * (k / cols) as f32, w: CELL_W, h: CELL_H })
+    }
+
+    /// The entry at (x, y) in the list or the grid.
+    fn item_at(&self, l: &Layout, x: f32, y: f32) -> Option<usize> {
+        (self.top..self.entries.len().min(self.top + self.visible())).find(|i| self.item_rect(l, *i).is_some_and(|r| r.contains(x, y)))
+    }
+
+    /// Switches between the list and the icon view, keeping the selection in view.
+    pub fn set_icons(&mut self, on: bool) {
+        self.icons = on;
+        self.top = 0;
+        if let Some(i) = self.selected {
+            let marked = self.marked.clone();
+            let name = self.name.clone();
+            self.select(i);
+            self.marked = marked;
+            self.name = name;
+        }
+    }
+
     /// A click at (x, y) points inside the panel, at time `t` ms.
     pub fn click(&mut self, x: f32, y: f32, t: f64, opener: &Opener) -> Option<Outcome> {
         let l = self.layout();
+        // the location pop-up takes the click: a row goes there, anywhere else closes it
+        if self.loc_menu {
+            self.loc_menu = false;
+            if let Some((_, loc)) = self.location_items().into_iter().enumerate().find(|(i, _)| self.location_row(&l, *i).contains(x, y)).map(|(_, it)| it) {
+                self.navigate(loc, opener);
+            }
+            return None;
+        }
         if l.cancel.contains(x, y) {
             // Cancel closes the New Folder field first, as Esc does
             if self.creating.take().is_some() {
@@ -618,28 +1022,63 @@ impl Panel {
         if self.creating.is_some() {
             return None;
         }
+        // a field clicked without a measured caret: the caret goes to the end
+        if l.field.is_some_and(|f| f.contains(x, y)) {
+            let end = self.name.len();
+            self.click_field(Focus::Name, end, t);
+            return None;
+        }
+        if l.search.contains(x, y) {
+            let end = self.search.len();
+            self.click_field(Focus::Search, end, t);
+            return None;
+        }
         if l.back.contains(x, y) {
-            self.up(opener);
+            self.go_back(opener);
+            return None;
+        }
+        if l.forward.contains(x, y) {
+            self.go_forward(opener);
+            return None;
+        }
+        if l.view_list.contains(x, y) {
+            self.set_icons(false);
+            return None;
+        }
+        if l.view_icons.contains(x, y) {
+            self.set_icons(true);
+            return None;
+        }
+        if l.location.contains(x, y) {
+            self.loc_menu = true;
             return None;
         }
         if l.sidebar.contains(x, y) {
-            let i = ((y - l.sidebar.y) / l.sidebar_row_h) as usize;
-            self.go_place(i, opener);
+            let row = ((y - l.sidebar.y) / l.sidebar_row_h) as usize;
+            if let Some(SideRow::Place(i)) = self.sidebar_rows().get(row).copied() {
+                self.go_place(i, opener);
+            }
             return None;
         }
         if l.list.contains(x, y) {
-            let i = self.top + ((y - l.list.y) / l.row_h) as usize;
-            if i < self.entries.len() {
-                let double = self.last_click.is_some_and(|(j, t0)| j == i && t - t0 <= DOUBLE_CLICK_MS);
-                self.last_click = Some((i, t));
-                if double {
-                    self.last_click = None;
-                    return self.activate(i, opener);
+            // a click in the list gives the keyboard back to the list (a save panel keeps typing in its name)
+            if self.focus == Focus::Search {
+                self.focus = if self.kind == Kind::Save { Focus::Name } else { Focus::List };
+            }
+            match self.item_at(&l, x, y) {
+                Some(i) => {
+                    let double = self.last_click.is_some_and(|(j, t0)| j == i && t - t0 <= DOUBLE_CLICK_MS);
+                    self.last_click = Some((i, t));
+                    if double {
+                        self.last_click = None;
+                        return self.activate(i, opener);
+                    }
+                    self.toggle(i);
                 }
-                self.toggle(i);
-            } else {
-                self.selected = None;
-                self.marked.clear();
+                None => {
+                    self.selected = None;
+                    self.marked.clear();
+                }
             }
         }
         None
@@ -647,18 +1086,61 @@ impl Panel {
 
     /// A key while the panel is open (evdev codes). `Some` when the panel took it; text is typed through `type_text`.
     pub fn key(&mut self, code: u16, opener: &Opener) -> Option<Option<Outcome>> {
+        self.key_with(code, false, opener)
+    }
+
+    /// `key` with Cmd held or not: Cmd+Up goes to the enclosing folder, Cmd+Down opens the selection, Cmd+[ and Cmd+]
+    /// are back and forward. While a text field has the keyboard, Left, Right, Home, End, Delete and Backspace are left
+    /// for the typing path (`edit`), which moves the caret.
+    pub fn key_with(&mut self, code: u16, cmd: bool, opener: &Opener) -> Option<Option<Outcome>> {
+        let cols = self.columns() as i32;
+        let field = self.field_focused();
         Some(match code {
+            1 if self.loc_menu => {
+                self.loc_menu = false;
+                None
+            }
             1 if self.creating.is_some() => {
                 self.creating = None;
                 None
             }
             1 => Some(Outcome::Cancel),
             28 | 96 => self.confirm(opener),
+            103 if cmd => {
+                self.up(opener);
+                None
+            }
+            108 if cmd => {
+                match self.selected {
+                    Some(i) if self.entries.get(i).is_some_and(|e| e.dir) => self.enter(i, opener),
+                    Some(_) => return Some(self.confirm(opener)),
+                    None => {}
+                }
+                None
+            }
+            26 if cmd => {
+                self.go_back(opener);
+                None
+            }
+            27 if cmd => {
+                self.go_forward(opener);
+                None
+            }
             103 => {
-                self.step(-1);
+                self.step(-cols);
                 None
             }
             108 => {
+                self.step(cols);
+                None
+            }
+            // a text field moves its caret with these; the typing path brings them
+            105 | 106 | 102 | 107 | 111 | 14 if field => return None,
+            105 if self.icons => {
+                self.step(-1);
+                None
+            }
+            106 if self.icons => {
                 self.step(1);
                 None
             }
@@ -680,6 +1162,7 @@ impl Panel {
         })
     }
 }
+
 
 /// The broker the shell holds: opener for the account, grant records and saves waiting for `DocCommit`.
 pub struct Broker {
@@ -1052,7 +1535,8 @@ impl super::Shell {
     /// A key while the panel is open; true when the panel took it.
     pub(super) fn doc_key(&mut self, code: u16, _t: f64) -> bool {
         let (Some(mut p), Some(b)) = (self.doc_panel.take(), self.doc_broker.as_mut().and_then(Option::as_mut)) else { return false };
-        let taken = p.key(code, &b.opener);
+        let cmd = self.key_mods.contains(bifrost_proto::ModifierFlags::COMMAND);
+        let taken = p.key_with(code, cmd, &b.opener);
         self.doc_panel = Some(p);
         let took = taken.is_some();
         self.dirty |= took;
@@ -1062,14 +1546,44 @@ impl super::Shell {
         took
     }
 
-    pub(super) fn doc_type(&mut self, text: &str) {
+    /// What the keyboard typed while the panel is open (`hw_type`): text, Backspace, and the field keys (caret movement,
+    /// Select All, Cut, Copy, Paste) for the name or search field.
+    pub(super) fn doc_edit(&mut self, out: &super::keyboard::Out) {
         if let Some(p) = self.doc_panel.as_mut() {
-            self.dirty |= p.type_text(text);
+            self.dirty |= p.edit(out);
         }
+    }
+
+    /// The byte offset in `text` nearest `x` px from its left edge, as the panel draws it (body size, regular).
+    fn doc_caret_at(&self, text: &str, x: f32) -> usize {
+        use super::ui::{Weight, MAC_BODY_PT};
+        let mut best = (0, f32::MAX);
+        for i in text.char_indices().map(|(i, _)| i).chain(std::iter::once(text.len())) {
+            let d = (self.ui.measure(&text[..i], MAC_BODY_PT, Weight::Regular) - x).abs();
+            if d < best.1 {
+                best = (i, d);
+            }
+        }
+        best.0
     }
 
     /// A click at (x, y) px from the panel's top-left corner.
     pub(super) fn doc_click(&mut self, x: f32, y: f32, t: f64) {
+        // a click in the name or search field puts the caret under the pointer (measured as the field draws its text)
+        let caret = self.doc_panel.as_ref().and_then(|p| {
+            let l = p.layout();
+            let (px, py) = (x / self.ui.pt(1.0), y / self.ui.pt(1.0));
+            if p.creating.is_some() || p.loc_menu {
+                return None;
+            }
+            let hit = |r: &R, field: Focus, text: &str| r.contains(px, py).then(|| (field, self.doc_caret_at(text, x - self.ui.pt(r.x + super::ui::SPACE_S))));
+            l.field.as_ref().and_then(|f| hit(f, Focus::Name, p.name())).or_else(|| hit(&l.search, Focus::Search, p.search.text()))
+        });
+        if let (Some((field, at)), Some(p)) = (caret, self.doc_panel.as_mut()) {
+            p.click_field(field, at, t);
+            self.dirty = true;
+            return;
+        }
         let (Some(mut p), Some(b)) = (self.doc_panel.take(), self.doc_broker.as_mut().and_then(Option::as_mut)) else { return };
         let out = p.click(x / self.ui.pt(1.0), y / self.ui.pt(1.0), t, &b.opener);
         self.doc_panel = Some(p);
@@ -1085,8 +1599,12 @@ impl super::Shell {
         let p = self.doc_panel.as_ref()?;
         let l = p.layout();
         let (w, h) = (self.ui.pt(l.w).ceil() as i32, self.ui.pt(l.h).ceil() as i32);
-        let body = self.desk.as_ref().and_then(|d| d.index_of(super::AppId::External(p.slot)).map(|i| d.wins[i].body(&self.desk_metrics())));
-        let (cx, top) = body.map_or((self.w / 2, (self.h - h) / 2), |b| (b.x + b.w / 2, b.y));
+        let m = self.desk_metrics();
+        let win = self.desk.as_ref().and_then(|d| d.index_of(super::AppId::External(p.slot)).map(|i| (d.wins[i].body(&m), d.wins[i].full)));
+        // a sheet drops from under the title bar; a full-size window's title bar is its unified toolbar band, which the
+        // body includes, so the sheet starts below that band (QA W2-13: it covered the window's toolbar)
+        let band = if super::desk::full_size(super::AppId::External(p.slot)) && !win.as_ref().is_some_and(|(_, full)| *full) { self.ui.pt(super::desk::UNIFIED_BAR_PT).round() as i32 } else { 0 };
+        let (cx, top) = win.map_or((self.w / 2, (self.h - h) / 2), |(b, _)| (b.x + b.w / 2, b.y + band));
         let bar = self.desktop_bar_height() as i32;
         let x = (cx - w / 2).clamp(0, (self.w - w).max(0));
         let y = top.max(bar).min((self.h - h).max(bar));
@@ -1104,9 +1622,9 @@ impl super::Shell {
 
     /// Draws the panel's content over the popup background (`draw_desktop_popup` drew the material).
     pub(super) fn draw_doc_panel(&self, s: &mut crate::gfx::Surface, x: usize, y: usize, _w: usize, _h: usize) {
-        use super::ui::{Weight, DETAIL_BG, FIELD_BG, LABEL, LINK, MAC_BODY_PT, MAC_HEADLINE_PT, SECONDARY, SELECTION, SEPARATOR_C, SPACE_S, WHITE};
+        use super::ui::{Weight, DETAIL_BG, FIELD_BG, LABEL, LINK, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, SECONDARY, SELECTION, SEPARATOR_C, SPACE_S, WHITE};
         let Some(p) = self.doc_panel.as_ref() else { return };
-        // the focus rings and the default button follow the user's accent colour; the back control stays a link
+        // the focus rings and the default button follow the user's accent colour
         let accent = bifrost_render::appearance::accent_now();
         let l = p.layout();
         let ui = &self.ui;
@@ -1118,98 +1636,175 @@ impl super::Shell {
             let t = ui.fit(t, size, rw - ui.pt(2.0 * inset));
             self.label(&t, size, weight, color, |im| s.blit(im, (rx + ui.pt(inset)) as i32, (ry + (rh - im.h as f32) / 2.0) as i32, 255, 255));
         };
+        // text centred in `r`
+        let centred = |s: &mut crate::gfx::Surface, r: &R, t: &str, size: f32, color: u32| {
+            let (rx, ry, rw, rh) = px(r);
+            self.label(t, size, Weight::Regular, color, |im| s.blit(im, (rx + (rw - im.w as f32) / 2.0) as i32, (ry + (rh - im.h as f32) / 2.0) as i32, 255, 255));
+        };
         let radius = ui.pt(6.0);
+        // a text field: its background, the focus ring when it has the keyboard, the selection plate with its text in
+        // white, and the caret when nothing is selected. `inset` is where the text starts (the click maps x the same way).
+        let field = |s: &mut crate::gfx::Surface, r: &R, buf: &bifrost_ui::text::TextBuffer, focused: bool, placeholder: &str, capsule: bool| {
+            let (fx, fy, fw, fh) = px(r);
+            let rad = if capsule { fh / 2.0 } else { radius };
+            s.fill_rrect(fx, fy, fw, fh, rad, if capsule { FIELD_BG.now() } else { DETAIL_BG.now() });
+            if focused {
+                s.stroke_rrect(fx, fy, fw, fh, rad, ui.pt(1.0), accent);
+            }
+            let left = fx + ui.pt(SPACE_S);
+            let t = buf.text();
+            if t.is_empty() {
+                if !placeholder.is_empty() && !focused {
+                    text(s, r, SPACE_S, placeholder, MAC_BODY_PT, Weight::Regular, SECONDARY);
+                }
+            } else if ui.measure(t, MAC_BODY_PT, Weight::Regular) > fw - ui.pt(2.0 * SPACE_S) {
+                // longer than the field: shown cut, without the caret
+                text(s, r, SPACE_S, t, MAC_BODY_PT, Weight::Regular, LABEL.now());
+                return;
+            } else {
+                let sel = if focused { buf.selection() } else { 0..0 };
+                if !sel.is_empty() {
+                    let before = ui.measure(&t[..sel.start], MAC_BODY_PT, Weight::Regular);
+                    let picked = ui.measure(&t[sel.clone()], MAC_BODY_PT, Weight::Regular);
+                    s.fill_rrect(left + before, fy + ui.pt(4.0), picked, fh - ui.pt(8.0), ui.pt(3.0), SELECTION.now());
+                }
+                let mut cx = left;
+                for (part, color) in [(&t[..sel.start], LABEL.now()), (&t[sel.clone()], WHITE), (&t[sel.end..], LABEL.now())] {
+                    if part.is_empty() {
+                        continue;
+                    }
+                    self.label(part, MAC_BODY_PT, Weight::Regular, color, |im| s.blit(im, cx as i32, (fy + (fh - im.h as f32) / 2.0) as i32, 255, 255));
+                    cx += ui.measure(part, MAC_BODY_PT, Weight::Regular);
+                }
+            }
+            if focused && !buf.has_selection() {
+                let at = left + ui.measure(&t[..buf.caret().min(t.len())], MAC_BODY_PT, Weight::Regular);
+                s.fill_rrect(at, fy + ui.pt(5.0), ui.pt(1.0).max(1.0), fh - ui.pt(10.0), 0.0, LABEL.now());
+            }
+        };
         text(s, &l.title, 0.0, &p.title, MAC_HEADLINE_PT, Weight::Bold, LABEL.now());
 
         if let Some(f) = &l.field {
             let label = R { x: l.title.x, y: f.y, w: f.x - l.title.x, h: f.h };
             text(s, &label, 0.0, "Save As:", MAC_BODY_PT, Weight::Regular, LABEL.now());
-            let (fx, fy, fw, fh) = px(f);
-            // the focused field: content background and the focus ring in the tint
-            s.fill_rrect(fx, fy, fw, fh, radius, DETAIL_BG.now());
-            s.stroke_rrect(fx, fy, fw, fh, radius, ui.pt(1.0), accent);
-            match p.name_sel.as_ref().filter(|r| !r.is_empty() && ui.measure(&p.name, MAC_BODY_PT, Weight::Regular) <= fw - ui.pt(2.0 * SPACE_S)) {
-                // the base name is selected: a plate behind it, its text in white, and no caret until the first edit
-                Some(sel) => {
-                    let (start, end) = (sel.start.min(p.name.len()), sel.end.min(p.name.len()));
-                    let before = ui.measure(&p.name[..start], MAC_BODY_PT, Weight::Regular);
-                    let picked = ui.measure(&p.name[start..end], MAC_BODY_PT, Weight::Regular);
-                    let left = fx + ui.pt(SPACE_S);
-                    s.fill_rrect(left + before, fy + ui.pt(3.0), picked, fh - ui.pt(6.0), ui.pt(3.0), SELECTION.now());
-                    let mut x = left;
-                    for (part, color) in [(&p.name[..start], LABEL.now()), (&p.name[start..end], WHITE), (&p.name[end..], LABEL.now())] {
-                        if part.is_empty() {
-                            continue;
-                        }
-                        self.label(part, MAC_BODY_PT, Weight::Regular, color, |im| s.blit(im, x as i32, (fy + (fh - im.h as f32) / 2.0) as i32, 255, 255));
-                        x += ui.measure(part, MAC_BODY_PT, Weight::Regular);
-                    }
-                }
-                None => {
-                    let shown = format!("{}|", p.name);
-                    text(s, f, SPACE_S, &shown, MAC_BODY_PT, Weight::Regular, LABEL.now());
-                }
-            }
+            field(s, f, &p.name, p.focus == Focus::Name && p.creating.is_none(), "", false);
         }
 
-        // back control and the folder's name (detail navigation: back in LINK, disabled at the top)
-        text(s, &l.back, SPACE_S, "\u{2039}", MAC_HEADLINE_PT, Weight::Bold, if p.can_go_up() { LINK } else { SECONDARY });
-        text(s, &l.location, 0.0, &p.location(), MAC_BODY_PT, Weight::Bold, LABEL.now());
+        // the toolbar row: back and forward, the view switcher, the location pop-up and the search field
+        let button = |s: &mut crate::gfx::Surface, r: &R, glyph: &str, on: bool, enabled: bool| {
+            let (bx, by, bw, bh) = px(r);
+            if on {
+                s.fill_rrect(bx, by, bw, bh, radius, FIELD_BG.now());
+            }
+            centred(s, r, glyph, MAC_HEADLINE_PT, if enabled { LABEL.now() } else { SECONDARY });
+        };
+        button(s, &l.back, "\u{2039}", false, p.can_go_back());
+        button(s, &l.forward, "\u{203a}", false, p.can_go_forward());
+        button(s, &l.view_list, "\u{2261}", !p.icons, true);
+        button(s, &l.view_icons, "\u{229e}", p.icons, true);
+        let (lx0, ly0, lw0, lh0) = px(&l.location);
+        s.fill_rrect(lx0, ly0, lw0, lh0, radius, FIELD_BG.now());
+        text(s, &R { w: l.location.w - 20.0, ..l.location }, SPACE_S, &p.location(), MAC_BODY_PT, Weight::Regular, LABEL.now());
+        text(s, &R { x: l.location.x + l.location.w - 20.0, w: 20.0, ..l.location }, 4.0, "\u{2195}", MAC_FOOTNOTE_PT, Weight::Regular, SECONDARY);
+        field(s, &l.search, &p.search, p.focus == Focus::Search && p.creating.is_none(), "Search", true);
 
-        // sidebar: plates of 9 pt (the sidebar selection radius) behind the active place
+        // sidebar: group headings in footnote grey, plates of 9 pt (the sidebar selection radius) behind the active place
         let plate = ui.pt(9.0);
         let active = p.active_place();
-        for (i, place) in p.places.iter().enumerate() {
-            let r = R { x: l.sidebar.x, y: l.sidebar.y + l.sidebar_row_h * i as f32, w: l.sidebar.w, h: l.sidebar_row_h };
-            if active == Some(i) {
-                let (rx, ry, rw, rh) = px(&r);
-                s.fill_rrect(rx, ry + ui.pt(2.0), rw, rh - ui.pt(4.0), plate, SELECTION.now());
+        for (row, item) in p.sidebar_rows().into_iter().enumerate() {
+            let r = R { x: l.sidebar.x, y: l.sidebar.y + l.sidebar_row_h * row as f32, w: l.sidebar.w, h: l.sidebar_row_h };
+            match item {
+                SideRow::Heading(h) => text(s, &R { y: r.y + 6.0, h: r.h - 6.0, ..r }, SPACE_S, h, MAC_FOOTNOTE_PT, Weight::Bold, SECONDARY),
+                SideRow::Place(i) => {
+                    if active == Some(i) {
+                        let (rx, ry, rw, rh) = px(&r);
+                        s.fill_rrect(rx, ry + ui.pt(2.0), rw, rh - ui.pt(4.0), plate, SELECTION.now());
+                    }
+                    text(s, &r, SPACE_S, &p.places[i].label, MAC_BODY_PT, Weight::Regular, if active == Some(i) { WHITE } else { LABEL.now() });
+                }
             }
-            text(s, &r, SPACE_S, &place.label, MAC_BODY_PT, Weight::Regular, if active == Some(i) { WHITE } else { LABEL.now() });
         }
 
         let (lx, ly, lw, lh) = px(&l.list);
         s.fill_rrect(lx, ly, lw, lh, radius, DETAIL_BG.now());
         s.stroke_rrect(lx, ly, lw, lh, radius, ui.pt(1.0), SEPARATOR_C.now());
         // New Folder: the name field takes the first row while it is open
-        let offset = p.row_offset();
         if let Some(name) = &p.creating {
             let r = R { x: l.list.x + 4.0, y: l.list.y, w: l.list.w - 8.0, h: l.row_h };
             let (rx, ry, rw, rh) = px(&r);
             s.stroke_rrect(rx, ry + ui.pt(2.0), rw, rh - ui.pt(4.0), radius, ui.pt(1.0), accent);
             text(s, &r, SPACE_S, &format!("{name}|"), MAC_BODY_PT, Weight::Regular, LABEL.now());
         }
-        for (row, e) in p.entries.iter().enumerate().skip(p.top).take(VISIBLE_ROWS - offset) {
-            let r = R { x: l.list.x + 4.0, y: l.list.y + l.row_h * (row - p.top + offset) as f32, w: l.list.w - 8.0, h: l.row_h };
-            let selected = p.marked.contains(&row);
-            if selected {
-                let (rx, ry, rw, rh) = px(&r);
-                s.fill_rrect(rx, ry + ui.pt(2.0), rw, rh - ui.pt(4.0), radius, SELECTION.now());
-            }
+        for (i, e) in p.entries.iter().enumerate().skip(p.top).take(p.visible()) {
+            let Some(r) = p.item_rect(&l, i) else { continue };
+            let selected = p.marked.contains(&i);
             let color = if selected { WHITE } else if e.enabled { LABEL.now() } else { SECONDARY };
-            text(s, &R { w: r.w - 24.0, ..r }, SPACE_S, &e.name, MAC_BODY_PT, Weight::Regular, color);
-            if e.dir {
-                text(s, &R { x: r.x + r.w - 24.0, w: 24.0, ..r }, SPACE_S, "\u{203a}", MAC_BODY_PT, Weight::Regular, if selected { WHITE } else { SECONDARY });
+            if p.icons {
+                // a folder or page tile over the name; the name sits on a selection plate when chosen
+                let (rx, ry, rw, _) = px(&r);
+                let (gw, gh) = if e.dir { (ui.pt(52.0), ui.pt(40.0)) } else { (ui.pt(40.0), ui.pt(50.0)) };
+                let gx = rx + (rw - gw) / 2.0;
+                let gy = ry + ui.pt(6.0) + (ui.pt(50.0) - gh);
+                let tile = if e.dir { LINK } else { WHITE };
+                s.fill_rrect(gx, gy, gw, gh, ui.pt(4.0), if e.enabled { tile } else { SEPARATOR_C.now() });
+                s.stroke_rrect(gx, gy, gw, gh, ui.pt(4.0), ui.pt(1.0), SEPARATOR_C.now());
+                let name_r = R { x: r.x + 2.0, y: r.y + 62.0, w: r.w - 4.0, h: 22.0 };
+                if selected {
+                    let (nx, ny, nw, nh) = px(&name_r);
+                    s.fill_rrect(nx, ny, nw, nh, radius, SELECTION.now());
+                }
+                let fitted = ui.fit(&e.name, MAC_FOOTNOTE_PT, ui.pt(name_r.w - 4.0));
+                centred(s, &name_r, &fitted, MAC_FOOTNOTE_PT, color);
+            } else {
+                if selected {
+                    let (rx, ry, rw, rh) = px(&r);
+                    s.fill_rrect(rx, ry + ui.pt(2.0), rw, rh - ui.pt(4.0), radius, SELECTION.now());
+                }
+                text(s, &R { w: r.w - 24.0, ..r }, SPACE_S, &e.name, MAC_BODY_PT, Weight::Regular, color);
+                if e.dir {
+                    text(s, &R { x: r.x + r.w - 24.0, w: 24.0, ..r }, SPACE_S, "\u{203a}", MAC_BODY_PT, Weight::Regular, if selected { WHITE } else { SECONDARY });
+                }
             }
         }
         if p.entries.is_empty() && p.creating.is_none() {
-            text(s, &R { y: l.list.y + l.row_h, h: l.row_h, ..l.list }, SPACE_S, if p.in_recents { "No recent documents" } else { "No items" }, MAC_BODY_PT, Weight::Regular, SECONDARY);
+            let empty = if !p.search.is_empty() {
+                "No matches"
+            } else if p.in_recents {
+                "No recent documents"
+            } else {
+                "No items"
+            };
+            text(s, &R { y: l.list.y + l.row_h, h: l.row_h, ..l.list }, SPACE_S, empty, MAC_BODY_PT, Weight::Regular, SECONDARY);
         }
 
         // Cancel, then the default button (Open or Save) in the tint; the default is dimmed when it would do nothing
         if p.can_create_dir() {
             let (nx, ny, nw, nh) = px(&l.new_folder);
             s.fill_rrect(nx, ny, nw, nh, radius, FIELD_BG.now());
-            self.label("New Folder", MAC_BODY_PT, Weight::Regular, LABEL.now(), |im| s.blit(im, (nx + (nw - im.w as f32) / 2.0) as i32, (ny + (nh - im.h as f32) / 2.0) as i32, 255, 255));
+            centred(s, &l.new_folder, "New Folder", MAC_BODY_PT, LABEL.now());
         }
         let (cx, cy, cw, ch) = px(&l.cancel);
         s.fill_rrect(cx, cy, cw, ch, radius, FIELD_BG.now());
-        self.label("Cancel", MAC_BODY_PT, Weight::Regular, LABEL.now(), |im| s.blit(im, (cx + (cw - im.w as f32) / 2.0) as i32, (cy + (ch - im.h as f32) / 2.0) as i32, 255, 255));
+        centred(s, &l.cancel, "Cancel", MAC_BODY_PT, LABEL.now());
         let (bx, by, bw, bh) = px(&l.ok);
         let enabled = p.can_confirm();
         s.fill_rrect(bx, by, bw, bh, radius, if enabled { accent } else { FIELD_BG.now() });
-        let ok = if p.kind == Kind::Save { "Save" } else { "Open" };
-        self.label(ok, MAC_BODY_PT, Weight::Regular, if enabled { WHITE } else { SECONDARY }, |im| s.blit(im, (bx + (bw - im.w as f32) / 2.0) as i32, (by + (bh - im.h as f32) / 2.0) as i32, 255, 255));
+        centred(s, &l.ok, if p.kind == Kind::Save { "Save" } else { "Open" }, MAC_BODY_PT, if enabled { WHITE } else { SECONDARY });
+
+        // the location pop-up, over everything: the folder shown (checked), then the folders that enclose it
+        if p.loc_menu {
+            let items = p.location_items();
+            let first = p.location_row(&l, 0);
+            let all = R { h: l.row_h * items.len() as f32, ..first };
+            let (mx, my, mw, mh) = px(&all);
+            s.fill_rrect(mx - ui.pt(2.0), my - ui.pt(2.0), mw + ui.pt(4.0), mh + ui.pt(4.0), radius, FIELD_BG.now());
+            s.stroke_rrect(mx - ui.pt(2.0), my - ui.pt(2.0), mw + ui.pt(4.0), mh + ui.pt(4.0), radius, ui.pt(1.0), SEPARATOR_C.now());
+            for (i, (label, _)) in items.iter().enumerate() {
+                let r = p.location_row(&l, i);
+                let mark = if i == 0 { "\u{2713} " } else { "    " };
+                text(s, &r, SPACE_S, &format!("{mark}{label}"), MAC_BODY_PT, Weight::Regular, LABEL.now());
+            }
+        }
     }
 }
 
@@ -1298,21 +1893,21 @@ pub(crate) mod tests {
     fn a_save_panel_types_a_name_and_a_click_on_a_file_copies_its_name() {
         let (d, o) = scratch("save");
         let mut p = Panel::new(0, 1, Kind::Save, "Export", vec![], "Untitled/1.md", &o);
-        assert_eq!((p.name.as_str(), p.title.as_str()), ("Untitled1.md", "Export"), "a slash cannot be part of the name");
+        assert_eq!((p.name(), p.title.as_str()), ("Untitled1.md", "Export"), "a slash cannot be part of the name");
         assert!(p.layout().field.is_some());
-        assert_eq!(p.name_sel, Some(0..9), "the base name is selected as the panel opens, the extension is not");
+        assert_eq!(p.name_sel(), Some(0..9), "the base name is selected as the panel opens, the extension is not");
         p.type_text("x\n");
-        assert_eq!(p.name, "x.md", "typing replaces the selected base name and keeps the extension");
-        assert_eq!(p.name_sel, None);
+        assert_eq!(p.name(), "x.md", "typing replaces the selected base name and keeps the extension");
+        assert_eq!(p.name_sel(), None);
         p.type_text("y");
-        assert_eq!(p.name, "x.mdy", "with nothing selected typing goes in at the end");
+        assert_eq!(p.name(), "xy.md", "the caret stays after what was typed (QA W2-10: it jumped to the end)");
         p.backspace();
-        assert_eq!(p.name, "x.md");
+        assert_eq!(p.name(), "x.md", "Backspace deletes before the caret");
         p.select(1);
-        assert_eq!(p.name_sel, Some(0..1), "choosing a file selects its base name too");
-        assert_eq!(p.name, "b.txt");
+        assert_eq!(p.name_sel(), Some(0..1), "choosing a file selects its base name too");
+        assert_eq!(p.name(), "b.txt");
         assert_eq!(p.key(28, &o), Some(Some(Outcome::Save { dir: "Documents".into(), name: "b.txt".into() })));
-        p.name.clear();
+        p.name.set_text("");
         p.selected = None;
         assert!(!p.can_confirm(), "an empty name cannot be saved");
         fs::remove_dir_all(&d).unwrap();
@@ -1323,29 +1918,31 @@ pub(crate) mod tests {
         let (d, o) = scratch("namesel");
         let save = |name: &str| Panel::new(0, 1, Kind::Save, "", vec![], name, &o);
         // a name with an extension selects what is before the last dot; one without selects all of it
-        assert_eq!(save("Report.final.rtf").name_sel, Some(0..12));
-        assert_eq!(save("Untitled").name_sel, Some(0..8));
-        assert_eq!(save(".profile").name_sel, Some(0..8), "a leading dot is part of the name");
-        assert_eq!(save("").name_sel, None, "an empty name has nothing to select");
+        assert_eq!(save("Report.final.rtf").name_sel(), Some(0..12));
+        assert_eq!(save("Untitled").name_sel(), Some(0..8));
+        assert_eq!(save(".profile").name_sel(), Some(0..8), "a leading dot is part of the name");
+        assert_eq!(save("").name_sel(), None, "an empty name has nothing to select");
         let open = Panel::new(0, 1, Kind::Open(DocMode::Read), "", vec![], "Untitled.rtf", &o);
-        assert_eq!(open.name_sel, None, "only a save panel has a name field");
+        assert_eq!(open.name_sel(), None, "only a save panel has a name field");
         // Backspace over the selection deletes it and keeps the extension
         let mut p = save("Untitled.rtf");
         assert!(p.backspace());
-        assert_eq!((p.name.as_str(), p.name_sel.clone()), (".rtf", None));
-        assert!(p.backspace(), "the next Backspace deletes a character as usual");
-        assert_eq!(p.name, ".rt");
+        assert_eq!((p.name(), p.name_sel()), (".rtf", None));
+        assert!(!p.backspace(), "the caret is at the start: nothing before it to delete");
+        assert!(p.edit(&crate::shell::keyboard::Out::Named("End")));
+        assert!(p.backspace(), "at the end Backspace deletes the last character");
+        assert_eq!(p.name(), ".rt");
         // a slash is not typeable: it leaves the selection alone
         let mut p = save("Untitled.rtf");
         p.type_text("/");
-        assert_eq!((p.name.as_str(), p.name_sel.clone()), ("Untitled.rtf", Some(0..8)));
+        assert_eq!((p.name(), p.name_sel()), ("Untitled.rtf", Some(0..8)));
         // typing replaces the selection in the middle of text and the limit still holds
         p.type_text("Résumé");
-        assert_eq!(p.name, "Résumé.rtf");
+        assert_eq!(p.name(), "Résumé.rtf");
         let mut long = save(&format!("{}.md", "a".repeat(300)));
         assert_eq!(long.name.len(), 255);
         long.type_text("b");
-        assert!(long.name.len() <= 255 && long.name.starts_with('b'));
+        assert!(long.name.len() <= 255 && long.name().starts_with('b'));
         fs::remove_dir_all(&d).unwrap();
     }
 
@@ -1659,10 +2256,14 @@ pub(crate) mod tests {
         fs::create_dir_all(d.join("home/Downloads")).unwrap();
         let mut p = Panel::new(0, 1, Kind::Open(DocMode::Read), "", vec![], "", &o).with_recents(vec!["Documents/b.txt".into(), "Gone/x.txt".into(), "Documents/Drafts".into()], &o);
         let labels: Vec<&str> = p.places.iter().map(|x| x.label.as_str()).collect();
-        assert_eq!(labels, ["Recents", "Home", "Documents", "Downloads"], "folders that do not exist are not listed");
-        assert_eq!(p.active_place(), Some(2));
+        assert_eq!(labels, ["Recents", "Documents", "Downloads", "Home"], "folders that do not exist are not listed");
+        assert_eq!(p.sidebar_rows(), [SideRow::Place(0), SideRow::Heading("Favorites"), SideRow::Place(1), SideRow::Place(2), SideRow::Heading("Locations"), SideRow::Place(3)]);
+        assert_eq!(p.active_place(), Some(1));
         let l = p.layout();
-        p.click(l.sidebar.x + 5.0, l.sidebar.y + 0.5 * l.sidebar_row_h, 0.0, &o);
+        let at = |p: &Panel, i: usize| l.sidebar.y + (p.sidebar_row_of(i).unwrap() as f32 + 0.5) * l.sidebar_row_h;
+        assert_eq!(p.click(l.sidebar.x + 5.0, l.sidebar.y + 1.5 * l.sidebar_row_h, 0.0, &o), None, "a heading is not a place");
+        assert_eq!(p.dir, Path::new("Documents"));
+        p.click(l.sidebar.x + 5.0, at(&p, 0), 0.0, &o);
         assert!(p.in_recents && p.active_place() == Some(0));
         assert_eq!((p.location(), p.can_go_up()), ("Recents".into(), false));
         assert_eq!(names(&p), ["b.txt", "Drafts"], "newest first; a document that is gone is left out");
@@ -1671,11 +2272,197 @@ pub(crate) mod tests {
         p.select(1);
         assert_eq!(p.confirm(&o), None, "a folder in Recents opens it");
         assert!(!p.in_recents && p.dir == Path::new("Documents/Drafts"));
-        p.click(l.sidebar.x + 5.0, l.sidebar.y + 3.5 * l.sidebar_row_h, 1000.0, &o);
+        p.click(l.sidebar.x + 5.0, at(&p, 2), 1000.0, &o);
         assert_eq!(p.dir, Path::new("Downloads"));
-        p.click(l.sidebar.x + 5.0, l.sidebar.y + 1.5 * l.sidebar_row_h, 2000.0, &o);
-        assert_eq!((p.location(), p.active_place()), ("Home".into(), Some(1)));
+        p.click(l.sidebar.x + 5.0, at(&p, 3), 2000.0, &o);
+        assert_eq!((p.location(), p.active_place()), ("Home".into(), Some(3)));
         assert!(p.go_to(Path::new("Documents"), &o) && !p.go_to(Path::new("Nowhere"), &o));
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    /// QA W2-10: the first character replaced the selected base name, the rest went after the extension ("e.rtf2e-test").
+    #[test]
+    fn typing_a_name_one_key_at_a_time_keeps_the_caret_after_the_typing() {
+        let (d, o) = scratch("caret");
+        let mut p = Panel::new(0, 1, Kind::Save, "", vec![], "Untitled.rtf", &o);
+        for c in "e2e-test".chars() {
+            p.type_text(&c.to_string());
+        }
+        assert_eq!(p.name(), "e2e-test.rtf");
+        assert_eq!(p.key(28, &o), Some(Some(Outcome::Save { dir: "Documents".into(), name: "e2e-test.rtf".into() })));
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn the_name_field_moves_selects_and_edits_like_a_text_field() {
+        use crate::shell::keyboard::Out;
+        let (d, o) = scratch("fieldkeys");
+        let mut p = Panel::new(0, 1, Kind::Save, "", vec![], "Report.rtf", &o);
+        // the caret keys are the field's: the panel's own key handler leaves them to the typing path
+        for code in [105, 106, 102, 107, 111, 14] {
+            assert_eq!(p.key(code, &o), None, "key {code} goes to the field");
+        }
+        assert!(p.edit(&Out::Named("Right")));
+        assert_eq!((p.name.caret(), p.name_sel()), (6, None), "Right collapses the selection to its end");
+        p.type_text("s");
+        assert_eq!(p.name(), "Reports.rtf");
+        p.edit(&Out::Named("Home"));
+        p.edit(&Out::Named("ShiftWordRight"));
+        assert_eq!(p.name_sel(), Some(0..7), "Shift+Option+Right selects the word");
+        p.edit(&Out::Named("SelectAll"));
+        assert_eq!(p.name_sel(), Some(0..11), "Cmd+A selects the whole name");
+        p.type_text("a.md");
+        assert_eq!(p.name(), "a.md");
+        p.edit(&Out::Named("Left"));
+        p.edit(&Out::Named("Left"));
+        p.edit(&Out::Named("Left"));
+        p.edit(&Out::Named("DeleteForward"));
+        assert_eq!(p.name(), "amd", "Delete removes the character after the caret");
+        p.edit(&Out::Named("End"));
+        p.edit(&Out::Named("DeleteLine"));
+        assert_eq!(p.name(), "", "Cmd+Backspace deletes everything before the caret");
+        assert!(!p.can_confirm());
+        // a click places the caret where the shell measured it; a double click selects the word
+        p.name.set_text("one two.txt");
+        p.click_field(Focus::Name, 2, 0.0);
+        assert_eq!((p.name.caret(), p.name_sel()), (2, None));
+        p.click_field(Focus::Name, 5, 100.0);
+        assert_eq!(p.name_sel(), Some(4..7));
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn the_search_field_filters_the_folder_and_is_cleared_on_navigation() {
+        use crate::shell::keyboard::Out;
+        let (d, o) = scratch("search");
+        let mut p = Panel::new(0, 1, Kind::Open(DocMode::Read), "", vec![], "", &o);
+        assert_eq!(p.focus, Focus::List);
+        assert_eq!(p.key(105, &o), Some(None), "with the list focused Left still goes up");
+        assert_eq!(p.dir, Path::new(""));
+        assert!(p.go_back(&o));
+        assert_eq!(p.dir, Path::new("Documents"));
+        // typing in an open panel starts a search
+        p.type_text("T");
+        assert_eq!((p.focus, p.search.text()), (Focus::Search, "T"));
+        assert_eq!(names(&p), ["b.txt", "Drafts", "photo.png"], "any case, anywhere in the name");
+        p.type_text("xt");
+        assert_eq!(names(&p), ["b.txt"]);
+        assert_eq!(p.key(105, &o), None, "Left moves the search field's caret");
+        p.edit(&Out::Backspace);
+        p.edit(&Out::Backspace);
+        p.edit(&Out::Backspace);
+        assert_eq!(names(&p), ["A.md", "b.txt", "Drafts", "photo.png"]);
+        p.type_text("zzz");
+        assert!(p.entries.is_empty());
+        // a click in the list hands the keys back to it; going into a folder clears the search
+        p.search.set_text("dra");
+        p.edit(&Out::Named("End"));
+        p.type_text("f");
+        assert_eq!(names(&p), ["Drafts"]);
+        let l = p.layout();
+        p.click(l.list.x + 10.0, l.list.y + l.row_h * 0.5, 0.0, &o);
+        assert_eq!(p.focus, Focus::List);
+        p.key(28, &o);
+        assert_eq!((p.dir.as_path(), p.search.text()), (Path::new("Documents/Drafts"), ""));
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn back_and_forward_step_through_the_folders_visited() {
+        let (d, o) = scratch("history");
+        let mut p = Panel::new(0, 1, Kind::Open(DocMode::Read), "", vec![], "", &o);
+        assert!(!p.can_go_back() && !p.can_go_forward());
+        let l = p.layout();
+        p.select(2);
+        p.key(28, &o);
+        assert_eq!(p.dir, Path::new("Documents/Drafts"));
+        p.click(l.back.x + 1.0, l.back.y + 1.0, 0.0, &o);
+        assert_eq!(p.dir, Path::new("Documents"));
+        assert!(p.can_go_forward());
+        p.click(l.forward.x + 1.0, l.forward.y + 1.0, 1000.0, &o);
+        assert_eq!(p.dir, Path::new("Documents/Drafts"));
+        // Cmd+Up goes up and Cmd+[ comes back; a new place drops what forward remembered
+        assert_eq!(p.key_with(103, true, &o), Some(None));
+        assert_eq!(p.dir, Path::new("Documents"));
+        p.key_with(26, true, &o);
+        assert_eq!(p.dir, Path::new("Documents/Drafts"));
+        p.go_place(0, &o);
+        assert!(p.in_recents && !p.can_go_forward());
+        // a folder that went away is skipped
+        fs::remove_dir_all(d.join("home/Documents/Drafts")).unwrap();
+        assert!(p.go_back(&o));
+        assert_eq!(p.dir, Path::new("Documents"));
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn the_location_pop_up_lists_the_enclosing_folders_and_goes_there() {
+        let (d, o) = scratch("location");
+        let mut p = Panel::new(0, 1, Kind::Save, "", vec![], "x.md", &o);
+        p.go_to(Path::new("Documents/Drafts"), &o);
+        let labels: Vec<String> = p.location_items().into_iter().map(|(l, _)| l).collect();
+        assert_eq!(labels, ["Drafts", "Documents", "Home"]);
+        let l = p.layout();
+        p.click(l.location.x + 5.0, l.location.y + 5.0, 0.0, &o);
+        assert!(p.loc_menu);
+        assert_eq!(p.key(1, &o), Some(None), "Esc closes the pop-up, not the panel");
+        assert!(!p.loc_menu);
+        p.click(l.location.x + 5.0, l.location.y + 5.0, 0.0, &o);
+        let r = p.location_row(&l, 2);
+        p.click(r.x + 5.0, r.y + 5.0, 100.0, &o);
+        assert_eq!((p.dir.as_path(), p.loc_menu), (Path::new(""), false));
+        assert!(p.can_go_back());
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn the_icon_view_lays_items_in_rows_and_arrows_move_through_them() {
+        let (d, o) = scratch("icons");
+        for i in 0..20 {
+            fs::write(d.join(format!("home/Documents/n{i:02}.txt")), "x").unwrap();
+        }
+        let mut p = Panel::new(0, 1, Kind::Open(DocMode::Read), "", vec![], "", &o);
+        let l = p.layout();
+        p.click(l.view_icons.x + 1.0, l.view_icons.y + 1.0, 0.0, &o);
+        assert!(p.icons);
+        let cols = p.columns();
+        assert!(cols >= 3, "{cols} columns");
+        assert_eq!(p.visible() % cols, 0);
+        let second = p.item_rect(&l, 1).unwrap();
+        assert_eq!(second.y, p.item_rect(&l, 0).unwrap().y, "side by side");
+        assert_eq!(p.item_rect(&l, cols).unwrap().x, p.item_rect(&l, 0).unwrap().x, "the next row starts under the first");
+        p.click(second.x + 5.0, second.y + 5.0, 1000.0, &o);
+        assert_eq!(p.selected, Some(1));
+        p.key(108, &o);
+        assert_eq!(p.selected, Some(1 + cols), "Down moves a row of icons");
+        p.key(106, &o);
+        assert_eq!(p.selected, Some(2 + cols), "Right moves one icon");
+        p.select(p.entries.len() - 1);
+        assert!(p.top > 0 && p.top % cols == 0, "scrolled by whole rows");
+        assert!(p.item_rect(&l, p.entries.len() - 1).is_some());
+        p.click(l.view_list.x + 1.0, l.view_list.y + 1.0, 2000.0, &o);
+        assert!(!p.icons && p.item_rect(&l, p.selected.unwrap()).is_some(), "the selection stays in view in the list");
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    /// A save panel in a shell: the caret keys come through `hw_type` as named keys and edit the name, not the folder.
+    #[test]
+    fn the_shell_routes_caret_keys_and_select_all_to_the_name_field() {
+        use crate::shell::keyboard::Out;
+        ALLOW.with(|a| a.set(true));
+        let (d, mut sh, peer) = shell_with_app("e2e-caret");
+        ask(&peer, &mut sh, ToShell::DocSave { request: 4, suggested_name: "Untitled.rtf".into(), filters: vec![] });
+        assert_eq!(sh.hw_menu_key(105, true, 1.0), None, "Left is the field's, not the panel's Back");
+        for out in [Out::Text("e".into()), Out::Text("2".into()), Out::Named("Left"), Out::Text("x".into()), Out::Named("End"), Out::Backspace] {
+            sh.hw_type(out, 1.0);
+        }
+        assert_eq!(sh.doc_panel.as_ref().unwrap().name(), "ex2.rt");
+        sh.hw_type(Out::Named("SelectAll"), 1.0);
+        sh.hw_type(Out::Text("final.rtf".into()), 1.0);
+        sh.hw_menu_key(28, true, 1.0);
+        let got = replies(&peer);
+        assert!(matches!(&got[..], [(ToApp::DocGranted { request: 4, name, .. }, Some(_))] if name == "final.rtf"), "{got:?}");
+        ALLOW.with(|a| a.set(false));
         fs::remove_dir_all(&d).unwrap();
     }
 

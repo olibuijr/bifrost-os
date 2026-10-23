@@ -7,7 +7,7 @@
 use crate::links;
 use crate::properties::{self, Properties};
 use crate::rtf;
-use crate::text::{family_for_name, Align, Cell, ListKind, Style, COLORS, DEFAULT_SIZE, FAMILY_NAMES, MAX_PARAGRAPH_SPACE, SPACINGS};
+use crate::text::{family_for_name, Align, Cell, ListKind, Style, COLORS, DEFAULT_SIZE, MAX_PARAGRAPH_SPACE, SPACINGS};
 use crate::xml::{self, Token};
 use crate::zipdoc;
 use std::collections::HashMap;
@@ -479,7 +479,7 @@ fn text_style_attrs(style: &Style) -> String {
         _ => {}
     }
     if style.font > 0 {
-        out += &format!(" fo:font-family=\"{}\"", FAMILY_NAMES[(style.font as usize).min(FAMILY_NAMES.len() - 1)]);
+        out += &format!(" fo:font-family=\"{}\"", crate::text::export_name(style.font));
     }
     out
 }

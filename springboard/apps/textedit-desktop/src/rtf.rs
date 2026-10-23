@@ -63,6 +63,13 @@ pub fn write_with_attachments(cells: &[Cell], tab: f32, props: &Properties, atta
     for (i, family) in FAMILIES.iter().enumerate() {
         out += &format!("{{\\f{i} {family};}}");
     }
+    // the installed families the text uses, under their own numbers (the `\fN` the runs carry)
+    let mut used: Vec<u8> = cells.iter().map(|c| c.style.font).filter(|f| *f as usize >= FAMILIES.len()).collect();
+    used.sort_unstable();
+    used.dedup();
+    for i in used {
+        out += &format!("{{\\f{i} {};}}", crate::view::family_name(i));
+    }
     out += "}{\\colortbl;";
     for (_, [r, g, b]) in COLORS.iter().skip(1) {
         out += &format!("\\red{r}\\green{g}\\blue{b};");
@@ -809,7 +816,8 @@ impl Reader {
                 let name = self.table_name.trim();
                 // "Courier New" is the Courier family; a name we do not carry falls back to the default
                 let lower = name.to_ascii_lowercase();
-                let index = FAMILIES.iter().position(|f| lower.starts_with(&f.to_ascii_lowercase())).unwrap_or(0) as u8;
+                let index = crate::text::family_index(name)
+                    .unwrap_or_else(|| FAMILIES.iter().position(|f| lower.starts_with(&f.to_ascii_lowercase())).unwrap_or(0) as u8);
                 self.fonts.push((number, index));
             }
             self.table_name.clear();

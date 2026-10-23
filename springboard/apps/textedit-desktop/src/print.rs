@@ -3,7 +3,7 @@
 //! the printable width, so a printed page breaks lines where the window does.
 
 use crate::layout::{self, Layout, Marker, Measure};
-use crate::text::{is_break, Cell, COLORS, FAMILIES, PAGE_BREAK};
+use crate::text::{is_break, Cell, COLORS, PAGE_BREAK};
 use bifrost_app::kit::cg::pdf::writer::text_literal;
 use bifrost_app::print::{PaperSize, PdfPage, PrintInfo};
 use std::ops::Range;
@@ -132,7 +132,8 @@ fn highlight_rgb(index: u8) -> [f32; 3] {
 }
 
 fn show(out: &mut Vec<u8>, s: &crate::text::Style, text: &str, x: f32, y: f32) {
-    let face = (s.font as usize).min(FAMILIES.len() - 1) * 4 + s.bold as usize + 2 * s.italic as usize;
+    // an installed family prints in the base PDF face closest to it
+    let face = crate::text::base_family(s.font) * 4 + s.bold as usize + 2 * s.italic as usize;
     // raised and lowered text is smaller and moves off the baseline (`Ts` is the text rise)
     let (size, rise) = match s.script {
         1 => (s.size * crate::view::SCRIPT_SCALE, s.size * 0.35),
@@ -291,7 +292,7 @@ mod tests {
 
     #[test]
     fn the_faces_list_one_name_per_family_style() {
-        assert_eq!(FACES.len(), FAMILIES.len() * 4);
+        assert_eq!(FACES.len(), crate::text::FAMILIES.len() * 4);
         assert_eq!(FACES[5], "Times-Bold");
     }
 }

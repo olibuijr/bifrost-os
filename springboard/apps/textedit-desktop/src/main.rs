@@ -9,6 +9,7 @@
 mod docx;
 mod encoding;
 mod document;
+mod font_panel;
 mod format_bar;
 mod html;
 mod layout;
@@ -54,6 +55,15 @@ use text::{Align, Cell, Kind, Style, Transform, OBJECT};
 use bifrost_app::graphics_imageio;
 use view::{Action, Button, Focus, Hit};
 
+/// A millisecond clock for type-select in the font panel (keys typed within a second continue a family's name).
+fn clock_ms() -> f64 {
+    static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+    START.get_or_init(std::time::Instant::now).elapsed().as_secs_f64() * 1000.0
+}
+
+/// The find bar highlights at most this many matches (a long document full of one letter stays quick to draw).
+const MAX_HIGHLIGHTS: usize = 2000;
+
 /// The layout of the document as last drawn, and the misspelled words of its text, kept until the text, the width or
 /// the document changes.
 struct Cache {
@@ -76,6 +86,8 @@ struct TextEditApp {
     find: String,
     replace: String,
     focus: Focus,
+    /// the whole text of the focused find field is selected (Cmd+A, reopening the bar, Tab into it): typing replaces it
+    find_sel: bool,
     /// the status row's note (a search that found nothing, the count of replacements), until the next edit
     note: Option<String>,
     /// how far the page is scrolled, in points, and whether the caret should be brought into view
@@ -121,6 +133,9 @@ struct TextEditApp {
     encodings_panel: bool,
     /// Format > Text > Spacing: the panel's fields, while it is open
     spacing_sheet: Option<SpacingSheet>,
+    /// Format > Font > Show Fonts: the font panel (its family list scroll), and Show Colors: the colour panel
+    fonts: Option<font_panel::Fonts>,
+    colors_panel: bool,
     /// Cut and Copy keep the copied cells with their formatting, for a paste of the same text. The text is the clipboard
     /// text they were copied with.
     rich_clip: Option<(String, Vec<Cell>)>,
@@ -273,6 +288,7 @@ impl TextEditApp {
             find: String::new(),
             replace: String::new(),
             focus: Focus::Body,
+            find_sel: false,
             note: None,
             scroll: 0.0,
             follow: true,
@@ -298,6 +314,8 @@ impl TextEditApp {
             spelling_panel: false,
             settings: false,
             encodings_panel: false,
+            fonts: None,
+            colors_panel: false,
             spacing_sheet: None,
             rich_clip: None,
             ruler: None,
@@ -420,6 +438,10 @@ impl TextEditApp {
             if find_field && !sheet_open && matches!(action, Action::Paste | Action::PasteMatch) {
                 let line = clipboard::text().map(|s| s.lines().next().unwrap_or("").to_string()).unwrap_or_default();
                 return self.type_into(&line);
+            }
+            // the find field's own Select All, Copy and Cut (QA W2-12: Cmd+A appended to the query instead)
+            if find_field && !sheet_open && matches!(action, Action::SelectAll | Action::Copy | Action::Cut) {
+                return self.find_field_command(action);
             }
             let panel_paste = matches!(action, Action::Paste | Action::PasteMatch)
                 && (self.link.is_some() || self.props.is_some() || self.line.is_some() || self.spacing_sheet.is_some());
@@ -632,19 +654,26 @@ impl TextEditApp {
                 }
                 self.find_open = true;
                 self.focus = Focus::Find;
+                // the previous query comes back selected, so typing starts a new one (QA W2-12)
+                self.find_sel = !self.find.is_empty();
                 return true;
             }
             Action::FindDone => {
                 self.find_open = false;
                 self.focus = Focus::Body;
+                self.find_sel = false;
+                // the bar's "not found" or "replaced" note goes with it (QA W2-12)
+                self.note = None;
                 return true;
             }
             Action::FocusFind => {
                 self.focus = Focus::Find;
+                self.find_sel = false;
                 return true;
             }
             Action::FocusReplace => {
                 self.focus = Focus::Replace;
+                self.find_sel = false;
                 return true;
             }
             Action::FindNext => return self.find_step(true),
@@ -760,6 +789,22 @@ impl TextEditApp {
                 return true;
             }
             Action::ShowSpacing => return self.open_spacing_sheet(),
+            Action::ShowFonts => {
+                // Cmd+T toggles the panel, as the shared font panel's menu item does
+                self.fonts = match self.fonts.take() {
+                    Some(_) => None,
+                    None => Some(font_panel::Fonts::new(self.status().style.font)),
+                };
+                self.colors_panel = false;
+                return true;
+            }
+            Action::ShowColors => {
+                self.colors_panel = !self.colors_panel;
+                self.fonts = None;
+                return true;
+            }
+            Action::FontsDone => return self.fonts.take().is_some(),
+            Action::ColorsDone => return std::mem::take(&mut self.colors_panel),
             Action::SpacingDone => return self.finish_spacing(),
             Action::SpacingCancel => return self.spacing_sheet.take().is_some(),
             Action::Setting(index) => {
@@ -1125,6 +1170,50 @@ impl TextEditApp {
         true
     }
 
+    /// A press while the font panel is open: a family, typeface or size applies to the selection at once; the arrows
+    /// scroll the families; Done closes. A press elsewhere is used up (the panel floats over the page).
+    fn touch_fonts(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
+        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let layout = font_panel::fonts_layout(geom.width, geom.body_top);
+        let Some(panel) = self.fonts.as_mut() else { return false };
+        match font_panel::fonts_hit(&layout, panel, px, py) {
+            Some(font_panel::FontsHit::Family(i)) => self.perform(ctx, Action::Font(i)),
+            Some(font_panel::FontsHit::Face(i)) => self.perform(ctx, Action::FontStyle(i)),
+            Some(font_panel::FontsHit::Size(i)) => self.perform(ctx, Action::Size(i)),
+            Some(font_panel::FontsHit::Up) => {
+                panel.scroll(-(font_panel::ROWS as i32 - 1));
+                true
+            }
+            Some(font_panel::FontsHit::Down) => {
+                panel.scroll(font_panel::ROWS as i32 - 1);
+                true
+            }
+            Some(font_panel::FontsHit::Done) => self.perform(ctx, Action::FontsDone),
+            None => true,
+        }
+    }
+
+    /// A press while the colour panel is open: a swatch colours the selection, Done closes.
+    fn touch_colors(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
+        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let layout = font_panel::colors_layout(geom.width, geom.body_top);
+        match font_panel::colors_hit(&layout, px, py) {
+            Some(Some(i)) => self.perform(ctx, Action::Color(i)),
+            Some(None) => self.perform(ctx, Action::ColorsDone),
+            None => true,
+        }
+    }
+
+    /// Up and Down in the font panel: the next or previous family, applied at once.
+    fn fonts_step(&mut self, ctx: &Ctx, by: i32) -> bool {
+        let current = self.status().style.font as i32;
+        let next = (current + by).clamp(0, text::families().len() as i32 - 1) as u8;
+        if let Some(panel) = self.fonts.as_mut() {
+            panel.reveal(next as usize);
+        }
+        self.perform(ctx, Action::Font(next))
+    }
+
     /// A press while the Preferences panel is open: Done, a row (which changes that setting), or nothing.
     fn touch_settings(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
         let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
@@ -1224,6 +1313,57 @@ impl TextEditApp {
             panel.focus = field;
         }
         true
+    }
+
+    /// Select All, Copy and Cut while a find field has the keyboard: they act on the field, never on the page.
+    fn find_field_command(&mut self, action: Action) -> bool {
+        let text = if self.focus == Focus::Find { self.find.clone() } else { self.replace.clone() };
+        match action {
+            Action::SelectAll => self.find_sel = !text.is_empty(),
+            Action::Copy | Action::Cut if self.find_sel => {
+                clipboard::set_text(&text);
+                if matches!(action, Action::Cut) {
+                    self.find_sel = false;
+                    if self.focus == Focus::Find {
+                        self.find.clear();
+                        self.find_live();
+                    } else {
+                        self.replace.clear();
+                    }
+                }
+            }
+            _ => {}
+        }
+        true
+    }
+
+    /// The live search as the query changes: the first match at or after the start of the selection is selected
+    /// (wrapping), so the page follows the typing; the page highlights every match while the bar is open.
+    fn find_live(&mut self) -> bool {
+        if self.find.is_empty() {
+            self.note = None;
+            return true;
+        }
+        let query = self.find.clone();
+        let Some(doc) = active_doc_mut(&mut self.docs) else { return true };
+        let from = doc.text.selection().start;
+        match doc.text.find(&query, from, true, false) {
+            Some(r) => {
+                doc.text.select(r.start, r.end);
+                self.note = None;
+            }
+            None => self.note = Some(format!("\"{query}\" not found")),
+        }
+        self.follow = true;
+        true
+    }
+
+    /// Every match of the find field in the active document, for the highlight (none while the bar is closed).
+    fn find_matches(&self) -> Vec<Range<usize>> {
+        if !self.find_open || self.find.is_empty() {
+            return Vec::new();
+        }
+        active_doc(&self.docs).map_or_else(Vec::new, |d| d.text.find_all(&self.find, false, MAX_HIGHLIGHTS))
     }
 
     /// Finds the next (or previous) match of the find field from the selection, and selects it.
@@ -1608,6 +1748,16 @@ impl TextEditApp {
         if printable.is_empty() {
             return false;
         }
+        // the font panel jumps to the family whose name is typed (and applies it, as clicking it would)
+        if let Some(panel) = self.fonts.as_mut() {
+            let Some(i) = panel.type_select(&printable, clock_ms()) else { return true };
+            let rich = active_doc(&self.docs).is_some_and(|d| d.rich);
+            if let Some(doc) = active_doc_mut(&mut self.docs).filter(|_| rich) {
+                doc.text.set_font(i);
+                self.edited();
+            }
+            return true;
+        }
         if let Some((_, panel)) = self.props.as_mut() {
             panel.type_text(&printable);
             return true;
@@ -1640,9 +1790,15 @@ impl TextEditApp {
             return true;
         }
         if self.find_open && self.focus != Focus::Body {
-            match self.focus {
-                Focus::Find => self.find.push_str(&printable),
-                _ => self.replace.push_str(&printable),
+            // typing over a selected field replaces it
+            let over = std::mem::take(&mut self.find_sel);
+            let field = if self.focus == Focus::Find { &mut self.find } else { &mut self.replace };
+            if over {
+                field.clear();
+            }
+            field.push_str(&printable);
+            if self.focus == Focus::Find {
+                self.find_live();
             }
             return true;
         }
@@ -1764,8 +1920,13 @@ impl TextEditApp {
             return true;
         }
         if self.find_open && self.focus != Focus::Body {
+            let over = std::mem::take(&mut self.find_sel);
             let field = if self.focus == Focus::Find { &mut self.find } else { &mut self.replace };
-            return field.pop().is_some();
+            let changed = if over { !std::mem::take(field).is_empty() } else { field.pop().is_some() };
+            if changed && self.focus == Focus::Find {
+                self.find_live();
+            }
+            return changed;
         }
         if self.refuse_edit() {
             return true;
@@ -1829,6 +1990,8 @@ impl TextEditApp {
             && !self.encodings_panel
             && !self.spelling_panel
             && !self.plain_sheet
+            && self.fonts.is_none()
+            && !self.colors_panel
     }
 
     /// A navigation key, with the modifiers a chord carries: Shift extends the selection, Alt or Ctrl move by word, Cmd by
@@ -1936,6 +2099,12 @@ impl TextEditApp {
         let (px, py) = (x / ctx.ui.s, y / ctx.ui.s);
         match kind {
             TouchKind::Down => {
+                if self.fonts.is_some() {
+                    return self.touch_fonts(ctx, px, py);
+                }
+                if self.colors_panel {
+                    return self.touch_colors(ctx, px, py);
+                }
                 if self.props.is_some() {
                     return self.touch_properties(ctx, px, py);
                 }
@@ -2094,6 +2263,9 @@ impl TextEditApp {
             items.push(menu_item(Action::Highlight(index as u8), title, "", rich).checked(style.highlight == index as u8).depth(1));
         }
         items.push(AppMenuItem::submenu("Font"));
+        items.push(menu_item(Action::ShowFonts, "Show Fonts", "cmd+t", enabled).checked(self.fonts.is_some()).depth(1));
+        items.push(menu_item(Action::ShowColors, "Show Colors", "cmd+shift+c", enabled).checked(self.colors_panel).depth(1));
+        items.push(AppMenuItem::separator().depth(1));
         for index in 0..text::FAMILIES.len() as u8 {
             items.push(menu_item(Action::Font(index), view::family_name(index), "", rich).checked(style.font == index).depth(1));
         }
@@ -2365,6 +2537,18 @@ impl App for TextEditApp {
                 if self.settings && code == 27 {
                     return self.perform(ctx, Action::SettingsDone);
                 }
+                // the font panel: Up and Down step through the families, Esc and Return close it
+                if self.fonts.is_some() {
+                    match code {
+                        38 => return self.fonts_step(ctx, -1),
+                        40 => return self.fonts_step(ctx, 1),
+                        1 | 27 | 13 => return self.perform(ctx, Action::FontsDone),
+                        _ => {}
+                    }
+                }
+                if self.colors_panel && matches!(code, 1 | 27 | 13) {
+                    return self.perform(ctx, Action::ColorsDone);
+                }
                 if self.encodings_panel && code == 27 {
                     return self.perform(ctx, Action::EncodingsDone);
                 }
@@ -2416,6 +2600,8 @@ impl App for TextEditApp {
                                 Focus::Find => Focus::Replace,
                                 _ => Focus::Find,
                             };
+                            // Tab into a field selects its text, as the native fields do
+                            self.find_sel = !(if self.focus == Focus::Find { &self.find } else { &self.replace }).is_empty();
                             true
                         } else {
                             false
@@ -2570,9 +2756,10 @@ impl App for TextEditApp {
         let tab = active_doc(&self.docs).map_or(0.0, |d| d.text.tab_width());
         view::draw_ruler(canvas, ui, &geom, tab);
         if self.find_open {
-            view::draw_find(canvas, ui, &geom, &find, &self.find, &self.replace, self.focus);
+            view::draw_find(canvas, ui, &geom, &find, &self.find, &self.replace, self.focus, self.find_sel);
         }
         self.ensure_layout(ui, geom.text_w);
+        let matches = self.find_matches();
         view::page_clip(canvas, ui, &geom, self.opts.dark_background);
         let view_h = geom.body_bottom - geom.body_top;
         if let (Some(doc), Some(cache)) = (active_doc(&self.docs), self.cache.as_ref()) {
@@ -2601,6 +2788,7 @@ impl App for TextEditApp {
                 self.scroll,
                 self.focus == Focus::Body,
                 &cache.misspelled,
+                &matches,
                 self.opts.dark_background,
             );
         }
@@ -2658,6 +2846,15 @@ impl App for TextEditApp {
                 .map(|(i, e)| (e.name(), (if self.opts.lists_encoding(i) { "Listed" } else { "Not listed" }).to_string()))
                 .collect();
             view::draw_list(canvas, ui, &layout, "Customize Encodings List", &rows, &buttons);
+        }
+        if let Some(panel) = &self.fonts {
+            let layout = font_panel::fonts_layout(geom.width, geom.body_top);
+            let style = self.status().style;
+            font_panel::draw_fonts(canvas, ui, &layout, panel, style.font, style.bold as u8 + 2 * style.italic as u8, style.size);
+        }
+        if self.colors_panel {
+            let layout = font_panel::colors_layout(geom.width, geom.body_top);
+            font_panel::draw_colors(canvas, ui, &layout, self.status().style.color);
         }
         let (words, chars) = active_doc(&self.docs).map_or((0, 0), |d| (d.text.word_count(), d.text.char_count()));
         view::draw_status(canvas, ui, &geom, words, chars, self.note.as_deref());
@@ -3114,10 +3311,13 @@ mod tests {
         assert!(app.event(&ctx, Input::Command(Command::Paste)));
         assert_eq!(app.find, "needle", "paste goes into the find field");
         assert_eq!(text_of(&app), SENTENCE, "the document is untouched");
-        for command in [Command::Cut, Command::SelectAll, Command::Undo] {
-            assert!(!app.event(&ctx, Input::Command(command)));
-        }
-        assert!(!app.event(&ctx, Input::Key(KeyInput::chord(45, CHORD_META))), "Cmd+X as a chord is swallowed too");
+        // Select All, Copy and Cut are the field's (QA W2-12: Cmd+A appended to the query instead); Undo does nothing
+        assert!(app.event(&ctx, Input::Command(Command::SelectAll)), "Cmd+A selects the find field's text");
+        assert!(app.find_sel);
+        assert!(!app.event(&ctx, Input::Command(Command::Undo)));
+        clipboard::set_text("");
+        assert!(app.event(&ctx, Input::Key(KeyInput::chord(45, CHORD_META))), "Cmd+X as a chord cuts the field's text");
+        assert_eq!((app.find.as_str(), clipboard::text().as_deref()), ("", Some("needle")));
         assert_eq!(text_of(&app), SENTENCE, "cut and undo left the document alone");
         assert_eq!(caret_of(&app), 0..5, "select all left the selection alone");
         // a sheet open over the page: the same
@@ -3129,6 +3329,105 @@ mod tests {
         }
         assert_eq!(text_of(&app), SENTENCE);
         assert_eq!(caret_of(&app), 0..5);
+    }
+
+    /// QA W2-12: Cmd+A in the find field, live matches while typing, the previous query selected on reopening, and no
+    /// "not found" left in the status row after the bar closes.
+    #[test]
+    fn the_find_bar_searches_as_it_is_typed_and_reopens_with_the_query_selected() {
+        let ctx = window(1200, 780);
+        let mut app = app_with_text("the lazy dog and the lazy cat", 0..0);
+        assert!(app.perform(&ctx, Action::Find));
+        // the shared find pasteboard may hold another test's query
+        app.find.clear();
+        app.find_sel = false;
+        for c in ["l", "a", "z"] {
+            app.event(&ctx, Input::Key(KeyInput::Text(c.into())));
+        }
+        assert_eq!(caret_of(&app), 4..7, "the first match is selected while typing");
+        assert_eq!(app.find_matches(), vec![4..7, 21..24], "every match is highlighted");
+        app.event(&ctx, Input::Key(KeyInput::Text("q".into())));
+        assert_eq!(app.note.as_deref(), Some("\"lazq\" not found"));
+        assert!(app.find_matches().is_empty());
+        app.backspace();
+        assert_eq!((app.find.as_str(), app.note.as_deref()), ("laz", None));
+        // closing clears the note and the highlight
+        app.event(&ctx, Input::Key(KeyInput::Text("q".into())));
+        assert!(app.perform(&ctx, Action::FindDone));
+        assert_eq!(app.note, None);
+        assert!(app.find_matches().is_empty(), "no highlight once the bar is closed");
+        // reopening selects the previous query: typing replaces it, Cmd+A selects it again
+        app.perform(&ctx, Action::Find);
+        assert!(app.find_sel);
+        app.event(&ctx, Input::Key(KeyInput::Text("cat".into())));
+        assert_eq!(app.find, "cat");
+        assert_eq!(caret_of(&app), 26..29);
+        app.event(&ctx, Input::Command(Command::SelectAll));
+        app.event(&ctx, Input::Key(KeyInput::Text("dog".into())));
+        assert_eq!(app.find, "dog", "Cmd+A then typing replaces the query");
+        app.event(&ctx, Input::Command(Command::SelectAll));
+        app.backspace();
+        assert_eq!(app.find, "", "Backspace over the selected query clears it");
+        assert_eq!(text_of(&app), "the lazy dog and the lazy cat", "the page was never edited");
+    }
+
+    #[test]
+    fn find_all_lists_every_match_without_overlap() {
+        let app = app_with_text("aaaa Aa", 0..0);
+        let doc = active_doc(&app.docs).unwrap();
+        assert_eq!(doc.text.find_all("aa", false, 10), vec![0..2, 2..4, 5..7]);
+        assert_eq!(doc.text.find_all("aa", true, 10), vec![0..2, 2..4]);
+        assert_eq!(doc.text.find_all("aa", false, 1), vec![0..2], "the limit holds");
+        assert!(doc.text.find_all("", false, 10).is_empty());
+    }
+
+    /// QA W2-11: Cmd+T did nothing and the Format menu had no Show Fonts or Show Colors.
+    #[test]
+    fn show_fonts_and_show_colors_open_panels_that_format_the_selection() {
+        let ctx = window(1200, 780);
+        let mut app = app_with_text("Hello world", 0..5);
+        let format = app.format_menu();
+        let item = |title: &str| format.items.iter().find(|i| i.title == title).cloned();
+        assert_eq!(item("Show Fonts").map(|i| (i.id, i.key)), Some((Action::ShowFonts.id().unwrap(), "cmd+t".to_string())));
+        assert_eq!(item("Show Colors").map(|i| (i.id, i.key)), Some((Action::ShowColors.id().unwrap(), "cmd+shift+c".to_string())));
+        // the menu item (Cmd+T) opens the panel; a family, a typeface and a size apply to the selection at once
+        assert!(app.menu_action(&ctx, Action::ShowFonts.id().unwrap()), "Cmd+T is the menu item's key equivalent");
+        assert!(app.fonts.is_some() && !app.page_has_keys());
+        let geom = app.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let l = font_panel::fonts_layout(geom.width, geom.body_top);
+        let row = |r: bifrost_app::controls::Rect, i: usize| (r.x + 6.0, r.y + font_panel::ROW_H * (i as f32 + 0.5));
+        press(&mut app, &ctx, TouchKind::Down, row(l.family, 2), 0.0);
+        press(&mut app, &ctx, TouchKind::Down, row(l.face, 1), 100.0);
+        press(&mut app, &ctx, TouchKind::Down, row(l.size, 5), 200.0);
+        let style = active_doc(&app.docs).unwrap().text.cells()[0].style;
+        assert_eq!((style.font, style.bold, style.italic, style.size), (2, true, false, text::SIZES[5]));
+        assert_eq!(active_doc(&app.docs).unwrap().text.cells()[6].style.font, 0, "only the selection");
+        // Up steps to the previous family; typing a name jumps to it; Esc closes
+        app.event(&ctx, Input::Key(KeyInput::Code(38)));
+        assert_eq!(app.status().style.font, 1);
+        app.event(&ctx, Input::Key(KeyInput::Text("hel".into())));
+        assert_eq!(app.status().style.font, 0, "Helvetica");
+        app.event(&ctx, Input::Key(KeyInput::Code(27)));
+        assert!(app.fonts.is_none() && app.page_has_keys());
+        // Show Colors: a swatch colours the selection, Done closes
+        app.perform(&ctx, Action::ShowColors);
+        let c = font_panel::colors_layout(geom.width, geom.body_top);
+        let s = c.swatches[1];
+        press(&mut app, &ctx, TouchKind::Down, (s.x + 4.0, s.y + 4.0), 300.0);
+        assert_eq!(active_doc(&app.docs).unwrap().text.cells()[0].style.color, 1);
+        press(&mut app, &ctx, TouchKind::Down, (c.done.x + 2.0, c.done.y + 2.0), 400.0);
+        assert!(!app.colors_panel);
+        assert!(app.docs.is_edited(app.docs.active().unwrap()), "formatting is an unsaved change");
+    }
+
+    #[test]
+    fn an_installed_family_beyond_the_base_three_maps_to_a_base_face_and_keeps_its_name() {
+        // the tests see only the base families; the mapping rules still hold for any index
+        assert_eq!(text::base_family(1), 1);
+        assert_eq!(text::base_family(200), 0, "an index past the list falls back to the default");
+        assert_eq!(text::export_name(2), "Courier New");
+        assert_eq!(text::family_index("times"), Some(1));
+        assert_eq!(text::family_for_name("Liberation Mono"), 2, "a fixed-width name maps to Courier");
     }
 
     fn text_of(app: &TextEditApp) -> String {

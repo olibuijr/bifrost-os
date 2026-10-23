@@ -1008,7 +1008,11 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                     let file = if matches!(m, ToApp::DocBatch { .. }) { None } else { fds.pop().map(into_file) };
                     let ev = docs.borrow_mut().event(m, file);
                     if let (Some(c), Some(ev)) = (&ctx, ev) {
-                        need_frame |= app.document(c, ev);
+                        // a save that finishes in the background (the autosave `suspend` starts) clears "Edited": the window
+                        // is still on screen on the desktop, so it repaints once even while suspended (QA W2-14)
+                        let changed = app.document(c, ev);
+                        need_frame |= changed;
+                        repaint_suspended |= changed && !active;
                     }
                 }
             }

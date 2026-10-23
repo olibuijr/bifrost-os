@@ -6,7 +6,7 @@
 
 use crate::links;
 use crate::properties::{self, Properties};
-use crate::text::{family_for_name, Align, Cell, ListKind, Style, COLORS, FAMILY_NAMES, LINE_BREAK, MAX_PARAGRAPH_SPACE, PAGE_BREAK, SPACINGS};
+use crate::text::{family_for_name, Align, Cell, ListKind, Style, COLORS, LINE_BREAK, MAX_PARAGRAPH_SPACE, PAGE_BREAK, SPACINGS};
 use crate::xml::{self, Token};
 use crate::{rtf, zipdoc};
 use std::collections::HashMap;
@@ -297,7 +297,7 @@ fn numbering_part() -> String {
 
 fn run_properties(style: &Style) -> String {
     let mut out = String::new();
-    let font = FAMILY_NAMES[(style.font as usize).min(FAMILY_NAMES.len() - 1)];
+    let font = crate::text::export_name(style.font);
     out += &format!("<w:rFonts w:ascii=\"{font}\" w:hAnsi=\"{font}\" w:cs=\"{font}\"/>");
     if style.bold {
         out += "<w:b/>";
