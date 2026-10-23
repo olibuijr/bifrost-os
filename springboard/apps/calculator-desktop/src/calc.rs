@@ -8,6 +8,7 @@ use bifrost_app::kit::ui::{MAC_CALLOUT_PT, MAC_TITLE1_PT};
 use bifrost_app::kit::ui::{home_zone, Ui, Weight, CARD_BG, CONTROL_PRESSED, DESTRUCTIVE, FIELD_BG, LABEL, LABEL_2, LABEL_3, SEGMENT_ON, SEPARATOR_C, WHITE};
 use bifrost_app::controls::prefs_layout::m;
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
+use bifrost_app::proto::ContextItem;
 use bifrost_app::controls::{Node, Rect, Role};
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
@@ -44,6 +45,23 @@ const BAR_BASIC: u32 = 2;
 const BAR_SCIENTIFIC: u32 = 3;
 const BAR_CONVERT: u32 = 5;
 const BAR_PROGRAMMER: u32 = 6;
+/// The keypad pull-down a compact window shows instead of the four segments (Golden Gate Calculator's mode button).
+const BAR_MODE: u32 = 7;
+
+/// The window's content size for each keypad, in points: Golden Gate Calculator resizes its window when the keypad
+/// changes (27-Golden-Gate-Calculator.png: the Basic window is 230 points wide, four 48-point keys 6 points apart and
+/// 10 points in from the sides). The heights leave the display, the expression line and the Delete control room above
+/// the keys (`DISPLAY_AND_KEYS_RESERVE_PT`).
+pub const BASIC_SIZE_PT: (f32, f32) = (230.0, 512.0);
+/// Ten 44-point columns (`wide_min_width` needs 520).
+pub const SCIENTIFIC_SIZE_PT: (f32, f32) = (560.0, 522.0);
+/// The scientific width with the binary row (`PROG_STRIP_PT`) above the keys.
+pub const PROGRAMMER_SIZE_PT: (f32, f32) = (560.0, 522.0 + PROG_STRIP_PT);
+/// Wide enough for seven category titles across the band, tall enough for the band over the keypad.
+pub const CONVERT_SIZE_PT: (f32, f32) = (640.0, 660.0);
+/// The width from which the basic keypad keeps its full margins (32-point sides, the home strip under it); a
+/// narrower window scales them down, to the reference's 10-point sides at 230 points.
+const FULL_MARGIN_W_PT: f32 = 736.0;
 
 /// How long a touch on the display must stay down to open Copy/Paste.
 const HOLD_MS: f64 = 500.0;
@@ -259,6 +277,8 @@ pub enum Mode {
 enum Target {
     Bit(u8),
     Mode(Mode),
+    /// The keypad pull-down of a compact window (`BAR_MODE`).
+    ModeMenu,
     Key(usize),
     Display,
     Backspace,
@@ -328,6 +348,8 @@ pub struct Calculator {
     swipe_row: Option<usize>,
     /// The history row the context menu is open for.
     ctx_row: Option<usize>,
+    /// The keypad pull-down was tapped and waits for the app to open it (`take_mode_menu`).
+    mode_menu: bool,
 }
 
 /// Typographic operators for the scientific expression line.
@@ -388,6 +410,7 @@ impl Calculator {
             clear_confirm: false,
             swipe_row: None,
             ctx_row: None,
+            mode_menu: false,
         }
     }
 
@@ -449,7 +472,10 @@ impl Calculator {
     /// the unit row and the keys, so the result shrinks (down to title 1) instead of running under the capsules.
     fn display_pt_max(&self, ui: &Ui) -> f32 {
         if self.convert.is_none() {
-            return DISPLAY_LARGE_PT;
+            // between the toolbar (and the expression line under it) and the Delete control over the keys: a compact
+            // window's display is smaller, a large one keeps the large display size
+            let room = self.deck_top(ui) - ui.pt(62.0) - ui.pt(UNIFIED_BAR_PT) - ui.pt(MAC_TITLE1_PT * LINE_EM + SPACE_M);
+            return (room / ui.pt(1.0) / LINE_EM).clamp(MAC_LARGE_TITLE_PT, DISPLAY_LARGE_PT);
         }
         let room = self.deck_top(ui) - ui.pt(62.0) - ui.pt(units_top_pt() + UNITS_H_PT + SPACE_S);
         let line = ui.pt(MAC_TITLE1_PT * LINE_EM + SPACE_M);
@@ -462,8 +488,14 @@ impl Calculator {
         }
     }
 
+    /// How much of the full margins a window of this width keeps: 1 from `FULL_MARGIN_W_PT` up, less in a narrower one.
+    fn margin_scale(&self, ui: &Ui) -> f32 {
+        (self.w as f32 / ui.pt(FULL_MARGIN_W_PT)).clamp(0.0, 1.0)
+    }
+
     fn layout(&self, ui: &Ui) -> Layout {
-        let bottom = self.h as f32 - home_zone(ui) - ui.pt(SPACE_XXL);
+        let k = self.margin_scale(ui);
+        let bottom = self.h as f32 - (home_zone(ui) + ui.pt(SPACE_XXL)) * k;
         let extra = self.strip_h(ui)
             + if self.convert.is_some() { ui.pt(convert_band_pt()) } else { 0.0 }
             + if self.convert_is_currency() { ui.pt(RATES_NOTE_H_PT) } else { 0.0 };
@@ -486,10 +518,19 @@ impl Calculator {
                 sci: true,
             };
         }
-        let gap = ui.pt(SPACE_M);
+        // a wide window: 12-point gaps and 32-point sides; a compact one keeps the reference's proportions (a gap of an
+        // eighth of a key, sides that shrink with the width)
+        let room = self.w as f32 - ui.pt(64.0) * k;
+        let full_gap_cell = (room - ui.pt(SPACE_M) * 3.0) / 4.0;
+        let (cell_w, gap) = if full_gap_cell >= ui.pt(SPACE_M * 8.0) {
+            (full_gap_cell, ui.pt(SPACE_M))
+        } else {
+            let cell = room / (4.0 + 3.0 / 8.0);
+            (cell, cell / 8.0)
+        };
         let cell = ui
             .pt(135.0)
-            .min((self.w as f32 - ui.pt(64.0) - gap * 3.0) / 4.0)
+            .min(cell_w)
             .min((available - gap * 4.0) / 5.0)
             .max(ui.pt(30.0));
         let width = cell * 4.0 + gap * 3.0;
@@ -555,7 +596,58 @@ impl Calculator {
 
     /// The unified toolbar: the history sidebar toggle and the keypad segments. The decimal separator is a View menu
     /// item ("Decimal Comma"), not an unlabelled toolbar chip (E2E W4-7).
+    /// A window too narrow for the four segments (the compact Basic window) shows the history button and one keypad
+    /// pull-down instead, as Golden Gate Calculator does.
     fn bar(&self, ui: &Ui) -> Toolbar {
+        let full = self.full_bar(ui);
+        if widgets::toolbar_layout(ui, self.bar_bounds(ui), &full).overflow.is_empty() {
+            return full;
+        }
+        Toolbar::new(vec![
+            ToolbarItem::icon(BAR_HISTORY, "History", "sidebar.left").selected(self.history_open),
+            ToolbarItem::flexible_space(),
+            ToolbarItem::menu(BAR_MODE, self.mode_title(), None),
+        ])
+    }
+
+    /// The name of the keypad that shows (or that the window is resizing for), as the pull-down shows it.
+    fn mode_title(&self) -> &'static str {
+        if self.convert.is_some() {
+            "Convert"
+        } else if self.programmer.is_some() {
+            "Programmer"
+        } else if self.settings.scientific && !self.settings.rpn {
+            "Scientific"
+        } else {
+            "Basic"
+        }
+    }
+
+    /// The content size, in points, the window should have for the keypad that is chosen (`windows::set_content_size`).
+    pub fn preferred_size(&self) -> (f32, f32) {
+        if self.convert.is_some() {
+            CONVERT_SIZE_PT
+        } else if self.programmer.is_some() {
+            PROGRAMMER_SIZE_PT
+        } else if self.settings.scientific && !self.settings.rpn {
+            SCIENTIFIC_SIZE_PT
+        } else {
+            BASIC_SIZE_PT
+        }
+    }
+
+    /// The keypad pull-down, once it was tapped: where it opens (px, under the button) and its items, the chosen keypad
+    /// checked. The app opens it as a context menu; the choice comes back to `context_action`.
+    pub fn take_mode_menu(&mut self, ui: &Ui) -> Option<(f32, f32, Vec<ContextItem>)> {
+        if !std::mem::take(&mut self.mode_menu) {
+            return None;
+        }
+        let r = widgets::toolbar_layout(ui, self.bar_bounds(ui), &self.bar(ui)).rect_of(BAR_MODE)?;
+        Some((ui.pt(r.x), ui.pt(r.y + r.h), self.mode_menu_items()))
+    }
+
+    /// The full toolbar: the history sidebar toggle and the four keypad segments.
+    fn full_bar(&self, ui: &Ui) -> Toolbar {
         let sci = self.sci_active(ui);
         Toolbar::new(vec![
             ToolbarItem::icon(BAR_HISTORY, "History", "sidebar.left").selected(self.history_open),
@@ -574,13 +666,9 @@ impl Calculator {
     }
 
     /// The toolbar laid out as `widgets::toolbar` draws it (titled buttons measured at body size).
+    /// The same layout `chrome::toolbar` draws (`widgets::toolbar_layout`), so a tap lands on what is drawn.
     fn bar_layout(&self, ui: &Ui) -> ToolbarLayout {
-        let width = |it: &ToolbarItem| {
-            if it.symbol.is_some() { widgets::CAPSULE_PT } else { (ui.measure(&it.label, MAC_BODY_PT, Weight::Regular) / ui.pt(1.0) + 3.0 * SPACE_S).max(widgets::CAPSULE_PT) }
-        };
-        let h = widgets::CAPSULE_PT;
-        let b = self.bar_bounds(ui);
-        self.bar(ui).layout_with(Rect { y: b.y + (b.h - h) / 2.0, h, ..b }, width, widgets::CAPSULE_PT, widgets::TOOLBAR_GAP_PT)
+        widgets::toolbar_layout(ui, self.bar_bounds(ui), &self.bar(ui))
     }
 
     /// Toolbar item `id` in pixels, or an empty rectangle when it overflowed.
@@ -801,6 +889,7 @@ impl Calculator {
             let p = ui.pt(1.0);
             return match self.bar_layout(ui).hit(x / p, y / p)? {
                 BAR_HISTORY => Some(if self.history_open { Target::Done } else { Target::History }),
+                BAR_MODE => Some(Target::ModeMenu),
                 BAR_CONVERT => Some(if self.convert.is_some() { Target::LeaveConvert } else { Target::ShowConvert }),
                 BAR_BASIC | BAR_SCIENTIFIC | BAR_PROGRAMMER if self.convert.is_some() => Some(Target::LeaveConvert),
                 BAR_PROGRAMMER if self.programmer.is_none() => Some(Target::Mode(Mode::Programmer)),
@@ -1288,6 +1377,7 @@ impl Calculator {
                 }
             }
             Target::Mode(mode) => self.set_mode(mode),
+            Target::ModeMenu => self.mode_menu = true,
             Target::Key(i) => self.press_index(ui, i),
             Target::Backspace => self.press_basic(ui, Key::Backspace),
             Target::ShowConvert => self.convert = Some(Converter::with_rates(self.rates.clone())),
@@ -1751,6 +1841,7 @@ impl Calculator {
             Some(Target::History) | Some(Target::Done) => Some(BAR_HISTORY),
             Some(Target::ShowConvert) | Some(Target::LeaveConvert) => Some(BAR_CONVERT),
             Some(Target::Scientific) => Some(if self.sci_active(ui) { BAR_BASIC } else { BAR_SCIENTIFIC }),
+            Some(Target::ModeMenu) => Some(BAR_MODE),
             Some(Target::Mode(Mode::Basic)) => Some(BAR_BASIC),
             Some(Target::Mode(Mode::Scientific)) => Some(BAR_SCIENTIFIC),
             Some(Target::Mode(Mode::Programmer)) => Some(BAR_PROGRAMMER),
@@ -1767,6 +1858,8 @@ pub use menu::{window_menu, MENU_ALWAYS_ON_TOP};
 mod convert_tests;
 #[cfg(test)]
 mod mode_tests;
+#[cfg(test)]
+mod size_tests;
 
 #[cfg(test)]
 mod tests {

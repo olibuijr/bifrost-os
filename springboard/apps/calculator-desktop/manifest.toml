@@ -10,6 +10,9 @@ kind = "system-app"
 architecture = "x86_64-linux"
 permissions = ["storage"]
 window = "full-size"
+# the compact Basic window (27-Golden-Gate-Calculator.png); the app resizes it for the other keypads
+window_size = "230x512"
+min_size = "230x512"
 
 [[intent]]
 id = "evaluate"

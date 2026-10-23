@@ -121,7 +121,7 @@ impl Calculator {
                 }
             }
             MENU_CONVERT => {
-                self.convert = if self.convert.is_some() { None } else { Some(Converter::default()) };
+                self.convert = if self.convert.is_some() { None } else { Some(Converter::with_rates(self.rates.clone())) };
             }
             MENU_HISTORY => {
                 self.history_open = !self.history_open;
@@ -251,8 +251,30 @@ impl Calculator {
         Some(vec![item(CTX_COPY_RESULT, "Copy Result"), item(CTX_COPY_EXPRESSION, "Copy Expression"), item(CTX_DELETE, "Delete")])
     }
 
-    /// The user chose an item of the history row menu; true when the app needs a new frame.
+    /// The keypad pull-down of a compact window (Golden Gate Calculator's mode menu): Basic, Scientific and Programmer,
+    /// then Convert and RPN Mode, the chosen ones checked. The ids are the View menu's, so a choice does what the View
+    /// menu item does.
+    pub(super) fn mode_menu_items(&self) -> Vec<ContextItem> {
+        let convert = self.convert.is_some();
+        let prog = self.programmer.is_some() && !convert;
+        let sci = self.settings.scientific && !self.settings.rpn && !prog && !convert;
+        let item = |id: u32, label: &str, on: bool| ContextItem::new(id, &format!("{} {label}", if on { "\u{2713}" } else { "\u{2003}" }));
+        vec![
+            item(MENU_BASIC, "Basic", !sci && !prog && !convert),
+            item(MENU_SCIENTIFIC, "Scientific", sci),
+            item(MENU_PROGRAMMER, "Programmer", prog),
+            ContextItem::separator(),
+            item(MENU_CONVERT, "Convert", convert),
+            item(MENU_RPN, "RPN Mode", self.settings.rpn),
+        ]
+    }
+
+    /// The user chose an item of the history row menu or of the keypad pull-down; true when the app needs a new frame.
     pub fn context_action(&mut self, ui: &Ui, id: u32) -> bool {
+        if matches!(id, MENU_BASIC | MENU_SCIENTIFIC | MENU_PROGRAMMER | MENU_CONVERT | MENU_RPN) {
+            self.ctx_row = None;
+            return self.menu_action(ui, id);
+        }
         let Some(row) = self.ctx_row.take() else { return false };
         let Some(entry) = self.store.get(row).cloned() else { return false };
         match id {
