@@ -1,10 +1,8 @@
 //! The calendar list's mini month (Golden Gate Calendar): a month at the bottom of the sidebar with previous and next
 //! chevrons, the weekday initials, today's red marker, the selected day's plate and a dot under the days with events. A
 //! click on a day shows it; the chevrons page the mini month alone, and it follows the selected day again on the next
-//! move of the main view. Drawn with the kit's `widgets::mini_month` (`NativeDatePicker`, graphical style).
-//!
-//! Apple's mini month also shows the leading and trailing days of the next and previous months in grey; the kit's
-//! mini month lays out the month's own days only, so those are left out here.
+//! move of the main view. Drawn with the kit's `widgets::mini_month` (`NativeDatePicker`, graphical style), which also
+//! shows the previous and next months' days around the month in grey; a click on one of them shows that day.
 use super::*;
 use bifrost_app::controls::calendar::MiniMonth;
 use bifrost_app::controls::Rect;
@@ -58,7 +56,8 @@ impl Calendar {
             return Some(Target::MiniNext);
         }
         let m = self.mini_month_shown();
-        l.hit_day(px, py).map(|day| Target::MiniDay(Date { day, ..m }))
+        // a day of the shown month, or a greyed day of the month before or after it
+        l.hit_date(px, py, m.year as i32, m.month).map(|d| Target::MiniDay(Date { year: d.year as i64, month: d.month, day: d.day }))
     }
 
     /// The chevrons page the mini month by a month; a day shows that day in the main view.

@@ -93,6 +93,9 @@ pub struct MiniMonth {
     pub weekday_of_column: [u32; 7],
     /// `(day, cell)` for every day of the month.
     pub days: Vec<(u32, Rect)>,
+    /// The previous month's last days before the 1st and the next month's first days after the last, filling the six
+    /// rows (`NSDatePicker` shows them greyed, and a click on one goes to that day): `(date, cell)` in display order.
+    pub outside: Vec<(Date, Rect)>,
 }
 
 impl MiniMonth {
@@ -114,11 +117,34 @@ impl MiniMonth {
                 }
             }
         }
-        MiniMonth { title, prev, next, weekdays, weekday_of_column, days }
+        // the cells before the 1st and after the last day, through the sixth row
+        let first = Date { year, month, day: 1 };
+        let lead = ((weekday(first) + 7 - first_weekday % 7) % 7) as usize;
+        let len = days_in_month(year, month) as usize;
+        let before = add_months(first, -1);
+        let before_len = days_in_month(before.year, before.month) as usize;
+        let after = add_months(first, 1);
+        let mut outside = Vec::new();
+        for i in (0..lead).chain(lead + len..42) {
+            let date = if i < lead {
+                Date { day: (before_len - lead + 1 + i) as u32, ..before }
+            } else {
+                Date { day: (i - lead - len + 1) as u32, ..after }
+            };
+            outside.push((date, cell(2 + i / 7, i % 7)));
+        }
+        MiniMonth { title, prev, next, weekdays, weekday_of_column, days, outside }
     }
     /// The day under `(x, y)`.
     pub fn hit_day(&self, x: f32, y: f32) -> Option<u32> {
         self.days.iter().find(|(_, r)| r.contains(x, y)).map(|(d, _)| *d)
+    }
+    /// The date under `(x, y)`: a day of the month, or a greyed day of the month before or after it.
+    pub fn hit_date(&self, x: f32, y: f32, year: i32, month: u32) -> Option<Date> {
+        if let Some(day) = self.hit_day(x, y) {
+            return Some(Date { year, month, day });
+        }
+        self.outside.iter().find(|(_, r)| r.contains(x, y)).map(|(d, _)| *d)
     }
 }
 
@@ -136,6 +162,29 @@ mod tests {
         assert_eq!(m.hit_day(95.0, 65.0), Some(1));
         assert_eq!(m.hit_day(5.0, 65.0), None, "before the first");
         assert!(m.next.right() <= 210.0 && m.prev.right() <= m.next.x);
+    }
+    #[test]
+    fn the_days_of_the_months_around_fill_the_six_rows() {
+        let b = crate::Rect { x: 0.0, y: 0.0, w: 210.0, h: 240.0 };
+        // September 2026 with weeks from Sunday (the reference): 30 and 31 August lead, 1 to 10 October trail
+        let m = MiniMonth::new(b, 2026, 9, 0);
+        assert_eq!(m.days.len() + m.outside.len(), 42, "six full rows");
+        assert_eq!(m.outside[0], (Date { year: 2026, month: 8, day: 30 }, crate::Rect { x: 0.0, y: 60.0, w: 30.0, h: 30.0 }));
+        assert_eq!(m.outside[1].0, Date { year: 2026, month: 8, day: 31 });
+        assert_eq!(m.outside[2].0, Date { year: 2026, month: 10, day: 1 });
+        assert_eq!(m.outside.last().unwrap().0, Date { year: 2026, month: 10, day: 10 });
+        assert_eq!(m.outside.last().unwrap().1, crate::Rect { x: 180.0, y: 210.0, w: 30.0, h: 30.0 }, "the last cell");
+        assert_eq!(m.hit_date(5.0, 65.0, 2026, 9), Some(Date { year: 2026, month: 8, day: 30 }));
+        assert_eq!(m.hit_date(65.0, 65.0, 2026, 9), Some(Date { year: 2026, month: 9, day: 1 }));
+        assert_eq!(m.hit_date(185.0, 215.0, 2026, 9), Some(Date { year: 2026, month: 10, day: 10 }));
+        // across a year: January leads with December of the year before
+        let j = MiniMonth::new(b, 2027, 1, 1);
+        assert!(j.outside.first().is_some_and(|(d, _)| d.year == 2026 && d.month == 12));
+        assert!(j.outside.last().is_some_and(|(d, _)| d.year == 2027 && d.month == 2));
+        // a month that starts on the first column has no leading days
+        let feb = MiniMonth::new(b, 2026, 2, 0);
+        assert_eq!(feb.outside[0].0, Date { year: 2026, month: 3, day: 1 });
+        assert_eq!(feb.outside.len(), 14);
     }
     use super::*;
     fn d(year: i32, month: u32, day: u32) -> Date {

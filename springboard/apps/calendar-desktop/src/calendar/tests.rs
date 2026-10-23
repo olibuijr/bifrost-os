@@ -2756,6 +2756,29 @@ fn the_sidebar_mini_month_pages_and_shows_a_clicked_day() {
 }
 
 #[test]
+fn a_greyed_day_of_the_next_or_previous_month_in_the_mini_month_shows_that_day() {
+    let ui = crate::test_ui();
+    let temp = Temp::new();
+    let mut c = new(&ui, temp.file());
+    c.layout_columns(&ui);
+    draw_once(&mut c, &ui);
+    let l = c.mini_layout(&ui).expect("the mini month");
+    assert_eq!(l.days.len() + l.outside.len(), 42, "six full rows");
+    // October 2026 starts on a Thursday: its first cells are September's last days, its last cell a day of November
+    let (d, r) = l.outside[0];
+    assert_eq!((d.year, d.month), (2026, 9));
+    tap(&mut c, &ui, r.x + r.w / 2.0, r.y + r.h / 2.0, 0.0);
+    assert_eq!(c.selected, date(2026, 9, d.day), "a click on a leading day shows it");
+    assert_eq!(c.mini_month_shown(), date(2026, 9, 1), "and the mini month follows it");
+    c.activate(&ui, Target::MiniNext, 50.0);
+    let l = c.mini_layout(&ui).unwrap();
+    let (d, r) = *l.outside.last().unwrap();
+    assert_eq!((d.year, d.month), (2026, 11));
+    tap(&mut c, &ui, r.x + r.w / 2.0, r.y + r.h / 2.0, 100.0);
+    assert_eq!(c.selected, date(2026, 11, d.day), "a click on a trailing day shows it");
+}
+
+#[test]
 fn the_calendar_pop_up_is_a_menu_of_calendars_with_their_colours() {
     let ui = crate::test_ui();
     let temp = Temp::new();

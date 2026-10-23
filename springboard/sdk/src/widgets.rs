@@ -1329,6 +1329,12 @@ pub fn mini_month(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, year: i32, month: u
             crate::glyphs::disc(s, ui.pt(r.x + r.w / 2.0), ui.pt(plate.bottom() - 2.0), ui.pt(1.5), LABEL_2.now());
         }
     }
+    // the months around it, greyed (secondary label), through the sixth row; the app hit-tests them with `hit_date`
+    for (d, r) in &l.outside {
+        let img = ui.text(&d.day.to_string(), MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now());
+        let (x, y) = mid(r, &img);
+        blit(s, &img, x, y);
+    }
     l
 }
 
@@ -1876,6 +1882,12 @@ mod tests {
         assert_eq!(l.days.len(), 31);
         let (_, today) = l.days[9];
         assert_eq!(px[(today.y + today.h / 2.0) as usize * w + (today.x + 3.0) as usize], bifrost_render::ui::DESTRUCTIVE, "today is red");
+        // the greyed days of September and November fill the six rows, and are drawn
+        assert_eq!(l.days.len() + l.outside.len(), 42);
+        let (_, lead) = l.outside[0];
+        let inked = |r: Rect| (r.y as usize..(r.y + r.h) as usize).any(|y| (r.x as usize..(r.x + r.w) as usize).any(|x| px[y * w + x] != 0));
+        assert!(inked(lead), "the 28th of September is drawn before the 1st");
+        assert!(inked(l.outside.last().unwrap().1), "the last trailing day is drawn");
     }
 
     #[test]
