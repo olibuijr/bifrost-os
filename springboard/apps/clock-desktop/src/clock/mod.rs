@@ -1240,7 +1240,7 @@ impl Clock {
         let second = per_second && sec != self.drawn_sec;
         // a countdown second with nothing else to show repaints only the timer cards, not the whole window (E2E W4-10:
         // slow full-window CPU frames at a timer's start)
-        self.rows_only = second && !dirty && self.tab == Tab::Timer && self.timer_list() && self.add.is_none() && self.world.sheet.is_none();
+        self.rows_only = second && !dirty && self.tab == Tab::Timer && self.timer_list() && self.add.is_none() && !self.world.sheet_open();
         dirty |= second;
         dirty |= self.tab == Tab::Stopwatch && self.stopwatch.running();
         dirty
@@ -1313,7 +1313,7 @@ impl Clock {
             && self.tab == Tab::Timer
             && self.timer_list()
             && self.add.is_none()
-            && self.world.sheet.is_none();
+            && !self.world.sheet_open();
         self.drawn_sec = self.wall.now(t);
         if rows_only {
             return Some(self.draw_timer_cards(s, ui, t));

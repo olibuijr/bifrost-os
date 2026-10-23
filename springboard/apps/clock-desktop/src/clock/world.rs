@@ -37,6 +37,11 @@ impl Default for World {
 }
 
 impl World {
+    /// Whether the Choose a City sheet is open (it covers the window, so a partial repaint must not run under it).
+    pub fn sheet_open(&self) -> bool {
+        self.sheet.is_some()
+    }
+
     pub fn load(&mut self, alarm_path: &str) {
         self.prefs = Prefs::load(Path::new(alarm_path).with_file_name("world-cities.ini"));
         self.selected = match self.prefs.get("cities") {
