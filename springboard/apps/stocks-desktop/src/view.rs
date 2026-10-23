@@ -29,6 +29,8 @@ const FIELD_TOP_PT: f32 = UNIFIED_BAR_PT + 8.0;
 /// Points: the line under the field for notes, and where the list starts.
 const NOTE_H_PT: f32 = 16.0;
 const LIST_TOP_PT: f32 = FIELD_TOP_PT + FIELD_H_PT + NOTE_H_PT + 6.0;
+/// Points: the source credit's line at the foot of the sidebar (`data::ATTRIBUTION`).
+const FOOTER_PT: f32 = 28.0;
 /// Points: one watchlist row (symbol over name, sparkline, price over the change pill).
 const ROW_PT: f32 = 56.0;
 /// Points: the sparkline's width and height, and the change pill's size.
@@ -64,6 +66,8 @@ pub struct Layout {
     /// The middle of the note line under the field (pixels).
     pub note_y: f32,
     pub list: Rect,
+    /// The middle of the source credit's line at the foot of the sidebar (pixels).
+    pub footer_y: f32,
     /// The detail pane: the header and the chart card under it.
     pub chart: Rect,
     /// One row's height in pixels.
@@ -81,7 +85,8 @@ pub fn layout(ui: &Ui, size: (usize, usize)) -> Layout {
         side,
         field: (margin, ui.pt(FIELD_TOP_PT), (side - 2.0 * margin).max(0.0), ui.pt(FIELD_H_PT)),
         note_y: ui.pt(FIELD_TOP_PT + FIELD_H_PT + 4.0 + NOTE_H_PT / 2.0),
-        list: (0.0, list_top, side, (h - list_top).max(0.0)),
+        list: (0.0, list_top, side, (h - list_top - ui.pt(FOOTER_PT)).max(0.0)),
+        footer_y: h - ui.pt(FOOTER_PT / 2.0),
         chart: (side + margin, chart_top, (w - side - 2.0 * margin).max(0.0), (h - chart_top - margin).max(0.0)),
         row_px: ui.pt(ROW_PT),
     }
@@ -228,6 +233,9 @@ impl Stocks {
             put(&mut self.labels, s, ui, &note, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), Align::Left, l.field.0 + ui.pt(SPACE_XS), l.note_y);
         }
         self.draw_list(s, ui, &l);
+        // the source of the prices, under the list as the reference credits it (privacy-first: who answers is shown)
+        let credit = ui.fit(data::ATTRIBUTION, MAC_FOOTNOTE_PT, (l.side - 2.0 * ui.pt(MARGIN_PT)).max(0.0));
+        put(&mut self.labels, s, ui, &credit, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), Align::Centre, l.side / 2.0, l.footer_y);
         self.draw_chart(s, ui, &l);
     }
 
@@ -443,6 +451,9 @@ mod tests {
         assert_eq!(l.list.0, 0.0);
         assert!(l.list.0 + l.list.2 <= l.side && l.chart.0 >= l.side, "the chart is right of the sidebar");
         assert!(l.field.0 + l.field.2 <= l.side);
+        assert!(l.list.1 + l.list.3 <= l.footer_y - ui.pt(FOOTER_PT / 2.0) + 0.5, "the source credit sits under the list");
+        assert!(l.footer_y < 1219.0);
+        assert!(ui.measure(data::ATTRIBUTION, MAC_FOOTNOTE_PT, Weight::Regular) <= l.side - 2.0 * ui.pt(MARGIN_PT), "the credit fits the sidebar");
         let points = plot(&[1.0, 3.0, 2.0], (0.0, 10.0, 100.0, 50.0));
         assert_eq!(points.len(), 3);
         assert!(points[1].1 < points[0].1, "the high is above the low");
