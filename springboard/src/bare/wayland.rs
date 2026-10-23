@@ -67,6 +67,13 @@ struct Window { surface:wl_surface::WlSurface, level_sent:Option<bool>, xdg:xdg_
     fs_pending:Option<bool>,
     /// Whether the last toplevel configure carried the Activated state, and whether the shell was told about it.
     act:bool, act_seen:bool,
+    /// The size, zoom and full-screen state the last toplevel configure carried. The window server sends its pending
+    /// state again with every configure (an activation change when another app opens a window), so a size it set once
+    /// (a tile) came back long after the window had another size; only a change is a new request (W4-3).
+    cfg_size:Option<(i32,i32,bool,bool)>,
+    /// A toplevel that has not had the keyboard yet: the window server raises and focuses every window it maps, so
+    /// the first keyboard focus of a window the shell did not put in front is the map, not the person (W4-1).
+    fresh:bool,
     /// GPU path: content damage not presented yet, the shadow margin around the content, the drawable size
     pending:Damage, margin:i32, gpu_size:(usize,usize),
     /// window-server materials (ext-background-effect): the effect object and the blur rects last sent (surface px)
@@ -403,7 +410,11 @@ impl Display {
         let levels:Vec<(u32,bool)> = frames.iter().map(|f|(f.id,f.floating)).collect();
         let front=ids.last().copied();
         self.state.z=ids.clone();
-        let activate=front.filter(|id|Some(*id)!=self.state.focused);
+        // an explicit open or focus (`raise_front`: the Dock, Overview, the Window menu) asks for the activation again
+        // even when the shell already thinks the front window has the keyboard: the window server may have handed it
+        // to another window since (a window it mapped), and the raise must not be lost (W4-1, W4-5)
+        let raise=std::mem::take(&mut self.state.raise_front);
+        let activate=front.filter(|id|raise||Some(*id)!=self.state.focused);
         self.state.focused=front;
         let removed:Vec<u32> = self.state.windows.keys().filter(|id|!ids.contains(id)).copied().collect();
         for id in removed {
@@ -445,7 +456,7 @@ impl Display {
                 if frame.input.is_some() { set_window_input(self.state.compositor.as_ref(),&surface,0,frame.width,frame.height,frame.input.as_deref(),&qh); }
                 surface.commit();
                 let mut pending=Damage::new(frame.width,frame.height); pending.all();
-                self.state.windows.insert(frame.id,Window { surface,xdg,top,level_sent:None,slots:vec![],buffer_size:(0,0),configured:false,frame,fs_pending:None,act:false,act_seen:false,pending,margin:0,gpu_size:(0,0),bg:None,bg_rects:Vec::new(),mat:None,mat_sent:(0,Vec::new()) });
+                self.state.windows.insert(frame.id,Window { surface,xdg,top,level_sent:None,slots:vec![],buffer_size:(0,0),configured:false,frame,fs_pending:None,act:false,act_seen:false,cfg_size:None,fresh:true,pending,margin:0,gpu_size:(0,0),bg:None,bg_rects:Vec::new(),mat:None,mat_sent:(0,Vec::new()) });
             }
         }
         // bifrost_window_level_v1: a window whose band changed is told the new level (the window server keeps it per surface)
@@ -459,15 +470,10 @@ impl Display {
                 }
             }
         }
-        if let (Some(id),Some(activation),Some(seat))=(activate,self.state.activation.as_ref(),self.state.seat.as_ref()) {
-            let token=activation.get_activation_token(&qh,id);
-            token.set_serial(self.state.serial,seat);
-            token.set_surface(self.state.surface.as_ref().unwrap());
-            token.commit();
-        }
+        if let Some(id)=activate { request_activation(&self.state,&qh,id); }
         // an explicit open or focus: xdg-activation needs a fresh input serial that control-socket and dock opens
         // lack, and a native client may hold focus; wlroots compositors always obey a foreign-toplevel activate
-        if std::mem::take(&mut self.state.raise_front) {
+        if raise {
             if let (Some(id),Some(seat))=(front,self.state.seat.as_ref()) {
                 let app_id=format!("is.olibuijr.bifrost.{id}");
                 if let Some(f)=self.state.foreign.iter().find(|f|f.info.app_id==app_id) {f.handle.unset_minimized();f.handle.activate(seat);}
@@ -1247,10 +1253,19 @@ impl Dispatch<wl_touch::WlTouch, ()> for State {
     }
 }
 impl Dispatch<wl_keyboard::WlKeyboard, ()> for State {
-    fn event(s: &mut Self, _: &wl_keyboard::WlKeyboard, e: wl_keyboard::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {
+    fn event(s: &mut Self, _: &wl_keyboard::WlKeyboard, e: wl_keyboard::Event, _: &(), _: &Connection, qh: &QueueHandle<Self>) {
         match e {
             wl_keyboard::Event::Enter {surface,..}=>{
-                if let Some(id)=s.windows.iter().find(|(_,w)|w.surface==surface).map(|(&id,_)|id) {s.focused=Some(id);s.window_events.push(WindowEvent::Focus(id));}
+                if let Some(id)=s.windows.iter().find(|(_,w)|w.surface==surface).map(|(&id,_)|id) {
+                    let fresh=s.windows.get_mut(&id).is_some_and(|w|std::mem::take(&mut w.fresh));
+                    if follows_keyboard_enter(fresh,id,s.focused) {
+                        s.focused=Some(id);s.window_events.push(WindowEvent::Focus(id));
+                    } else if let Some(front)=s.focused.filter(|f|s.windows.contains_key(f)) {
+                        // the window server focused a window it just mapped (one that came back from Overview or a
+                        // minimize behind the front): the front window the shell raised gets the keyboard back
+                        request_activation(s,qh,front);
+                    }
+                }
             },
             wl_keyboard::Event::Key {key,state:WEnum::Value(v),serial,..}=>{
                 s.serial=serial; let down=v==wl_keyboard::KeyState::Pressed;
@@ -1286,7 +1301,11 @@ impl Dispatch<xdg_wm_base::XdgWmBase, ()> for State {
 }
 impl Dispatch<xdg_surface::XdgSurface,u32> for State {
     fn event(s: &mut Self, obj: &xdg_surface::XdgSurface, e:xdg_surface::Event, id: &u32, _: &Connection, _: &QueueHandle<Self>) {
-        if let xdg_surface::Event::Configure {serial} = e {obj.ack_configure(serial); if let Some(w)=s.windows.get_mut(id) {let focus=focus_on_configure(!w.configured,w.act,w.act_seen);w.configured=true;w.act_seen=w.act;if focus {s.window_events.push(WindowEvent::Focus(*id));}} }
+        // a new toplevel's configures focus only the window the shell put in front: one that came back behind it (from
+        // Overview or a minimize) and that the window server activated as it mapped must not lift itself over the
+        // front one (W4-1, W4-5)
+        let front=s.focused;
+        if let xdg_surface::Event::Configure {serial} = e {obj.ack_configure(serial); if let Some(w)=s.windows.get_mut(id) {let focus=follows_keyboard_enter(w.fresh,*id,front)&&focus_on_configure(!w.configured,w.act,w.act_seen);w.configured=true;w.act_seen=w.act;if focus {s.window_events.push(WindowEvent::Focus(*id));}} }
     }
 }
 impl Dispatch<xdg_toplevel::XdgToplevel,u32> for State {
@@ -1302,7 +1321,12 @@ impl Dispatch<xdg_toplevel::XdgToplevel,u32> for State {
                 // window, which is never maximized) says nothing about the zoom
                 let mut zoom_known=!fullscreen;
                 if let Some(w)=s.windows.get_mut(id) { match w.fs_pending { Some(want) if want==fullscreen => w.fs_pending=None, Some(_) => zoom_known=false, None if w.frame.fullscreen!=fullscreen => { w.frame.fullscreen=fullscreen; s.window_events.push(WindowEvent::Fullscreen(*id,fullscreen)); }, None => {} } }
-                if zoom_known {s.window_events.push(WindowEvent::Maximized(*id,maximized));} if width>0 && height>0 {s.window_events.push(WindowEvent::Resize(*id,width,height));} },
+                if zoom_known {s.window_events.push(WindowEvent::Maximized(*id,maximized));}
+                // the window server repeats its pending size in every configure (an activation change when another app
+                // opens a window): only a new size, or a new zoom or full-screen state, resizes the window (W4-3)
+                let now=(width,height,maximized,fullscreen);
+                let resizes=s.windows.get_mut(id).map_or(true,|w|configure_resizes(w.cfg_size.replace(now),now));
+                if width>0 && height>0 && resizes {s.window_events.push(WindowEvent::Resize(*id,width,height));} },
             xdg_toplevel::Event::Close => s.window_events.push(WindowEvent::Close(*id)),
             _=>{}
         }
@@ -1411,6 +1435,25 @@ fn dock_placement(x:i32,y:i32,width:usize,height:usize,screen:(u32,u32))->(DockE
 /// appears) or one that newly carries the Activated state. A size, tile or state configure on a window in the
 /// background must not lift it over the one the user is working in.
 fn focus_on_configure(first:bool,activated:bool,was_activated:bool)->bool { first || (activated && !was_activated) }
+/// Whether the shell follows the window server's keyboard focus (or activation) of window `id`. The window server raises
+/// and focuses every toplevel it maps, so a window's first focus (`fresh`) while the shell has another window in front
+/// (`front`: the last one it raised, or the one the person pressed) is the map of a window that came back behind it
+/// (Overview, a minimize, a window covered until now), not a choice of the person: following it lifted that window over
+/// the one the Dock, Overview or the Window menu had just brought forward (W4-1, W4-5).
+fn follows_keyboard_enter(fresh:bool,id:u32,front:Option<u32>)->bool { !fresh || front.map_or(true,|f|f==id) }
+/// Whether a toplevel configure resizes the window: its size, zoom or full-screen state differs from the last
+/// configure's (`last`). The window server sends its whole pending state again for an activation change, so a size it
+/// set once (a tile, W4-3) must not undo a size the window took since.
+fn configure_resizes(last:Option<(i32,i32,bool,bool)>,now:(i32,i32,bool,bool))->bool { last!=Some(now) }
+/// Asks the window server to activate (raise and focus) the shell's window `id`, with the shell's last input serial.
+fn request_activation(s:&State,qh:&QueueHandle<State>,id:u32) {
+    if let (Some(activation),Some(seat),Some(surface))=(s.activation.as_ref(),s.seat.as_ref(),s.surface.as_ref()) {
+        let token=activation.get_activation_token(qh,id);
+        token.set_serial(s.serial,seat);
+        token.set_surface(surface);
+        token.commit();
+    }
+}
 // Keep quiet windows single-buffered. A pending update may allocate one spare
 // while the compositor owns the first; never write into an in-flight buffer.
 fn window_buffer_count(count:usize, available:bool, dirty:bool) -> usize {
@@ -1431,6 +1474,27 @@ mod tests {
         assert!(focus_on_configure(false,true,false), "a window that became active is focused");
         assert!(!focus_on_configure(false,false,false), "a resize of a background window");
         assert!(!focus_on_configure(false,true,true), "a resize of the active window raises nothing again");
+    }
+    /// W4-1/W4-5: the window server focuses every window it maps; a window that maps behind the front one (back from
+    /// Overview or a minimize) must not take the front from the window the shell just raised.
+    #[test]
+    fn a_window_mapped_behind_the_front_one_does_not_take_the_focus() {
+        assert!(!follows_keyboard_enter(true,7,Some(3)), "the map focus of a window behind the front is not followed");
+        assert!(follows_keyboard_enter(true,3,Some(3)), "the front window's own first focus is");
+        assert!(follows_keyboard_enter(true,7,None), "with nothing in front, the new window is the front");
+        assert!(follows_keyboard_enter(false,7,Some(3)), "a window that had the keyboard before follows the window server");
+    }
+    /// W4-3: a configure that repeats the size the window server sent before (an activation change) does not resize
+    /// the window to it again; a new size, zoom or full-screen state does.
+    #[test]
+    fn a_repeated_configure_size_does_not_resize_the_window_again() {
+        let tile=(1280,1233,false,false);
+        assert!(configure_resizes(None,tile), "the first configure sizes the window");
+        assert!(!configure_resizes(Some(tile),tile), "the same pending size sent again for an activation change");
+        assert!(configure_resizes(Some(tile),(923,861,false,false)), "a new size is a request");
+        assert!(configure_resizes(Some((2560,1233,true,false)),(2560,1233,false,false)), "leaving the zoom at the same size");
+        assert!(configure_resizes(Some((2560,1233,false,false)),(2560,1233,true,false)), "a zoom to the size it had");
+        assert!(configure_resizes(Some((2560,1440,false,true)),(2560,1440,false,false)), "leaving full screen");
     }
     #[test]
     fn a_shaped_window_takes_input_only_where_it_drew() {

@@ -656,6 +656,13 @@ fn size_range(app: AppId, m: &Metrics) -> (i32, i32, i32, i32) {
     (min_w, min_h, max_w.max(min_w), max_h.max(min_h))
 }
 
+/// Whether a window closed at `size` (outer px) comes back at that size in the work area `a`. A frame that spans the
+/// work area's height or width (within 3 %) is a tile or the Fill frame, which the window server sizes, not a size the
+/// person chose by hand: the next window opens at its default size, never filling the screen (W4-3, W4-8).
+pub(super) fn remembered_size(a: Rect, (w, h): (i32, i32)) -> bool {
+    w * 100 < a.w * 97 && h * 100 < a.h * 97
+}
+
 /// `size` (outer px) held to the range `app`'s window may be resized within (`size_range`).
 fn clamp_size(app: AppId, m: &Metrics, (w, h): (i32, i32)) -> (i32, i32) {
     let (min_w, min_h, max_w, max_h) = size_range(app, m);
@@ -857,10 +864,11 @@ impl Desk {
         self.wins.iter().any(|w| !w.minimized && Some(w.app.parent()) != parent)
     }
 
-    /// Whether the windows of `app` float.
+    /// Whether the window of `app` floats: an app's main window and its extra windows float with the app
+    /// (`ToShell::WindowLevel`), and one extra window floats on its own (`ToShell::WindowLevelOf`). A built-in window
+    /// never floats, so Settings, Terminal and the other built-ins always come in front of the normal windows (W4-1).
     pub(super) fn is_floating(&self, app: AppId) -> bool {
-        // a window floats with its app (the window level is per app, `ToShell::WindowLevel`)
-        self.floating.contains(&app.parent())
+        matches!(app, AppId::External(_) | AppId::ExternalWindow(..)) && (self.floating.contains(&app) || self.floating.contains(&app.parent()))
     }
 
     /// The index a window of `app` takes on the top of its band: after every window at its level or below, so a normal
@@ -873,13 +881,17 @@ impl Desk {
     /// Sets the apps whose windows float and moves their windows after the normal ones; each band keeps its order.
     pub(super) fn sync_levels(&mut self, floating: Vec<AppId>) -> bool {
         self.floating = floating;
-        let list = std::mem::take(&mut self.floating);
+        // the bands follow `is_floating`, the test `band_top` places a raised or opened window with: sorting by another
+        // rule (the exact id) left a window `band_top` counted as floating inside the normal band, and a window raised
+        // later went in under it, behind the front (W4-1). The sort is stable, so each band keeps its order.
+        let level: Vec<bool> = self.wins.iter().map(|w| self.is_floating(w.app)).collect();
         // true when the stack moved: a settled desktop asks for no frame
-        let moved = self.wins.windows(2).any(|p| list.contains(&p[0].app) && !list.contains(&p[1].app));
+        let moved = level.windows(2).any(|p| p[0] && !p[1]);
         if moved {
-            self.wins.sort_by_key(|w| list.contains(&w.app));
+            let mut wins: Vec<(bool, Win)> = level.into_iter().zip(std::mem::take(&mut self.wins)).collect();
+            wins.sort_by_key(|(f, _)| *f);
+            self.wins = wins.into_iter().map(|(_, w)| w).collect();
         }
-        self.floating = list;
         moved
     }
 
@@ -1972,6 +1984,8 @@ impl Shell {
         // its Dock thumbnail: one picture, asked for while the window server still has it on screen
         self.dock_shot(app, t);
         if let Some(d) = self.desk.as_mut() { d.wins[i].minimized = true; d.hidden.retain(|a| *a != app); }
+        // the desktop it uncovers is drawn whole, not only the bar and Dock regions (W4-4)
+        self.force_full_redraw();
         self.desk_refocus();
     }
 
@@ -2175,7 +2189,9 @@ impl Shell {
         // a window opened again comes back at the size it was closed with; a fixed manifest size still wins
         let (w, h) = match (size_limits(app).initial, self.desk.as_ref().and_then(|d| d.closed_sizes.get(&app).copied())) {
             // held to the window's range: a size below the minimum must not come back with the window (E2E-12)
-            (None, Some(closed)) if !borderless(app) => clamp_size(app, &m, closed),
+            // a frame as tall or as wide as the work area (a tile or the Fill frame the window server gave it) is not a
+            // size the person chose: the window opens at its default size instead of filling the screen (W4-3, W4-8)
+            (None, Some(closed)) if !borderless(app) && remembered_size(Desk::area(&m), closed) => clamp_size(app, &m, closed),
             _ => (w, h),
         };
         let existed = self.desk.as_ref().is_some_and(|d| d.index_of(app).is_some());
@@ -2330,6 +2346,10 @@ impl Shell {
                 w.minimized = true;
             }
         }
+        // the whole desktop surface is drawn afresh: a partial frame clears only the bar, Dock and menu regions, so
+        // anything left on the surface under the windows (a stray drag image) stayed in the middle of the bare
+        // desktop until the next full frame (W4-4)
+        self.force_full_redraw();
         self.desk_refocus();
     }
 
@@ -2377,7 +2397,8 @@ impl Shell {
     pub(super) fn floating_apps(&self) -> Vec<AppId> {
         let mut out = Vec::new();
         for (slot, host) in self.ext.iter().enumerate() {
-            let Some(h) = host else { continue };
+            // only a running app's windows float: the level an exited app asked for is not kept for its windows
+            let Some(h) = host.as_ref().filter(|h| h.running()) else { continue };
             if h.window_level == bifrost_proto::WindowLevel::Floating {
                 out.push(AppId::External(slot as u8));
             }
@@ -2584,6 +2605,8 @@ impl Shell {
         let Some(d) = self.desk.as_mut() else { return false };
         let Some(i) = d.index_of(AppId::ExternalWindow(slot, id)) else { return false };
         d.raise(i);
+        // the window server raises it and gives it the keyboard as well, as an open does (W4-1)
+        d.raise_front = true;
         self.desk_refocus();
         self.dirty = true;
         true
@@ -5407,5 +5430,156 @@ mod w3_window_tests {
         sh.desktop_pointer(gx, gy, false, 3000.);
         sh.arrange_tick(3000. + ARRANGE_DWELL_MS);
         assert_eq!(sh.desktop_menu, Some(super::super::desktop_bar::Menu::Arrange), "a new rest opens it again");
+    }
+}
+
+#[cfg(test)]
+mod w4_window_tests {
+    use super::*;
+
+    fn metrics() -> Metrics {
+        Metrics { w: 2560, h: 1440, title: 52, menubar: 35, min_w: 320, min_h: 220, edge: 6, light: 12, light_gap: 8, light_x: 12, dock_bottom: 172, pt: 1.25 }
+    }
+
+    fn desktop() -> crate::shell::Shell {
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.anim = None;
+        sh.screen = crate::shell::Screen::Home;
+        if sh.desk.is_none() { sh.desk = Some(Desk::new()); }
+        sh
+    }
+
+    /// W4-1: a built-in window never floats, whatever the list says, so raising it always puts it in front of the
+    /// normal windows of every app.
+    #[test]
+    fn a_built_in_window_never_floats() {
+        let mut d = Desk::new();
+        d.floating = vec![AppId::Terminal, AppId::Settings];
+        assert!(!d.is_floating(AppId::Terminal) && !d.is_floating(AppId::Settings));
+        d.floating = vec![AppId::External(4)];
+        assert!(d.is_floating(AppId::External(4)) && d.is_floating(AppId::ExternalWindow(4, 2)), "an app's windows float with it");
+        d.floating = vec![AppId::ExternalWindow(4, 2)];
+        assert!(d.is_floating(AppId::ExternalWindow(4, 2)) && !d.is_floating(AppId::External(4)), "one extra window floats alone");
+    }
+
+    /// W4-1: the bands `sync_levels` sorts are the ones `band_top` reads: an extra window of a floating app goes up with
+    /// it, so a built-in window raised afterwards lands above every normal window, not under a stray floating one.
+    #[test]
+    fn a_raised_built_in_window_goes_above_every_normal_window() {
+        let m = metrics();
+        let mut d = Desk::new();
+        d.open(&m, AppId::Terminal, (800, 500));
+        d.open(&m, AppId::ExternalWindow(5, 1), (300, 200));
+        d.open(&m, AppId::Settings, (900, 700));
+        d.open(&m, AppId::External(25), (1000, 700));
+        d.open(&m, AppId::External(5), (400, 300));
+        d.sync_levels(vec![AppId::External(5)]);
+        let order: Vec<AppId> = d.wins.iter().map(|w| w.app).collect();
+        assert_eq!(&order[3..], &[AppId::ExternalWindow(5, 1), AppId::External(5)], "both windows of the floating app are on top");
+        let t = d.index_of(AppId::Terminal).unwrap();
+        let at = d.raise(t);
+        assert_eq!(at, 2, "Terminal goes right under the floating band");
+        assert!(d.wins[..at].iter().all(|w| !d.is_floating(w.app)), "no floating window is left under it");
+        d.sync_levels(Vec::new());
+        let t = d.index_of(AppId::Terminal).unwrap();
+        assert_eq!(d.raise(t), d.wins.len() - 1, "with nothing floating, a raise is the very front");
+        assert_eq!(d.front().map(|w| w.app), Some(AppId::Terminal));
+    }
+
+    /// W4-3, W4-8: a window closed at a tile or the Fill frame is not remembered at that size; a size the person chose is.
+    #[test]
+    fn a_tile_or_fill_frame_is_not_remembered_as_the_closed_size() {
+        let a = Desk::area(&metrics());
+        assert!(!remembered_size(a, (a.w, a.h)), "the Fill frame");
+        assert!(!remembered_size(a, (a.w / 2, a.h)), "a half tile is as tall as the work area");
+        assert!(!remembered_size(a, (a.w, a.h / 2)), "a top or bottom tile is as wide");
+        assert!(remembered_size(a, (1200, 825)), "a default-sized window");
+        assert!(remembered_size(a, (a.w * 2 / 3, a.h * 2 / 3)), "the Centre tile is a size of its own");
+    }
+
+    /// W4-8: an app without a manifest `window_size` opens at its default size, even when its last window was closed
+    /// while it filled the work area.
+    #[test]
+    fn a_window_closed_filling_the_screen_opens_again_at_the_default_size() {
+        let mut sh = desktop();
+        sh.desk_open(AppId::Photos, 0.0);
+        let m = sh.desk_metrics();
+        let default = { let d = sh.desk.as_ref().unwrap(); let r = d.wins[d.index_of(AppId::Photos).unwrap()].r; (r.w, r.h) };
+        {
+            let d = sh.desk.as_mut().unwrap();
+            let i = d.index_of(AppId::Photos).unwrap();
+            d.wins[i].r = Desk::area(&m);
+            d.close(i);
+        }
+        sh.desk_open(AppId::Photos, 10.0);
+        let d = sh.desk.as_ref().unwrap();
+        let r = d.wins[d.index_of(AppId::Photos).unwrap()].r;
+        assert_eq!((r.w, r.h), default, "the default size, not the work area");
+    }
+
+    /// W4-2: a click on the pinned Terminal icon in the Dock opens Terminal in front, with the focus.
+    #[test]
+    fn a_dock_click_on_terminal_opens_it_in_front() {
+        let mut sh = desktop();
+        sh.desk_open(AppId::Settings, 0.0);
+        sh.desk_open(AppId::Photos, 1.0);
+        {
+            let p = &mut sh.desk.as_mut().unwrap().dock_preferences.pinned;
+            if !p.iter().any(|k| k == "is.olibuijr.term") { p.push("is.olibuijr.term".into()); }
+        }
+        let m = sh.desk_metrics();
+        let t = 5000.0;
+        let (list, bar, icons) = sh.desk_dock(&m);
+        let (_, icons) = sh.dock_live(bar, &icons, t / 1000.0);
+        let k = list.iter().position(|&e| apps().get(e).is_some_and(|a| a.id == AppId::Terminal)).expect("Terminal is in the Dock");
+        let r = icons[k];
+        let (x, y) = ((r.x + r.w / 2) as f32, (r.y + r.h / 2) as f32);
+        sh.desk_event(Event::Down(x, y), t);
+        sh.desk_event(Event::Up(x, y), t + 60.0);
+        let d = sh.desk.as_ref().unwrap();
+        assert_eq!(d.front().map(|w| w.app), Some(AppId::Terminal), "Terminal is the front window");
+        assert_eq!(sh.screen, crate::shell::Screen::App(AppId::Terminal), "and has the focus");
+    }
+
+    /// W4-5: opening a window that sits behind others (an Overview pick, the Dock, the Window menu) brings it to the very
+    /// front with the focus, and the window server is asked to raise it.
+    #[test]
+    fn opening_a_window_behind_others_brings_it_to_the_very_front() {
+        let mut sh = desktop();
+        sh.desk_open(AppId::Terminal, 0.0);
+        sh.desk_open(AppId::Settings, 1.0);
+        sh.desk_open(AppId::Photos, 2.0);
+        sh.take_raise_front();
+        sh.desk_open(AppId::Terminal, 3.0);
+        assert_eq!(sh.desk.as_ref().unwrap().wins.last().map(|w| w.app), Some(AppId::Terminal), "last in the stack");
+        assert_eq!(sh.screen, crate::shell::Screen::App(AppId::Terminal));
+        assert!(sh.take_raise_front(), "the window server raises and focuses it");
+    }
+
+    /// W4-1: raising an app's extra window (the Window menu, the Dock's app menu) asks the window server to raise it too.
+    #[test]
+    fn focusing_an_extra_window_asks_the_window_server_to_raise_it() {
+        let mut sh = desktop();
+        let m = sh.desk_metrics();
+        let d = sh.desk.as_mut().unwrap();
+        d.open(&m, AppId::ExternalWindow(3, 1), (300, 200));
+        d.open(&m, AppId::Settings, (900, 700));
+        sh.take_raise_front();
+        assert!(sh.desk_focus_extra_window(3, 1));
+        assert_eq!(sh.desk.as_ref().unwrap().front().map(|w| w.app), Some(AppId::ExternalWindow(3, 1)));
+        assert!(sh.take_raise_front());
+    }
+
+    /// W4-4: Show Desktop (Esc, the hot corner, the Window menu) draws the whole desktop surface afresh, so nothing left
+    /// under the windows stays on the bare desktop.
+    #[test]
+    fn show_desktop_redraws_the_whole_desktop() {
+        let mut sh = desktop();
+        sh.desk_open(AppId::Settings, 0.0);
+        sh.desk_regions = Some(vec![(0, 0, 10, 10)]);
+        sh.desk_show_desktop();
+        assert!(sh.desk_regions.is_none(), "no partial frame: the regions of the last one are dropped");
+        assert!(matches!(sh.drawn, crate::shell::Drawn::Nothing));
+        assert!(sh.desk.as_ref().unwrap().wins.iter().all(|w| w.minimized));
     }
 }

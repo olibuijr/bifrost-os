@@ -5276,7 +5276,9 @@ focus one with `desk_focus_extra_window`. Tests: `app_window_table` (`desk_chang
 
 Window server: an extra window has its own frame id, `WINDOW_ID_FLAG | slot << 16 | window id` (`win_id`, `frame_app` is the
 inverse), so it takes the same `SPRINGBOARD_WAYLAND` path as an app's window. A window floats with its app (`is_floating` checks
-the parent), so the window-level path (`take_wayland_windows`) keeps working. Cmd+` (`desk_cycle_window`) walks the front app's
+the window and its parent; a built-in window never floats, and only a running app's level counts), so the window-level path
+(`take_wayland_windows`) keeps working; `sync_levels` sorts the bands with the same test `band_top` raises into, so a raised
+window always lands at the top of its band (W4-1). Cmd+` (`desk_cycle_window`) walks the front app's
 windows, its extra windows included; Cmd+Tab still lists apps. The Window menu lists only the front app's windows. The screen
 reader lists each window of the front app as a window element (`walk::window`). Not done: the parent app's drop targets and the
 window's own controls are not in the reader tree; the direct Wayland path has no second toplevel (`LAYER_CONTEXT_WIRED` is false).
