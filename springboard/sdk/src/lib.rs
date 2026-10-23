@@ -84,6 +84,8 @@ pub mod font_descriptor;
 pub mod font_substitution;
 /// App-facing font objects, specs, the font manager, collections and fallback cascade.
 pub use bifrost_render::{fontinfo, fontobj};
+/// The installed font families (`fontprefs::installed`, `NSFontManager.availableFontFamilies`) for font panels.
+pub use bifrost_render::fontprefs;
 pub mod screen_saver_defaults;
 pub mod screen_saver;
 pub mod idle_watch;

@@ -177,6 +177,11 @@ pub enum Action {
     /// The format bar's style pop-up (0 Regular, 1 Bold, 2 Italic, 3 Bold Italic) and size pop-up (index into `SIZES`)
     FontStyle(u8),
     Size(u8),
+    /// Format > Font > Show Fonts and Show Colors (the font and colour panels), and their Done buttons
+    ShowFonts,
+    ShowColors,
+    FontsDone,
+    ColorsDone,
 }
 
 /// The first menu id of Text Editor's own items. Ids are stable: they are the values a menu sends back.
@@ -298,6 +303,10 @@ impl Action {
             Action::EncodingToggle(i) => MENU_BASE + 0xe0 + i as u32,
             Action::FontStyle(i) => MENU_BASE + 0xee + i as u32,
             Action::Size(i) => MENU_BASE + 0xf2 + i as u32,
+            Action::ShowFonts => MENU_BASE + 0xfb,
+            Action::ShowColors => MENU_BASE + 0xfc,
+            Action::FontsDone => MENU_BASE + 0xfd,
+            Action::ColorsDone => MENU_BASE + 0xfe,
         })
     }
 
@@ -417,6 +426,10 @@ impl Action {
             0xe8 => Action::Direction(true),
             0xee..=0xf1 => Action::FontStyle((offset - 0xee) as u8),
             0xf2..=0xfa => Action::Size((offset - 0xf2) as u8),
+            0xfb => Action::ShowFonts,
+            0xfc => Action::ShowColors,
+            0xfd => Action::FontsDone,
+            0xfe => Action::ColorsDone,
             _ => return None,
         })
     }
@@ -598,7 +611,7 @@ pub fn weight_of(style: &Style) -> Weight {
 
 /// The face name a font index stands for, for the menu and the readout.
 pub fn family_name(font: u8) -> &'static str {
-    FAMILIES.get(font as usize).copied().unwrap_or(FAMILIES[0])
+    crate::text::families().get(font as usize).map_or(FAMILIES[0], String::as_str)
 }
 
 fn label_button(ui: &Ui, label: &str, action: Option<Action>, weight: Weight) -> Button {
@@ -1302,6 +1315,10 @@ mod tests {
             Action::FontStyle(3),
             Action::Size(0),
             Action::Size(8),
+            Action::ShowFonts,
+            Action::ShowColors,
+            Action::FontsDone,
+            Action::ColorsDone,
         ];
         let mut ids: Vec<u32> = all.iter().filter_map(|a| a.id()).collect();
         ids.sort_unstable();

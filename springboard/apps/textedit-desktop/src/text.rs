@@ -11,9 +11,69 @@ pub const FAMILIES: [&str; 3] = ["Helvetica", "Times", "Courier"];
 /// The names other programs know the families by (a document written for them names these), in `FAMILIES` order.
 pub const FAMILY_NAMES: [&str; 3] = ["Arial", "Times New Roman", "Courier New"];
 
-/// The family a font name from another program is closest to: serif faces map to Times, fixed-width faces to Courier,
-/// everything else to the default.
+/// Every family a document can use, by `Style::font` index: the three base families (`FAMILIES`), then the font families
+/// installed on the system and in the user's fonts folder, by name (`NSFontManager.availableFontFamilies`). At most 256.
+/// Tests see the base families only, so they do not depend on the machine's fonts.
+pub fn families() -> &'static [String] {
+    static ALL: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+    ALL.get_or_init(|| {
+        let mut v: Vec<String> = FAMILIES.iter().map(|f| f.to_string()).collect();
+        #[cfg(not(test))]
+        for name in installed_families() {
+            if v.len() < 256 && !v.iter().any(|f| f.eq_ignore_ascii_case(&name)) {
+                v.push(name);
+            }
+        }
+        v
+    })
+}
+
+/// The installed font families (the system's fonts and `~/.local/share/fonts`), sorted by name.
+#[cfg(not(test))]
+fn installed_families() -> Vec<String> {
+    let mut dirs = vec![std::path::PathBuf::from("/usr/share/fonts")];
+    if let Some(home) = std::env::var_os("HOME") {
+        dirs.push(std::path::Path::new(&home).join(".local/share/fonts"));
+    }
+    bifrost_app::fontprefs::installed(&dirs).into_iter().map(|f| f.family).filter(|f| !f.trim().is_empty()).collect()
+}
+
+/// The index of the family named exactly `name` (any case), when a document can use it.
+pub fn family_index(name: &str) -> Option<u8> {
+    let name = name.trim();
+    families().iter().position(|f| f.eq_ignore_ascii_case(name)).map(|i| i as u8)
+}
+
+/// The base family (index into `FAMILIES`) that stands for family `font` where only the base three exist (the PDF faces of
+/// printing, the names other programs know): a base family is itself, an installed one maps by its name.
+pub fn base_family(font: u8) -> usize {
+    match families().get(font as usize) {
+        Some(_) if (font as usize) < FAMILIES.len() => font as usize,
+        Some(name) => family_for_name(name).min(FAMILIES.len() as u8 - 1) as usize,
+        None => 0,
+    }
+}
+
+/// The name another program knows family `font` by: the base families under their common names, an installed family
+/// under its own.
+pub fn export_name(font: u8) -> &'static str {
+    if (font as usize) < FAMILY_NAMES.len() {
+        return FAMILY_NAMES[font as usize];
+    }
+    families().get(font as usize).map_or(FAMILY_NAMES[0], String::as_str)
+}
+
+/// The family a font name from another program is closest to: a family a document can use by that exact name, else
+/// serif faces map to Times, fixed-width faces to Courier, everything else to the default.
 pub fn family_for_name(name: &str) -> u8 {
+    if let Some(i) = family_index(name).filter(|i| *i as usize >= FAMILIES.len()) {
+        return i;
+    }
+    family_for_base_name(name)
+}
+
+/// `family_for_name` among the base families only.
+fn family_for_base_name(name: &str) -> u8 {
     let lower = name.to_ascii_lowercase();
     let has = |words: &[&str]| words.iter().any(|w| lower.contains(w));
     if has(&["courier", "mono", "consolas", "menlo", "typewriter"]) {
@@ -301,7 +361,7 @@ impl Text {
     /// The family new text takes where no character sets one (the Preferences' default font). Setting it changes no
     /// text and makes no undo entry.
     pub fn set_default_font(&mut self, font: u8) {
-        self.default_font = (font as usize).min(FAMILIES.len() - 1) as u8;
+        self.default_font = (font as usize).min(families().len() - 1) as u8;
         if self.cells.is_empty() {
             self.typing.font = self.default_font;
         }
@@ -659,7 +719,7 @@ impl Text {
     }
 
     pub fn set_font(&mut self, font: u8) {
-        let font = (font as usize).min(FAMILIES.len() - 1) as u8;
+        let font = (font as usize).min(families().len() - 1) as u8;
         self.restyle(|s| s.font = font);
     }
 

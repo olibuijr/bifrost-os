@@ -102,7 +102,7 @@ pub fn write_with(cells: &[Cell], tab: f32, props: &Properties) -> Vec<u8> {
                 j += 1;
             }
             let s = para[i].style;
-            let mut span = format!("font-family:{};font-size:{}pt", FAMILIES[(s.font as usize).min(FAMILIES.len() - 1)], s.size);
+            let mut span = format!("font-family:{};font-size:{}pt", crate::view::family_name(s.font), s.size);
             if s.color > 0 {
                 let [r, g, b] = COLORS[(s.color as usize).min(COLORS.len() - 1)].1;
                 span += &format!(";color:#{r:02x}{g:02x}{b:02x}");
@@ -539,6 +539,10 @@ fn align_of(v: &str) -> Align {
 fn family_of(v: &str) -> u8 {
     let lower = v.to_ascii_lowercase();
     let first = lower.split(',').next().unwrap_or("").trim().trim_matches(|c| c == '"' || c == '\'').to_string();
+    // an installed family by its exact name, else a base family the name starts with
+    if let Some(i) = crate::text::family_index(&first) {
+        return i;
+    }
     if let Some(i) = FAMILIES.iter().position(|f| first.starts_with(&f.to_ascii_lowercase())) {
         return i as u8;
     }
