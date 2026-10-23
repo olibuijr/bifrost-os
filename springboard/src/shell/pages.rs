@@ -352,6 +352,8 @@ pub enum Pick {
     ScreenSaverModule(usize),
     /// Settings > Sound > Alert Sound: the n-th `options::ALERT_SOUNDS` entry
     AlertSound(usize),
+    /// Settings > Sound > Play sound effects through: 0 the selected output device, n the (n-1)th output
+    EffectsOutput(usize),
     /// Settings > Screen Saver > Start After: the index into `screensaver::START_AFTER`
     ScreenSaverStart(usize),
     /// Settings > Screen Saver: the n-th option of the chosen saver, set to its c-th choice (see `screensaver::load_sheet`)
@@ -382,6 +384,8 @@ impl Pick {
             Pick::ScreenSaverModule(_) => Pick::ScreenSaverModule(k),
             Pick::ScreenSaverStart(_) => Pick::ScreenSaverStart(k),
             Pick::ScreenSaverOption(n, _) => Pick::ScreenSaverOption(n, k),
+            Pick::AlertSound(_) => Pick::AlertSound(k),
+            Pick::EffectsOutput(_) => Pick::EffectsOutput(k),
             _ => return None,
         })
     }
@@ -1103,17 +1107,20 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         }
         PageId::Wallpaper => page("Wallpaper", false, vec![]),
         PageId::ScreenSaver => screen_saver_page(o, &super::screensaver::manifest(o.screensaver_module).map(|m| m.sheet().clone()).unwrap_or_default()),
+        // the Golden Gate Sound pane: Sound Effects (alert sound, where effects play, the effect switches), then the
+        // output devices with the live output volume, then the input devices
         PageId::Sounds => page(
-            "Sounds",
+            "Sound",
             false,
             {
-                let mut groups = vec![
-                    Group::new(vec![Item::slider(Ends::Volume, o.volume, Action::Slider(Slider::Volume))]).header("RINGER AND ALERTS"),
-                    Group::new(super::options::ALERT_SOUNDS.iter().enumerate().map(|(i, l)| Item::new(*l).check(i == o.alert_sound, Action::Pick(Pick::AlertSound(i)))).collect())
-                        .header("ALERT SOUND")
-                        .footer("The sound that plays when an alert arrives."),
-                    Group::new(sound_switches(o, m.haptics)),
+                let alert = o.alert_sound.min(super::options::ALERT_SOUNDS.len() - 1);
+                let through = m.sound.effects_choice();
+                let mut effects = vec![
+                    Item::new("Alert sound").popup(choice_labels(&super::options::ALERT_SOUNDS), alert, Action::Pick(Pick::AlertSound(alert))),
+                    Item::new("Play sound effects through").popup(m.sound.effects_choices(), through, Action::Pick(Pick::EffectsOutput(through))),
                 ];
+                effects.extend(sound_switches(o, m.haptics));
+                let mut groups = vec![Group::new(effects).header("SOUND EFFECTS").footer("The alert sound plays when a timer or an alarm goes off and for the terminal bell.")];
                 groups.extend(super::sound_page::groups(m.sound));
                 groups
             },
@@ -2932,7 +2939,9 @@ mod tests {
         let h = spec(PageId::HomeScreen, &m);
         assert_eq!(h.groups[0].items[1].accessory, Accessory::Check(true));
         let s = spec(PageId::Sounds, &m);
-        assert_eq!(s.groups[0].items[0].body, super::super::list::Body::Slider { ends: Ends::Volume, value: 0.25 });
+        assert_eq!(s.groups[0].items[0].accessory, Accessory::Popup, "Alert sound is a pop-up");
+        let volume = s.groups.iter().find(|g| g.header.as_deref() == Some("OUTPUT VOLUME")).expect("the output volume");
+        assert_eq!(volume.items[0].body, super::super::list::Body::Slider { ends: Ends::Volume, value: m.sound.volume }, "the live level, not the saved pref");
         let b = spec(PageId::Battery, &m);
         assert_eq!(b.groups[0].items[0].value, "63%");
         assert_eq!(b.groups[0].items[1].value, "Charging");

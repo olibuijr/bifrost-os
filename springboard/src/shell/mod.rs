@@ -2483,6 +2483,11 @@ impl Shell {
     pub fn set_volume(&mut self, level: f32) {
         self.cc.volume = Volume::new(level).level();
         self.audio_volume(self.cc.volume);
+        // Settings > Sound shows the live level and route
+        let headphones = self.cc.route == Route::Headphones;
+        if let Some(st) = &mut self.settings {
+            st.set_audio(&self.ui, self.cc.volume, headphones);
+        }
         self.dirty = true;
     }
 
@@ -3052,6 +3057,7 @@ impl Shell {
             let mut st = Settings::new(&self.ui, &self.info, &self.prefs, self.w, self.h, self.wallpapers.clone());
             st.set_data_dir(self.data_dir.clone());
             st.set_haptics_available(self.haptics);
+            st.set_audio(&self.ui, self.cc.volume, self.cc.route == Route::Headphones);
             if let Some(o) = &self.ota {
                 st.set_update_badge(&self.ui, o.os_badge() > 0);
                 st.mirror_update(&self.ui, &o.updater);

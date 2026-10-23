@@ -360,6 +360,11 @@ pub struct Settings {
     /// Displays > Resolution: the size in the display-resolution file (None is Native), read when the Displays pages open
     resolution: Option<(u32, u32)>,
     sound: super::sound_page::SoundView,
+    /// Sound: the saved output, input and sound-effects device UIDs (`sound_page::PREF_*`), chosen again when the
+    /// device list is read
+    sound_saved: (String, String, String),
+    /// the headphones are plugged in (the output route), so the analog output is listed as Headphones
+    headphones: bool,
     login_out: Vec<String>,
     /// the Focus time row the time-of-day picker is editing
     notify_edge: Option<NotifyEdit>,
@@ -598,6 +603,12 @@ impl Settings {
             refresh: super::services::display_services::RefreshChoice::Max,
             resolution: None,
             sound: Default::default(),
+            sound_saved: (
+                prefs.get(super::sound_page::PREF_OUTPUT).unwrap_or("").to_string(),
+                prefs.get(super::sound_page::PREF_INPUT).unwrap_or("").to_string(),
+                prefs.get(super::sound_page::PREF_EFFECTS).unwrap_or("").to_string(),
+            ),
+            headphones: false,
             notify_edge: None,
             night: NightShift::load(prefs),
             night_edge: None,
@@ -939,9 +950,45 @@ impl Settings {
             self.brightness = info.brightness;
         }
         if self.info != *info {
+            let sink_changed = self.info.bt.audio_sink() != info.bt.audio_sink();
             self.info = info.clone();
+            // a Bluetooth headset that connects or leaves is an output that comes or goes on Sound
+            if sink_changed && self.page() == PageId::Sounds {
+                self.reload_sound();
+            }
             self.rebuild_visible(ui);
         }
+    }
+
+    /// The live output level and route, from the shell (the Control Center slider, the volume keys, the headphone
+    /// jack). Sound's Output volume shows it, not the saved pref, and follows it while the page is open.
+    pub fn set_audio(&mut self, ui: &Ui, level: f32, headphones: bool) {
+        let level = level.clamp(0.0, 1.0);
+        let route = self.headphones != headphones;
+        if (self.sound.volume - level).abs() < 1e-4 && !route {
+            return;
+        }
+        self.sound.volume = level;
+        self.headphones = headphones;
+        // the page follows a level set elsewhere, but not the drag of its own slider (which set the level)
+        if self.page() == PageId::Sounds && self.drag.is_none() {
+            if route {
+                self.reload_sound();
+            }
+            self.rebuild_visible(ui);
+        }
+    }
+
+    /// Reads the Sound page's devices again (ALSA, the jack, Bluetooth) and selects the saved ones.
+    fn reload_sound(&mut self) {
+        let (volume, level) = (self.sound.volume, self.sound.level);
+        self.sound = super::sound_page::read_view(self.headphones, self.info.bt.audio_sink());
+        self.sound.volume = volume;
+        self.sound.level = level;
+        let (o, i, e) = &self.sound_saved;
+        let some = |s: &str| (!s.is_empty()).then(|| s.to_string());
+        let (o, i, e) = (some(o), some(i), some(e));
+        self.sound.choose(o.as_deref(), i.as_deref(), e.as_deref());
     }
 
     /// Re-renders after a text size or weight change.
@@ -1735,6 +1782,7 @@ impl Settings {
             PageId::SoftwareUpdate if matches!(self.updater.state, update::State::Idle | update::State::UpToDate | update::State::Failed(_)) => self.updater.check(),
             PageId::Backup => self.backup_note.clear(),
             PageId::Users => self.users_note.clear(),
+            PageId::Sounds => self.reload_sound(),
             _ => {}
         }
         let back = self.stack.last().map(|e| e.title.clone());
@@ -2552,6 +2600,7 @@ impl Settings {
             }
             Slider::Volume => {
                 self.opts.volume = v;
+                self.sound.volume = v;
                 self.list_mut().expect("list").set_slider(g, i, v);
                 if release {
                     self.opts.save(prefs);
@@ -3169,8 +3218,25 @@ impl Settings {
                             if let Err(e) = prefs.set(key, &uid) {
                                 eprintln!("settings: {key}: {e}");
                             }
-                            if input { self.sound.input = Some(k) } else { self.sound.output = Some(k) }
+                            if input {
+                                self.sound.input = Some(k);
+                                self.sound_saved.1 = uid;
+                            } else {
+                                self.sound.output = Some(k);
+                                self.sound_saved.0 = uid;
+                            }
+                            // the check moves to the chosen device
+                            self.rebuild_visible(ui);
                         }
+                        vec![]
+                    }
+                    Pick::EffectsOutput(k) => {
+                        let uid = super::sound_page::effects_pref(&self.sound, k);
+                        if let Err(e) = prefs.set(super::sound_page::PREF_EFFECTS, &uid) {
+                            eprintln!("settings: {}: {e}", super::sound_page::PREF_EFFECTS);
+                        }
+                        self.sound.effects = k.checked_sub(1).filter(|&i| i < self.sound.outputs.len());
+                        self.sound_saved.2 = uid;
                         vec![]
                     }
                     Pick::IconSize(k) => {
@@ -5093,5 +5159,33 @@ mod e2e_w3_tests {
         settle(&mut st, &ui);
         assert_eq!(st.page(), first, "Return opened the first match");
         assert_eq!(first, PageId::About);
+    }
+
+    /// The Output volume slider's value on the open Sound page.
+    fn sound_slider(st: &Settings) -> f32 {
+        let spec = st.list().expect("list").spec();
+        let g = spec.groups.iter().find(|g| g.header.as_deref() == Some("OUTPUT VOLUME")).expect("the output volume group");
+        match g.items[0].body {
+            super::super::list::Body::Slider { value, .. } => value,
+            _ => panic!("not a slider"),
+        }
+    }
+
+    /// W3-9: Sound showed the saved "volume" pref (0) while the system played at 0.644; it shows the live level, and
+    /// follows it while open.
+    #[test]
+    fn sound_shows_and_follows_the_live_output_level() {
+        let ui = crate::shell::tests::ui();
+        let (mut st, _) = split(&ui);
+        st.set_audio(&ui, 0.644, false);
+        st.open_page(&ui, "Sound", 0.0);
+        settle(&mut st, &ui);
+        assert_eq!(st.page(), PageId::Sounds);
+        assert!((sound_slider(&st) - 0.644).abs() < 1e-4, "the live level");
+        st.set_audio(&ui, 0.25, false);
+        assert!((sound_slider(&st) - 0.25).abs() < 1e-4, "a level set by the keys or Control Center shows at once");
+        let spec = st.list().expect("list").spec();
+        assert!(spec.groups.iter().any(|g| g.header.as_deref() == Some("OUTPUT") && !g.items.is_empty()), "the output devices are listed");
+        assert!(spec.groups[0].items.iter().any(|i| i.label == "Play sound effects through"));
     }
 }
