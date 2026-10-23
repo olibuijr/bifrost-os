@@ -5355,7 +5355,7 @@ mod w3_window_tests {
         assert!(sh.desktop_menu.is_none());
         sh.arrange_tick(2000. + 2. * ARRANGE_DWELL_MS);
         assert!(sh.desktop_menu.is_none(), "not again without the pointer moving");
-        sh.desktop_pointer(gx + 1., gy, false, 3000.);
+        sh.desktop_pointer(gx, gy, false, 3000.);
         sh.arrange_tick(3000. + ARRANGE_DWELL_MS);
         assert_eq!(sh.desktop_menu, Some(super::super::desktop_bar::Menu::Arrange), "a new rest opens it again");
     }
