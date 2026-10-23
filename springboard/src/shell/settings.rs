@@ -4681,7 +4681,8 @@ mod tests {
         assert_eq!(prefs.get("keyboard_clicks"), Some("0"));
         tap_row(&mut st, &ui, &mut prefs, "Lock Sound");
         assert_eq!(prefs.get("lock_sound"), Some("0"));
-        assert_eq!(tap_row(&mut st, &ui, &mut prefs, "Chime"), vec![Effect::AlertSound(1)], "choosing an alert sound plays it once");
+        // Alert sound is a pop-up (the Golden Gate Sound pane): its second choice is Chime
+        assert_eq!(pick(&mut st, &ui, &mut prefs, "Alert sound", 1), vec![Effect::AlertSound(1)], "choosing an alert sound plays it once");
         assert_eq!(prefs.get("alert_sound"), Some("1"));
         assert_eq!(st.options().alert_sound, 1);
         back(&mut st, &ui, &mut prefs);
@@ -4937,7 +4938,9 @@ mod tests {
         assert_eq!(st.options().text_scale, TEXT_SIZES[0]);
         back(&mut st, &ui, &mut prefs);
         tap_row(&mut st, &ui, &mut prefs, "Sounds");
-        let fx = drag_slider(&mut st, &ui, &mut prefs, None, 0, 0, 0.5, 0.0);
+        // the Output volume slider sits under the output devices
+        let g = st.list().unwrap().spec().groups.iter().position(|g| g.header.as_deref() == Some("OUTPUT VOLUME")).expect("Output volume");
+        let fx = drag_slider(&mut st, &ui, &mut prefs, None, g, 0, 0.5, 0.0);
         assert_eq!(fx.last(), Some(&Effect::Volume(0.0)));
         assert_eq!(prefs.get("volume"), Some("0.00"));
     }
