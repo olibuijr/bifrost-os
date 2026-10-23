@@ -180,10 +180,13 @@ impl Music {
 
     /// The source list: the Library, then Playlists with each playlist; the shown one is selected.
     pub fn sidebar(&self) -> SourceList {
-        let mut items = vec![SidebarItem::header("Library")];
+        // the listening places come first, above the Library (the reference's Home / New / Radio group; this app has
+        // no catalogue to fill Home or New, so Radio stands alone there)
+        let radio = TABS.iter().position(|e| e.0 == Tab::Radio).unwrap_or(0);
+        let mut items = vec![SidebarItem::row(SIDE_TAB + radio as u32, TABS[radio].1).with_symbol(TABS[radio].2), SidebarItem::header("Library")];
         for (i, (tab, label, symbol)) in TABS.iter().enumerate() {
             if *tab == Tab::Radio {
-                items.push(SidebarItem::header("Radio"));
+                continue;
             }
             if *tab == Tab::Playlists {
                 items.push(SidebarItem::header("Playlists"));

@@ -137,6 +137,73 @@ const MENU_HEAD_PT: f32 = 44.0;
 /// The route button of the mini player bar sits this far left of Play; its touch reach is MINI_ROUTE_HIT_PT.
 const MINI_ROUTE_GAP_PT: f32 = 56.0;
 const MINI_ROUTE_HIT_PT: f32 = 24.0;
+/// The mini player bar's volume slider: its length, its gap to the route button, and the narrowest bar that has one.
+const MINI_VOLUME_PT: f32 = 72.0;
+const MINI_VOLUME_GAP_PT: f32 = 24.0;
+const MINI_VOLUME_MIN_BAR_PT: f32 = 480.0;
+/// The room the elapsed time (or LIVE and the time on air) needs left of the volume slider, and the room the title
+/// keeps before the time is shown at all.
+const MINI_STATUS_MIN_PT: f32 = 96.0;
+const MINI_TITLE_MIN_PT: f32 = 120.0;
+
+/// The mini player bar's volume track, left of the route button; None when the bar is too narrow to hold one.
+fn mini_volume_track(ui: &Ui, mini: &Mini) -> Option<R> {
+    if mini.bar.w < ui.pt(MINI_VOLUME_MIN_BAR_PT) {
+        return None;
+    }
+    let route_x = mini.play.0 - ui.pt(MINI_ROUTE_GAP_PT);
+    let w = ui.pt(MINI_VOLUME_PT);
+    let h = ui.pt(SPACE_XXS);
+    Some(R { x: route_x - ui.pt(MINI_VOLUME_GAP_PT) - w, y: mini.play.1 - h / 2.0, w, h })
+}
+
+/// How wide the mini player bar's title and second line may be: up to the time and the volume slider when the bar has
+/// them, else up to the buttons.
+fn mini_text_w(ui: &Ui, w: i32, h: i32) -> f32 {
+    let mini = Mini::new(ui, w, h);
+    match (mini_volume_track(ui, &mini), mini_status_right(ui, &mini)) {
+        (Some(_), Some(right)) => right - ui.pt(MINI_STATUS_MIN_PT) - ui.pt(SPACE_L) - mini.text_x(ui),
+        (Some(track), None) => track.x - ui.pt(SPACE_L) - mini.text_x(ui),
+        _ => w as f32 - ui.pt(MINI_TEXT_PT),
+    }
+}
+
+/// Where the mini player bar's time text ends (it is right-aligned there); None when the bar has no room for it.
+fn mini_status_right(ui: &Ui, mini: &Mini) -> Option<f32> {
+    let track = mini_volume_track(ui, mini)?;
+    let right = track.x - ui.pt(SPACE_L);
+    (right - mini.text_x(ui) >= ui.pt(MINI_STATUS_MIN_PT + MINI_TITLE_MIN_PT) + ui.pt(SPACE_L)).then_some(right)
+}
+
+/// The title and the hint of an empty library, per Library section: what is missing, and how to add music (File >
+/// Import, or files copied to the Music folder). Nothing is hinted while the folder is still being read.
+fn library_empty_text(tab: Tab, scope: Scope, scanning: bool) -> (&'static str, &'static str) {
+    if scanning {
+        return ("Looking for music\u{2026}", "");
+    }
+    const ADD: &str = "Choose File > Import\u{2026} (\u{2318}O) or copy MP3 or M4A files to your Music folder";
+    let title = match (tab, scope) {
+        (Tab::Artists, _) => "No Artists",
+        (Tab::Albums, _) => "No Albums",
+        (Tab::Songs, Scope::RecentlyAdded) => "Nothing Added Yet",
+        (Tab::Songs, Scope::RecentlyPlayed) => "Nothing Played Yet",
+        (Tab::Songs, Scope::Favourites) => "No Favourites",
+        _ => "No Songs",
+    };
+    (title, ADD)
+}
+
+/// What the mini player bar says about the time: a song's elapsed and total time, a station's LIVE and how long it
+/// has been listened to.
+fn mini_status(live: bool, position_ms: f64, duration_ms: Option<f64>) -> String {
+    if live {
+        return format!("LIVE \u{00b7} {}", clock(position_ms));
+    }
+    match duration_ms.filter(|d| *d > 0.0) {
+        Some(d) => format!("{} / {}", clock(position_ms.min(d)), clock(d)),
+        None => clock(position_ms),
+    }
+}
 /// The Get Info page's rows: Title, Artist, Album, Restore Original Tags, File, Length.
 const INFO_ROWS: usize = 6;
 /// The width of the label column on the Get Info page.
@@ -211,6 +278,8 @@ pub enum Target {
     Route,
     /// the route button of the mini player bar
     MiniRoute,
+    /// the volume slider of the mini player bar
+    MiniVolume,
     /// Get Info: the i-th field (Title, Artist, Album), and Restore Original Tags
     InfoField(usize),
     InfoReset,
@@ -360,7 +429,8 @@ pub struct Music {
     scrolling: bool,
     /// a finger on a scrubber: the fraction under it, and which surface
     scrub: Option<(f32, Surface_)>,
-    vol_drag: bool,
+    /// the volume track a finger is dragging: the Now Playing sheet's or the mini player bar's
+    vol_drag: Option<R>,
     volume: f32,
     seed: u64,
     /// Songs tab: the order and filter shown (ids into the library)
@@ -522,7 +592,7 @@ impl Music {
             pressed: None,
             scrolling: false,
             scrub: None,
-            vol_drag: false,
+            vol_drag: None,
             volume,
             seed: 0x5EED,
             view: Vec::new(),
@@ -1017,8 +1087,8 @@ impl Music {
             key,
             title: ui.text(&ui.fit(&title, MAC_TITLE3_PT, np_w), MAC_TITLE3_PT, Weight::Semibold, WHITE),
             artist: ui.text(&ui.fit(&artist, MAC_TITLE3_PT, np_w), MAC_TITLE3_PT, Weight::Regular, dim),
-            mini: ui.text(&ui.fit(&title, MAC_SUBHEAD_PT, self.w as f32 - ui.pt(MINI_TEXT_PT)), MAC_SUBHEAD_PT, Weight::Semibold, WHITE),
-            mini_artist: ui.text(&ui.fit(&artist, MAC_FOOTNOTE_PT, self.w as f32 - ui.pt(MINI_TEXT_PT)), MAC_FOOTNOTE_PT, Weight::Regular, WHITE),
+            mini: ui.text(&ui.fit(&title, MAC_SUBHEAD_PT, mini_text_w(ui, self.w, self.h)), MAC_SUBHEAD_PT, Weight::Semibold, WHITE),
+            mini_artist: ui.text(&ui.fit(&artist, MAC_FOOTNOTE_PT, mini_text_w(ui, self.w, self.h)), MAC_FOOTNOTE_PT, Weight::Regular, WHITE),
         }
     }
 
@@ -1449,6 +1519,9 @@ impl Music {
             if (x - rx).abs() <= ui.pt(MINI_ROUTE_HIT_PT) && (y - ry).abs() <= ui.pt(MINI_ROUTE_HIT_PT) {
                 return Some(Target::MiniRoute);
             }
+            if mini_volume_track(ui, &mini).is_some_and(|v| v.inset(ui.pt(SPACE_S)).contains(x, y)) {
+                return Some(Target::MiniVolume);
+            }
             if let Some(t) = mini.hit(x, y) {
                 return Some(Target::Mini(t));
             }
@@ -1503,8 +1576,13 @@ impl Music {
                 match self.pressed {
                     Some(Target::Np(nowplaying::Target::Scrubber)) if !self.is_live() => self.scrub = Some((Layout::fraction(layout.scrub, x), Surface_::Sheet)),
                     Some(Target::Np(nowplaying::Target::Volume)) => {
-                        self.vol_drag = true;
+                        self.vol_drag = Some(layout.volume);
                         return self.set_volume_from(Layout::fraction(layout.volume, x));
+                    }
+                    Some(Target::MiniVolume) => {
+                        let Some(track) = mini_volume_track(ui, &Mini::new(ui, self.w, self.h)) else { return vec![] };
+                        self.vol_drag = Some(track);
+                        return self.set_volume_from(Layout::fraction(track, x));
                     }
                     Some(Target::QDrag(row)) => self.qdrag = Some(QueueDrag { from: row, y: y - self.content_top(ui) + self.scroll.offset() }),
                     Some(p) if scrolls(p) => {
@@ -1517,8 +1595,8 @@ impl Music {
             Event::Move(..) => {
                 if let Some((_, Surface_::Sheet)) = self.scrub {
                     self.scrub = Some((Layout::fraction(layout.scrub, x), Surface_::Sheet));
-                } else if self.vol_drag {
-                    return self.set_volume_from(Layout::fraction(layout.volume, x));
+                } else if let Some(track) = self.vol_drag {
+                    return self.set_volume_from(Layout::fraction(track, x));
                 } else if self.qdrag.is_some() {
                     let rel = y - self.content_top(ui) + self.scroll.offset();
                     if let Some(drag) = self.qdrag.as_mut() {
@@ -1537,7 +1615,7 @@ impl Music {
                     self.seek_fraction(f);
                     return vec![];
                 }
-                if std::mem::take(&mut self.vol_drag) {
+                if self.vol_drag.take().is_some() {
                     return vec![];
                 }
                 if let Some(drag) = self.qdrag.take() {
@@ -2028,6 +2106,9 @@ impl Music {
             lyrics_shown: self.lyrics_on,
             has_lyrics: self.lyrics.is_some(),
             crossfade_secs: self.playback.crossfade_secs,
+            // the window knows the devices (`MusicApp::main_menu` fills them in)
+            outputs: Vec::new(),
+            output: None,
         }
     }
 
@@ -2073,7 +2154,8 @@ impl Music {
     pub fn run_command(&mut self, cmd: Command) -> bool {
         let song = self.current_song();
         match cmd {
-            Command::Import | Command::MiniPlayer | Command::KeepMiniOnTop => return false,
+            // the window runs these: the open panel, its windows and the shell's device service are its
+            Command::Import | Command::MiniPlayer | Command::KeepMiniOnTop | Command::Output(_) => return false,
             Command::PlayPause => self.control(nowplaying::Target::Play),
             Command::Next => self.control(nowplaying::Target::Next),
             Command::Previous => self.control(nowplaying::Target::Prev),
@@ -2469,7 +2551,7 @@ impl Music {
             }
             Target::Np(nowplaying::Target::Artwork | nowplaying::Target::Open | nowplaying::Target::Scrubber | nowplaying::Target::Volume) => {}
             Target::Np(c) => self.control(c),
-            Target::Content => {}
+            Target::Content | Target::MiniVolume => {}
         }
         self.dirty = true;
         vec![]
@@ -2659,11 +2741,10 @@ impl Music {
                 self.label(&mut band, ui, "Songs you play show up here", MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), self.w as f32 / 2.0, mid + ui.pt(SPACE_L), 0.5);
             } else if page == Page::Root && self.tab == Tab::Playlists || matches!(page, Page::Playlist(_) | Page::Smart(_) | Page::SmartEdit(_) | Page::Info) {
             } else if !radio && self.library.is_empty() {
-                let text = if self.scanning { "Looking for music…" } else { "No Music" };
+                let (text, hint) = library_empty_text(self.tab, self.scope, self.scanning);
                 self.label(&mut band, ui, text, MAC_TITLE1_PT, Weight::Semibold, LABEL_2.now(), self.w as f32 / 2.0, mid - ui.pt(SPACE_L), 0.5);
-                if !self.scanning {
-                    self.label(&mut band, ui, "Copy MP3 or M4A files to Music", MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), self.w as f32 / 2.0, mid + ui.pt(SPACE_L), 0.5);
-                }
+                let hint = ui.fit(hint, MAC_SUBHEAD_PT, self.w as f32 - 2.0 * ui.pt(SPACE_L));
+                self.label(&mut band, ui, &hint, MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), self.w as f32 / 2.0, mid + ui.pt(SPACE_L), 0.5);
             }
         }
         s.fill_rect(0, 0, self.w as usize, top as usize, CONTENT_BG.now());
@@ -3232,6 +3313,21 @@ impl Music {
             s.blit_colored(&l.mini, mini.text_x(ui) as i32, ty as i32, LABEL.now(), 255);
             s.blit_colored(&l.mini_artist, mini.text_x(ui) as i32, (ty + l.mini.h as f32 + gap) as i32, LABEL_2.now(), 255);
         }
+        // how far in (a station: LIVE and how long it has been on) and the volume, left of the route button
+        if let Some(track) = mini_volume_track(ui, &mini) {
+            // drawn in the label colours (the sheet's white slider would vanish on the light bar)
+            let fx = track.x + track.w * self.volume.clamp(0.0, 1.0);
+            s.fill_rrect(track.x, track.y, track.w, track.h, track.h / 2.0, SEPARATOR_C.now());
+            s.fill_rrect(track.x, track.y, fx - track.x, track.h, track.h / 2.0, LABEL_2.now());
+            let k = ui.pt(if self.vol_drag == Some(track) { SPACE_M } else { SPACE_S });
+            s.fill_rrect(fx - k / 2.0, track.y + track.h / 2.0 - k / 2.0, k, k, k / 2.0, LABEL.now());
+            if let Some(right) = mini_status_right(ui, &mini) {
+                let status = mini_status(self.is_live(), self.snap.position_ms, self.snap.duration_ms);
+                let im = ui.text(&ui.fit(&status, MAC_FOOTNOTE_PT, ui.pt(MINI_STATUS_MIN_PT)), MAC_FOOTNOTE_PT, Weight::Regular, WHITE);
+                let x = right - im.w as f32;
+                s.blit_colored(&im, x as i32, (mini.bar.y + (mini.bar.h - im.h as f32) / 2.0) as i32, LABEL_2.now(), 255);
+            }
+        }
         let dim = |t: nowplaying::Target| if self.pressed == Some(Target::Mini(t)) { LABEL_3.now() } else { LABEL.now() };
         icons::play_pause(s, mini.play, ui.pt(SPACE_XXL), self.snap.playing, dim(nowplaying::Target::Play));
         icons::skip(s, mini.next, ui.pt(SPACE_XL), true, dim(nowplaying::Target::Next));
@@ -3435,6 +3531,84 @@ mod tests {
 
     fn song_path(m: &Music, id: usize) -> PathBuf {
         m.library.songs[id].path.clone()
+    }
+
+    fn test_ui() -> Ui {
+        let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets");
+        let data: &'static [u8] = Box::leak(std::fs::read(format!("{dir}/SFUI.ttf")).unwrap().into_boxed_slice());
+        Ui::new(bifrost_app::kit::Font::parse(data).unwrap(), 1.0)
+    }
+
+    #[test]
+    fn an_empty_library_names_the_section_and_says_how_to_add_music() {
+        assert_eq!(library_empty_text(Tab::Albums, Scope::All, false).0, "No Albums");
+        assert_eq!(library_empty_text(Tab::Artists, Scope::All, false).0, "No Artists");
+        assert_eq!(library_empty_text(Tab::Songs, Scope::All, false).0, "No Songs");
+        assert_eq!(library_empty_text(Tab::Songs, Scope::RecentlyAdded, false).0, "Nothing Added Yet");
+        for (tab, scope) in [(Tab::Artists, Scope::All), (Tab::Songs, Scope::Favourites), (Tab::Songs, Scope::RecentlyPlayed)] {
+            let hint = library_empty_text(tab, scope, false).1;
+            assert!(hint.contains("Import") && hint.contains("Music folder"), "{hint}");
+        }
+        assert_eq!(library_empty_text(Tab::Songs, Scope::All, true).1, "", "no hint while the folder is read");
+    }
+
+    #[test]
+    fn the_sidebar_puts_radio_above_the_library() {
+        let dir = folder("sidebar-order");
+        let m = music(&dir);
+        let rows: Vec<String> = m
+            .sidebar()
+            .items
+            .iter()
+            .map(|i| match i {
+                bifrost_app::controls::sidebar::SidebarItem::Row { label, .. } => label.clone(),
+                bifrost_app::controls::sidebar::SidebarItem::Header(label) | bifrost_app::controls::sidebar::SidebarItem::Section { label, .. } => format!("[{label}]"),
+            })
+            .collect();
+        assert_eq!(rows[0], "Radio");
+        assert_eq!(rows[1], "[Library]");
+        assert_eq!(rows.iter().filter(|r| r.as_str() == "Radio").count(), 1, "one Radio row");
+        assert!(rows.iter().position(|r| r == "Artists") < rows.iter().position(|r| r == "[Playlists]"));
+    }
+
+    #[test]
+    fn the_mini_bar_says_live_and_the_time_on_air_for_a_station_and_elapsed_of_total_for_a_song() {
+        assert_eq!(mini_status(true, 83_000.0, None), "LIVE \u{00b7} 1:23");
+        assert_eq!(mini_status(false, 83_000.0, Some(225_000.0)), "1:23 / 3:45");
+        assert_eq!(mini_status(false, 300_000.0, Some(225_000.0)), "3:45 / 3:45", "never past the end");
+        assert_eq!(mini_status(false, 5_000.0, None), "0:05", "a song of unknown length shows the elapsed time");
+    }
+
+    #[test]
+    fn the_mini_bar_has_a_volume_slider_left_of_the_route_button_when_it_is_wide_enough() {
+        let ui = test_ui();
+        let wide = Mini::new(&ui, 900, 600);
+        let track = mini_volume_track(&ui, &wide).expect("a wide bar has a volume slider");
+        let route_x = wide.play.0 - ui.pt(MINI_ROUTE_GAP_PT);
+        assert!(track.x + track.w < route_x && track.x > wide.text_x(&ui), "{track:?}");
+        assert!(wide.bar.contains(track.x, track.y), "the slider sits in the bar");
+        let right = mini_status_right(&ui, &wide).expect("a wide bar shows the time");
+        assert!(right <= track.x && mini_text_w(&ui, 900, 600) + wide.text_x(&ui) + ui.pt(MINI_STATUS_MIN_PT) <= right, "the title stops before the time and the slider");
+        let middle = Mini::new(&ui, 500, 600);
+        if mini_volume_track(&ui, &middle).is_some() && mini_status_right(&ui, &middle).is_none() {
+            assert!(mini_text_w(&ui, 500, 600) >= ui.pt(MINI_TITLE_MIN_PT), "without the time the title keeps its room");
+        }
+        let narrow = Mini::new(&ui, 400, 600);
+        assert_eq!(mini_volume_track(&ui, &narrow), None, "a narrow bar keeps only its buttons");
+    }
+
+    #[test]
+    fn dragging_the_mini_bar_volume_sets_the_volume() {
+        let dir = folder("mini-volume");
+        let mut m = music(&dir);
+        let ui = test_ui();
+        let mini = Mini::new(&ui, m.w, m.h);
+        let Some(track) = mini_volume_track(&ui, &mini) else { return };
+        m.vol_drag = Some(track);
+        m.touch(&ui, Event::Move(track.x + track.w * 0.25, track.y), 0.0);
+        assert!((m.volume - 0.25).abs() < 0.02, "{}", m.volume);
+        m.touch(&ui, Event::Up(track.x + track.w * 0.25, track.y), 0.0);
+        assert_eq!(m.vol_drag, None);
     }
 
     #[test]
