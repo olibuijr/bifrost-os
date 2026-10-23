@@ -4156,9 +4156,20 @@ An app that does not ask keeps the touch stream it had (the wheel as a drag, no 
   `the_wheel_reaches_the_extra_window_it_is_over_with_its_id`, view scroll `the_window_hands_the_wheel_to_the_scroll_view_under_the_pointer`,
   ui scroll `the_wheel_moves_the_offset_by_its_travel_within_the_range`. The pinch and rotate gestures still go to the main
   window of the app in front only.
+- **Adopters** (2026-10-23, E2E follow-up): asking for the wheel drops the emulated drag in *every* window of the app, so an
+  app that adopts it handles `pointer` for its main window as well as `window_pointer`. Mail scrolls its list and reader
+  (main window), a viewer's text and a compose window's message (whole lines back from the end; typing returns to the end).
+  An extra window's `WindowTouch` and wheel are window points: Mail's viewer and compose sheet scale them to the pixels they
+  draw in (the viewer used to scroll at 1/scale speed and compose clicks missed at a scale other than 1). TextEdit scrolls
+  its page and the Fonts panel's family column (its emulated drag had placed the caret and selected text). The shell's
+  open and save panel takes the wheel over its list and icon grid while it is up (`Shell::doc_wheel`, modal: the wheel
+  never reaches the window under it) and drops the release of the emulated drag (`Panel::swallows`), which had clicked
+  the row under the pointer. Tests: mail `the_wheel_scrolls_the_list_a_viewer_and_a_compose_message`, textedit
+  `the_wheel_scrolls_the_page_and_over_the_fonts_panel_its_families`, docpanel
+  `the_wheel_over_the_panel_never_clicks_and_never_reaches_the_window_under_it`.
 - **Not built, said plainly**: the Wayland layer reads only the vertical axis of a notched wheel (no `axis_source`, no phases,
   no momentum, no horizontal scroll), binds no pointer-gestures protocol (a touchpad pinch does not arrive; only touchscreen
-  fingers do), and no shipped app or view takes the events yet. Apple's trackpad momentum and phase behaviour cannot be
+  fingers do). Apple's trackpad momentum and phase behaviour cannot be
   matched until the compositor forwards `axis_source`/`axis_stop`.
 - Midget check: give an SDK app `fn pointer_interest(&self) -> u32 { pointer_events::WHEEL | pointer_events::HOVER }` and an
   `App::pointer` that logs, install it, scroll the wheel and move the pointer over its window, and read `bifrost pc log`.

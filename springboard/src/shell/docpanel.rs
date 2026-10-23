@@ -10,6 +10,9 @@
 //!
 //! The toolbar row has back and forward (the folders visited in this panel), the list or icon view switcher, the location
 //! pop-up (the folder and the folders that enclose it) and a search field that filters the folder shown by name.
+//! The list and the icon grid scroll with the wheel (`Panel::wheel`, `Shell::doc_wheel`) and show each item's file-type
+//! icon (`FileKind`, from its content type). The panel is as wide as its window allows (`fit_width`: the window's
+//! width less a margin, between `MIN_W` and `MAX_W`), and follows the window as it is resized.
 //! The save panel's name field is a real text field (the kit's `TextBuffer`): caret, selection, Shift and Option
 //! movement, Cmd+A, Cut, Copy and Paste.
 //!
@@ -131,8 +134,80 @@ pub const VISIBLE_ROWS: usize = 10;
 /// One item of the icon view, in points.
 pub const CELL_W: f32 = 96.0;
 pub const CELL_H: f32 = 92.0;
+/// The file-type icon of an icon-view cell and of a list row, in points.
+const ICON_PT: f32 = 52.0;
+const ROW_ICON_PT: f32 = 18.0;
 /// Clicks on the same row closer than this are a double click (ms).
 const DOUBLE_CLICK_MS: f64 = 400.0;
+/// The panel's width in points before the shell fits it to its window (`fit_width`), and the range it is fitted to:
+/// narrow enough to leave the window's edges in view, wide enough for the sidebar, the toolbar row and the buttons.
+pub const DEFAULT_W: f32 = 720.0;
+pub const MIN_W: f32 = 620.0;
+pub const MAX_W: f32 = 960.0;
+/// How much narrower than its window the panel is, both edges together (points).
+const WINDOW_INSET: f32 = 48.0;
+/// The drag the shell emulates for a wheel event ends this soon after it (ms); the panel drops its release.
+const WHEEL_DRAG_MS: f64 = 250.0;
+
+/// What an item's icon shows, from its content type (`uttype`): the kinds `workspace::icon_for_content_type` names
+/// glyphs for (folder, photo, film, music, PDF, archive, text), else a plain document.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FileKind {
+    Folder,
+    Image,
+    Movie,
+    Audio,
+    Pdf,
+    Archive,
+    Text,
+    Document,
+}
+
+impl FileKind {
+    /// The kind of `e`: a folder, else the kind its name's content type conforms to.
+    pub fn of(e: &Entry) -> FileKind {
+        if e.dir {
+            return FileKind::Folder;
+        }
+        const TABLE: [(&str, FileKind); 6] = [
+            ("public.image", FileKind::Image),
+            ("public.movie", FileKind::Movie),
+            ("public.audio", FileKind::Audio),
+            ("com.adobe.pdf", FileKind::Pdf),
+            ("public.archive", FileKind::Archive),
+            ("public.text", FileKind::Text),
+        ];
+        let Some(ty) = bifrost_ui::uttype::type_for_extension(&e.name) else { return FileKind::Document };
+        TABLE.iter().find(|(t, _)| bifrost_ui::uttype::conforms(ty, t)).map_or(FileKind::Document, |(_, k)| *k)
+    }
+
+    /// The colour of the folder, or of the band across a document's page (system colours; red stays for destructive
+    /// actions).
+    pub fn tint(self) -> bifrost_render::appearance::Pair {
+        use super::ui::system::{SYSTEM_BLUE, SYSTEM_BROWN, SYSTEM_GRAY, SYSTEM_GREEN, SYSTEM_INDIGO, SYSTEM_ORANGE, SYSTEM_PINK, SYSTEM_PURPLE};
+        match self {
+            FileKind::Folder => SYSTEM_BLUE,
+            FileKind::Image => SYSTEM_GREEN,
+            FileKind::Movie => SYSTEM_PURPLE,
+            FileKind::Audio => SYSTEM_PINK,
+            FileKind::Pdf => SYSTEM_ORANGE,
+            FileKind::Archive => SYSTEM_BROWN,
+            FileKind::Text => SYSTEM_INDIGO,
+            FileKind::Document => SYSTEM_GRAY,
+        }
+    }
+}
+
+/// The panel's width for a parent window `parent` points wide on a screen `screen` points wide: the window's width less
+/// `WINDOW_INSET`, kept between `MIN_W` and `MAX_W`, and never wider than the screen.
+pub fn fit_width(parent: f32, screen: f32) -> f32 {
+    let w = if parent.is_finite() { (parent - WINDOW_INSET).max(MIN_W).min(MAX_W) } else { DEFAULT_W };
+    if screen.is_finite() && screen > 0.0 {
+        w.min(screen)
+    } else {
+        w
+    }
+}
 
 /// How much the window under a panel is dimmed (the alpha of black): 28%, as the kit's sheets dim their parent.
 const SHEET_DIM_ALPHA: u8 = 71;
@@ -219,6 +294,10 @@ pub struct Panel {
     last_click: Option<(usize, f64)>,
     /// the last click in a text field (field, time), for a double click that selects a word
     last_field_click: Option<(Focus, f64)>,
+    /// the panel's width in points (`fit_width`, from its window)
+    pub width: f32,
+    /// a wheel event came at this time (ms): the release of the drag the shell emulates for it is not a click
+    wheel_at: Option<f64>,
 }
 
 impl Panel {
@@ -258,6 +337,8 @@ impl Panel {
             top: 0,
             last_click: None,
             last_field_click: None,
+            width: DEFAULT_W,
+            wheel_at: None,
         };
         // Golden Gate starts in the last folder, else Documents (the shell moves the panel to the app's last folder after this)
         if opener.list(Path::new("Documents")).is_ok() {
@@ -686,6 +767,43 @@ impl Panel {
         self.select(to as usize);
     }
 
+    /// Fits the panel to a new width (points), keeping the first item shown at the start of a row of icons.
+    pub fn set_width(&mut self, w: f32) {
+        if (w - self.width).abs() < 0.5 || !w.is_finite() || w <= 0.0 {
+            return;
+        }
+        self.width = w;
+        self.top -= self.top % self.columns();
+    }
+
+    /// `scrollWheel:` at (`x`, `y`) points in the panel at `t` ms: the content moved `dy` points (negative for a wheel
+    /// turned down, which shows the items below). Over the list or the icon grid it scrolls a row (of icons) for each
+    /// row height of travel, at least one a notch, between the first item and the last. The release of the drag the
+    /// shell emulates for the wheel is then not a click (`swallows`). True when the items moved.
+    pub fn wheel(&mut self, x: f32, y: f32, dy: f32, t: f64) -> bool {
+        self.wheel_at = Some(t);
+        let l = self.layout();
+        if self.loc_menu || !l.list.contains(x, y) || !dy.is_finite() || dy == 0.0 {
+            return false;
+        }
+        let cols = self.columns();
+        let step = if self.icons { CELL_H } else { l.row_h };
+        let rows = (-dy / step).round();
+        let rows = if rows == 0.0 { -dy.signum() } else { rows };
+        let shown = (self.visible() / cols).max(1);
+        let most = self.entries.len().div_ceil(cols).saturating_sub(shown) as i64;
+        let row = ((self.top / cols) as i64 + rows as i64).clamp(0, most) as usize;
+        let before = self.top;
+        self.top = row * cols;
+        self.top != before
+    }
+
+    /// True for the release of the drag the shell emulated for a wheel event (`wheel`) at `t` ms: it is dropped, not
+    /// taken as a click. Asked once per release.
+    pub fn swallows(&mut self, t: f64) -> bool {
+        matches!(self.wheel_at.take(), Some(at) if t >= at && t - at <= WHEEL_DRAG_MS)
+    }
+
     /// Whether the default button (Open or Save) would do something now.
     pub fn can_confirm(&self) -> bool {
         if self.creating.is_some() {
@@ -918,11 +1036,12 @@ impl Panel {
         }
     }
 
-    /// The panel's geometry in points. Width and row count are fixed tokens; nothing depends on the screen size
-    /// except where the shell places it.
+    /// The panel's geometry in points. The width follows the window the panel hangs from (`width`, `fit_width`): the
+    /// location pop-up and the list take what the width leaves; the row count is a fixed token.
     pub fn layout(&self) -> Layout {
         use super::ui::{SPACE_M, SPACE_S, SPACE_XL, SPACE_XXS};
-        let (w, row_h, bar_h, button_w, side_w, search_w) = (720.0, 28.0, 28.0, 96.0, 150.0, 150.0);
+        let w = if self.width.is_finite() && self.width > 0.0 { self.width } else { DEFAULT_W };
+        let (row_h, bar_h, button_w, side_w, search_w) = (28.0, 28.0, 96.0, 150.0, 150.0);
         let pad = SPACE_XL;
         let title = R { x: pad, y: pad, w: w - 2.0 * pad, h: 20.0 };
         let mut y = title.y + title.h + SPACE_M;
@@ -1492,16 +1611,52 @@ impl super::Shell {
             panel.go_to(&last, &b.opener);
         }
         self.doc_panel = Some(panel);
+        self.doc_fit_width();
         self.desktop_menu = Some(super::desktop_bar::Menu::Document);
         self.dirty = true;
     }
 
-    /// The panel stays up until it is answered, whatever else closed the popup (a menu-bar click, Esc elsewhere).
+    /// The panel stays up until it is answered, whatever else closed the popup (a menu-bar click, Esc elsewhere), and
+    /// keeps the width of the window it hangs from as that window is resized.
     pub(super) fn doc_keep_shown(&mut self) {
         if self.doc_panel.is_some() && self.desktop_menu != Some(super::desktop_bar::Menu::Document) {
             self.desktop_menu = Some(super::desktop_bar::Menu::Document);
             self.dirty = true;
         }
+        self.doc_fit_width();
+    }
+
+    /// Fits the panel's width to its window (`fit_width`): the app's main window, or the screen when it has none.
+    fn doc_fit_width(&mut self) {
+        let Some(slot) = self.doc_panel.as_ref().map(|p| p.slot) else { return };
+        let pt = self.ui.pt(1.0).max(f32::EPSILON);
+        let m = self.desk_metrics();
+        let parent = self.desk.as_ref().and_then(|d| d.index_of(super::AppId::External(slot)).map(|i| d.wins[i].body(&m).w as f32 / pt));
+        let screen = self.w as f32 / pt;
+        let w = fit_width(parent.unwrap_or(screen), screen);
+        if let Some(p) = self.doc_panel.as_mut() {
+            if (p.width - w).abs() >= 0.5 {
+                p.set_width(w);
+                self.dirty = true;
+            }
+        }
+    }
+
+    /// The wheel at screen point (`x`, `y`) px while the panel is up, moving the content `dy` px at `t` ms: over the
+    /// panel's list or icon grid the items scroll. The panel is modal, so the wheel never reaches the window under it;
+    /// true while a panel is up.
+    pub(super) fn doc_wheel(&mut self, x: f32, y: f32, dy: f32, t: f64) -> bool {
+        if self.doc_panel.is_none() {
+            return false;
+        }
+        let pt = self.ui.pt(1.0).max(f32::EPSILON);
+        let (left, top) = self.doc_panel_rect().map_or((0.0, 0.0), |(l, t, _, _)| (l as f32, t as f32));
+        if let Some(p) = self.doc_panel.as_mut() {
+            if p.wheel((x - left) / pt, (y - top) / pt, dy / pt, t) {
+                self.dirty = true;
+            }
+        }
+        true
     }
 
     /// The app in `slot` exited: close its panel and throw away its unfinished saves.
@@ -1569,6 +1724,10 @@ impl super::Shell {
 
     /// A click at (x, y) px from the panel's top-left corner.
     pub(super) fn doc_click(&mut self, x: f32, y: f32, t: f64) {
+        // the release of the drag the shell emulates for a wheel event is not a click (`doc_wheel`)
+        if self.doc_panel.as_mut().is_some_and(|p| p.swallows(t)) {
+            return;
+        }
         // a click in the name or search field puts the caret under the pointer (measured as the field draws its text)
         let caret = self.doc_panel.as_ref().and_then(|p| {
             let l = p.layout();
@@ -1620,9 +1779,49 @@ impl super::Shell {
         s.fill_rrect(body.x as f32, body.y as f32, body.w as f32, body.h as f32, radius, crate::gfx::rgba(0, 0, 0, SHEET_DIM_ALPHA));
     }
 
+    /// Draws the icon of item `e` centred in a square of `side` px whose top-left is (`x`, `y`): a folder in the folder
+    /// colour, or a white page with a folded corner and a band in its kind's colour (`FileKind`) that carries the
+    /// extension (`thumb_service::badge_for`) when the icon is large enough to read it. `bg` is what the page's cut
+    /// corner shows; a row that cannot be chosen is drawn in grey.
+    fn draw_file_icon(&self, s: &mut crate::gfx::Surface, e: &Entry, x: f32, y: f32, side: f32, bg: u32) {
+        use super::ui::{Weight, MAC_CAPTION2_PT, SECONDARY, SEPARATOR_C, WHITE};
+        let kind = FileKind::of(e);
+        let tint = if e.enabled { kind.tint().now() } else { SECONDARY };
+        let hair = self.ui.pt(1.0).max(1.0);
+        if kind == FileKind::Folder {
+            // the tab, then the body over its lower half
+            let (bw, bh) = (side * 0.9, side * 0.66);
+            let (bx, by) = (x + (side - bw) / 2.0, y + side * 0.24);
+            s.fill_rrect(bx, by - side * 0.1, bw * 0.42, side * 0.2, side * 0.06, tint);
+            s.fill_rrect(bx, by, bw, bh, side * 0.08, tint);
+            return;
+        }
+        let (pw, ph) = (side * 0.74, side * 0.94);
+        let (px0, py0) = (x + (side - pw) / 2.0, y + (side - ph) / 2.0);
+        let page = if e.enabled { WHITE } else { SEPARATOR_C.now() };
+        s.fill_rrect(px0, py0, pw, ph, side * 0.05, page);
+        s.stroke_rrect(px0, py0, pw, ph, side * 0.05, hair, SEPARATOR_C.now());
+        // the folded corner: the cut shows what is behind the page, the fold is a grey triangle
+        let fold = pw * 0.3;
+        let right = px0 + pw;
+        super::icons::polygon(s, &[(right - fold, py0 - hair), (right + hair, py0 - hair), (right + hair, py0 + fold)], bg);
+        super::icons::polygon(s, &[(right - fold, py0), (right - fold, py0 + fold), (right, py0 + fold)], SEPARATOR_C.now());
+        // the band in the kind's colour, with the extension when it can be read
+        let badge = bifrost_ui::thumb_service::badge_for(&e.name);
+        let band_h = if side >= self.ui.pt(32.0) { ph * 0.22 } else { ph * 0.16 };
+        let (band_x, band_y, band_w) = (px0 + pw * 0.08, py0 + ph * 0.6, pw * 0.84);
+        s.fill_rrect(band_x, band_y, band_w, band_h, band_h * 0.25, tint);
+        if let Some(badge) = badge.filter(|_| side >= self.ui.pt(32.0)) {
+            let fitted = self.ui.fit(&badge, MAC_CAPTION2_PT, band_w);
+            self.label(&fitted, MAC_CAPTION2_PT, Weight::Bold, WHITE, |im| {
+                s.blit(im, (band_x + (band_w - im.w as f32) / 2.0) as i32, (band_y + (band_h - im.h as f32) / 2.0) as i32, 255, 255)
+            });
+        }
+    }
+
     /// Draws the panel's content over the popup background (`draw_desktop_popup` drew the material).
     pub(super) fn draw_doc_panel(&self, s: &mut crate::gfx::Surface, x: usize, y: usize, _w: usize, _h: usize) {
-        use super::ui::{Weight, DETAIL_BG, FIELD_BG, LABEL, LINK, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, SECONDARY, SELECTION, SEPARATOR_C, SPACE_S, WHITE};
+        use super::ui::{Weight, DETAIL_BG, FIELD_BG, LABEL, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, SECONDARY, SELECTION, SEPARATOR_C, SPACE_S, WHITE};
         let Some(p) = self.doc_panel.as_ref() else { return };
         // the focus rings and the default button follow the user's accent colour
         let accent = bifrost_render::appearance::accent_now();
@@ -1740,14 +1939,10 @@ impl super::Shell {
             let selected = p.marked.contains(&i);
             let color = if selected { WHITE } else if e.enabled { LABEL.now() } else { SECONDARY };
             if p.icons {
-                // a folder or page tile over the name; the name sits on a selection plate when chosen
+                // the item's file-type icon over the name; the name sits on a selection plate when chosen
                 let (rx, ry, rw, _) = px(&r);
-                let (gw, gh) = if e.dir { (ui.pt(52.0), ui.pt(40.0)) } else { (ui.pt(40.0), ui.pt(50.0)) };
-                let gx = rx + (rw - gw) / 2.0;
-                let gy = ry + ui.pt(6.0) + (ui.pt(50.0) - gh);
-                let tile = if e.dir { LINK } else { WHITE };
-                s.fill_rrect(gx, gy, gw, gh, ui.pt(4.0), if e.enabled { tile } else { SEPARATOR_C.now() });
-                s.stroke_rrect(gx, gy, gw, gh, ui.pt(4.0), ui.pt(1.0), SEPARATOR_C.now());
+                let side = ui.pt(ICON_PT);
+                self.draw_file_icon(s, e, rx + (rw - side) / 2.0, ry + ui.pt(6.0), side, DETAIL_BG.now());
                 let name_r = R { x: r.x + 2.0, y: r.y + 62.0, w: r.w - 4.0, h: 22.0 };
                 if selected {
                     let (nx, ny, nw, nh) = px(&name_r);
@@ -1760,7 +1955,12 @@ impl super::Shell {
                     let (rx, ry, rw, rh) = px(&r);
                     s.fill_rrect(rx, ry + ui.pt(2.0), rw, rh - ui.pt(4.0), radius, SELECTION.now());
                 }
-                text(s, &R { w: r.w - 24.0, ..r }, SPACE_S, &e.name, MAC_BODY_PT, Weight::Regular, color);
+                // a small file-type icon, then the name after it
+                let (rx, ry, _, rh) = px(&r);
+                let side = ui.pt(ROW_ICON_PT);
+                self.draw_file_icon(s, e, rx + ui.pt(SPACE_S), ry + (rh - side) / 2.0, side, if selected { SELECTION.now() } else { DETAIL_BG.now() });
+                let after = SPACE_S + ROW_ICON_PT;
+                text(s, &R { x: r.x + after, w: r.w - 24.0 - after, ..r }, SPACE_S, &e.name, MAC_BODY_PT, Weight::Regular, color);
                 if e.dir {
                     text(s, &R { x: r.x + r.w - 24.0, w: 24.0, ..r }, SPACE_S, "\u{203a}", MAC_BODY_PT, Weight::Regular, if selected { WHITE } else { SECONDARY });
                 }
@@ -1833,6 +2033,99 @@ pub(crate) mod tests {
 
     fn names(p: &Panel) -> Vec<&str> {
         p.entries.iter().map(|e| e.name.as_str()).collect()
+    }
+
+    /// A panel on a Documents folder of `n` text files (f00.txt, f01.txt, ...).
+    fn many(tag: &str, n: usize) -> (PathBuf, Opener, Panel) {
+        let d = std::env::temp_dir().join(format!("docpanel-{tag}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&d);
+        fs::create_dir_all(d.join("home/Documents")).unwrap();
+        for i in 0..n {
+            fs::write(d.join(format!("home/Documents/f{i:02}.txt")), "x").unwrap();
+        }
+        let m = fs::metadata(&d).unwrap();
+        let o = Opener::new(&d.join("home"), m.uid(), m.gid()).unwrap();
+        let p = Panel::new(0, 1, Kind::Open(DocMode::Read), "", vec![], "", &o);
+        (d, o, p)
+    }
+
+    #[test]
+    fn the_wheel_scrolls_the_list_by_rows_and_the_grid_by_rows_of_icons() {
+        let (d, _o, mut p) = many("wheel", 30);
+        assert_eq!(p.entries.len(), 30);
+        let l = p.layout();
+        let (x, y) = (l.list.x + 10.0, l.list.y + 10.0);
+        // a notch turned down shows the next row; more travel, more rows
+        assert!(p.wheel(x, y, -3.0, 0.0));
+        assert_eq!(p.top, 1);
+        assert!(p.wheel(x, y, -l.row_h * 4.0, 10.0));
+        assert_eq!(p.top, 5);
+        assert!(p.wheel(x, y, l.row_h * 2.0, 20.0), "turned up, the rows above");
+        assert_eq!(p.top, 3);
+        p.wheel(x, y, -1.0e5, 30.0);
+        assert_eq!(p.top, 30 - VISIBLE_ROWS, "the last item stays on the last row");
+        assert!(!p.wheel(x, y, -30.0, 40.0), "the end");
+        assert!(!p.wheel(l.ok.x + 1.0, l.ok.y + 1.0, 30.0, 50.0), "only the list scrolls");
+        assert_eq!(p.top, 30 - VISIBLE_ROWS);
+        // the icon grid moves by whole rows of icons
+        p.set_icons(true);
+        let cols = p.columns();
+        assert!(cols > 1);
+        assert!(p.wheel(x, y, -3.0, 60.0));
+        assert_eq!(p.top, cols);
+        p.wheel(x, y, -1.0e5, 70.0);
+        assert_eq!(p.top % cols, 0);
+        assert!(p.top + p.visible() >= 30 && p.top < 30, "the last row is in view: top {}", p.top);
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn the_release_of_the_drag_a_wheel_emulates_is_not_a_click() {
+        let (d, o, mut p) = many("wheel-click", 3);
+        let l = p.layout();
+        let row = |i: usize| l.list.y + l.row_h * (i as f32 + 0.5);
+        p.wheel(l.list.x + 10.0, row(1), -3.0, 1000.0);
+        assert!(p.swallows(1100.0), "the release that follows the wheel");
+        assert!(!p.swallows(1150.0), "only that one");
+        p.wheel(l.list.x + 10.0, row(1), -3.0, 2000.0);
+        assert!(!p.swallows(2000.0 + WHEEL_DRAG_MS + 1.0), "a release long after the wheel is a click");
+        assert_eq!(p.click(l.list.x + 10.0, row(1), 3000.0, &o), None);
+        assert_eq!(p.selected, Some(1));
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn the_panel_width_follows_its_window_within_a_range_and_the_list_takes_the_rest() {
+        assert_eq!(fit_width(800.0, 1920.0), 800.0 - WINDOW_INSET);
+        assert_eq!(fit_width(300.0, 1920.0), MIN_W, "a small window still gets a usable panel");
+        assert_eq!(fit_width(3000.0, 3840.0), MAX_W);
+        assert_eq!(fit_width(500.0, 600.0), 600.0f32.min(MIN_W), "never wider than the screen");
+        assert_eq!(fit_width(f32::NAN, 1920.0), DEFAULT_W);
+        let (d, _o, mut p) = many("width", 30);
+        assert_eq!(p.layout().w, DEFAULT_W);
+        p.set_icons(true);
+        p.wheel(p.layout().list.x + 1.0, p.layout().list.y + 1.0, -3.0, 0.0);
+        let narrow_cols = p.columns();
+        p.set_width(MAX_W);
+        let l = p.layout();
+        assert_eq!(l.w, MAX_W);
+        assert!((l.ok.x + l.ok.w - (MAX_W - super::super::ui::SPACE_XL)).abs() < 0.01, "the buttons keep to the right edge");
+        assert!(l.list.x + l.list.w <= l.w && l.search.x + l.search.w <= l.w);
+        assert!(p.columns() > narrow_cols, "a wider panel shows more icons a row");
+        assert_eq!(p.top % p.columns(), 0, "the first item shown starts a row");
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn an_item_icon_follows_its_content_type() {
+        let entry = |name: &str, dir: bool| Entry { name: name.into(), dir, enabled: true, path: None };
+        let kinds: Vec<FileKind> = [("Drafts", true), ("photo.png", false), ("b.txt", false), ("A.md", false), ("a.pdf", false), ("x.zip", false), ("song.mp3", false), ("clip.mov", false), ("data.xyz9", false), ("README", false)]
+            .iter()
+            .map(|(n, dir)| FileKind::of(&entry(n, *dir)))
+            .collect();
+        use FileKind::*;
+        assert_eq!(kinds, [Folder, Image, Text, Text, Pdf, Archive, Audio, Movie, Document, Document]);
+        assert_ne!(Pdf.tint(), super::super::ui::system::SYSTEM_RED, "red is for destructive actions");
     }
 
     #[test]
@@ -2031,6 +2324,33 @@ pub(crate) mod tests {
         let mut s = String::new();
         (&*f).read_to_string(&mut s).unwrap();
         assert_eq!(s, "b.txt", "the app reads the chosen file through the descriptor");
+        ALLOW.with(|a| a.set(false));
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    /// E2E: the wheel over an open panel is the panel's (it is modal), and the release of the drag the shell emulates
+    /// for it does not click the row under the pointer; a click afterwards does.
+    #[test]
+    fn the_wheel_over_the_panel_never_clicks_and_never_reaches_the_window_under_it() {
+        ALLOW.with(|a| a.set(true));
+        let (d, mut sh, peer) = shell_with_app("e2e-wheel");
+        ask(&peer, &mut sh, ToShell::DocOpen { request: 3, mode: DocMode::Read, title: String::new(), filters: vec![] });
+        let (left, top, w, _) = sh.doc_panel_rect().expect("the panel is up");
+        let p = sh.doc_panel.as_ref().unwrap();
+        let l = p.layout();
+        assert!((sh.ui.pt(l.w) - w as f32).abs() <= 1.0, "the rect is the fitted layout's width");
+        assert!(l.w >= MIN_W.min(sh.w as f32 / sh.ui.pt(1.0)) && l.w <= MAX_W);
+        let pt = sh.ui.pt(1.0);
+        let (x, y) = (left as f32 + pt * (l.list.x + 10.0), top as f32 + pt * (l.list.y + l.row_h * 1.5));
+        assert!(sh.pointer_wheel(x, y, 0.0, -3.0, 5000.0), "the panel takes the wheel");
+        sh.desktop_bar_event(super::super::Event::Down(x, y), 5010.0);
+        sh.desktop_bar_event(super::super::Event::Up(x, y), 5030.0);
+        assert_eq!(sh.doc_panel.as_ref().unwrap().selected, None, "the emulated release is no click");
+        sh.desktop_bar_event(super::super::Event::Down(x, y), 9000.0);
+        sh.desktop_bar_event(super::super::Event::Up(x, y), 9010.0);
+        assert_eq!(sh.doc_panel.as_ref().unwrap().selected, Some(1), "a real click selects the row");
+        // outside the panel the wheel is used up too: the panel is modal
+        assert!(sh.pointer_wheel(1.0, sh.h as f32 - 2.0, 0.0, -3.0, 9500.0));
         ALLOW.with(|a| a.set(false));
         fs::remove_dir_all(&d).unwrap();
     }

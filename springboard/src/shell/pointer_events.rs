@@ -62,6 +62,11 @@ impl Shell {
         if self.modal_layer.is_some() {
             return true;
         }
+        // an open or save panel is modal over the desktop: its list and icon grid take the wheel (`doc_wheel`)
+        #[cfg(feature = "desktop-wayland")]
+        if self.doc_wheel(x, y, dy, t) {
+            return true;
+        }
         let Some((slot, window, lx, ly)) = self.ext_content_at(x, y) else { return false };
         let event = PointerEvent::Wheel { x: lx, y: ly, dx, dy, precise: false, phase: Phase::None, momentum: Phase::None };
         if !self.send_pointer(slot, window, event) {
