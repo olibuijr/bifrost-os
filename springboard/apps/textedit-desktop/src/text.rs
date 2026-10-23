@@ -65,13 +65,13 @@ pub fn build_catalogue(installed: &[InstalledFamily]) -> (Vec<String>, Vec<Optio
 pub fn stand_in(installed: &[InstalledFamily], base: usize) -> Option<String> {
     let named = |names: &[&str]| names.iter().find_map(|n| installed.iter().find(|f| f.name.eq_ignore_ascii_case(n)));
     let found = match base {
-        1 => named(&["Times", "Times New Roman", "Tinos", "Liberation Serif", "Nimbus Roman", "Noto Serif", "DejaVu Serif"]).or_else(|| {
+        1 => named(&["Times", "Times New Roman", "Tinos", "Liberation Serif", "Nimbus Roman", "Noto Serif", "DejaVu Serif"][..]).or_else(|| {
             installed.iter().find(|f| {
                 let l = f.name.to_lowercase();
                 l.contains("serif") && !l.contains("sans") && !f.mono
             })
         }),
-        2 => named(&["Courier", "Courier New", "Cousine", "Liberation Mono", "Nimbus Mono PS", "Noto Sans Mono", "DejaVu Sans Mono"])
+        2 => named(&["Courier", "Courier New", "Cousine", "Liberation Mono", "Nimbus Mono PS", "Noto Sans Mono", "DejaVu Sans Mono"][..])
             .or_else(|| installed.iter().find(|f| f.mono)),
         _ => None,
     };
