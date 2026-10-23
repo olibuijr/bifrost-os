@@ -807,6 +807,9 @@ pub struct Shell {
     shot_layer: Option<capture_flow::Layer>,
     /// The system sheets and alerts as a surface of their own above the windows on the desktop (id 15)
     modal_layer: Option<capture_flow::Layer>,
+    /// The announcement caption (id 17) and the screen reader's focus ring (id 18) as surfaces of their own above the
+    /// windows and the menu bar on the desktop; drawn into the shell's own frame they were hidden behind both (W5-19)
+    a11y_layers: [Option<capture_flow::Layer>; 2],
     /// A key answered a card alert: the key still held must not repeat into the app that comes back to the front
     /// (the key loop takes it with `take_key_repeat_cancel`).
     key_repeat_cancel: bool,
@@ -1294,6 +1297,7 @@ impl Shell {
             capture_layer: None,
             shot_layer: None,
             modal_layer: None,
+            a11y_layers: [None, None],
             key_repeat_cancel: false,
             shot_dir: None,
             shot_saved: Vec::new(),

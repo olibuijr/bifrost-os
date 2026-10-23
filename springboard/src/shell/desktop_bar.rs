@@ -1756,7 +1756,9 @@ impl Shell {
         // the system sheets and alerts (id 15, the whole screen): a surface above the windows that takes the pointer and the
         // keyboard until the sheet is answered. Drawn into the shell's own frame, under the windows, a sheet was hidden
         // behind them and left its veil on the wallpaper (MA6).
-        for (id,layer) in [(11,&self.capture_layer),(12,&self.shot_layer),(MODAL_CHROME_ID,&self.modal_layer)] {
+        // the announcement caption (id 17) and the screen reader's focus ring (id 18): above every window and the menu bar,
+        // taking neither the pointer nor the keyboard
+        for (id,layer) in [(11,&self.capture_layer),(12,&self.shot_layer),(MODAL_CHROME_ID,&self.modal_layer),(17,&self.a11y_layers[0]),(18,&self.a11y_layers[1])] {
             if let Some(l)=layer {
                 if l.image.w>0&&l.image.h>0 {frames.push(crate::bare::wayland::ChromeFrame{id,x:l.x,y:l.y,width:l.image.w,height:l.image.h,pixels:l.image.px.clone(),input:l.input});}
             }
