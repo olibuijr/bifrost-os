@@ -1,6 +1,6 @@
 id = "ai.storyteller.deckcraft"
 name = "DeckCraft"
-version = "0.9.0"
+version = "0.10.0"
 exec = "deckcraft"
 icon = "icon.png"
 min_shell = "0.4.97"
