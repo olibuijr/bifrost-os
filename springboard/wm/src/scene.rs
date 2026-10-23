@@ -24,6 +24,7 @@ use crate::{
     material_filter::Tone,
     material_kind::{premultiply, resolve, MaterialSpec, Resolved},
     state::WmState,
+    white_point::MultiplyElement,
 };
 
 render_elements! {
@@ -32,6 +33,7 @@ render_elements! {
     Glass = GlassElement,
     Plate = PixelShaderElement,
     Memory = MemoryRenderBufferRenderElement<GlesRenderer>,
+    WhitePoint = MultiplyElement,
 }
 
 /// One surface of the scene: its elements and what sits behind its material regions on the output.

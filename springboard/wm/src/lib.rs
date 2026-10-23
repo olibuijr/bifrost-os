@@ -39,6 +39,7 @@ pub mod transform;
 pub mod touch;
 pub mod window_capture;
 pub mod window_level;
+pub mod white_point;
 pub mod wm;
 #[cfg(feature = "xwayland")]
 pub mod xwayland;

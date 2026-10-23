@@ -4,7 +4,7 @@
     Copyright 2026 BifrOSt. Private protocol of the BifrOSt window server (docs/bifrost-ui.md, "Window level").
   </copyright>
 
-  <interface name="bifrost_window_level_manager_v1" version="4">
+  <interface name="bifrost_window_level_manager_v1" version="5">
     <description summary="stacking level of a toplevel">
       Lets the shell put a toplevel on the floating level. A floating window stays above the normal windows of the
       desktop and is raised only within its own band; menus, panels and the menu bar are not affected. The level
@@ -20,6 +20,11 @@
       Since version 4 the shell can say where a toplevel goes when it maps again (`set_origin`): the shell destroys
       the toplevel of a window that is hidden (Overview, a minimize) and creates it again when it comes back, and the
       window server would otherwise cascade it as a new window.
+
+      Since version 5 the shell sets the output's white point (`set_white_point`, Night Shift) and the window server
+      applies it to everything it shows, the shell's surfaces and every app's alike, in one place: the CRTC's gamma
+      ramp when the display has one (no GPU work), else a final multiply pass in its compositor. It reports which with
+      `white_point_mode`; while that is not `none` the shell does not tint its own surfaces.
     </description>
 
     <request name="destroy" type="destructor"/>
@@ -54,6 +59,18 @@
       <arg name="y" type="int"/>
     </request>
 
+    <request name="set_white_point" since="5">
+      <description summary="the white point of the outputs (Night Shift)">
+        The red, green and blue multipliers every output is shown with, 256 being 1.0 (larger values are taken as
+        256): 256 256 256 is off. The window server fades from the white point in force to this one along a straight
+        line in RGB over about 1.5 s, so the client sends the target only, once per change. Only the privileged client
+        (the shell) may set it; the request of any other client is ignored.
+      </description>
+      <arg name="red" type="uint"/>
+      <arg name="green" type="uint"/>
+      <arg name="blue" type="uint"/>
+    </request>
+
     <event name="frame" since="2">
       <description summary="the window server's frame of a toplevel">
         The frame the window server holds for the toplevel of `surface`, in logical desktop pixels: the window
@@ -67,6 +84,15 @@
       <arg name="y" type="int"/>
       <arg name="width" type="int"/>
       <arg name="height" type="int"/>
+    </event>
+
+    <event name="white_point_mode" since="5">
+      <description summary="how the window server applies the white point">
+        Sent when the manager is bound, and again when the way changes (a gamma ramp the display refused falls back to
+        the compositor pass). While the mode is not `none`, `set_white_point` tints every output and the client must not
+        tint its own surfaces as well.
+      </description>
+      <arg name="mode" type="uint" summary="a white_point_mode value"/>
     </event>
 
     <enum name="level">
@@ -86,6 +112,12 @@
       <entry name="bottom_right" value="8"/>
       <entry name="centre" value="9" summary="centre at the previous size"/>
       <entry name="previous" value="10" summary="back to the size before the last fill or tile"/>
+    </enum>
+
+    <enum name="white_point_mode">
+      <entry name="none" value="0" summary="not applied: the client tints its own surfaces"/>
+      <entry name="hardware" value="1" summary="the display's gamma ramp"/>
+      <entry name="composited" value="2" summary="a final multiply pass of the compositor"/>
     </enum>
 
     <enum name="error">

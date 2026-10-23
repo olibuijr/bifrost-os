@@ -30,12 +30,27 @@ pub mod protocol {
 
 /// The newest protocol version the shell binds: 2 adds `frame`, the window server's frame of each of the shell's
 /// toplevels (the shell keeps its window rectangles from it); 3 adds `tile`, the shell's request to place one; 4 adds
-/// `set_origin`, where a toplevel maps again after the shell destroyed it while the window was hidden.
-pub const VERSION: u32 = 4;
+/// `set_origin`, where a toplevel maps again after the shell destroyed it while the window was hidden; 5 adds
+/// `set_white_point` and `white_point_mode`, Night Shift applied by the window server to the whole output.
+pub const VERSION: u32 = 5;
 /// The version that introduced `tile`; a manager bound at an older version is never sent one.
 pub const TILE_SINCE: u32 = 3;
 /// The version that introduced `set_origin`; a manager bound at an older version is never sent one.
 pub const ORIGIN_SINCE: u32 = 4;
+/// The version that introduced `set_white_point` and the `white_point_mode` event.
+pub const WHITE_POINT_SINCE: u32 = 5;
+
+/// The `set_white_point` arguments for the Night Shift multipliers `m` (`night_shift::multipliers`, 256 = 1.0, in R, G,
+/// B order): off is 256 256 256, and nothing above 1.0 is sent.
+pub fn white_point_wire(m: Option<[u32; 3]>) -> [u32; 3] {
+    m.map_or([256; 3], |m| m.map(|v| v.min(256)))
+}
+
+/// Whether the window server applies the white point itself for a `white_point_mode` value (1 the display's gamma
+/// ramp, 2 its compositor pass); 0, or a window server without the event, leaves the tint to the shell.
+pub fn wm_tints(mode: u32) -> bool {
+    mode != 0
+}
 
 /// The wire value of a placement in `bifrost_window_level_v1` `tile` (the `placement` enum).
 pub fn placement_wire(p: Placement) -> u32 {
@@ -86,6 +101,25 @@ mod tests {
         let xml = include_str!("../../wm/protocol/bifrost-window-level-v1.xml");
         assert!(xml.contains(&format!("<request name=\"set_origin\" since=\"{ORIGIN_SINCE}\">")));
         assert!(ORIGIN_SINCE <= VERSION);
+    }
+
+    #[test]
+    fn the_shell_asks_for_the_white_point_the_protocol_declares() {
+        let xml = include_str!("../../wm/protocol/bifrost-window-level-v1.xml");
+        assert!(xml.contains(&format!("<request name=\"set_white_point\" since=\"{WHITE_POINT_SINCE}\">")));
+        assert!(xml.contains(&format!("<event name=\"white_point_mode\" since=\"{WHITE_POINT_SINCE}\">")));
+        assert!(WHITE_POINT_SINCE <= VERSION);
+        for (name, value, tints) in [("none", 0, false), ("hardware", 1, true), ("composited", 2, true)] {
+            assert!(xml.contains(&format!("<entry name=\"{name}\" value=\"{value}\"")), "{name}");
+            assert_eq!(wm_tints(value), tints, "{name}");
+        }
+    }
+
+    #[test]
+    fn the_white_point_goes_out_on_the_wire_scale() {
+        assert_eq!(white_point_wire(None), [256; 3], "off is white");
+        assert_eq!(white_point_wire(Some([256, 200, 100])), [256, 200, 100]);
+        assert_eq!(white_point_wire(Some([300, 256, 0])), [256, 256, 0], "never brighter than white");
     }
 
     #[test]

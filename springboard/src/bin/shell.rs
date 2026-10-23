@@ -1624,9 +1624,10 @@ fn run() -> std::io::Result<()> {
             let reason = if trace { shell.frame_reason() } else { String::new() };
             let t0 = sys::now_ms();
             let jctx = shell.jank_context();
-            // the GPU presenter tints in its final pass (`wayland_night`): the CPU copies are tinted only without it
+            // the window server tints the whole output, or the GPU presenter tints in its final pass (`wayland_night`):
+            // the CPU copies are tinted only without both
             #[cfg(feature = "desktop-wayland")]
-            let night_mult = night_mult.filter(|_| !(wayland && disp.wayland_gpu_active()));
+            let night_mult = night_mult.filter(|_| !(wayland && (disp.wayland_gpu_active() || disp.wayland_wm_tints())));
             let mut scan_failed = false;
             if scan.live && !gpu_comp.scanout_active() {
                 // the GPU compositor went away with the ring: CPU frames from here on
