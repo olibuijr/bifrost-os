@@ -611,6 +611,9 @@ pub struct AppHost {
     /// the buffer the newest frame replaced: given back after that frame is blitted, so the app
     /// draws at most one frame per composite (paced by the display, not free-running)
     release_after_blit: Option<usize>,
+    /// The app has shown a frame since it started: a new `Buffers` set (it reallocates on every resize) leaves `shown`
+    /// empty until the next frame, but the window stays mapped meanwhile (`between_buffers`).
+    presented: bool,
     pending: Damage,
     status: Status,
     pub wants_keyboard: bool,
@@ -781,6 +784,7 @@ impl AppHost {
             buffer_size: (cfg.w as usize, cfg.h as usize),
             shown: None,
             release_after_blit: None,
+            presented: false,
             pending: Damage::new(cfg.w as usize, cfg.h as usize),
             status: Status::Running,
             wants_keyboard: false,
@@ -1294,6 +1298,7 @@ impl AppHost {
                         }
                     }
                     self.shown = Some(buf);
+                    self.presented = true;
                     for r in damage {
                         self.pending.add(r[0] as i32, r[1] as i32, r[2] as i32, r[3] as i32);
                     }
@@ -1615,6 +1620,13 @@ impl AppHost {
     /// Whether frames arrived that `blit` has not yet copied.
     pub fn has_pending(&self) -> bool {
         !self.pending.is_empty()
+    }
+
+    /// The app already showed frames and is drawing its first one into a new buffer set (a resize reallocates them):
+    /// its window keeps its last pixels instead of being unmapped (dropping the toplevel mid-drag ended the pointer
+    /// grab of a resize after a few pixels, E2E-11).
+    pub fn between_buffers(&self) -> bool {
+        self.running() && self.presented && self.shown.is_none()
     }
 
     /// Copies the newest frame into `dst` at (0, 0) and returns the rectangles
@@ -3491,6 +3503,50 @@ mod extra_window_frame_tests {
         let after = sh.take_wayland_windows();
         assert!(after.iter().all(|f| f.id != id_of(extra)), "no frame for the closed window");
         assert!(after.iter().any(|f| f.id == id_of(main)), "the app's own window stays");
+        if let Some(v) = saved { std::env::set_var("SPRINGBOARD_WAYLAND", v) } else { std::env::remove_var("SPRINGBOARD_WAYLAND") };
+    }
+
+    /// E2E-11/12: an app that reallocates its buffers (every step of a live resize) keeps its window on the desk until it
+    /// draws into them: the window is not unmapped and its frame (last pixels, last size) is still sent, so the toplevel
+    /// is not destroyed under the pointer (which ended the resize) and the window behind does not take the focus.
+    #[test]
+    fn an_app_between_buffer_sets_keeps_its_window() {
+        let _lock = crate::test_support::global_lock();
+        let saved = std::env::var_os("SPRINGBOARD_WAYLAND");
+        std::env::set_var("SPRINGBOARD_WAYLAND", "1");
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.screen = Screen::Home;
+        sh.anim = None;
+        let (mine, _peer) = sys::socketpair_pair().unwrap();
+        let cfg = Configure { w: 64, h: 48, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
+        let mut host = AppHost::with_channel("fixture", mine, None, cfg);
+        assert!(!host.between_buffers(), "an app that never drew is not between buffers");
+        buffers(&mut host, None, 64, 48);
+        host.handle(ToShell::Frame { buf: 0, damage: vec![[0, 0, 64, 48]] }, Vec::new(), &mut Pumped::default());
+        sh.ext.push(Some(host));
+        let m = sh.desk_metrics();
+        let main = AppId::External(0);
+        sh.desk.as_mut().unwrap().open(&m, main, (600, 400));
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let mut px = vec![0u32; w * h];
+        sh.dirty = true;
+        sh.draw_desk_windows(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 1000.0);
+        let id = desk::win_id(main).unwrap_or(0);
+        let first = sh.take_wayland_windows();
+        let drawn = first.iter().find(|f| f.id == id).expect("the window is drawn");
+        let size = (drawn.width, drawn.height);
+        // the window was resized: the app sends a new buffer set and has not drawn into it yet
+        let r = sh.desk.as_ref().unwrap().wins[0].r;
+        sh.desk.as_mut().unwrap().wins[0].r.w = r.w - 40;
+        buffers(sh.ext[0].as_mut().unwrap(), None, 80, 60);
+        assert!(sh.ext[0].as_ref().unwrap().between_buffers());
+        assert!(!sh.desk_window_unmapped(main), "the window stays mapped between buffer sets");
+        sh.dirty = true;
+        sh.draw_desk_windows(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 1100.0);
+        let next = sh.take_wayland_windows();
+        let kept = next.iter().find(|f| f.id == id).expect("a frame is still sent: the toplevel is kept");
+        assert_eq!((kept.width, kept.height), size, "at the size of the pixels it last presented");
+        assert!(kept.pixels.is_none(), "the window server keeps showing the last pixels");
         if let Some(v) = saved { std::env::set_var("SPRINGBOARD_WAYLAND", v) } else { std::env::remove_var("SPRINGBOARD_WAYLAND") };
     }
 }
