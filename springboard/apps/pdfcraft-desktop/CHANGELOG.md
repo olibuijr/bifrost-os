@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.12.0
+
+- Upstream pdfcraft v0.12.0.
+  > [!NOTE]
+  > **FreeBSD aarch64 is dropped from this release.** We had to cut releases, and we cannot build this target within the 5-hour CI limit for any of the Craft apps, so we are dropping it for now. This is a known blocker, flagged for a future fix in storytold/craft-common-actions#39. FreeBSD x86_64 and every other platform are included.
+  ## What's Changed
+  * M7: lay out the Edit panel as Acrobat's by @abc2cb in https://github.com/storytold/pdfcraft/pull/2245
+  * fix(engine): PNG export writes opaque pages as RGB at deflate level 3 (3–5× faster, same size) by @Piohrun in https://github.com/storytold/pdfcraft/pull/2425
+
 ## 0.11.0
 
 - Upstream pdfcraft v0.11.0.
