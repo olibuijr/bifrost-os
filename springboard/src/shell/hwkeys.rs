@@ -567,9 +567,10 @@ impl HwKeys {
     pub fn chord_mods(&self, code: u16) -> Option<u32> {
         // Backspace, forward Delete, Up and Down are chord keys too: Cmd+Backspace deletes in the apps, Cmd+Up goes to the
         // enclosing folder in Files and Cmd+Down opens the item (neither arrow types anything while Cmd is held).
+        // Return is one as well: Cmd+Return in Search shows the file in its folder, and an app may bind it.
         // Option+Backspace and Option+Delete are chords as well (they delete a word); AltGr alone types.
         let option_delete = matches!(code, KEY_BACKSPACE | KEY_DELETE) && self.alt > self.altgr;
-        if self.ctrl == 0 && self.meta == 0 && !option_delete || (!matches!(code, KEY_BACKSPACE | KEY_DELETE | KEY_UP | KEY_DOWN) && !TEXT_KEYS.iter().any(|k| k.0 == code)) {
+        if self.ctrl == 0 && self.meta == 0 && !option_delete || (!matches!(code, KEY_BACKSPACE | KEY_DELETE | KEY_UP | KEY_DOWN | KEY_ENTER) && !TEXT_KEYS.iter().any(|k| k.0 == code)) {
             return None;
         }
         let mut mods = 0;
@@ -945,6 +946,11 @@ impl Shell {
     /// was used; false leaves it to `hw_chord`.
     pub fn hw_builtin_chord(&mut self, code: u16, mods: u32, t: f64) -> bool {
         const KEY_LEFTBRACE: u16 = 26;
+        // Cmd+Return in Search shows the selected file in its folder (Show in Finder on the reference platform)
+        if code == KEY_ENTER && mods == CHORD_META && self.screen_on && !self.card_alert_up() && self.quicksearch_reveal(t) {
+            self.last_input = t;
+            return true;
+        }
         if !self.screen_on || self.anim.is_some() || self.shell_takes_typing() || self.card_alert_up() {
             return false;
         }
@@ -1537,6 +1543,7 @@ mod tests {
         assert_eq!(k.chord_mods(KEY_UP), Some(CHORD_META), "Cmd+Up");
         assert_eq!(k.chord_mods(KEY_DOWN), Some(CHORD_META), "Cmd+Down");
         assert_eq!(k.chord_mods(KEY_DELETE), Some(CHORD_META), "Cmd+Delete");
+        assert_eq!(k.chord_mods(KEY_ENTER), Some(CHORD_META), "Cmd+Return (Search reveals the file)");
         assert_eq!(k.chord_mods(KEY_LEFT), None, "the other arrows are not chord keys");
         k.key(KEY_LEFTMETA, false);
         assert_eq!(k.chord_mods(KEY_BACKSPACE), None, "plain Backspace types");
