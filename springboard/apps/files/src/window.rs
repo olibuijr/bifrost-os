@@ -46,7 +46,7 @@ impl Files {
         // a provider folder is listed by its extension, which the host starts if it is not running
         let providers = in_provider.then(provider::shared);
         let (sort, bin) = (self.sort, self.bin());
-        let chain = if virtual_folder { vec![] } else { ancestor_chain(&path) };
+        let chain = if virtual_folder { vec![] } else { ancestor_chain(&path, &self.home) };
         let work = move || {
             let batch_path = path.clone();
             let result = if let Some(list) = tagged {

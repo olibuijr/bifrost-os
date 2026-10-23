@@ -36,12 +36,18 @@ pub(crate) struct Listing {
     pub(crate) partial: bool,
 }
 
-/// The nearest `ANCESTORS` folders above `path`, outermost first.
-pub(crate) fn ancestor_chain(path: &Path) -> Vec<PathBuf> {
+/// The nearest `ANCESTORS` folders above `path`, outermost first. Inside the home folder the columns start at the
+/// home folder (as Files's column view starts at the place the sidebar opened), so the home folder shows one column
+/// of its own and never the system folders (`/bin`, `/dev`, ...) to its left.
+pub(crate) fn ancestor_chain(path: &Path, home: &Path) -> Vec<PathBuf> {
     let mut out = vec![];
+    if path == home {
+        return out;
+    }
+    let inside_home = path.starts_with(home);
     let mut parent = path.parent();
     while let Some(folder) = parent {
-        if out.len() == ANCESTORS {
+        if out.len() == ANCESTORS || (inside_home && !folder.starts_with(home)) {
             break;
         }
         out.push(folder.to_path_buf());
@@ -78,5 +84,30 @@ impl Files {
         }
         self.refresh_rows();
         self.selection.clear();
+    }
+}
+
+#[cfg(test)]
+mod chain_tests {
+    use super::*;
+
+    #[test]
+    fn the_columns_start_at_the_home_folder_inside_it() {
+        let home = Path::new("/home/ana");
+        assert!(ancestor_chain(home, home).is_empty(), "the home folder is the first column");
+        assert_eq!(ancestor_chain(&home.join("Documents"), home), vec![home.to_path_buf()]);
+        assert_eq!(ancestor_chain(&home.join("a/b"), home), vec![home.to_path_buf(), home.join("a")]);
+        // deep in the home folder the nearest ANCESTORS folders show, still never above home
+        let deep = home.join("a/b/c/d");
+        assert_eq!(ancestor_chain(&deep, home), vec![home.join("a"), home.join("a/b"), home.join("a/b/c")]);
+    }
+
+    #[test]
+    fn outside_the_home_folder_the_columns_walk_up_to_the_root() {
+        let home = Path::new("/home/ana");
+        assert_eq!(ancestor_chain(Path::new("/usr/share"), home), vec![PathBuf::from("/"), PathBuf::from("/usr")]);
+        assert!(ancestor_chain(Path::new("/"), home).is_empty());
+        // a sibling whose name starts like the home folder is not inside it
+        assert_eq!(ancestor_chain(Path::new("/home/anabel/x"), home), vec![PathBuf::from("/"), PathBuf::from("/home"), PathBuf::from("/home/anabel")]);
     }
 }
