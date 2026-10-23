@@ -352,21 +352,43 @@ pub enum DistanceUnits {
 }
 
 /// A distance in short form (`NativeDistanceFormatter`, default units). Metres below a kilometre, then kilometres;
-/// feet below a thousand, then miles. Negative input is shown as zero. Only the English unit symbols are produced.
+/// feet below a thousand, then miles. Kilometres and miles keep one decimal below ten and are whole numbers with
+/// thousands grouping from ten up ("1.5 km", "343 km", "1,886 km"), as the reference rounds them (E2E W4-13: "1,885.8
+/// km away"). Negative input is shown as zero. Only the English unit symbols are produced.
 pub fn format_distance(meters: f64, units: DistanceUnits) -> String {
     let meters = meters.max(0.0);
+    let large = |value: f64, unit: &str| {
+        if value < 9.95 {
+            format!("{value:.1} {unit}")
+        } else {
+            format!("{} {unit}", group_thousands(value.round() as u64))
+        }
+    };
     match units {
         DistanceUnits::Metric if meters < 1000.0 => format!("{:.0} m", meters),
-        DistanceUnits::Metric => format!("{:.1} km", meters / 1000.0),
+        DistanceUnits::Metric => large(meters / 1000.0, "km"),
         DistanceUnits::Imperial => {
             let feet = meters / 0.3048;
             if feet < 1000.0 {
                 format!("{:.0} ft", feet)
             } else {
-                format!("{:.1} mi", meters / 1609.344)
+                large(meters / 1609.344, "mi")
             }
         }
     }
+}
+
+/// `n` with a comma between each group of three digits ("1,886").
+fn group_thousands(n: u64) -> String {
+    let digits = n.to_string();
+    let mut out = String::with_capacity(digits.len() + digits.len() / 3);
+    for (i, ch) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i) % 3 == 0 {
+            out.push(',');
+        }
+        out.push(ch);
+    }
+    out
 }
 
 #[cfg(test)]
@@ -493,6 +515,14 @@ mod tests {
         assert_eq!(format_distance(-5.0, DistanceUnits::Metric), "0 m");
         assert_eq!(format_distance(30.48, DistanceUnits::Imperial), "100 ft");
         assert_eq!(format_distance(1609.344, DistanceUnits::Imperial), "1.0 mi");
+        // ten and up are whole, grouped by thousands (E2E W4-13)
+        assert_eq!(format_distance(9_940.0, DistanceUnits::Metric), "9.9 km");
+        assert_eq!(format_distance(9_960.0, DistanceUnits::Metric), "10 km");
+        assert_eq!(format_distance(343_400.0, DistanceUnits::Metric), "343 km");
+        assert_eq!(format_distance(1_885_800.0, DistanceUnits::Metric), "1,886 km");
+        assert_eq!(format_distance(16_093.44 * 120.0, DistanceUnits::Imperial), "1,200 mi");
+        assert_eq!(group_thousands(1_234_567), "1,234,567");
+        assert_eq!(group_thousands(999), "999");
     }
 
     #[test]

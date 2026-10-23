@@ -97,6 +97,9 @@ fn fade(c: u32, alpha: u8) -> u32 {
     m(0) | m(8) | m(16) | m(24)
 }
 const MARGIN: f32 = 20.0;
+/// How often a fetch in flight is looked for, in milliseconds.
+const FETCH_POLL_MS: f64 = 120.0;
+
 fn places_field_top_pt() -> f32 { nav_bottom_pt() + 54.0 }
 fn places_list_top_pt() -> f32 { nav_bottom_pt() + 100.0 }
 fn stocks_field_top_pt() -> f32 { nav_bottom_pt() + 10.0 }
@@ -730,7 +733,11 @@ impl Weather {
 
     fn draw_bar(&mut self, s: &mut Surface, ui: &Ui) {
         if self.screen != Screen::Main {
-            widgets::toolbar_band(s, ui, KRect { x: 0.0, y: 0.0, w: self.w as f32 / ui.pt(1.0), h: UNIFIED_BAR_PT });
+            // an opaque band with a hairline under it (E2E W4-13): the material band asked for its rectangle in this
+            // pane's coordinates, which the shell reads as the window's, so the window behind showed through the bar
+            let band = ui.pt(UNIFIED_BAR_PT).round() as usize;
+            s.fill_rect(0, 0, s.w, band.min(s.h), CONTENT_BG.now());
+            s.fill_rect(0, band.saturating_sub(1).min(s.h), s.w, 1, SEPARATOR_C.now());
             let title = if self.screen == Screen::Places { "Locations" } else { "Stocks" };
             self.put(s, ui, title, MAC_TITLE3_PT, Weight::Bold, LABEL.now(), Align::Centre, self.w as f32 / 2.0, ui.pt(UNIFIED_BAR_PT / 2.0));
         }
@@ -1390,6 +1397,14 @@ impl Weather {
             self.activate(ui, Target::Remove(self.selected), 0.0, t);
             return;
         }
+        // Return in Locations searches for what the field holds, focused or not (E2E W4-12)
+        if self.screen == Screen::Places && out == Out::Enter && !self.field.is_empty() {
+            self.field.focused = false;
+            self.kb_on = false;
+            self.search();
+            self.fit_scroll(ui);
+            return;
+        }
         if out == Out::Hide || !self.field.focused {
             if out == Out::Hide {
                 self.field.focused = false;
@@ -1532,6 +1547,29 @@ impl Weather {
         }
     }
 
+    /// The scroll wheel at (`x`, `y`) in window pixels (`scrollWheel`, E2E W4-11): over the hourly strip a sideways
+    /// wheel scrolls the hours, anywhere else in the detail pane the wheel scrolls the page (forecast, Locations,
+    /// Stocks). `dx` and `dy` are the content's travel in pixels, positive `dy` moving it down. True when it moved.
+    pub fn wheel(&mut self, ui: &Ui, x: f32, y: f32, dx: f32, dy: f32) -> bool {
+        self.relayout(ui);
+        if x < self.side || self.scrolling.is_some() {
+            return false;
+        }
+        let x = x - self.side;
+        self.fit_scroll(ui);
+        let (hx, hy, hw, hh) = self.hourly_rect(ui);
+        let over_hours = self.screen == Screen::Main && x >= hx && x < hx + hw && y >= hy && y < hy + hh;
+        let moved = if over_hours && dx.abs() > dy.abs() {
+            self.hscroll.wheel(dx)
+        } else if y >= ui.pt(self.list_top()) && y < self.bottom(ui) {
+            self.scroll.wheel(dy)
+        } else {
+            false
+        };
+        self.dirty |= moved;
+        moved
+    }
+
     pub fn tick(&mut self, ui: &Ui, t: f64) -> bool {
         self.relayout(ui);
         self.pump();
@@ -1558,7 +1596,18 @@ impl Weather {
             let poll = self.next_status_poll.min(until);
             due = Some(due.map_or(poll, |d| d.min(poll)));
         }
+        // a search, forecast or quote fetch in flight: look for its result soon, so it shows when it lands and not on
+        // the next click (E2E W4-12; the main-queue wake from the worker does not always reach the run loop)
+        if self.fetching() {
+            let poll = t + FETCH_POLL_MS;
+            due = Some(due.map_or(poll, |d| d.min(poll)));
+        }
         due
+    }
+
+    /// Whether a fetch runs on the utility queue whose result has not been applied yet.
+    fn fetching(&self) -> bool {
+        self.searching || self.quotes_pending || !self.pending.is_empty() || !self.done.lock().map_or(true, |d| d.is_empty())
     }
 
     // ---- My Location: the shell's location service, asked only once the person picks My Location ----
@@ -2706,6 +2755,49 @@ mod tests {
         assert_eq!(app.hit(&ui, left + ui.pt(10.0), y), Some(Target::Notify(0)));
         assert_eq!(app.hit(&ui, left - ui.pt(10.0), y), Some(Target::Place(0)));
         assert_eq!(app.hit(&ui, app.w as f32 - ui.pt(MARGIN + 10.0), y), Some(Target::Remove(0)));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// E2E W4-11: the wheel over the detail pane scrolls the forecast, within its range; the sidebar leaves it alone.
+    #[test]
+    fn the_wheel_scrolls_the_forecast_page() {
+        let (mut app, ui, dir) = app_with("wheel", &["A"]);
+        app.fit_scroll(&ui);
+        let (x, y) = (app.side + ui.pt(200.0), 700.0);
+        assert!(app.wheel(&ui, x, y, 0.0, -120.0), "a wheel turned down scrolls the page");
+        assert!(app.scroll.offset() > 0.0);
+        assert!(app.wheel(&ui, x, y, 0.0, 10_000.0));
+        assert_eq!(app.scroll.offset(), 0.0, "clamped at the top");
+        assert!(!app.wheel(&ui, x, y, 0.0, 120.0), "nothing above the top");
+        if app.side > 0.0 {
+            assert!(!app.wheel(&ui, 2.0, y, 0.0, -120.0), "the sidebar does not scroll the forecast");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// E2E W4-12: Return in Locations searches, and while the answer is on its way the app asks to be woken for it.
+    #[test]
+    fn return_in_locations_searches_and_the_answer_shows_without_more_input() {
+        let (mut app, ui, dir) = app_with("enter", &["A"]);
+        app.activate(&ui, Target::Places, 0.0, 0.0);
+        assert_eq!(app.screen, Screen::Places);
+        app.field.set_text(&ui, "London");
+        app.field.focused = false;
+        app.key(&ui, Out::Enter, 10.0);
+        assert!(app.searching, "Return starts the search");
+        assert!(app.next_wake(20.0).is_some_and(|w| w <= 20.0 + FETCH_POLL_MS), "polls for the answer");
+        // the offline answer lands on the utility queue and a plain tick applies it
+        let mut landed = false;
+        for i in 0..400 {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+            app.tick(&ui, 100.0 + i as f64);
+            if !app.searching {
+                landed = true;
+                break;
+            }
+        }
+        assert!(landed, "the search finished");
+        assert_eq!(app.note.as_deref(), Some("Search unavailable"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
