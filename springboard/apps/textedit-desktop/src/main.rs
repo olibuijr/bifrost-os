@@ -54,6 +54,9 @@ use text::{Align, Cell, Kind, Style, Transform, OBJECT};
 use bifrost_app::graphics_imageio;
 use view::{Action, Button, Focus, Hit};
 
+/// The find bar highlights at most this many matches (a long document full of one letter stays quick to draw).
+const MAX_HIGHLIGHTS: usize = 2000;
+
 /// The layout of the document as last drawn, and the misspelled words of its text, kept until the text, the width or
 /// the document changes.
 struct Cache {
@@ -76,6 +79,8 @@ struct TextEditApp {
     find: String,
     replace: String,
     focus: Focus,
+    /// the whole text of the focused find field is selected (Cmd+A, reopening the bar, Tab into it): typing replaces it
+    find_sel: bool,
     /// the status row's note (a search that found nothing, the count of replacements), until the next edit
     note: Option<String>,
     /// how far the page is scrolled, in points, and whether the caret should be brought into view
@@ -273,6 +278,7 @@ impl TextEditApp {
             find: String::new(),
             replace: String::new(),
             focus: Focus::Body,
+            find_sel: false,
             note: None,
             scroll: 0.0,
             follow: true,
@@ -420,6 +426,10 @@ impl TextEditApp {
             if find_field && !sheet_open && matches!(action, Action::Paste | Action::PasteMatch) {
                 let line = clipboard::text().map(|s| s.lines().next().unwrap_or("").to_string()).unwrap_or_default();
                 return self.type_into(&line);
+            }
+            // the find field's own Select All, Copy and Cut (QA W2-12: Cmd+A appended to the query instead)
+            if find_field && !sheet_open && matches!(action, Action::SelectAll | Action::Copy | Action::Cut) {
+                return self.find_field_command(action);
             }
             let panel_paste = matches!(action, Action::Paste | Action::PasteMatch)
                 && (self.link.is_some() || self.props.is_some() || self.line.is_some() || self.spacing_sheet.is_some());
@@ -632,19 +642,26 @@ impl TextEditApp {
                 }
                 self.find_open = true;
                 self.focus = Focus::Find;
+                // the previous query comes back selected, so typing starts a new one (QA W2-12)
+                self.find_sel = !self.find.is_empty();
                 return true;
             }
             Action::FindDone => {
                 self.find_open = false;
                 self.focus = Focus::Body;
+                self.find_sel = false;
+                // the bar's "not found" or "replaced" note goes with it (QA W2-12)
+                self.note = None;
                 return true;
             }
             Action::FocusFind => {
                 self.focus = Focus::Find;
+                self.find_sel = false;
                 return true;
             }
             Action::FocusReplace => {
                 self.focus = Focus::Replace;
+                self.find_sel = false;
                 return true;
             }
             Action::FindNext => return self.find_step(true),
@@ -1226,6 +1243,57 @@ impl TextEditApp {
         true
     }
 
+    /// Select All, Copy and Cut while a find field has the keyboard: they act on the field, never on the page.
+    fn find_field_command(&mut self, action: Action) -> bool {
+        let text = if self.focus == Focus::Find { self.find.clone() } else { self.replace.clone() };
+        match action {
+            Action::SelectAll => self.find_sel = !text.is_empty(),
+            Action::Copy | Action::Cut if self.find_sel => {
+                clipboard::set_text(&text);
+                if matches!(action, Action::Cut) {
+                    self.find_sel = false;
+                    if self.focus == Focus::Find {
+                        self.find.clear();
+                        self.find_live();
+                    } else {
+                        self.replace.clear();
+                    }
+                }
+            }
+            _ => {}
+        }
+        true
+    }
+
+    /// The live search as the query changes: the first match at or after the start of the selection is selected
+    /// (wrapping), so the page follows the typing; the page highlights every match while the bar is open.
+    fn find_live(&mut self) -> bool {
+        if self.find.is_empty() {
+            self.note = None;
+            return true;
+        }
+        let query = self.find.clone();
+        let Some(doc) = active_doc_mut(&mut self.docs) else { return true };
+        let from = doc.text.selection().start;
+        match doc.text.find(&query, from, true, false) {
+            Some(r) => {
+                doc.text.select(r.start, r.end);
+                self.note = None;
+            }
+            None => self.note = Some(format!("\"{query}\" not found")),
+        }
+        self.follow = true;
+        true
+    }
+
+    /// Every match of the find field in the active document, for the highlight (none while the bar is closed).
+    fn find_matches(&self) -> Vec<Range<usize>> {
+        if !self.find_open || self.find.is_empty() {
+            return Vec::new();
+        }
+        active_doc(&self.docs).map_or_else(Vec::new, |d| d.text.find_all(&self.find, false, MAX_HIGHLIGHTS))
+    }
+
     /// Finds the next (or previous) match of the find field from the selection, and selects it.
     fn find_step(&mut self, forward: bool) -> bool {
         if self.find.is_empty() {
@@ -1640,9 +1708,15 @@ impl TextEditApp {
             return true;
         }
         if self.find_open && self.focus != Focus::Body {
-            match self.focus {
-                Focus::Find => self.find.push_str(&printable),
-                _ => self.replace.push_str(&printable),
+            // typing over a selected field replaces it
+            let over = std::mem::take(&mut self.find_sel);
+            let field = if self.focus == Focus::Find { &mut self.find } else { &mut self.replace };
+            if over {
+                field.clear();
+            }
+            field.push_str(&printable);
+            if self.focus == Focus::Find {
+                self.find_live();
             }
             return true;
         }
@@ -1764,8 +1838,13 @@ impl TextEditApp {
             return true;
         }
         if self.find_open && self.focus != Focus::Body {
+            let over = std::mem::take(&mut self.find_sel);
             let field = if self.focus == Focus::Find { &mut self.find } else { &mut self.replace };
-            return field.pop().is_some();
+            let changed = if over { !std::mem::take(field).is_empty() } else { field.pop().is_some() };
+            if changed && self.focus == Focus::Find {
+                self.find_live();
+            }
+            return changed;
         }
         if self.refuse_edit() {
             return true;
@@ -2416,6 +2495,8 @@ impl App for TextEditApp {
                                 Focus::Find => Focus::Replace,
                                 _ => Focus::Find,
                             };
+                            // Tab into a field selects its text, as the native fields do
+                            self.find_sel = !(if self.focus == Focus::Find { &self.find } else { &self.replace }).is_empty();
                             true
                         } else {
                             false
@@ -2570,9 +2651,10 @@ impl App for TextEditApp {
         let tab = active_doc(&self.docs).map_or(0.0, |d| d.text.tab_width());
         view::draw_ruler(canvas, ui, &geom, tab);
         if self.find_open {
-            view::draw_find(canvas, ui, &geom, &find, &self.find, &self.replace, self.focus);
+            view::draw_find(canvas, ui, &geom, &find, &self.find, &self.replace, self.focus, self.find_sel);
         }
         self.ensure_layout(ui, geom.text_w);
+        let matches = self.find_matches();
         view::page_clip(canvas, ui, &geom, self.opts.dark_background);
         let view_h = geom.body_bottom - geom.body_top;
         if let (Some(doc), Some(cache)) = (active_doc(&self.docs), self.cache.as_ref()) {
@@ -2601,6 +2683,7 @@ impl App for TextEditApp {
                 self.scroll,
                 self.focus == Focus::Body,
                 &cache.misspelled,
+                &matches,
                 self.opts.dark_background,
             );
         }
@@ -3114,10 +3197,13 @@ mod tests {
         assert!(app.event(&ctx, Input::Command(Command::Paste)));
         assert_eq!(app.find, "needle", "paste goes into the find field");
         assert_eq!(text_of(&app), SENTENCE, "the document is untouched");
-        for command in [Command::Cut, Command::SelectAll, Command::Undo] {
-            assert!(!app.event(&ctx, Input::Command(command)));
-        }
-        assert!(!app.event(&ctx, Input::Key(KeyInput::chord(45, CHORD_META))), "Cmd+X as a chord is swallowed too");
+        // Select All, Copy and Cut are the field's (QA W2-12: Cmd+A appended to the query instead); Undo does nothing
+        assert!(app.event(&ctx, Input::Command(Command::SelectAll)), "Cmd+A selects the find field's text");
+        assert!(app.find_sel);
+        assert!(!app.event(&ctx, Input::Command(Command::Undo)));
+        clipboard::set_text("");
+        assert!(app.event(&ctx, Input::Key(KeyInput::chord(45, CHORD_META))), "Cmd+X as a chord cuts the field's text");
+        assert_eq!((app.find.as_str(), clipboard::text().as_deref()), ("", Some("needle")));
         assert_eq!(text_of(&app), SENTENCE, "cut and undo left the document alone");
         assert_eq!(caret_of(&app), 0..5, "select all left the selection alone");
         // a sheet open over the page: the same
@@ -3129,6 +3215,56 @@ mod tests {
         }
         assert_eq!(text_of(&app), SENTENCE);
         assert_eq!(caret_of(&app), 0..5);
+    }
+
+    /// QA W2-12: Cmd+A in the find field, live matches while typing, the previous query selected on reopening, and no
+    /// "not found" left in the status row after the bar closes.
+    #[test]
+    fn the_find_bar_searches_as_it_is_typed_and_reopens_with_the_query_selected() {
+        let ctx = window(1200, 780);
+        let mut app = app_with_text("the lazy dog and the lazy cat", 0..0);
+        assert!(app.perform(&ctx, Action::Find));
+        // the shared find pasteboard may hold another test's query
+        app.find.clear();
+        app.find_sel = false;
+        for c in ["l", "a", "z"] {
+            app.event(&ctx, Input::Key(KeyInput::Text(c.into())));
+        }
+        assert_eq!(caret_of(&app), 4..7, "the first match is selected while typing");
+        assert_eq!(app.find_matches(), vec![4..7, 21..24], "every match is highlighted");
+        app.event(&ctx, Input::Key(KeyInput::Text("q".into())));
+        assert_eq!(app.note.as_deref(), Some("\"lazq\" not found"));
+        assert!(app.find_matches().is_empty());
+        app.backspace();
+        assert_eq!((app.find.as_str(), app.note.as_deref()), ("laz", None));
+        // closing clears the note and the highlight
+        app.event(&ctx, Input::Key(KeyInput::Text("q".into())));
+        assert!(app.perform(&ctx, Action::FindDone));
+        assert_eq!(app.note, None);
+        assert!(app.find_matches().is_empty(), "no highlight once the bar is closed");
+        // reopening selects the previous query: typing replaces it, Cmd+A selects it again
+        app.perform(&ctx, Action::Find);
+        assert!(app.find_sel);
+        app.event(&ctx, Input::Key(KeyInput::Text("cat".into())));
+        assert_eq!(app.find, "cat");
+        assert_eq!(caret_of(&app), 26..29);
+        app.event(&ctx, Input::Command(Command::SelectAll));
+        app.event(&ctx, Input::Key(KeyInput::Text("dog".into())));
+        assert_eq!(app.find, "dog", "Cmd+A then typing replaces the query");
+        app.event(&ctx, Input::Command(Command::SelectAll));
+        app.backspace();
+        assert_eq!(app.find, "", "Backspace over the selected query clears it");
+        assert_eq!(text_of(&app), "the lazy dog and the lazy cat", "the page was never edited");
+    }
+
+    #[test]
+    fn find_all_lists_every_match_without_overlap() {
+        let app = app_with_text("aaaa Aa", 0..0);
+        let doc = active_doc(&app.docs).unwrap();
+        assert_eq!(doc.text.find_all("aa", false, 10), vec![0..2, 2..4, 5..7]);
+        assert_eq!(doc.text.find_all("aa", true, 10), vec![0..2, 2..4]);
+        assert_eq!(doc.text.find_all("aa", false, 1), vec![0..2], "the limit holds");
+        assert!(doc.text.find_all("", false, 10).is_empty());
     }
 
     fn text_of(app: &TextEditApp) -> String {

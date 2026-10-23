@@ -11,9 +11,10 @@ use bifrost_app::document::item;
 use bifrost_app::kit::canvas::{Canvas, ImageRef, RectF};
 use bifrost_app::kit::ui::{
     Ui, Weight, BLACK, CONTENT_BG, DESTRUCTIVE, DETAIL_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, LINK, MAC_BODY_PT, MAC_FOOTNOTE_PT,
-    SELECTION, SEGMENT_ON, SEPARATOR_C,
+    SELECTION, SEGMENT_ON, SEPARATOR_C, WHITE,
 };
 use bifrost_app::glyphs::glyph;
+use bifrost_app::kit::ui::system::FIND_HIGHLIGHT;
 use bifrost_app::kit::{pack, Image};
 use bifrost_app::layout::{traffic_lights_trailing, MARGIN_PT, READABLE_MAX_PT, UNIFIED_BAR_PT};
 use bifrost_app::controls::prefs_layout::m;
@@ -764,7 +765,8 @@ pub fn draw_button(c: &mut dyn Canvas, ui: &Ui, b: &Button) {
 }
 
 /// Draws the find bar: its two fields, their text, and its buttons.
-pub fn draw_find(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry, buttons: &[Button], find: &str, replace: &str, focus: Focus) {
+/// `selected`: the focused field's whole text is selected (typing replaces it), drawn on a selection plate.
+pub fn draw_find(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry, buttons: &[Button], find: &str, replace: &str, focus: Focus, selected: bool) {
     let top = geom.find_top;
     c.fill_rect(RectF::new(0.0, ui.pt(top), ui.pt(geom.width).ceil(), ui.pt(FIND_H).ceil()), DETAIL_BG.now());
     c.fill_rect(RectF::new(0.0, ui.pt(top + FIND_H).floor() - 1.0, ui.pt(geom.width).ceil(), 1.0), SEPARATOR_C.now());
@@ -777,10 +779,14 @@ pub fn draw_find(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry, buttons: &[Button
         if focus == which {
             c.stroke_rrect(r, ui.pt(CONTROL_RADIUS), ui.pt(1.0).max(1.0), LINK);
         }
-        let (shown, color) = if text.is_empty() { (placeholder, LABEL_3.now()) } else { (text, LABEL.now()) };
+        let picked = selected && focus == which && !text.is_empty();
+        let (shown, color) = if text.is_empty() { (placeholder, LABEL_3.now()) } else if picked { (text, WHITE) } else { (text, LABEL.now()) };
         let inner = ui.pt(rect.w) - 2.0 * ui.pt(BUTTON_PAD);
         let fitted = ui.fit(shown, MAC_BODY_PT, inner.max(0.0));
         let img = ui.text(&fitted, MAC_BODY_PT, Weight::Regular, color);
+        if picked {
+            c.fill_rrect(RectF::new(r.x + ui.pt(BUTTON_PAD) - 1.0, r.y + ui.pt(3.0), img.w as f32 + 2.0, r.h - ui.pt(6.0)), ui.pt(3.0), SELECTION.now());
+        }
         blit(c, &img, r.x + ui.pt(BUTTON_PAD), r.y + (r.h - img.h as f32) / 2.0);
     }
     for b in buttons {
@@ -950,10 +956,22 @@ pub fn page_clip(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry, dark: bool) -> Re
 /// is the dark page: text with no colour of its own is white.
 #[allow(clippy::too_many_arguments)]
 #[allow(clippy::too_many_arguments)]
-pub fn draw_text(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry, lines: &Layout, cells: &[Cell], art: &Art, sel: std::ops::Range<usize>, head: usize, scroll: f32, caret: bool, misspelled: &[std::ops::Range<usize>], dark: bool) {
+/// `matches` are the find bar's matches, highlighted behind the text (`findHighlightColor`) while the bar is open.
+pub fn draw_text(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry, lines: &Layout, cells: &[Cell], art: &Art, sel: std::ops::Range<usize>, head: usize, scroll: f32, caret: bool, misspelled: &[std::ops::Range<usize>], matches: &[std::ops::Range<usize>], dark: bool) {
     let origin_x = geom.text_x;
     let origin_y = geom.body_top - scroll;
     let measure = measure_in(ui, &art.aspects, lines.width);
+    // find matches: a plate per line each one crosses, under the selection (the current match is the selection)
+    for m in matches {
+        for line in lines.lines.iter().filter(|l| m.start <= l.end && m.end >= l.start) {
+            let x0 = lines.x_in_line(cells, line, m.start.max(line.start), &measure);
+            let x1 = lines.x_in_line(cells, line, m.end.min(line.end), &measure);
+            if x1 > x0 {
+                let rect = Rect { x: origin_x + x0, y: origin_y + line.top, w: x1 - x0, h: line.height };
+                c.fill_rrect(to_px(ui, rect), ui.pt(2.0), FIND_HIGHLIGHT.now());
+            }
+        }
+    }
     // selection: one plate per line the selection crosses; a newline inside it shows as the line's end
     if !sel.is_empty() {
         for line in &lines.lines {

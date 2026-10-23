@@ -936,6 +936,25 @@ impl Text {
         Some(at..at + needle.len())
     }
 
+    /// Every match of `query`, in order and not overlapping, at most `limit` (the find bar's highlight).
+    pub fn find_all(&self, query: &str, case_sensitive: bool, limit: usize) -> Vec<Range<usize>> {
+        let n = query.chars().count();
+        let mut out = Vec::new();
+        if n == 0 {
+            return out;
+        }
+        let mut i = 0;
+        while i + n <= self.cells.len() && out.len() < limit {
+            if matches_at(&self.cells, i, query, case_sensitive) {
+                out.push(i..i + n);
+                i += n;
+            } else {
+                i += 1;
+            }
+        }
+        out
+    }
+
     /// Replace (the Replace button): when the selection is a match, it becomes `replacement`. Returns whether it did.
     pub fn replace_selection(&mut self, query: &str, replacement: &str, case_sensitive: bool) -> bool {
         let sel = self.selection();
