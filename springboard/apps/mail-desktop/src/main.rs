@@ -5,6 +5,7 @@ use bifrost_app::app_windows::WindowId;
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::background_tasks::{self, TaskEvent};
 use bifrost_app::{passwords, usernotif};
+use bifrost_app::pointer_events::PointerEvent;
 use bifrost_app::proto::WindowInput;
 use bifrost_app::{App, AppMenu, Command, Commands, Ctx, DocumentEvent, Input, TouchKind};
 use bifrost_mail::background::{self, Check};
@@ -168,9 +169,12 @@ impl App for MailApp {
         if window.is_main() {
             return self.event(ctx, ev);
         }
+        // an extra window's touches arrive in window points (`WindowTouch`); the viewer and the compose sheet are laid
+        // out and hit-tested in the pixels they are drawn in
+        let k = ctx.ui.pt(1.0);
         if let Some(viewer) = self.viewers.iter_mut().find(|v| v.id == window) {
             return match ev {
-                Input::Touch { kind, y, t, .. } => viewer.touch(kind, y, t),
+                Input::Touch { kind, y, t, .. } => viewer.touch(kind, y, k, t),
                 _ => false,
             };
         }
@@ -186,7 +190,7 @@ impl App for MailApp {
                 if self.composes.active != Some(window) {
                     return false;
                 }
-                mail.touch(ctx, kind, x, y, t, mods)
+                mail.touch(ctx, kind, x * k, y * k, t, mods)
             }
             // the compose window is the key window: its keys and editing commands go to its message (the shell sends
             // them tagged with the window, not to the main window)
@@ -212,6 +216,36 @@ impl App for MailApp {
             }
             other => bifrost_app::app_windows::default_window_input(self, ctx, window, other),
         }
+    }
+
+    /// The scroll wheel, in place of the drag the shell would emulate for it in every window of the app.
+    fn pointer_interest(&self) -> u32 {
+        bifrost_app::pointer_events::WHEEL
+    }
+
+    /// The main window's wheel (surface pixels): the list or the reader under the pointer scrolls. A compose window
+    /// that holds the sheet slot gives it back first, so the main window's own panes are the ones that move.
+    fn pointer(&mut self, ctx: &Ctx, ev: &PointerEvent) -> bool {
+        let PointerEvent::Wheel { x, y, dy, .. } = *ev else { return false };
+        let Some(mail) = &mut self.window else { return false };
+        if !self.composes.deactivate(mail) {
+            return false;
+        }
+        mail.wheel(&ctx.ui, x, y, dy)
+    }
+
+    /// An extra window's wheel (window points): a viewer scrolls its text, a compose window its message.
+    fn window_pointer(&mut self, ctx: &Ctx, window: WindowId, ev: &PointerEvent) -> bool {
+        if window.is_main() {
+            return self.pointer(ctx, ev);
+        }
+        let PointerEvent::Wheel { dy, .. } = *ev else { return false };
+        let k = ctx.ui.pt(1.0);
+        if let Some(viewer) = self.viewers.iter_mut().find(|v| v.id == window) {
+            return viewer.wheel(dy, k);
+        }
+        let Some(mail) = &mut self.window else { return false };
+        self.composes.wheel(&ctx.ui, mail, window, dy * k)
     }
 
     fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<bifrost_core::json::Json, String>) -> bool {
@@ -328,6 +362,10 @@ impl App for MailApp {
 /// A key or a standard editing command for the main window's message list or its sheet (the active compose's message
 /// while a compose window is key).
 fn key_or_command(mail: &mut MailWindow, ctx: &Ctx, ev: Input) -> bool {
+    // typing shows the end of the message again, where the caret is, after the wheel scrolled it up
+    if let Some(bifrost_mail::state::Sheet::Compose(compose)) = &mut mail.mail.sheet {
+        compose.scroll_back = 0;
+    }
     match ev {
         Input::Key(k) => mail.key(ctx, k),
         Input::Command(Command::Paste) => mail.paste(),
@@ -442,7 +480,7 @@ mod tests {
     use super::*;
     use bifrost_app::controls::internet_accounts::{Account, Kind, Security, Server};
     use bifrost_app::kit::{Font, Ui};
-    use bifrost_app::proto::{Configure, ToShell};
+    use bifrost_app::proto::{Configure, ToApp, ToShell};
     use bifrost_app::{KeyInput, ModifierFlags};
     use bifrost_mail::compose_windows::{COMPOSE_H, COMPOSE_W};
     use bifrost_mail::draw::{choice_count, sheet_layout, Hit};
@@ -483,9 +521,14 @@ mod tests {
     }
 
     fn ctx(dir: &std::path::Path) -> Ctx {
+        ctx_at(dir, 1.0)
+    }
+
+    /// A test context on a screen of `scale` pixels a point.
+    fn ctx_at(dir: &std::path::Path, scale: f32) -> Ctx {
         let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice());
-        let cfg = Configure { w: 800, h: 600, scale: 1.0, safe_top: 0.0, safe_bottom: 0.0, dark: false, text_scale: 1.0, reduce_motion: false };
-        let mut ctx = Ctx::testing(Ui::new(Font::parse(data).unwrap(), 1.0), cfg);
+        let cfg = Configure { w: 800, h: 600, scale, safe_top: 0.0, safe_bottom: 0.0, dark: false, text_scale: 1.0, reduce_motion: false };
+        let mut ctx = Ctx::testing(Ui::new(Font::parse(data).unwrap(), scale), cfg);
         ctx.data_dir = dir.to_path_buf();
         ctx
     }
@@ -734,6 +777,113 @@ mod tests {
         // Escape closes the message, asking first because it has text
         app.window_event(&ctx, id, Input::Key(KeyInput::Code(1)));
         assert!(matches!(app.window.as_ref().unwrap().mail.sheet, Some(Sheet::Question(_))), "Save This Message, Don't Save, Cancel");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A wheel event turned `dy` (negative: down) at (`x`, `y`).
+    fn wheel(x: f32, y: f32, dy: f32) -> PointerEvent {
+        use bifrost_app::pointer_events::Phase;
+        PointerEvent::Wheel { x, y, dx: 0.0, dy, precise: false, phase: Phase::None, momentum: Phase::None }
+    }
+
+    /// Puts `lines` lines of text into the message of the active compose.
+    fn fill_message(app: &mut MailApp, lines: usize) {
+        let text: Vec<String> = (0..lines).map(|i| format!("line {i}")).collect();
+        let Some(Sheet::Compose(compose)) = &mut app.window.as_mut().unwrap().mail.sheet else { panic!("a compose in the slot") };
+        let field = compose.form.fields.iter_mut().find(|f| f.label == "Message").expect("the message field");
+        field.value = text.join("\n");
+        compose.styles = vec![Default::default(); compose.message().chars().count()];
+    }
+
+    fn scroll_back(app: &MailApp) -> usize {
+        match &app.window.as_ref().unwrap().mail.sheet {
+            Some(Sheet::Compose(c)) => c.scroll_back,
+            _ => app.composes.slots[0].compose.scroll_back,
+        }
+    }
+
+    /// E2E: Mail takes the wheel (so the shell no longer emulates a drag for it in any window): the main window's
+    /// message list scrolls under the pointer, a viewer window's text scrolls in pixels from the window points it
+    /// gets, and a compose window's message scrolls back from its end until typing brings the end back.
+    #[test]
+    fn the_wheel_scrolls_the_list_a_viewer_and_a_compose_message() {
+        let dir = std::env::temp_dir().join(format!("bifrost-mail-wheel-{}", std::process::id()));
+        let ctx = ctx(&dir);
+        let mut app = app_with_account(&ctx);
+        assert_eq!(app.pointer_interest(), bifrost_app::pointer_events::WHEEL);
+        let listed = |uid: u32| Listed { uid, flags: Flags::empty(), header: format!("Subject: m{uid}\r\nFrom: Ana <ana@x.is>\r\n\r\n") };
+        app.window.as_mut().unwrap().mail.apply_listing("work", INBOX, vec![], (1..=60).map(listed).collect());
+        let (x, y) = row_point(&app, &ctx.ui, 60);
+        // the list's range is set when it is drawn
+        app.window.as_mut().unwrap().list_scroll.set_max(1000.0);
+        assert!(app.pointer(&ctx, &wheel(x, y, -40.0)), "the list under the pointer scrolls");
+        assert_eq!(app.window.as_ref().unwrap().list_scroll.offset(), 40.0);
+        assert!(app.window_pointer(&ctx, WindowId::MAIN, &wheel(x, y, 15.0)), "window 0 is the main window");
+        assert_eq!(app.window.as_ref().unwrap().list_scroll.offset(), 25.0);
+
+        // a viewer window
+        let id = ctx.open_window(bifrost_mail::viewer::Snapshot::default().spec()).unwrap();
+        app.viewers.push(Viewer::new(id, bifrost_mail::viewer::Snapshot::default()));
+        app.viewers[0].scroll.set_max(300.0);
+        assert!(app.window_pointer(&ctx, id, &wheel(10.0, 10.0, -30.0)));
+        assert_eq!(app.viewers[0].scroll.offset(), 30.0);
+        // over the wire, as the shell sends it: the SDK hands it to `window_pointer`
+        let msg = ToApp::WindowInput { window: id.0, input: WindowInput::Pointer(wheel(10.0, 10.0, -30.0)) };
+        let ToApp::WindowInput { input, .. } = ToApp::decode(&msg.encode()).unwrap() else { unreachable!() };
+        assert!(app.window_input(&ctx, id, input));
+        assert_eq!(app.viewers[0].scroll.offset(), 60.0);
+
+        // a compose window with a long message shows its end; the wheel turned up shows earlier lines
+        app.with_window(&ctx, |mail| {
+            mail.mail.open_compose(None);
+            true
+        });
+        let compose = app.composes.active.expect("a compose window");
+        fill_message(&mut app, 40);
+        assert!(app.window_pointer(&ctx, compose, &wheel(10.0, 10.0, 60.0)));
+        let back = scroll_back(&app);
+        assert!(back >= 3, "about three lines a 60-point turn: {back}");
+        assert!(app.window_pointer(&ctx, compose, &wheel(10.0, 10.0, 99_999.0)));
+        let top = scroll_back(&app);
+        assert!(top > back && top < 40, "clamped so the top line shows at the top: {top}");
+        assert!(!app.window_pointer(&ctx, compose, &wheel(10.0, 10.0, 60.0)), "already at the top");
+        app.window_pointer(&ctx, compose, &wheel(10.0, 10.0, -99_999.0));
+        assert_eq!(scroll_back(&app), 0, "back at the end");
+        app.window_pointer(&ctx, compose, &wheel(10.0, 10.0, 40.0));
+        assert!(scroll_back(&app) > 0);
+        app.window_event(&ctx, compose, Input::Key(KeyInput::Text("x".into())));
+        assert_eq!(scroll_back(&app), 0, "typing shows the end, where the caret is");
+        // the main window's wheel gives the sheet slot back and scrolls the list, not the compose
+        app.window_pointer(&ctx, compose, &wheel(10.0, 10.0, 40.0));
+        let held = scroll_back(&app);
+        app.pointer(&ctx, &wheel(x, y, -10.0));
+        assert_eq!(app.composes.active, None);
+        assert_eq!(app.window.as_ref().unwrap().list_scroll.offset(), 35.0);
+        // a compose window that is not active scrolls its own message in its slot
+        assert!(app.window_pointer(&ctx, compose, &wheel(10.0, 10.0, -20.0)));
+        assert!(app.composes.slots[0].compose.scroll_back < held);
+        assert_eq!(app.composes.active, None, "the wheel does not move the sheet slot");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The shell sends a compose window's touches in window points; the sheet is hit-tested in the pixels it is drawn
+    /// in, so on a 2x screen a click lands on the field drawn under it.
+    #[test]
+    fn a_compose_window_click_in_points_lands_on_its_field_on_a_2x_screen() {
+        let dir = std::env::temp_dir().join(format!("bifrost-mail-compose-2x-{}", std::process::id()));
+        let ctx = ctx_at(&dir, 2.0);
+        let mut app = app_with_account(&ctx);
+        app.with_window(&ctx, |mail| {
+            mail.mail.open_compose(None);
+            true
+        });
+        let id = app.composes.active.expect("a compose window");
+        let (x, y) = field_centre(&app, &ctx.ui, "Subject", 2.0 * COMPOSE_W, 2.0 * COMPOSE_H);
+        for kind in [TouchKind::Down, TouchKind::Up] {
+            app.window_event(&ctx, id, Input::Touch { kind, id: 0, x: x / 2.0, y: y / 2.0, t: 10.0, mods: bifrost_app::ModifierFlags::EMPTY });
+        }
+        app.window_event(&ctx, id, Input::Key(KeyInput::Text("Fundur".into())));
+        assert_eq!(compose_field(&app, "Subject"), "Fundur");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

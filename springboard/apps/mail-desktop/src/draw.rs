@@ -476,6 +476,43 @@ pub fn sheet_layout(ui: &Ui, w: f32, h: f32, sheet: &Sheet, choices: usize) -> S
     SheetLayout { panel: [px, py, pw, ph], fields, cancel, primary, discard, attach, note, files: rows, choices: matched }
 }
 
+/// How many lines of text the message field `r` (pixels) shows.
+fn message_room(ui: &Ui, r: Rect) -> usize {
+    let value_y = r[1] + ui.pt(SPACE_XL);
+    ((r[1] + r[3] - value_y - ui.pt(SPACE_XS)) / ui.pt(BODY_LINE_PT)).floor().max(1.0) as usize
+}
+
+/// The first of `total` message lines the field shows when it holds `room` lines and is scrolled `back` lines up from
+/// the end (clamped, so the top line of the message is as far as it goes).
+pub fn first_shown(total: usize, room: usize, back: usize) -> usize {
+    let at_end = total.saturating_sub(room);
+    at_end - back.min(at_end)
+}
+
+/// `scrollWheel:` on a compose window `w` x `h` pixels: the wheel moved the content `dy` pixels (negative for a wheel
+/// turned down, which shows what is below). The message field scrolls by whole lines, at least one a notch, between
+/// the top of the message and its end. True when it moved.
+pub fn scroll_message(ui: &Ui, compose: &mut Compose, w: f32, h: f32, dy: f32) -> bool {
+    if !dy.is_finite() || dy == 0.0 {
+        return false;
+    }
+    let Some(at) = compose.form.fields.iter().position(|f| f.label == "Message") else { return false };
+    let sheet = Sheet::Compose(compose.clone());
+    let Some(&r) = sheet_layout(ui, w, h, &sheet, 0).fields.get(at) else { return false };
+    let pad = ui.pt(SPACE_S);
+    let measure = |text: &str, style: Style| ui.measure(text, MAC_BODY_PT, style_weight(style));
+    let total = richtext::layout(compose.message(), &compose.styles, r[2] - 2.0 * pad, &measure).len();
+    let most = total.saturating_sub(message_room(ui, r));
+    let line_h = ui.pt(BODY_LINE_PT).max(1.0);
+    let steps = (dy / line_h).round();
+    let steps = if steps == 0.0 { dy.signum() } else { steps };
+    // a wheel turned up (positive) moves the content down: earlier lines come into view
+    let back = (compose.scroll_back.min(most) as f32 + steps).clamp(0.0, most as f32) as usize;
+    let moved = back != compose.scroll_back;
+    compose.scroll_back = back;
+    moved
+}
+
 /// The wrapped text of the open message, kept while the message and the width stay the same.
 pub struct Laid {
     pub uid: u32,
@@ -1182,13 +1219,15 @@ impl MailWindow {
         let caret = ui.pt(1.0).max(1.0);
         let measure = |text: &str, style: Style| ui.measure(text, MAC_BODY_PT, style_weight(style));
         let lines = richtext::layout(compose.message(), &compose.styles, r[2] - 2.0 * pad, &measure);
-        let room = ((r[1] + r[3] - value_y - ui.pt(SPACE_XS)) / line_h).floor().max(1.0) as usize;
-        let first = lines.len().saturating_sub(room);
+        let room = message_room(ui, r);
+        let first = first_shown(lines.len(), room, compose.scroll_back);
+        // scrolled up with the wheel, the end of the message (and the caret) is out of view
+        let at_end = first == lines.len().saturating_sub(room);
         let current = compose.misspelled.get(compose.misspelled_at);
         let (suggested, suggested_at) = compose.proofread_marks();
         let mut end_x = tx;
         let hilite = focused && compose.form.selected();
-        for (k, line) in lines[first..].iter().enumerate() {
+        for (k, line) in lines[first..].iter().take(room).enumerate() {
             let y = value_y + k as f32 * line_h;
             let mut x = tx;
             if hilite {
@@ -1231,7 +1270,7 @@ impl MailWindow {
             }
             end_x = x;
         }
-        if focused {
+        if focused && at_end {
             let cy = value_y + (lines.len() - first).saturating_sub(1) as f32 * line_h;
             s.fill_rect(px(end_x), px(cy), px(caret), px(ui.pt(MAC_BODY_PT)), colors::SYSTEM_BLUE.now());
         }

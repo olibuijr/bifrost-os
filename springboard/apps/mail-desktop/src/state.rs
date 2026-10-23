@@ -364,6 +364,9 @@ pub struct Compose {
     pub proofread: Option<Panel>,
     /// The Message-ID of this message's draft in Drafts; empty until the first save.
     pub draft_id: String,
+    /// How many lines the message field is scrolled up from its end (the scroll wheel, `draw::scroll_message`); 0
+    /// shows the end of the message, where the caret is. Typing scrolls back to the end.
+    pub scroll_back: usize,
 }
 
 impl Compose {
@@ -382,6 +385,7 @@ impl Compose {
             misspelled_at: 0,
             proofread: None,
             draft_id: String::new(),
+            scroll_back: 0,
         };
         compose.styles = vec![Style::default(); compose.message().chars().count()];
         compose

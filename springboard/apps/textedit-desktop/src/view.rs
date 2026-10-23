@@ -186,6 +186,9 @@ pub enum Action {
 
 /// The first menu id of Text Editor's own items. Ids are stable: they are the values a menu sends back.
 const MENU_BASE: u32 = 0x4E00;
+/// The ids of the families (`Action::Font`), one per `Style::font` index 0 to 255, after every other item's id.
+const FONT_IDS: u32 = 0x100;
+const FONT_IDS_END: u32 = FONT_IDS + u8::MAX as u32;
 
 impl Action {
     /// The menu id of this action, or `None` for document commands (they have the controller's ids).
@@ -211,7 +214,8 @@ impl Action {
             Action::FindDone => MENU_BASE + 17,
             Action::FocusFind => MENU_BASE + 18,
             Action::FocusReplace => MENU_BASE + 19,
-            Action::Font(i) => MENU_BASE + 0x20 + i as u32,
+            // every family a document can use (`text::families`, up to 256): ids of their own past the other items
+            Action::Font(i) => MENU_BASE + FONT_IDS + i as u32,
             Action::Align(a) => MENU_BASE + 0x30 + align_index(a),
             Action::Color(i) => MENU_BASE + 0x40 + i as u32,
             Action::Spacing(i) => MENU_BASE + 0x50 + i as u32,
@@ -333,7 +337,6 @@ impl Action {
             17 => Action::FindDone,
             18 => Action::FocusFind,
             19 => Action::FocusReplace,
-            0x20..=0x27 => Action::Font((offset - 0x20) as u8),
             0x30..=0x33 => Action::Align(align_of_index(offset - 0x30)),
             0x40..=0x47 => Action::Color((offset - 0x40) as u8),
             0x50..=0x54 => Action::Spacing((offset - 0x50) as u8),
@@ -430,6 +433,7 @@ impl Action {
             0xfc => Action::ShowColors,
             0xfd => Action::FontsDone,
             0xfe => Action::ColorsDone,
+            FONT_IDS..=FONT_IDS_END => Action::Font((offset - FONT_IDS) as u8),
             _ => return None,
         })
     }
@@ -575,10 +579,11 @@ pub fn measure_in<'a>(ui: &'a Ui, aspects: &'a [f32], fit: f32) -> impl Fn(char,
     move |ch: char, style: &Style| if ch == OBJECT { object_box(aspects, style, fit).0 } else { char_width(ui, ch, style) }
 }
 
-/// The width of one character in a style, in points.
+/// The width of one character in a style, in points, in the style's family (`family_font`), as the page draws it.
 pub fn char_width(ui: &Ui, ch: char, style: &Style) -> f32 {
     let mut buf = [0u8; 4];
-    ui.measure(ch.encode_utf8(&mut buf), drawn_size(style), weight_of(style)) / ui.s
+    let text: &str = ch.encode_utf8(&mut buf);
+    crate::family_font::with_family(ui, style.font, text, |u| u.measure(text, drawn_size(style), weight_of(style)) / u.s)
 }
 
 /// How much smaller superscript and subscript text is drawn.
@@ -1122,12 +1127,13 @@ fn flush_run(c: &mut dyn Canvas, ui: &Ui, text: &str, style: &Style, x: f32, y: 
         -1 => style.size * 0.3,
         _ => 0.0,
     };
-    let width = ui.measure(&shown, size, weight_of(style)) / ui.s;
+    // the run's own family, measured and drawn alike (the layout measured it the same way, `char_width`)
+    let (width, img) = crate::family_font::with_family(ui, style.font, &shown, |u| (u.measure(&shown, size, weight_of(style)) / u.s, u.text(&shown, size, weight_of(style), color)));
     if style.highlight > 0 {
         let plate = Rect { x, y, w: width, h: line_height };
         c.fill_rect(to_px(ui, plate), highlight_color(style.highlight));
     }
-    text_at(c, ui, &shown, size, weight_of(style), color, x, y + shift);
+    blit(c, &img, ui.pt(x), ui.pt(y + shift));
     if style.underline || style.link != 0 {
         let rule = Rect { x, y: y + line_height.min(style.size * 1.25) - 2.0, w: width, h: 1.0 };
         c.fill_rect(to_px(ui, rule), color);
@@ -1328,6 +1334,14 @@ mod tests {
             let id = a.id().expect("own action has an id");
             assert_eq!(Action::from_id(id), Some(a));
         }
+        // every family index has an id of its own, after all the other items' ids
+        let others: Vec<u32> = all.iter().filter(|a| !matches!(a, Action::Font(_))).filter_map(|a| a.id()).collect();
+        for i in [0u8, 3, 8, 9, 100, 255] {
+            let id = Action::Font(i).id().unwrap();
+            assert_eq!(Action::from_id(id), Some(Action::Font(i)));
+            assert!(others.iter().all(|other| *other < id), "family {i}");
+        }
+        assert_eq!(Action::from_id(MENU_BASE + FONT_IDS_END + 1), None);
         assert_eq!(Action::Document(item::NEW).id(), None, "document commands use the controller's ids");
         assert_eq!(Action::from_id(item::SAVE), None);
     }

@@ -916,6 +916,23 @@ impl MailWindow {
         }
     }
 
+    /// `scrollWheel:` at (`x`, `y`): the wheel moved the content `dy` pixels (negative for a wheel turned down, which
+    /// shows what is below). The pane under the pointer scrolls (the message list or the reader); with a compose sheet
+    /// in the slot, its message scrolls. True when something moved.
+    pub fn wheel(&mut self, ui: &Ui, x: f32, y: f32, dy: f32) -> bool {
+        let (w, h) = (self.w as f32, self.h as f32);
+        let moved = if self.mail.sheet.is_none() {
+            let region = self.region(ui, x, y);
+            self.scroller(region).is_some_and(|scroll| scroll.wheel(dy))
+        } else if let Some(Sheet::Compose(compose)) = &mut self.mail.sheet {
+            crate::draw::scroll_message(ui, compose, w, h, dy)
+        } else {
+            false
+        };
+        self.dirty |= moved;
+        moved
+    }
+
     pub fn key(&mut self, ctx: &Ctx, k: KeyInput) -> bool {
         if let Some((key, mods)) = k.as_chord() {
             return self.chord(&ctx.ui, key, mods);

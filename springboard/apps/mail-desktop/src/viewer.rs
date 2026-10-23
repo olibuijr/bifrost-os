@@ -60,8 +60,11 @@ impl Viewer {
         Viewer { id, snapshot, scroll: Scroller::new(), labels: TextCache::default(), laid: None }
     }
 
-    /// Scrolls the text with a touch. Returns true when the window needs a new frame.
-    pub fn touch(&mut self, kind: TouchKind, y: f32, t: f64) -> bool {
+    /// Scrolls the text with a touch at window point `y`. The shell sends an extra window's touches in points
+    /// (`WindowTouch`), and the scroller counts the pixels the viewer draws in, `scale` pixels a point, so the text
+    /// follows the finger one to one. Returns true when the window needs a new frame.
+    pub fn touch(&mut self, kind: TouchKind, y: f32, scale: f32, t: f64) -> bool {
+        let y = y * scale;
         match kind {
             TouchKind::Down => {
                 self.scroll.down(y, t);
@@ -76,6 +79,12 @@ impl Viewer {
                 true
             }
         }
+    }
+
+    /// `scrollWheel:`: the wheel moved the text `dy` window points (negative for a wheel turned down, which shows what
+    /// is below), `scale` pixels a point. True when the text moved.
+    pub fn wheel(&mut self, dy: f32, scale: f32) -> bool {
+        self.scroll.wheel(dy * scale)
     }
 
     /// Paints the viewer into `s`: the header lines, the files, and the body below them.
@@ -161,6 +170,35 @@ mod tests {
         let spec = Snapshot { subject: "Lunch".into(), ..Snapshot::default() }.spec();
         assert_eq!(spec.title, "Lunch");
         assert_eq!((spec.width, spec.height), (VIEWER_W, VIEWER_H));
+    }
+
+    #[test]
+    fn a_drag_in_window_points_scrolls_the_pixel_text_one_to_one() {
+        // a 2x screen: a drag of 100 points moves the text 200 pixels, less the scroller's start-of-drag slop
+        let mut viewer = Viewer::new(WindowId(1), Snapshot::default());
+        viewer.scroll.set_max(1000.0);
+        viewer.touch(TouchKind::Down, 300.0, 2.0, 0.0);
+        viewer.touch(TouchKind::Move, 200.0, 2.0, 16.0);
+        let scaled = viewer.scroll.offset();
+        let mut flat = Viewer::new(WindowId(2), Snapshot::default());
+        flat.scroll.set_max(1000.0);
+        flat.touch(TouchKind::Down, 300.0, 1.0, 0.0);
+        flat.touch(TouchKind::Move, 200.0, 1.0, 16.0);
+        assert!(scaled > 150.0, "{scaled}");
+        assert!((scaled - flat.scroll.offset() - 100.0).abs() < 0.5, "the extra 100 points are 200 pixels: {scaled}");
+    }
+
+    #[test]
+    fn the_wheel_scrolls_the_viewer_by_its_travel_in_pixels() {
+        let mut viewer = Viewer::new(WindowId(1), Snapshot::default());
+        assert!(!viewer.wheel(-20.0, 2.0), "nothing to scroll yet");
+        viewer.scroll.set_max(500.0);
+        assert!(viewer.wheel(-20.0, 2.0));
+        assert_eq!(viewer.scroll.offset(), 40.0, "20 points down is 40 pixels on a 2x screen");
+        assert!(viewer.wheel(10.0, 2.0));
+        assert_eq!(viewer.scroll.offset(), 20.0);
+        viewer.wheel(-9000.0, 2.0);
+        assert_eq!(viewer.scroll.offset(), 500.0, "the end of the text");
     }
 
     #[test]

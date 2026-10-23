@@ -6,7 +6,7 @@
 //! This file is the model (what the bar has, what a press does, the menu rows) and the drawing of the slots the app
 //! draws itself. The window (`main.rs`) hit-tests with `hit`, asks `press` what to do and opens the menus.
 
-use crate::text::{Align, ListKind, COLORS, FAMILIES, SIZES, SPACINGS};
+use crate::text::{families, Align, ListKind, COLORS, FAMILIES, SIZES, SPACINGS};
 use crate::view::{blit, family_name, spacing_label, text_color, Action, Geometry, Status, FORMAT_H};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::prefs_layout::m;
@@ -173,9 +173,34 @@ pub fn hit(layout: &ToolbarLayout, x: f32, y: f32) -> Option<Hit> {
     layout.hit(x, y).map(Hit::Item)
 }
 
-/// The font family menu.
+/// The font family menu: every family a document can use (`text::families`, the base ones and the installed ones).
 pub fn font_rows() -> Vec<Row> {
-    (0..FAMILIES.len() as u8).map(|i| Row::new(family_name(i), Action::Font(i))).collect()
+    family_rows(families().len())
+}
+
+/// The rows for the first `count` families. A menu holds at most `MAX_MENU_ROWS` rows (the context menu's wire
+/// limit), so past that the last rows are a separator and Show Fonts, whose panel lists every family.
+fn family_rows(count: usize) -> Vec<Row> {
+    let count = count.min(256);
+    let row = |i: usize| Row::new(family_name(i as u8), Action::Font(i as u8));
+    if count <= MAX_MENU_ROWS {
+        return (0..count).map(row).collect();
+    }
+    let mut rows: Vec<Row> = (0..MAX_MENU_ROWS - 2).map(row).collect();
+    rows.push(Row::separator());
+    rows.push(Row::new("Show Fonts\u{2026}", Action::ShowFonts));
+    rows
+}
+
+/// The families Format > Font lists: the base ones, and the selection's family `current` when it is an installed one,
+/// so its check mark shows. Every family is in the Fonts panel and the format bar's pop-up: a menu of the menu bar
+/// carries at most `proto::MAX_APP_MENU_ITEMS` items, and the Format menu fills them.
+pub fn font_menu_families(current: u8) -> Vec<u8> {
+    let mut shown: Vec<u8> = (0..FAMILIES.len() as u8).collect();
+    if (current as usize) >= FAMILIES.len() && (current as usize) < families().len() {
+        shown.push(current);
+    }
+    shown
 }
 
 /// The style menu: the four faces.
@@ -370,6 +395,32 @@ mod tests {
     use crate::text::Style;
     use crate::view::geometry;
     use bifrost_app::kit::Font;
+
+    #[test]
+    fn the_family_pop_up_lists_every_family_and_past_a_menu_ends_with_show_fonts() {
+        let rows = family_rows(12);
+        assert_eq!(rows.len(), 12, "more than the eight families menu ids once allowed");
+        assert_eq!(rows[11].action, Some(Action::Font(11)));
+        assert_eq!(family_rows(MAX_MENU_ROWS).len(), MAX_MENU_ROWS);
+        let many = family_rows(200);
+        assert_eq!(many.len(), MAX_MENU_ROWS, "the context menu's limit");
+        assert_eq!(many[MAX_MENU_ROWS - 3].action, Some(Action::Font(MAX_MENU_ROWS as u8 - 3)));
+        assert_eq!(many[MAX_MENU_ROWS - 2].action, None, "a separator");
+        assert_eq!(many[MAX_MENU_ROWS - 1].action, Some(Action::ShowFonts));
+        // every row's action has a menu id the app reads back
+        for row in &many {
+            if let Some(action) = row.action {
+                assert_eq!(Action::from_id(action.id().unwrap()), Some(action));
+            }
+        }
+    }
+
+    #[test]
+    fn format_font_lists_the_base_families_and_an_installed_selection() {
+        assert_eq!(font_menu_families(1), vec![0, 1, 2]);
+        // tests see the base families only: an index past them is no family, so nothing is added
+        assert_eq!(font_menu_families(9), vec![0, 1, 2]);
+    }
 
     fn ui() -> Ui {
         let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice());
