@@ -1080,7 +1080,8 @@ fn add_list_while_a_reminders_details_are_open_makes_a_list() {
     let id = app.data.items[0].id;
     app.screen = Screen::Items;
     app.rebuild(&ui);
-    app.activate(&ui, Target::Row(0), 10.0);
+    let row = app.rows.iter().position(|r| matches!(r, Row::Item { .. })).expect("the reminder's row");
+    app.activate(&ui, Target::Row(row), 10.0);
     assert_eq!(app.editor.as_ref().and_then(|e| e.id), Some(id), "Details are open");
     let lists = app.data.lists.len();
     app.activate(&ui, Target::NewList, 11.0);
