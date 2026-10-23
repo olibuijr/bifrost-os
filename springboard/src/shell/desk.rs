@@ -338,6 +338,9 @@ pub struct Desk {
     pub(super) dock_bounce:Vec<(usize,f64)>,
     /// the outer size each app's window had when it was last closed (the window comes back at it when reopened)
     pub(super) closed_sizes:std::collections::HashMap<AppId,(i32,i32)>,
+    /// where each app's window was when it was last closed: a window opened again comes back there (W2-26), as an app's
+    /// autosaved frame does, instead of at the window server's next cascade position
+    pub(super) closed_origins:std::collections::HashMap<AppId,(i32,i32)>,
     /// the last title-bar press (window, time in ms): a second press within the Double-Click Speed gap zooms
     last_title: Option<(AppId, f64)>,
     pub(super) dock_hide_at:Option<f64>,
@@ -733,9 +736,19 @@ impl Desk {
         let (w, h) = (size.0.min(a.w), size.1.min(a.h));
         let step = (m.title as f32 * 1.1) as i32;
         let n = (self.opened % 8) as i32;
-        self.opened += 1;
-        let x = (a.x + (a.w - w) / 2 + (n - 3) * step).clamp(a.x, (a.x + a.w - w).max(a.x));
-        let y = (a.y + (a.h - h) / 3 + n * step / 2).clamp(a.y, (a.y + a.h - h).max(a.y));
+        let (x, y) = match self.closed_origins.get(&app) {
+            // a window opened again comes back where it was closed (W2-26); its toplevel asks to map there (`placed`)
+            Some(&(x, y)) => {
+                self.placed.insert(app);
+                (x, y)
+            }
+            None => {
+                self.opened += 1;
+                (a.x + (a.w - w) / 2 + (n - 3) * step, a.y + (a.h - h) / 3 + n * step / 2)
+            }
+        };
+        let x = x.clamp(a.x, (a.x + a.w - w).max(a.x));
+        let y = y.clamp(a.y, (a.y + a.h - h).max(a.y));
         let r = Rect { x, y, w, h };
         let at = self.band_top(app);
         self.wins.insert(at, Win { app, r, maximized: false, minimized: false, full: false, restore: r });
@@ -845,7 +858,8 @@ impl Desk {
         // the frame the user left the window at (the zoomed one goes back to the frame before zoom)
         let r = if w.maximized { w.restore } else { w.r };
         self.closed_sizes.insert(w.app, (r.w, r.h));
-        // a window opened again is a new window: the window server places it
+        self.closed_origins.insert(w.app, (r.x, r.y));
+        // the toplevel is gone; `open` asks the next one to map where this one was (`closed_origins`)
         self.placed.remove(&w.app);
         self.release_app_buffers(w.app);
         self.collapsed.remove(&w.app);
@@ -3890,6 +3904,34 @@ mod tests {
         d.toggle_zoom(&m, i);
         d.close(0);
         assert_eq!(d.closed_sizes.get(&AppId::Photos), Some(&(800, 500)));
+    }
+
+    /// W2-26: a window closed and opened again comes back at the frame it was closed with, and its toplevel asks the
+    /// window server to map it there; a window never closed is cascaded as before.
+    #[test]
+    fn a_reopened_window_comes_back_where_it_was_closed() {
+        let m = metrics();
+        let mut d = Desk::new();
+        let i = d.open(&m, AppId::Settings, (700, 600));
+        let a = Desk::area(&m);
+        let at = Rect { x: a.x + 40, y: a.y + 30, w: 700, h: 600 };
+        d.place(&m, i, at);
+        d.close(i);
+        assert!(!d.placed.contains(&AppId::Settings), "the closed toplevel is gone");
+        let i = d.open(&m, AppId::Settings, (700, 600));
+        assert_eq!((d.wins[i].r.x, d.wins[i].r.y), (at.x, at.y), "back where it was");
+        assert!(d.placed.contains(&AppId::Settings), "its new toplevel maps there (origin_hint)");
+        assert_eq!(origin_hint(&d.placed, AppId::Settings, d.wins[i].r.x, d.wins[i].r.y), Some((at.x, at.y)));
+        // a remembered spot off the work area (a smaller screen now) is held inside it
+        d.close(i);
+        d.closed_origins.insert(AppId::Settings, (a.x + a.w + 500, a.y - 200));
+        let i = d.open(&m, AppId::Settings, (700, 600));
+        let r = d.wins[i].r;
+        assert!(r.x >= a.x && r.x + r.w <= a.x + a.w && r.y >= a.y, "inside the work area");
+        // a window never closed is cascaded and asks nothing
+        let j = d.open(&m, AppId::Photos, (500, 400));
+        let p = d.wins[j].app;
+        assert!(!d.placed.contains(&p));
     }
 
     #[test]
