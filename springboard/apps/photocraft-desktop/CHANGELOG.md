@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.13.0
+
+- Upstream photocraft v0.13.0.
+  > [!NOTE]
+  > **FreeBSD aarch64 is dropped from this release.** We had to cut releases, and we cannot build this target within the 5-hour CI limit for any of the Craft apps, so we are dropping it for now. This is a known blocker, flagged for a future fix in storytold/craft-common-actions#39. FreeBSD x86_64 and every other platform are included.
+  ## What's Changed
+  * Fix lag when dragging a floating selection with the Move tool by @robertoffmoura in https://github.com/storytold/photocraft/pull/6318
+  * Open GIMP XCF files: layers, groups, masks, blend modes, channels and selection by @diegochagas in https://github.com/storytold/photocraft/pull/2945
+
 ## 0.12.0
 
 - Upstream photocraft v0.12.0.
