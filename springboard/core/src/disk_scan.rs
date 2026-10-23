@@ -45,6 +45,22 @@ pub fn unescape(text: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
+/// Each device's main mount point. A device mounted more than once (btrfs subvolumes at `/`, `/home`, `/var/log`, or a
+/// bind mount) is shown at its shallowest point, the first listed among equals, so the system volume reads as `/`.
+pub fn primary_mounts(mounts_text: &str) -> HashMap<String, String> {
+    let depth = |p: &str| p.split('/').filter(|c| !c.is_empty()).count();
+    let mut out: HashMap<String, String> = HashMap::new();
+    for (dev, point) in parse_mounts(mounts_text) {
+        match out.get(&dev) {
+            Some(have) if depth(have) <= depth(&point) => {}
+            _ => {
+                out.insert(dev, point);
+            }
+        }
+    }
+    out
+}
+
 fn read_trim(path: &Path) -> String {
     fs::read_to_string(path).map(|s| s.trim().to_string()).unwrap_or_default()
 }
@@ -68,7 +84,7 @@ fn entry(dir: &Path, name: &str, parent: Option<&str>, removable: bool, mounts: 
 
 /// Reads every disk under `sys_block` and its partitions after it, sorted by name. `mounts_text` is `/proc/mounts`.
 pub fn scan(sys_block: &Path, mounts_text: &str) -> Vec<Entry> {
-    let mounts: HashMap<String, String> = parse_mounts(mounts_text).into_iter().collect();
+    let mounts = primary_mounts(mounts_text);
     let Ok(read) = fs::read_dir(sys_block) else { return Vec::new() };
     let mut names: Vec<String> = read.filter_map(Result::ok).map(|e| e.file_name().to_string_lossy().into_owned()).collect();
     names.sort();
@@ -165,6 +181,15 @@ mod tests {
         assert_eq!(volumes[1].parent.as_deref(), Some("nvme0n1"));
         assert_eq!((volumes[1].fs_type.as_deref(), volumes[1].label.as_deref()), (Some("vfat"), Some("EFI")));
         assert_eq!(volumes[1].disk.mount_point.as_deref(), Some("/boot"));
+    }
+
+    #[test]
+    fn a_device_mounted_many_times_shows_its_shallowest_mount_point() {
+        let table = "/dev/nvme0n1p2 /var/log btrfs rw 0 0\n/dev/nvme0n1p2 / btrfs rw 0 0\n/dev/nvme0n1p2 /home btrfs rw 0 0\n\
+                     /dev/sdb1 /run/media/a vfat rw 0 0\n/dev/sdb1 /run/media/b vfat rw 0 0\n";
+        let m = primary_mounts(table);
+        assert_eq!(m["/dev/nvme0n1p2"], "/");
+        assert_eq!(m["/dev/sdb1"], "/run/media/a", "the first listed among equals");
     }
 
     #[test]

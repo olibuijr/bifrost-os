@@ -145,6 +145,10 @@ impl DiskUtility {
             return false;
         }
         let Some(node) = self.selected_node().cloned() else { return false };
+        if self.selected_is_system() {
+            self.error = Some(format!("{} holds the running system, so it cannot be restored over while it is in use.", model::display_name(&node)));
+            return true;
+        }
         let picks = self.restore_sources(&node);
         if picks.is_empty() {
             self.error = Some(format!("No volume is small enough to restore onto {}.", node.name));
