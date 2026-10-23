@@ -304,6 +304,15 @@ impl NotesApp {
         cut
     }
 
+    /// Edit > Copy (or Cut) in a note window: its selection goes to the pasteboard as the main editor's does.
+    fn copy_window_selection(&mut self, ctx: &Ctx, window: WindowId, cut: bool) -> bool {
+        let now = bifrost_app::proto::sys::now_ms();
+        let Some(n) = &mut self.notes else { return false };
+        let Some(markdown) = n.window_take_selection(&ctx.ui, window, cut, now) else { return false };
+        system::copy(ctx, &markdown);
+        cut
+    }
+
     /// File > Import to Notes (Cmd+O): the open panel answers in `document`.
     fn open_import(&mut self, ctx: &Ctx) {
         self.import = Some(ctx.open_document(DocMode::Read, "Import to Notes", &["public.text", "public.html", "public.rtf"]));
@@ -448,8 +457,21 @@ impl App for NotesApp {
         vec![file, AppMenu { title: "Note".into(), items: note }, view_menu(n), format_menu(n), float]
     }
 
-    fn commands(&self, _ctx: &Ctx) -> Commands {
+    fn commands(&self, ctx: &Ctx) -> Commands {
         let Some(n) = &self.notes else { return Commands::default() };
+        // a note window that has the keys edits its own text: the Edit commands follow its selection and history
+        let key = ctx.key_window();
+        if !key.is_main() && n.windows.note_of(key).is_some() {
+            let (undo, redo) = n.window_can_undo_redo(key);
+            let selected = n.window_has_selection(key);
+            return Commands::default()
+                .with(Command::Undo, undo)
+                .with(Command::Redo, redo)
+                .with(Command::Cut, selected)
+                .with(Command::Copy, selected)
+                .with(Command::Paste, bifrost_app::kit::clipboard::text().is_some_and(|s| !s.is_empty()))
+                .with(Command::SelectAll, true);
+        }
         let (undo, redo) = n.can_undo_redo();
         // the note or a focused field takes the text commands (Edit menu, Cmd+X, C, V, A)
         let text = n.is_editing() || n.field_focused();
@@ -899,24 +921,69 @@ impl App for NotesApp {
     }
 
     /// A note window draws its note (`Notes::draw_window`); any other extra window draws nothing.
-    fn draw_window(&mut self, ctx: &Ctx, window: WindowId, s: &mut Surface, _t: f64) -> Damage {
+    fn draw_window(&mut self, ctx: &Ctx, window: WindowId, s: &mut Surface, t: f64) -> Damage {
         if let Some(n) = &mut self.notes {
-            n.draw_window(s, &ctx.ui, window);
+            n.draw_window(s, &ctx.ui, window, t);
         }
         let mut d = Damage::new(s.w, s.h);
         d.all();
         d
     }
 
-    /// A touch in a note window focuses it (the Window menu's Float on Top acts on it). The window takes no typing yet.
+    /// A note window edits its note as the main editor does on the desktop: the mouse places the caret and selects
+    /// (a press also focuses the window, which the Window menu's Float on Top acts on), the keys the shell sends to the
+    /// key window type and run the editing bindings, and the Edit commands (Cut, Copy, Paste, Select All, Undo, Redo
+    /// and their Cmd chords) act on its text.
     fn window_event(&mut self, ctx: &Ctx, window: WindowId, ev: Input) -> bool {
         if window.is_main() {
             return self.event(ctx, ev);
         }
-        if let (Input::Touch { kind: TouchKind::Down, .. }, Some(n)) = (&ev, &mut self.notes) {
-            n.windows.focus(window);
+        let now = bifrost_app::proto::sys::now_ms();
+        let Some(n) = &mut self.notes else { return false };
+        if n.windows.note_of(window).is_none() {
+            return false;
         }
-        false
+        match ev {
+            Input::Touch { kind, x, y, t, mods, .. } => {
+                n.set_pointer_shift(mods.contains(bifrost_app::proto::ModifierFlags::SHIFT));
+                let press = match kind {
+                    TouchKind::Down => note_windows::Press::Down,
+                    TouchKind::Move => note_windows::Press::Move,
+                    TouchKind::Up | TouchKind::Cancel => note_windows::Press::Up,
+                };
+                n.window_pointer(&ctx.ui, window, press, x, y, t)
+            }
+            Input::Command(command) => match command {
+                Command::Cut => self.copy_window_selection(ctx, window, true),
+                Command::Copy => self.copy_window_selection(ctx, window, false),
+                Command::Paste => n.window_paste(&ctx.ui, window, now),
+                Command::SelectAll => n.window_select_all(window),
+                Command::Undo => n.window_undo(&ctx.ui, window, false, now),
+                Command::Redo => n.window_undo(&ctx.ui, window, true, now),
+            },
+            Input::Key(k) => {
+                if let Some((key, mods)) = k.as_chord() {
+                    use bifrost_app::proto::{CHORD_ALT, CHORD_CTRL, CHORD_META, CHORD_SHIFT};
+                    // Copy and Cut put the window's selection on the pasteboard, as in the main editor
+                    if (key == KEY_C || key == KEY_X) && mods & (CHORD_CTRL | CHORD_META) != 0 && mods & (CHORD_SHIFT | CHORD_ALT) == 0 {
+                        return self.copy_window_selection(ctx, window, key == KEY_X);
+                    }
+                    return n.window_chord(&ctx.ui, window, key, mods, now);
+                }
+                let out = match k {
+                    KeyInput::Text(s) => Out::Text(s),
+                    KeyInput::Code(8) => Out::Backspace,
+                    KeyInput::Code(13) => Out::Enter,
+                    KeyInput::Code(37) => Out::Named("Left"),
+                    KeyInput::Code(38) => Out::Named("Up"),
+                    KeyInput::Code(39) => Out::Named("Right"),
+                    KeyInput::Code(40) => Out::Named("Down"),
+                    KeyInput::Code(_) => return false,
+                };
+                n.window_key(&ctx.ui, window, out, now)
+            }
+            _ => false,
+        }
     }
 
     /// The shell or the app closed a note window: it is no longer bound to its note.

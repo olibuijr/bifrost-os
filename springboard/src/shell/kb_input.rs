@@ -102,7 +102,8 @@ pub fn binding_of(sc: Shortcut) -> Option<usize> {
         Shortcut::AppSwitch => 1,
         // Cmd+Q was Close Window's chord before it quit the app, so it keeps that switch
         Shortcut::Close | Shortcut::Quit => 2,
-        Shortcut::Minimize => 3,
+        // Cmd+H was Minimize Window's chord before it hid the app, so Hide and Hide Others keep that switch
+        Shortcut::Minimize | Shortcut::Hide | Shortcut::HideOthers => 3,
         Shortcut::FullScreen => 4,
         Shortcut::Tile(_) => 5,
         Shortcut::CycleWindow | Shortcut::CycleWindowBack => 6,

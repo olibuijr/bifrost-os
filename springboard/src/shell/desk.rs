@@ -338,6 +338,11 @@ pub struct Desk {
     pub(super) dock_bounce:Vec<(usize,f64)>,
     /// the outer size each app's window had when it was last closed (the window comes back at it when reopened)
     pub(super) closed_sizes:std::collections::HashMap<AppId,(i32,i32)>,
+    /// the windows Hide put away (Cmd+H, Hide Others): they are `minimized` but not in the Dock's minimized section, and
+    /// they come back with Show All or when their app is activated (`raise`)
+    pub(super) hidden: Vec<AppId>,
+    /// the window server's toplevels (native and Linux apps) Hide minimized, so Show All can bring them back
+    pub(super) hidden_foreign: Vec<u32>,
     /// where each app's window was when it was last closed: a window opened again comes back there (W2-26), as an app's
     /// autosaved frame does, instead of at the window server's next cascade position
     pub(super) closed_origins:std::collections::HashMap<AppId,(i32,i32)>,
@@ -756,13 +761,70 @@ impl Desk {
         self.wins.iter().rev().find(|w| !w.minimized)
     }
 
-    /// Brings window `i` to the front (and shows it); returns its new index.
+    /// Brings window `i` to the front (and shows it); returns its new index. A hidden app comes back whole: raising one
+    /// of its windows (the Dock, Cmd+Tab, the Window menu) shows every window Hide put away, as activating a hidden app does.
     pub fn raise(&mut self, i: usize) -> usize {
+        let parent = self.wins[i].app.parent();
+        if self.hidden.iter().any(|a| a.parent() == parent) {
+            self.unhide(|a| a.parent() == parent);
+        }
         let mut w = self.wins.remove(i);
         w.minimized = false;
         let at = self.band_top(w.app);
         self.wins.insert(at, w);
         at
+    }
+
+    /// Hide (Cmd+H, the App menu's Hide): every shown window of the app `parent` goes away at once, with no minimize
+    /// effect and no Dock thumbnail; the app stays running and comes back with `unhide` or when one of its windows is raised.
+    /// Returns whether a window was hidden.
+    pub(super) fn hide_app(&mut self, parent: AppId) -> bool {
+        self.hide_where(|a| a.parent() == parent)
+    }
+
+    /// Hide Others (Option+Cmd+H): every app but `keep` (a parent id; None hides every app's windows) is hidden.
+    pub(super) fn hide_others(&mut self, keep: Option<AppId>) -> bool {
+        self.hide_where(|a| Some(a.parent()) != keep)
+    }
+
+    fn hide_where(&mut self, pick: impl Fn(AppId) -> bool) -> bool {
+        let mut any = false;
+        for w in self.wins.iter_mut().filter(|w| !w.minimized && pick(w.app)) {
+            w.minimized = true;
+            if !self.hidden.contains(&w.app) {
+                self.hidden.push(w.app);
+            }
+            any = true;
+        }
+        any
+    }
+
+    /// Show All: every window Hide put away is shown again, where it was in the stack.
+    pub(super) fn unhide_all(&mut self) {
+        self.unhide(|_| true);
+    }
+
+    fn unhide(&mut self, pick: impl Fn(AppId) -> bool) {
+        let (back, keep): (Vec<AppId>, Vec<AppId>) = self.hidden.iter().partition(|a| pick(**a));
+        self.hidden = keep;
+        for w in self.wins.iter_mut().filter(|w| back.contains(&w.app)) {
+            w.minimized = false;
+        }
+    }
+
+    /// Whether the window of `app` is hidden (put away by Hide, not minimized to the Dock).
+    pub(super) fn is_hidden(&self, app: AppId) -> bool {
+        self.hidden.contains(&app) && self.index_of(app).is_some_and(|i| self.wins[i].minimized)
+    }
+
+    /// Whether any window is hidden now (Show All has something to show).
+    pub(super) fn any_hidden(&self) -> bool {
+        self.wins.iter().any(|w| w.minimized && self.hidden.contains(&w.app))
+    }
+
+    /// Whether a window of an app other than `parent` is on screen (Hide Others has something to hide).
+    pub(super) fn others_shown(&self, parent: Option<AppId>) -> bool {
+        self.wins.iter().any(|w| !w.minimized && Some(w.app.parent()) != parent)
     }
 
     /// Whether the windows of `app` float.
@@ -1858,7 +1920,7 @@ impl Shell {
         self.desk_fx_start(app, FxCall::Minimize, t);
         // its Dock thumbnail: one picture, asked for while the window server still has it on screen
         self.dock_shot(app, t);
-        if let Some(d) = self.desk.as_mut() { d.wins[i].minimized = true; }
+        if let Some(d) = self.desk.as_mut() { d.wins[i].minimized = true; d.hidden.retain(|a| *a != app); }
         self.desk_refocus();
     }
 
@@ -1955,7 +2017,7 @@ impl Shell {
         if std::env::var_os("SPRINGBOARD_WAYLAND").is_some() { list.push(apps().len()); }
         // sections: pinned, then recents (running, not kept), then minimized windows and the Trash
         list.sort_by_key(|&i| self.dock_section(i));
-        list.extend(desk.wins.iter().enumerate().filter(|(_, w)| self.overview.user_minimized(w)).map(|(wi, _)| super::desktop_dock::DOCK_MIN_BASE - wi));
+        list.extend(desk.wins.iter().enumerate().filter(|(_, w)| self.overview.user_minimized(w) && !desk.is_hidden(w.app)).map(|(wi, _)| super::desktop_dock::DOCK_MIN_BASE - wi));
         let ui = &self.ui;
         let icon = ui.pt(self.dock_preferences().size).round() as i32;
         let pad = ui.pt(DOCK_PAD_PT).round() as i32;
@@ -3980,6 +4042,45 @@ mod tests {
         let r = d.wins[i].r;
         assert!(r.x >= a.x && r.y >= a.y && r.x + r.w <= a.x + a.w && r.y + r.h <= a.y + a.h, "{r:?}");
         assert!(!d.wins[i].maximized);
+    }
+
+    #[test]
+    fn hide_puts_away_a_whole_app_and_raising_it_brings_it_back() {
+        let m = metrics();
+        let mut d = Desk::new();
+        d.open(&m, AppId::Photos, (900, 600));
+        d.open(&m, AppId::External(3), (900, 600));
+        d.open(&m, AppId::ExternalWindow(3, 7), (400, 300));
+        d.open(&m, AppId::Terminal, (900, 600));
+        assert!(d.hide_app(AppId::External(3)), "the app had windows to hide");
+        assert!(d.is_hidden(AppId::External(3)) && d.is_hidden(AppId::ExternalWindow(3, 7)), "its extra window goes with it");
+        assert!(!d.is_hidden(AppId::Photos) && !d.is_hidden(AppId::Terminal));
+        assert!(!d.hide_app(AppId::External(3)), "nothing left to hide");
+        assert!(d.others_shown(Some(AppId::Terminal)), "Photos is still shown");
+        // raising one of its windows shows the whole app again
+        let i = d.index_of(AppId::External(3)).unwrap();
+        d.raise(i);
+        assert!(!d.any_hidden(), "the extra window came back too");
+        assert!(d.hidden.is_empty());
+    }
+
+    #[test]
+    fn hide_others_keeps_the_front_app_and_unhide_all_restores_the_rest() {
+        let m = metrics();
+        let mut d = Desk::new();
+        d.open(&m, AppId::Photos, (900, 600));
+        d.open(&m, AppId::Terminal, (900, 600));
+        d.open(&m, AppId::Settings, (900, 600));
+        let i = d.index_of(AppId::Photos).unwrap();
+        d.wins[i].minimized = true; // minimized by the user: not hidden, and Show All leaves it in the Dock
+        assert!(d.hide_others(Some(AppId::Settings)));
+        assert!(d.is_hidden(AppId::Terminal) && !d.is_hidden(AppId::Settings));
+        assert!(!d.is_hidden(AppId::Photos), "a minimized window is not hidden");
+        assert!(!d.others_shown(Some(AppId::Settings)));
+        d.unhide_all();
+        assert!(!d.wins[d.index_of(AppId::Terminal).unwrap()].minimized, "Terminal is back");
+        assert!(d.wins[d.index_of(AppId::Photos).unwrap()].minimized, "the minimized window stays in the Dock");
+        assert!(!d.any_hidden());
     }
 
     #[test]

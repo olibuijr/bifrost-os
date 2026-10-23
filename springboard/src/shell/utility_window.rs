@@ -28,6 +28,25 @@ pub enum Kind {
     ForceQuit,
     /// System menu > Log Out and Shift+Cmd+Q: asks first
     LogOut,
+    /// an app's About panel (the application menu's About <App>): its icon, name, version and summary (`AppAbout`)
+    AboutApp,
+}
+
+/// What an app's About panel shows (the standard About panel of the application menu).
+#[derive(Clone, Default)]
+pub struct AppAbout {
+    pub name: String,
+    /// the version string; the panel shows "Version <version>", nothing when empty
+    pub version: String,
+    /// the app's one-line description, wrapped under the version; nothing when empty
+    pub summary: String,
+    pub icon: Option<Image>,
+}
+
+/// The second line of an About panel: "Version 1.2", or nothing for an app with no version.
+pub fn about_version_line(version: &str) -> Option<String> {
+    let v = version.trim();
+    (!v.is_empty()).then(|| format!("Version {v}"))
 }
 
 /// What a Force Quit row ends.
@@ -91,6 +110,8 @@ pub struct UtilityWindow {
     pub facts: Facts,
     /// the signed-in account's full name, for the Log Out question
     pub user: String,
+    /// the app an About panel (`Kind::AboutApp`) is for
+    pub app: Option<AppAbout>,
     /// how far the card was dragged from the centre, in px
     offset: (f32, f32),
     /// the last pointer position of a title-bar drag
@@ -138,7 +159,7 @@ pub fn about_title(f: &Facts) -> &str {
 
 impl UtilityWindow {
     pub fn new(kind: Kind) -> Self {
-        UtilityWindow { kind, entries: Vec::new(), selected: None, facts: Facts::default(), user: String::new(), offset: (0., 0.), drag: None, pressed: None }
+        UtilityWindow { kind, entries: Vec::new(), selected: None, facts: Facts::default(), user: String::new(), app: None, offset: (0., 0.), drag: None, pressed: None }
     }
 
     /// Keeps the selection on a row (or none when the list is empty).
@@ -187,6 +208,10 @@ impl UtilityWindow {
                 let m = ui.wrap(Self::LOG_OUT_MESSAGE, MAC_CALLOUT_PT, Weight::Regular, text_w).len().max(1);
                 (320., 24. + t as f32 * 17. + 8. + m as f32 * 15. + 20. + 28. + 20.)
             }
+            Kind::AboutApp => {
+                let summary = self.app.as_ref().map_or(0, |a| if a.summary.is_empty() { 0 } else { ui.wrap(&a.summary, MAC_FOOTNOTE_PT, Weight::Regular, (280. - 48.) * k).len() });
+                (280., 160. + summary as f32 * 14. + 20.)
+            }
         };
         let (cwp, chp) = (cw * k, ch * k);
         // centred, a little above the middle, then moved by the drag and held on the screen below the menu bar
@@ -217,6 +242,11 @@ impl UtilityWindow {
                 text_x = card.x + pad(16. * k);
                 text_y = card.y + pad(176. * k);
                 text_w = 164. * k;
+            }
+            Kind::AboutApp => {
+                text_x = card.x + pad(24. * k);
+                text_y = card.y + pad(160. * k);
+                text_w = cwp - 48. * k;
             }
             Kind::LogOut => {
                 primary = rect(cx + cwp - 24. * k - 104. * k, cy + chp - 20. * k - btn_h, 104. * k, btn_h);
@@ -258,6 +288,7 @@ impl UtilityWindow {
                     return Some(Part::Primary);
                 }
             }
+            Kind::AboutApp => {}
             Kind::LogOut => {
                 if l.primary.contains(x, y) {
                     return Some(Part::Primary);
@@ -315,6 +346,8 @@ impl UtilityWindow {
             Kind::ForceQuit => self.selected.and_then(|i| self.entries.get(i)).map_or(Outcome::Nothing, |e| Outcome::ForceQuit(e.target.clone())),
             Kind::LogOut => Outcome::LogOut,
             Kind::About => Outcome::MoreInfo,
+            // the About panel has no button: Return does nothing, Esc and the close light close it
+            Kind::AboutApp => Outcome::Nothing,
         }
     }
 
@@ -354,7 +387,16 @@ impl Shell {
             Kind::ForceQuit => w.set_entries(self.force_quit_entries()),
             Kind::About => w.facts = self.about_facts(),
             Kind::LogOut => w.user = user_name().to_string(),
+            Kind::AboutApp => {}
         }
+        self.utility = Some(w);
+        self.utility_changed();
+    }
+
+    /// Opens the About panel of an app (the application menu's About <App>), replacing a card that is up.
+    pub(super) fn utility_open_about_app(&mut self, about: AppAbout) {
+        let mut w = UtilityWindow::new(Kind::AboutApp);
+        w.app = Some(about);
         self.utility = Some(w);
         self.utility_changed();
     }
@@ -573,6 +615,30 @@ impl Shell {
             Kind::ForceQuit => self.draw_force_quit(s, w, &l),
             Kind::About => self.draw_about(s, w, &l),
             Kind::LogOut => self.draw_log_out(s, w, &l),
+            Kind::AboutApp => self.draw_about_app(s, w, &l),
+        }
+    }
+
+    /// The standard About panel: the app's icon, its name in bold, "Version ..." and its summary, centred.
+    fn draw_about_app(&self, s: &mut Surface, w: &UtilityWindow, l: &Layout) {
+        let Some(app) = w.app.as_ref() else { return };
+        let ui = &self.ui;
+        let k = ui.pt(1.0);
+        let cx = l.card.x + l.card.w / 2;
+        let side = pad(64. * k).max(1) as usize;
+        if let Some(im) = &app.icon {
+            let icon = im.resized(side, side);
+            s.blit(&icon, cx - side as i32 / 2, l.card.y + pad(40. * k), 255, 255);
+        }
+        let name = ui.wrap(&app.name, MAC_HEADLINE_PT, Weight::Bold, l.text_w);
+        let name = &name[..name.len().min(1)];
+        self.draw_lines(s, name, MAC_HEADLINE_PT, Weight::Bold, LABEL.now(), 0, l.card.y + pad(116. * k), ui.pt(17.), Some(cx));
+        if let Some(version) = about_version_line(&app.version) {
+            self.draw_lines(s, &[version], MAC_FOOTNOTE_PT, Weight::Regular, SECONDARY, 0, l.card.y + pad(138. * k), ui.pt(14.), Some(cx));
+        }
+        if !app.summary.is_empty() {
+            let lines = ui.wrap(&app.summary, MAC_FOOTNOTE_PT, Weight::Regular, l.text_w);
+            self.draw_lines(s, &lines, MAC_FOOTNOTE_PT, Weight::Regular, SECONDARY, 0, l.text_y, ui.pt(14.), Some(cx));
         }
     }
 
@@ -728,6 +794,21 @@ mod tests {
         assert_eq!(w.log_out_title(), "Are you sure you want to log out Ada Lovelace?");
         assert_eq!(w.key(28), Outcome::LogOut);
         assert_eq!(w.key(1), Outcome::Close, "Esc cancels");
+    }
+
+    #[test]
+    fn the_about_panel_shows_the_version_and_has_no_button() {
+        assert_eq!(about_version_line(" 1.4.2 ").as_deref(), Some("Version 1.4.2"));
+        assert_eq!(about_version_line(""), None, "an app with no version shows no version line");
+        let sh = crate::shell::tests::shell();
+        let mut w = UtilityWindow::new(Kind::AboutApp);
+        w.app = Some(AppAbout { name: "Notes".into(), version: "2.0".into(), summary: "Write notes. ".repeat(12), icon: None });
+        let l = w.layout(&sh.ui, 1280, 800);
+        assert!(l.card.x >= 0 && l.card.y >= 0 && l.card.x + l.card.w <= 1280 && l.card.y + l.card.h <= 800);
+        let short = { let mut v = UtilityWindow::new(Kind::AboutApp); v.app = Some(AppAbout { name: "Notes".into(), ..AppAbout::default() }); v.layout(&sh.ui, 1280, 800).card.h };
+        assert!(l.card.h > short, "the summary makes the panel taller");
+        assert_eq!(w.activate(), Outcome::Nothing, "Return does nothing");
+        assert_eq!(w.key(1), Outcome::Close, "Esc closes");
     }
 
     #[test]

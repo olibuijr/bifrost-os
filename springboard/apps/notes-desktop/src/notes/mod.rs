@@ -1261,10 +1261,115 @@ impl Notes {
     }
 
     /// Draws one of the note windows (`note_windows::draw`). The main window is drawn by `draw`.
-    pub fn draw_window(&mut self, s: &mut Surface, ui: &Ui, window: bifrost_app::app_windows::WindowId) {
+    pub fn draw_window(&mut self, s: &mut Surface, ui: &Ui, window: bifrost_app::app_windows::WindowId, t: f64) {
         let text = self.windows.note_of(window).map(str::to_owned);
         let text = text.as_deref().and_then(|id| self.notes.iter().find(|n| n.id == id)).map(|n| n.text.as_str());
-        note_windows::draw(window, &mut self.windows, s, ui, text, self.note_settings);
+        note_windows::draw(window, &mut self.windows, s, ui, text, self.note_settings, t);
+    }
+
+    /// A note window's text changed (typing, Cut, Paste, Undo in it): the note takes the text and the autosave is armed
+    /// (an unsaved edit of another note is written first); the main editor, when it shows the same note, follows.
+    fn window_changed(&mut self, ui: &Ui, window: bifrost_app::app_windows::WindowId, t: f64) {
+        let Some(id) = self.windows.note_of(window).map(str::to_owned) else { return };
+        let Some(text) = self.windows.text(window).map(str::to_owned) else { return };
+        if self.unsaved.as_deref().is_some_and(|u| u != id) {
+            self.save(t, true);
+        }
+        let Some(i) = self.notes.iter().position(|n| n.id == id) else { return };
+        self.notes[i].text = text;
+        self.notes[i].modified = self.wall.now(t);
+        self.unsaved = Some(id);
+        self.autosave.touch(t);
+        if self.screen == Screen::Editor(i) && self.editor.text() != self.notes[i].text {
+            let text = self.notes[i].text.clone();
+            self.editor.set_text(ui, &text);
+        }
+        self.dirty = true;
+    }
+
+    /// The mouse in a note window (`NoteWindows::pointer`), Shift as `set_pointer_shift` last said. True when the window
+    /// needs a new frame.
+    pub fn window_pointer(&mut self, ui: &Ui, window: bifrost_app::app_windows::WindowId, press: note_windows::Press, x: f32, y: f32, t: f64) -> bool {
+        if press == note_windows::Press::Down {
+            self.windows.focus(window);
+        }
+        self.windows.pointer(ui, window, press, x, y, t, self.pointer_shift)
+    }
+
+    /// A desktop chord in a note window: the editing bindings of the main editor (`chord`), for that window's text.
+    /// False when the chord has no meaning there.
+    pub fn window_chord(&mut self, ui: &Ui, window: bifrost_app::app_windows::WindowId, key: u32, mods: u32, t: f64) -> bool {
+        use bifrost_app::proto::{CHORD_ALT, CHORD_CTRL, CHORD_META, CHORD_SHIFT};
+        let (ctrl, shift, alt, meta) = (mods & CHORD_CTRL != 0, mods & CHORD_SHIFT != 0, mods & CHORD_ALT != 0, mods & CHORD_META != 0);
+        if (ctrl || meta) && !alt && !shift && key == KEY_V {
+            return self.window_paste(ui, window, t);
+        }
+        let Some(combo) = bifrost_app::controls::keys::KeyCombo::from_evdev(key, ctrl, shift, alt, meta) else { return false };
+        match self.windows.key_combo(ui, window, combo, t) {
+            Some(true) => {
+                self.window_changed(ui, window, t);
+                true
+            }
+            Some(false) => true,
+            None => false,
+        }
+    }
+
+    /// Typing and the plain editing keys in a note window. True when the window needs a new frame.
+    pub fn window_key(&mut self, ui: &Ui, window: bifrost_app::app_windows::WindowId, out: Out, t: f64) -> bool {
+        if self.windows.edit(ui, window, &out, t) {
+            self.window_changed(ui, window, t);
+        }
+        self.windows.text(window).is_some()
+    }
+
+    /// Edit > Select All in a note window.
+    pub fn window_select_all(&mut self, window: bifrost_app::app_windows::WindowId) -> bool {
+        self.windows.select_all(window)
+    }
+
+    /// Edit > Paste in a note window: the pasteboard's text replaces the selection; text Notes copied keeps its Markdown.
+    pub fn window_paste(&mut self, ui: &Ui, window: bifrost_app::app_windows::WindowId, t: f64) -> bool {
+        let Some(text) = springboard::shell::clipboard::text() else { return false };
+        let text = match &self.copied {
+            Some(copied) if md::to_plain(copied) == text || *copied == text => copied.clone(),
+            _ => text,
+        };
+        if !self.windows.replace_selection(ui, window, &text, t) {
+            return false;
+        }
+        self.window_changed(ui, window, t);
+        true
+    }
+
+    /// Edit > Copy and Cut in a note window: the selected Markdown (remembered for a paste back into Notes); `cut`
+    /// removes it. The caller puts it on the pasteboard. `None` when nothing is selected there.
+    pub fn window_take_selection(&mut self, ui: &Ui, window: bifrost_app::app_windows::WindowId, cut: bool, t: f64) -> Option<String> {
+        let markdown = self.windows.selected_text(window)?;
+        self.copied = Some(markdown.clone());
+        if cut && self.windows.replace_selection(ui, window, "", t) {
+            self.window_changed(ui, window, t);
+        }
+        Some(markdown)
+    }
+
+    /// Edit > Undo (or Redo, with `redo`) in a note window.
+    pub fn window_undo(&mut self, ui: &Ui, window: bifrost_app::app_windows::WindowId, redo: bool, t: f64) -> bool {
+        if !self.windows.undo(ui, window, redo, t) {
+            return false;
+        }
+        self.window_changed(ui, window, t);
+        true
+    }
+
+    /// Whether something is selected in a note window (Cut and Copy apply).
+    pub fn window_has_selection(&self, window: bifrost_app::app_windows::WindowId) -> bool {
+        self.windows.selected_text(window).is_some()
+    }
+
+    /// Whether Undo and Redo have a step in a note window.
+    pub fn window_can_undo_redo(&self, window: bifrost_app::app_windows::WindowId) -> (bool, bool) {
+        self.windows.can_undo_redo(window)
     }
 
     /// The shortcut row above the keyboard while it is shown.
@@ -4922,6 +5027,44 @@ mod tests {
         }
         let (ox, oy) = n.text_origin(ui);
         (ox + x, oy + y + h / 2.0)
+    }
+
+    /// A note opened in its own window is edited there as in the main editor: its edits go back to the note (and to the
+    /// main editor showing it), and the Edit commands act on the window's text.
+    #[test]
+    fn a_note_window_edits_its_note_with_the_edit_commands() {
+        use bifrost_app::app_windows::WindowId;
+        let dir = scratch("window-edit");
+        let ui = ui();
+        let mut n = app(&ui, &dir);
+        n.set_hardware_keyboard(true);
+        open_with(&mut n, &ui, "Title\nbody");
+        let Screen::Editor(i) = n.screen else { panic!("a note is open") };
+        let id = n.notes[i].id.clone();
+        let win = WindowId(7);
+        n.windows.bind(win, &id);
+        let mut buf = vec![0u32; 600 * 500];
+        n.draw_window(&mut Surface { w: 600, h: 500, stride: 600, px: &mut buf, y0: 0 }, &ui, win, 2000.0);
+        assert!(n.window_select_all(win));
+        assert!(n.window_has_selection(win));
+        assert!(n.window_key(&ui, win, Out::Text("Fresh".into()), 2100.0));
+        assert_eq!(n.notes[i].text, "Fresh", "the window's typing went into the note");
+        assert_eq!(n.editor.text(), "Fresh", "the main editor showing the note follows");
+        assert_eq!(n.window_can_undo_redo(win), (true, false));
+        // Cut takes the selection out and remembers its Markdown for a paste back
+        assert!(n.window_select_all(win));
+        assert_eq!(n.window_take_selection(&ui, win, true, 2200.0).as_deref(), Some("Fresh"));
+        assert_eq!(n.notes[i].text, "");
+        assert!(n.window_undo(&ui, win, false, 2300.0), "Undo brings it back");
+        assert_eq!(n.notes[i].text, "Fresh");
+        // Cmd+Right to the line end, then Shift+Cmd+Left selects back to its start, through the window's bindings
+        use bifrost_app::proto::{CHORD_META, CHORD_SHIFT};
+        assert!(n.window_chord(&ui, win, 106, CHORD_META, 2400.0));
+        assert!(n.window_chord(&ui, win, 105, CHORD_META | CHORD_SHIFT, 2450.0));
+        assert!(n.window_has_selection(win));
+        assert!(!n.window_chord(&ui, WindowId(9), 105, CHORD_META, 2500.0), "a window with no note takes no keys");
+        n.flush();
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

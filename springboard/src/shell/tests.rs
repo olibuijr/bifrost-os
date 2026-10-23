@@ -475,10 +475,9 @@
     fn menu_separators_are_short_and_skipped_by_the_keyboard() {
         use desktop_bar::Menu;
         let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
-        // the Services group is there only while some app registered services (a process-global registry other tests fill)
-        let _lock=crate::test_support::global_lock();
+        // About | Settings | Services (a submenu) | Hide, Hide Others, Show All | Quit
         let rows=sh.menu_row_texts(Menu::App);
-        let groups=if super::services_route::menu_entries().is_empty(){"About | Settings | Quit"}else{"About | Settings | Services | Quit"};
+        let groups="About | Settings | Services | Hide | Quit";
         assert_eq!(rows.iter().filter(|t|t.is_empty()).count(),groups.matches('|').count(),"{groups}: {rows:?}");
         sh.desktop_menu=Some(Menu::App);
         let (_,_,_,h)=sh.desktop_popup_rect().unwrap();
@@ -3231,6 +3230,81 @@
         assert!(d.index_of(AppId::Terminal).is_some(),"and only that one");
         sh.run_menu_action(desktop_bar::Action::Quit,2.);
         assert!(sh.desk.as_ref().unwrap().index_of(AppId::Terminal).is_none(),"the menu's Quit closes the next one");
+    }
+
+    /// Every app's application menu carries the standard items (HIG "The menu bar", App menu): About, Services, Hide,
+    /// Hide Others, Show All and Quit with their keys; Settings\u{2026} only for an app that has settings (a built-in window
+    /// has none; the desktop's opens System Settings).
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn the_application_menu_has_the_standard_items() {
+        use desktop_bar::{Action,Menu};
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        let home=sh.menu_row_texts(Menu::App);
+        assert!(home.contains(&"Settings\u{2026}".to_string()),"the desktop's Settings opens System Settings: {home:?}");
+        assert!(sh.menu_rows(Menu::App).iter().any(|r|r.text.starts_with("Hide ")&&r.action.is_none()),"nothing to hide on the desktop");
+        sh.desk_open(AppId::Terminal,0.);
+        let rows=sh.menu_rows(Menu::App);
+        let texts:Vec<&str>=rows.iter().map(|r|r.text.as_str()).collect();
+        let name=texts[0].strip_prefix("About ").expect("About comes first").to_string();
+        for want in ["Services".to_string(),format!("Hide {name}"),"Hide Others".to_string(),"Show All".to_string(),format!("Quit {name}")] {
+            assert!(texts.contains(&want.as_str()),"{want}: {texts:?}");
+        }
+        assert!(!texts.contains(&"Settings\u{2026}"),"a built-in window has no settings of its own: {texts:?}");
+        assert!(sh.front_app_settings().is_none(),"so Cmd+, does nothing for it");
+        let keys=sh.menu_row_keys(Menu::App);
+        assert!(keys.contains(&"\u{2318}H".to_string())&&keys.contains(&"\u{2325}\u{2318}H".to_string())&&keys.contains(&"\u{2318}Q".to_string()),"{keys:?}");
+        let row=|t:&str|rows.iter().find(|r|r.text==t).unwrap().action.clone();
+        assert!(matches!(row(&format!("Hide {name}")),Some(Action::Hide)));
+        assert!(row("Hide Others").is_none(),"no other app shows a window");
+        assert!(row("Show All").is_none(),"nothing is hidden");
+        assert!(matches!(row("Services"),Some(Action::Submenu(Menu::Services))),"Services is a submenu");
+        assert_eq!(sh.menu_row_texts(Menu::Services)[0],"Services","the submenu leads back to the application menu");
+    }
+
+    /// Hide (Cmd+H) puts away every window of the app in front without a Dock thumbnail, Hide Others the windows of every
+    /// other app, and Show All brings them back where they were.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn hide_hide_others_and_show_all_act_on_whole_apps() {
+        use desktop_bar::{Action,Menu};
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        sh.desk_open(AppId::Terminal,0.);sh.desk_open(AppId::Settings,0.);
+        let fx=sh.hw_shortcut(hwkeys::Shortcut::Hide,1.);
+        assert!(fx.is_empty());
+        let d=sh.desk.as_ref().unwrap();
+        assert!(d.is_hidden(AppId::Settings),"Cmd+H hid Settings");
+        assert_eq!(d.front().map(|w|w.app),Some(AppId::Terminal),"the next app takes the front");
+        assert!(!d.is_hidden(AppId::Terminal));
+        let show=sh.menu_rows(Menu::App).into_iter().find(|r|r.text=="Show All").unwrap();
+        assert!(matches!(show.action,Some(Action::UnhideAll)),"Show All is enabled while an app is hidden");
+        sh.run_menu_action(Action::UnhideAll,2.);
+        let d=sh.desk.as_ref().unwrap();
+        assert!(!d.is_hidden(AppId::Settings)&&!d.wins[d.index_of(AppId::Settings).unwrap()].minimized,"Show All brought it back");
+        assert_eq!(d.front().map(|w|w.app),Some(AppId::Settings),"in its place in the stack");
+        let others=sh.menu_rows(Menu::App).into_iter().find(|r|r.text=="Hide Others").unwrap();
+        assert!(matches!(others.action,Some(Action::HideOthers)),"Terminal shows a window behind Settings");
+        sh.hw_shortcut(hwkeys::Shortcut::HideOthers,3.);
+        let d=sh.desk.as_ref().unwrap();
+        assert!(d.is_hidden(AppId::Terminal),"Option+Cmd+H hid the other app");
+        assert_eq!(d.front().map(|w|w.app),Some(AppId::Settings),"and kept the front one");
+        // activating a hidden app shows it again
+        sh.desk_open(AppId::Terminal,4.);
+        let d=sh.desk.as_ref().unwrap();
+        assert!(!d.is_hidden(AppId::Terminal)&&!d.any_hidden(),"opening a hidden app unhides it");
+    }
+
+    /// An app's View menu carries no shell-wide items: the Dock's settings live in the Dock's menu and Settings, and the
+    /// menu ends with Enter Full Screen.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn the_view_menu_has_no_dock_settings() {
+        use desktop_bar::Menu;
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        sh.desk_open(AppId::Settings,0.);
+        let rows=sh.menu_row_texts(Menu::View);
+        assert!(!rows.iter().any(|t|t.contains("Dock")||t.contains("Icons")),"{rows:?}");
+        assert_eq!(rows.last().map(String::as_str),Some("Enter Full Screen"),"{rows:?}");
     }
 
     /// The Dock's hover label shows the app's name: the text is tinted with the label colour over the menu material, so it
