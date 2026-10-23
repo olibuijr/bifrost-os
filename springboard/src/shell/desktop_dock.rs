@@ -50,20 +50,22 @@ impl Shell {
   if !self.desk_active()||self.is_locked(){return None;}
   if let Pointer::Hover(x,y)=event {
    let m=self.desk_metrics();let (_,bar,rects)=self.desk_dock(&m);let now=t/1000.;
-   let (_,live)=self.dock_live(bar,&rects,now);
    let zone=self.dock_zone(bar);
    let p=self.dock_preferences();
    let edge=match p.position{Position::Bottom=>y>=self.h as f32-self.ui.pt(4.),Position::Left=>x<=self.ui.pt(4.),Position::Right=>x>=self.w as f32-self.ui.pt(4.)};
    let inside=bar.contains(x,y);
    let in_zone=self.dock_is_visible()&&(inside||zone.contains(x,y));
-   let hov=if in_zone{live.iter().position(|r|r.contains(x,y))}else{None};
    let magnify=in_zone&&p.magnification;
    let menu=self.desktop_menu==Some(Menu::Dock);
    let cur=self.dock_mag_amount(now);
    let d=self.desk.as_mut().unwrap();
-   if d.dock_hover!=hov{d.dock_label_last=d.dock_hover;d.dock_label_ms=t;d.dock_hover=hov;self.dirty=true;}
    if magnify!=d.dock_ptr.is_some(){d.dock_mag=Some(Anim{from:cur,to:if magnify{1.}else{0.},start:now,kind:Kind::DockMagnify,curve:Curve::EaseOut});self.dirty=true;}
    let moved=d.dock_ptr!=magnify.then_some((x,y));d.dock_ptr=magnify.then_some((x,y));if moved&&magnify{self.dirty=true;}
+   // the hovered icon comes from the layout centred on this pointer, the one drawn and pressed next (W2-23): the
+   // layout of the previous pointer put the label, and a quick press, on a neighbour
+   let hov=if in_zone{self.dock_live(bar,&rects,now).1.iter().position(|r|r.contains(x,y))}else{None};
+   let d=self.desk.as_mut().unwrap();
+   if d.dock_hover!=hov{d.dock_label_last=d.dock_hover;d.dock_label_ms=t;d.dock_hover=hov;self.dirty=true;}
    if edge||inside||menu {d.dock_hide_at=None;dock_reveal(d,now);if !d.dock_visible{self.dirty=true;}}
    else if d.dock_autohides()&&d.dock_hide_at.is_none(){d.dock_hide_at=Some(t+550.);}
    return Some(vec![]);
@@ -93,7 +95,25 @@ impl Shell {
  pub(super) fn dock_removable(&self,entry:usize)->bool{entry!=apps().len()&&entry!=DOCK_TRASH&&dock_min_index(entry).is_none()&&self.dock_section(entry)==0}
  pub(super) fn dock_reorder(&mut self,from:usize,to:usize,after:bool){let Some(key)=self.dock_app_key(from)else{return;};let target=self.dock_app_key(to);let d=self.desk.as_mut().unwrap();d.dock_preferences.pinned.retain(|s|s!=&key);let at=target.and_then(|key|d.dock_preferences.pinned.iter().position(|s|s==&key)).map(|at|at+after as usize).unwrap_or(d.dock_preferences.pinned.len());d.dock_preferences.pinned.insert(at.min(d.dock_preferences.pinned.len()),key);d.dock_preferences.save(&self.data_dir);self.dirty=true;}
  pub(super) fn dock_is_visible(&self)->bool{self.desk.as_ref().is_some_and(|d|!d.dock_autohides()||d.dock_visible)}
- pub(super) fn dock_overlay_rect(&self)->Rect {let m=self.desk_metrics();let (_,bar,_)=self.desk_dock(&m);if self.dock_is_visible(){bar}else{let p=self.ui.pt(3.) as i32;match self.dock_preferences().position {Position::Bottom=>Rect{x:0,y:self.h-p,w:self.w,h:p},Position::Left=>Rect{x:0,y:m.menubar,w:p,h:self.h-m.menubar},Position::Right=>Rect{x:self.w-p,y:m.menubar,w:p,h:self.h-m.menubar}}}}
+ /// The Dock's surface: the overlay grown along the axis by the room the magnified plate can take (fixed while the
+ /// Dock is shown, so the window server is not asked for a new size every magnification frame). Only the plate drawn
+ /// now takes the pointer (`dock_input_rect`), so the ends of the surface let clicks through to the windows below.
+ pub(super) fn dock_surface_rect(&self)->Rect {
+  if !self.dock_is_visible(){return self.dock_overlay_rect();}
+  let m=self.desk_metrics();let (_,bar,_)=self.desk_dock(&m);let room=self.dock_axis_room();
+  if self.dock_preferences().position==Position::Bottom{Rect{x:bar.x-room,w:bar.w+2*room,..bar}}else{Rect{y:bar.y-room,h:bar.h+2*room,..bar}}
+ }
+ /// The Dock surface's input region (surface px, from `surface` = `dock_surface_rect`): the plate drawn now.
+ pub(super) fn dock_input_rect(&self,surface:Rect)->Option<[i32;4]>{
+  if !self.dock_is_visible(){return None;}
+  let p=self.dock_overlay_rect();Some([p.x-surface.x.max(0),p.y-surface.y.max(0),p.w,p.h])
+ }
+ /// The Dock as it is drawn now: the plate (grown by magnification), or the strip at the edge that reveals a hidden Dock.
+ pub(super) fn dock_overlay_rect(&self)->Rect {let m=self.desk_metrics();let (_,bar,_)=self.desk_dock(&m);if self.dock_is_visible(){
+  // the plate where the Dock rests: an autohide slide moves the drawing inside the fixed surface, not the surface
+  let now=self.desk_t/1000.;let plate=self.dock_plate_at(now);let slid=self.dock_slid(bar,&[],now).0;
+  Rect{x:plate.x-(slid.x-bar.x),y:plate.y-(slid.y-bar.y),..plate}
+ }else{let p=self.ui.pt(3.) as i32;match self.dock_preferences().position {Position::Bottom=>Rect{x:0,y:self.h-p,w:self.w,h:p},Position::Left=>Rect{x:0,y:m.menubar,w:p,h:self.h-m.menubar},Position::Right=>Rect{x:self.w-p,y:m.menubar,w:p,h:self.h-m.menubar}}}}
 }
 
 /// Entries of the `desk_dock` list from this value down (below `DOCK_TRASH`) stand for minimized windows:
@@ -110,6 +130,17 @@ pub(super) fn dock_drag_off(bar:Rect,x:f32,y:f32,reach:f32)->bool{
 }
 /// A launch bounce gives up after this long even if no window maps.
 const BOUNCE_MAX_S:f64=10.;
+/// The Dock plate for a magnified row: `bar` stretched along its axis (x, or y when `vertical`) so the first and last
+/// `live` icons keep the padding the `resting` row has to the capsule's ends. It never shrinks below `bar`; its depth
+/// (across the axis) stays the capsule's, as the Dock's does, so magnified icons rise out of it but never past its ends.
+pub fn dock_plate(bar:Rect,resting:&[Rect],live:&[Rect],vertical:bool)->Rect{
+ let (Some(r0),Some(r1),Some(l0),Some(l1))=(resting.first(),resting.last(),live.first(),live.last()) else {return bar;};
+ let (start,len):(fn(&Rect)->i32,fn(&Rect)->i32)=if vertical{(|r|r.y,|r|r.h)}else{(|r|r.x,|r|r.w)};
+ let (b0,b1)=(start(&bar),start(&bar)+len(&bar));
+ let lo=(start(l0)-(start(r0)-b0)).min(b0);
+ let hi=(start(l1)+len(l1)+(b1-start(r1)-len(r1))).max(b1);
+ if vertical{Rect{y:lo,h:hi-lo,..bar}}else{Rect{x:lo,w:hi-lo,..bar}}
+}
 /// Pointer magnification: 1 at the pointer, 0 at `radius` and beyond, a cosine in between.
 pub fn magnify_factor(dist:f32,radius:f32)->f32{if radius<=0.||dist>=radius{0.}else{0.5+0.5*(std::f32::consts::PI*dist.max(0.)/radius).cos()}}
 /// Scales a premultiplied colour (all four channels) by `k`, for fades.
@@ -229,10 +260,29 @@ impl Shell {
  pub(super) fn dock_magnified(&self,rects:&[Rect],now:f64)->Vec<Rect>{
   let Some(d)=self.desk.as_ref()else{return rects.to_vec();};
   let p=&d.dock_preferences;
-  let Some((px,py))=d.dock_ptr.filter(|_|p.magnification&&d.grab_idle())else{return rects.to_vec();};
+  let Some((px,py))=d.dock_ptr.filter(|_|p.magnification&&d.dock_grab_magnifies())else{return rects.to_vec();};
   let max=self.ui.pt(p.magnified).round() as i32;
   let (vertical,far,ptr)=match p.position{Position::Bottom=>(false,true,px),Position::Left=>(true,false,py),Position::Right=>(true,true,py)};
   magnified_rects(rects,vertical,far,ptr,max,max as f32*1.6,self.dock_mag_amount(now))
+ }
+ /// The Dock plate drawn now: the capsule grown along the Dock's axis around the magnified row (W2-24).
+ pub(super) fn dock_plate_at(&self,now:f64)->Rect{
+  let m=self.desk_metrics();let (_,bar,rects)=self.desk_dock(&m);
+  let (bar,slid)=self.dock_slid(bar,&rects,now);let live=self.dock_magnified(&slid,now);
+  dock_plate(bar,&slid,&live,self.dock_preferences().position!=Position::Bottom)
+ }
+ /// How far (px) the plate can grow past the resting capsule at each end of its axis while magnified: the growth with
+ /// the pointer on the middle icon (where the most icons are inside the radius) plus one magnified icon of slack.
+ pub(super) fn dock_axis_room(&self)->i32{
+  let p=self.dock_preferences();if !p.magnification{return 0;}
+  let m=self.desk_metrics();let (_,bar,rects)=self.desk_dock(&m);
+  let vertical=p.position!=Position::Bottom;let max=self.ui.pt(p.magnified).round() as i32;
+  let Some(mid)=rects.get(rects.len()/2) else {return 0;};
+  let ptr=if vertical{mid.y as f32+mid.h as f32/2.}else{mid.x as f32+mid.w as f32/2.};
+  let live=magnified_rects(&rects,vertical,true,ptr,max,max as f32*1.6,1.);
+  let plate=dock_plate(bar,&rects,&live,vertical);
+  let (a,b)=if vertical{(plate.h,bar.h)}else{(plate.w,bar.w)};
+  ((a-b).max(0)+1)/2+(max-rects[0].w.min(rects[0].h)).max(0)
  }
  /// The hover label's slot and opacity at `t` ms: fading in for the hovered slot, out for the one just left.
  pub(super) fn dock_label_state(&self,t:f64)->(Option<usize>,f32){
@@ -294,6 +344,26 @@ fn dock_reveal(d:&mut super::desk::Desk,now:f64){
   assert_eq!(out[2].y+out[2].h,row[2].y+row[2].h,"icons keep the bottom edge");
   let (a,b)=(row[0].x+row[4].x+row[4].w,out[0].x+out[4].x+out[4].w);assert!((a-b).abs()<=2,"centred");
   assert_eq!(magnified_rects(&row,false,true,0.,96,150.,0.),row);
+ }
+ /// W2-24: the plate grows along the axis with the magnified row and keeps the end padding; at rest it is the capsule.
+ #[test]fn the_plate_grows_with_the_magnified_row(){
+  let row:Vec<Rect>=(0..5).map(|i|Rect{x:110+i*58,y:710,w:48,h:48}).collect();
+  let bar=Rect{x:100,y:700,w:5*48+4*10+20,h:68};
+  assert_eq!(dock_plate(bar,&row,&row,false),bar,"at rest the plate is the capsule");
+  let live=magnified_rects(&row,false,true,row[0].x as f32+24.,96,150.,1.);
+  let plate=dock_plate(bar,&row,&live,false);
+  assert!(plate.w>bar.w,"it grows");
+  assert_eq!((plate.y,plate.h),(bar.y,bar.h),"its depth stays the capsule's");
+  assert_eq!(live[0].x-plate.x,10,"the first icon keeps its padding");
+  assert_eq!(plate.x+plate.w-(live[4].x+live[4].w),10,"and so does the last");
+  assert!(live.iter().all(|r|r.x>=plate.x&&r.x+r.w<=plate.x+plate.w),"every icon is on the plate");
+  // a side Dock grows along y
+  let col:Vec<Rect>=row.iter().map(|r|Rect{x:r.y,y:r.x,w:r.h,h:r.w}).collect();
+  let side=Rect{x:bar.y,y:bar.x,w:bar.h,h:bar.w};
+  let live=magnified_rects(&col,true,false,col[2].y as f32+24.,96,150.,1.);
+  let plate=dock_plate(side,&col,&live,true);
+  assert!(plate.h>side.h&&plate.x==side.x&&plate.w==side.w);
+  assert!(live.iter().all(|r|r.y>=plate.y&&r.y+r.h<=plate.y+plate.h));
  }
  #[test]fn minimized_entries_decode_to_window_indices(){assert_eq!(dock_min_index(DOCK_MIN_BASE),Some(0));assert_eq!(dock_min_index(DOCK_MIN_BASE-3),Some(3));assert_eq!(dock_min_index(DOCK_TRASH),None);assert_eq!(dock_min_index(4),None);}
  #[test]fn fade_scales_all_channels(){assert_eq!(fade(0xff80_4020,0.5)&0xff00_0000,0x8000_0000);assert_eq!(fade(0xffff_ffff,0.),0);assert_eq!(fade(0x1234_5678,1.),0x1234_5678);}

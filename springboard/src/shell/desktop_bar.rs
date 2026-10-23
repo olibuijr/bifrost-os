@@ -705,7 +705,7 @@ impl Shell {
         // the open menu owes its shadow on every side, the top one up into the gap under the bar; the same rect is
         // cleared on the frame after it closes (desk_regions keeps it), so no shadow line is left behind
         if let Some(popup)=self.desktop_popup_rect(){let g=self.ui.pt(super::desk::SHADOW_REACH_PT) as i32+2;v.push(popup_damage_rect(popup,self.desktop_bar_height() as i32,g,self.ui.pt(2.) as i32));}
-        let d=self.dock_overlay_rect();let m=self.ui.pt(120.) as i32;
+        let d=self.dock_surface_rect();let m=self.ui.pt(120.) as i32;
         v.push(((d.x-m).max(0),(d.y-m).max(0),d.w+2*m,d.h+2*m));
         // the desktop Control Center and Notification Center panels, with room for their shadow
         let g=self.ui.pt(super::desk::SHADOW_REACH_PT);
@@ -1067,8 +1067,8 @@ impl Shell {
         // menu over white content had no edge at all (E2E N6). Only the menu itself takes the pointer (`input`); a click
         // on the shadow reaches the window below, as when the surface was the menu's size.
         let popup=self.desktop_popup_rect().map(|p|popup_surface_rect(p,self.desktop_bar_height() as i32,self.ui.pt(super::desk::SHADOW_REACH_PT) as i32+2,self.ui.pt(2.) as i32,(width,height)));
-        let mut frames=Vec::new();for (id,x,y,w,h) in std::iter::once((0,0,0,width,self.desktop_bar_height())).chain({let r=self.dock_overlay_rect();std::iter::once((2,r.x.max(0) as usize,r.y.max(0) as usize,r.w.max(0) as usize,r.h.max(0) as usize))}).chain(popup.map(|(r,_)|(1,r.0,r.1,r.2,r.3))).chain(self.desk_panel_overlays()) {
-            let w=w.min(width.saturating_sub(x));let h=h.min(height.saturating_sub(y));if w==0||h==0{continue;}let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}if id==2&&!self.dock_is_visible(){data.fill(0);}let input=if id==1 {popup.map(|(_,menu)|menu)}else{None};frames.push(crate::bare::wayland::ChromeFrame{id,x:x as i32,y:y as i32,width:w,height:h,pixels:data,input});
+        let mut frames=Vec::new();for (id,x,y,w,h) in std::iter::once((0,0,0,width,self.desktop_bar_height())).chain({let r=self.dock_surface_rect();std::iter::once((2,r.x.max(0) as usize,r.y.max(0) as usize,r.w.max(0) as usize,r.h.max(0) as usize))}).chain(popup.map(|(r,_)|(1,r.0,r.1,r.2,r.3))).chain(self.desk_panel_overlays()) {
+            let w=w.min(width.saturating_sub(x));let h=h.min(height.saturating_sub(y));if w==0||h==0{continue;}let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}if id==2&&!self.dock_is_visible(){data.fill(0);}let input=match id {1=>popup.map(|(_,menu)|menu),2=>self.dock_input_rect(self.dock_surface_rect()),_=>None};frames.push(crate::bare::wayland::ChromeFrame{id,x:x as i32,y:y as i32,width:w,height:h,pixels:data,input});
         }
         // Search: id 3, an overlay surface above every window that takes the keyboard while it is open
         if let Some(((x,y,ow,oh),mask))=self.quicksearch.desk_overlay(&self.ui,self.w) {
@@ -1663,7 +1663,13 @@ mod context_menu_shell_tests {
         let reach = sh.ui.pt(crate::shell::desk::SHADOW_REACH_PT) as i32;
         assert!(f.x <= px as i32 - reach && f.y <= py as i32 - reach, "room for the shadow left of and above the menu");
         assert!(f.x + f.width as i32 >= (px + pw) as i32 + reach && f.y + f.height as i32 >= (py + ph) as i32 + reach, "and right of and below it");
-        assert!(frames.iter().filter(|f| f.id != 1).all(|f| f.input.is_none()), "the other chrome takes the whole surface");
+        assert!(frames.iter().filter(|f| f.id != 1 && f.id != 2).all(|f| f.input.is_none()), "the other chrome takes the whole surface");
+        // W2-24: the Dock's surface has room for a magnified plate at both ends; only the plate drawn now takes input
+        if let Some(d) = frames.iter().find(|f| f.id == 2) {
+            let plate = sh.dock_overlay_rect();
+            assert_eq!(d.input, Some([plate.x - d.x, plate.y - d.y, plate.w, plate.h]), "the plate, in surface px");
+            assert!(d.x <= plate.x && d.x + d.width as i32 >= plate.x + plate.w, "the surface holds the plate");
+        }
     }
 
     /// The shadow does not change what a click does: the menu's rectangle decides, a press on the shadow closes the menu.

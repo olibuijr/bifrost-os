@@ -270,7 +270,9 @@ enum Grab {
     Resize { edges: u8, start: Rect, x: f32, y: f32, app: AppId },
     /// a press on a traffic light that acts on release
     Light(usize, Light),
-    DockDrag{from:usize,x:f32,y:f32,at_x:f32,at_y:f32,moved:bool},
+    /// a press on Dock slot `from`: `entry` is the dock list entry and `rect` the icon as hit-tested at the press, so the
+    /// release opens the icon that was pressed even when the row re-centres in between (W2-23)
+    DockDrag{from:usize,entry:usize,rect:Rect,x:f32,y:f32,at_x:f32,at_y:f32,moved:bool},
     /// the touch belongs to this window's app until it lifts
     Content(usize),
 }
@@ -659,6 +661,9 @@ impl Desk {
     }
 
     pub(super) fn grab_idle(&self)->bool{self.grab.is_none()}
+    /// Whether the Dock keeps magnifying: with no grab, or while a Dock icon is pressed but not dragged, so the row does
+    /// not jump back to rest under the pointer between the press and the release (W2-23).
+    pub(super) fn dock_grab_magnifies(&self)->bool{matches!(self.grab,None|Some(Grab::DockDrag{moved:false,..}))}
     pub fn new() -> Self {
         Desk {dock_visible:true,..Default::default()}
     }
@@ -992,6 +997,13 @@ pub fn dock_rects(m: &Metrics, icon: i32, pad: i32, gap: i32, n: usize, sep_afte
 }
 
 /// Like `dock_rects` with a divider after each index in `seps` (pinned | recents | minimized and Trash).
+/// Whether the release of a Dock press at (`x`, `y`) opens the pressed icon: the icon as it was hit at the press
+/// (`pressed`) decides, so a row that re-centred under a still pointer cannot drop the click or move it to a neighbour
+/// (W2-23); the slot's current rect counts too while it still holds the same entry (`now`, `now_entry`).
+pub(super) fn dock_release_hits(pressed: Rect, now: Option<Rect>, now_entry: Option<usize>, entry: usize, x: f32, y: f32) -> bool {
+    pressed.contains(x, y) || (now_entry == Some(entry) && now.is_some_and(|r| r.contains(x, y)))
+}
+
 pub fn dock_rects_seps(m: &Metrics, icon: i32, pad: i32, gap: i32, n: usize, seps: &[usize], sep: i32) -> (Rect, Vec<Rect>) {
     let extra = seps.len() as i32 * sep;
     let total = n as i32 * icon + (n as i32 - 1).max(0) * gap + extra + 2 * pad;
@@ -2327,6 +2339,9 @@ impl Shell {
 
     /// Touches over the desktop. `None` leaves the event to the normal path.
     pub(super) fn desk_event(&mut self, ev: Event, t: f64) -> Option<Vec<Effect>> {
+        // a press is also a pointer position: the magnified row is centred on it before the hit test, so the press
+        // resolves the icon drawn under the pointer, not one laid out around where the pointer was a moment ago (W2-23)
+        if let Event::Down(x, y) = ev { let _ = self.dock_pointer(super::desktop_dock::Pointer::Hover(x, y), t); }
         let m = self.desk_metrics();
         let (list, bar0, icons) = self.desk_dock(&m);
         let (dock_bar, icons) = self.dock_live(bar0, &icons, t / 1000.0);
@@ -2335,7 +2350,7 @@ impl Shell {
                 self.desk.as_mut()?.grab = None;
                 // the dock sits over the windows
                 if let Some(k) = icons.iter().position(|r| self.dock_is_visible()&&r.contains(x, y)) {
-                    self.desk.as_mut()?.grab = Some(Grab::DockDrag{from:k,x,y,at_x:x,at_y:y,moved:false});
+                    self.desk.as_mut()?.grab = Some(Grab::DockDrag{from:k,entry:list[k],rect:icons[k],x,y,at_x:x,at_y:y,moved:false});
                     self.desk.as_mut()?.dock_drop = None;
                     // an app that already has a window comes forward on the press, not after the release
                     if let Some(a) = apps().get(list[k]).map(|a| Self::dock_app(a.id)) {
@@ -2426,10 +2441,10 @@ impl Shell {
                         let fx = self.with_size(b.w, b.h, |sh| sh.app_touch_single(w.app, Event::Move(x - b.x as f32, y - b.y as f32), t));
                         Some(fx)
                     }
-                    Grab::DockDrag{from,x:x0,y:y0,..}=>{
+                    Grab::DockDrag{from,entry,rect,x:x0,y:y0,..}=>{
                         let moved=(x-x0).abs()+(y-y0).abs()>self.ui.pt(8.);
                         let desk=self.desk.as_mut()?;
-                        desk.grab=Some(Grab::DockDrag{from,x:x0,y:y0,at_x:x,at_y:y,moved});
+                        desk.grab=Some(Grab::DockDrag{from,entry,rect,x:x0,y:y0,at_x:x,at_y:y,moved});
                         if moved {
                             let centres:Vec<(f32,f32)>=icons.iter().map(|r|((r.x+r.w/2) as f32,(r.y+r.h/2) as f32)).collect();
                             if let Some(slot)=bifrost_ui::dockdrag::slot_at(&centres,x,y) {
@@ -2488,55 +2503,56 @@ impl Shell {
                         self.ext_window_dropped(moved);
                         Some(vec![])
                     }
-                    Some(Grab::DockDrag{from:k,x:x0,y:y0,..}) if (x-x0).abs()+(y-y0).abs()>self.ui.pt(8.) => {
+                    Some(Grab::DockDrag{from:k,entry,x:x0,y:y0,..}) if (x-x0).abs()+(y-y0).abs()>self.ui.pt(8.) => {
                         // the neighbours already show the final order, so dropping them in place is seamless
                         let slot=self.desk.as_mut()?.dock_drop.take();
                         self.desk.as_ref()?.dock_slide.borrow_mut().clear();
                         // an app pinned in the Dock and dragged well off it leaves the Dock (its Pin toggles off)
-                        if slot.is_none() && self.dock_removable(list[k]) && super::desktop_dock::dock_drag_off(dock_bar, x, y, self.ui.pt(DOCK_REMOVE_PT)) {
-                            self.dock_change(super::desktop_dock::Change::Pin(list[k]), t);
-                        } else if let Some(target)=slot{self.dock_reorder(list[k],list[target],target>k);}
+                        if slot.is_none() && self.dock_removable(entry) && super::desktop_dock::dock_drag_off(dock_bar, x, y, self.ui.pt(DOCK_REMOVE_PT)) {
+                            self.dock_change(super::desktop_dock::Change::Pin(entry), t);
+                        } else if let Some(&to)=slot.and_then(|target|list.get(target)){self.dock_reorder(entry,to,slot.unwrap_or(0)>k);}
                         Some(vec![])
                     },
-                    Some(Grab::DockDrag{from:k,..}) => {
-                        if icons.get(k).is_some_and(|r| r.contains(x, y)) {
-                            if list[k] == DOCK_TRASH {
+                    Some(Grab::DockDrag{from:k,entry,rect,..}) => {
+                        // the icon latched at the press decides: the row may have re-centred since (W2-23)
+                        if dock_release_hits(rect, icons.get(k).copied(), list.get(k).copied(), entry, x, y) {
+                            if entry == DOCK_TRASH {
                                 // the account's Trash as Files keeps it; the shell runs as root, so not $HOME, and Files creates it
                                 let trash=crate::files::trash::dir(&super::dock_stack::home_dir());
                                 if let Err(e)=self.desktop_open_folder(FILES_APP,&trash.to_string_lossy(),t){eprintln!("BifrOSt Trash: {e}");}
                                 return Some(vec![]);
                             }
-                            if list[k] == super::dock_stack::DOCK_STACK {
+                            if entry == super::dock_stack::DOCK_STACK {
                                 // the Downloads stack opens its folder in Files
                                 let folder = super::dock_stack::downloads_dir();
                                 if let Err(e)=self.desktop_open_folder(FILES_APP,&folder.to_string_lossy(),t){eprintln!("BifrOSt Downloads: {e}");}
                                 return Some(vec![]);
                             }
-                            if let Some(wi) = super::desktop_dock::dock_min_index(list[k]) {
+                            if let Some(wi) = super::desktop_dock::dock_min_index(entry) {
                                 // a minimized window comes back from its slot
                                 let app = self.desk.as_ref()?.wins.get(wi)?.app;
                                 self.desk_open(app, t);
                                 return Some(vec![]);
                             }
                             #[cfg(feature = "desktop-wayland")]
-                            if list[k] > apps().len() {
-                                let app=&self.desk.as_ref()?.linux_apps[list[k]-apps().len()-1];
+                            if entry > apps().len() {
+                                let app=self.desk.as_ref()?.linux_apps.get(entry-apps().len()-1)?;
                                 if app.windows.is_empty() {
                                     let id = app.app_id.clone();
-                                    self.dock_start_bounce(list[k], t);
+                                    self.dock_start_bounce(entry, t);
                                     crate::bare::sys::spawn_named("launch-apps", move || { let _ = std::process::Command::new("/usr/bin/bifrost-apps").arg(id).status(); });
                                     return Some(vec![]);
                                 }
                                 let next=app.windows.iter().position(|w|w.active).map(|i|(i+1)%app.windows.len()).unwrap_or(0);
                                 return Some(vec![Effect::ActivateForeign(app.windows[next].id)]);
                             }
-                            if list[k] == apps().len() {
+                            if entry == apps().len() {
                                 // the Apps icon opens the Apps grid
                                 self.appgrid_toggle(t);
                                 return Some(vec![]);
                             }
-                            let app = apps()[list[k]].id;
-                            self.dock_start_bounce(list[k], t);
+                            let Some(app) = apps().get(entry).map(|a| a.id) else { return Some(vec![]) };
+                            self.dock_start_bounce(entry, t);
                             self.desk_dock_tap(app, t);
                         }
                         Some(vec![])
@@ -3082,8 +3098,10 @@ impl Shell {
         let (list, bar0, rects0) = self.desk_dock(m);
         // autohide slide, then magnification around the pointer (both pure functions of the clock)
         let (bar, slid) = self.dock_slid(bar0, &rects0, t / 1000.0);
-        self.note_dock_glass(bifrost_render::glass::gpu().then_some(bar));
         let rects = self.dock_magnified(&slid, t / 1000.0);
+        // the plate grows along the axis with the magnified row, so the end icons stay on it (W2-24)
+        let bar = super::desktop_dock::dock_plate(bar, &slid, &rects, self.dock_preferences().position != super::desktop_dock::Position::Bottom);
+        self.note_dock_glass(bifrost_render::glass::gpu().then_some(bar));
         let ui = &self.ui;
         // frosted material: blur what is behind the dock, tint it, and edge it with a hairline
         let (bx, by) = (bar.x.max(0) as usize, bar.y.max(0) as usize);
@@ -3112,7 +3130,12 @@ impl Shell {
         }
         // dividers: pinned | recents | minimized windows and the Trash
         for k in self.dock_seps(&list) {
-            let (a, b) = (slid[k], slid[k + 1]);
+            // placed between the icons as drawn (magnified), at the resting icons' depth
+            let (a, b) = if slid[k].y == slid[k + 1].y {
+                (Rect { x: rects[k].x, w: rects[k].w, ..slid[k] }, Rect { x: rects[k + 1].x, ..slid[k + 1] })
+            } else {
+                (Rect { y: rects[k].y, h: rects[k].h, ..slid[k] }, Rect { y: rects[k + 1].y, ..slid[k + 1] })
+            };
             // a hairline of the Dock's own divider colour: the separator grey vanished into the dark glass
             let t = ui.pt(1.0).round().max(1.0);
             if a.y == b.y {
@@ -4192,6 +4215,35 @@ mod tests {
         assert_eq!(d.wins[0].r.x, start.x - 50);
         assert!(d.wins[0].r.y >= m.menubar);
         assert_eq!(d.wins[0].r.y + d.wins[0].r.h, start.y + start.h, "the bottom edge stays put");
+    }
+
+    /// W2-23: a press latches the icon it hit, so the release opens it even when the row has re-centred under the
+    /// pointer since (or the layout fell back to rest); a different entry now in that slot does not count.
+    #[test]
+    fn a_dock_release_opens_the_icon_latched_at_the_press() {
+        let row: Vec<Rect> = (0..5).map(|i| Rect { x: 100 + i * 58, y: 700, w: 48, h: 48 }).collect();
+        // the icon under the pointer in the row magnified around it, as the press hit-tests it
+        let live = super::super::desktop_dock::magnified_rects(&row, false, true, 175.0, 96, 150.0, 1.0);
+        let k = live.iter().position(|r| r.contains(175.0, 740.0)).expect("an icon under the pointer");
+        assert!(dock_release_hits(live[k], Some(row[k]), Some(7), 7, 175.0, 740.0), "the latched rect decides");
+        assert!(!dock_release_hits(live[k], Some(live[k]), Some(8), 7, 400.0, 740.0), "a release elsewhere opens nothing");
+        assert!(dock_release_hits(Rect { x: 0, y: 0, w: 1, h: 1 }, Some(row[2]), Some(7), 7, 230.0, 720.0), "the slot's current rect counts for the same entry");
+        assert!(!dock_release_hits(Rect { x: 0, y: 0, w: 1, h: 1 }, Some(row[2]), Some(8), 7, 230.0, 720.0), "but not once another entry is there");
+    }
+
+    /// W2-23: pressing a Dock icon keeps the row magnified (it used to drop to the resting layout under the pointer);
+    /// a drag that moved, and any other grab, lay the row out at rest.
+    #[test]
+    fn a_pressed_dock_icon_keeps_the_dock_magnified_until_it_is_dragged() {
+        let mut d = Desk::new();
+        assert!(d.dock_grab_magnifies());
+        let r = Rect { x: 0, y: 0, w: 48, h: 48 };
+        d.grab = Some(Grab::DockDrag { from: 1, entry: 3, rect: r, x: 0.0, y: 0.0, at_x: 0.0, at_y: 0.0, moved: false });
+        assert!(d.dock_grab_magnifies());
+        d.grab = Some(Grab::DockDrag { from: 1, entry: 3, rect: r, x: 0.0, y: 0.0, at_x: 40.0, at_y: 0.0, moved: true });
+        assert!(!d.dock_grab_magnifies());
+        d.grab = Some(Grab::Content(0));
+        assert!(!d.dock_grab_magnifies());
     }
 
     #[test]
