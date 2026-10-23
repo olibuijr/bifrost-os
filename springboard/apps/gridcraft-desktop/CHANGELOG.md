@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.11.1
+
+- Upstream gridcraft v0.11.1.
+  > [!NOTE]
+  > **FreeBSD aarch64 is dropped from this release.** We had to cut releases, and we cannot build this target within the 5-hour CI limit for any of the Craft apps, so we are dropping it for now. This is a known blocker, flagged for a future fix in storytold/craft-common-actions#39. FreeBSD x86_64 and every other platform are included.
+  ## What's Changed
+  * security: enforce HTTPS on curl downloads (SonarCloud S6506) by @dylanmtaylor in https://github.com/storytold/gridcraft/pull/2188
+  * Backlog integration: 230 reviewed fixes and reference app behaviour changes by @aiongg in https://github.com/storytold/gridcraft/pull/2226
+
 ## 0.10.0
 
 - Upstream gridcraft v0.10.0.
