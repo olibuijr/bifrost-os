@@ -49,6 +49,8 @@ struct ShortcutsApp {
     dropped: Vec<(u32, f64, Vec<String>)>,
     /// whether the drag over the window carries files
     drag_files: bool,
+    /// the shell calls steps made (Start Timer) whose reply is still to come; a failure is shown in the window
+    step_calls: Vec<u32>,
 }
 
 /// The absolute path of an open file, read from the descriptor table. The shell hands files over as descriptors, so
@@ -72,6 +74,7 @@ impl ShortcutsApp {
             app_intents_loaded: false,
             dropped: Vec::new(),
             drag_files: false,
+            step_calls: Vec::new(),
         }
     }
 
@@ -106,7 +109,9 @@ impl ShortcutsApp {
         let list = self.shortcuts(&ctx.data_dir);
         let shortcut = list.get(index)?;
         let refs: Vec<&str> = paths.iter().map(String::as_str).collect();
-        let steps = droplet::run(shortcut, &refs, &mut runner::AppHost::new(ctx))?;
+        let mut host = runner::AppHost::new(ctx);
+        let steps = droplet::run(shortcut, &refs, &mut host)?;
+        self.step_calls.extend(host.service_requests);
         if let Some(c) = self.w.as_mut() {
             let t = c.now();
             c.show_run(&shortcut.name, &steps, t);
@@ -179,7 +184,9 @@ impl ShortcutsApp {
         let Some(c) = self.w.as_mut() else { return };
         let t = c.now();
         for s in c.take_run_requests() {
-            let steps = flow::run(&s.actions, &mut runner::AppHost::new(ctx));
+            let mut host = runner::AppHost::new(ctx);
+            let steps = flow::run(&s.actions, &mut host);
+            self.step_calls.extend(host.service_requests);
             c.show_run(&s.name, &steps, t);
         }
         let requests = c.take_intent_requests();
@@ -289,6 +296,19 @@ impl App for ShortcutsApp {
                     return false;
                 }
             }
+            // a right-click on a tile: Run, Edit, Rename, Duplicate, Delete
+            Input::Context { x, y } => {
+                let items = c.context_items(&ctx.ui, x, y);
+                if items.is_empty() {
+                    return false;
+                }
+                ctx.context_menu(x, y, items);
+            }
+            Input::ContextAction(id) => {
+                if !c.context_action(id) {
+                    return false;
+                }
+            }
             _ => return false,
         }
         self.settle(ctx);
@@ -364,9 +384,18 @@ impl App for ShortcutsApp {
         true
     }
 
-    fn service_reply(&mut self, _ctx: &Ctx, _request: u32, result: &Result<Json, String>) -> bool {
+    fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
         if let Err(msg) = result {
             eprintln!("shortcuts: shell service: {msg}");
+        }
+        if let Some(at) = self.step_calls.iter().position(|r| *r == request) {
+            self.step_calls.remove(at);
+            // a step the shell refused (an older shell without the service, or a bad value) says so in the window
+            if let (Err(msg), Some(c)) = (result, self.w.as_mut()) {
+                let t = c.now();
+                c.say(&format!("Start Timer did not run: {msg}"), t);
+            }
+            return true;
         }
         if let (Some(status), Some(c)) = (login::status_from_reply(result), self.w.as_mut()) {
             c.set_login(Some(status));

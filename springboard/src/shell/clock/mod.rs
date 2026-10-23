@@ -248,6 +248,16 @@ impl Clock {
         vec![self.wake_effect(t)]
     }
 
+    /// Starts a Clock timer for another caller (the `timer_start` system intent, which Shortcuts and Search run): the
+    /// files are read first so a change the Clock app just made is kept, then the timer is written beside the alarms,
+    /// so the Clock app lists it and this service rings it with the app closed. None for a zero duration.
+    pub fn start_timer(&mut self, label: &str, duration_ms: i64, t: f64) -> Option<u32> {
+        self.read_files(t);
+        let id = self.timers.start(label, duration_ms, t, self.wall.now_ms(t))?;
+        let _ = self.persist_timers(t);
+        Some(id)
+    }
+
     fn persist_timers(&mut self, t: f64) -> Vec<Effect> {
         self.write(Some("clock-timers.ini"), self.timers.serialize());
         vec![self.wake_effect(t)]
@@ -517,6 +527,21 @@ mod tests {
         assert!(c.alert().is_none());
         assert!(c.timers().list.is_empty());
         assert!(std::fs::read_to_string(store::sibling(&path, "clock-timers.ini")).unwrap().lines().all(|l| l.starts_with('#')), "the finished timer is gone from the file");
+    }
+
+    #[test]
+    fn a_timer_started_for_an_intent_is_written_for_the_app_and_rings() {
+        let ui = ui();
+        let path = scratch("intent");
+        let mut c = clock(&ui);
+        c.load(&path, 1000.0);
+        assert_eq!(c.start_timer("Tea", 0, 1000.0), None, "a zero duration starts nothing");
+        let id = c.start_timer("Tea", 2000, 1000.0).expect("a timer");
+        let saved = Timers::parse(&std::fs::read_to_string(store::sibling(&path, "clock-timers.ini")).unwrap(), 1000.0, c.wall.now_ms(1000.0));
+        assert!(saved.list.iter().any(|i| i.id == id && i.label == "Tea"), "the Clock app reads it from its file");
+        let (fx, _) = c.tick(&ui, 3000.0);
+        assert!(fx.contains(&Effect::Alarm));
+        assert_eq!(c.alert().map(|a| a.title.as_str()), Some("Tea"));
     }
 
     #[test]

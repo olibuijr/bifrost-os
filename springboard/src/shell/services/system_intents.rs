@@ -12,6 +12,8 @@
 //!     scanner is named by its display name (the first one found when absent). The format is `jpeg` (the default),
 //!     `png` or `tiff`; `pdf` is refused because the scan command cannot write one.
 //!   - `scan_to_folder {folder, device?}`: the same, into the named folder under the home folder (JPEG).
+//!   - `timer_start {duration, label?}`: starts a Clock timer of `duration` whole seconds (1 to 86400) through the
+//!     shell's Clock service, so the Clock app lists it and the shell rings it. Replies `{status: "started", id}`.
 //! - `last {}` returns `{message, ok}` for the last scan: where the file went, or why it failed. `message` is empty
 //!   before any scan ran.
 //!
@@ -32,14 +34,20 @@ pub const VPN_CONNECT: &str = "vpn_connect";
 pub const VPN_DISCONNECT: &str = "vpn_disconnect";
 pub const SCAN_DOCUMENT: &str = "scan_document";
 pub const SCAN_TO_FOLDER: &str = "scan_to_folder";
+/// The SDK's `system_intents::TIMER_START_ID`.
+pub const TIMER_START: &str = "timer_start";
+/// The longest timer `timer_start` takes, in seconds (a day), and the longest label in characters.
+pub const TIMER_MAX_S: i64 = 86_400;
+pub const TIMER_LABEL_MAX: usize = 40;
 
 /// Every intent this service runs, with the title Search lists.
-pub const INTENTS: [(&str, &str); 5] = [
+pub const INTENTS: [(&str, &str); 6] = [
     (LOCK_SCREEN, "Lock Screen"),
     (VPN_CONNECT, "Connect VPN"),
     (VPN_DISCONNECT, "Disconnect VPN"),
     (SCAN_DOCUMENT, "Scan Document"),
     (SCAN_TO_FOLDER, "Scan to Folder"),
+    (TIMER_START, "Start Timer"),
 ];
 
 /// The folder `scan_document` saves into, under the home folder.
@@ -54,6 +62,8 @@ pub enum Intent {
     VpnConnect(String),
     VpnDisconnect(Option<String>),
     Scan(Scan),
+    /// a Clock timer: its length in milliseconds and its label (empty for the Clock's default name)
+    Timer { ms: i64, label: String },
 }
 
 /// A scan request: which scanner (by display name, the first one found when `None`), the file format, and the folder
@@ -122,6 +132,14 @@ pub fn parse(id: &str, params: &Json) -> Result<Intent, String> {
                 return Err("The folder must be a plain path under the home folder".into());
             }
             Ok(Intent::Scan(Scan { device: string_param(params, "device")?.map(str::to_string), format: DocumentFormat::Jpeg, folder: folder.to_string() }))
+        }
+        TIMER_START => {
+            let secs = match params.get("duration") {
+                Some(Json::Num(n)) if n.is_finite() && n.fract() == 0.0 && *n >= 1.0 && *n <= TIMER_MAX_S as f64 => *n as i64,
+                _ => return Err(format!("timer_start needs a duration in whole seconds from 1 to {TIMER_MAX_S}")),
+            };
+            let label: String = string_param(params, "label")?.unwrap_or("").trim().chars().filter(|c| !c.is_control()).take(TIMER_LABEL_MAX).collect();
+            Ok(Intent::Timer { ms: secs * 1000, label })
         }
         other => Err(format!("no intent {other}")),
     }
@@ -198,6 +216,8 @@ fn start(intent: Intent) {
         Intent::VpnConnect(name) => desktop_network::send(desktop_network::Request::Vpn(VpnAction::Up(name))),
         Intent::VpnDisconnect(name) => desktop_network::send(desktop_network::Request::Vpn(VpnAction::Down(name))),
         Intent::Scan(scan) => start_scan(scan),
+        // served in `call`, which has the shell's Clock
+        Intent::Timer { .. } => {}
     }
 }
 
@@ -213,7 +233,7 @@ impl SystemService for SystemIntents {
         "system_intents"
     }
 
-    fn call(&mut self, _shell: &mut Shell, app_id: &str, method: &str, params: &Json, _t: f64) -> Result<Json, String> {
+    fn call(&mut self, shell: &mut Shell, app_id: &str, method: &str, params: &Json, t: f64) -> Result<Json, String> {
         match method {
             "list" => Ok(Json::Arr(
                 INTENTS.iter().map(|(id, title)| Json::Obj(vec![("id".into(), Json::Str((*id).into())), ("title".into(), Json::Str((*title).into()))])).collect(),
@@ -224,6 +244,10 @@ impl SystemService for SystemIntents {
                 }
                 let id = string_param(params, "intent")?.ok_or("run needs an intent")?;
                 let intent = parse(id, params)?;
+                if let Intent::Timer { ms, label } = &intent {
+                    let id = shell.clock.start_timer(label, *ms, t).ok_or("the timer could not be started")?;
+                    return Ok(Json::Obj(vec![("status".into(), Json::Str("started".into())), ("id".into(), Json::Num(id as f64))]));
+                }
                 start(intent);
                 Ok(Json::Obj(vec![("status".into(), Json::Str("queued".into()))]))
             }
@@ -242,6 +266,19 @@ mod tests {
 
     fn obj(pairs: &[(&str, &str)]) -> Json {
         Json::Obj(pairs.iter().map(|(k, v)| ((*k).to_string(), Json::Str((*v).to_string()))).collect())
+    }
+
+    #[test]
+    fn timer_start_checks_the_duration_and_the_label() {
+        let num = |n: f64, label: &str| Json::Obj(vec![("duration".into(), Json::Num(n)), ("label".into(), Json::Str(label.into()))]);
+        assert_eq!(parse(TIMER_START, &num(600.0, "  Tea  ")), Ok(Intent::Timer { ms: 600_000, label: "Tea".into() }));
+        assert!(parse(TIMER_START, &num(0.0, "")).is_err(), "at least a second");
+        assert!(parse(TIMER_START, &num(1.5, "")).is_err(), "whole seconds");
+        assert!(parse(TIMER_START, &num(86_401.0, "")).is_err(), "at most a day");
+        assert!(parse(TIMER_START, &obj(&[("duration", "60")])).is_err(), "a number, not text");
+        let Ok(Intent::Timer { label, .. }) = parse(TIMER_START, &num(60.0, &"x".repeat(100))) else { panic!("a timer") };
+        assert_eq!(label.len(), TIMER_LABEL_MAX);
+        assert!(INTENTS.iter().any(|(id, _)| *id == "timer_start"), "the SDK's TIMER_START_ID");
     }
 
     #[test]

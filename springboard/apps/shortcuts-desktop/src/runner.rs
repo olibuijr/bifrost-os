@@ -1,10 +1,12 @@
 //! Running a shortcut inside the app. `springboard::shortcuts::flow` walks the steps, passes text from one to the next and
 //! runs the If and Repeat blocks; this host performs the steps that only need the app: copying text to the clipboard,
-//! showing a notification and showing a result. Steps that need the shell's own services (Wi-Fi, Low Power, Do Not
-//! Disturb, brightness, apps, screenshots, timers, folders, scripts, files, the network) or an answer from the user are
-//! refused with a reason, which stops the shortcut and is shown in the result panel.
+//! showing a notification and showing a result. Start Timer goes to the shell's `system_intents` service
+//! (`timer_start`), which starts the timer in the shell's Clock service, so the Clock app lists it and the shell rings
+//! it. Steps that need the shell's own services that no service offers yet (Wi-Fi, Low Power, Do Not Disturb,
+//! brightness, apps, screenshots, folders, files, the network) or an answer from the user are refused with a reason,
+//! which stops the shortcut and is shown in the result panel.
 
-use bifrost_app::Ctx;
+use bifrost_app::{service, Ctx};
 use bifrost_core::json::Json;
 use bifrost_core::script::dictionary::Dictionary;
 use bifrost_core::script::interp::{self as script, ScriptError};
@@ -49,12 +51,24 @@ pub fn script_source(text: &str) -> String {
 /// The steps the app can perform for itself, over the app's context.
 pub struct AppHost<'a> {
     ctx: &'a Ctx,
+    /// the `system_intents` calls this run made (Start Timer); a failed reply is shown when it arrives
+    pub service_requests: Vec<u32>,
 }
 
 impl<'a> AppHost<'a> {
     pub fn new(ctx: &'a Ctx) -> Self {
-        AppHost { ctx }
+        AppHost { ctx, service_requests: Vec::new() }
     }
+}
+
+/// The shell service that runs the system intents, and the parameters of a Start Timer step of `minutes`.
+pub const SYSTEM_INTENTS: &str = "system_intents";
+pub fn timer_params(minutes: u32) -> Json {
+    Json::Obj(vec![
+        ("intent".into(), Json::Str("timer_start".into())),
+        ("duration".into(), Json::Num(minutes as f64 * 60.0)),
+        ("label".into(), Json::Str(format!("{minutes} min"))),
+    ])
 }
 
 impl Host for AppHost<'_> {
@@ -79,7 +93,12 @@ impl Host for AppHost<'_> {
                     Err(e) => Err(e.message),
                 }
             }
-            other => Err(format!("{} needs the shell's services, which this app cannot reach yet", other.title())),
+            Action::Timer(minutes) => {
+                let id = service::call(self.ctx, SYSTEM_INTENTS, "run", &timer_params(*minutes));
+                self.service_requests.push(id);
+                Ok(Done::said(&format!("Started a {minutes}-minute timer in Clock")))
+            }
+            other => Err(format!("{} is not available from Shortcuts on this computer yet", other.title())),
         }
     }
 }
@@ -117,11 +136,24 @@ mod tests {
     }
 
     #[test]
+    fn start_timer_asks_the_shells_clock_through_the_system_intent() {
+        let ctx = ctx();
+        let mut host = AppHost::new(&ctx);
+        let steps = flow::run(&[Action::Timer(10)], &mut host);
+        assert_eq!(steps[0].outcome, Ok("Started a 10-minute timer in Clock".into()));
+        let sent = ctx.take_sent();
+        let ToShell::ServiceCall { request, service, method, body } = &sent[0] else { panic!("a service call") };
+        assert_eq!((service.as_str(), method.as_str()), ("system_intents", "run"));
+        assert!(body.contains("timer_start") && body.contains("600"), "{body}");
+        assert_eq!(host.service_requests, vec![*request], "the reply is watched for a failure");
+    }
+
+    #[test]
     fn a_step_that_needs_the_shell_stops_the_shortcut_with_a_reason() {
         let ctx = ctx();
         let list = vec![Action::Text("a".into()), Action::Wifi(true), Action::ShowResult("never".into())];
         let steps = flow::run(&list, &mut AppHost::new(&ctx));
-        assert!(steps[1].outcome.as_ref().unwrap_err().contains("Set Wi-Fi needs the shell's services"));
+        assert!(steps[1].outcome.as_ref().unwrap_err().contains("Set Wi-Fi is not available"));
         assert!(steps[2].outcome.is_err(), "the result after it is not shown");
         assert!(ctx.take_sent().is_empty(), "nothing reached the shell");
     }
