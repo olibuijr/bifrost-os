@@ -35,8 +35,8 @@ use bifrost_app::kit::{clipboard, Scroller, TextCache, Ui};
 use bifrost_app::passwords::{self, Error as KeyError};
 use bifrost_app::text_services;
 use bifrost_app::usernotif::{self, Request};
-use bifrost_app::{AppMenu, AppMenuItem, ContextItem, Ctx, DocumentEvent, KeyInput, OpenOptions, TouchKind};
-use bifrost_app::proto::{DocErrorCode, DocMode, CHORD_ALT, CHORD_CTRL, CHORD_META};
+use bifrost_app::{AppMenu, AppMenuItem, ContextItem, Ctx, DocumentEvent, KeyInput, ModifierFlags, OpenOptions, TouchKind};
+use bifrost_app::proto::{DocErrorCode, DocMode, CHORD_ALT, CHORD_CTRL, CHORD_META, CHORD_SHIFT};
 use bifrost_core::json::Json;
 use springboard::deildu::http::Transport;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -179,6 +179,9 @@ const KEY_A: u32 = 30;
 const KEY_C: u32 = 46;
 const KEY_X: u32 = 45;
 const KEY_BACKSPACE_CHORD: u32 = 14;
+/// The evdev codes of Up and Down Arrow, as they arrive in a chord (Shift-Up, Shift-Down; the manifest's `edit_keys`).
+const KEY_UP_CHORD: u32 = 103;
+const KEY_DOWN_CHORD: u32 = 108;
 
 /// What the window is waiting for from Passwords (the passwords group, through `service_reply`).
 enum Pending {
@@ -877,7 +880,9 @@ impl MailWindow {
         self.refresh_account(&account.id);
     }
 
-    pub fn touch(&mut self, ctx: &Ctx, kind: TouchKind, x: f32, y: f32, t: f64) -> bool {
+    /// A press, drag or release at (`x`, `y`) with the modifier keys held for it: a click on a message with Cmd toggles it
+    /// in the selection and with Shift extends the selection from the anchor (`NSEvent.modifierFlags`).
+    pub fn touch(&mut self, ctx: &Ctx, kind: TouchKind, x: f32, y: f32, t: f64, mods: ModifierFlags) -> bool {
         match kind {
             TouchKind::Down => {
                 let region = self.region(&ctx.ui, x, y);
@@ -906,14 +911,14 @@ impl MailWindow {
                     }
                     return true;
                 }
-                self.tap(ctx, x, y, t)
+                self.tap(ctx, x, y, t, mods)
             }
         }
     }
 
     pub fn key(&mut self, ctx: &Ctx, k: KeyInput) -> bool {
         if let Some((key, mods)) = k.as_chord() {
-            return self.chord(key, mods);
+            return self.chord(&ctx.ui, key, mods);
         }
         if self.mail.sheet.is_none() {
             // Up and Down Arrow move the selection in the message list (the find bar takes no arrows)
@@ -981,6 +986,16 @@ impl MailWindow {
     fn step_selection(&mut self, ui: &Ui, down: bool) -> bool {
         let Some((index, uid)) = self.mail.neighbour(down) else { return false };
         self.open_message(uid);
+        self.scroll_list_to(ui, index);
+        self.dirty = true;
+        true
+    }
+
+    /// Shift-Up (`down` false) or Shift-Down Arrow: the selection grows or shrinks by one line from the anchor, and the
+    /// list scrolls to keep the moving end in view. False at either end of the list.
+    fn extend_by_arrow(&mut self, ui: &Ui, down: bool) -> bool {
+        let Some((index, fetch)) = self.mail.extend_by_arrow(down) else { return false };
+        self.shown_changed(fetch);
         self.scroll_list_to(ui, index);
         self.dirty = true;
         true
@@ -1057,12 +1072,16 @@ impl MailWindow {
     /// A chord for the field of the open sheet: Cmd or Ctrl with V, C or X, Cmd+A (select all), Option or Ctrl with Backspace
     /// (the word before the caret) and Cmd+Backspace (everything before it). The shell sends Select All, Copy, Cut and Paste as
     /// commands when it can (`Mail::commands`); the chords are what arrives when it cannot.
-    fn chord(&mut self, key: u32, mods: u32) -> bool {
+    fn chord(&mut self, ui: &Ui, key: u32, mods: u32) -> bool {
         let primary = mods & (CHORD_CTRL | CHORD_META) != 0;
         if key == KEY_V && primary {
             return self.paste();
         }
         if self.mail.sheet.is_none() {
+            // Shift-Up and Shift-Down Arrow extend the selection in the message list from its anchor
+            if matches!(key, KEY_UP_CHORD | KEY_DOWN_CHORD) && mods == CHORD_SHIFT {
+                return self.extend_by_arrow(ui, key == KEY_DOWN_CHORD);
+            }
             return false;
         }
         if key == KEY_A && mods & CHORD_META != 0 {
@@ -1097,6 +1116,16 @@ impl MailWindow {
     /// Edit > Select All in the open sheet: the whole text of the focused field is selected, so typing, Backspace or Paste
     /// replaces it (an Add Account form retyped from the start). False when no field with text has the focus.
     pub fn select_all(&mut self) -> bool {
+        // with no sheet, Select All selects every message the list shows
+        if self.mail.sheet.is_none() {
+            if self.mail.visible_lines().is_empty() {
+                return false;
+            }
+            let fetch = self.mail.select_all_messages();
+            self.shown_changed(fetch);
+            self.dirty = true;
+            return true;
+        }
         if self.focus_is_picker() {
             return false;
         }
@@ -1487,7 +1516,8 @@ impl MailWindow {
             return false;
         }
         let crate::draw::Hit::Message(uid) = self.hit(&ctx.ui, x, y) else { return false };
-        if self.mail.open != Some(uid) {
+        // a right-click inside a selection of several keeps it, so the menu acts on all of them
+        if !self.mail.is_selected(uid) {
             self.open_message(uid);
         }
         ctx.context_menu(x, y, context_items(&self.mail, self.undo_pending()));
@@ -2005,26 +2035,31 @@ impl MailWindow {
         }
     }
 
-    /// Sets or clears a flag on the open message. The row changes at once; the server is told in the background.
+    /// Sets or clears a flag on every selected message: the open one decides which (the menu item is titled after it),
+    /// as Message > Flag and Mark as Unread do for a selection in the reference. The rows change at once; the server is
+    /// told in the background.
     fn toggle_flag(&mut self, flag: Flag) {
         let Some(uid) = self.mail.open else { return };
         let Some(flags) = self.mail.flags_of(uid) else { return };
         let on = !flags.contains(flag);
-        self.mail.set_flag_locally(uid, flag, on);
-        if flag == Flag::Flagged && !on {
-            // clearing the flag also clears its colour keywords on the server
-            self.change_message(uid, Change::Color { color: None });
-        } else {
-            self.change_message(uid, Change::Flag { flag, on });
+        for uid in self.mail.selected() {
+            self.mail.set_flag_locally(uid, flag, on);
+            if flag == Flag::Flagged && !on {
+                // clearing the flag also clears its colour keywords on the server
+                self.change_message(uid, Change::Color { color: None });
+            } else {
+                self.change_message(uid, Change::Flag { flag, on });
+            }
         }
     }
 
-    /// Message > Flag Color and Clear Flag: the open message is flagged in `color` (or loses its flag). The row changes
-    /// at once; the server is told in the background.
+    /// Message > Flag Color and Clear Flag: every selected message is flagged in `color` (or loses its flag). The rows
+    /// change at once; the server is told in the background.
     fn set_color_open(&mut self, color: Option<FlagColor>) {
-        let Some(uid) = self.mail.open else { return };
-        self.mail.set_color_locally(uid, color);
-        self.change_message(uid, Change::Color { color });
+        for uid in self.mail.selected() {
+            self.mail.set_color_locally(uid, color);
+            self.change_message(uid, Change::Color { color });
+        }
     }
 
     /// Message > Mute: the open message's conversation stops raising notifications, or starts again.
@@ -2221,43 +2256,63 @@ impl MailWindow {
         sync::spawn(self.tx.clone(), self.wake_clone(), move || sync::export(transport.as_ref(), &account, &password, &mailbox));
     }
 
-    /// Moves the open message to the account's Archive or Trash mailbox. The message leaves the list at once.
+    /// Moves the selected messages to the account's Archive or Trash mailbox. They leave the list at once.
     fn move_open(&mut self, candidates: &[&str], label: &str) {
-        let Some(uid) = self.mail.open else { return };
+        let selected = self.mail.selected();
+        if selected.is_empty() {
+            return;
+        }
         let Some(to) = self.mail.find_mailbox(candidates) else {
             self.mail.status = format!("This account has no {label} mailbox");
             return;
         };
-        self.mail.remove_row(uid);
-        self.change_message(uid, Change::Move { to });
+        for uid in selected {
+            self.mail.remove_row(uid);
+            self.change_message(uid, Change::Move { to: to.clone() });
+        }
     }
 
     /// Message > Move To and Move Again: moves the open message to `to` and remembers it for Move Again. A message leaving
     /// the Junk mailbox loses its junk mark.
     fn move_open_to(&mut self, to: &str) {
-        let Some(uid) = self.mail.open else { return };
+        let selected = self.mail.selected();
+        if selected.is_empty() {
+            return;
+        }
         self.mail.last_target = Some(to.to_string());
         let leaving_junk = JUNK_NAMES.iter().any(|name| name.eq_ignore_ascii_case(&self.mail.mailbox)) && !JUNK_NAMES.iter().any(|name| name.eq_ignore_ascii_case(to));
-        self.mail.remove_row(uid);
-        let action = if leaving_junk { Change::NotJunk { to: to.to_string() } } else { Change::Move { to: to.to_string() } };
-        self.change_message(uid, action);
+        for uid in selected {
+            self.mail.remove_row(uid);
+            let action = if leaving_junk { Change::NotJunk { to: to.to_string() } } else { Change::Move { to: to.to_string() } };
+            self.change_message(uid, action);
+        }
     }
 
     /// Message > Move to Junk: the message moves to the account's Junk mailbox marked `$Junk`.
     fn junk_open(&mut self) {
-        let Some(uid) = self.mail.open else { return };
+        let selected = self.mail.selected();
+        if selected.is_empty() {
+            return;
+        }
         let Some(to) = self.mail.find_mailbox(&JUNK_NAMES) else {
             self.mail.status = "This account has no Junk mailbox".into();
             return;
         };
-        self.mail.remove_row(uid);
-        self.change_message(uid, Change::Junk { to });
+        for uid in selected {
+            self.mail.remove_row(uid);
+            self.change_message(uid, Change::Junk { to: to.clone() });
+        }
     }
 
-    /// Message > Copy To: the open message stays where it is and a copy goes to `to`.
+    /// Message > Copy To: the selected messages stay where they are and a copy of each goes to `to`.
     fn copy_open_to(&mut self, to: &str) {
-        let Some(uid) = self.mail.open else { return };
-        self.change_message(uid, Change::Copy { to: to.to_string() });
+        let selected = self.mail.selected();
+        if selected.is_empty() {
+            return;
+        }
+        for uid in selected {
+            self.change_message(uid, Change::Copy { to: to.to_string() });
+        }
         self.mail.status = format!("Copying to {to}");
     }
 
@@ -2539,13 +2594,18 @@ impl MailWindow {
     }
 
     fn open_message(&mut self, uid: u32) {
+        let fetch = self.mail.open_message(uid).then_some(uid);
+        self.shown_changed(fetch);
+    }
+
+    /// The reader shows another message (or none, or a selection of several): it starts from the top, and the text of
+    /// `fetch` is asked for when it is not loaded yet.
+    fn shown_changed(&mut self, fetch: Option<u32>) {
         self.reader_scroll = Scroller::new();
         if let Some(bar) = self.mail.find.as_mut() {
             bar.current = 0;
         }
-        if !self.mail.open_message(uid) {
-            return;
-        }
+        let Some(uid) = fetch else { return };
         let Some(account) = self.mail.current().cloned() else { return };
         let Some(password) = self.mail.password(&account).map(str::to_string) else {
             self.mail.status = format!("No password is saved for {}", account.name);
@@ -3222,7 +3282,7 @@ impl MailWindow {
         }
     }
 
-    fn tap(&mut self, ctx: &Ctx, x: f32, y: f32, t: f64) -> bool {
+    fn tap(&mut self, ctx: &Ctx, x: f32, y: f32, t: f64, mods: ModifierFlags) -> bool {
         let hit = self.hit(&ctx.ui, x, y);
         // every click counts, so a click elsewhere in between breaks a double-click; `t` is milliseconds
         let scale = ctx.ui.pt(1.0).max(f32::EPSILON);
@@ -3256,6 +3316,14 @@ impl MailWindow {
                 crate::draw::Side::Heading(_) => return false,
                 crate::draw::Side::Add => self.mail.open_setup(),
             },
+            // Cmd-click toggles the message in the selection, Shift-click selects the range from the anchor; neither counts
+            // towards a double-click
+            crate::draw::Hit::Message(uid) if mods.command() || mods.shift() => {
+                self.last_tap = None;
+                self.clicks = ClickCounter::default();
+                let fetch = if mods.command() { self.mail.toggle_selected(uid) } else { self.mail.extend_selection(uid) };
+                self.shown_changed(fetch);
+            }
             crate::draw::Hit::Message(uid) => {
                 // a double-click on a message opens it in a viewer window (the first click already selected it)
                 let double = clicks >= 2 && self.last_tap == Some(uid);
@@ -3373,7 +3441,8 @@ fn picker_focused(mail: &Mail) -> bool {
 /// that takes typed text, or the find bar of an open message.
 fn edit_enabled(mail: &Mail) -> (bool, bool, bool, bool) {
     let Some(form) = mail.sheet.as_ref().map(Sheet::form) else {
-        return (false, false, false, mail.open.is_some() && mail.find.is_some());
+        // the message list takes Select All (every message it shows)
+        return (!mail.visible_lines().is_empty(), false, false, mail.open.is_some() && mail.find.is_some());
     };
     let typed = !picker_focused(mail);
     let has_text = typed && form.fields.get(form.focus).is_some_and(|f| !f.value.is_empty());
