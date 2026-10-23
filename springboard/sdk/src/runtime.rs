@@ -1096,7 +1096,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
         for chunk in notes.chunks(crate::proto::axtext::MAX_NOTES) {let _=chan.send(&ToShell::AxNotify(chunk.to_vec()).encode(),&[]);}
         let commands=app.commands(c);
         let menus=app.menus_for(c,c.key_window());
-        if menus!=menus_seen {let _=chan.send(&ToShell::AppMenus(menus.clone()).encode(),&[]);menus_seen=menus;}
+        if menus!=menus_seen {send_app_menus(&chan,&menus);menus_seen=menus;}
         if commands_seen != Some(commands) {commands_seen=Some(commands);let _=chan.send(&ToShell::Commands(commands).encode(),&[]);}
         let titles=app.undo_titles(c);
         if titles!=undo_titles_seen {let _=chan.send(&ToShell::UndoTitles{undo:titles.0.clone(),redo:titles.1.clone()}.encode(),&[]);undo_titles_seen=titles;}
@@ -1157,6 +1157,23 @@ fn send_message(chan: &Channel, m: &ToShell) {
         _ => {
             let _ = chan.send(&m.encode(), &[]);
         }
+    }
+}
+
+/// Sends the app's menus (`NativeApp.mainMenu`) in as many packets as they need (`proto::app_menu_packets`), and logs
+/// each menu that loses items to a cap or the packet size, so a too-long menu is never cut without a word (once per
+/// menu and count, not on every update).
+fn send_app_menus(chan: &Channel, menus: &[crate::proto::AppMenu]) {
+    thread_local! {static WARNED: RefCell<std::collections::HashSet<(String, usize)>> = RefCell::new(Default::default());}
+    let out = crate::proto::app_menu_packets(menus);
+    for (title, n) in &out.dropped {
+        if !WARNED.with(|w| w.borrow_mut().insert((title.clone(), *n))) {
+            continue;
+        }
+        eprintln!("bifrost-app: menu \"{title}\" is over the shell's limits ({} items a menu level, {} a menu, {} menus): {n} items left out", crate::proto::MAX_APP_MENU_ITEMS, crate::proto::MAX_APP_MENU_TOTAL, crate::proto::MAX_APP_MENUS);
+    }
+    for packet in &out.packets {
+        let _ = chan.send(packet, &[]);
     }
 }
 

@@ -927,6 +927,9 @@ pub enum ToShell {
     /// Sent when they change; an empty list clears them. The app recomputes enabled and checked state, which is
     /// `validateMenuItem:`. Choosing an item answers `ToApp::MenuAction(id)`.
     AppMenus(Vec<AppMenu>),
+    /// More of the app's menus, appended to the ones the last `AppMenus` carried (`app_menu_packets` splits a set that
+    /// does not fit one packet; at most `MAX_APP_MENUS` in all). Tag 0x251.
+    AppMenusMore(Vec<AppMenu>),
     /// `NativeDocument` window state: the title to show (`displayName`), whether the document has unsaved changes
     /// (`isDocumentEdited`: the close light shows the dirty dot and the title gets "- Edited") and the represented
     /// file name (`representedFilename`, a name only, never a path). Empty title: the app name.
@@ -1038,7 +1041,12 @@ pub enum ToShell {
 }
 
 pub const MAX_APP_MENUS: usize = 8;
-pub const MAX_APP_MENU_ITEMS: usize = 48;
+/// Items in one menu level: a top-level menu's own items, or the direct children of one submenu (separators count).
+/// Each submenu has a budget of its own, so a long Font submenu does not crowd out the rest of its Format menu. Items
+/// past it are left out (`AppMenu::kept_items`) and the SDK logs a warning; the shell scrolls a menu taller than the screen.
+pub const MAX_APP_MENU_ITEMS: usize = 256;
+/// Items in one top-level menu with all its submenus.
+pub const MAX_APP_MENU_TOTAL: usize = 1024;
 /// Item titles are cut to this many characters.
 pub const MAX_APP_MENU_TITLE: usize = 64;
 /// How deep submenus nest (items carry a `depth`, 0 to this).
@@ -1050,6 +1058,130 @@ pub struct AppMenu {
     pub title: String,
     /// Items in order. A submenu is an item with `submenu` set, followed by its children at `depth + 1`.
     pub items: Vec<AppMenuItem>,
+}
+
+impl AppMenu {
+    /// The items the shell takes, in order, and how many are left out: at most `MAX_APP_MENU_ITEMS` in each menu level
+    /// (the menu's own items, and each submenu's direct children, counted apart) and `MAX_APP_MENU_TOTAL` in all. A
+    /// submenu header that is left out takes its children with it. Depths past `MAX_APP_MENU_DEPTH` count as that depth.
+    pub fn kept_items(&self) -> (Vec<&AppMenuItem>, usize) {
+        let levels = MAX_APP_MENU_DEPTH as usize + 1;
+        let mut counts = vec![0usize; levels + 1];
+        // the depth of a header that was left out: its children (deeper items right after it) go too
+        let mut skipping: Option<usize> = None;
+        let (mut kept, mut dropped) = (Vec::new(), 0usize);
+        for item in &self.items {
+            let d = (item.depth.min(MAX_APP_MENU_DEPTH)) as usize;
+            if let Some(s) = skipping {
+                if d > s {
+                    dropped += 1;
+                    continue;
+                }
+                skipping = None;
+            }
+            if counts[d] >= MAX_APP_MENU_ITEMS || kept.len() >= MAX_APP_MENU_TOTAL {
+                dropped += 1;
+                if item.submenu {
+                    skipping = Some(d);
+                }
+                continue;
+            }
+            counts[d] += 1;
+            if item.submenu {
+                // a new submenu: its children start a level of their own
+                counts[d + 1..].iter_mut().for_each(|c| *c = 0);
+            }
+            kept.push(item);
+        }
+        (kept, dropped)
+    }
+
+    /// How many items the shell would leave out of this menu (`kept_items`); 0 when it fits.
+    pub fn dropped_items(&self) -> usize {
+        self.kept_items().1
+    }
+}
+
+/// The packets that carry an app's menus (`app_menu_packets`) and what had to be left out.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AppMenuPackets {
+    /// `ToShell::AppMenus` with the menus that fit one packet, then `ToShell::AppMenusMore` for the rest, in order.
+    pub packets: Vec<Vec<u8>>,
+    /// Each menu that lost items, by title, with the number of items left out (over a cap or over the packet size); a
+    /// menu past `MAX_APP_MENUS` is listed with all of its items.
+    pub dropped: Vec<(String, usize)>,
+}
+
+/// The menu `m` on the wire (title, item count, items), cut at `budget` bytes. Returns the bytes and the items left out.
+fn encode_app_menu(m: &AppMenu, budget: usize) -> (Vec<u8>, usize) {
+    let mut b = Vec::new();
+    str_(&mut b, &m.title.chars().take(48).collect::<String>());
+    let n_at = b.len();
+    u32_(&mut b, 0);
+    let (items, mut dropped) = m.kept_items();
+    let mut n = 0u32;
+    for (k, i) in items.iter().enumerate() {
+        let title = i.title.chars().take(MAX_APP_MENU_TITLE).collect::<String>();
+        let key = i.key.chars().take(24).collect::<String>();
+        if b.len() + 4 + 4 + title.len() + 4 + key.len() + 2 > budget {
+            dropped += items.len() - k;
+            break;
+        }
+        u32_(&mut b, i.id);
+        str_(&mut b, &title);
+        str_(&mut b, &key);
+        b.push(i.enabled as u8 | (i.checked as u8) << 1 | (i.separator as u8) << 2 | (i.submenu as u8) << 3 | (i.prints as u8) << 4);
+        b.push(i.depth.min(MAX_APP_MENU_DEPTH));
+        n += 1;
+    }
+    b[n_at..n_at + 4].copy_from_slice(&n.to_le_bytes());
+    (b, dropped)
+}
+
+/// One menus packet with tag `tag`: whole menus from the front of `menus` while they fit (the first one always, cut to
+/// the packet when it alone is too large). Returns the packet, how many menus it holds and the items left out of each.
+fn app_menus_packet(tag: u32, menus: &[AppMenu]) -> (Vec<u8>, usize, Vec<(String, usize)>) {
+    let budget = MAX_PACKET - 1024;
+    let mut b = Vec::new();
+    u32_(&mut b, tag);
+    u32_(&mut b, 0);
+    let (mut kept, mut dropped) = (0usize, Vec::new());
+    for m in menus {
+        let (one, cut) = encode_app_menu(m, budget - 8);
+        if kept > 0 && b.len() + one.len() > budget {
+            break;
+        }
+        b.extend_from_slice(&one);
+        if cut > 0 {
+            dropped.push((m.title.clone(), cut));
+        }
+        kept += 1;
+    }
+    b[4..8].copy_from_slice(&(kept as u32).to_le_bytes());
+    (b, kept, dropped)
+}
+
+/// The packets that carry `menus` (`NativeApp.mainMenu`): an `AppMenus` packet with the menus that fit, then an
+/// `AppMenusMore` packet for each further group, so a long menu (every installed font family) does not push the
+/// menus after it off the bar. Menus are never split across packets. Nothing is cut silently: what is left out is
+/// listed in `dropped`, for the sender to log.
+pub fn app_menu_packets(menus: &[AppMenu]) -> AppMenuPackets {
+    let shown = &menus[..menus.len().min(MAX_APP_MENUS)];
+    let mut dropped: Vec<(String, usize)> = Vec::new();
+    let mut packets = Vec::new();
+    let mut at = 0;
+    loop {
+        let tag = if packets.is_empty() { tag::APP_MENUS } else { tag::APP_MENUS_MORE };
+        let (packet, n, cut) = app_menus_packet(tag, &shown[at..]);
+        packets.push(packet);
+        dropped.extend(cut);
+        at += n;
+        if at >= shown.len() || n == 0 {
+            break;
+        }
+    }
+    dropped.extend(menus.iter().skip(MAX_APP_MENUS).map(|m| (m.title.clone(), m.items.len())));
+    AppMenuPackets { packets, dropped }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1178,6 +1310,8 @@ mod tag {
     pub const DOC_OPEN_EX: u32 = 0x119;
     pub const MATERIALS: u32 = 0x116;
     pub const APP_MENUS: u32 = 0x117;
+    /// App -> shell: more menus after an `APP_MENUS` packet (`ToShell::AppMenusMore`).
+    pub const APP_MENUS_MORE: u32 = 0x251;
     pub const KEYCHAIN: u32 = 0x118;
     pub const CONTROLS_TREE: u32 = 0x11a;
     pub const PASTEBOARD: u32 = 0x190;
@@ -2046,39 +2180,10 @@ impl ToShell {
                 }
             }
             ToShell::ContextMenu{x,y,items}=>{u32_(&mut b,tag::CONTEXT_MENU);f32_(&mut b,*x);f32_(&mut b,*y);u32_(&mut b,items.len().min(32) as u32);for item in items.iter().take(32){u32_(&mut b,item.id);b.push(item.enabled as u8);let label=item.label.chars().take(128).collect::<String>();str_(&mut b,&label);}},
-            ToShell::AppMenus(menus) => {
-                // Menus that do not fit one packet are cut (whole items, then whole menus), never split.
-                let budget = MAX_PACKET - 1024;
-                u32_(&mut b, tag::APP_MENUS);
-                let count_at = b.len();
-                u32_(&mut b, 0);
-                let mut kept = 0u32;
-                for m in menus.iter().take(MAX_APP_MENUS) {
-                    if b.len() + 80 > budget {
-                        break;
-                    }
-                    str_(&mut b, &m.title.chars().take(48).collect::<String>());
-                    let n_at = b.len();
-                    u32_(&mut b, 0);
-                    let mut n = 0u32;
-                    for i in m.items.iter().take(MAX_APP_MENU_ITEMS) {
-                        let title = i.title.chars().take(MAX_APP_MENU_TITLE).collect::<String>();
-                        let key = i.key.chars().take(24).collect::<String>();
-                        if b.len() + 4 + 4 + title.len() + 4 + key.len() + 2 > budget {
-                            break;
-                        }
-                        u32_(&mut b, i.id);
-                        str_(&mut b, &title);
-                        str_(&mut b, &key);
-                        b.push(i.enabled as u8 | (i.checked as u8) << 1 | (i.separator as u8) << 2 | (i.submenu as u8) << 3 | (i.prints as u8) << 4);
-                        b.push(i.depth.min(MAX_APP_MENU_DEPTH));
-                        n += 1;
-                    }
-                    b[n_at..n_at + 4].copy_from_slice(&n.to_le_bytes());
-                    kept += 1;
-                }
-                b[count_at..count_at + 4].copy_from_slice(&kept.to_le_bytes());
-            }
+            // Menus that do not fit one packet are cut (whole items, then whole menus), never split; `app_menu_packets`
+            // sends the rest in `AppMenusMore` packets and reports what was cut.
+            ToShell::AppMenus(menus) => b = app_menus_packet(tag::APP_MENUS, &menus[..menus.len().min(MAX_APP_MENUS)]).0,
+            ToShell::AppMenusMore(menus) => b = app_menus_packet(tag::APP_MENUS_MORE, &menus[..menus.len().min(MAX_APP_MENUS)]).0,
             ToShell::RemoteSharing { on } => {u32_(&mut b,tag::REMOTE_SHARING);b.push(*on as u8);}
             ToShell::Controls(nodes) => {
                 u32_(&mut b,tag::CONTROLS);u32_(&mut b,0);let mut count=0u32;
@@ -2453,7 +2558,8 @@ impl ToShell {
                 }
                 ToShell::DocGrantPath { request, path }
             }
-            tag::APP_MENUS => {
+            tag::APP_MENUS | tag::APP_MENUS_MORE => {
+                let more = p.get(..4) == Some(&tag::APP_MENUS_MORE.to_le_bytes()[..]);
                 let n = r.u32()? as usize;
                 if n > MAX_APP_MENUS {
                     return Err(DecodeError::BadValue);
@@ -2462,7 +2568,7 @@ impl ToShell {
                 for _ in 0..n {
                     let title = r.str()?;
                     let count = r.u32()? as usize;
-                    if title.len() > 512 || count > MAX_APP_MENU_ITEMS {
+                    if title.len() > 512 || count > MAX_APP_MENU_TOTAL {
                         return Err(DecodeError::BadValue);
                     }
                     let mut items = Vec::new();
@@ -2479,7 +2585,7 @@ impl ToShell {
                     }
                     menus.push(AppMenu { title, items });
                 }
-                ToShell::AppMenus(menus)
+                if more { ToShell::AppMenusMore(menus) } else { ToShell::AppMenus(menus) }
             }
             tag::KEYCHAIN => {
                 let request = r.u32()?;
@@ -2935,7 +3041,85 @@ mod sys_tests {
         assert!(bytes.len() < MAX_PACKET);
         let ToShell::AppMenus(m) = ToShell::decode(&bytes).unwrap() else { panic!() };
         assert!(!m.is_empty() && m.len() <= MAX_APP_MENUS);
-        assert_eq!((m[0].items.len(), m[0].items[0].title.chars().count()), (MAX_APP_MENU_ITEMS, MAX_APP_MENU_TITLE));
+        assert!(m[0].items.len() < 200, "the packet size cuts the first menu");
+        assert_eq!(m[0].items[0].title.chars().count(), MAX_APP_MENU_TITLE);
+    }
+
+    fn level(n: usize, depth: u8) -> Vec<AppMenuItem> {
+        (0..n).map(|i| AppMenuItem::new(i as u32 + 1, "x").depth(depth)).collect()
+    }
+
+    /// Each submenu has a budget of its own: a Font submenu with every family does not push out the items after it.
+    #[test]
+    fn menu_items_are_counted_per_level() {
+        let mut items = vec![AppMenuItem::submenu("Font")];
+        items.extend(level(200, 1));
+        items.push(AppMenuItem::submenu("Text"));
+        items.extend(level(10, 1));
+        items.extend(level(40, 0));
+        let menu = AppMenu { title: "Format".into(), items };
+        assert_eq!(menu.dropped_items(), 0, "{} items in all, but no level is over the cap", menu.items.len());
+        let (kept, _) = menu.kept_items();
+        assert_eq!(kept.len(), menu.items.len());
+        // one level over the cap: only that level loses items, the next submenu and the top level keep theirs
+        let mut items = vec![AppMenuItem::submenu("Font")];
+        items.extend(level(MAX_APP_MENU_ITEMS + 5, 1));
+        items.push(AppMenuItem::submenu("Text"));
+        items.extend(level(3, 1));
+        let menu = AppMenu { title: "Format".into(), items };
+        let (kept, dropped) = menu.kept_items();
+        assert_eq!(dropped, 5);
+        assert_eq!(kept.iter().filter(|i| i.title == "Text").count(), 1, "the Text submenu is kept");
+        assert_eq!(kept.iter().rev().take_while(|i| i.depth == 1).count(), 3, "with all its items");
+    }
+
+    /// A submenu header past its level's cap goes with its children; items at the parent level after it are counted again.
+    #[test]
+    fn a_dropped_submenu_takes_its_children_along() {
+        let mut items = level(MAX_APP_MENU_ITEMS, 0);
+        items.push(AppMenuItem::submenu("Too Many"));
+        items.extend(level(4, 1));
+        let menu = AppMenu { title: "Long".into(), items };
+        let (kept, dropped) = menu.kept_items();
+        assert_eq!((kept.len(), dropped), (MAX_APP_MENU_ITEMS, 5));
+        assert!(kept.iter().all(|i| i.depth == 0));
+    }
+
+    /// Menus that do not fit one packet go in `AppMenusMore` packets after the first, whole; what is cut is reported.
+    #[test]
+    fn long_menus_are_split_over_packets_and_nothing_is_cut_silently() {
+        let family = |i: usize| AppMenuItem::new(i as u32 + 1, &format!("Family Name Number {i:03}")).depth(1);
+        let big = |title: &str| {
+            let mut items = vec![AppMenuItem::submenu("Font")];
+            items.extend((0..250).map(family));
+            AppMenu { title: title.into(), items }
+        };
+        let menus = vec![AppMenu { title: "File".into(), items: level(10, 0) }, big("Format"), big("Preferences"), AppMenu { title: "Window".into(), items: level(3, 0) }];
+        let out = app_menu_packets(&menus);
+        assert!(out.packets.len() >= 2, "too much for one packet");
+        assert!(out.dropped.is_empty(), "everything fits in some packet: {:?}", out.dropped);
+        let mut got = Vec::new();
+        for (k, p) in out.packets.iter().enumerate() {
+            assert!(p.len() <= MAX_PACKET);
+            match ToShell::decode(p).unwrap() {
+                ToShell::AppMenus(m) if k == 0 => got.extend(m),
+                ToShell::AppMenusMore(m) if k > 0 => got.extend(m),
+                other => panic!("packet {k} is {other:?}"),
+            }
+        }
+        assert_eq!(got, menus, "the menus arrive whole and in order");
+        // one menu bigger than a packet is cut, and the cut is reported
+        let huge = AppMenu { title: "Huge".into(), items: (0..MAX_APP_MENU_ITEMS).map(|i| AppMenuItem::new(i as u32, &"t".repeat(MAX_APP_MENU_TITLE))).collect() };
+        let out = app_menu_packets(&[huge]);
+        assert_eq!(out.packets.len(), 1);
+        assert!(matches!(out.dropped.as_slice(), [(t, n)] if t == "Huge" && *n > 0), "{:?}", out.dropped);
+        // a ninth menu is reported with all its items
+        let nine: Vec<AppMenu> = (0..MAX_APP_MENUS + 1).map(|i| AppMenu { title: format!("M{i}"), items: level(2, 0) }).collect();
+        assert_eq!(app_menu_packets(&nine).dropped, vec![(format!("M{MAX_APP_MENUS}"), 2)]);
+        // no menus: one packet that clears them
+        let out = app_menu_packets(&[]);
+        assert_eq!(out.packets.len(), 1);
+        assert_eq!(ToShell::decode(&out.packets[0]), Ok(ToShell::AppMenus(vec![])));
     }
     #[test]
     fn the_apps_own_print_item_keeps_its_flag_over_the_wire() {
