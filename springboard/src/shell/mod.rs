@@ -36,6 +36,7 @@ mod audiosvc;
 pub mod assistive_touch;
 pub mod store;
 pub mod weather;
+pub mod market_quotes;
 pub mod evkeys;
 pub mod focus;
 pub mod fsutil;

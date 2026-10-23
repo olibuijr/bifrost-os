@@ -1,24 +1,16 @@
-//! The quote and price-history service: symbol rules, request addresses, the parser for the service's JSON answers
-//! and the app's own CSV cache form. The service is Yahoo Finance's public chart endpoint (`/v8/finance/chart`): no
-//! key, no account and no cookie are sent, only the symbol (the reference app credits the same source). One request
-//! per symbol gives the latest price, the name, the previous close and a month of daily closes (the sparkline); a
-//! longer range gives the chart. Stooq, the source before, now answers its quote address with 404 and its history
-//! address with a JavaScript browser check (E2E W4-14).
+//! The quote and price-history service as the app uses it: the cache forms and the fetches. The service itself
+//! (symbol rules, addresses, the chart parser and the private fetcher) is `springboard::shell::market_quotes`, shared
+//! with the Weather app's watchlist: Yahoo Finance's public chart endpoint, asked with the symbol and nothing else (no
+//! key, account, cookie or crumb, a generic User-Agent; see that module). Stooq, the source before, now answers its
+//! quote address with 404 and its history address with a JavaScript browser check (E2E W4-14).
 //! The network is passed in as a `Fetch`, so the parsers and the fetch functions can be checked without it.
 
 use crate::model::{Bar, Quote};
-use bifrost_core::json::{self, Json};
+use springboard::shell::market_quotes::{fetch_chart, history_url, quote_url, Chart};
+pub use springboard::shell::market_quotes::{display_symbol, normalise_symbol, ATTRIBUTION};
 use springboard::shell::music::radio::Fetch;
 use std::io;
 
-/// The chart endpoint; the symbol follows, then the range and the interval.
-pub const CHART_API: &str = "https://query1.finance.yahoo.com/v8/finance/chart/";
-/// The range a quote request asks for: daily closes enough for the sidebar's sparkline and the previous close.
-pub const QUOTE_RANGE: &str = "1mo";
-/// The range of the chart.
-pub const HISTORY_RANGE: &str = "6mo";
-/// The largest answer the app reads (a month is a few kilobytes; six months a few tens).
-pub const BODY_LIMIT: usize = 1024 * 1024;
 /// The sessions the chart keeps (about four months of trading days).
 pub const HISTORY_KEEP: usize = 90;
 /// The header of the cached quotes file.
@@ -26,126 +18,17 @@ const QUOTES_HEADER: &str = "Symbol,Date,Time,Previous,Close,Name,Spark";
 /// The header of a cached history file.
 const HISTORY_HEADER: &str = "Date,Close";
 
-/// A typed symbol in the service's form: upper case, "AAPL", "^GSPC", "BRK-B", "MAREL.IC". The ".us" suffix of the
-/// old Stooq form is dropped and "^SPX" becomes "^GSPC". Returns `None` for an empty or malformed symbol.
-pub fn normalise_symbol(raw: &str) -> Option<String> {
-    let s = raw.trim().to_uppercase();
-    let s = s.strip_suffix(".US").unwrap_or(&s).to_string();
-    if s.is_empty() || s.len() > 12 || !s.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '^' | '-' | '=')) {
-        return None;
+/// The quote of a chart answer: the price against the close before the latest session, the month of closes as the
+/// sparkline.
+pub fn quote_of(chart: &Chart) -> Quote {
+    Quote {
+        symbol: chart.symbol.clone(),
+        name: chart.name.clone(),
+        stamp: chart.stamp(),
+        open: chart.previous_close(),
+        close: chart.price,
+        spark: chart.closes(),
     }
-    Some(if s == "^SPX" { "^GSPC".to_string() } else { s })
-}
-
-/// The symbol as the screen shows it.
-pub fn display_symbol(symbol: &str) -> String {
-    symbol.to_uppercase()
-}
-
-/// The symbol escaped for a URL path ("^GSPC" is "%5EGSPC").
-fn escape(symbol: &str) -> String {
-    symbol.chars().map(|c| if c.is_ascii_alphanumeric() || matches!(c, '.' | '-') { c.to_string() } else { format!("%{:02X}", c as u32) }).collect()
-}
-
-/// The address of `symbol`'s chart over `range` in daily bars.
-fn chart_url(symbol: &str, range: &str) -> String {
-    format!("{CHART_API}{}?range={range}&interval=1d", escape(symbol))
-}
-
-/// The address of the latest quote (and a month of closes) of one symbol.
-pub fn quote_url(symbol: &str) -> String {
-    chart_url(symbol, QUOTE_RANGE)
-}
-
-/// The address of the daily history of one symbol.
-pub fn history_url(symbol: &str) -> String {
-    chart_url(symbol, HISTORY_RANGE)
-}
-
-/// One answer of the chart endpoint: the meta block and the daily closes.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Chart {
-    pub symbol: String,
-    pub name: String,
-    pub price: f64,
-    /// Unix seconds of the price, and the exchange's offset from UTC in seconds.
-    pub time: i64,
-    pub offset: i64,
-    /// Daily bars, oldest first (sessions without a close are left out).
-    pub bars: Vec<Bar>,
-}
-
-impl Chart {
-    /// The quote: the price against the close before the latest session.
-    pub fn quote(&self) -> Quote {
-        let closes: Vec<f64> = self.bars.iter().map(|b| b.close).collect();
-        let previous = if closes.len() >= 2 { closes[closes.len() - 2] } else { closes.first().copied().unwrap_or(self.price) };
-        Quote {
-            symbol: self.symbol.clone(),
-            name: self.name.clone(),
-            stamp: stamp(self.time + self.offset),
-            open: previous,
-            close: self.price,
-            spark: closes,
-        }
-    }
-}
-
-/// Days since 1970-01-01 to a civil (year, month, day).
-fn civil(days: i64) -> (i64, u32, u32) {
-    let z = days + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z.rem_euclid(146_097);
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
-    (yoe + era * 400 + i64::from(m <= 2), m, d)
-}
-
-/// "2026-10-22" for local unix seconds.
-fn iso_date(local: i64) -> String {
-    let (y, m, d) = civil(local.div_euclid(86_400));
-    format!("{y:04}-{m:02}-{d:02}")
-}
-
-/// "2026-10-22 16:00" for local unix seconds.
-fn stamp(local: i64) -> String {
-    let secs = local.rem_euclid(86_400);
-    format!("{} {:02}:{:02}", iso_date(local), secs / 3600, secs / 60 % 60)
-}
-
-/// Reads one chart answer. The service's own error ("No data found, symbol may be delisted") is the `Err` text.
-pub fn parse_chart(text: &str) -> Result<Chart, String> {
-    let root = json::parse(text).map_err(|_| "The quote service sent an answer it could not read.".to_string())?;
-    let chart = root.get("chart").ok_or("The quote service sent an unexpected answer.")?;
-    if let Some(e) = chart.get("error").filter(|e| **e != Json::Null) {
-        return Err(e.str_field("description").unwrap_or_else(|| "The symbol was not found.".to_string()));
-    }
-    let result = chart.get("result").and_then(Json::as_array).and_then(|r| r.first()).ok_or("The symbol was not found.")?;
-    let meta = result.get("meta").ok_or("The quote service sent an unexpected answer.")?;
-    let num = |j: &Json, k: &str| j.get(k).and_then(Json::number);
-    let price = num(meta, "regularMarketPrice").ok_or("The symbol has no price.")?;
-    let symbol = meta.str_field("symbol").and_then(|s| normalise_symbol(&s)).ok_or("The quote service sent an unexpected answer.")?;
-    let name = meta.str_field("shortName").or_else(|| meta.str_field("longName")).unwrap_or_default();
-    let offset = num(meta, "gmtoffset").unwrap_or(0.0) as i64;
-    let time = num(meta, "regularMarketTime").unwrap_or(0.0) as i64;
-    let stamps = result.get("timestamp").and_then(Json::as_array).unwrap_or(&[]);
-    let closes = result
-        .get("indicators")
-        .and_then(|i| i.get("quote"))
-        .and_then(Json::as_array)
-        .and_then(|q| q.first())
-        .and_then(|q| q.get("close"))
-        .and_then(Json::as_array)
-        .unwrap_or(&[]);
-    let bars = stamps
-        .iter()
-        .zip(closes)
-        .filter_map(|(t, c)| Some(Bar { date: iso_date(t.number()? as i64 + offset), close: c.number()? }))
-        .collect();
-    Ok(Chart { symbol, name, price, time, offset, bars })
 }
 
 /// The cached quotes file: one row per quote, the name with its commas taken out and the sparkline's closes joined
@@ -219,17 +102,6 @@ fn is_iso_date(s: &str) -> bool {
     b.len() == 10 && b[4] == b'-' && b[7] == b'-' && b.iter().enumerate().all(|(i, c)| i == 4 || i == 7 || c.is_ascii_digit())
 }
 
-/// The chart of one symbol over `range`. A symbol the service does not know is `Ok(Err(message))`; a failed request
-/// (no network, the service down) is the outer `Err`.
-fn fetch_chart(symbol: &str, url: &str, net: &dyn Fetch) -> io::Result<Result<Chart, String>> {
-    match net.get(url, BODY_LIMIT) {
-        Ok(body) => Ok(parse_chart(&String::from_utf8_lossy(&body))),
-        // the service answers an unknown symbol with 404 (and its own error in the body, which the fetch drops)
-        Err(e) if e.to_string().contains("status 404") => Ok(Err(format!("{} was not found.", display_symbol(symbol)))),
-        Err(e) => Err(e),
-    }
-}
-
 /// What a quote request brought back: the cache text, the quotes, and the symbols the service did not know with why.
 pub type QuoteAnswer = (String, Vec<Quote>, Vec<(String, String)>);
 
@@ -241,7 +113,7 @@ pub fn fetch_quotes(symbols: &[String], net: &dyn Fetch) -> io::Result<QuoteAnsw
     for symbol in symbols {
         match fetch_chart(symbol, &quote_url(symbol), net) {
             Ok(Ok(chart)) => {
-                let mut q = chart.quote();
+                let mut q = quote_of(&chart);
                 q.symbol = symbol.clone();
                 quotes.push(q);
             }
@@ -261,12 +133,14 @@ pub fn fetch_history(symbol: &str, net: &dyn Fetch) -> io::Result<(String, Vec<B
     if chart.bars.is_empty() {
         return Err(io::Error::other("no history in the answer"));
     }
-    Ok((history_csv(&chart.bars), chart.bars))
+    let bars: Vec<Bar> = chart.bars;
+    Ok((history_csv(&bars), bars))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use springboard::shell::market_quotes::parse_chart;
 
     /// A trimmed chart answer as the service sends it (three sessions, one without a close).
     const CHART: &str = r#"{"chart":{"result":[{"meta":{"currency":"USD","symbol":"AAPL","regularMarketTime":1792699201,
@@ -303,12 +177,7 @@ mod tests {
     fn symbols_are_normalised_to_the_service_form() {
         assert_eq!(normalise_symbol(" aapl "), Some("AAPL".to_string()));
         assert_eq!(normalise_symbol("nvda.us"), Some("NVDA".to_string()), "the old Stooq form still reads");
-        assert_eq!(normalise_symbol("^spx"), Some("^GSPC".to_string()));
-        assert_eq!(normalise_symbol("brk-b"), Some("BRK-B".to_string()));
         assert_eq!(normalise_symbol("marel.ic"), Some("MAREL.IC".to_string()));
-        assert_eq!(normalise_symbol(""), None);
-        assert_eq!(normalise_symbol("a b"), None);
-        assert_eq!(normalise_symbol("waytoolongsymbol"), None);
         assert_eq!(display_symbol("AAPL"), "AAPL");
     }
 
@@ -326,7 +195,7 @@ mod tests {
         assert_eq!(chart.name, "Apple Inc.");
         assert_eq!(chart.bars.iter().map(|b| b.close).collect::<Vec<_>>(), [339.5, 343.99, 348.22], "a session without a close is left out");
         assert_eq!(chart.bars[0].date, "2026-10-20", "dates are the exchange's own days");
-        let q = chart.quote();
+        let q = quote_of(&chart);
         assert_eq!((q.open, q.close), (343.99, 348.22), "the change is against the previous close");
         assert!((q.change_pct() - 1.23).abs() < 0.01);
         assert_eq!(q.stamp, "2026-10-22 16:00");
@@ -341,7 +210,7 @@ mod tests {
 
     #[test]
     fn the_quote_cache_round_trips() {
-        let q = parse_chart(CHART).unwrap().quote();
+        let q = quote_of(&parse_chart(CHART).unwrap());
         let csv = quotes_csv(&[q.clone()]);
         assert!(csv.starts_with(QUOTES_HEADER));
         assert_eq!(parse_quotes(&csv), vec![q]);
@@ -396,9 +265,7 @@ mod tests {
     }
 
     #[test]
-    fn civil_dates_follow_the_calendar() {
-        assert_eq!(iso_date(0), "1970-01-01");
-        assert_eq!(iso_date(951_782_400), "2000-02-29");
-        assert_eq!(stamp(1_792_699_201 - 14_400), "2026-10-22 16:00");
+    fn the_source_credit_names_the_service_and_the_delay() {
+        assert_eq!(ATTRIBUTION, "Quotes from Yahoo Finance \u{b7} delayed");
     }
 }

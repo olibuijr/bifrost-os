@@ -33,12 +33,9 @@ impl Quote {
     }
 }
 
-/// One daily bar of a price history: the session date (ISO, `YYYY-MM-DD`) and its close.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Bar {
-    pub date: String,
-    pub close: f64,
-}
+/// One daily bar of a price history: the session date (ISO, `YYYY-MM-DD`) and its close. The quote service's own type
+/// (`springboard::shell::market_quotes`, shared with the Weather app's watchlist).
+pub use springboard::shell::market_quotes::Bar;
 
 /// Why a symbol could not join the watchlist.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
