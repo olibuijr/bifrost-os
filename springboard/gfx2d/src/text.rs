@@ -232,6 +232,10 @@ pub fn placements(font: &Font<'_>, run: &TextRun) -> Vec<Placement> {
     let base = ox as f32 + PAD as f32;
     let mut out = Vec::with_capacity(run.text.len());
     for (i, ch) in run.text.char_indices() {
+        // a default-ignorable character has no glyph and no advance (as on the CPU path): never a `.notdef` box
+        if bifrost_render::font::is_default_ignorable(ch) {
+            continue;
+        }
         let gid = font.glyph(ch);
         let pen = base + font.measure_var(&run.text[..i], run.px, &run.vars);
         let (whole, q) = split_pen(pen);
@@ -405,6 +409,18 @@ mod tests {
         let mut h = DefaultHasher::new();
         t.hash(&mut h);
         h.finish()
+    }
+
+    #[test]
+    fn placements_skip_default_ignorable_characters() {
+        let data = sf();
+        let font = Font::parse(&data).unwrap();
+        let plain = placements(&font, &run("548 St.", 20.0, 0.0, 0.0));
+        let padded = placements(&font, &run("5\u{200b}4\u{2060}8 S\u{ad}t.\u{feff}", 20.0, 0.0, 0.0));
+        let chars = |v: &[Placement]| v.iter().map(|p| p.ch).collect::<String>();
+        assert_eq!(chars(&padded), "548 St.", "no glyph is placed for an invisible character");
+        let pens = |v: &[Placement]| v.iter().map(|p| p.pen).collect::<Vec<f32>>();
+        assert_eq!(pens(&padded), pens(&plain), "and they move no pen");
     }
 
     #[test]
