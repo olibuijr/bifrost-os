@@ -3170,6 +3170,8 @@ mod tests {
             edit.range.set_start(0.25);
             edit.range.set_end(0.5);
         }
+        // the person allowed the microphone (without an answer Record waits for consent: `mic_wait`)
+        app.reply(Ask::Mic, &Ok(parse(r#"{"media":"microphone","status":"authorized"}"#)));
         // Record starts the take; without an audio service it cannot, and says so
         app.activate(&ui, Target::Done);
         assert!(app.trim.is_none() && !app.recording);
