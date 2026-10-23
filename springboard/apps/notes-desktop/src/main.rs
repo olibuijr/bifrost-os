@@ -485,8 +485,30 @@ impl App for NotesApp {
             .with(Command::SelectAll, text)
     }
 
-    fn undo_titles(&self, _ctx: &Ctx) -> (String, String) {
-        self.notes.as_ref().map(|n| n.undo_titles()).unwrap_or_default()
+    /// Edit > Undo and Redo name the step of the window that has the keys: a note window's own history, or the main
+    /// editor's.
+    fn undo_titles(&self, ctx: &Ctx) -> (String, String) {
+        let Some(n) = &self.notes else { return Default::default() };
+        let key = ctx.key_window();
+        if !key.is_main() && n.windows.note_of(key).is_some() {
+            return n.window_undo_titles(key);
+        }
+        n.undo_titles()
+    }
+
+    /// An input method's composition in the main window: the search field or the open note's editor.
+    fn text_input(&mut self, ctx: &Ctx, ev: bifrost_app::proto::ToApp) -> bool {
+        let now = bifrost_app::proto::sys::now_ms();
+        self.notes.as_mut().is_some_and(|n| n.text_input(&ctx.ui, &ev, now))
+    }
+
+    /// The key window's composition: a note window composes in its own text, the main window in `text_input`.
+    fn window_text_input(&mut self, ctx: &Ctx, window: WindowId, ev: bifrost_app::proto::ToApp) -> bool {
+        if window.is_main() {
+            return self.text_input(ctx, ev);
+        }
+        let now = bifrost_app::proto::sys::now_ms();
+        self.notes.as_mut().is_some_and(|n| n.window_text_input(&ctx.ui, window, &ev, now))
     }
 
     /// A chosen entry of the menu bar extra: New Quick Note starts a note (or reopens the last quick note when the
@@ -916,14 +938,27 @@ impl App for NotesApp {
         false
     }
 
+    /// The wheel over a note window (window points, turned into the px the window is drawn in) scrolls its text.
+    fn window_pointer(&mut self, ctx: &Ctx, window: WindowId, ev: &bifrost_app::pointer_events::PointerEvent) -> bool {
+        if window.is_main() {
+            return self.pointer(ctx, ev);
+        }
+        let Some(n) = &mut self.notes else { return false };
+        match ev {
+            bifrost_app::pointer_events::PointerEvent::Wheel { dy, .. } => n.window_wheel(&ctx.ui, window, *dy * ctx.ui.pt(1.0)),
+            _ => false,
+        }
+    }
+
     fn next_wake(&self, t: f64) -> Option<f64> {
         self.notes.as_ref().and_then(|n| n.next_wake(t))
     }
 
-    /// A note window draws its note (`Notes::draw_window`); any other extra window draws nothing.
+    /// A note window draws its note (`Notes::draw_window`), with its caret while it is the key window; any other extra
+    /// window draws nothing.
     fn draw_window(&mut self, ctx: &Ctx, window: WindowId, s: &mut Surface, t: f64) -> Damage {
         if let Some(n) = &mut self.notes {
-            n.draw_window(s, &ctx.ui, window, t);
+            n.draw_window(s, &ctx.ui, window, ctx.key_window() == window, t);
         }
         let mut d = Damage::new(s.w, s.h);
         d.all();
@@ -951,7 +986,9 @@ impl App for NotesApp {
                     TouchKind::Move => note_windows::Press::Move,
                     TouchKind::Up | TouchKind::Cancel => note_windows::Press::Up,
                 };
-                n.window_pointer(&ctx.ui, window, press, x, y, t)
+                // an extra window's touches arrive in window points (`WindowTouch`); the text is laid out in px
+                let k = ctx.ui.pt(1.0);
+                n.window_pointer(&ctx.ui, window, press, x * k, y * k, t)
             }
             Input::Command(command) => match command {
                 Command::Cut => self.copy_window_selection(ctx, window, true),

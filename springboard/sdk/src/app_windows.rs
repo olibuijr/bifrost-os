@@ -272,8 +272,9 @@ pub(crate) fn deliver_window<A: crate::App>(app: &mut A, ctx: &crate::Ctx, msg: 
 }
 
 /// What `App::window_input` does unless the app overrides it: keys and commands go to `window_event` of the window
-/// (as `Input::Key` and `Input::Command`); a menu item and a text edit go to the main window's `menu_action` and
-/// `text_input`, and drop for an extra window; a pointer event goes to `window_pointer` when the app asked for its kind.
+/// (as `Input::Key` and `Input::Command`); a text edit (marked text, unmark, delete surrounding, accent hold) goes to
+/// `window_text_input` of the window, as the `ToApp` message `text_input` takes; a menu item goes to the main window's
+/// `menu_action` and drops for an extra window; a pointer event goes to `window_pointer` when the app asked for its kind.
 /// An app that handles its own keys calls this for the rest.
 pub fn default_window_input<A: crate::App + ?Sized>(app: &mut A, ctx: &crate::Ctx, window: WindowId, input: crate::proto::WindowInput) -> bool {
     use crate::proto::WindowInput;
@@ -281,8 +282,9 @@ pub fn default_window_input<A: crate::App + ?Sized>(app: &mut A, ctx: &crate::Ct
         WindowInput::Key(k) => app.window_event(ctx, window, crate::Input::Key(k)),
         WindowInput::Command(c) => app.window_event(ctx, window, crate::Input::Command(c)),
         WindowInput::MenuAction(id) if window.is_main() => app.menu_action(ctx, id),
-        text @ (WindowInput::SetMarkedText { .. } | WindowInput::UnmarkText { .. } | WindowInput::DeleteSurrounding { .. }) if window.is_main() => {
-            app.text_input(ctx, text.to_app(0))
+        // marked text and the other text edits belong to the window being typed in, the main window's included
+        text @ (WindowInput::SetMarkedText { .. } | WindowInput::UnmarkText { .. } | WindowInput::DeleteSurrounding { .. } | WindowInput::AccentHold { .. }) => {
+            app.window_text_input(ctx, window, text.to_app(0))
         }
         // the wheel, hover and gestures of the window under the pointer, of a kind the app asked for
         WindowInput::Pointer(ev) if app.pointer_interest() & ev.interest() != 0 => app.window_pointer(ctx, window, &ev),
@@ -546,7 +548,7 @@ mod tests {
     }
 
     #[test]
-    fn menu_items_and_text_edits_reach_only_the_main_window() {
+    fn menu_items_and_text_edits_reach_only_the_main_window_by_default() {
         let ctx = crate::runtime::test_ctx();
         let mut app = KeyFake::default();
         let id = ctx.open_window(WindowSpec::new("Card", 480.0, 560.0)).unwrap();
@@ -555,11 +557,68 @@ mod tests {
         over_the_wire(&mut app, &ctx, &menu);
         let text = ToApp::WindowInput { window: id.0, input: crate::proto::WindowInput::UnmarkText { commit: true } };
         over_the_wire(&mut app, &ctx, &text);
-        assert!(app.log.is_empty(), "an extra window gets no menu item or text edit by default: {:?}", app.log);
+        assert!(app.log.is_empty(), "an app that does not override window_text_input gets no extra-window text edit: {:?}", app.log);
         // the main window's menu item and text edit go to the main window's callbacks
         let main_menu = ToApp::WindowInput { window: 0, input: crate::proto::WindowInput::MenuAction(4) };
         over_the_wire(&mut app, &ctx, &main_menu);
-        assert_eq!(app.log, vec!["menu 4".to_string()]);
+        let main_text = ToApp::WindowInput { window: 0, input: crate::proto::WindowInput::UnmarkText { commit: true } };
+        over_the_wire(&mut app, &ctx, &main_text);
+        assert_eq!(app.log, vec!["menu 4".to_string(), format!("text {:?}", ToApp::UnmarkText { commit: true })]);
+    }
+
+    /// An app whose extra windows edit text: it logs each window's marked text, unmark and accent hold.
+    #[derive(Default)]
+    struct MarkedFake {
+        log: Vec<String>,
+    }
+
+    impl crate::App for MarkedFake {
+        fn id(&self) -> &str {
+            "is.test.marked"
+        }
+        fn draw(&mut self, _: &crate::Ctx, s: &mut crate::kit::Surface, _: f64) -> crate::kit::Damage {
+            crate::kit::Damage::new(s.w, s.h)
+        }
+        fn text_input(&mut self, _: &crate::Ctx, ev: ToApp) -> bool {
+            self.log.push(format!("main {ev:?}"));
+            true
+        }
+        fn window_text_input(&mut self, ctx: &crate::Ctx, window: WindowId, ev: ToApp) -> bool {
+            if window.is_main() {
+                return self.text_input(ctx, ev);
+            }
+            self.log.push(format!("{} {ev:?}", window.0));
+            true
+        }
+    }
+
+    #[test]
+    fn marked_text_and_accent_holds_reach_the_key_window_with_its_id() {
+        let ctx = crate::runtime::test_ctx();
+        let mut app = MarkedFake::default();
+        let id = ctx.open_window(WindowSpec::new("Note", 480.0, 560.0)).unwrap();
+        let send = |app: &mut MarkedFake, m: ToApp| deliver_window(app, &ctx, &ToApp::decode(&m.encode()).unwrap(), 0.0);
+        send(&mut app, ToApp::WindowFocus { window: id.0, focused: true });
+        // an input method's candidate shows as marked text in the note window, then the composition is dropped
+        let marked = crate::proto::WindowInput::SetMarkedText { text: "´".into(), sel_start: 2, sel_len: 0 };
+        assert_eq!(send(&mut app, ToApp::WindowInput { window: id.0, input: marked }), Some(true));
+        send(&mut app, ToApp::WindowInput { window: id.0, input: crate::proto::WindowInput::UnmarkText { commit: false } });
+        send(&mut app, ToApp::WindowInput { window: id.0, input: crate::proto::WindowInput::AccentHold { letter: 'a' } });
+        // the main window's come through the same route to `text_input`
+        send(&mut app, ToApp::WindowInput { window: 0, input: crate::proto::WindowInput::UnmarkText { commit: true } });
+        assert_eq!(
+            app.log,
+            vec![
+                format!("1 {:?}", ToApp::SetMarkedText { text: "´".into(), sel_start: 2, sel_len: 0 }),
+                format!("1 {:?}", ToApp::UnmarkText { commit: false }),
+                format!("1 {:?}", ToApp::AccentHold { letter: 'a' }),
+                format!("main {:?}", ToApp::UnmarkText { commit: true }),
+            ]
+        );
+        // a closed window's late composition is dropped, never typed into the main window
+        ctx.close_window(id).unwrap();
+        assert_eq!(send(&mut app, ToApp::WindowInput { window: id.0, input: crate::proto::WindowInput::UnmarkText { commit: true } }), Some(false));
+        assert_eq!(app.log.len(), 4);
     }
 
     #[test]

@@ -2360,10 +2360,10 @@ impl Shell {
         self.keyboard.set_return_key(super::textinput::return_key(t));
     }
 
-    /// Sends a message to the foreground external app, if there is one.
-    pub(super) fn ext_fg_send(&mut self, m: &ToApp) {
+    /// Sends input to the key window of the foreground external app (an extra window's carries its id), if there is one.
+    pub(super) fn ext_fg_input(&mut self, input: WindowInput) {
         if let Some(Some(h)) = self.ext_fg.and_then(|n| self.ext.get_mut(n as usize)) {
-            h.send(m);
+            h.input(input);
         }
     }
 
@@ -3297,6 +3297,31 @@ mod window_table_tests {
                 ToApp::Key(KeyInput::Code(9)),
             ],
             "a repeated focus sends nothing; the main window's keys keep the legacy message"
+        );
+    }
+
+    #[test]
+    fn marked_text_and_accent_holds_follow_the_key_window() {
+        let (channel, peer) = sys::socketpair_pair().unwrap();
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
+        host.set_key_window(2);
+        host.input(super::super::textinput::to_input(super::super::keyboard::Composition::Preedit { text: "´".into(), sel_start: 2, sel_len: 0 }));
+        host.input(WindowInput::AccentHold { letter: 'a' });
+        host.set_key_window(0);
+        host.input(WindowInput::UnmarkText { commit: true });
+        host.input(WindowInput::AccentHold { letter: 'o' });
+        let got = sent(&peer);
+        assert_eq!(
+            got[2..],
+            [
+                ToApp::WindowInput { window: 2, input: WindowInput::SetMarkedText { text: "´".into(), sel_start: 2, sel_len: 0 } },
+                ToApp::WindowInput { window: 2, input: WindowInput::AccentHold { letter: 'a' } },
+                ToApp::WindowFocus { window: 2, focused: false },
+                ToApp::WindowFocus { window: 0, focused: true },
+                ToApp::UnmarkText { commit: true },
+                ToApp::AccentHold { letter: 'o' },
+            ],
+            "an extra key window's composition carries its id; the main window keeps the legacy messages"
         );
     }
 

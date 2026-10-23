@@ -82,6 +82,8 @@ pub enum WindowInput {
     UnmarkText { commit: bool },
     /// as `ToApp::DeleteSurrounding`
     DeleteSurrounding { before: u32, after: u32 },
+    /// as `ToApp::AccentHold`: a letter held down in the key window's text, for its own accent list
+    AccentHold { letter: char },
     /// as `ToApp::Pointer`, for the window under the pointer (not the key window), sent only when the app asked for
     /// that kind (`ToShell::PointerInterest`). An extra window's locations and wheel deltas are window points, like
     /// `ToApp::WindowTouch`; window 0 gets `ToApp::Pointer` in surface pixels as before.
@@ -102,6 +104,7 @@ impl WindowInput {
             WindowInput::SetMarkedText { text, sel_start, sel_len } => ToApp::SetMarkedText { text, sel_start, sel_len },
             WindowInput::UnmarkText { commit } => ToApp::UnmarkText { commit },
             WindowInput::DeleteSurrounding { before, after } => ToApp::DeleteSurrounding { before, after },
+            WindowInput::AccentHold { letter } => ToApp::AccentHold { letter },
             WindowInput::Pointer(ev) => ToApp::Pointer(ev),
         }
     }
@@ -1350,7 +1353,8 @@ fn checked_title(title: String) -> Result<String, DecodeError> {
 }
 
 /// `WindowInput` after the window id: a kind byte, then the payload (`0` key, `1` command, `2` menu item, `3` marked
-/// text, `4` unmark, `5` delete surrounding, `6` pointer: the `ToApp::Pointer` kind byte and payload, see `pointer`).
+/// text, `4` unmark, `5` delete surrounding, `6` pointer: the `ToApp::Pointer` kind byte and payload, see `pointer`;
+/// `7` accent hold: the letter as a `u32` code point).
 fn window_input_encode(b: &mut Vec<u8>, input: &WindowInput) {
     match input {
         WindowInput::Key(KeyInput::Text(s)) => {
@@ -1390,6 +1394,10 @@ fn window_input_encode(b: &mut Vec<u8>, input: &WindowInput) {
             b.push(6);
             pointer::encode_event(ev, b);
         }
+        WindowInput::AccentHold { letter } => {
+            b.push(7);
+            u32_(b, *letter as u32);
+        }
     }
 }
 
@@ -1414,6 +1422,7 @@ fn window_input_decode(r: &mut Reader) -> Result<WindowInput, DecodeError> {
         4 => WindowInput::UnmarkText { commit: r.u8()? != 0 },
         5 => WindowInput::DeleteSurrounding { before: r.u32()?, after: r.u32()? },
         6 => WindowInput::Pointer(pointer::decode_event(r)?),
+        7 => WindowInput::AccentHold { letter: char::from_u32(r.u32()?).ok_or(DecodeError::BadValue)? },
         _ => return Err(DecodeError::BadValue),
     })
 }
@@ -3351,6 +3360,7 @@ mod quick_action_tests {
             ToApp::WindowInput { window: 3, input: WindowInput::SetMarkedText { text: "にほん".into(), sel_start: 3, sel_len: 3 } },
             ToApp::WindowInput { window: 3, input: WindowInput::UnmarkText { commit: true } },
             ToApp::WindowInput { window: 3, input: WindowInput::DeleteSurrounding { before: 2, after: 0 } },
+            ToApp::WindowInput { window: 3, input: WindowInput::AccentHold { letter: 'a' } },
             ToApp::WindowInput {
                 window: 3,
                 input: WindowInput::Pointer(bifrost_ui::pointer_event::PointerEvent::Wheel {
@@ -3395,6 +3405,18 @@ mod quick_action_tests {
         let hover = bifrost_ui::pointer_event::PointerEvent::Hover { x: 3.0, y: 4.0 };
         assert_eq!(WindowInput::Pointer(hover).to_app(0), ToApp::Pointer(hover));
         assert_eq!(WindowInput::Pointer(hover).to_app(5), ToApp::WindowInput { window: 5, input: WindowInput::Pointer(hover) });
+    }
+
+    #[test]
+    fn an_accent_hold_goes_to_the_key_window_and_a_bad_code_point_is_refused() {
+        assert_eq!(WindowInput::AccentHold { letter: 'e' }.to_app(0), ToApp::AccentHold { letter: 'e' });
+        assert_eq!(WindowInput::AccentHold { letter: 'e' }.to_app(2), ToApp::WindowInput { window: 2, input: WindowInput::AccentHold { letter: 'e' } });
+        let mut bytes = ToApp::WindowInput { window: 2, input: WindowInput::AccentHold { letter: 'e' } }.encode();
+        // kind 7 at byte 8, the code point at 9..13
+        assert_eq!(bytes[8], 7);
+        assert_eq!(&bytes[9..13], &('e' as u32).to_le_bytes());
+        bytes[9..13].copy_from_slice(&0xD800u32.to_le_bytes());
+        assert_eq!(ToApp::decode(&bytes), Err(DecodeError::BadValue), "a surrogate is not a letter");
     }
 
     #[test]
