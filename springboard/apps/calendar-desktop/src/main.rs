@@ -468,6 +468,33 @@ impl App for CalendarApp {
         true
     }
 
+    /// The scroll wheel comes as itself, not as an emulated drag, in the main window and in the editor windows alike
+    /// (`window_pointer`), so a drag in the hour grid moves an event and the wheel over it scrolls.
+    fn pointer_interest(&self) -> u32 {
+        bifrost_app::pointer_events::WHEEL
+    }
+
+    /// The main window's wheel, in surface pixels: the hour grid, the search results or the event form scroll.
+    fn pointer(&mut self, ctx: &Ctx, ev: &bifrost_app::pointer_events::PointerEvent) -> bool {
+        let Some(c) = &mut self.cal else { return false };
+        match *ev {
+            bifrost_app::pointer_events::PointerEvent::Wheel { x, y, dy, .. } => c.wheel(&ctx.ui, x, y, dy),
+            _ => false,
+        }
+    }
+
+    /// The wheel over an editor window (window points) scrolls that window's form; the main window's goes to `pointer`.
+    fn window_pointer(&mut self, ctx: &Ctx, window: WindowId, ev: &bifrost_app::pointer_events::PointerEvent) -> bool {
+        if window.is_main() {
+            return self.pointer(ctx, ev);
+        }
+        let Some(c) = &mut self.cal else { return false };
+        match *ev {
+            bifrost_app::pointer_events::PointerEvent::Wheel { x, y, dy, .. } => c.wheel_pane(&ctx.ui, window.0, x, y, dy),
+            _ => false,
+        }
+    }
+
     /// One frame of touches: the first touch that went down drives the calendar until it lifts, as the plain stream did.
     fn touches(&mut self, ctx: &Ctx, ev: &TouchEvent) -> bool {
         let Some(c) = &mut self.cal else { return false };

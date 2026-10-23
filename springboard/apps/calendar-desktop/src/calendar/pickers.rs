@@ -190,8 +190,6 @@ impl Calendar {
     pub(super) fn picker_tap(&mut self, target: Target) {
         self.focus(None);
         let prefs = self.prefs;
-        let choices: Vec<u32> = self.extras.choices().into_iter().map(|(id, _)| id).collect();
-        let default = self.extras.default_id();
         let Some(d) = self.editor.as_mut() else { return };
         match target {
             Target::Repeat => d.repeat_open = !d.repeat_open,
@@ -276,11 +274,6 @@ impl Calendar {
                     d.alarms.remove(i);
                 }
             }
-            Target::Calendar => {
-                let cur = if choices.contains(&d.extra.calendar) { d.extra.calendar } else { default };
-                let i = choices.iter().position(|c| *c == cur).unwrap_or(0);
-                d.extra.calendar = choices[(i + 1) % choices.len()];
-            }
             Target::Zone => {
                 let i = zone_index(d.extra.tzid.as_deref());
                 d.extra.tzid = extras::ZONES[(i + 1) % extras::ZONES.len()].map(str::to_string);
@@ -355,6 +348,11 @@ impl Calendar {
                 let cur = if self.extras.exists(d.extra.calendar) { d.extra.calendar } else { self.extras.default_id() };
                 let name = self.extras.name_of(cur);
                 self.value_row(s, ui, "Calendar", &name, mid);
+                // the calendar's colour dot before its name, as in the pop-up menu it opens (`calmenu.rs`)
+                let text_w = ui.measure(&name, MAC_BODY_PT, Weight::Regular).min(w * 0.55);
+                let d = ui.pt(SPACE_S);
+                let x = w - ui.pt(36.0) - text_w - ui.pt(SPACE_XS) - d;
+                s.fill_rrect(x, mid - d / 2.0, d, d, d / 2.0, self.calendar_colour(cur));
             }
             Target::Zone => self.value_row(s, ui, "Time Zone", extras::zone_title(d.extra.tzid.as_deref()), mid),
             Target::Travel => self.value_row(s, ui, "Travel Time", &extras::travel_title(d.extra.travel), mid),

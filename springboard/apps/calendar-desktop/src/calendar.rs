@@ -3,6 +3,7 @@
 pub mod alerts;
 pub mod archive;
 pub mod birthdays;
+mod calmenu;
 mod chrome;
 pub mod clip;
 mod colours;
@@ -286,6 +287,8 @@ pub struct Calendar {
     /// The quick-event popover on a new event, while it is open (`eventpop.rs`), and the last click on an empty slot of
     /// the grid with its time (a second click there in time is a double-click, which opens the popover).
     event_pop: Option<eventpop::EventPop>,
+    /// The menu of calendars a Calendar pop-up button opened (the popover's or the form's), while it is open (`calmenu.rs`).
+    cal_menu: Option<calmenu::CalMenu>,
     last_slot: Option<(Date, u16, f64)>,
     /// The month the sidebar's mini month was paged to; None follows the selected day (`minimonth.rs`).
     mini_shown: Option<Date>,
@@ -427,6 +430,7 @@ impl Calendar {
             pointer: false,
             quick_line: None,
             event_pop: None,
+            cal_menu: None,
             last_slot: None,
             mini_shown: None,
             press: None,
@@ -1098,6 +1102,10 @@ impl Calendar {
 
     /// Escape closes the open event editor without saving.
     pub fn escape(&mut self, ui: &Ui, t: f64) -> bool {
+        // Escape closes an open pop-up menu of calendars first, and changes nothing
+        if self.cal_menu_cancel() {
+            return true;
+        }
         // Escape drops the new event of the quick-event popover
         if self.pop_cancel() {
             return true;
@@ -1235,9 +1243,10 @@ impl Calendar {
             | Target::AlarmStep(_)
             | Target::AlarmAdd
             | Target::AlarmDrop(_)
-            | Target::Calendar
             | Target::Zone
             | Target::Travel => self.picker_tap(target),
+            // a pop-up menu of the calendars with their colours, not a step to the next one
+            Target::Calendar => self.open_form_cal_menu(ui),
             Target::DateStep(_)
             | Target::MonthStep(_)
             | Target::TimeStep(_)
@@ -1295,6 +1304,10 @@ impl Calendar {
 
     pub fn key(&mut self, ui: &Ui, out: Out, t: f64) {
         self.sync_overlay();
+        if self.cal_menu.is_some() {
+            self.cal_menu_key(out, t);
+            return;
+        }
         if self.event_pop.is_some() {
             self.pop_key(ui, out, t);
             return;
@@ -1423,6 +1436,18 @@ impl Calendar {
             _ => return,
         };
         self.dirty = true;
+        // an open pop-up menu of calendars takes every press: a row picks, outside closes it (`calmenu.rs`)
+        if self.cal_menu.is_some() {
+            match ev {
+                Event::Down(..) => self.cal_menu_press(ui, x + self.x0, y),
+                Event::Move(..) => self.cal_menu_hover(ui, x + self.x0, y),
+                _ => {}
+            }
+            self.pressed = None;
+            self.start = None;
+            self.scrolling = false;
+            return;
+        }
         // Menu bubbles and selection handles extend beyond the title's
         // rectangle. Let the field inspect the whole gesture before app
         // controls, retaining selection when a key is tapped below it.
@@ -1511,6 +1536,22 @@ impl Calendar {
             }
             _ => {}
         }
+    }
+
+    /// `scrollWheel:` at `(x, y)` in window pixels: the wheel moved the content `dy` pixels (positive toward the start).
+    /// The hour grid, the search results and the event form scroll by the wheel's travel (`Scroller::wheel`); the
+    /// calendar list and a view with nothing to scroll (the month grid) take none. Not taken while a press or drag is in
+    /// progress. True when the content moved.
+    pub fn wheel(&mut self, ui: &Ui, x: f32, _y: f32, dy: f32) -> bool {
+        self.layout_columns(ui);
+        if x < self.x0 || self.drag.is_some() || self.scrolling || self.field_touch || self.cal_menu.is_some() {
+            return false;
+        }
+        if !self.scroll.wheel(dy) {
+            return false;
+        }
+        self.dirty = true;
+        true
     }
 
     pub fn tick(&mut self, ui: &Ui, t: f64) -> bool {
@@ -1616,6 +1657,7 @@ impl Calendar {
         }
         self.draw_chrome(s, ui);
         self.draw_event_pop(s, ui);
+        self.draw_cal_menu(s, ui);
         self.dirty = false;
     }
 

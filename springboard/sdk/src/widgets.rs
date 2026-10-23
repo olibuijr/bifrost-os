@@ -879,6 +879,9 @@ pub const MENU_ROW_PT: f32 = 22.0;
 pub const MENU_SEPARATOR_PT: f32 = 9.0;
 pub const MENU_PAD_PT: f32 = 5.0;
 const MENU_INSET_PT: f32 = 5.0;
+/// The round colour swatch of a menu item (`MenuItem::swatch`) and the gap after it, in points.
+pub const MENU_SWATCH_PT: f32 = 10.0;
+pub const MENU_SWATCH_GAP_PT: f32 = 6.0;
 
 /// A pop-up button (`NativePopUpButton`): the current choice with an up/down chevron pair. `open` draws it pressed.
 /// `bounds` in points; the standard height is 22.
@@ -931,6 +934,9 @@ pub fn candidate_list(s: &mut dyn Canvas, ui: &Ui, anchor: Rect, items: &[String
 pub fn menu(s: &mut dyn Canvas, ui: &Ui, origin: (f32, f32), width: f32, menu: &Menu) -> Rect {
     let (rows, total) = menu.rows(MENU_ROW_PT, MENU_SEPARATOR_PT, MENU_PAD_PT);
     let bounds = Rect { x: origin.0, y: origin.1, w: width, h: total };
+    // a menu of colours (calendars, tags): a round swatch before each title, and every title moved over by it
+    let swatched = menu.items.iter().any(|i| i.swatch.is_some());
+    let lead = if swatched { MENU_SWATCH_PT + MENU_SWATCH_GAP_PT } else { 0.0 };
     material(s, ui, bounds, 8.0, Material::Popover);
     s.stroke_rrect(RectF::new(ui.pt(bounds.x), ui.pt(bounds.y), ui.pt(width), ui.pt(total)), ui.pt(8.), ui.pt(1.0).max(1.0), HAIRLINE_C.now());
     for (i, (item, &(top, h))) in menu.items.iter().zip(&rows).enumerate() {
@@ -950,9 +956,13 @@ pub fn menu(s: &mut dyn Canvas, ui: &Ui, origin: (f32, f32), width: f32, menu: &
             let tick = line("\u{2713}", color);
             blit(s, &tick, ui.pt(origin.0 + MENU_INSET_PT + 6.) as i32, center(&tick));
         }
-        let room = ui.pt(width - 2. * MENU_INSET_PT - 26. - 12. - item.shortcut.as_ref().map_or(0.0, |_| 48.));
+        if let Some(c) = item.swatch {
+            let d = MENU_SWATCH_PT;
+            s.fill_rrect(RectF::new(ui.pt(origin.0 + MENU_INSET_PT + 24.), ui.pt(y + (h - d) / 2.), ui.pt(d), ui.pt(d)), ui.pt(d / 2.), c);
+        }
+        let room = ui.pt(width - 2. * MENU_INSET_PT - 26. - 12. - lead - item.shortcut.as_ref().map_or(0.0, |_| 48.));
         let title = line(&ui.fit(&item.title, MAC_BODY_PT, room.max(0.)), color);
-        blit(s, &title, ui.pt(origin.0 + MENU_INSET_PT + 24.) as i32, center(&title));
+        blit(s, &title, ui.pt(origin.0 + MENU_INSET_PT + 24. + lead) as i32, center(&title));
         if let Some(sc) = &item.shortcut {
             let t = ui.text(sc, MAC_BODY_PT, Weight::Regular, if hot { WHITE } else { LABEL_2.now() });
             blit(s, &t, (ui.pt(origin.0 + width - MENU_INSET_PT - 10.) - t.w as f32) as i32, center(&t));
@@ -1319,6 +1329,12 @@ pub fn mini_month(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, year: i32, month: u
             crate::glyphs::disc(s, ui.pt(r.x + r.w / 2.0), ui.pt(plate.bottom() - 2.0), ui.pt(1.5), LABEL_2.now());
         }
     }
+    // the months around it, greyed (secondary label), through the sixth row; the app hit-tests them with `hit_date`
+    for (d, r) in &l.outside {
+        let img = ui.text(&d.day.to_string(), MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now());
+        let (x, y) = mid(r, &img);
+        blit(s, &img, x, y);
+    }
     l
 }
 
@@ -1661,6 +1677,26 @@ mod tests {
     }
 
     #[test]
+    fn a_menu_of_colours_draws_a_round_swatch_before_each_title() {
+        use bifrost_ui::menu::{Menu, MenuItem};
+        let ui = test_ui();
+        let (w, h) = (260usize, 120usize);
+        let (green, blue) = (0xff34_c759u32, 0xff00_7affu32);
+        let m = Menu::popup(vec![MenuItem::new(1, "Home").swatch(green), MenuItem::new(2, "Work").swatch(blue)], 0);
+        let mut px = vec![0u32; w * h];
+        menu(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, &ui, (10.0, 10.0), 220.0, &m);
+        let (rows, _) = m.rows(MENU_ROW_PT, MENU_SEPARATOR_PT, MENU_PAD_PT);
+        // the swatch's centre, after the check mark column
+        let at = |row: usize| {
+            let x = ui.pt(10.0 + MENU_INSET_PT + 24.0 + MENU_SWATCH_PT / 2.0) as usize;
+            let y = ui.pt(10.0 + rows[row].0 + rows[row].1 / 2.0) as usize;
+            px[y * w + x]
+        };
+        assert_eq!(at(0), green);
+        assert_eq!(at(1), blue);
+    }
+
+    #[test]
     fn materials_get_denser_towards_popover() {
         let a = |m: Material| m.tint() >> 24;
         assert!(a(Material::Popover) > a(Material::Titlebar) && a(Material::Titlebar) > a(Material::Hud));
@@ -1846,6 +1882,12 @@ mod tests {
         assert_eq!(l.days.len(), 31);
         let (_, today) = l.days[9];
         assert_eq!(px[(today.y + today.h / 2.0) as usize * w + (today.x + 3.0) as usize], bifrost_render::ui::DESTRUCTIVE, "today is red");
+        // the greyed days of September and November fill the six rows, and are drawn
+        assert_eq!(l.days.len() + l.outside.len(), 42);
+        let (_, lead) = l.outside[0];
+        let inked = |r: Rect| (r.y as usize..(r.y + r.h) as usize).any(|y| (r.x as usize..(r.x + r.w) as usize).any(|x| px[y * w + x] != 0));
+        assert!(inked(lead), "the 28th of September is drawn before the 1st");
+        assert!(inked(l.outside.last().unwrap().1), "the last trailing day is drawn");
     }
 
     #[test]

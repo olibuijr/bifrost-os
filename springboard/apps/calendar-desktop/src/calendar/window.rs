@@ -51,6 +51,8 @@ pub struct Pane {
     scrolling: bool,
     field_touch: bool,
     saved_scroll: f32,
+    /// The window's own pop-up menu of calendars (its form's Calendar row), so it opens and draws in that window only.
+    cal_menu: Option<super::calmenu::CalMenu>,
     /// The window's geometry in pixels, with no sidebar (`Calendar::layout_columns` reads `full_w` and `side_hidden`).
     w: i32,
     h: i32,
@@ -72,6 +74,7 @@ impl Pane {
             scrolling: false,
             field_touch: false,
             saved_scroll: 0.0,
+            cal_menu: None,
             w,
             h,
             full_w: w,
@@ -89,6 +92,7 @@ impl Pane {
         std::mem::swap(&mut self.scrolling, &mut c.scrolling);
         std::mem::swap(&mut self.field_touch, &mut c.field_touch);
         std::mem::swap(&mut self.saved_scroll, &mut c.saved_scroll);
+        std::mem::swap(&mut self.cal_menu, &mut c.cal_menu);
         std::mem::swap(&mut self.w, &mut c.w);
         std::mem::swap(&mut self.h, &mut c.h);
         std::mem::swap(&mut self.full_w, &mut c.full_w);
@@ -214,6 +218,14 @@ impl Calendar {
         Some((result, open))
     }
 
+    /// The scroll wheel over the editor window `window`, at `(x, y)` with travel `dy`, all in window points (as
+    /// `App::window_pointer` delivers them; the editor lays out in pixels). True when the form scrolled; false when it did
+    /// not, or no editor window has `window`.
+    pub fn wheel_pane(&mut self, ui: &Ui, window: u32, x: f32, y: f32, dy: f32) -> bool {
+        let k = ui.s;
+        self.with_pane(window, |c| c.wheel(ui, x * k, y * k, dy * k)).is_some_and(|(moved, _)| moved)
+    }
+
     /// Draws the editor of `window` at the size of the surface `s` (pixels), with the editor's toolbar. Returns false when
     /// no editor window has `window`.
     pub fn draw_pane(&mut self, window: u32, s: &mut Surface, ui: &Ui, t: f64) -> bool {
@@ -227,6 +239,7 @@ impl Calendar {
             c.draw_editor(s, ui, t);
             // an opaque band: the window material would show the main window's title through it (E2E W2-17)
             c.draw_chrome_opaque(s, ui, true);
+            c.draw_cal_menu(s, ui);
             c.dirty = false;
         })
         .is_some()

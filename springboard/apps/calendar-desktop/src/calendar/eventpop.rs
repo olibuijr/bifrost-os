@@ -177,11 +177,11 @@ impl Calendar {
         match part {
             PopPart::Title => self.pop_focus(0),
             PopPart::Location => self.pop_focus(1),
+            // a pop-up menu of the calendars with their colours over the button (`calmenu.rs`)
             PopPart::Calendar => {
-                let choices: Vec<u32> = self.extras.choices().into_iter().map(|(id, _)| id).collect();
-                if let Some(pop) = &mut self.event_pop {
-                    let at = choices.iter().position(|id| *id == pop.calendar).map_or(0, |i| i + 1);
-                    pop.calendar = choices.get(at % choices.len().max(1)).copied().unwrap_or(pop.calendar);
+                let current = self.event_pop.as_ref().map(|p| p.calendar);
+                if let (Some(l), Some(current)) = (self.pop_layout(ui), current) {
+                    self.open_cal_menu(ui, l.calendar, current, super::calmenu::MenuFor::Popover);
                 }
             }
             // the time is set in the full form, as are the repeat, alerts and invitees
