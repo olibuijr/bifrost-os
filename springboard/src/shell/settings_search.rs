@@ -5,7 +5,7 @@
 //! while there is a query the root page shows the matches (`results`).
 //! Other apps reach a pane by name through `find_page`.
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use super::fuzzy;
 use super::glyphs;
@@ -263,6 +263,45 @@ pub fn index(mut spec_of: impl FnMut(PageId) -> Spec) -> Vec<Entry> {
         }
     }
     out
+}
+
+/// The pages from a first-level pane (a row of the root page) down to `target`, the pane first and `target` last, found
+/// by walking the pages from the root as `index` does (the shortest way there). None when no walked page links to it.
+pub fn path_to(mut spec_of: impl FnMut(PageId) -> Spec, target: PageId) -> Option<Vec<PageId>> {
+    if target == PageId::Root {
+        return None;
+    }
+    let mut parent: HashMap<PageId, PageId> = HashMap::new();
+    let mut walk: VecDeque<PageId> = VecDeque::from([PageId::Root]);
+    let mut visited: HashSet<PageId> = HashSet::from([PageId::Root]);
+    'walk: while let Some(id) = walk.pop_front() {
+        let page = spec_of(id);
+        for item in page.groups.iter().flat_map(|g| g.items.iter()) {
+            let Action::Push(next) = item.action else { continue };
+            if !visited.insert(next) {
+                continue;
+            }
+            parent.insert(next, id);
+            if next == target {
+                break 'walk;
+            }
+            if walked(next) && !detail(next) {
+                walk.push_back(next);
+            }
+        }
+    }
+    parent.get(&target)?;
+    let mut path = vec![target];
+    let mut at = target;
+    while let Some(&up) = parent.get(&at) {
+        if up == PageId::Root {
+            break;
+        }
+        path.push(up);
+        at = up;
+    }
+    path.reverse();
+    Some(path)
 }
 
 /// The entries that match `query`: every word of it must match part of an entry. Entries whose label starts with the

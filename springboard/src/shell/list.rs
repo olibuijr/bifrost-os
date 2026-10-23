@@ -279,6 +279,8 @@ pub struct Spec {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Hit {
     Back,
+    /// the forward half of the desktop toolbar's back/forward pill
+    Forward,
     /// group, item
     Row(usize, usize),
     Slider(usize, usize),
@@ -618,6 +620,8 @@ pub struct NavBar {
     status_pt: f32,
     /// desktop toolbar: back and forward in one pill instead of a labelled button
     pill: bool,
+    /// there is a page to go forward to: the pill's forward half is enabled
+    forward: bool,
 }
 
 impl NavBar {
@@ -629,7 +633,23 @@ impl NavBar {
             nav_pt: NAV_PT,
             status_pt: STATUS_PT,
             pill: false,
+            forward: false,
         }
+    }
+
+    /// Enables the pill's forward half (there is a page Back left that Forward opens again).
+    pub fn set_forward(&mut self, on: bool) {
+        self.forward = on;
+    }
+
+    /// Whether the pill's back half is enabled (there is a page to go back to).
+    pub fn has_back(&self) -> bool {
+        self.back.is_some()
+    }
+
+    /// Whether the pill's forward half is enabled.
+    pub fn has_forward(&self) -> bool {
+        self.forward
     }
 
     /// Draws back and forward as one pill (the desktop toolbar). The title then sits left-aligned beside the pill in the
@@ -668,6 +688,17 @@ impl NavBar {
         self.back.is_some() && y < self.bottom(ui) && x < ui.pt(150.0)
     }
 
+    /// Whether (x, y) is on the enabled forward half of the pill (the desktop toolbar only).
+    pub fn hit_forward(&self, ui: &Ui, x: f32, y: f32) -> bool {
+        use bifrost_ui::prefs_layout::m;
+        self.pill
+            && self.forward
+            && x >= ui.pt(m::TOOLBAR_X + m::TOOLBAR_PILL_W / 2.0)
+            && x < ui.pt(m::TOOLBAR_X + m::TOOLBAR_PILL_W)
+            && y >= ui.pt(m::TOOLBAR_Y)
+            && y < ui.pt(m::TOOLBAR_Y + m::TOOLBAR_PILL_H)
+    }
+
     /// Draws the bar `alpha` (0..=1) solid over the content, with the title
     /// shown at `title_alpha`.
     pub fn draw(&self, s: &mut Surface, ui: &Ui, w: i32, alpha: f32, title_alpha: f32) {
@@ -688,10 +719,10 @@ impl NavBar {
             let bx = px + pw * 0.27;
             icons::line(s, (bx + a * 0.5, cy - a), (bx - a * 0.5, cy), th, col(self.back.is_some()));
             icons::line(s, (bx - a * 0.5, cy), (bx + a * 0.5, cy + a), th, col(self.back.is_some()));
-            // there is no forward history yet: the forward half stays dimmed
+            // each half is enabled only while there is history that way (a page Back left, for forward)
             let fx = px + pw * 0.73;
-            icons::line(s, (fx - a * 0.5, cy - a), (fx + a * 0.5, cy), th, col(false));
-            icons::line(s, (fx + a * 0.5, cy), (fx - a * 0.5, cy + a), th, col(false));
+            icons::line(s, (fx - a * 0.5, cy - a), (fx + a * 0.5, cy), th, col(self.forward));
+            icons::line(s, (fx + a * 0.5, cy), (fx - a * 0.5, cy + a), th, col(self.forward));
         } else if let Some((chev, label)) = &self.back {
             let x = ui.pt(12.0);
             let lw = chev.w as f32 + ui.pt(2.0) + label.w as f32;
@@ -850,6 +881,19 @@ impl ListPage {
 
     fn nav_bottom(&self, ui: &Ui) -> f32 {
         ui.pt(self.status_pt + self.nav_pt)
+    }
+
+    /// Enables or dims the forward half of the toolbar pill (see `NavBar::set_forward`).
+    pub fn set_forward(&mut self, on: bool) {
+        if self.nav.has_forward() != on {
+            self.nav.set_forward(on);
+            self.gen = next_gen();
+        }
+    }
+
+    /// The page's navigation bar (its back and forward state).
+    pub fn nav(&self) -> &NavBar {
+        &self.nav
     }
 
     /// Marks the sidebar row that opens `page` as selected.
@@ -1031,6 +1075,9 @@ impl ListPage {
 
     pub fn hit(&self, ui: &Ui, x: f32, y: f32) -> Option<Hit> {
         if y < self.nav_bottom(ui) {
+            if self.nav.hit_forward(ui, x, y) {
+                return Some(Hit::Forward);
+            }
             return self.nav.hit_back(ui, x, y).then_some(Hit::Back);
         }
         // an open menu takes the touch: a row of it chooses, its rim does nothing, anything else closes it

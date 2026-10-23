@@ -945,11 +945,22 @@ impl Shell {
     /// was used; false leaves it to `hw_chord`.
     pub fn hw_builtin_chord(&mut self, code: u16, mods: u32, t: f64) -> bool {
         const KEY_LEFTBRACE: u16 = 26;
+        const KEY_RIGHTBRACE: u16 = 27;
         if !self.screen_on || self.anim.is_some() || self.shell_takes_typing() || self.card_alert_up() {
             return false;
         }
         if code == KEY_LEFTBRACE && mods == CHORD_META && self.screen == Screen::App(AppId::Settings) {
             let stepped = self.settings.as_mut().is_some_and(|s| s.back_page(t));
+            if stepped {
+                self.last_input = t;
+                self.dirty = true;
+            }
+            return stepped;
+        }
+        // Cmd+] goes Forward to the page Back left, as the pill's forward half does
+        if code == KEY_RIGHTBRACE && mods == CHORD_META && self.screen == Screen::App(AppId::Settings) {
+            let ui = &self.ui;
+            let stepped = self.settings.as_mut().is_some_and(|s| s.forward_page(ui, t));
             if stepped {
                 self.last_input = t;
                 self.dirty = true;
@@ -1447,6 +1458,11 @@ mod tests {
         assert!(!sh.hw_builtin_chord(27, CHORD_META, 6000.0), "Cmd+] is not Back");
         assert!(sh.hw_builtin_chord(26, CHORD_META, 6000.0), "Cmd+[ goes Back");
         assert_eq!(sh.settings.as_ref().unwrap().stack().len(), depth - 1);
+        // the page Back left is ahead now: Cmd+] opens it again
+        let (ui, st) = (&sh.ui, sh.settings.as_mut().expect("Settings is open"));
+        st.tick(ui, 9000.0);
+        assert!(sh.hw_builtin_chord(27, CHORD_META, 9500.0), "Cmd+] goes Forward");
+        assert_eq!(sh.settings.as_ref().unwrap().stack().len(), depth);
     }
 
     /// E2E W3-4: Escape in Settings on a first-level page minimised every desktop window (Back fell through to

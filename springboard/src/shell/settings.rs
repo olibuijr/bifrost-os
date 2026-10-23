@@ -318,6 +318,9 @@ pub struct Settings {
     /// Live Look (`wallpaper_look` pref): the desktop's animated or time-of-day wallpaper, or the still
     wallpaper_look: Look,
     stack: Vec<Entry>,
+    /// the pages Back left, the next one last: the toolbar pill's forward half opens them again; any other navigation
+    /// clears them (a browser's forward list)
+    forward: Vec<PageId>,
     transition: Option<Slide>,
     sheet: Option<Sheet>,
     /// the Time Zone picker over Date & Time
@@ -569,6 +572,7 @@ impl Settings {
             wallpaper_dynamic: prefs.get("wallpaper_dynamic") == Some("1"),
             wallpaper_look: Look::parse(prefs.get(LOOK_PREF).unwrap_or("")),
             stack: vec![],
+            forward: Vec::new(),
             transition: None,
             sheet: None,
             zone_picker: None,
@@ -916,6 +920,7 @@ impl Settings {
             }
             self.stack[k] = entry;
         }
+        self.sync_forward();
     }
 
     fn rebuild_sidebar(&mut self, ui: &Ui) {
@@ -1469,12 +1474,6 @@ impl Settings {
     /// Jumps to the page a row name stands for (rows without a page of
     /// their own show the root), dropping any sheet; Wi-Fi starts a scan.
     pub fn open_page(&mut self, ui: &Ui, name: &str, t: f64) -> Vec<Effect> {
-        self.sheet = None;
-        self.zone_picker = None;
-        self.time_picker = None;
-        self.pressed = None;
-        self.transition = None;
-        self.stack.truncate(usize::from(self.side_w == 0));
         let id = match name {
             "Network" => PageId::Network,
             "Assistant" => PageId::Assistant,
@@ -1487,22 +1486,18 @@ impl Settings {
             "Wallpaper" => PageId::Wallpaper,
             "Screen Saver" => PageId::ScreenSaver,
             "About" => PageId::About,
-            // a computer without a battery has no Battery pane: its power settings are Energy
-            "Battery" => if super::pages::has_battery(&self.info) { PageId::Battery } else { PageId::Energy },
+            "Battery" => PageId::Battery,
             "Focus" | "Do Not Disturb" => PageId::Focus,
             "Notifications" => PageId::Notifications,
-            "Software Update" => {
-                self.push(ui, PageId::General, t);
-                PageId::SoftwareUpdate
-            }
-            "Fonts" => {
-                self.push(ui, PageId::General, t);
-                PageId::Fonts
-            }
+            "Software Update" => PageId::SoftwareUpdate,
+            "Fonts" => PageId::Fonts,
+            "Appearance" => PageId::Appearance,
+            "Keyboard" => PageId::Keyboard,
             "Accessibility" | "AssistiveTouch" => PageId::Accessibility,
             _ => match settings_search::alias(name).or_else(|| settings_search::find_page(&self.build_index(), name)) {
                 Some(id) => id,
                 None => {
+                    self.reset_overlays();
                     if self.stack.is_empty() {
                         self.push(ui, PageId::General, t);
                     }
@@ -1510,35 +1505,48 @@ impl Settings {
                 }
             },
         };
-        self.push(ui, id, t);
-        match id {
-            PageId::Wifi => vec![Effect::Wifi(WifiAction::Scan)],
-            PageId::Bluetooth => vec![Effect::Bluetooth(BtCmd::Scan)],
-            _ => vec![],
-        }
+        self.open_page_id(ui, id, t)
     }
 
-    /// Opens the pane `id` directly, for an App Intent of the Settings panes (`settings_intents`, opened from Search).
-    /// It goes on top of the current stack like `open_page` does; the root is the base and is not pushed twice.
-    pub fn open_page_id(&mut self, ui: &Ui, id: PageId, t: f64) -> Vec<Effect> {
-        // a computer without a battery has no Battery pane: its power settings are Energy
-        let id = if id == PageId::Battery && !super::pages::has_battery(&self.info) { PageId::Energy } else { id };
+    /// Drops the sheet, pickers, press and slide before a jump to another page.
+    fn reset_overlays(&mut self) {
         self.sheet = None;
         self.zone_picker = None;
         self.time_picker = None;
         self.pressed = None;
         self.transition = None;
-        self.stack.truncate(usize::from(self.side_w == 0));
+    }
+
+    /// The pages from a first-level pane (a sidebar row) down to `id`, the pane first and `id` last: what Back walks up
+    /// through. `id` alone when no page links to it.
+    fn path_to(&self, id: PageId) -> Vec<PageId> {
+        settings_search::path_to(|p| self.spec_for(p), id).unwrap_or_else(|| vec![id])
+    }
+
+    /// Opens the pane `id` directly (a deep link, an App Intent of the Settings panes, a Search result). The pages that
+    /// lead to it go under it, so Back walks up to its pane: in the split layout the pane's sidebar row is selected and
+    /// the pane is the detail's first page; the single column stacks them on the root.
+    pub fn open_page_id(&mut self, ui: &Ui, id: PageId, t: f64) -> Vec<Effect> {
+        // a computer without a battery has no Battery pane: its power settings are Energy
+        let id = if id == PageId::Battery && !super::pages::has_battery(&self.info) { PageId::Energy } else { id };
+        self.reset_overlays();
         if id == PageId::Root {
-            if self.stack.is_empty() {
-                self.push(ui, PageId::Root, t);
+            // the root is the single column's base; the split layout keeps its pane
+            if self.side_w == 0 {
+                self.stack.truncate(1);
+                if self.stack.is_empty() {
+                    self.push(ui, PageId::Root, t);
+                }
+                self.forward.clear();
+                self.sync_forward();
             }
             return vec![];
         }
-        if matches!(id, PageId::SoftwareUpdate | PageId::Fonts) {
-            self.push(ui, PageId::General, t);
+        let path = self.path_to(id);
+        self.stack.truncate(usize::from(self.side_w == 0));
+        for p in path {
+            self.push(ui, p, t);
         }
-        self.push(ui, id, t);
         match id {
             PageId::Wifi => vec![Effect::Wifi(WifiAction::Scan)],
             PageId::Bluetooth => vec![Effect::Bluetooth(BtCmd::Scan)],
@@ -1714,6 +1722,8 @@ impl Settings {
     }
 
     fn push(&mut self, ui: &Ui, id: PageId, t: f64) {
+        // a page opened by any way but Forward starts a new history: nothing is ahead of it
+        self.forward.clear();
         self.start_loads(id);
         match id {
             PageId::Storage => self.scan.start(self.data_dir.clone()),
@@ -1733,6 +1743,7 @@ impl Settings {
         if self.stack.len() > 1 {
             self.transition = Some(Slide { push: true, start: t, leaving: None, imgs: None });
         }
+        self.sync_forward();
     }
 
     /// Esc: backs out of the page on top (an open sheet or picker swallows it); false at the root.
@@ -1741,16 +1752,57 @@ impl Settings {
             return false;
         }
         if self.transition.is_none() && !self.overlay_open() {
-            self.pop(t);
+            self.go_back(t);
         }
         true
     }
 
+    /// Back (the pill's back half, Esc, Cmd+[): pops the top page and keeps it for Forward.
+    fn go_back(&mut self, t: f64) {
+        if self.stack.len() > 1 {
+            let id = self.page();
+            self.pop(t);
+            self.forward.push(id);
+            self.sync_forward();
+        }
+    }
+
+    /// Forward (the pill's forward half, Cmd+]): opens again the page Back left last; false when there is none.
+    pub fn forward_page(&mut self, ui: &Ui, t: f64) -> bool {
+        if self.transition.is_some() || self.overlay_open() {
+            return !self.forward.is_empty();
+        }
+        let Some(id) = self.forward.pop() else { return false };
+        let ahead = std::mem::take(&mut self.forward);
+        self.push(ui, id, t);
+        self.forward = ahead;
+        self.sync_forward();
+        true
+    }
+
+    /// Whether the pill's forward half is enabled (a page Back left can be opened again).
+    pub fn can_go_forward(&self) -> bool {
+        !self.forward.is_empty()
+    }
+
+    /// Shows the forward state on the top page's toolbar pill.
+    fn sync_forward(&mut self) {
+        let on = !self.forward.is_empty();
+        if let Some(top) = self.stack.last_mut() {
+            top.nav.set_forward(on);
+            if let View::List(p) = &mut top.view {
+                p.set_forward(on);
+            }
+        }
+    }
+
+    /// Takes the top page off the stack (Back, or a page whose subject is gone, which Forward must not bring back).
     fn pop(&mut self, t: f64) {
         if self.stack.len() > 1 {
             let leaving = self.stack.pop();
             self.transition = Some(Slide { push: false, start: t, leaving, imgs: None });
         }
+        self.sync_forward();
     }
 
     /// Handles a touch; `prefs` receives every persisted change.
@@ -1897,7 +1949,7 @@ impl Settings {
         match self.page_touch(ui, ev, x, y, t) {
             Outcome::Nothing => vec![],
             Outcome::Pop => {
-                self.pop(t);
+                self.go_back(t);
                 vec![]
             }
             Outcome::Slide(g, i, release) => self.slide(ui, prefs, g, i, x, release),
@@ -1953,6 +2005,8 @@ impl Settings {
         self.transition = None;
         if self.stack.first().is_some_and(|e| e.id == id) {
             self.stack.truncate(1);
+            self.forward.clear();
+            self.sync_forward();
             return vec![];
         }
         self.stack.clear();
@@ -2600,7 +2654,11 @@ impl Settings {
         // (group, item, the pop-up choice when the touch chose one from an open menu)
         let (g, i, choice) = match hit {
             Hit::Back => {
-                self.pop(t);
+                self.go_back(t);
+                return vec![];
+            }
+            Hit::Forward => {
+                self.forward_page(ui, t);
                 return vec![];
             }
             Hit::Row(g, i) => (g, i, None),
@@ -4884,5 +4942,106 @@ mod read_on_worker_tests {
         let (value, worker) = rx.recv().expect("the worker sends its result");
         assert_eq!(value, 7);
         assert_ne!(worker, caller, "the read must not run on the calling thread");
+    }
+}
+
+/// E2E wave 3 (Settings): navigation history, Escape, the Sound page, search and the sidebar order.
+#[cfg(test)]
+mod e2e_w3_tests {
+    use super::*;
+    use bifrost_ui::prefs_layout::m;
+
+    fn info() -> Info {
+        Info { battery: 42, wifi: "Home".into(), wifi_on: true, model: "Midget".into(), brightness: 0.5, ..Info::default() }
+    }
+
+    /// The desktop split layout (sidebar + detail).
+    fn split(ui: &Ui) -> (Settings, Prefs) {
+        let st = Settings::new(ui, &info(), &Prefs::memory(), 1200, 1920, Rc::new(vec![]));
+        assert!(st.sidebar_list().is_some(), "1200 px at this scale is wide enough for the split layout");
+        (st, Prefs::memory())
+    }
+
+    fn settle(st: &mut Settings, ui: &Ui) {
+        st.tick(ui, 1e9);
+    }
+
+    fn tap(st: &mut Settings, ui: &Ui, prefs: &mut Prefs, x: f32, y: f32) -> Vec<Effect> {
+        let mut fx = st.touch(ui, prefs, Event::Down(x, y), 0.0);
+        fx.extend(st.touch(ui, prefs, Event::Up(x, y), 10.0));
+        settle(st, ui);
+        fx
+    }
+
+    /// The centre of the back (`false`) or forward (`true`) half of the toolbar pill, in window px.
+    fn pill(st: &Settings, ui: &Ui, forward: bool) -> (f32, f32) {
+        let k = if forward { 0.75 } else { 0.25 };
+        (st.pane_x() + ui.pt(m::TOOLBAR_X + m::TOOLBAR_PILL_W * k), ui.pt(m::TOOLBAR_Y + m::TOOLBAR_PILL_H / 2.0))
+    }
+
+    /// W3-3: a page opened in the split layout (a deep link, a Search hit) had no back target, so the pill and Esc did
+    /// nothing; it now goes on its pane, and the pill walks back and forward through the history.
+    #[test]
+    fn the_split_layout_pill_goes_back_and_forward() {
+        let ui = crate::shell::tests::ui();
+        let (mut st, mut prefs) = split(&ui);
+        st.open_page(&ui, "About", 0.0);
+        settle(&mut st, &ui);
+        assert_eq!(st.stack(), vec![PageId::General, PageId::About], "About goes on its pane");
+        let nav = st.list().expect("list").nav();
+        assert!(nav.has_back() && !nav.has_forward(), "only the back half is enabled");
+        let (bx, by) = pill(&st, &ui, false);
+        tap(&mut st, &ui, &mut prefs, bx, by);
+        assert_eq!(st.stack(), vec![PageId::General], "the back half pops About");
+        assert!(st.can_go_forward() && st.list().expect("list").nav().has_forward(), "About is ahead now");
+        assert!(!st.list().expect("list").nav().has_back(), "General is the first page: nothing behind it");
+        let (fx, fy) = pill(&st, &ui, true);
+        tap(&mut st, &ui, &mut prefs, fx, fy);
+        assert_eq!(st.stack(), vec![PageId::General, PageId::About], "the forward half opens About again");
+        assert!(!st.can_go_forward());
+        // a tap on the dimmed forward half does nothing
+        tap(&mut st, &ui, &mut prefs, fx, fy);
+        assert_eq!(st.page(), PageId::About);
+    }
+
+    /// W3-3: Esc pops a sub-page in the split layout, and is not used at the pane (so the shell leaves it alone).
+    #[test]
+    fn escape_pops_a_split_sub_page_and_stops_at_its_pane() {
+        let ui = crate::shell::tests::ui();
+        let (mut st, _) = split(&ui);
+        st.open_page(&ui, "Software Update", 0.0);
+        settle(&mut st, &ui);
+        assert_eq!(st.stack(), vec![PageId::General, PageId::SoftwareUpdate]);
+        assert!(st.back_page(0.0));
+        settle(&mut st, &ui);
+        assert_eq!(st.stack(), vec![PageId::General]);
+        assert!(!st.back_page(0.0), "nothing to pop at the pane");
+    }
+
+    /// A new navigation (a sidebar row, a deep link) clears what was ahead.
+    #[test]
+    fn a_new_page_clears_the_forward_history() {
+        let ui = crate::shell::tests::ui();
+        let (mut st, _) = split(&ui);
+        st.open_page(&ui, "About", 0.0);
+        settle(&mut st, &ui);
+        st.back_page(0.0);
+        settle(&mut st, &ui);
+        assert!(st.can_go_forward());
+        st.open_page(&ui, "Bluetooth", 0.0);
+        settle(&mut st, &ui);
+        assert!(!st.can_go_forward());
+        assert!(!st.forward_page(&ui, 0.0));
+    }
+
+    /// The single column stacks the same way, on the root.
+    #[test]
+    fn the_single_column_stacks_a_deep_link_on_its_pane() {
+        let ui = crate::shell::tests::ui();
+        let (mut st, _) = split(&ui);
+        st.allow_split(&ui, false);
+        st.open_page(&ui, "About", 0.0);
+        settle(&mut st, &ui);
+        assert_eq!(st.stack(), vec![PageId::Root, PageId::General, PageId::About]);
     }
 }
