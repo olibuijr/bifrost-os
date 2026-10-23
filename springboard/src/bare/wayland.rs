@@ -124,6 +124,9 @@ struct State {
     /// and whether a configuration is in flight.
     output_manager:Option<om_manager::ZwlrOutputManagerV1>, output_head:Option<om_head::ZwlrOutputHeadV1>, output_serial:u32, output_busy:bool,
     bg_manager:Option<bg_manager::ExtBackgroundEffectManagerV1>, bg_blur:bool, mat_manager:Option<mat_manager::BifrostMaterialManagerV1>, level_mgr:Option<lvl_manager::BifrostWindowLevelManagerV1>,
+    /// the window server applies Night Shift to the whole output (`white_point_mode` not none), and the white point it was
+    /// last sent (None: nothing sent yet)
+    wm_white_point:bool, white_point_sent:Option<Option<[u32;3]>>,
     foreign_manager:Option<foreign_manager::ZwlrForeignToplevelManagerV1>, foreign:Vec<Foreign>, foreign_dirty:bool,
     /// window capture (the global is listed on the privileged socket only): the manager, the requests in flight by token, the answers
     cap_mgr:Option<cap_manager::BifrostWindowCaptureManagerV1>, cap_jobs:HashMap<u64,CapJob>, cap_results:Vec<(u64,ShotOutcome)>,
@@ -812,12 +815,23 @@ fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_
     /// an empty `present` (nothing is uploaded, the CPU draws nothing). True while the fade runs, so the caller keeps
     /// waking every frame; false once settled or without a GPU presenter (the CPU path tints the frame itself).
     pub fn night(&mut self, m: Option<[u32; 3]>) -> io::Result<bool> {
+        // the window server tints the whole output, apps included (`set_white_point`): it gets the target once per change
+        // and fades it itself, and the presenter's own pass fades back to white so nothing is tinted twice
+        let wm = self.state.wm_white_point;
+        if wm && self.state.white_point_sent != Some(m) {
+            if let Some(mgr) = self.state.level_mgr.as_ref().filter(|mgr| mgr.version() >= super::window_level_client::WHITE_POINT_SINCE) {
+                let [r, g, b] = super::window_level_client::white_point_wire(m);
+                mgr.set_white_point(r, g, b);
+                self.state.white_point_sent = Some(m);
+                transient(self.conn.flush())?;
+            }
+        }
         let Some(g) = &mut self.gpu else { return Ok(false) };
         let now = std::time::Instant::now();
         // a long idle gap counts as one frame, so a schedule that starts while nothing draws still fades in
         let dt = (now.duration_since(g.night_at).as_secs_f32() * 1000.0).min(50.0);
         g.night_at = now;
-        let target = crate::gpu::wl::night_factors(m);
+        let target = if wm { [1.0; 3] } else { crate::gpu::wl::night_factors(m) };
         let cur = g.p.night();
         if cur == target { return Ok(false); }
         g.p.set_night(crate::gpu::wl::night_step(cur, target, dt));
@@ -829,6 +843,9 @@ fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_
         transient(self.conn.flush())?;
         Ok(true)
     }
+    /// True when the window server applies Night Shift to the whole output: the shell then tints nothing itself, on the
+    /// GPU presenter or on the CPU copy of an SHM frame.
+    pub fn wm_tints(&self) -> bool { self.state.wm_white_point }
     /// Frees the spare background drawable once the shell has drawn nothing for `GPU_POOL_IDLE_SECS`.
     pub fn trim_idle(&mut self) {
         let Some(g) = &mut self.gpu else { return };
@@ -1651,10 +1668,15 @@ impl Dispatch<cap_frame::BifrostWindowCaptureFrameV1,u64> for State {
 }
 impl Dispatch<lvl_manager::BifrostWindowLevelManagerV1,()> for State {
     fn event(s:&mut Self,_:&lvl_manager::BifrostWindowLevelManagerV1,e:lvl_manager::Event,_:&(),_:&Connection,_:&QueueHandle<Self>) {
-        // the window server's frame of one of our toplevels: the shell keeps its window rectangle from it
-        let lvl_manager::Event::Frame{surface,x,y,width,height}=e;
-        if let Some(id)=s.windows.iter().find(|(_,w)|w.surface==surface).map(|(&id,_)|id) {
-            s.window_events.push(WindowEvent::Frame(id,x,y,width,height));
+        match e {
+            // the window server's frame of one of our toplevels: the shell keeps its window rectangle from it
+            lvl_manager::Event::Frame{surface,x,y,width,height} => {
+                if let Some(id)=s.windows.iter().find(|(_,w)|w.surface==surface).map(|(&id,_)|id) {
+                    s.window_events.push(WindowEvent::Frame(id,x,y,width,height));
+                }
+            }
+            // how the window server applies Night Shift; a change of way sends the white point again
+            lvl_manager::Event::WhitePointMode{mode} => { s.wm_white_point=super::window_level_client::wm_tints(mode); s.white_point_sent=None; }
         }
     }
 }

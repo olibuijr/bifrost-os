@@ -1354,6 +1354,10 @@ Float on Top, the floating CPU window of Activity Monitor). Ours, end to end:
 - Shell to window server: the private protocol `bifrost_window_level_v1` (`wm/protocol/bifrost-window-level-v1.xml`,
   client `springboard/src/bare/window_level_client.rs`, server `springboard/wm/src/window_level.rs`). `set_level(surface,
   level)` stores the level on the surface; the window server applies it at once to a mapped toplevel and at its map.
+  Version 5 adds the output's white point (Night Shift on the whole screen, `set_white_point` and the
+  `white_point_mode` event; `docs/gpu-first.md`, "Night Shift on the whole output"). Apple's Night Shift is a display
+  property (CoreBrightness), not a per-window one, so the window server owns it: it tints every app's window, the
+  pointer included, on the CRTC gamma ramp or a final GLES pass, and the shell stops tinting its own surfaces.
 - Window model: `springboard/wm/src/wm.rs` `Level` (`Normal`, `Floating`). The stack is sorted by level: a floating
   window is above every normal window, a raised or re-levelled window goes to the top of its own band, and raising a
   normal window does not pass a floating one. Hit testing uses the same order. The key window is the one last raised

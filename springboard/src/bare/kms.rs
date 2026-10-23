@@ -885,6 +885,9 @@ impl Display {
     /// Night Shift through the GPU presenter's final pass (`wayland::Display::night`): true while its fade runs.
     #[cfg(feature = "desktop-wayland")]
     pub fn wayland_night(&mut self, m: Option<[u32; 3]>) -> io::Result<bool> {if let Some(w)=&mut self.wayland {w.night(m)} else {Ok(false)}}
+    /// The window server applies Night Shift to the whole output (`wayland::Display::wm_tints`): the shell tints nothing.
+    #[cfg(feature = "desktop-wayland")]
+    pub fn wayland_wm_tints(&self) -> bool {self.wayland.as_ref().is_some_and(|w| w.wm_tints())}
     /// Screen Zoom state and pointer for the next present (see `wayland::Display::set_zoom`).
     #[cfg(feature = "desktop-wayland")]
     pub fn wayland_set_zoom(&mut self, zoom: crate::shell::accessibility::zoom::ScreenZoom, pointer: (f32, f32)) {if let Some(w)=&mut self.wayland {w.set_zoom(zoom,pointer);}}

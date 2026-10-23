@@ -207,3 +207,30 @@ Not measured on Midget yet: the fallback path has only been read through, not ru
 ## Window capture (2026-10-20)
 
 The GLES backends render one window alone into a texture of the requested size (`capture::capture_window`): the window's surface tree at the scale `size / geometry`, with its material regions as flat plates behind it (a region that blurs the desktop on screen has nothing to blur here), onto a transparent ground, in one render and one readback. It runs only for a request (the shell: Mission Control tiles, the Dock thumbnail of a window being minimized, a window screenshot), never per frame, and does not touch the scanout's glass or plate caches (`Glass::plates_once`). The Vulkan scanout has no GLES renderer for it and answers `failed(unsupported)`; every consumer keeps its fallback. The reduction is the GPU's bilinear sample at the render scale, so a picture far smaller than the window can alias; the requests ask for twice the tile size to keep it sharp. Protocol, access rule and the minimized-window rule: `docs/window-server.md`, "Window capture".
+
+## Night Shift on the whole output (2026-10-23)
+
+Night Shift is applied by the window server, not the shell: before, the shell's presenter multiplied only its own
+surfaces in its final pass (`gpu/wl.rs`), so external SDK app windows composed by bifrost-wm stayed cold and the screen
+was half warm. Now the shell sends the target white point once per change over `bifrost_window_level_v1` version 5
+(`set_white_point`, 256 = 1.0, privileged only) and the window server fades to it in one place (`wm/src/white_point.rs`,
+a straight RGB line over 1.5 s) and applies it to everything it shows:
+
+- **Hardware** (preferred, zero GPU cost): the CRTC's gamma ramp, programmed with the legacy gamma ioctl (on atomic
+  drivers the kernel turns it into the GAMMA_LUT blob; smithay's commits never touch it). The display's own ramp is read
+  at start as the base and kept (calibration), replaced by the identity when it reads back zero or looks like a warm
+  tint left behind by a window server that died. Fade steps reach the ramp at most every 33 ms (each set is a blocking
+  commit); the last step always lands. The ramp is programmed again after a VT switch and put back on SIGTERM, SIGINT
+  and SIGHUP (then the signal is re-raised with its default action) and when the loop ends.
+- **Composited** (no ramp, or the driver refused one): a frontmost multiply element in the GLES scene (blend
+  DST_COLOR, ZERO, alpha kept; stable id, damage only when the colour changes). Captures do not include it, as they do
+  not include the ramp. `BIFROST_WM_NIGHT=composited` forces this path for testing.
+- **None**: the Vulkan scanout without a ramp, nested and headless backends. The shell then keeps tinting its own
+  surfaces as before.
+
+The window server reports the mode with `white_point_mode` on bind and on change. While it is not `none` the shell's
+presenter fades its own pass back to white and the CPU tint of SHM frames is skipped (`Display::night`,
+`wayland_wm_tints`), so nothing is tinted twice; the KMS and SHM CPU paths keep the shell's tint for sessions without
+bifrost-wm. Tests: `white_point::tests`, `drm::tests::night_shift_takes_the_ramp_first_then_the_gles_pass`,
+`window_level::tests`, `window_level_client::tests`. Open: a VT switch away leaves the warm ramp to the next DRM master
+(smithay drops the master before the pause event, so it cannot be restored there); the Vulkan scanout has no pass.
