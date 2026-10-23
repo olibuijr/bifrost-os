@@ -9,6 +9,23 @@ use bifrost_app::dnd::{self, DragItem, DragPhase, DragPreview, Payload};
 use bifrost_app::proto::GrantId;
 use bifrost_app::{Document, DocumentEvent};
 
+/// Whether a drop of this window's own drag copies: Option was held (`copy_drag`), or the shell narrowed the mask so that
+/// a move is not allowed (Option held while the shell owns the pointer).
+pub(crate) fn own_drop_copies(copy_drag: bool, allowed: u8) -> bool {
+    copy_drag || allowed & dnd::dragop::MOVE == 0
+}
+
+/// The operation this window answers for a hover: none away from a folder; inside the window a move, or a copy when
+/// `copy`; files from another app are always copied.
+pub(crate) fn drop_reply(over_folder: bool, own: bool, copy: bool) -> u8 {
+    match (over_folder, own) {
+        (false, _) => 0,
+        (true, true) if copy => dnd::dragop::COPY,
+        (true, true) => dnd::dragop::MOVE,
+        (true, false) => dnd::dragop::COPY,
+    }
+}
+
 /// The cross-window drag state of one window.
 #[derive(Default)]
 pub(crate) struct DragOut {
@@ -118,8 +135,11 @@ impl Files {
     }
 
     /// Pointer hovers, enters, leaves or drops on this window during a session (own or another app's).
-    pub(crate) fn drag_out_dest(&mut self, ctx: &Ctx, session: u32, phase: DragPhase, x: f32, y: f32, items: Vec<DragItem>) -> bool {
+    /// `allowed` is the source's mask as the held modifier keys narrow it (Option leaves copy only).
+    pub(crate) fn drag_out_dest(&mut self, ctx: &Ctx, session: u32, phase: DragPhase, x: f32, y: f32, allowed: u8, items: Vec<DragItem>) -> bool {
         let own = self.dnd.session == Some(session);
+        // a drag inside this window moves; Option (the key, or a mask the shell narrowed to copy) copies
+        let copy = own_drop_copies(self.fx.copy_drag, allowed);
         match phase {
             DragPhase::Entered | DragPhase::Updated => {
                 if !own {
@@ -136,13 +156,7 @@ impl Files {
                 }
                 self.revision += 1;
                 // inside this window a drag moves the items, Option copies; files from another app are copied
-                let op = match (&self.drop_target, own) {
-                    (None, _) => 0,
-                    (Some(_), true) if self.fx.copy_drag => dnd::dragop::COPY,
-                    (Some(_), true) => dnd::dragop::MOVE,
-                    (Some(_), false) => dnd::dragop::COPY,
-                };
-                dnd::reply(ctx, session, op);
+                dnd::reply(ctx, session, drop_reply(self.drop_target.is_some(), own, copy));
                 true
             }
             DragPhase::Exited => {
@@ -156,9 +170,12 @@ impl Files {
                 let dest = self.drop_target.take();
                 self.spring_hover(None);
                 if own {
+                    // a drop on one of this window's folders (the shell always hands the source window its own drop): the
+                    // target from the last Updated, else the folder under the drop point
+                    let dest = dest.or_else(|| self.drop_target_at(x, y));
                     self.dragging = false;
                     let paths = std::mem::take(&mut self.fx.drag_paths);
-                    let copy = std::mem::take(&mut self.fx.copy_drag);
+                    self.fx.copy_drag = false;
                     let accepted = dest.is_some();
                     if let Some(dest) = dest {
                         let (title, op) = if copy { ("Copying", Op::Copy) } else { ("Moving", Op::Move) };
@@ -217,5 +234,24 @@ impl Files {
             return true;
         }
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bifrost_app::dnd::dragop;
+
+    #[test]
+    fn a_drag_inside_the_window_moves_and_option_copies() {
+        let both = dragop::COPY | dragop::MOVE;
+        assert!(!own_drop_copies(false, both));
+        assert!(own_drop_copies(true, both), "Option seen by the window");
+        assert!(own_drop_copies(false, dragop::COPY), "Option narrowed the mask while the shell owns the pointer");
+        assert_eq!(drop_reply(true, true, false), dragop::MOVE);
+        assert_eq!(drop_reply(true, true, true), dragop::COPY);
+        assert_eq!(drop_reply(true, false, false), dragop::COPY, "another app's files are copied");
+        assert_eq!(drop_reply(false, true, false), 0, "not over a folder");
+        assert_eq!(drop_reply(false, false, true), 0);
     }
 }

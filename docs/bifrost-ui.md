@@ -972,12 +972,19 @@ the menu is a plain context menu (no icons, no "More..."), and Copy of a file co
   then sends `Perform` with the items; file items carry the new grant ids and a file that could not be handed over is dropped.
   The destination answers `dnd::performed(accepted)` and the source gets `Ended` with the agreed operation, or 0 when refused.
   Text and URLs travel inline (512 characters at most).
+- **Same window** (W4-24): a release over the source's own window always ends in `Perform` there, whatever its last reply said
+  (the reply to the last `Updated` can still be in flight when the button goes up); the app decides and answers `performed`.
+  Files moves the dragged items into the folder row or icon under the drop (the target is tinted while hovered, list and icon
+  view) and copies with Option.
+- **Modifier keys** (`draggingSourceOperationMask`): the shell narrows the source's mask by the keys held at each pointer step
+  (`dnd::modifier_mask`: Option copy, Command move, both link; a wanted operation the source does not allow leaves 0) and
+  sends the narrowed mask as `allowed`; a reply is negotiated against it when the drop happens.
 - **Cleanup**: an app that exits loses its registration and abandons a session it takes part in. Wire sizes are capped (8 items,
   4 types of 128 bytes per item) so every packet fits `MAX_PACKET`; a full packet is asserted in the proto tests.
 
 Gaps (not matched yet): destinations are app windows only; the desktop background, the Dock (drop a file on an icon to open it)
 and Files' own desktop icons are not destinations, and shell chrome (Spotlight, menus) cannot be dragged from. No Escape to
-cancel, no modifier keys choosing copy / move / link (the destination decides), no spring-loaded folders, no auto-scroll, no
+cancel, modifier changes while the pointer stands still reach the destination only with the next move, no auto-scroll, no
 slide-back animation, one drag image (no per-item image components, no `draggingFormation`, no image swap on `Entered`).
 Promised data lives in-process (see "Promised pasteboard data"); the drag wire still has no promised-file payload kind. Drags between an SDK window and a native Wayland
 or X11 window (the `text/uri-list` portal) are not bridged. The preview is drawn only where the shell composites on the CPU

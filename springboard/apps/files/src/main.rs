@@ -377,7 +377,7 @@ impl App for Files {
     }
     fn drag(&mut self, ctx: &Ctx, ev: bifrost_app::dnd::Event) -> bool {
         match ev {
-            bifrost_app::dnd::Event::Dest { session, phase, x, y, items, .. } => self.drag_out_dest(ctx, session, phase, x / ctx.ui.s, y / ctx.ui.s, items),
+            bifrost_app::dnd::Event::Dest { session, phase, x, y, allowed, items } => self.drag_out_dest(ctx, session, phase, x / ctx.ui.s, y / ctx.ui.s, allowed, items),
             bifrost_app::dnd::Event::Ended { session, .. } => self.drag_out_ended(ctx, session),
         }
     }
@@ -621,6 +621,7 @@ impl Files {
                 x,
                 y,
                 t: _,
+                mods,
                 ..
             } => {
                 let (x, y) = (x / ctx.ui.s, y / ctx.ui.s);
@@ -640,6 +641,10 @@ impl Files {
                     }
                 }
                 if self.dragging {
+                    // Option held while dragging inside the window copies instead of moving
+                    if mods.option() {
+                        self.fx.copy_drag = true;
+                    }
                     let target = self.drop_target_at(x, y);
                     if target != self.drop_target {
                         self.spring_hover(target.as_ref());
