@@ -562,9 +562,12 @@
     fn command_comma_opens_settings() {
         let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
         assert!(sh.desk.as_ref().unwrap().front().is_none());
+        // on the desktop the application menu's Settings\u{2026} (System Settings) carries the key equivalent
+        assert!(sh.menu_row_keys(desktop_bar::Menu::App).contains(&"\u{2318},".to_string()));
         sh.hw_shortcut(hwkeys::Shortcut::Settings,1.);
         assert_eq!(sh.desk.as_ref().unwrap().front().map(|w|w.app),Some(AppId::Settings));
-        assert!(sh.menu_row_keys(desktop_bar::Menu::App).contains(&"\u{2318},".to_string()));
+        // System Settings in front has no settings of its own, so its application menu has no Settings\u{2026} row
+        assert!(!sh.menu_row_keys(desktop_bar::Menu::App).contains(&"\u{2318},".to_string()));
     }
 
     /// The status items sit right beside the clock whatever its width or the screen size (no fixed reserve), and the
