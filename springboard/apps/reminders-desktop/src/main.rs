@@ -546,6 +546,9 @@ impl App for RemindersApp {
                 let t = bifrost_proto::sys::now_ms();
                 a.touch(&ctx.ui, Event::Down(x, y), t);
                 a.touch(&ctx.ui, Event::Up(x, y), t);
+                if let Some((mx, my, items)) = a.take_menu_request() {
+                    ctx.context_menu(mx, my, items);
+                }
                 true
             }
             Input::Touch { kind, x, y, t, .. } => {
@@ -555,8 +558,21 @@ impl App for RemindersApp {
                     TouchKind::Up | TouchKind::Cancel => Event::Up(x, y),
                 };
                 a.touch(&ctx.ui, e, t);
+                // the toolbar's "..." asks for the list's menu
+                if let Some((mx, my, items)) = a.take_menu_request() {
+                    ctx.context_menu(mx, my, items);
+                }
                 true
             }
+            // a right click on a list in the sidebar opens its menu; the choice comes back as a ContextAction
+            Input::Context { x, y } => match a.context_menu_at(&ctx.ui, x, y) {
+                Some(items) => {
+                    ctx.context_menu(x, y, items);
+                    true
+                }
+                None => false,
+            },
+            Input::ContextAction(id) => a.context_action(&ctx.ui, id, bifrost_proto::sys::now_ms()),
             Input::Key(k) => {
                 if let Some((key, mods)) = k.as_chord() {
                     a.chord(&ctx.ui, key, mods, bifrost_proto::sys::now_ms());
