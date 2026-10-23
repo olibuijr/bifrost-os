@@ -4,24 +4,30 @@
 /// The most symbols a watchlist holds.
 pub const MAX_SYMBOLS: usize = 30;
 
-/// One quote row from the quote service: the day's open and the latest close.
+/// One quote from the quote service: the latest price against the previous session's close.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Quote {
-    /// lower case with its market suffix, e.g. "aapl.us"
+    /// in the service's form, e.g. "AAPL" or "^GSPC"
     pub symbol: String,
-    /// when the service priced it, as it reports it, e.g. "2026-10-02 22:00:09"
+    /// the company or index name, e.g. "Apple Inc." (empty when the service gave none)
+    pub name: String,
+    /// when the service priced it, in the exchange's time, e.g. "2026-10-22 16:00"
     pub stamp: String,
+    /// the price the change is measured from: the previous session's close
     pub open: f64,
+    /// the latest price
     pub close: f64,
+    /// a month of daily closes, oldest first, for the sidebar's sparkline
+    pub spark: Vec<f64>,
 }
 
 impl Quote {
-    /// The change since the open, in price units.
+    /// The change since the previous close, in price units.
     pub fn change(&self) -> f64 {
         self.close - self.open
     }
 
-    /// The change since the open, in per cent (0 when the open is 0).
+    /// The change since the previous close, in per cent (0 when that close is 0).
     pub fn change_pct(&self) -> f64 {
         if self.open == 0.0 { 0.0 } else { self.change() / self.open * 100.0 }
     }
@@ -295,7 +301,7 @@ mod tests {
 
     #[test]
     fn quote_change_is_against_the_open() {
-        let q = Quote { symbol: "aapl.us".into(), stamp: String::new(), open: 100.0, close: 110.0 };
+        let q = Quote { symbol: "AAPL".into(), name: String::new(), stamp: String::new(), open: 100.0, close: 110.0, spark: vec![] };
         assert!((q.change() - 10.0).abs() < 1e-9);
         assert!((q.change_pct() - 10.0).abs() < 1e-9);
         let flat = Quote { open: 0.0, ..q };

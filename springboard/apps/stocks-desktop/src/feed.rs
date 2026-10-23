@@ -17,7 +17,8 @@ pub const RETRY_S: f64 = 60.0;
 /// A finished background job, waiting for the app loop.
 #[derive(Debug)]
 pub enum Done {
-    Quotes(Result<Vec<Quote>, String>),
+    /// The quotes that came back and the symbols the service did not know (with its message), or why none came.
+    Quotes(Result<(Vec<Quote>, Vec<(String, String)>), String>),
     History { symbol: String, result: Result<Vec<Bar>, String> },
 }
 
@@ -28,6 +29,8 @@ pub struct Feed {
     pub quotes_at: Option<f64>,
     /// The message of the last quote failure, cleared by the next good answer.
     pub quotes_error: Option<String>,
+    /// Symbols the service did not know, with its message (the row says so instead of waiting for a price).
+    pub quote_failed: HashMap<String, String>,
     pub quotes_pending: bool,
     /// A symbol was added since the last quote request, so the next request is due now.
     pub quotes_wanted: bool,
@@ -91,12 +94,17 @@ impl Feed {
     /// Applies a finished job at `now` (unix seconds). A failure keeps the data already held and waits `RETRY_S`.
     pub fn apply(&mut self, done: Done, now: f64) {
         match done {
-            Done::Quotes(Ok(list)) => {
+            Done::Quotes(Ok((list, failed))) => {
                 self.quotes_pending = false;
                 self.quotes_at = Some(now);
                 self.quotes_error = None;
                 for q in list {
+                    self.quote_failed.remove(&q.symbol);
                     self.quotes.insert(q.symbol.clone(), q);
+                }
+                for (symbol, message) in failed {
+                    self.quotes.remove(&symbol);
+                    self.quote_failed.insert(symbol, message);
                 }
             }
             Done::Quotes(Err(e)) => {
@@ -136,7 +144,7 @@ mod tests {
     const NOW: f64 = 1_000_000.0;
 
     fn quote(symbol: &str, close: f64) -> Quote {
-        Quote { symbol: symbol.into(), stamp: "2026-10-02 22:00:00".into(), open: 100.0, close }
+        Quote { symbol: symbol.into(), name: String::new(), stamp: "2026-10-02 22:00".into(), open: 100.0, close, spark: vec![] }
     }
 
     fn bars(n: usize) -> Vec<Bar> {
@@ -153,7 +161,7 @@ mod tests {
     #[test]
     fn quotes_wait_for_their_time_to_live_unless_a_symbol_was_added() {
         let mut feed = Feed::default();
-        feed.apply(Done::Quotes(Ok(vec![quote("aapl.us", 110.0)])), NOW);
+        feed.apply(Done::Quotes(Ok((vec![quote("AAPL", 110.0)], vec![]))), NOW);
         assert!(!feed.quotes_due(NOW + 60.0), "fresh");
         assert!(feed.quotes_due(NOW + QUOTE_TTL_S), "stale");
         feed.quotes_wanted = true;
@@ -175,21 +183,32 @@ mod tests {
     #[test]
     fn a_failure_keeps_the_old_quotes_and_waits_before_retrying() {
         let mut feed = Feed::default();
-        feed.apply(Done::Quotes(Ok(vec![quote("aapl.us", 110.0)])), NOW);
+        feed.apply(Done::Quotes(Ok((vec![quote("AAPL", 110.0)], vec![]))), NOW);
         feed.begin_quotes();
         feed.apply(Done::Quotes(Err("Quotes are unavailable".into())), NOW + 900.0);
-        assert_eq!(feed.quotes.get("aapl.us").map(|q| q.close), Some(110.0), "cached quote still shown");
+        assert_eq!(feed.quotes.get("AAPL").map(|q| q.close), Some(110.0), "cached quote still shown");
         assert_eq!(feed.quotes_error.as_deref(), Some("Quotes are unavailable"));
         assert_eq!(feed.quotes_at, Some(NOW), "a failure is not a fresh answer");
         assert!(!feed.quotes_due(NOW + 900.0 + RETRY_S - 1.0));
         assert!(feed.quotes_due(NOW + 900.0 + RETRY_S));
     }
 
+    /// E2E W4-14: a symbol the service does not know is recorded, so its row says so instead of showing a dash.
+    #[test]
+    fn an_unknown_symbol_is_recorded_and_a_later_price_clears_it() {
+        let mut feed = Feed::default();
+        feed.apply(Done::Quotes(Ok((vec![quote("AAPL", 1.0)], vec![("NOPE".into(), "NOPE was not found.".into())]))), NOW);
+        assert_eq!(feed.quote_failed.get("NOPE").map(String::as_str), Some("NOPE was not found."));
+        assert!(feed.quotes_error.is_none(), "one unknown symbol is not an outage");
+        feed.apply(Done::Quotes(Ok((vec![quote("NOPE", 2.0)], vec![]))), NOW + 1.0);
+        assert!(feed.quote_failed.is_empty());
+    }
+
     #[test]
     fn a_good_answer_clears_the_error() {
         let mut feed = Feed::default();
         feed.apply(Done::Quotes(Err("down".into())), NOW);
-        feed.apply(Done::Quotes(Ok(vec![quote("aapl.us", 1.0)])), NOW + RETRY_S);
+        feed.apply(Done::Quotes(Ok((vec![quote("AAPL", 1.0)], vec![]))), NOW + RETRY_S);
         assert_eq!(feed.quotes_error, None);
         assert_eq!(feed.quotes_at, Some(NOW + RETRY_S));
     }
@@ -219,10 +238,11 @@ mod tests {
     #[test]
     fn cached_quotes_and_history_load_with_their_age() {
         let mut feed = Feed::default();
-        feed.load_quotes("Symbol,Date,Time,Open,High,Low,Close,Volume\nAAPL.US,2026-10-02,22:00:09,100,1,1,105,5\n", NOW - 30.0);
-        assert_eq!(feed.quotes["aapl.us"].close, 105.0);
+        feed.load_quotes("Symbol,Date,Time,Previous,Close,Name,Spark\nAAPL,2026-10-02,22:00,100,105,Apple Inc.,100;105\n", NOW - 30.0);
+        assert_eq!(feed.quotes["AAPL"].close, 105.0);
+        assert_eq!(feed.quotes["AAPL"].spark, [100.0, 105.0]);
         assert_eq!(feed.quotes_at, Some(NOW - 30.0));
-        assert!(feed.load_history("aapl.us", "Date,Open,High,Low,Close,Volume\n2026-10-01,1,1,1,2,1\n", NOW));
+        assert!(feed.load_history("aapl.us", "Date,Close\n2026-10-01,2\n", NOW));
         assert!(!feed.load_history("xyz.us", "garbage", NOW), "an unreadable cache is ignored");
         assert_eq!(feed.history["aapl.us"].len(), 1);
     }
