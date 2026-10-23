@@ -818,8 +818,9 @@ fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_
         let dt = (now.duration_since(g.night_at).as_secs_f32() * 1000.0).min(50.0);
         g.night_at = now;
         let target = crate::gpu::wl::night_factors(m);
-        if g.p.night() == target { return Ok(false); }
-        g.p.set_night(crate::gpu::wl::night_step(g.p.night(), target, dt));
+        let cur = g.p.night();
+        if cur == target { return Ok(false); }
+        g.p.set_night(crate::gpu::wl::night_step(cur, target, dt));
         let (w, h) = (self.state.size.0 as usize, self.state.size.1 as usize);
         self.render_windows()?;
         self.render_chrome()?;
