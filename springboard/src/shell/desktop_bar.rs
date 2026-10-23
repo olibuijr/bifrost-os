@@ -1137,7 +1137,7 @@ impl Shell {
         let foreign_id=match &front {FrontApp::Foreign(id)=>Some(id.as_str()),_=>None};
         let others=self.desk.as_ref().is_some_and(|d|d.others_shown(keep)||d.native_windows.iter().chain(d.linux_apps.iter().flat_map(|a|a.windows.iter())).any(|w|Some(w.app_id.as_str())!=foreign_id&&!d.hidden_foreign.contains(&w.id)));
         let hidden=self.desk.as_ref().is_some_and(|d|d.any_hidden())||!self.hidden_foreign_now().is_empty();
-        application_menu(&self.app_menu_name(),self.front_app_settings(),on,others,hidden)
+        application_menu(&self.app_menu_name(),self.front_app_settings(),on,on&&others,hidden)
     }
     /// The window server's toplevels Hide minimized that still exist and have not been brought back (an active one is shown).
     fn hidden_foreign_now(&self)->Vec<u32> {
