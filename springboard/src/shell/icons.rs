@@ -20,6 +20,8 @@ const INDIGO: u32 = pack(94, 92, 230, 255);
 const GRAY: u32 = pack(142, 142, 147, 255);
 const TEAL: u32 = pack(50, 173, 230, 255);
 pub const GREEN: u32 = pack(52, 199, 89, 255);
+/// The Appearance tile: near black, so its half-white disc reads as light and dark
+const CHARCOAL: u32 = pack(28, 28, 30, 255);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Icon {
@@ -51,10 +53,12 @@ pub enum Icon {
     Search,
     Trackpad,
     Vpn,
+    /// Appearance (Light, Dark, Auto): a ring with its left half filled
+    Appearance,
 }
 
 impl Icon {
-    pub const ALL: [Icon; 26] = [
+    pub const ALL: [Icon; 27] = [
         Icon::Airplane,
         Icon::Wifi,
         Icon::Bluetooth,
@@ -81,6 +85,7 @@ impl Icon {
         Icon::Search,
         Icon::Trackpad,
         Icon::Vpn,
+        Icon::Appearance,
     ];
 
     /// The tile's background colour.
@@ -95,6 +100,7 @@ impl Icon {
             Icon::Assistant => INDIGO,
             Icon::Wallpaper => TEAL,
             Icon::Battery => GREEN,
+            Icon::Appearance => CHARCOAL,
         }
     }
 }
@@ -363,6 +369,15 @@ pub fn tile(s: &mut Surface, ui: &Ui, icon: Icon, x: f32, y: f32) {
             s.fill_rrect(bx + 2.6 * k, by + 2.6 * k, bw - 5.2 * k, bh - 5.2 * k, 1.6 * k, WHITE);
             s.fill_rrect(bx + bw + k, by + 3.5 * k, 1.6 * k, bh - 7.0 * k, 0.8 * k, WHITE);
         }
+        Icon::Appearance => {
+            ring(s, cx, cy, ui.pt(9.5), ui.pt(1.8), WHITE);
+            // the left half of the inner disc: light beside dark
+            let r = ui.pt(6.0);
+            for (dy, row) in (0..(2.0 * r).ceil() as i32).map(|i| (i as f32 + 0.5 - r, i)) {
+                let half = (r * r - dy * dy).max(0.0).sqrt();
+                s.fill_rrect(cx - half, cy - r + row as f32, half, 1.0, 0.0, WHITE);
+            }
+        }
         Icon::Privacy | Icon::Passcode => {
             let (px0, py0) = p(9.0, 13.0);
             s.fill_rrect(px0, py0, ui.pt(11.5), ui.pt(10.5), ui.pt(3.5), WHITE);
@@ -472,6 +487,7 @@ fn artwork(icon: Icon, px: usize) -> Option<std::sync::Arc<crate::gfx::Image>> {
         Icon::Search => include_bytes!("../../res/settings-icons/search.png"),
         Icon::Trackpad => include_bytes!("../../res/settings-icons/trackpad.png"),
         Icon::Vpn => include_bytes!("../../res/settings-icons/vpn.png"),
+        Icon::Appearance => include_bytes!("../../res/settings-icons/appearance.png"),
     };
     let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
     let mut c = cache.lock().ok()?;

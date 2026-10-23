@@ -27,7 +27,7 @@ use super::update::{self, Updater};
 use super::{backup, backup_page, diag, diagnostics_page};
 use super::ui::{AlertCard, Ui, Weight, CONTENT_BG, SEPARATOR_C, SIDEBAR_BG};
 use super::live_wallpaper::{Look, LOOK_PREF};
-use super::wallpaper_page::{Tap, Target, Wallpaper, WallpaperPage};
+use super::wallpaper_page::{Import, ShowOn, Tap, Target, Wallpaper, WallpaperPage, SHOW_ON_PREF};
 use super::controls::{notch, slider_value};
 pub use super::list::fill_row;
 use super::wifi_page::{choose, Choice, Sheet, SheetHit, BLUE};
@@ -317,6 +317,10 @@ pub struct Settings {
     wallpaper_dynamic: bool,
     /// Live Look (`wallpaper_look` pref): the desktop's animated or time-of-day wallpaper, or the still
     wallpaper_look: Look,
+    /// Show On (`wallpaper_show_on` pref, desktop): where a click on a thumbnail puts the wallpaper
+    wallpaper_show_on: ShowOn,
+    /// Add Photo… or Add Folder… was clicked; the shell brings up its open panel (`take_wallpaper_import`)
+    wallpaper_import: Option<Import>,
     stack: Vec<Entry>,
     /// the pages Back left, the next one last: the toolbar pill's forward half opens them again; any other navigation
     /// clears them (a browser's forward list)
@@ -579,6 +583,8 @@ impl Settings {
             wallpaper_dim: prefs.get("wallpaper_dim") != Some("0"),
             wallpaper_dynamic: prefs.get("wallpaper_dynamic") == Some("1"),
             wallpaper_look: Look::parse(prefs.get(LOOK_PREF).unwrap_or("")),
+            wallpaper_show_on: ShowOn::parse(prefs.get(SHOW_ON_PREF).unwrap_or("")),
+            wallpaper_import: None,
             stack: vec![],
             forward: Vec::new(),
             transition: None,
@@ -813,6 +819,9 @@ impl Settings {
             let mut page = WallpaperPage::new(ui, self.w, self.screen_aspect, &self.wallpapers, &self.info.wallpaper, self.wallpaper_dim);
             page.set_dynamic(self.wallpaper_dynamic);
             page.set_look(self.wallpaper_look);
+            // the desktop applies a thumbnail on click (Golden Gate); the tablet keeps its preview with the Set buttons
+            page.set_desktop(ui, super::pages::pointer_form());
+            page.set_show_on(self.wallpaper_show_on);
             return Entry { id, nav: NavBar::new(ui, &title, back).height(self.pane().nav_pt), title, view: View::Wallpaper(page) };
         }
         let spec = self.spec_for(id);
@@ -1059,6 +1068,26 @@ impl Settings {
     /// Settings > Screen Saver > Preview: true once after the row is tapped.
     pub(super) fn take_screensaver_preview(&mut self) -> bool {
         std::mem::take(&mut self.screensaver_preview)
+    }
+
+    /// Settings > Wallpaper > Add Photo… or Add Folder…: once after the click, for the shell's open panel.
+    pub(super) fn take_wallpaper_import(&mut self) -> Option<Import> {
+        self.wallpaper_import.take()
+    }
+
+    /// The pictures the open panel added are in the catalogue now (`wallpapers`, shared with the shell): the Wallpaper
+    /// page lists them, and the first of `added` is applied as a click on its thumbnail would (Show On decides where).
+    pub(super) fn wallpapers_added(&mut self, ui: &Ui, prefs: &mut Prefs, wallpapers: Rc<Vec<Wallpaper>>, added: &[String]) -> Vec<Effect> {
+        self.wallpapers = wallpapers;
+        let Some(top) = self.stack.iter().rposition(|e| e.id == PageId::Wallpaper) else { return vec![] };
+        let back = top.checked_sub(1).map(|i| self.stack[i].title.clone());
+        let page = self.build(ui, PageId::Wallpaper, back.as_deref());
+        self.stack[top] = page;
+        if top + 1 != self.stack.len() {
+            return vec![];
+        }
+        let Some(i) = added.first().and_then(|id| self.wallpapers.iter().position(|w| &w.id == id)) else { return vec![] };
+        self.wallpaper_tap(ui, prefs, Tap::Set(i, self.wallpaper_show_on.target()))
     }
 
     /// Edits made on the notification pages, for the shell to apply.
@@ -2090,8 +2119,9 @@ impl Settings {
                             if let Some(tap) = page.tap(ui, w, h, x, y) {
                                 return Outcome::Wallpaper(tap);
                             }
-                        } else if let Some(tap @ (Tap::Dynamic | Tap::Look(_))) = page.tap(ui, w, h, x, y) {
-                            // the Dynamic Wallpaper switch and the Live Look row sit above the grid and are not thumbnails
+                        } else if let Some(tap @ (Tap::Dynamic | Tap::Look(_) | Tap::ShowOn(_) | Tap::Add(_))) = page.tap(ui, w, h, x, y) {
+                            // the Dynamic Wallpaper switch, the Live Look row and the desktop's Show On row and add
+                            // buttons sit above the grid and are not thumbnails
                             return Outcome::Wallpaper(tap);
                         } else if let Some(i) = held.filter(|&i| page.hit(ui, w, h, x, y) == Some(i)) {
                             return Outcome::Wallpaper(Tap::Thumb(i));
@@ -2499,8 +2529,23 @@ impl Settings {
             }
         };
         match tap {
+            // the desktop applies the wallpaper at once, where Show On says (Golden Gate's Wallpaper pane)
+            Tap::Thumb(i) if page.desktop() => {
+                let target = page.show_on().target();
+                self.wallpaper_tap(ui, prefs, Tap::Set(i, target))
+            }
             Tap::Thumb(i) => {
                 page.open_preview(ui, w, h, i);
+                vec![]
+            }
+            Tap::ShowOn(o) => {
+                page.set_show_on(o);
+                self.wallpaper_show_on = o;
+                save(prefs, SHOW_ON_PREF, o.pref());
+                vec![]
+            }
+            Tap::Add(kind) => {
+                self.wallpaper_import = Some(kind);
                 vec![]
             }
             Tap::Cancel => {
@@ -3677,6 +3722,7 @@ impl Settings {
                 self.wallpaper_dim = true;
                 self.wallpaper_dynamic = false;
                 self.wallpaper_look = Look::Still;
+                self.wallpaper_show_on = ShowOn::All;
                 self.rebuild(ui);
                 vec![Effect::AutoLock(self.opts.auto_lock_ms), Effect::Volume(self.opts.volume), Effect::Wallpaper(String::new()), Effect::LockWallpaper(String::new()), Effect::WallpaperDim(true), Effect::LiveWallpaper(Look::Still.pref().to_string())]
             }
@@ -4599,6 +4645,51 @@ mod tests {
         assert!(fx.contains(&Effect::LiveWallpaper("still".into())));
         assert_eq!(st.wallpaper_look, Look::Still);
         assert_eq!(prefs.get("wallpaper_look"), None);
+    }
+
+    #[test]
+    fn on_the_desktop_a_click_applies_a_wallpaper_where_show_on_says_and_the_add_buttons_ask_for_the_panel() {
+        use bifrost_ui::form_factor::FormFactor;
+        let ui = super::super::tests::ui();
+        super::super::pages::set_test_form(FormFactor::Desktop);
+        let mut prefs = Prefs::memory();
+        let mut st = Settings::new(&ui, &Info { wallpaper: "a".into(), ..info() }, &prefs, 1200, 1920, stills());
+        st.allow_split(&ui, false); // single-column geometry
+        assert!(tap_row(&mut st, &ui, &mut prefs, "Wallpaper").is_empty());
+        let View::Wallpaper(page) = &st.stack.last().unwrap().view else { panic!("wallpaper page") };
+        assert!(page.desktop());
+        let (cx, cy, cw, ch) = page.cell(&ui, 1200, 1);
+        // a click applies it at once, to the desktop and the lock screen together: no preview
+        assert_eq!(tap(&mut st, &ui, &mut prefs, cx + cw / 2.0, cy + ch / 2.0), vec![Effect::LockWallpaper(String::new()), Effect::Wallpaper("b".into())]);
+        let View::Wallpaper(page) = &st.stack.last().unwrap().view else { panic!("wallpaper page") };
+        assert!(!page.previewing(), "the desktop has no Set Lock Screen / Home / Both preview");
+        assert_eq!((prefs.get("wallpaper"), st.info.wallpaper.as_str()), (Some("b"), "b"));
+        // Lock Screen Only: the next click sets the lock screen alone, and the choice is kept
+        let (sx, sy, sw, sh) = super::super::wallpaper_page::show_on_segment(&ui, 1200, 1);
+        assert!(tap(&mut st, &ui, &mut prefs, sx + sw / 2.0, sy + sh / 2.0).is_empty());
+        assert_eq!(prefs.get(SHOW_ON_PREF), Some("lock"));
+        let (cx, cy, cw, ch) = match &st.stack.last().unwrap().view {
+            View::Wallpaper(page) => page.cell(&ui, 1200, 0),
+            _ => panic!("wallpaper page"),
+        };
+        assert_eq!(tap(&mut st, &ui, &mut prefs, cx + cw / 2.0, cy + ch / 2.0), vec![Effect::LockWallpaper("a".into())]);
+        assert_eq!((prefs.get("wallpaper_lock"), st.info.wallpaper.as_str()), (Some("a"), "b"), "the desktop keeps its wallpaper");
+        assert_eq!(Settings::new(&ui, &info(), &prefs, 1200, 1920, stills()).wallpaper_show_on, ShowOn::LockScreen);
+        // Add Photo… and Add Folder… ask the shell for its open panel once
+        for (i, kind) in Import::ALL.into_iter().enumerate() {
+            let (bx, by, bw, bh) = super::super::wallpaper_page::add_button(&ui, 1200, i);
+            assert!(tap(&mut st, &ui, &mut prefs, bx + bw / 2.0, by + bh / 2.0).is_empty());
+            assert_eq!(st.take_wallpaper_import(), Some(kind));
+            assert_eq!(st.take_wallpaper_import(), None);
+        }
+        // a picture added through the panel joins the grid and is applied where Show On says
+        let mut more = (*stills()).clone();
+        more.push(Wallpaper { id: "photo_fjord".into(), name: "Fjord".into(), thumb: Image { w: 320, h: 180, px: vec![pack(1, 2, 3, 255); 320 * 180] } });
+        let fx = st.wallpapers_added(&ui, &mut prefs, Rc::new(more), &["photo_fjord".to_string()]);
+        assert_eq!(fx, vec![Effect::LockWallpaper("photo_fjord".into())]);
+        let View::Wallpaper(page) = &st.stack.last().unwrap().view else { panic!("wallpaper page") };
+        assert_eq!(page.len(), 3, "the grid lists the added picture");
+        super::super::pages::set_test_form(FormFactor::Tablet);
     }
 
     #[test]

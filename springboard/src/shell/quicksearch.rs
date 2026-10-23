@@ -281,7 +281,8 @@ fn pane_symbol(page: PageId) -> Symbol {
         P::Focus => Symbol::Tile(Icon::Focus),
         P::ScreenTime => Symbol::Tile(Icon::ScreenTime),
         P::ControlCentre | P::MenuBar => Symbol::Tile(Icon::ControlCentre),
-        P::Display | P::Appearance => Symbol::Tile(Icon::Display),
+        P::Display => Symbol::Tile(Icon::Display),
+        P::Appearance => Symbol::Tile(Icon::Appearance),
         P::HomeScreen | P::Overview | P::HotCorners => Symbol::Tile(Icon::HomeScreen),
         P::Accessibility | P::AccessibilityShortcut => Symbol::Tile(Icon::Accessibility),
         P::Wallpaper | P::ScreenSaver => Symbol::Tile(Icon::Wallpaper),
@@ -493,6 +494,7 @@ mod symbol_and_line_tests {
         assert_eq!(result_symbol(&Hit::Settings("Do Not Disturb")), Some(Symbol::Tile(Icon::Focus)));
         assert_eq!(pane_symbol(PageId::Wallpaper), Symbol::Tile(Icon::Wallpaper));
         assert_eq!(pane_symbol(PageId::Keyboard), Symbol::Glyph(Glyph::Keyboard));
+        assert_eq!(pane_symbol(PageId::Appearance), Symbol::Tile(Icon::Appearance), "Appearance has its own tile");
         assert_eq!(pane_symbol(PageId::Root), Symbol::Tile(Icon::General), "an unnamed pane keeps the general symbol");
         // every Settings page and every Settings intent has a symbol: no blank square is left
         for page in settings::PAGES {

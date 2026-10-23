@@ -950,7 +950,7 @@ pub fn desktop_sidebar(root: Spec, vpn: bool) -> Spec {
     let mut items: Vec<Item> = root.groups.into_iter().flat_map(|g| g.items).filter(|i| i.label != "Airplane Mode").collect();
     let has = |items: &[Item], id: PageId| items.iter().any(|i| i.action == Action::Push(id));
     if !has(&items, PageId::Appearance) {
-        items.push(Item::new("Appearance").icon(Icon::Display).link(PageId::Appearance));
+        items.push(Item::new("Appearance").icon(Icon::Appearance).link(PageId::Appearance));
     }
     if !has(&items, PageId::Keyboard) {
         items.push(Item::new("Keyboard").icon(Icon::Keyboard).link(PageId::Keyboard));
@@ -1229,16 +1229,24 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     }])
                         .footer("Automatic gives a full-screen game the whole processor while it is in front, and lets go a few seconds after the game leaves the front."),
                     Group::new(vec![Item::new("Storage").glyph(Glyph::Storage).link(PageId::Storage), Item::new("Startup Disk").glyph(Glyph::Storage).link(PageId::StartupDisk), Item::new("Background App Refresh").glyph(Glyph::Refresh).link(PageId::BackgroundRefresh)]),
-                    Group::new(vec![
-                        Item::new("Date & Time").glyph(Glyph::DateTime).link(PageId::DateTime),
-                        Item::new("Keyboard").glyph(Glyph::Keyboard).link(PageId::Keyboard),
-                        Item::new("Fonts").glyph(Glyph::Fonts).link(PageId::Fonts),
-                        Item::new("Language & Region").glyph(Glyph::Language).link(PageId::Language),
-                        Item::new("Dictionary").glyph(Glyph::Dictionary).link(PageId::Dictionary),
-                        Item::new("Default Apps").glyph(Glyph::DefaultApps).link(PageId::DefaultApps),
-                        Item::new("Login Items & Extensions").glyph(Glyph::DefaultApps).link(PageId::LoginItems),
-                        Item::new("Game Controllers").link(PageId::GameControllers),
-                    ]),
+                    Group::new({
+                        let mut rows = vec![
+                            Item::new("Date & Time").glyph(Glyph::DateTime).link(PageId::DateTime),
+                            Item::new("Keyboard").glyph(Glyph::Keyboard).link(PageId::Keyboard),
+                            Item::new("Fonts").glyph(Glyph::Fonts).link(PageId::Fonts),
+                            Item::new("Language & Region").glyph(Glyph::Language).link(PageId::Language),
+                            Item::new("Dictionary").glyph(Glyph::Dictionary).link(PageId::Dictionary),
+                            Item::new("Default Apps").glyph(Glyph::DefaultApps).link(PageId::DefaultApps),
+                            Item::new("Login Items & Extensions").glyph(Glyph::DefaultApps).link(PageId::LoginItems),
+                            Item::new("Game Controllers").link(PageId::GameControllers),
+                        ];
+                        // the desktop's sidebar has Keyboard as a pane of its own (`desktop_sidebar`): General does not
+                        // list it a second time
+                        if info.display_mode.is_some() {
+                            rows.retain(|i| i.action != Action::Push(PageId::Keyboard));
+                        }
+                        rows
+                    }),
                     Group::new(vec![Item::new("Legal & Regulatory").glyph(Glyph::Info).link(PageId::Legal)]),
                     Group::new(vec![Item::new("Backup").glyph(Glyph::Backup).link(PageId::Backup)]),
                     Group::new(vec![
@@ -2676,6 +2684,22 @@ mod tests {
         for label in ["Print & Scan", "Keyboard Shortcuts", "Assistant", "Trackpad", "Mouse", "Search"] {
             assert_ne!(icon(label), Some(Icon::General), "{label}");
         }
+    }
+
+    #[test]
+    fn the_desktop_has_an_appearance_tile_and_lists_keyboard_once() {
+        let (info, opts) = (Info { display_mode: Some((2560, 1440, 60)), ..desktop_info(false, true) }, Options::default());
+        let root = desktop_sidebar(spec(PageId::Root, &model(&info, &opts)), true);
+        let row = |label: &str| root.groups.iter().flat_map(|g| g.items.iter()).find(|i| i.label == label).cloned();
+        assert_eq!(row("Appearance").and_then(|i| i.icon), Some(Icon::Appearance), "Appearance has its own tile, not the Displays one");
+        assert_eq!(row("Keyboard").map(|i| i.action), Some(Action::Push(PageId::Keyboard)), "Keyboard is a sidebar pane");
+        let keyboard_in = |s: &Spec| s.groups.iter().flat_map(|g| g.items.iter()).any(|i| i.action == Action::Push(PageId::Keyboard));
+        assert!(!keyboard_in(&spec(PageId::General, &model(&info, &opts))), "General does not repeat the Keyboard pane");
+        // the tablet has no Keyboard pane in its root list: General keeps the row
+        let tablet = Info::default();
+        assert!(tablet.display_mode.is_none());
+        assert!(keyboard_in(&spec(PageId::General, &model(&tablet, &opts))));
+        assert!(spec(PageId::General, &model(&info, &opts)).groups.iter().flat_map(|g| g.items.iter()).any(|i| i.label == "Fonts"), "the rest of the group stays");
     }
 
     #[test]

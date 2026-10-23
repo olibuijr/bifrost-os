@@ -2355,6 +2355,8 @@ fn wallpapers(dir: &str) -> Vec<springboard::shell::wallpaper_page::Wallpaper> {
             Some(springboard::shell::wallpaper_page::Wallpaper { id: id.to_string(), name: name.to_string(), thumb })
         })
         .chain(photo_wallpapers(dir))
+        // the pictures added with Settings > Wallpaper > Add Photo… / Add Folder…
+        .chain(springboard::shell::wallpaper_page::added_wallpapers(std::path::Path::new(dir)))
         .chain(app_wallpapers(dir))
         .chain(gradient_posters(dir))
         .collect()
