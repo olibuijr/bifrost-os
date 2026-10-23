@@ -36,15 +36,15 @@ pub fn term_of(query: &str) -> Option<(String, bool)> {
     let tail = |s: &str, p: &str| s.len() > p.len() && s.get(s.len() - p.len()..).is_some_and(|t| t.eq_ignore_ascii_case(p));
     let strip = |t: &str| t.trim().trim_end_matches('?').trim().to_string();
     let q = strip(query);
-    let mut term: Option<String> = PREFIXES.iter().find(|p| head(&q, p)).map(|p| strip(&q[p.len()..]));
-    match term.as_mut() {
-        // "what does x mean": the suffix goes too
-        Some(t) => {
-            if let Some(s) = SUFFIXES.iter().find(|s| tail(t, s)) {
-                *t = strip(&t[..t.len() - s.len()]);
-            }
+    let mut term: Option<String> = PREFIXES.into_iter().find(|p| head(q.as_str(), *p)).map(|p| strip(&q[p.len()..]));
+    // "what does x mean": the suffix goes too
+    if let Some(t) = term.as_mut() {
+        if let Some(s) = SUFFIXES.into_iter().find(|s| tail(t.as_str(), *s)) {
+            *t = strip(&t[..t.len() - s.len()]);
         }
-        None => term = SUFFIXES.iter().find(|s| tail(&q, s)).map(|s| strip(&q[..q.len() - s.len()])),
+    }
+    if term.is_none() {
+        term = SUFFIXES.into_iter().find(|s| tail(q.as_str(), *s)).map(|s| strip(&q[..q.len() - s.len()]));
     }
     if let Some(t) = term {
         let t = t.trim_matches(|c: char| c == '"' || c == '\'' || c == '\u{201c}' || c == '\u{201d}').trim();
