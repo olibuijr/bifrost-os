@@ -18,6 +18,8 @@
 
 pub mod banner;
 pub mod center;
+pub mod desk_banner;
+pub mod desk_card;
 pub mod list;
 pub mod lockwidgets;
 pub mod modes;
@@ -26,7 +28,7 @@ pub mod schedule;
 pub mod store;
 
 use super::clock::Wall;
-use super::notify_page::{pref_key, AppNotif};
+use super::notify_page::{pref_key, AppNotif, CenterPrefs, CENTER_PREF};
 use super::ui::Ui;
 use super::{AppId, Effect, Event, Info, Screen, Shell, apps, IN_DOCK};
 use crate::deildu::DeilduEvent;
@@ -156,6 +158,15 @@ pub struct Notify {
     pub(super) ask_queue: Vec<(AppId, String)>,
     /// the first-time permission alert on screen (`permission.rs`)
     pub(super) ask: Option<permission::Sheet>,
+    /// desktop banners that arrived while another was up: drawn as the stack's edges under the front banner, newest
+    /// last; each comes to the front, with a fresh rest, when the one before it leaves (`desk_banner`)
+    banner_behind: Vec<(u64, AppId)>,
+    /// the part of the desktop banner under the pointer (its close X and Options chevron show while it is hovered)
+    banner_hover: Option<desk_banner::Part>,
+    /// the part of the desktop banner a press landed on
+    banner_press: Option<desk_banner::Part>,
+    /// the desktop banner's Options menu is open
+    banner_menu: bool,
 }
 
 impl Default for Notify {
@@ -191,6 +202,10 @@ impl Default for Notify {
             sched_skip: false,
             ask_queue: Vec::new(),
             ask: None,
+            banner_behind: Vec::new(),
+            banner_hover: None,
+            banner_press: None,
+            banner_menu: false,
         }
     }
 }
@@ -338,6 +353,14 @@ impl Notify {
         self.banner.as_ref()
     }
 
+    /// Forgets the desktop banner's queue, hover and menu (the banner itself is gone or going).
+    fn drop_desk_banner_state(&mut self) {
+        self.banner_behind.clear();
+        self.banner_hover = None;
+        self.banner_press = None;
+        self.banner_menu = false;
+    }
+
     /// Every frame matters: the banner sliding or the sheet settling.
     pub fn animating(&self) -> bool {
         self.banner.as_ref().is_some_and(Banner::animating) || self.center.animating()
@@ -375,6 +398,7 @@ impl Notify {
         self.center.hide();
         self.banner = None;
         self.banner_card = None;
+        self.drop_desk_banner_state();
         self.lock_touch = None;
     }
 
@@ -466,8 +490,15 @@ impl Shell {
             bifrost_core::log::shell_logger("notify").debug(format!("notification {id} listed only, no banner"));
             return id;
         }
+        let center = self.notify_center_prefs();
         if !self.screen_on {
-            self.notify.wake = true;
+            // Settings > Notifications > Notification Center: a sleeping display wakes only when both "display is
+            // sleeping" and "screen is locked" allow it (it wakes onto the lock screen)
+            self.notify.wake = center.sleeping && center.locked;
+            return id;
+        }
+        // "when mirroring or sharing the display": a recording of the screen gets no banner unless allowed
+        if self.recording_active() && !center.mirroring {
             return id;
         }
         let covered = self.screen == Screen::Lock || self.cc_active() || self.center_active() || self.clock.alert().is_some();
@@ -525,9 +556,21 @@ impl Shell {
         let Some(n) = self.notify.store.get(id).cloned() else { return };
         let icon = self.notification_icon(app);
         let page = self.app_notif(app);
-        // a banner shows once unlocked, so only Never hides its text
-        self.notify.banner_card = Some(Card::new(&self.ui, &n, &icon, now, page.previews == 2));
         let alerts = page.persistent;
+        // on the desktop a banner that is still up goes behind the new one: the stack shows its edge, and it comes back
+        // when the new one leaves (`desk_banner_next`)
+        if self.desk_active() {
+            let up = self.notify.banner.as_ref().filter(|b| matches!(b.phase(), banner::Phase::In | banner::Phase::Hold)).map(|b| b.id);
+            let front = up.and_then(|id| self.notify.banner_card.as_ref().map(|c| (id, c.app)));
+            if let Some(front) = front.filter(|f| f.0 != id) {
+                self.notify.banner_behind.push(front);
+                let extra = self.notify.banner_behind.len().saturating_sub(desk_banner::MAX_BEHIND);
+                self.notify.banner_behind.drain(..extra);
+            }
+            self.notify.banner_menu = false;
+        }
+        // a banner shows once unlocked, so only Never (the app's or Notification Center's) hides its text
+        self.notify.banner_card = Some(Card::new(&self.ui, &n, &icon, now, self.previews_hidden(app, Mode::Center)));
         self.notify.banner = Some(Banner::new(id, self.notify.t).persistent(alerts));
     }
 
@@ -667,6 +710,12 @@ impl Shell {
     }
 
     fn open_from_notification_inner(&mut self, app: AppId, t: f64) {
+        // the desktop brings the app's window forward and leaves its notifications alone: the card or banner that was
+        // clicked clears its own notification (`desk_banner_act`, `center_desk_event`), as on the reference
+        if self.desk_active() && self.screen != Screen::Lock {
+            self.open(app, t);
+            return;
+        }
         match self.screen {
             Screen::Lock => {
                 self.notify.pending_open = Some(app);
@@ -695,8 +744,10 @@ impl Shell {
     /// Whether the lock screen hides what notifications and events say: a passcode is set.
     /// Whether the app's Show Previews setting hides its text in a list of `mode`: Never hides it everywhere,
     /// When Unlocked hides it on the lock screen and shows it once unlocked (`notify_page::PREVIEWS`).
+    /// Notification Center's own Show Previews (Settings > Notifications) applies to every app: the stricter of the
+    /// two wins.
     fn previews_hidden(&self, app: AppId, mode: Mode) -> bool {
-        match self.app_notif(app).previews {
+        match self.app_notif(app).previews.max(self.notify_center_prefs().previews) {
             2 => true,
             1 => mode == Mode::Lock,
             _ => false,
@@ -708,8 +759,18 @@ impl Shell {
     }
 
     /// The groups a list of `mode` shows: the apps whose page lets them into it.
+    /// The lock screen lists nothing when Settings > Notifications > Notification Center does not allow notifications
+    /// while the screen is locked.
     pub(super) fn visible_groups(&self, mode: Mode) -> Vec<store::Group> {
+        if mode == Mode::Lock && !self.notify_center_prefs().locked {
+            return Vec::new();
+        }
         self.notify.store.groups().into_iter().filter(|g| listed_in(&self.app_notif(g.app), mode)).collect()
+    }
+
+    /// Settings > Notifications > Notification Center's options (the defaults until they are changed).
+    pub(in crate::shell) fn notify_center_prefs(&self) -> CenterPrefs {
+        self.prefs.get(CENTER_PREF).map_or_else(CenterPrefs::default, CenterPrefs::decode)
     }
 
     fn render_list(&mut self, mode: Mode) -> ListView {
@@ -917,11 +978,12 @@ impl Shell {
                 DeilduEvent::Ready { title } => self.notify(Notification::new(AppId::Deildu, "Ready to play", title, now)),
             }
         }
-        // a banner that was up when Overview opened leaves; a new one waits (`held_banner`)
+        // a banner that was up when Overview opened leaves, with the stack behind it; a new one waits (`held_banner`)
         if self.overview_active() {
             if let Some(b) = &mut self.notify.banner {
                 b.dismiss(t);
             }
+            self.notify.banner_behind.clear();
         } else {
             self.release_held_banner();
         }
@@ -932,6 +994,10 @@ impl Shell {
             if b.gone() {
                 self.notify.banner = None;
                 self.notify.banner_card = None;
+                self.notify.banner_hover = None;
+                self.notify.banner_menu = false;
+                // the next banner of the desktop's stack comes to the front (none while Overview is open)
+                self.desk_banner_next();
             }
         }
         // a Wi-Fi drop that has lasted `WIFI_DROP_MS` posts its "Disconnected" notice (`notify_info` only runs on change)
@@ -958,6 +1024,10 @@ impl Shell {
         if self.overview_active() {
             return None;
         }
+        // the desktop's banner sits at the top right under the menu bar (`desk_banner`); the tablet keeps its centred one
+        if self.desk_active() {
+            return self.desk_banner_rect(t);
+        }
         let b = self.notify.banner.as_ref()?;
         let ui = &self.ui;
         let w = ui.pt(CARD_W_PT);
@@ -976,6 +1046,9 @@ impl Shell {
     }
 
     fn banner_event(&mut self, ev: Event, t: f64) -> Option<Vec<Effect>> {
+        if self.desk_active() {
+            return self.desk_banner_event(ev, t);
+        }
         let pulling = self.notify.banner.as_ref().is_some_and(Banner::pulling);
         match ev {
             Event::Down(x, y) if !pulling => {
@@ -1171,6 +1244,9 @@ impl Shell {
 
     /// Paints the banner over the frame and remembers that it did.
     pub(super) fn draw_banner(&mut self, s: &mut Surface, t: f64) {
+        if self.desk_active() {
+            return self.draw_desk_banner(s, t);
+        }
         let rect = self.banner_rect(t);
         self.notify.banner_drawn = rect.is_some();
         let (Some((x, y, _, _)), Some(card)) = (rect, &self.notify.banner_card) else { return };
@@ -1280,6 +1356,29 @@ mod tests {
         assert_eq!(list.groups.len(), 1);
         assert_eq!(list.groups[0].count, 2);
         assert!(sh.notify.center.is_shown());
+    }
+
+    /// E2E W5-9: Settings > Notifications > Notification Center applies to every app: Show Previews Never hides the
+    /// text, "screen is locked" off empties the lock screen's list (Notification Center keeps it), "display is
+    /// sleeping" off leaves a dark display dark.
+    #[test]
+    fn the_notification_center_options_apply_to_every_app() {
+        let mut sh = shell();
+        unlock(&mut sh);
+        assert!(!sh.previews_hidden(AppId::Files, Mode::Center));
+        let _ = sh.prefs.set(CENTER_PREF, &CenterPrefs { previews: 2, ..CenterPrefs::default() }.encode());
+        assert!(sh.previews_hidden(AppId::Files, Mode::Center), "Never hides every app's text");
+        let _ = sh.prefs.set(CENTER_PREF, &CenterPrefs { locked: false, ..CenterPrefs::default() }.encode());
+        sh.notify(note(AppId::Files, "Quiet"));
+        assert!(sh.visible_groups(Mode::Lock).is_empty(), "nothing on the lock screen");
+        assert_eq!(sh.visible_groups(Mode::Center).len(), 1, "still in Notification Center");
+        let _ = sh.prefs.set(CENTER_PREF, &CenterPrefs { sleeping: false, ..CenterPrefs::default() }.encode());
+        sh.screen_on = false;
+        sh.notify(note(AppId::Files, "Asleep"));
+        assert!(!sh.notify.wake, "the display stays dark");
+        let _ = sh.prefs.set(CENTER_PREF, &CenterPrefs::default().encode());
+        sh.notify(note(AppId::Files, "Wake"));
+        assert!(sh.notify.wake, "by default a notification wakes the display, as before");
     }
 
     #[test]

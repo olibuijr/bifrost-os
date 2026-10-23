@@ -45,6 +45,9 @@ fn status_icon_lift(battery:bool,ethernet:bool)->f32 {if battery{0.}else if ethe
     Location,
     /// Control Center menu extra: a press opens the Control Center sheet, it has no rows
     ControlCenter,
+    /// the Focus moon: shown left of Control Center while Do Not Disturb or another Focus is on; a press opens Control
+    /// Center (where the Focus module is), it has no rows
+    Focus,
     /// CPU and RAM details; no longer placed on the bar (Golden Gate shows no readouts), kept for their rows
     Cpu,Memory,Dock,Context,
     /// the n-th menu the frontmost SDK app published (`ToShell::AppMenus`)
@@ -636,6 +639,8 @@ impl Shell {
         // the Bluetooth extra sits left of Wi-Fi, once the radio exists (it stays hidden without a controller)
         if self.info.bt.state!=crate::bare::bluetooth::State::Unavailable {extras.insert(2,(Menu::Bluetooth,self.ui.pt(STATUS_ICON_PT),String::from("bluetooth")));}
         // the Now Playing extra sits left of the system extras while an app has a session, and right of the app extras
+        // the Focus moon sits right beside Control Center while a Focus is on (E2E W5-8)
+        if self.notify.active_mode().is_some() {extras.insert(1,(Menu::Focus,self.ui.pt(STATUS_ICON_PT),String::from("focus")));}
         if self.game_mode_on(){let label=String::from("Game Mode");let w=self.measure_chrome(&label,12.,Weight::Regular)+self.ui.pt(2.*STATUS_PAD_PT);extras.push((Menu::GameMode,w,label));}
         if let Some(p)=super::now_playing_menu::panel(){let label=self.fit_chrome(&p.label,12.,self.ui.pt(160.));let w=self.measure_chrome(&label,12.,Weight::Regular)+self.ui.pt(2.*STATUS_PAD_PT);extras.push((Menu::NowPlaying,w,label));}
         // menu extras of running apps (`NativeStatusItem`) sit left of the system extras: the app's title, or its symbol when it
@@ -698,6 +703,8 @@ impl Shell {
         let y=y-p*if matches!(menu,Menu::System|Menu::ControlCenter){0.}else{status_icon_lift(menu==Menu::Power&&self.info.battery_present,label=="ethernet")};let rect=|s:&mut Surface,dx:f32,dy:f32,w:f32,h:f32|s.fill_rrect(x+dx*p,y+dy*p,w*p,h*p,p,ink);
         // the recording stop item: a red dot, as the recording indicator
         if menu==Menu::Recording {s.fill_rrect(x-4.*p,y-4.*p,8.*p,8.*p,4.*p,super::ui::SYSTEM_RED);return;}
+        // the Focus moon: a crescent in the bar's ink
+        if menu==Menu::Focus {super::notify::desk_card::moon(s,(x,y),6.*p,ink);return;}
         // the location arrow: a north-pointing triangle, drawn as ten rows that widen from the tip
         if menu==Menu::Location {for i in 0..10 {let w=1.+i as f32*0.9;rect(s,4.5-w/2.,i as f32,w,1.);}return;}
         if menu==Menu::System {
@@ -873,7 +880,7 @@ impl Shell {
             Menu::System=>{use super::power_menu::PowerAction;use super::utility_window::Kind;let user=self.fit_chrome(super::utility_window::user_name(),13.,self.ui.pt(180.));vec![Row::action("About This Computer",Action::Window(Kind::About)),Row::separator(),Row::action("System Settings…",Action::Settings("")),Row::action("App Store…",Action::Open(AppId::AppStore)),Row::separator(),Row::action("Recent Items",Action::Submenu(Menu::Recent)),Row::separator(),Row::action("Force Quit…",Action::Window(Kind::ForceQuit)).key("alt+cmd+escape"),Row::separator(),Row::action("Sleep",Action::Sleep),Row::action("Restart…",Action::Halt(PowerAction::Restart)),Row::action("Shut Down…",Action::Halt(PowerAction::Off)),Row::separator(),Row::action("Lock Screen",Action::Lock).key("ctrl+cmd+q"),Row::action(format!("Log Out {user}…"),Action::Window(Kind::LogOut)).key("shift+cmd+q")]},
             // the Recent Items submenu: the apps opened last (newest first), then Clear Menu
             Menu::Recent=>{let recent=self.recent_titles();let mut rows=Vec::new();if recent.is_empty(){rows.push(Row::label("No Recent Items"));}for (i,title) in recent.iter().enumerate(){rows.push(Row::action(title.clone(),Action::Recent(i as u8)));}rows.push(Row::separator());rows.push(if recent.is_empty(){Row::label("Clear Menu")}else{Row::action("Clear Menu",Action::ClearRecent)});rows},
-            Menu::ControlCenter=>Vec::new(),
+            Menu::ControlCenter|Menu::Focus=>Vec::new(),
             Menu::Recording=>vec![Row::action("Stop Recording",Action::RecordStop)],
             Menu::GameMode=>vec![Row::action("Turn Off Game Mode",Action::GameModeOff)],
             // the apps using location now, by name: a label, not a choice (nothing here changes the grant)
@@ -1063,7 +1070,7 @@ impl Shell {
         self.draw_desktop_bar_items(s,height);
     }
     fn draw_desktop_bar_items(&self,s:&mut Surface,height:usize) {
-        for (menu,x,width,label) in self.menu_buttons() {if self.desktop_menu==Some(menu)||self.desktop_menu.map(|m|self.bar_anchor(m))==Some(menu){let h=height as f32-self.ui.pt(4.);s.fill_rrect(x,self.ui.pt(2.),width,h,h/2.,self.bar_ink().capsule);}if matches!(menu,Menu::System|Menu::Network|Menu::Power|Menu::ControlCenter|Menu::Bluetooth|Menu::Location)||self.status_item_is_icon(menu) {
+        for (menu,x,width,label) in self.menu_buttons() {if self.desktop_menu==Some(menu)||self.desktop_menu.map(|m|self.bar_anchor(m))==Some(menu){let h=height as f32-self.ui.pt(4.);s.fill_rrect(x,self.ui.pt(2.),width,h,h/2.,self.bar_ink().capsule);}if matches!(menu,Menu::System|Menu::Network|Menu::Power|Menu::ControlCenter|Menu::Focus|Menu::Bluetooth|Menu::Location)||self.status_item_is_icon(menu) {
             // the battery item with its percentage: the glyph stays at the item's left, the percentage follows it
             let percent=if menu==Menu::Power {self.battery_bar_label()} else {None};
             let glyph_x=if percent.is_some() {x+self.ui.pt(STATUS_ICON_PT)/2.} else {x+width/2.};
@@ -1166,7 +1173,7 @@ impl Shell {
         match event {
             // Golden Gate: the clock opens Notification Center (notifications and widgets), as on Golden Gate
             Event::Down(x,y) if self.clock_hit(x,y)&&self.desktop_menu.is_none()&&self.desk.is_some()=>{if self.notify.center.is_hidden(){self.open_notification_center(t);}else{self.notify.center.hide();}self.dirty=true;Some(vec![])},
-            Event::Down(x,y) if y<self.desktop_bar_height() as f32 && (!self.cc_reveal_zone(x,y)||self.menu_buttons().iter().any(|(_,left,w,_)|x>=*left&&x<*left+*w))=>{self.desktop_menu_row=None;self.help_reset();self.desktop_menu_scroll=MenuScrollState::default();self.desktop_menu=self.menu_buttons().into_iter().find(|(_,left,w,_)|x>=*left&&x<*left+*w).map(|b|b.0);if self.desktop_menu==Some(Menu::ControlCenter){self.desktop_menu=None;self.toggle_desk_control_center(t);}else{self.close_desk_control_center(t);}self.dirty=true;Some(vec![])},
+            Event::Down(x,y) if y<self.desktop_bar_height() as f32 && (!self.cc_reveal_zone(x,y)||self.menu_buttons().iter().any(|(_,left,w,_)|x>=*left&&x<*left+*w))=>{self.desktop_menu_row=None;self.help_reset();self.desktop_menu_scroll=MenuScrollState::default();self.desktop_menu=self.menu_buttons().into_iter().find(|(_,left,w,_)|x>=*left&&x<*left+*w).map(|b|b.0);if self.desktop_menu==Some(Menu::ControlCenter){self.desktop_menu=None;self.toggle_desk_control_center(t);}else if self.desktop_menu==Some(Menu::Focus){self.desktop_menu=None;self.toggle_desk_control_center(t);}else{self.close_desk_control_center(t);}self.dirty=true;Some(vec![])},
             // a press on the green button the menu hangs from is the button's own click (full screen), not a click outside
             Event::Down(x,y) if self.desktop_menu==Some(Menu::Arrange)&&self.arrange_on_button(x,y)=>{self.desktop_menu=None;self.dirty=true;None},
             // a press inside any open level (a menu or a submenu cascading beside it) keeps the menus open
@@ -1302,7 +1309,7 @@ impl Shell {
         // a context menu stays open when the pointer crosses the bar; only a bar menu follows the pointer to a neighbour
         if under.is_none()&&y<self.desktop_bar_height() as f32&&!matches!(menu,Menu::Context|Menu::Arrange) {
             // a submenu hangs from its bar item's menu: crossing that item is not a move to another menu
-            if let Some(b)=self.menu_buttons().into_iter().find(|(_,l,w,_)|x>=*l&&x<*l+*w) {let here=self.bar_anchor(menu);if b.0!=here&&b.0!=Menu::ControlCenter{self.desktop_menu=Some(b.0);self.desktop_menu_row=None;self.desktop_flyout=Flyout::default();self.help_reset();self.dirty=true;}}
+            if let Some(b)=self.menu_buttons().into_iter().find(|(_,l,w,_)|x>=*l&&x<*l+*w) {let here=self.bar_anchor(menu);if b.0!=here&&b.0!=Menu::ControlCenter&&b.0!=Menu::Focus{self.desktop_menu=Some(b.0);self.desktop_menu_row=None;self.desktop_flyout=Flyout::default();self.help_reset();self.dirty=true;}}
             return;
         }
         // on a parent of the open submenu
@@ -1687,6 +1694,16 @@ impl Shell {
         for f in frames.iter_mut() {
             let level=if f.id==1 {0} else if f.id>=FLYOUT_CHROME_ID&&((f.id-FLYOUT_CHROME_ID) as usize)<flyouts.len() {(f.id-FLYOUT_CHROME_ID) as usize+1} else {continue};
             for &(cover,_) in flyouts.iter().skip(level) {clear_covered(&mut f.pixels,(f.x,f.y,f.width,f.height),cover);}
+        }
+        // the desktop notification banner (`notify::desk_banner`): an overlay surface above every window while it shows,
+        // taking the pointer over the card, its hover controls and its Options menu only (E2E W5-5)
+        if let Some(((x,y,w,h),input))=self.desk_banner_overlay() {
+            let w=w.min(width.saturating_sub(x));let h=h.min(height.saturating_sub(y));
+            if w>0&&h>0 {
+                let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
+                Self::desk_banner_mask(&mut data,w,h,input);
+                frames.push(crate::bare::wayland::ChromeFrame{id:super::notify::desk_banner::BANNER_CHROME_ID,x:x as i32,y:y as i32,width:w,height:h,pixels:data,input:Some(input)});
+            }
         }
         // Search: id 3, an overlay surface above every window that takes the keyboard while it is open
         if let Some(((x,y,ow,oh),mask))=self.quicksearch.desk_overlay(&self.ui,self.w) {

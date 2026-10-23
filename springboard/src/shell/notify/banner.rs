@@ -38,11 +38,13 @@ pub struct Banner {
     pull: Option<Pull>,
     /// an alert style banner (Settings > Notifications > Alerts): it rests until the person dismisses it
     persistent: bool,
+    /// the pointer is over it (a desktop banner): it rests while hovered, and its rest starts over when the pointer leaves
+    hovered: bool,
 }
 
 impl Banner {
     pub fn new(id: u64, t: f64) -> Self {
-        Banner { id, phase: Phase::In, since: t, pull: None, persistent: false }
+        Banner { id, phase: Phase::In, since: t, pull: None, persistent: false, hovered: false }
     }
 
     /// The same banner, resting until it is dismissed when `on` (the Alerts style of an app).
@@ -67,7 +69,7 @@ impl Banner {
     /// When the rest ends and the slide out starts, unless a finger holds it.
     pub fn next_wake(&self) -> Option<f64> {
         match (self.phase, self.pull) {
-            (Phase::Hold, None) if !self.persistent => Some(self.since + HOLD_MS),
+            (Phase::Hold, None) if !self.persistent && !self.hovered => Some(self.since + HOLD_MS),
             _ => None,
         }
     }
@@ -78,7 +80,7 @@ impl Banner {
         loop {
             let (next, len) = match self.phase {
                 Phase::In => (Phase::Hold, SLIDE_MS),
-                Phase::Hold if self.pull.is_none() && !self.persistent => (Phase::Out, HOLD_MS),
+                Phase::Hold if self.pull.is_none() && !self.persistent && !self.hovered => (Phase::Out, HOLD_MS),
                 Phase::Out => (Phase::Gone, SLIDE_MS),
                 _ => return changed,
             };
@@ -144,6 +146,18 @@ impl Banner {
         false
     }
 
+    /// The pointer moved onto (`on`) or off the banner at `t`. A hovered banner stays; once the pointer leaves, a resting
+    /// banner rests a full `HOLD_MS` again, as on the reference's desktop.
+    pub fn set_hovered(&mut self, on: bool, t: f64) {
+        if self.hovered == on {
+            return;
+        }
+        self.hovered = on;
+        if !on && self.phase == Phase::Hold {
+            self.since = t;
+        }
+    }
+
     /// Starts the slide out now (or does nothing if already leaving).
     pub fn dismiss(&mut self, t: f64) {
         if matches!(self.phase, Phase::In | Phase::Hold) {
@@ -192,6 +206,21 @@ mod tests {
         assert!(b.gone());
         assert_eq!(b.shown(1e9), 0.0);
         assert_eq!(b.next_wake(), None);
+    }
+
+    /// E2E W5-5: a desktop banner under the pointer stays, and rests a full five seconds once the pointer leaves.
+    #[test]
+    fn a_hovered_banner_stays_and_rests_again_after_the_pointer_leaves() {
+        let mut b = Banner::new(1, 0.0);
+        b.tick(SLIDE_MS);
+        b.set_hovered(true, 1000.0);
+        assert_eq!(b.next_wake(), None, "no timeout while hovered");
+        assert!(!b.tick(SLIDE_MS + HOLD_MS * 3.0));
+        assert_eq!(b.phase(), Phase::Hold);
+        b.set_hovered(false, 20_000.0);
+        assert_eq!(b.next_wake(), Some(20_000.0 + HOLD_MS), "the rest starts over");
+        assert!(b.tick(20_000.0 + HOLD_MS));
+        assert_eq!(b.phase(), Phase::Out);
     }
 
     #[test]

@@ -766,7 +766,9 @@ impl Settings {
             PageId::Focus => {
                 let mut s = spec(id, &self.model());
                 let prefs = NotifyPrefs { clock_24h: self.opts.clock_24h, ..self.notify.clone() };
+                s.groups.insert(0, notify_page::status_group(prefs.active.as_deref()));
                 s.groups.push(notify_page::modes_group(&prefs));
+                s.groups.extend(notify_page::add_mode_group(&prefs));
                 s.groups.push(notify_page::schedule_group(&prefs));
                 s
             }
@@ -1062,9 +1064,16 @@ impl Settings {
 
     /// Loads the Focus mode names and the mode that is on by hand. The page is rebuilt by the call that follows
     /// (`set_notify` or `set_dnd`).
-    pub(super) fn set_focus_modes(&mut self, names: Vec<String>, on: Option<usize>) {
+    pub(super) fn set_focus_modes(&mut self, names: Vec<String>, on: Option<usize>, active: Option<String>) {
         self.notify.modes = names;
         self.notify.mode_on = on;
+        self.notify.active = active;
+    }
+
+    /// Loads Settings > Notifications > Notification Center's options from the shell. The page is rebuilt by the call
+    /// that follows (`set_notify`).
+    pub(super) fn set_notify_center(&mut self, center: notify_page::CenterPrefs) {
+        self.notify.center = center;
     }
 
     /// The crash log the user tapped, for the shell to open in Files' viewer.
@@ -1373,6 +1382,19 @@ impl Settings {
                 self.notify.mode_on = next;
                 self.notify_out.push(NotifyChange::Mode(next));
                 self.rebuild(ui);
+            }
+            NotifyEdit::Center(field) => {
+                self.notify.center.apply(field);
+                self.notify_out.push(NotifyChange::Center(self.notify.center));
+                self.rebuild(ui);
+            }
+            NotifyEdit::AddMode => {
+                // the shell adds the mode and sends the new list back (`set_focus_modes`); the page shows it at once
+                if let Some(name) = notify_page::next_preset(&self.notify.modes) {
+                    self.notify.modes.push(name.to_string());
+                    self.notify_out.push(NotifyChange::AddMode(name.to_string()));
+                    self.rebuild(ui);
+                }
             }
             NotifyEdit::From | NotifyEdit::To => {
                 let (minute, title) = if edit == NotifyEdit::From { (self.notify.schedule.start, "From") } else { (self.notify.schedule.end, "To") };

@@ -38,11 +38,28 @@ impl Shell {
         opts.dnd = on;
         opts.save(&mut self.prefs);
         let (names, mode_on) = self.focus_mode_view();
+        let active = self.notify.active_mode().map(|m| m.name);
         if let Some(st) = &mut self.settings {
-            st.set_focus_modes(names, mode_on);
+            st.set_focus_modes(names, mode_on, active);
             st.set_dnd(&self.ui, on);
         }
         self.notify.save_modes();
+        self.dirty = true;
+        true
+    }
+
+    /// Settings > Focus > Add Focus…: adds a mode named `name` (off until it is chosen), saves the list and shows it
+    /// in a retained Settings page. Returns false when the list refused it (empty name, or full).
+    pub fn add_focus_mode(&mut self, name: &str) -> bool {
+        if self.notify.modes.add(name).is_none() {
+            return false;
+        }
+        self.notify.save_modes();
+        let (names, mode_on) = self.focus_mode_view();
+        let active = self.notify.active_mode().map(|m| m.name);
+        if let Some(st) = &mut self.settings {
+            st.set_focus_modes(names, mode_on, active);
+        }
         self.dirty = true;
         true
     }
@@ -73,6 +90,18 @@ mod tests {
         assert_eq!(sh.focus_mode_view().1, Some(1));
         assert!(sh.set_focus_mode(None));
         assert_eq!(sh.focus_mode_view().1, None);
+    }
+
+    /// E2E W5-9: Settings > Focus > Add Focus… adds a mode that stays off until it is chosen.
+    #[test]
+    fn add_focus_appends_a_mode_that_is_off() {
+        let mut sh = shell();
+        unlock(&mut sh);
+        assert!(sh.add_focus_mode("Reading"));
+        let (names, on) = sh.focus_mode_view();
+        assert_eq!(names.last().map(String::as_str), Some("Reading"));
+        assert_eq!(on, None, "a new mode is off");
+        assert!(!sh.add_focus_mode("  "), "an empty name is refused");
     }
 
     #[test]

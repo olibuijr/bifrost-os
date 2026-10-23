@@ -12,6 +12,7 @@ use super::super::ui::{centred, Weight, WHITE};
 use super::super::{apphost, apps, AppId, Effect, Event, Screen, Shell, IN_DOCK};
 use bifrost_ui::material_request::ShellSurface;
 use bifrost_ui::widget_kind::Family;
+use super::desk_card;
 use super::list::{Hit, ListView, Mode, Slide, CARD_W_PT};
 use crate::deildu::scroll::Scroller;
 use crate::gfx::{rgba, Image, Surface};
@@ -74,15 +75,19 @@ pub struct Center {
     /// the unix second from which the column's widget text is redrawn: live date text changes, and a toggle waits for
     /// its app (`widgets_timeline::next_refresh`)
     refresh_due: i64,
-    /// the apps' icons at the column's card size, rendered when the column opens
-    icons: Vec<(AppId, Option<Image>)>,
+    /// the apps' icons at the column's card size, rendered when the column opens (the desktop banner uses them too)
+    pub(super) icons: Vec<(AppId, Option<Image>)>,
+    /// the column's stacks shown expanded, one card per notification: the app and the thread of each
+    desk_expanded: Vec<(AppId, String)>,
+    /// what the pointer is over in the column (a group header's X grows into Clear All while its row is hovered)
+    desk_hover: Option<DeskHit>,
     /// the icon of an app that provides a widget row (by package id); None when the app has none
     widget_icons: Vec<(String, Option<Image>)>,
 }
 
 impl Default for Center {
     fn default() -> Self {
-        Center { state: State::Hidden, touch: None, revealed: None, backdrop: None, list: None, list_key: (u32::MAX, 0), scroll: Scroller::new(), title: None, empty: None, desk_press: None, editing: false, configuring: None, refresh_due: 0, icons: Vec::new(), widget_icons: Vec::new() }
+        Center { state: State::Hidden, touch: None, revealed: None, backdrop: None, list: None, list_key: (u32::MAX, 0), scroll: Scroller::new(), title: None, empty: None, desk_press: None, editing: false, configuring: None, refresh_due: 0, icons: Vec::new(), widget_icons: Vec::new(), desk_expanded: Vec::new(), desk_hover: None }
     }
 }
 
@@ -434,9 +439,14 @@ impl Shell {
 // under the menu bar (27-Golden-Gate-Notification-Center.png, 2x). Measured in
 // pt: column 342 wide, 18 from the right edge; cards about 74 high with a 17 pt
 // radius, 10 apart; a "Notification Center" title row with a 20 pt clear disc.
-// One card per app (its newest notification), a stacked edge when the app has
-// more; the card's disc clears that app, the title's clears all, a click on a
-// card opens its app, a click elsewhere closes the column.
+// One card per stack (its newest notification), a stacked edge when it has
+// more. A click on a stack expands it into a header (the app's name, Show Less,
+// an X that grows into Clear All while the row is hovered) and one card per
+// notification; a click on a single card opens its app and clears only that
+// notification (E2E W5-6). A card's circled X clears it (a collapsed stack's X
+// the stack), the title's clears all; with nothing to list there is no title
+// row. While a Focus is on, a line under the title names it. A click elsewhere
+// closes the column.
 //
 // The column is 0.245 of the screen wide (never under 342 pt). Order, top to bottom: the title, the notification cards
 // (app icon, name, title, body), a row of Calendar and Weather cards, the widget rows, and the Edit Widgets capsule
@@ -486,24 +496,43 @@ const NC_EDIT_W_PT: f32 = 104.0;
 const NC_EDIT_GAP_PT: f32 = 8.0;
 /// the radius of the weather glyph at the top right of the Weather card
 const NC_WEATHER_GLYPH_R_PT: f32 = 14.0;
-const NC_RIGHT_PT: f32 = 18.0;
-const NC_TOP_GAP_PT: f32 = 6.0;
+pub(super) const NC_RIGHT_PT: f32 = 18.0;
+pub(super) const NC_TOP_GAP_PT: f32 = 6.0;
 const NC_TITLE_PT: f32 = 32.0;
-const NC_CARD_PT: f32 = 74.0;
-const NC_CARD_R_PT: f32 = 17.0;
+pub(super) const NC_CARD_PT: f32 = 74.0;
+pub(super) const NC_CARD_R_PT: f32 = 17.0;
 const NC_GAP_PT: f32 = 10.0;
-const NC_STACK_PT: f32 = 6.0;
+pub(super) const NC_STACK_PT: f32 = 6.0;
 const NC_PAD_PT: f32 = 14.0;
 const NC_CLOSE_PT: f32 = 20.0;
+/// an expanded stack's header row (the app's name, Show Less and the X that grows into Clear All), and the gap
+/// between its cards
+const NC_HEADER_PT: f32 = 28.0;
+const NC_ITEM_GAP_PT: f32 = 8.0;
+/// the Show Less capsule's width
+const NC_LESS_W_PT: f32 = 76.0;
+/// the Focus status line under the title (the moon and "Do Not Disturb is on")
+const NC_FOCUS_PT: f32 = 26.0;
 /// room kept free above the dock
 const NC_BOTTOM_PT: f32 = 90.0;
 
 #[derive(Clone, Copy, PartialEq)]
 enum DeskHit {
+    /// the title's X (Clear All while the title row is hovered): clears every notification
     ClearAll,
-    Card(AppId),
-    /// the close control of a stack: its index in the column's groups
-    Close(usize),
+    /// the title row outside its X (hover only)
+    Title,
+    /// a card: the group (index into the column's groups) and the notification it shows; None for a collapsed stack of
+    /// several, whose click expands it
+    Card { group: usize, item: Option<usize> },
+    /// a card's close X: the notification, or the whole stack for a collapsed one
+    Close { group: usize, item: Option<usize> },
+    /// an expanded stack's header row outside its buttons (hover only)
+    Header(usize),
+    /// an expanded stack's Show Less: folds it again
+    Less(usize),
+    /// an expanded stack's X (Clear All while its header is hovered): clears the stack
+    GroupClear(usize),
     /// the Edit Widgets capsule at the foot of the column
     EditWidgets,
     /// the round close button beside it: puts the column away
@@ -578,6 +607,37 @@ type GalleryRow = (usize, R4, R4, Vec<(Family, R4)>, Option<R4>);
 
 type R4 = (f32, f32, f32, f32);
 
+/// A notification card of the column: its group (index into the column's groups), the notification (index into the
+/// group's items; None for a collapsed stack of several, which stands for the whole group), its rect and its X.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct DeskCard {
+    group: usize,
+    item: Option<usize>,
+    rect: R4,
+    close: R4,
+}
+
+/// The header row over an expanded stack: the row, Show Less and the X.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct DeskHeader {
+    group: usize,
+    rect: R4,
+    less: R4,
+    clear: R4,
+}
+
+/// Where the column's title, Focus line, stacks and cards sit. `flow` is where the content under the cards starts and
+/// `end` is the lowest edge drawn so far.
+struct DeskLayout {
+    title: R4,
+    clear: R4,
+    focus: Option<R4>,
+    cards: Vec<DeskCard>,
+    headers: Vec<DeskHeader>,
+    flow: f32,
+    end: f32,
+}
+
 /// The capsule's top: `gap` under the column's content ending at `end`, but no lower than `floor` (above the dock).
 fn edit_capsule_y(end: f32, gap: f32, floor: f32) -> f32 {
     (end + gap).min(floor)
@@ -589,22 +649,14 @@ fn within((x, y, w, h): R4, px: f32, py: f32) -> bool {
 
 impl Shell {
     /// The column's width: the reference's share of the screen, never narrower than the measured width.
-    fn center_w(&self) -> f32 {
+    pub(super) fn center_w(&self) -> f32 {
         (self.w as f32 * NC_W_FRAC).max(self.ui.pt(NC_W_PT))
     }
 
     /// Where the content under the notification cards starts: under the last card (and its stack edge), or under the
     /// title when there are none.
     fn center_flow_top(&self) -> f32 {
-        let (title, _, cards) = self.center_desk_layout();
-        let groups = self.visible_groups(Mode::Center);
-        match cards.last() {
-            Some(&(i, r, _)) => {
-                let stack = if groups.get(i).is_some_and(|g| g.items.len() > 1) { self.ui.pt(NC_STACK_PT) } else { 0.0 };
-                r.1 + r.3 + stack + self.ui.pt(NC_GAP_PT)
-            }
-            None => title.1 + title.3,
-        }
+        self.center_desk_layout().flow
     }
 
     /// Height in px of one line of text at `pt`: the line box `Ui::text` renders, whatever the string.
@@ -730,37 +782,102 @@ impl Shell {
 
     /// Where the column's content ends: the lowest edge of the title, cards, info cards and widget rows.
     fn center_content_end(&self) -> f32 {
-        let (title, _, cards) = self.center_desk_layout();
-        let groups = self.visible_groups(Mode::Center);
-        let stack = |i: usize| if groups.get(i).is_some_and(|g| g.items.len() > 1) { self.ui.pt(NC_STACK_PT) } else { 0.0 };
         let below = |r: &R4| r.1 + r.3;
-        let cards = cards.iter().map(|&(i, r, _)| below(&r) + stack(i));
         let info = self.center_info_rects().into_iter().map(|(_, r)| below(&r));
         let widgets = self.center_widget_rects().into_iter().map(|(r, _)| below(&r));
-        cards.chain(info).chain(widgets).fold(below(&title), f32::max)
+        info.chain(widgets).fold(self.center_desk_layout().end, f32::max)
     }
 
-    /// Title row, then (group index, card rect, close rect) for the cards that fit.
-    fn center_desk_layout(&self) -> (R4, R4, Vec<(usize, R4, R4)>) {
+    /// Whether the column shows group `g` expanded: a stack of several the person clicked open.
+    fn desk_group_expanded(&self, g: &super::store::Group) -> bool {
+        g.items.len() > 1 && self.notify.center.desk_expanded.iter().any(|(a, th)| *a == g.app && *th == g.thread)
+    }
+
+    /// The title row with its X (no row at all when there is nothing to list, as on the reference), the Focus line while
+    /// a Focus is on, then the stacks that fit above the dock: a collapsed stack is one card with its edge showing
+    /// under it, an expanded one a header row and a card per notification.
+    fn center_desk_layout(&self) -> DeskLayout {
         let ui = &self.ui;
         let w = self.center_w();
         let x = self.w as f32 - ui.pt(NC_RIGHT_PT) - w;
         let mut y = self.desktop_bar_height() as f32 + ui.pt(NC_TOP_GAP_PT);
-        let title = (x, y, w, ui.pt(NC_TITLE_PT));
+        let groups = self.visible_groups(Mode::Center);
         let c = ui.pt(NC_CLOSE_PT);
-        let clear = (x + w - c, y + (ui.pt(NC_TITLE_PT) - c) / 2.0, c, c);
-        y += ui.pt(NC_TITLE_PT);
-        let mut cards = vec![];
-        for (i, g) in self.visible_groups(Mode::Center).iter().enumerate() {
-            let h = ui.pt(NC_CARD_PT);
-            let stack = if g.items.len() > 1 { ui.pt(NC_STACK_PT) } else { 0.0 };
-            if y + h + stack > self.h as f32 - ui.pt(NC_BOTTOM_PT) {
-                break;
+        let title_h = if groups.is_empty() { 0.0 } else { ui.pt(NC_TITLE_PT) };
+        let title = (x, y, w, title_h);
+        let clear = (x + w - c, y + (title_h - c) / 2.0, c, c);
+        y += title_h;
+        let mut end = y;
+        let focus = if self.notify.active_mode().is_some() {
+            let r = (x, y, w, ui.pt(NC_FOCUS_PT));
+            y += r.3;
+            end = y;
+            Some(r)
+        } else {
+            None
+        };
+        let floor = self.h as f32 - ui.pt(NC_BOTTOM_PT);
+        let card_close = |r: R4| (r.0 + r.2 - ui.pt(NC_PAD_PT) - c + ui.pt(6.0), r.1 + ui.pt(6.0), c, c);
+        let h = ui.pt(NC_CARD_PT);
+        let (mut cards, mut headers) = (Vec::new(), Vec::new());
+        'groups: for (i, g) in groups.iter().enumerate() {
+            if self.desk_group_expanded(g) {
+                let hh = ui.pt(NC_HEADER_PT);
+                if y + hh + h > floor {
+                    break;
+                }
+                let gx = (x + w - c, y + (hh - c) / 2.0, c, c);
+                // Show Less sits left of the room the X takes once it has grown into Clear All
+                let grown = desk_card::clear_all_rect(ui, gx);
+                let lw = ui.pt(NC_LESS_W_PT);
+                let less = (grown.0 - ui.pt(NC_CHIP_GAP_PT) - lw, gx.1, lw, c);
+                headers.push(DeskHeader { group: i, rect: (x, y, w, hh), less, clear: gx });
+                y += hh;
+                end = y;
+                for j in 0..g.items.len() {
+                    if y + h > floor {
+                        break 'groups;
+                    }
+                    let r = (x, y, w, h);
+                    cards.push(DeskCard { group: i, item: Some(j), rect: r, close: card_close(r) });
+                    end = y + h;
+                    y += h + ui.pt(NC_ITEM_GAP_PT);
+                }
+                y += ui.pt(NC_GAP_PT) - ui.pt(NC_ITEM_GAP_PT);
+            } else {
+                let stack = if g.items.len() > 1 { ui.pt(NC_STACK_PT) } else { 0.0 };
+                if y + h + stack > floor {
+                    break;
+                }
+                let r = (x, y, w, h);
+                cards.push(DeskCard { group: i, item: (g.items.len() == 1).then_some(0), rect: r, close: card_close(r) });
+                end = y + h + stack;
+                y += h + stack + ui.pt(NC_GAP_PT);
             }
-            cards.push((i, (x, y, w, h), (x + w - ui.pt(NC_PAD_PT) - c + ui.pt(6.0), y + ui.pt(6.0), c, c)));
-            y += h + stack + ui.pt(NC_GAP_PT);
         }
-        (title, clear, cards)
+        DeskLayout { title, clear, focus, cards, headers, flow: y, end }
+    }
+
+    /// The pointer moved over (x, y): the column remembers what it is over, so a hovered header's X grows into Clear
+    /// All.
+    pub(super) fn center_desk_hover(&mut self, x: f32, y: f32) {
+        if !self.notify.center.is_shown() || self.notify.center.editing {
+            return;
+        }
+        let hit = self.center_desk_hit(x, y);
+        if hit != self.notify.center.desk_hover {
+            self.notify.center.desk_hover = hit;
+            self.dirty = true;
+        }
+    }
+
+    /// Whether the X of the title (None) or of group `g`'s header shows as Clear All: its row is hovered.
+    fn desk_clear_grown(&self, g: Option<usize>) -> bool {
+        match (self.notify.center.desk_hover, g) {
+            (Some(DeskHit::Title | DeskHit::ClearAll), None) => true,
+            (Some(DeskHit::Header(i) | DeskHit::Less(i) | DeskHit::GroupClear(i)), Some(k)) => i == k,
+            _ => false,
+        }
     }
 
     /// The widget area under the title: one glass row per widget entry or live activity on screen
@@ -865,7 +982,7 @@ impl Shell {
             .unwrap_or(t.1 + t.3);
             return Some((t.0, t.1, t.2, bottom - t.1));
         }
-        let (t, _, _) = self.center_desk_layout();
+        let t = self.center_desk_layout().title;
         let bottom = self.center_content_end();
         // the Edit Widgets capsule is part of the column too
         let edit = self.center_edit_rect();
@@ -914,12 +1031,29 @@ impl Shell {
         if within(close, x, y) {
             return Some(DeskHit::CloseCenter);
         }
-        let (_, clear, cards) = self.center_desk_layout();
-        if within(clear, x, y) {
-            return Some(DeskHit::ClearAll);
+        let l = self.center_desk_layout();
+        if l.title.3 > 0.0 {
+            let clear = if self.desk_clear_grown(None) { desk_card::clear_all_rect(&self.ui, l.clear) } else { l.clear };
+            if within(clear, x, y) {
+                return Some(DeskHit::ClearAll);
+            }
+            if within(l.title, x, y) {
+                return Some(DeskHit::Title);
+            }
         }
-        let groups = self.visible_groups(Mode::Center);
-        cards.iter().find(|c| within(c.1, x, y)).map(|&(i, _, close)| if within(close, x, y) { DeskHit::Close(i) } else { DeskHit::Card(groups[i].app) })
+        for h in &l.headers {
+            let clear = if self.desk_clear_grown(Some(h.group)) { desk_card::clear_all_rect(&self.ui, h.clear) } else { h.clear };
+            if within(clear, x, y) {
+                return Some(DeskHit::GroupClear(h.group));
+            }
+            if within(h.less, x, y) {
+                return Some(DeskHit::Less(h.group));
+            }
+            if within(h.rect, x, y) {
+                return Some(DeskHit::Header(h.group));
+            }
+        }
+        l.cards.iter().find(|c| within(c.rect, x, y)).map(|c| if within(c.close, x, y) { DeskHit::Close { group: c.group, item: c.item } } else { DeskHit::Card { group: c.group, item: c.item } })
     }
 
     /// The option rows of the widget being configured: (option index, row rect), as many as fit above the dock.
@@ -1013,15 +1147,29 @@ impl Shell {
         // a live overlay over the desktop, like the menu-bar menus: no snapshot
         let c = &mut self.notify.center;
         c.backdrop = None;
-        // it opens on the widgets, not on the gallery of an earlier visit
+        // it opens on the widgets, not on the gallery of an earlier visit, with every stack folded
         c.editing = false;
+        c.desk_expanded.clear();
+        c.desk_hover = None;
         c.configuring = None;
         c.refresh_due = 0;
         // icons are looked up again: an app may have been installed since the column last opened
         c.icons.clear();
         c.widget_icons.clear();
         c.settle(0.0, true, t);
+        // a banner up at the top right would sit over the column's title: it leaves, with the ones waiting behind it
+        if let Some(b) = &mut self.notify.banner {
+            b.dismiss(t);
+        }
+        self.notify.banner_behind.clear();
         self.dirty = true;
+    }
+
+    /// The group at `i` of the column and the notification `item` of it (the newest for a collapsed stack).
+    fn desk_note(&self, group: usize, item: Option<usize>) -> Option<(AppId, String, u64)> {
+        let g = self.visible_groups(Mode::Center).into_iter().nth(group)?;
+        let id = g.items.get(item.unwrap_or(0))?.id;
+        Some((g.app, g.thread, id))
     }
 
     /// The gallery's listing entry at `i`, as the service has it now.
@@ -1043,15 +1191,36 @@ impl Shell {
                 if hit.is_some() && hit == self.center_desk_hit(x, y) {
                     match hit.unwrap() {
                         DeskHit::ClearAll => self.clear_all_notifications(),
-                        DeskHit::Close(i) => {
-                            let stack = self.visible_groups(Mode::Center).get(i).map(|g| (g.app, g.thread.clone()));
-                            if let Some((app, thread)) = stack {
+                        DeskHit::Title | DeskHit::Header(_) => {}
+                        // a collapsed stack's X clears the stack; a single card's X clears that notification
+                        DeskHit::Close { group, item: None } | DeskHit::GroupClear(group) => {
+                            if let Some((app, thread, _)) = self.desk_note(group, None) {
                                 self.clear_group(app, &thread);
                             }
                         }
-                        DeskHit::Card(app) => {
-                            self.notify.center.hide();
-                            self.open_from_notification(app, t);
+                        DeskHit::Close { group, item: Some(j) } => {
+                            if let Some((_, _, id)) = self.desk_note(group, Some(j)) {
+                                self.clear_notification(id);
+                            }
+                        }
+                        // a click on a collapsed stack expands it (the reference): one card per notification
+                        DeskHit::Card { group, item: None } => {
+                            if let Some((app, thread, _)) = self.desk_note(group, None) {
+                                self.notify.center.desk_expanded.push((app, thread));
+                            }
+                        }
+                        // a click on one card opens its app and clears only that notification
+                        DeskHit::Card { group, item: Some(j) } => {
+                            if let Some((app, _, id)) = self.desk_note(group, Some(j)) {
+                                self.notify.center.hide();
+                                self.open_from_notification(app, t);
+                                self.clear_notification(id);
+                            }
+                        }
+                        DeskHit::Less(group) => {
+                            if let Some((app, thread, _)) = self.desk_note(group, None) {
+                                self.notify.center.desk_expanded.retain(|(a, th)| !(*a == app && *th == thread));
+                            }
                         }
                         DeskHit::EditWidgets => self.notify.center.editing = true,
                         // the same close as a click outside the column, so the live-glass overlay goes the usual way
@@ -1098,7 +1267,7 @@ impl Shell {
 
     /// The app's icon at the column's card size, rendered once per opening: a built-in's from the dock or the grid, an
     /// installed package's from its package; None (no icon drawn) when the app has none.
-    fn desk_notification_icon(&mut self, app: AppId) {
+    pub(super) fn desk_notification_icon(&mut self, app: AppId) {
         if self.notify.center.icons.iter().any(|(a, _)| *a == app) {
             return;
         }
@@ -1131,8 +1300,7 @@ impl Shell {
     }
 
     fn draw_desk_center(&mut self, s: &mut Surface, t: f64) {
-        use super::super::control_center::desk_glass;
-        use super::super::ui::{FIELD_BG, LABEL, LABEL_2, LINK, MAC_BODY_PT, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT, BAR_TEXT, BAR_TEXT_SHADOW, BAR_TEXT_SHADOW_ALPHA, NC_QUIET_ALPHA, NC_WEATHER_TINT, SYSTEM_RED};
+        use super::super::ui::{FIELD_BG, FOCUS_INDIGO, LABEL, LABEL_2, LINK, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT, BAR_TEXT, BAR_TEXT_SHADOW, BAR_TEXT_SHADOW_ALPHA, NC_WEATHER_TINT, SYSTEM_RED};
         let c = &self.notify.center;
         let p = c.progress(t).clamp(0.0, 1.0);
         if let Some((x, y, w, h)) = self.center_desk_rect().filter(|_| bifrost_render::glass::gpu()) {
@@ -1159,67 +1327,77 @@ impl Shell {
         let alpha = (p * 255.0) as u32;
         let ui = &self.ui;
         let slide = (1.0 - p) * ui.pt(24.0);
-        let (title, clear, cards) = self.center_desk_layout();
+        let layout = self.center_desk_layout();
         let groups = self.visible_groups(Mode::Center);
         let now = self.notify.now();
         let (label, secondary) = (LABEL.now(), LABEL_2.now());
-        let disc = |s: &mut Surface, (x, y, w, h): R4, fill: u32, ink: u32| {
-            s.fill_rrect(x + slide, y, w, h, w / 2.0, crate::gfx::scale(fill, alpha));
-            let k = w * 0.18;
-            let (cx, cy) = (x + slide + w / 2.0, y + h / 2.0);
-            for d in [-1.0f32, 1.0] {
-                for i in 0..((2.0 * k) as i32).max(1) {
-                    let o = i as f32 - k;
-                    s.fill_rect((cx + o) as usize, (cy + o * d) as usize, ui.pt(1.5) as usize, ui.pt(1.5) as usize, crate::gfx::scale(ink, alpha));
-                }
-            }
+        let shift = |(x, y, w, h): R4| (x + slide, y, w, h);
+        // text on the wallpaper (the title, a stack's name, the Focus line) is drawn like the menu bar's: white with a
+        // soft shadow
+        let on_wallpaper = |s: &mut Surface, img: &Image, x: f32, y: f32| {
+            s.blit_colored(img, x as i32, y as i32 + ui.pt(0.5).max(1.0) as i32, BAR_TEXT_SHADOW, BAR_TEXT_SHADOW_ALPHA * alpha / 255);
+            s.blit_colored(img, x as i32, y as i32, BAR_TEXT, alpha);
         };
-        // the title sits on the wallpaper like the menu bar's text: white with a soft shadow. With nothing to show it
-        // is a quiet line instead of a heading, and there is no clear button.
-        let quiet = groups.is_empty();
-        let tm = if quiet { ui.text("No Notifications", MAC_BODY_PT, Weight::Regular, WHITE) } else { ui.text("Notification Center", MAC_TITLE3_PT, Weight::Bold, WHITE) };
-        let ink_alpha = if quiet { alpha * NC_QUIET_ALPHA / 255 } else { alpha };
-        let ty = (title.1 + (title.3 - tm.h as f32) / 2.0) as i32;
-        s.blit_colored(&tm, (title.0 + slide) as i32, ty + ui.pt(0.5).max(1.0) as i32, BAR_TEXT_SHADOW, BAR_TEXT_SHADOW_ALPHA * ink_alpha / 255);
-        s.blit_colored(&tm, (title.0 + slide) as i32, ty, BAR_TEXT, ink_alpha);
-        if !quiet {
-            disc(s, clear, FIELD_BG.now(), label);
+        // the title with its circled X, which grows into Clear All while the row is hovered; with nothing to list
+        // there is no title row at all, only the widgets (the reference's empty column)
+        if !groups.is_empty() {
+            let (tx, ty, _, th) = layout.title;
+            let tm = ui.text("Notification Center", MAC_TITLE3_PT, Weight::Bold, WHITE);
+            on_wallpaper(s, &tm, tx + slide, ty + (th - tm.h as f32) / 2.0);
+            if self.desk_clear_grown(None) {
+                desk_card::clear_all_capsule(s, ui, shift(desk_card::clear_all_rect(ui, layout.clear)), alpha);
+            } else {
+                desk_card::close_disc(s, ui, shift(layout.clear), alpha);
+            }
+        }
+        // the Focus line: the moon and the Focus that is on
+        if let (Some((fx, fy, _, fh)), Some(mode)) = (layout.focus, self.notify.active_mode()) {
+            let r = ui.pt(6.0);
+            desk_card::moon(s, (fx + slide + r, fy + fh / 2.0), r, crate::gfx::scale(FOCUS_INDIGO, alpha));
+            let line = ui.text(&ui.fit(&format!("{} is on", mode.name), MAC_SUBHEAD_PT, layout.title.2 - 3.0 * r), MAC_SUBHEAD_PT, Weight::Semibold, WHITE);
+            on_wallpaper(s, &line, fx + slide + 3.0 * r, fy + (fh - line.h as f32) / 2.0);
+        }
+        // an expanded stack's header: its name, Show Less and the X (Clear All while the row is hovered)
+        for h in &layout.headers {
+            let Some(g) = groups.get(h.group) else { continue };
+            let (hx, hy, _, hh) = h.rect;
+            let name = desk_card::app_name(g.app);
+            let name = if g.thread.is_empty() { name } else { format!("{name} \u{b7} {}", g.thread) };
+            let nm = ui.text(&ui.fit(&name, MAC_HEADLINE_PT, h.less.0 - hx - ui.pt(NC_CHIP_GAP_PT)), MAC_HEADLINE_PT, Weight::Semibold, WHITE);
+            on_wallpaper(s, &nm, hx + slide, hy + (hh - nm.h as f32) / 2.0);
+            let (lx, ly, lw, lh) = shift(h.less);
+            s.fill_rrect(lx, ly, lw, lh, lh / 2.0, crate::gfx::scale(FIELD_BG.now(), alpha));
+            let lt = ui.text("Show Less", MAC_SUBHEAD_PT, Weight::Semibold, label);
+            s.blit(&lt, (lx + (lw - lt.w as f32) / 2.0) as i32, (ly + (lh - lt.h as f32) / 2.0) as i32, 255, alpha);
+            if self.desk_clear_grown(Some(h.group)) {
+                desk_card::clear_all_capsule(s, ui, shift(desk_card::clear_all_rect(ui, h.clear)), alpha);
+            } else {
+                desk_card::close_disc(s, ui, shift(h.clear), alpha);
+            }
+        }
+        // notification cards: the app's icon, then its name and age, the title and the body; a collapsed stack shows
+        // the newest with "· n more" and its edge under the card
+        for card in &layout.cards {
+            let Some(g) = groups.get(card.group) else { continue };
+            let (x, y, w, h) = shift(card.rect);
+            let r = ui.pt(NC_CARD_R_PT);
+            if card.item.is_none() {
+                // the edge sits under the card without overlapping it (overlapping glass shapes compose darker)
+                let (inset, edge) = (ui.pt(10.0), ui.pt(NC_STACK_PT));
+                desk_card::tile(s, ShellSurface::NotificationPanel, (x + inset, y + h, w - 2.0 * inset, edge), edge / 2.0, alpha * 3 / 4);
+            }
+            desk_card::tile(s, ShellSurface::NotificationPanel, (x, y, w, h), r, alpha);
+            let n = &g.items[card.item.unwrap_or(0).min(g.items.len() - 1)];
+            let app = desk_card::app_name(g.app);
+            let head = if card.item.is_none() { format!("{app} \u{b7} {} more", g.items.len() - 1) } else { app.clone() };
+            let (title, body) = if self.previews_hidden(g.app, Mode::Center) { (app.clone(), "Notification".to_string()) } else { (n.title.clone(), n.body.clone()) };
+            let age = super::store::age_text(n.time, now);
+            let icon = self.notify.center.icons.iter().find(|(a, _)| *a == g.app).and_then(|(_, i)| i.as_ref());
+            let text = desk_card::CardText { head: &head, age: Some(&age), title: &title, body: &body };
+            desk_card::draw_text(s, ui, (x, y, w, h), icon, &text, ui.pt(NC_CLOSE_PT), alpha);
+            desk_card::close_disc(s, ui, shift(card.close), alpha);
         }
         let pad = ui.pt(NC_PAD_PT);
-        // notification cards: the app's icon, then its name and age, the title and the body
-        for (i, (x, y, w, h), close) in cards {
-            let g = &groups[i];
-            let x = x + slide;
-            let r = ui.pt(NC_CARD_R_PT);
-            if g.items.len() > 1 {
-                let inset = ui.pt(10.0);
-                desk_glass(s, ShellSurface::NotificationPanel, (x + inset, y + h - r, w - 2.0 * inset, r + ui.pt(NC_STACK_PT)), r, alpha);
-            }
-            desk_glass(s, ShellSurface::NotificationPanel, (x, y, w, h), r, alpha);
-            let n = g.latest();
-            let app = match g.app {
-                AppId::External(slot) => apphost::installed().get(slot as usize).map_or_else(String::new, |a| a.manifest.name.clone()),
-                other => apps().iter().find(|a| a.id == other).map_or_else(String::new, |a| a.name.to_string()),
-            };
-            let tx = x + pad + ui.pt(NC_ICON_PT) + ui.pt(NC_ICON_GAP_PT);
-            if let Some(icon) = self.notify.center.icons.iter().find(|(a, _)| *a == g.app).and_then(|(_, i)| i.as_ref()) {
-                s.blit(icon, (x + pad) as i32, (y + (h - icon.h as f32) / 2.0) as i32, 255, alpha);
-            }
-            let room = x + w - tx - pad - ui.pt(NC_CLOSE_PT);
-            let more = if g.items.len() > 1 { format!("{app} \u{b7} {} more", g.items.len() - 1) } else { app.clone() };
-            let head = ui.text(&ui.fit(&more, MAC_SUBHEAD_PT, room - ui.pt(60.0)), MAC_SUBHEAD_PT, Weight::Regular, secondary);
-            let age = ui.text(&super::store::age_text(n.time, now), MAC_SUBHEAD_PT, Weight::Regular, secondary);
-            let t1 = ui.text(&ui.fit(&n.title, MAC_HEADLINE_PT, room), MAC_HEADLINE_PT, Weight::Semibold, label);
-            let t2 = ui.text(&ui.fit(&n.body, MAC_BODY_PT, x + w - tx - pad), MAC_BODY_PT, Weight::Regular, label);
-            let mut ly = y + (h - (head.h + t1.h + t2.h) as f32) / 2.0;
-            s.blit(&head, tx as i32, ly as i32, 255, alpha);
-            s.blit(&age, (x + w - pad - ui.pt(NC_CLOSE_PT) - ui.pt(6.0) - age.w as f32) as i32, ly as i32, 255, alpha);
-            ly += head.h as f32;
-            s.blit(&t1, tx as i32, ly as i32, 255, alpha);
-            ly += t1.h as f32;
-            s.blit(&t2, tx as i32, ly as i32, 255, alpha);
-            disc(s, close, FIELD_BG.now(), label);
-        }
         // Calendar and Weather: glass cards with the date, and the Weather app's saved place on a blue plate; the text
         // lines come from `info_layout`, the same boxes the layout tests check
         for (card, rect) in self.center_info_rects() {
@@ -1227,7 +1405,7 @@ impl Shell {
             let layout = self.info_layout(card, rect);
             let x = x + slide;
             let r = ui.pt(NC_CARD_R_PT);
-            desk_glass(s, ShellSurface::NotificationPanel, (x, y, w, h), r, alpha);
+            desk_card::tile(s, ShellSurface::NotificationPanel, (x, y, w, h), r, alpha);
             if card == InfoCard::Weather {
                 let Some(sum) = self.today.weather() else { continue };
                 s.fill_rrect(x, y, w, h, r, crate::gfx::scale(NC_WEATHER_TINT, alpha));
@@ -1258,7 +1436,7 @@ impl Shell {
             let rects = self.center_action_rects((x, y, w, h), row.buttons.len());
             let x = x + slide;
             let r = ui.pt(NC_CARD_R_PT);
-            desk_glass(s, ShellSurface::NotificationPanel, (x, y, w, h), r, alpha);
+            desk_card::tile(s, ShellSurface::NotificationPanel, (x, y, w, h), r, alpha);
             // the entry's buttons: a capsule plate with a link-coloured label; a toggle that is on has a link plate
             // with a white label, and one waiting for its app is drawn lighter
             for (button, (bx, by, bw, bh)) in row.buttons.iter().zip(rects.iter().copied()) {
@@ -1290,11 +1468,10 @@ impl Shell {
         }
         // Edit Widgets: a small glass capsule with a quiet label and a round close button beside it
         let ((ex, ey, ew, eh), close) = self.center_edit_rects();
-        desk_glass(s, ShellSurface::NotificationPanel, (ex + slide, ey, ew, eh), eh / 2.0, alpha);
+        desk_card::tile(s, ShellSurface::NotificationPanel, (ex + slide, ey, ew, eh), eh / 2.0, alpha);
         let et = ui.text("Edit Widgets", MAC_SUBHEAD_PT, Weight::Semibold, label);
         s.blit(&et, (ex + slide + (ew - et.w as f32) / 2.0) as i32, (ey + (eh - et.h as f32) / 2.0) as i32, 255, alpha);
-        desk_glass(s, ShellSurface::NotificationPanel, (close.0 + slide, close.1, close.2, close.3), close.3 / 2.0, alpha);
-        disc(s, close, 0, label);
+        desk_card::close_disc(s, ui, shift(close), alpha);
     }
 
     /// The Edit Widgets gallery in the column's place: the title with Done, then a row per widget with a disc that adds
@@ -1448,7 +1625,7 @@ mod column_tests {
         assert!(w >= sh.ui.pt(NC_W_PT), "never narrower than the measured width");
         assert!(w >= sh.w as f32 * NC_W_FRAC - 0.5, "at least the reference share of the screen");
         let x = sh.w as f32 - sh.ui.pt(NC_RIGHT_PT) - w;
-        let (title, _, _) = sh.center_desk_layout();
+        let title = sh.center_desk_layout().title;
         let info = sh.center_info_rects();
         let (kind, date) = info.first().copied().expect("the date card is always there");
         assert!(kind == InfoCard::Calendar && date.1 >= title.1 + title.3, "under the title");
@@ -1524,5 +1701,107 @@ mod column_tests {
                 }
             }
         }
+    }
+}
+
+#[cfg(all(test, feature = "desktop-wayland"))]
+mod stack_tests {
+    use super::*;
+    use crate::shell::notify::Notification;
+
+    fn open(sh: &mut Shell, t: f64) {
+        sh.open_desk_notification_center(t);
+        sh.center_tick(t + SPRING_MS + 1.0);
+        assert!(sh.notify.center.is_shown());
+    }
+
+    fn click(sh: &mut Shell, (x, y): (f32, f32), t: f64) {
+        sh.center_desk_event(Event::Down(x, y), t);
+        sh.center_desk_event(Event::Up(x, y), t + 20.0);
+    }
+
+    fn mid((x, y, w, h): R4) -> (f32, f32) {
+        (x + w / 2.0, y + h / 2.0)
+    }
+
+    fn three() -> Shell {
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.screen = Screen::Home;
+        for title in ["One", "Two", "Three"] {
+            sh.notify(Notification::new(AppId::Files, title, "Something happened", 0));
+        }
+        sh
+    }
+
+    /// E2E W5-6: a click on a collapsed stack expands it (a header and one card per notification) instead of opening
+    /// the app and clearing the whole stack; Show Less folds it again.
+    #[test]
+    fn a_click_on_a_stack_expands_it_and_show_less_folds_it() {
+        let mut sh = three();
+        open(&mut sh, 1000.0);
+        let l = sh.center_desk_layout();
+        assert_eq!((l.cards.len(), l.headers.len()), (1, 0), "one collapsed stack");
+        assert_eq!(l.cards[0].item, None);
+        click(&mut sh, mid(l.cards[0].rect), 2000.0);
+        assert!(sh.notify.center.is_shown(), "the column stays open");
+        assert_eq!(sh.notify.store().len(), 3, "nothing is cleared");
+        let l = sh.center_desk_layout();
+        assert_eq!((l.cards.len(), l.headers.len()), (3, 1), "a header and a card per notification");
+        assert!(l.cards.iter().enumerate().all(|(j, c)| c.item == Some(j)));
+        assert!(l.cards[0].rect.1 >= l.headers[0].rect.1 + l.headers[0].rect.3, "the cards sit under the header");
+        click(&mut sh, mid(l.headers[0].less), 3000.0);
+        assert_eq!(sh.center_desk_layout().cards.len(), 1, "folded again");
+    }
+
+    /// E2E W5-6: a click on one card of an expanded stack opens the app and clears only that notification.
+    #[test]
+    fn a_click_on_one_card_clears_only_that_notification() {
+        let mut sh = three();
+        open(&mut sh, 1000.0);
+        click(&mut sh, mid(sh.center_desk_layout().cards[0].rect), 2000.0);
+        let second = sh.center_desk_layout().cards[1];
+        // keep clear of the card's X
+        click(&mut sh, (second.rect.0 + 40.0, second.rect.1 + second.rect.3 / 2.0), 3000.0);
+        let left: Vec<String> = sh.notify.store().groups()[0].items.iter().map(|n| n.title.clone()).collect();
+        assert_eq!(left, ["Three", "One"], "only \"Two\" is cleared");
+    }
+
+    /// E2E W5-6/7: the group clears from its header's X, which grows into Clear All while the header is hovered; a
+    /// card's own X clears one notification.
+    #[test]
+    fn the_header_x_grows_into_clear_all_on_hover_and_clears_the_stack() {
+        let mut sh = three();
+        open(&mut sh, 1000.0);
+        click(&mut sh, mid(sh.center_desk_layout().cards[0].rect), 2000.0);
+        let card = sh.center_desk_layout().cards[2];
+        click(&mut sh, mid(card.close), 2500.0);
+        assert_eq!(sh.notify.store().len(), 2, "a card's X clears its notification");
+        let h = sh.center_desk_layout().headers[0];
+        let grown = desk_card::clear_all_rect(&sh.ui, h.clear);
+        let left_of_x = (grown.0 + 2.0, grown.1 + grown.3 / 2.0);
+        assert!(sh.center_desk_hit(left_of_x.0, left_of_x.1) == Some(DeskHit::Header(0)), "no Clear All before the hover");
+        sh.center_desk_hover(h.rect.0 + 10.0, h.rect.1 + h.rect.3 / 2.0);
+        assert!(sh.desk_clear_grown(Some(0)));
+        assert!(sh.center_desk_hit(left_of_x.0, left_of_x.1) == Some(DeskHit::GroupClear(0)), "the capsule takes the click");
+        click(&mut sh, left_of_x, 3000.0);
+        assert_eq!(sh.notify.store().len(), 0);
+    }
+
+    /// E2E W5-7/8: with nothing to list the column has no title row and no X (only its widgets); while a Focus is on a
+    /// Focus line sits under the title.
+    #[test]
+    fn the_empty_column_has_no_title_and_focus_adds_its_line() {
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.screen = Screen::Home;
+        open(&mut sh, 1000.0);
+        let l = sh.center_desk_layout();
+        assert_eq!(l.title.3, 0.0, "no title row");
+        assert!(l.focus.is_none());
+        let (cx, cy) = mid(l.clear);
+        assert!(sh.center_desk_hit(cx, cy) != Some(DeskHit::ClearAll), "no clear button");
+        sh.set_dnd(true);
+        let l = sh.center_desk_layout();
+        let f = l.focus.expect("the Focus line");
+        assert!(l.flow >= f.1 + f.3, "the content starts under it");
     }
 }
