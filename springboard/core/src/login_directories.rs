@@ -33,6 +33,24 @@ pub fn ensure_for_env() -> io::Result<Vec<PathBuf>> {
     ensure_under(&home, data_home.as_deref(), cache_home.as_deref())
 }
 
+/// [`ensure_under`] for another user, from a process that is not that user (the shell runs as root with no `HOME`
+/// and makes the local account's directories): the user's XDG defaults under `home`, and every directory this call
+/// creates is handed to `uid`:`gid`. Directories that already exist keep their owner.
+pub fn ensure_for_user(home: &Path, uid: u32, gid: u32) -> io::Result<Vec<PathBuf>> {
+    let support = home.join(".local/share");
+    let cache = home.join(".cache");
+    for (dir, mode) in [(&support, 0o755), (&cache, 0o700)] {
+        // the missing directories from the outermost down, so each is created (and chowned) before its child
+        let mut missing: Vec<&Path> = dir.ancestors().take_while(|p| !p.exists()).collect();
+        missing.reverse();
+        for p in missing {
+            fs::DirBuilder::new().mode(mode).create(p)?;
+            std::os::unix::fs::chown(p, Some(uid), Some(gid))?;
+        }
+    }
+    Ok(vec![support, cache])
+}
+
 /// An XDG base directory: the variable when it holds an absolute path, else `home/fallback`.
 fn base_dir(var: Option<&OsStr>, home: &Path, fallback: &str) -> PathBuf {
     match var.map(Path::new) {
@@ -64,6 +82,23 @@ mod tests {
         fs::write(dirs[1].join("entry"), "kept").unwrap();
         assert_eq!(ensure_under(&home, None, None).unwrap(), dirs);
         assert_eq!(fs::read_to_string(dirs[1].join("entry")).unwrap(), "kept");
+    }
+
+    #[test]
+    fn another_users_directories_are_made_and_handed_to_them() {
+        use std::os::unix::fs::MetadataExt;
+        let s = tempfile::tempdir().unwrap();
+        let home = s.path().join("home");
+        fs::create_dir_all(home.join(".local")).unwrap();
+        // the test runs unprivileged, so it hands the directories to itself: chown to one's own ids always succeeds
+        let me = fs::metadata(s.path()).unwrap();
+        let dirs = ensure_for_user(&home, me.uid(), me.gid()).unwrap();
+        assert_eq!(dirs, vec![home.join(".local/share"), home.join(".cache")]);
+        assert!(dirs[0].is_dir() && dirs[1].is_dir());
+        assert_eq!(fs::metadata(&dirs[1]).unwrap().permissions().mode() & 0o777, 0o700, "the cache directory is private");
+        assert_eq!(fs::metadata(&dirs[0]).unwrap().uid(), me.uid());
+        // a second call changes nothing
+        assert_eq!(ensure_for_user(&home, me.uid(), me.gid()).unwrap(), dirs);
     }
 
     #[test]

@@ -155,7 +155,15 @@ fn run() -> std::io::Result<()> {
         }
     }
     // the per-user support and private cache directories exist before any app runs (dirhelper's job)
-    if let Err(e) = bifrost_core::login_directories::ensure_for_env() {
+    // springboard.service runs the shell as root with no HOME: the directories are then the local account's, from its
+    // passwd entry, and handed to it (with HOME set, as in a development run, the running user's are made)
+    let made = if std::env::var_os("HOME").is_some_and(|h| !h.is_empty()) {
+        bifrost_core::login_directories::ensure_for_env()
+    } else {
+        springboard::bare::account::Account::installed()
+            .and_then(|a| bifrost_core::login_directories::ensure_for_user(&a.home, a.uid, a.gid))
+    };
+    if let Err(e) = made {
         eprintln!("springboard: login directories not created: {e}");
     }
     // the crash-loop rule applies on every start
