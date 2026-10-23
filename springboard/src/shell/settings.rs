@@ -2182,8 +2182,13 @@ impl Settings {
             return vec![];
         }
         if self.sheet.is_none() && self.search.active && (self.stack.len() == 1 || self.side_w > 0) {
+            // Return opens the first match (the field keeps its query, so the results stay in the sidebar)
+            let first = matches!(out, Out::Enter).then(|| settings_search::first_hit(self.index.as_deref().unwrap_or(&[]), self.search.query())).flatten();
             if self.search.edit(ui, out, t) {
                 self.requery(ui);
+            }
+            if let Some(id) = first {
+                return self.open_page_id(ui, id, t);
             }
             return vec![];
         }
@@ -5074,5 +5079,19 @@ mod e2e_w3_tests {
         super::super::pages::set_test_form(FormFactor::Tablet);
         tap(&mut st, &ui, &mut prefs, middle, mid);
         assert_eq!(st.options().dnd, before, "a finger flips it from anywhere on the row");
+    }
+
+    /// W3-11: Return in the search field did nothing; it opens the first match.
+    #[test]
+    fn return_in_search_opens_the_first_match() {
+        let ui = crate::shell::tests::ui();
+        let (mut st, _) = split(&ui);
+        st.search.active = true;
+        st.key(&ui, Out::Text("about".into()), 0.0);
+        let first = settings_search::first_hit(st.index.as_deref().unwrap_or(&[]), "about").expect("a match");
+        st.key(&ui, Out::Enter, 0.0);
+        settle(&mut st, &ui);
+        assert_eq!(st.page(), first, "Return opened the first match");
+        assert_eq!(first, PageId::About);
     }
 }

@@ -230,8 +230,17 @@ fn walked(id: PageId) -> bool {
     )
 }
 
-/// Every pane reachable from the root page, and every setting row on them, walked from `spec_of` (a page's live spec).
-/// A row that opens a pane is listed as that pane; a row without an action is information and is not listed.
+/// A group header as a result's label: "SHOW SCROLL BARS" reads "Show scroll bars" (the macOS sentence case of a
+/// section title).
+fn header_label(header: &str) -> String {
+    let lower = header.trim().to_lowercase();
+    let mut chars = lower.chars();
+    chars.next().map_or_else(String::new, |c| c.to_uppercase().chain(chars).collect())
+}
+
+/// Every pane reachable from the root page, every group header on them and every setting row, walked from `spec_of` (a
+/// page's live spec). A row that opens a pane is listed as that pane; a row without an action is information and is not
+/// listed; a group header opens the page it heads, so a section is found by its title ("Highlight colour").
 pub fn index(mut spec_of: impl FnMut(PageId) -> Spec) -> Vec<Entry> {
     let mut out: Vec<Entry> = Vec::new();
     let mut seen: HashSet<(String, PageId)> = HashSet::new();
@@ -239,6 +248,14 @@ pub fn index(mut spec_of: impl FnMut(PageId) -> Spec) -> Vec<Entry> {
     let mut visited: HashSet<PageId> = HashSet::from([PageId::Root]);
     while let Some(id) = walk.pop_front() {
         let page = spec_of(id);
+        if id != PageId::Root {
+            for header in page.groups.iter().filter_map(|g| g.header.as_deref()) {
+                let entry = Entry::new(&header_label(header), id, &page.title, false);
+                if !entry.label.is_empty() && seen.insert((entry.label.clone(), entry.page)) {
+                    out.push(entry);
+                }
+            }
+        }
         for item in page.groups.iter().flat_map(|g| g.items.iter()) {
             let label = item.label.trim();
             if label.is_empty() {
@@ -328,13 +345,22 @@ fn rank(e: &Entry, query: &str) -> u8 {
     }
 }
 
+/// The page Return opens while Search has a query: the first match's.
+pub fn first_hit(index: &[Entry], query: &str) -> Option<PageId> {
+    matches(index, query).first().map(|e| e.page)
+}
+
 /// The root page while Search has a query: one row per match (its name, and the page it sits on under it), or a
-/// single "No Results" row. A tap opens the match's page.
+/// single "No Results" row. A tap opens the match's page. A label that more than one page has ("Natural Scrolling" on
+/// Mouse and Trackpad) carries its page's name, since the sidebar shows labels alone.
 pub fn results(index: &[Entry], query: &str) -> Spec {
-    let mut items: Vec<Item> = matches(index, query)
-        .into_iter()
+    let hits = matches(index, query);
+    let twice = |label: &str| hits.iter().filter(|e| e.label == label).count() > 1;
+    let mut items: Vec<Item> = hits
+        .iter()
         .map(|e| {
-            let mut item = Item::new(e.label.clone()).value(e.place.clone());
+            let label = if twice(&e.label) && !e.place.is_empty() { format!("{} ({})", e.label, e.place) } else { e.label.clone() };
+            let mut item = Item::new(label).value(e.place.clone());
             item.action = Action::Push(e.page);
             item
         })
@@ -456,6 +482,46 @@ mod tests {
         let none = results(&idx, "zzzz");
         assert_eq!(none.groups[0].items.len(), 1);
         assert_eq!(none.groups[0].items[0].action, Action::None);
+    }
+
+    #[test]
+    fn group_headers_are_found_and_open_their_page() {
+        let tree_with_header = |id: PageId| {
+            let mut s = tree(id);
+            if id == PageId::Battery {
+                s.groups[0].header = Some("BATTERY HEALTH".into());
+            }
+            s
+        };
+        let idx = index(tree_with_header);
+        let hit = matches(&idx, "health");
+        assert_eq!(hit.first().map(|e| (e.label.as_str(), e.page)), Some(("Battery health", PageId::Battery)), "a section is found by its title");
+    }
+
+    #[test]
+    fn a_label_on_two_pages_shows_its_page() {
+        let two = |id: PageId| match id {
+            PageId::Root => page(PageId::Root, "Settings", vec![push("Mouse", PageId::Mouse), push("Trackpad", PageId::Trackpad)]),
+            PageId::Mouse => page(PageId::Mouse, "Mouse", vec![setting("Natural Scrolling")]),
+            PageId::Trackpad => page(PageId::Trackpad, "Trackpad", vec![setting("Natural Scrolling"), setting("Tap to Click")]),
+            other => panic!("unexpected page {other:?}"),
+        };
+        let idx = index(two);
+        let spec = results(&idx, "natural");
+        let labels: Vec<&str> = spec.groups[0].items.iter().map(|i| i.label.as_str()).collect();
+        assert_eq!(labels, vec!["Natural Scrolling (Mouse)", "Natural Scrolling (Trackpad)"]);
+        let single = results(&idx, "tap to");
+        assert_eq!(single.groups[0].items[0].label, "Tap to Click", "a label only one page has stays plain");
+        assert_eq!(first_hit(&idx, "natural"), Some(PageId::Mouse), "Return opens the first match");
+        assert_eq!(first_hit(&idx, "zzzz"), None);
+    }
+
+    #[test]
+    fn a_path_leads_from_the_pane_to_the_page() {
+        assert_eq!(path_to(tree, PageId::Wifi), Some(vec![PageId::Network, PageId::Wifi]));
+        assert_eq!(path_to(tree, PageId::Battery), Some(vec![PageId::Battery]));
+        assert_eq!(path_to(tree, PageId::WifiDetail), Some(vec![PageId::Network, PageId::Wifi, PageId::WifiDetail]));
+        assert_eq!(path_to(tree, PageId::Root), None);
     }
 
     #[test]
