@@ -128,7 +128,8 @@ pub struct Manifest {
 
 impl Manifest {
     pub fn full_size_content(&self) -> bool {
-        self.window == "full-size"
+        // a borderless window (`window = "borderless"`) is full-size content with no chrome at all
+        self.window == "full-size" || self.window == "borderless"
     }
     pub fn is_system(&self) -> bool {
         Kind::of(&self.kind) == Kind::System

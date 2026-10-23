@@ -45,7 +45,11 @@ pub struct WindowFrame { pub id:u32, pub title:&'static str, pub x:i32, pub y:i3
     /// The smallest outer size (window px, title bar included) the window may be resized to: the app's own minimum
     /// (`desk::size_range`, Settings' split width), advertised with xdg_toplevel `set_min_size` so the window server's
     /// interactive resize stops where the shell's does. (0, 0) falls back to `DEFAULT_MIN_SIZE`.
-    pub min_size:(i32,i32) }
+    pub min_size:(i32,i32),
+    /// The parts of a shaped window that take the pointer (x, y, w, h in window px): a borderless window's drawn pixels,
+    /// so a click on its transparent rest reaches the window below (`desk::alpha_shape`). A shaped window draws its own
+    /// edges and gets no shell shadow. `None`: the whole window takes input.
+    pub input:Option<std::sync::Arc<[[i32;4]]>> }
 /// The minimum a toplevel advertises when its frame names none.
 const DEFAULT_MIN_SIZE:(i32,i32)=(320,220);
 /// The `set_min_size` a toplevel sends for `min`: the frame's own minimum, or the default when it has none.
@@ -420,8 +424,10 @@ impl Display {
                 // the app's minimum can change with the scale or the screen (a minimum never exceeds the screen)
                 if min_size_of(w.frame.min_size)!=min_size_of(frame.min_size) { let (mw,mh)=min_size_of(frame.min_size); w.top.set_min_size(mw,mh); }
                 let pixels = frame.pixels.take().or_else(||w.frame.pixels.take());
+                let shape_changed = w.frame.input != frame.input;
                 w.frame = frame;
                 w.frame.pixels = pixels;
+                if shape_changed { set_window_input(self.state.compositor.as_ref(),&w.surface,w.margin,w.frame.width,w.frame.height,w.frame.input.as_deref(),&qh); }
             } else {
                 let surface = self.state.compositor.as_ref().unwrap().create_surface(&qh,());
                 let xdg = self.state.wm.as_ref().ok_or_else(||err("xdg-shell unavailable"))?.get_xdg_surface(&surface,&qh,frame.id);
@@ -431,6 +437,7 @@ impl Display {
                 if let (Some((ox,oy)),Some(mgr))=(frame.origin,self.state.level_mgr.as_ref()) {
                     if mgr.version()>=super::window_level_client::ORIGIN_SINCE { mgr.set_origin(&surface,ox,oy); }
                 }
+                if frame.input.is_some() { set_window_input(self.state.compositor.as_ref(),&surface,0,frame.width,frame.height,frame.input.as_deref(),&qh); }
                 surface.commit();
                 let mut pending=Damage::new(frame.width,frame.height); pending.all();
                 self.state.windows.insert(frame.id,Window { surface,xdg,top,level_sent:None,slots:vec![],buffer_size:(0,0),configured:false,frame,fs_pending:None,act:false,act_seen:false,pending,margin:0,gpu_size:(0,0),bg:None,bg_rects:Vec::new(),mat:None,mat_sent:(0,Vec::new()) });
@@ -512,7 +519,7 @@ impl Display {
                 if width==0||height==0||width>8192||height>8192 { continue; }
                 // the margins hold the GPU shadow (a dedicated reach, longer below); maximized windows have none
                 let scale=if self.state.scale>0.0 {self.state.scale} else {(w.frame.title_height as f32/TITLE_PT).max(1.0)};
-                let (margin,bottom)=if w.frame.maximized||w.frame.fullscreen {(0,0)} else {((SHADOW_SIDE_PT*scale).round() as i32,(SHADOW_BOTTOM_PT*scale).round() as i32)};
+                let (margin,bottom)=if w.frame.maximized||w.frame.fullscreen||w.frame.input.is_some() {(0,0)} else {((SHADOW_SIDE_PT*scale).round() as i32,(SHADOW_BOTTOM_PT*scale).round() as i32)};
                 let (bw,bh)=(width+2*margin as usize,height+(margin+bottom) as usize);
                 if w.gpu_size!=(bw,bh) || !g.p.has_surface(key) {
                     if let Some(slots)=self.state.gpu_slots.remove(&key) {for s in slots {s.buffer.destroy();}}
@@ -521,10 +528,9 @@ impl Display {
                     let w=self.state.windows.get_mut(&id).unwrap();
                     w.gpu_size=(bw,bh); w.margin=margin; w.pending=Damage::new(width,height); w.pending.all();
                     w.xdg.set_window_geometry(margin,margin,width as i32,height as i32);
-                    // the shadow is not part of the window: clicks there reach what is below
-                    let region=self.state.compositor.as_ref().unwrap().create_region(&qh,());
-                    region.add(margin,margin,width as i32,height as i32);
-                    w.surface.set_input_region(Some(&region)); region.destroy();
+                    // the shadow is not part of the window: clicks there reach what is below (and a shaped window takes
+                    // input only where it drew)
+                    set_window_input(self.state.compositor.as_ref(),&w.surface,margin,width,height,w.frame.input.as_deref(),&qh);
                     self.state.gpu_slots.insert(key,slots);
                 }
                 let w=self.state.windows.get_mut(&id).unwrap();
@@ -648,6 +654,21 @@ fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u3
         }
         // -1: placed from the screen's corner, not pushed below the menu bar's or the Dock's exclusive zone
         _ => {l.set_anchor(surface::Anchor::Top|surface::Anchor::Left);l.set_margin(frame.y,0,0,frame.x);l.set_exclusive_zone(-1);}
+    }
+}
+/// Sets a window's input region: its `width` x `height` body inside the shadow `margin`, or only the `shape` rects
+/// (window px) of a shaped window. Applies on the next commit.
+fn set_window_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_surface::WlSurface,margin:i32,width:usize,height:usize,shape:Option<&[[i32;4]]>,qh:&QueueHandle<State>) {
+    let Some(compositor)=compositor else {return};
+    let region=compositor.create_region(qh,());
+    for [x,y,w,h] in input_rects(margin,width,height,shape) {region.add(x,y,w,h);}
+    surface.set_input_region(Some(&region));region.destroy();
+}
+/// The rects of a window's input region in surface px (`set_window_input`): the body, or each shape rect moved by the margin.
+fn input_rects(margin:i32,width:usize,height:usize,shape:Option<&[[i32;4]]>)->Vec<[i32;4]> {
+    match shape {
+        Some(rects)=>rects.iter().filter(|r|r[2]>0&&r[3]>0).map(|r|[r[0]+margin,r[1]+margin,r[2],r[3]]).collect(),
+        None=>vec![[margin,margin,width as i32,height as i32]],
     }
 }
 /// Limits the pointer input of a chrome surface to `input` (x, y, w, h in surface px); `None` gives the whole surface
@@ -1358,6 +1379,14 @@ mod tests {
         assert!(focus_on_configure(false,true,false), "a window that became active is focused");
         assert!(!focus_on_configure(false,false,false), "a resize of a background window");
         assert!(!focus_on_configure(false,true,true), "a resize of the active window raises nothing again");
+    }
+    #[test]
+    fn a_shaped_window_takes_input_only_where_it_drew() {
+        assert_eq!(super::input_rects(12,300,200,None),vec![[12,12,300,200]],"the body inside the shadow");
+        let shape=[[10,20,100,50],[0,0,0,5]];
+        assert_eq!(super::input_rects(0,300,200,Some(&shape)),vec![[10,20,100,50]],"empty rects are dropped");
+        assert_eq!(super::input_rects(4,300,200,Some(&shape)),vec![[14,24,100,50]]);
+        assert!(super::input_rects(0,300,200,Some(&[])).is_empty(),"nothing drawn: no input at all");
     }
     #[test]
     fn the_dock_is_anchored_to_its_own_edge() {

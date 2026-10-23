@@ -374,6 +374,9 @@ pub struct Desk {
     /// (Overview, a minimize) its toplevel is destroyed, and the new toplevel must map where the window was, not at the
     /// window server's cascade
     pub(super) placed: std::collections::HashSet<AppId>,
+    /// the input shape of each borderless window (window px, `alpha_shape` of its last frame): the window server gives
+    /// it the pointer only there, and `pick` hits it only there
+    pub(super) shapes: std::collections::HashMap<AppId, std::sync::Arc<[[i32; 4]]>>,
     /// windows of apps that have not committed a frame yet: not drawn and not hit until the first frame arrives
     /// (`Shell::desk_refresh_unmapped`), so an app that opened a window it never drew leaves no black shell behind
     pub(super) unmapped: Vec<AppId>,
@@ -471,6 +474,73 @@ pub struct Metrics {
 /// A full-size-content window (`NativeWindowStyleMaskFullSizeContentView`): no title bar, the app draws to the top edge
 /// and the traffic lights sit inside its sidebar. Settings is one; an installed app asks with `window = "full-size"`
 /// in its manifest.
+/// Whether `app`'s window is borderless (`window = "borderless"`): a full-size window without shell chrome (no traffic
+/// lights, title band, rim, shadow, dim or corner clip) whose transparent pixels let the pointer through
+/// (`alpha_shape`), for an app that draws free-floating pieces such as Sticky Notes' notes (W2-22).
+pub fn borderless(app: AppId) -> bool {
+    match app {
+        AppId::External(slot) => apphost::installed().get(slot as usize).is_some_and(|a| a.manifest.borderless()),
+        _ => false,
+    }
+}
+
+/// The parts of a window of `width` x `height` px that its pixels cover (alpha above zero), as rects in window px:
+/// a run of covered pixels per row, and rows with the same runs merged into one rect. A borderless window takes the
+/// pointer only there (`WindowFrame::input`). More than `MAX_SHAPE_RECTS` rects (a noisy picture) falls back to one
+/// bounding box per run of rows, so the region stays small.
+pub fn alpha_shape(px: &[u32], width: usize, height: usize) -> Vec<[i32; 4]> {
+    let mut out: Vec<[i32; 4]> = Vec::new();
+    // the rects of the row band still growing: (x0, x1) runs and the row they started on
+    let mut open: Vec<(usize, usize)> = Vec::new();
+    let mut start = 0usize;
+    let flush = |out: &mut Vec<[i32; 4]>, runs: &[(usize, usize)], y0: usize, y1: usize| {
+        for &(a, b) in runs { out.push([a as i32, y0 as i32, (b - a) as i32, (y1 - y0) as i32]); }
+    };
+    for y in 0..=height {
+        let runs: Vec<(usize, usize)> = if y == height { Vec::new() } else {
+            let row = &px[y * width..(y + 1) * width];
+            let mut v = Vec::new();
+            let mut x = 0;
+            while x < width {
+                if row[x] >> 24 == 0 { x += 1; continue; }
+                let a = x;
+                while x < width && row[x] >> 24 != 0 { x += 1; }
+                v.push((a, x));
+            }
+            v
+        };
+        if runs != open {
+            flush(&mut out, &open, start, y);
+            open = runs;
+            start = y;
+        }
+    }
+    if out.len() > MAX_SHAPE_RECTS {
+        // one box per band of rows that has any pixel
+        let mut boxes: Vec<[i32; 4]> = Vec::new();
+        for r in out {
+            match boxes.last_mut() {
+                Some(b) if b[1] + b[3] == r[1] || (b[1] == r[1]) => {
+                    let (x0, x1) = (b[0].min(r[0]), (b[0] + b[2]).max(r[0] + r[2]));
+                    let (y0, y1) = (b[1].min(r[1]), (b[1] + b[3]).max(r[1] + r[3]));
+                    *b = [x0, y0, x1 - x0, y1 - y0];
+                }
+                _ => boxes.push(r),
+            }
+        }
+        return boxes;
+    }
+    out
+}
+
+/// The most rects a borderless window's input region holds before `alpha_shape` merges them into boxes.
+pub const MAX_SHAPE_RECTS: usize = 512;
+
+/// Whether window-local (`x`, `y`) is inside one of `shape`'s rects.
+pub fn shape_contains(shape: &[[i32; 4]], x: f32, y: f32) -> bool {
+    shape.iter().any(|r| x >= r[0] as f32 && x < (r[0] + r[2]) as f32 && y >= r[1] as f32 && y < (r[1] + r[3]) as f32)
+}
+
 pub fn full_size(app: AppId) -> bool {
     match app {
         AppId::Settings => true,
@@ -493,6 +563,10 @@ pub fn bar_hidden(full: bool, pointer_y: Option<f32>, bar_h: f32) -> bool {
 }
 
 pub fn drag_zone(w: &Win, m: &Metrics, controls: &[bifrost_proto::Node]) -> (i32, Vec<[i32; 4]>) {
+    // a borderless window has no title band: every press is the app's (a sticky note moves itself)
+    if borderless(w.app) {
+        return (0, Vec::new());
+    }
     zone_of(w, m, controls, full_size(w.app) && w.app != AppId::Settings)
 }
 
@@ -593,8 +667,8 @@ impl Win {
         if !outer.contains(x, y) {
             return None;
         }
-        // a full-screen window is the app alone: no resize edges, no title bar, no traffic lights
-        if self.full {
+        // a full-screen window is the app alone: no resize edges, no title bar, no traffic lights; so is a borderless one
+        if self.full || borderless(self.app) {
             return self.r.contains(x, y).then_some(Hit::Content);
         }
         if !self.maximized && !size_limits(self.app).fixed {
@@ -719,7 +793,10 @@ impl Desk {
 
     /// The frontmost visible window hit at (x, y).
     pub fn pick(&self, m: &Metrics, x: f32, y: f32) -> Option<(usize, Hit)> {
-        self.wins.iter().enumerate().rev().filter(|(_, w)| !w.minimized && !self.unmapped.contains(&w.app)).find_map(|(i, w)| w.hit(m, x, y).map(|h| (i, h)))
+        self.wins.iter().enumerate().rev().filter(|(_, w)| !w.minimized && !self.unmapped.contains(&w.app))
+            // a shaped (borderless) window is hit only where it drew: the rest belongs to the window below (W2-22)
+            .filter(|(_, w)| self.shapes.get(&w.app).map_or(true, |s| shape_contains(s, x - w.r.x as f32, y - w.r.y as f32)))
+            .find_map(|(i, w)| w.hit(m, x, y).map(|h| (i, h)))
     }
 
     /// The work area windows live in: below the menu bar, above the dock.
@@ -861,6 +938,7 @@ impl Desk {
         self.closed_origins.insert(w.app, (r.x, r.y));
         // the toplevel is gone; `open` asks the next one to map where this one was (`closed_origins`)
         self.placed.remove(&w.app);
+        self.shapes.remove(&w.app);
         self.release_app_buffers(w.app);
         self.collapsed.remove(&w.app);
         // a window closed while full screen from a zoom must not leave its way back for the window opened next
@@ -1130,7 +1208,7 @@ impl Shell {
             let Some(id)=win_id(w.app) else{return false};
             // a covered window has no cache entry by design (see `hidden_ids`); anything else without one needs a full draw
             if !desk.window_cache.contains_key(&id) && !desk.hidden_ids.contains(&id) {return false;}
-            frames.push(crate::bare::wayland::WindowFrame {id,title:frame_title(id),x:w.r.x,y:w.r.y,width:w.r.w as usize,height:w.r.h as usize,pixels:None,damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize),maximized:w.maximized,fullscreen:w.full,title_height,drag_height:0,no_drag:Vec::new(),floating:false,fx:bifrost_render::glass::Fx::IDENTITY,opaque:!matches!(w.app,AppId::External(_)),origin:None,min_size:(0,0)});
+            frames.push(crate::bare::wayland::WindowFrame {id,title:frame_title(id),x:w.r.x,y:w.r.y,width:w.r.w as usize,height:w.r.h as usize,pixels:None,damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize),maximized:w.maximized,fullscreen:w.full,title_height,drag_height:0,no_drag:Vec::new(),floating:false,fx:bifrost_render::glass::Fx::IDENTITY,opaque:!matches!(w.app,AppId::External(_)),origin:None,min_size:(0,0),input:None});
             let controls=match w.app {AppId::External(slot)=>ext.get(slot as usize).and_then(Option::as_ref).map_or(&[][..],|h|&h.controls[..]),_=>&[][..]};
             let (dh,nd)=drag_zone(w,&m,controls);
             if let Some(f)=frames.last_mut(){f.drag_height=dh;f.no_drag=nd;}
@@ -1214,6 +1292,14 @@ impl Shell {
             }
             frames.sort_by_key(|f| f.floating);
             for f in frames.iter_mut() {
+                // a borderless window takes the pointer only where its newest pixels cover (W2-22)
+                if let Some(a) = frame_app(f.id).filter(|a| borderless(*a)) {
+                    if let Some(px) = f.pixels.as_ref().filter(|p| p.len() == f.width * f.height) {
+                        let shape: std::sync::Arc<[[i32; 4]]> = alpha_shape(px, f.width, f.height).into();
+                        d.shapes.insert(a, shape);
+                    }
+                    f.input = Some(d.shapes.get(&a).cloned().unwrap_or_else(|| std::sync::Arc::from(Vec::new())));
+                }
                 f.origin = frame_app(f.id).and_then(|a| origin_hint(&d.placed, a, f.x, f.y));
                 // the toplevel advertises the app's own minimum (outer px, as its window geometry), not a fixed one
                 f.min_size = frame_app(f.id).map_or((0, 0), |a| { let (w, h, _, _) = size_range(a, &m); (w, h) });
@@ -1971,10 +2057,12 @@ impl Shell {
         let (w, h) = ((w as i32).min(m.w * 9 / 10), (h as i32).min(m.h * 85 / 100));
         // the manifest's window_size (content points) replaces the default size
         let (w, h) = size_limits(app).initial.map(|s| outer_px(app, &m, s)).unwrap_or((w, h));
+        // a borderless window is a transparent layer over the whole work area, so what it draws can go anywhere on it
+        let (w, h) = if borderless(app) { let a = Desk::area(&m); (a.w, a.h) } else { (w, h) };
         // a window opened again comes back at the size it was closed with; a fixed manifest size still wins
         let (w, h) = match (size_limits(app).initial, self.desk.as_ref().and_then(|d| d.closed_sizes.get(&app).copied())) {
             // held to the window's range: a size below the minimum must not come back with the window (E2E-12)
-            (None, Some(closed)) => clamp_size(app, &m, closed),
+            (None, Some(closed)) if !borderless(app) => clamp_size(app, &m, closed),
             _ => (w, h),
         };
         let existed = self.desk.as_ref().is_some_and(|d| d.index_of(app).is_some());
@@ -2846,7 +2934,7 @@ impl Shell {
                         id, title: frame_title(id), x:w.r.x, y:w.r.y,
                         width:w.r.w as usize, height:w.r.h as usize, pixels:None,
                         damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize), maximized:w.maximized, fullscreen:w.full, title_height:m.title,
-                        drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None, min_size:(0,0),
+                        drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None, min_size:(0,0),input:None,
                     });
                     continue;
                 }
@@ -2855,7 +2943,7 @@ impl Shell {
                         id, title: frame_title(id), x:w.r.x, y:w.r.y,
                         width:w.r.w as usize, height:w.r.h as usize, pixels:None,
                         damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize), maximized:w.maximized, fullscreen:w.full, title_height:m.title,
-                        drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None, min_size:(0,0),
+                        drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None, min_size:(0,0),input:None,
                     });
                     self.desk.as_mut().unwrap().window_cache.insert(id,cached.unwrap());
                     continue;
@@ -2879,7 +2967,7 @@ impl Shell {
                             desk.frames.push(crate::bare::wayland::WindowFrame {
                                 id, title: frame_title(id), x:w.r.x, y:w.r.y, width:cw, height:ch, pixels:None,
                                 damage:crate::gfx::Damage::new(cw,ch), maximized:w.maximized, fullscreen:w.full, title_height:m.title,
-                                drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None, min_size:(0,0),
+                                drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None, min_size:(0,0),input:None,
                             });
                             continue;
                         }
@@ -2897,18 +2985,21 @@ impl Shell {
                         }
                         let mut damage=crate::gfx::Damage::new(width,height);
                         for a in body_damage.areas() {damage.add(a.x0 as i32,(a.y0+top) as i32,(a.x1-a.x0) as i32,(a.y1-a.y0) as i32);}
-                        if !focused { for a in body_damage.areas() { dim_rect(pixels, width, a.x0, a.y0 + top, a.x1, a.y1 + top, BACKGROUND_DIM); } }
+                        // a borderless window is the app's pixels alone: no dim, rim, corner clip or lights (its notes, or
+                        // whatever it draws, carry their own edges)
+                        let bare = borderless(w.app);
+                        if !focused && !bare { for a in body_damage.areas() { dim_rect(pixels, width, a.x0, a.y0 + top, a.x1, a.y1 + top, BACKGROUND_DIM); } }
                         let src=self.ext.get(slot as usize).and_then(Option::as_ref).and_then(|h|h.frame());
-                        let dim=(!focused).then_some(BACKGROUND_DIM);
+                        let dim=(!focused && !bare).then_some(BACKGROUND_DIM);
                         // the app drew into the window's edge band: the band is taken again from the app's frame and the
                         // dark-mode inner rim and the corner clip are applied once over it (stroking the retained buffer
                         // stacked 15% white per repaint into a solid white border, E2E-10)
                         let mut edge:Vec<(i32,i32,i32,i32)>=Vec::new();
-                        if !w.maximized && body_damage.areas().iter().any(|a| edge_band_rects(width,height,corner).iter().any(|r| overlaps(r,a,top))) {
+                        if !w.maximized && !bare && body_damage.areas().iter().any(|a| edge_band_rects(width,height,corner).iter().any(|r| overlaps(r,a,top))) {
                             if let Some(src)=src { edge=restore_window_edge(pixels,width,height,top,src,dim,corner,window_rim_color()); }
                             for r in &edge {damage.add(r.0,r.1,r.2,r.3);}
                         }
-                        if full_size(w.app) {
+                        if full_size(w.app) && !bare {
                             // the lights sit over the app: repaint them where the app just drew under them
                             let mut local=*w; local.r.x=0; local.r.y=0;
                             let mut surf=Surface{w:width,h:height,stride:width,px:&mut pixels[..],y0:0};
@@ -2930,7 +3021,7 @@ impl Shell {
                         let desk=self.desk.as_mut().unwrap();
                         desk.body_cache.remove(&w.app);
                         desk.window_cache.insert(id,retained);
-                        desk.frames.push(crate::bare::wayland::WindowFrame{id,title:frame_title(id),x:w.r.x,y:w.r.y,width,height,pixels:outgoing,damage,maximized:w.maximized,fullscreen:w.full,title_height:m.title,drag_height,no_drag,fx:bifrost_render::glass::Fx::IDENTITY,opaque,floating:false,origin:None,min_size:(0,0)});
+                        desk.frames.push(crate::bare::wayland::WindowFrame{id,title:frame_title(id),x:w.r.x,y:w.r.y,width,height,pixels:outgoing,damage,maximized:w.maximized,fullscreen:w.full,title_height:m.title,drag_height,no_drag,fx:bifrost_render::glass::Fx::IDENTITY,opaque,floating:false,origin:None,min_size:(0,0),input:None});
                         continue;
                     }
                 }
@@ -2952,7 +3043,7 @@ impl Shell {
                     self.draw_window(&mut surf, &local, Some(i) == front, &m, t, false);
                     self.desk_cover(&mut surf, &local, &m, t);
                 }
-                if !w.maximized { clip_corners(&mut image,corner); }
+                if !w.maximized && !borderless(w.app) { clip_corners(&mut image,corner); }
                 let previous = cached.as_ref().filter(|c| c.width == image.w && c.height == image.h).map_or(&[][..], |c| c.pixels.as_ref());
                 let damage = crate::gfx::Damage::between(previous, &image.px, image.w, image.h);
                 let pixels:std::sync::Arc<[u32]> = if damage.is_empty() {cached.unwrap().pixels} else {std::sync::Arc::from(&image.px[..])};
@@ -2965,7 +3056,7 @@ impl Shell {
                 desk.frames.push(crate::bare::wayland::WindowFrame {
                     id, title: frame_title(id), x:w.r.x, y:w.r.y,
                     width:w.r.w as usize, height:w.r.h as usize, pixels, damage, maximized:w.maximized, fullscreen:w.full, title_height:m.title,
-                    drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None, min_size:(0,0),
+                    drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None, min_size:(0,0),input:None,
                 });
                 continue;
             }
@@ -3023,14 +3114,15 @@ impl Shell {
     fn draw_window(&mut self, s: &mut Surface, w: &Win, focused: bool, m: &Metrics, t: f64, shadow: bool) {
         let ui = &self.ui;
         let r = w.r;
-        let rad = if w.maximized || w.full { 0.0 } else { ui.pt(bifrost_ui::prefs_layout::m::WINDOW_RADIUS) };
+        let bare = borderless(w.app);
+        let rad = if w.maximized || w.full || bare { 0.0 } else { ui.pt(bifrost_ui::prefs_layout::m::WINDOW_RADIUS) };
         // shadow (CPU path; the GPU presenter draws its own): Golden Gate's key window casts a
         // large soft shadow (~40 pt blur, ~16 pt down, ~30% under the bottom edge), others a light one
-        if !w.maximized && shadow {
+        if !w.maximized && shadow && !bare {
             cached_window_shadow(s, ui, r.x as f32, r.y as f32, r.w as f32, r.h as f32, rad, focused);
         }
         let bar = if focused { super::ui::WINDOW_FRAME_FOCUSED.now() } else { super::ui::WINDOW_FRAME_BLURRED.now() };
-        s.fill_rrect(r.x as f32, r.y as f32, r.w as f32, r.h as f32, rad, bar);
+        if !bare { s.fill_rrect(r.x as f32, r.y as f32, r.w as f32, r.h as f32, rad, bar); }
         // the body: the app, drawn at the body size
         let b = w.body(m);
         let (bw, bh) = (b.w.max(1) as usize, b.h.max(1) as usize);
@@ -3066,15 +3158,15 @@ impl Shell {
             }
         }
         if full_size(w.app) && rad > 0.0 { copy_rect_rounded(s, &buf, bw, bh, b.x, b.y, rad); } else { copy_rect(s, &buf, bw, bh, b.x, b.y); }
-        if !focused { dim_rect(s.px, s.stride, b.x.max(0) as usize, (b.y.max(0) as usize).saturating_sub(s.y0), ((b.x + b.w).max(0) as usize).min(s.w), ((b.y + b.h).max(0) as usize).saturating_sub(s.y0).min(s.h), BACKGROUND_DIM); }
+        if !focused && !bare { dim_rect(s.px, s.stride, b.x.max(0) as usize, (b.y.max(0) as usize).saturating_sub(s.y0), ((b.x + b.w).max(0) as usize).min(s.w), ((b.y + b.h).max(0) as usize).saturating_sub(s.y0).min(s.h), BACKGROUND_DIM); }
         #[cfg(feature = "desktop-wayland")]
         if persistent || builtin { self.desk.as_mut().unwrap().body_cache.insert(w.app,buf); }
         else { self.desk.as_mut().unwrap().buf = buf; }
         #[cfg(not(feature = "desktop-wayland"))]
         { self.desk.as_mut().unwrap().buf = buf; }
         let ui = &self.ui;
-        // a full-screen window is the app alone: no rim, title or traffic lights
-        if w.full { return; }
+        // a full-screen window is the app alone: no rim, title or traffic lights; so is a borderless one
+        if w.full || bare { return; }
         // hairline under the title bar and around the window
         if !w.maximized { window_rim(s, r.x as f32, r.y as f32, r.w as f32, r.h as f32, rad); }
         if !full_size(w.app) { s.fill_rect(r.x.max(0) as usize, (r.y + m.title - 1).max(0) as usize, r.w.max(0) as usize, 1, super::ui::SEPARATOR_C.now()); }
@@ -3906,6 +3998,52 @@ mod tests {
         assert_eq!(d.closed_sizes.get(&AppId::Photos), Some(&(800, 500)));
     }
 
+    /// W2-22: a borderless window's shape is where its pixels cover, row runs merged into rects.
+    #[test]
+    fn the_alpha_shape_covers_the_drawn_pixels_only() {
+        let (w, h) = (10, 6);
+        let mut px = vec![0u32; w * h];
+        // a 3x2 block at (1,1) and a 2x3 block at (6,2)
+        for (x0, y0, bw, bh) in [(1, 1, 3, 2), (6, 2, 2, 3)] {
+            for y in y0..y0 + bh { for x in x0..x0 + bw { px[y * w + x] = 0x80ff_ff00; } }
+        }
+        let shape = alpha_shape(&px, w, h);
+        let covered = |x: usize, y: usize| shape_contains(&shape, x as f32 + 0.5, y as f32 + 0.5);
+        for y in 0..h { for x in 0..w {
+            assert_eq!(covered(x, y), px[y * w + x] >> 24 != 0, "({x},{y})");
+        }}
+        assert!(shape.len() <= 4, "rows with the same runs merge: {shape:?}");
+        assert!(alpha_shape(&vec![0u32; w * h], w, h).is_empty(), "nothing drawn, nothing hit");
+        assert_eq!(alpha_shape(&vec![0xff00_0000u32; w * h], w, h), vec![[0, 0, w as i32, h as i32]], "an opaque window is one rect");
+        // a noisy picture falls back to boxes that still cover every drawn pixel
+        let (w, h) = (2 * MAX_SHAPE_RECTS, 4);
+        let noisy: Vec<u32> = (0..w * h).map(|i| if (i + i / w) % 2 == 0 { 0xff00_0000 } else { 0 }).collect();
+        let shape = alpha_shape(&noisy, w, h);
+        assert!(shape.len() <= MAX_SHAPE_RECTS);
+        assert!((0..w * h).filter(|i| noisy[*i] != 0).all(|i| shape_contains(&shape, (i % w) as f32 + 0.5, (i / w) as f32 + 0.5)));
+    }
+
+    /// W2-22: a click on the transparent part of a shaped window picks the window behind it.
+    #[test]
+    fn a_shaped_window_lets_a_click_through_where_it_drew_nothing() {
+        let m = metrics();
+        let mut d = Desk::new();
+        let back = d.open(&m, AppId::Photos, (900, 600));
+        let back_r = d.wins[back].r;
+        let front = d.open(&m, AppId::External(3), (1600, 900));
+        let r = d.wins[front].r;
+        let note = [100, 100, 200, 150];
+        d.shapes.insert(AppId::External(3), std::sync::Arc::from(vec![note]));
+        let on_note = ((r.x + 150) as f32, (r.y + 150) as f32);
+        assert_eq!(d.pick(&m, on_note.0, on_note.1).map(|(i, _)| d.wins[i].app), Some(AppId::External(3)), "the note takes the click");
+        // a point inside both windows but off the note reaches the window behind
+        let (x, y) = ((back_r.x + back_r.w / 2) as f32, (back_r.y + back_r.h / 2) as f32);
+        assert!(r.contains(x, y) && !shape_contains(&[note], x - r.x as f32, y - r.y as f32));
+        assert_eq!(d.pick(&m, x, y).map(|(i, _)| d.wins[i].app), Some(AppId::Photos));
+        d.close(d.index_of(AppId::External(3)).unwrap());
+        assert!(d.shapes.is_empty(), "closing forgets the shape");
+    }
+
     /// W2-26: a window closed and opened again comes back at the frame it was closed with, and its toplevel asks the
     /// window server to map it there; a window never closed is cascaded as before.
     #[test]
@@ -4104,7 +4242,7 @@ mod tests {
         assert_eq!((rect(&sh, placed).x, rect(&sh, placed).y), (1065, 524), "the shell follows the reported frame");
         let frames: Vec<_> = [placed, fresh].iter().map(|&app| {
             let r = rect(&sh, app);
-            crate::bare::wayland::WindowFrame { id: win_id(app).unwrap(), title: "", x: r.x, y: r.y, width: r.w as usize, height: r.h as usize, pixels: None, damage: crate::gfx::Damage::new(1, 1), maximized: false, fullscreen: false, title_height: 0, drag_height: 0, no_drag: Vec::new(), floating: false, fx: bifrost_render::glass::Fx::IDENTITY, opaque: true, origin: None, min_size: (0, 0) }
+            crate::bare::wayland::WindowFrame { id: win_id(app).unwrap(), title: "", x: r.x, y: r.y, width: r.w as usize, height: r.h as usize, pixels: None, damage: crate::gfx::Damage::new(1, 1), maximized: false, fullscreen: false, title_height: 0, drag_height: 0, no_drag: Vec::new(), floating: false, fx: bifrost_render::glass::Fx::IDENTITY, opaque: true, origin: None, min_size: (0, 0), input: None }
         }).collect();
         sh.desk.as_mut().unwrap().frames = frames;
         let out = sh.take_wayland_windows();

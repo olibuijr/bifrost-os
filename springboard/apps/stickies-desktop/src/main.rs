@@ -112,6 +112,9 @@ const MENU_PAPER_BASE: u32 = 105; // 105..=109, one per entry of PAPERS
 const MENU_WHOLE_WORD: u32 = 110;
 /// Window > Float on Top: the window stays above the other windows (`windows::set_level`).
 const MENU_FLOAT_ON_TOP: u32 = 111;
+/// File > Close (Cmd+W): closes the front note, as a note's close box does: one with text asks first, then it is
+/// deleted (W2-22: Cmd+W closed the whole board window).
+const MENU_CLOSE: u32 = 112;
 
 /// What a replace changes: the selected match, every match in the focused note, or every match in every note.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -171,7 +174,7 @@ fn frames(board: &Board) -> Vec<(u64, f32, f32, f32, f32)> {
 fn undo_name(id: u32) -> Option<&'static str> {
     Some(match id {
         MENU_NEW => "New Note",
-        MENU_DELETE => "Delete",
+        MENU_DELETE | MENU_CLOSE => "Delete",
         MENU_DUPLICATE => "Duplicate",
         MENU_COLLAPSE | MENU_COLLAPSE_ALL | MENU_EXPAND_ALL => "Collapse",
         MENU_BOLD | MENU_ITALIC | MENU_UNDERLINE | MENU_STRIKE | MENU_OUTLINE | MENU_BIGGER | MENU_SMALLER | MENU_PASTE_STYLE | MENU_USE_DEFAULT => "Style",
@@ -1032,7 +1035,7 @@ impl StickiesApp {
         let now = Self::now();
         match id {
             MENU_NEW => self.new_note(),
-            MENU_DELETE => {
+            MENU_DELETE | MENU_CLOSE => {
                 let Some(board) = &mut self.board else { return false };
                 let Some(focus) = board.focus else { return false };
                 let title = board.find(focus).map(|n| n.title()).unwrap_or_default();
@@ -1285,6 +1288,8 @@ impl StickiesApp {
             AppMenuItem::new(MENU_NEW, "New Sticky Note").key("cmd+n"),
             AppMenuItem::new(MENU_DUPLICATE, "Duplicate Sticky Note").key("cmd+d").enabled(has_focus),
             AppMenuItem::new(MENU_DELETE, "Delete Sticky Note").key("cmd+shift+backspace").enabled(has_focus),
+            // Cmd+W is the front note's: the shell sends the chord here while a note is focused (`app_owns_close`)
+            AppMenuItem::new(MENU_CLOSE, "Close").key("cmd+w").enabled(has_focus),
             AppMenuItem::separator(),
             AppMenuItem::new(MENU_IMPORT, "Import Text...").key("cmd+o"),
             AppMenuItem::new(MENU_EXPORT, "Export Sticky Note...").enabled(has_focus),
@@ -1693,7 +1698,7 @@ mod tests {
 
     #[test]
     fn every_mutating_menu_id_has_an_undo_name_and_the_others_do_not() {
-        for id in [MENU_NEW, MENU_DELETE, MENU_DUPLICATE, MENU_BOLD, MENU_CUT, MENU_PASTE, MENU_ZOOM, MENU_UPPER, 7, 12, 62, 54, MENU_OUTLINE, 80, 85, 88, MENU_SPELL_CORRECT] {
+        for id in [MENU_NEW, MENU_DELETE, MENU_CLOSE, MENU_DUPLICATE, MENU_BOLD, MENU_CUT, MENU_PASTE, MENU_ZOOM, MENU_UPPER, 7, 12, 62, 54, MENU_OUTLINE, 80, 85, 88, MENU_SPELL_CORRECT] {
             assert!(undo_name(id).is_some(), "id {id}");
         }
         for id in [MENU_COPY, MENU_SELECT_ALL, MENU_FIND, MENU_PRINT, MENU_IMPORT, MENU_OPEN_LINK, MENU_UNDO, MENU_COPY_STYLE, MENU_SPELL_CHECK_NOW, MENU_SMART_QUOTES, MENU_ADD_LINK, MENU_FLOAT_ON_TOP] {
@@ -1713,6 +1718,32 @@ mod tests {
         assert_eq!(MENU_BASELINE_BASE + 2, MENU_KERN_BASE - 1, "three baselines fit before the kern items");
         assert_eq!(MENU_KERN_BASE + 2, MENU_LIGATURE_BASE - 1, "three kern settings fit before the ligature items");
         assert_eq!(MENU_LIGATURE_BASE + 2, MENU_ADD_LINK - 1, "three ligature settings fit before Add Link");
+    }
+
+    /// W2-22: Cmd+W (File > Close) closes the front note, not the board: an empty note goes at once, one with text asks
+    /// first; the item is enabled (so the shell hands it the chord) only while a note is focused.
+    #[test]
+    fn cmd_w_closes_the_front_note_and_asks_first_when_it_has_text() {
+        let dir = std::env::temp_dir().join(format!("stickies-close-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let ctx = ctx_in(&dir);
+        let mut app = app_with(&["keep me", "", "other"]);
+        let file = app.file_menu(true);
+        let close = file.items.iter().find(|i| i.id == MENU_CLOSE).expect("File has Close");
+        assert_eq!((close.key.as_str(), close.enabled), ("cmd+w", true));
+        assert!(!app.file_menu(false).items.iter().any(|i| i.id == MENU_CLOSE && i.enabled), "no focused note: Cmd+W is the shell's");
+        let empty = app.board.as_ref().unwrap().notes[1].id;
+        app.board.as_mut().unwrap().focus = Some(empty);
+        assert!(app.run(&ctx, MENU_CLOSE));
+        assert!(app.board.as_ref().unwrap().find(empty).is_none(), "the empty front note is gone");
+        assert_eq!(app.board.as_ref().unwrap().notes.len(), 2, "the other notes stay");
+        assert!(app.undo(), "and it can be undone");
+        let kept = app.board.as_ref().unwrap().notes[0].id;
+        app.board.as_mut().unwrap().focus = Some(kept);
+        assert!(app.run(&ctx, MENU_CLOSE));
+        assert_eq!(app.confirm.as_ref().map(|c| c.note), Some(kept), "a note with text asks first");
+        assert_eq!(app.board.as_ref().unwrap().notes.len(), 3);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -1978,7 +2009,7 @@ mod tests {
 
     #[test]
     fn replace_and_custom_colour_ids_do_not_clash_with_the_other_menu_ids() {
-        let ids = [MENU_COLOUR_CUSTOM, MENU_SPEAK_START, MENU_SPEAK_STOP, MENU_REPLACE, MENU_REPLACE_ALL, MENU_REPLACE_IN_NOTE, MENU_IGNORE_CASE, MENU_WHOLE_WORD, MENU_FLOAT_ON_TOP, MENU_PORTRAIT, MENU_LANDSCAPE, MENU_PAPER_BASE, MENU_PAPER_BASE + 4];
+        let ids = [MENU_COLOUR_CUSTOM, MENU_SPEAK_START, MENU_SPEAK_STOP, MENU_REPLACE, MENU_REPLACE_ALL, MENU_REPLACE_IN_NOTE, MENU_IGNORE_CASE, MENU_WHOLE_WORD, MENU_FLOAT_ON_TOP, MENU_CLOSE, MENU_PORTRAIT, MENU_LANDSCAPE, MENU_PAPER_BASE, MENU_PAPER_BASE + 4];
         for (i, a) in ids.iter().enumerate() {
             assert!(!(MENU_COLOUR_BASE..=15).contains(a) && !(MENU_ARRANGE_BASE..=56).contains(a) && !(MENU_INK_BASE..=64).contains(a));
             assert!(![MENU_INFO_CREATED, MENU_INFO_MODIFIED, MENU_ZOOM, MENU_TRANSLUCENT].contains(a));

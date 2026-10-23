@@ -56,7 +56,9 @@ pub struct Manifest {
     /// them (`bifrost_app::file_manager_sync`, [`Manifest::file_manager_dirs`]).
     pub file_manager_folders: Vec<String>,
     /// `"native"`: a native Wayland app owns its GPU surfaces instead of using SDK frames. `"full-size"`: an SDK app
-    /// with a full-size-content window (no title row; the traffic lights sit over its sidebar).
+    /// with a full-size-content window (no title row; the traffic lights sit over its sidebar). `"borderless"`: a
+    /// full-size window without any shell chrome, covering the work area, transparent where the app draws nothing and
+    /// letting the pointer through there (`desk::borderless`; Sticky Notes' notes).
     pub window: String,
     /// Window size in points (`NativeWindow` content size): `window_size = "WxH"` is the initial size and
     /// `"fixed:WxH"` a fixed-size window (no resizing, no zoom), like Calculator.
@@ -104,7 +106,11 @@ pub struct Manifest {
 impl Manifest {
     /// The app draws to the top edge of its window (`NativeWindowStyleMaskFullSizeContentView`).
     pub fn full_size_content(&self) -> bool {
-        self.window == "full-size"
+        self.window == "full-size" || self.borderless()
+    }
+    /// The app's window has no shell chrome and takes input only where it draws (`window = "borderless"`).
+    pub fn borderless(&self) -> bool {
+        self.window == "borderless"
     }
     pub fn animation_behavior(&self) -> super::window_fx::AnimationBehavior {
         super::window_fx::AnimationBehavior::parse(self.animation_behavior.trim())

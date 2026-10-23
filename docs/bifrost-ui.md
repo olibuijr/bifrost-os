@@ -74,6 +74,7 @@ with `.now()`); `bifrost pc gallery [DIR]` (the `preview_sdk_gallery` test) rend
 | `widgets::capsule` | Liquid Glass button group plate | Soft ring, plate, one-pixel edge. |
 | `controls::split::SplitView::toggle` | `NSSplitViewController.toggleSidebar(_:)` | Files binds it to the sidebar button and ⌃⌘S. |
 | Manifest `window = "full-size"`; `layout::UNIFIED_BAR_PT`, `layout::traffic_lights_trailing()` | `NSWindowStyleMaskFullSizeContentView` | No title row. The shell draws the traffic lights at the Settings positions over the app; the top 52 pt band moves the window except over the lights and the controls the app publishes with `App::controls` (so publish every toolbar button). Needs system 0.4.84 (`min_shell`). |
+| Manifest `window = "borderless"` | `NSWindowStyleMaskBorderless` with a clear background (`isOpaque = NO`, `ignoresMouseEvents` per pixel) | A full-size window with no shell chrome (no traffic lights, title band, rim, shadow, inactive dim or corner clip) that covers the work area. Where the app draws nothing (alpha 0) the pointer reaches the window below: the shell sets the toplevel's input region from the frame's alpha (`desk::alpha_shape`, `WindowFrame::input`) and `Desk::pick` skips the transparent part. Sticky Notes uses it for its notes (W2-22). Gap: the notes still share one window, so they raise and lower together; one window per note needs an app without a main window, which the SDK does not have yet. |
 
 Moving an app to the kit:
 
