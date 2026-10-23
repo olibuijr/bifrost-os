@@ -35,6 +35,8 @@ struct CalculatorApp {
     floating: bool,
     /// Copies sent to the shell's pasteboard that have not been answered yet: (request, number).
     copies: Vec<(u32, String)>,
+    /// The content size last asked of the shell for the chosen keypad (`windows::set_content_size`).
+    window_size: Option<(f32, f32)>,
 }
 
 /// How often a running rates check is looked at, in milliseconds.
@@ -44,38 +46,24 @@ const RATES_POLL_MS: f64 = 250.0;
 const MAX_PENDING_COPIES: usize = 16;
 
 impl CalculatorApp {
-    /// Sends the calculator's pending Copy (if any) to the general board through the `pasteboard` service.
-    fn send_copy(&mut self, ctx: &Ctx) {
-        let Some(req) = self.calc.as_mut().and_then(|c| c.take_copy()) else { return };
-        let id = copy_service::send(ctx, &req);
-        self.copies.push((id, req.number));
-        if self.copies.len() > MAX_PENDING_COPIES {
-            self.copies.remove(0);
+    /// Follows the calculator's state with the window: opens a tapped keypad pull-down, and sizes the window for the
+    /// chosen keypad (Golden Gate Calculator resizes its window between Basic, Scientific and Programmer). The size is
+    /// also the window's minimum, so the keypad always fits; the person may still make the window larger.
+    fn sync_window(&mut self, ctx: &Ctx) {
+        let Some(calc) = &mut self.calc else { return };
+        if let Some((x, y, items)) = calc.take_mode_menu(&ctx.ui) {
+            ctx.context_menu(x, y, items);
         }
-    }
-}
-
-impl App for CalculatorApp {
-    fn id(&self) -> &str {
-        "is.olibuijr.calculator.desktop"
-    }
-
-    fn configure(&mut self, ctx: &Ctx) {
-        ctx.enable_sudden_termination(); // keeps no unsaved state
-        let (w, h) = (ctx.cfg.w as i32, ctx.cfg.h as i32);
-        match &mut self.calc {
-            Some(c) => c.set_size(w, h),
-            None => {
-                let service = rates::Service::start(&ctx.data_dir, rates::today());
-                let mut calc = calc::Calculator::new(&ctx.ui, w, h).with_storage(ctx.data_dir.clone());
-                calc.set_rates(service.rates(), service.pending());
-                self.calc = Some(calc);
-                self.rates = Some(service);
-            }
+        let size = calc.preferred_size();
+        if self.window_size != Some(size) {
+            self.window_size = Some(size);
+            // the limits first: a smaller keypad's size would be held to the larger one's minimum
+            windows::set_content_limits(ctx, Some(size), None);
+            windows::set_content_size(ctx, size.0, size.1);
         }
     }
 
-    fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
+    fn handle_event(&mut self, ctx: &Ctx, ev: Input) -> bool {
         // Edit > Copy and Edit > Paste from the shell's Edit menu (the items `commands` advertises)
         if let Input::Command(command) = &ev {
             let Some(calc) = &mut self.calc else { return false };
@@ -134,6 +122,44 @@ impl App for CalculatorApp {
         true
     }
 
+    /// Sends the calculator's pending Copy (if any) to the general board through the `pasteboard` service.
+    fn send_copy(&mut self, ctx: &Ctx) {
+        let Some(req) = self.calc.as_mut().and_then(|c| c.take_copy()) else { return };
+        let id = copy_service::send(ctx, &req);
+        self.copies.push((id, req.number));
+        if self.copies.len() > MAX_PENDING_COPIES {
+            self.copies.remove(0);
+        }
+    }
+}
+
+impl App for CalculatorApp {
+    fn id(&self) -> &str {
+        "is.olibuijr.calculator.desktop"
+    }
+
+    fn configure(&mut self, ctx: &Ctx) {
+        ctx.enable_sudden_termination(); // keeps no unsaved state
+        let (w, h) = (ctx.cfg.w as i32, ctx.cfg.h as i32);
+        match &mut self.calc {
+            Some(c) => c.set_size(w, h),
+            None => {
+                let service = rates::Service::start(&ctx.data_dir, rates::today());
+                let mut calc = calc::Calculator::new(&ctx.ui, w, h).with_storage(ctx.data_dir.clone());
+                calc.set_rates(service.rates(), service.pending());
+                self.calc = Some(calc);
+                self.rates = Some(service);
+            }
+        }
+        self.sync_window(ctx);
+    }
+
+    fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
+        let changed = self.handle_event(ctx, ev);
+        self.sync_window(ctx);
+        changed
+    }
+
     /// The shell's answer to a copy: when the copy did not reach the pasteboard service (an older shell, or an error),
     /// the number goes to the plain clipboard instead.
     fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
@@ -162,6 +188,7 @@ impl App for CalculatorApp {
         let Some(calc) = &mut self.calc else { return false };
         let changed = calc.menu_action(&ctx.ui, id);
         self.send_copy(ctx);
+        self.sync_window(ctx);
         changed
     }
 
@@ -251,5 +278,5 @@ pub fn test_ui() -> bifrost_app::Ui {
 }
 
 fn main() {
-    bifrost_app::run(CalculatorApp { calc: None, rates: None, floating: false, copies: Vec::new() });
+    bifrost_app::run(CalculatorApp { calc: None, rates: None, floating: false, copies: Vec::new(), window_size: None });
 }

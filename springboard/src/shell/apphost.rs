@@ -273,6 +273,17 @@ pub struct SizeLimits {
     pub fixed: bool,
 }
 
+impl SizeLimits {
+    /// The limits with the app's own content limits (`ToShell::SetContentLimits`) over the manifest's `min_size` and
+    /// `max_size`; a limit the app left `None` keeps the manifest's. A fixed-size window keeps its fixed size.
+    pub fn with_content_limits(self, min: Option<(f32, f32)>, max: Option<(f32, f32)>) -> Self {
+        if self.fixed {
+            return self;
+        }
+        SizeLimits { min: min.or(self.min), max: max.or(self.max), ..self }
+    }
+}
+
 /// `"320x520"` as points; anything else (zero, negative, malformed) is `None`.
 fn parse_size(s: &str) -> Option<(f32, f32)> {
     let (w, h) = s.trim().split_once(['x', 'X'])?;
@@ -2503,6 +2514,8 @@ impl Shell {
         let mut open_url=None;
         let mut badge_changed=false;
         let mut full_screen: Vec<(usize, bool)> = Vec::new();
+        // main-window content sizes the apps asked for (`ToShell::SetContentSize`), applied once the loop is done
+        let mut content_sizes: Vec<(u8, (f32, f32))> = Vec::new();
         let mut notifications = Vec::new();
         let mut rich_msgs = Vec::new();
         #[cfg(feature = "desktop-wayland")]
@@ -2598,6 +2611,8 @@ impl Shell {
                         }
                     }
                     ToShell::SetFullScreen { on } => full_screen.push((slot, on)),
+                    ToShell::SetContentSize { w, h } => content_sizes.push((slot as u8, (w, h))),
+                    ToShell::SetContentLimits { min, max } => super::desk::set_content_limits(slot as u8, min, max),
                     ToShell::SetBadge { label } => {
                         let permitted = installed().get(slot).is_some_and(|a| a.manifest.permissions.iter().any(|p| p == "notifications"));
                         let label = clean_badge(&label);
@@ -2650,7 +2665,8 @@ impl Shell {
         for (id, code) in late_crashes() { self.app_crashed_late(&id, code); }
         // a window whose app has exited must not keep its last frame on screen
         for &slot in &vanished { self.dnd_app_gone(slot); self.extras_app_gone(slot); self.workspace_app_event(bifrost_proto::WorkspaceEventKind::DidTerminateApplication, slot); }
-        for slot in died.into_iter().chain(vanished) { self.desk_close_app(super::AppId::External(slot)); }
+        // an app's content limits last as long as it runs: the next launch starts from the manifest's again
+        for slot in died.into_iter().chain(vanished) { super::desk::forget_content_limits(slot); self.desk_close_app(super::AppId::External(slot)); }
         for slot in failed { self.launch_failed(slot); }
         if self.desk.is_some() {
             for slot in fell_back { if self.ext.get(slot as usize).and_then(Option::as_ref).is_some_and(|h| h.running()) { self.desk_open(super::AppId::External(slot), t); } }
@@ -2660,6 +2676,7 @@ impl Shell {
         self.sync_key_windows();
         if badge_changed { self.dirty = true; }
         for (slot, on) in full_screen { self.desk_set_full_screen(super::AppId::External(slot as u8), on); }
+        for (slot, size) in content_sizes { self.desk_set_content_size(super::AppId::External(slot), size); }
         let indexed = rich_msgs.iter().any(|(_, r)| matches!(r, ToShell::QuickSearchIndex(_) | ToShell::QuickSearchDelete { .. }));
         for (slot, r) in rich_msgs { self.rich_msg(slot, r, t); }
         self.services_tick(t);
@@ -3204,6 +3221,17 @@ mod tests {
         assert_eq!(free, SizeLimits { initial: Some((800.0, 600.0)), min: Some((400.0, 300.0)), max: Some((1200.0, 900.0)), fixed: false });
         let bad = Manifest::parse(&format!("{base}window_size = \"fixed:0x10\"\nmin_size = \"wide\"\n")).unwrap().size_limits();
         assert_eq!(bad, SizeLimits::default(), "malformed sizes are ignored");
+    }
+
+    #[test]
+    fn content_limits_from_the_app_replace_the_manifest_ones_except_on_a_fixed_window() {
+        let base = "id = \"a.b\"\nname = \"A\"\nexec = \"a\"\n";
+        let free = Manifest::parse(&format!("{base}window_size = \"800x600\"\nmin_size = \"400x300\"\nmax_size = \"1200x900\"\n")).unwrap().size_limits();
+        let ours = free.with_content_limits(Some((560.0, 500.0)), None);
+        assert_eq!(ours, SizeLimits { initial: Some((800.0, 600.0)), min: Some((560.0, 500.0)), max: Some((1200.0, 900.0)), fixed: false });
+        assert_eq!(free.with_content_limits(None, None), free, "no limit of its own keeps the manifest's");
+        let fixed = Manifest::parse(&format!("{base}window_size = \"fixed:320x520\"\n")).unwrap().size_limits();
+        assert_eq!(fixed.with_content_limits(Some((10.0, 10.0)), Some((2000.0, 2000.0))), fixed);
     }
 
     #[test]

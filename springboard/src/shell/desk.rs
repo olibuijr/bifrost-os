@@ -625,13 +625,41 @@ fn zone_of(w: &Win, m: &Metrics, controls: &[bifrost_proto::Node], unified: bool
 /// none (`NativeWindow.contentMinSize`, `contentMaxSize`, a fixed-size window without the resizable style).
 pub fn size_limits(app: AppId) -> apphost::SizeLimits {
     match app {
-        AppId::External(slot) => apphost::installed().get(slot as usize).map(|a| a.manifest.size_limits()).unwrap_or_default(),
+        AppId::External(slot) => {
+            let manifest = apphost::installed().get(slot as usize).map(|a| a.manifest.size_limits()).unwrap_or_default();
+            match content_limits(slot) {
+                Some((min, max)) => manifest.with_content_limits(min, max),
+                None => manifest,
+            }
+        }
         // Settings on the desktop is always the sidebar + detail layout: narrower than the split minimum it fell back to
         // the tablet root list and stayed there (E2E-12: a 400x549 window)
         // (one point over it, so the rounding to px never lands under the split test)
         AppId::Settings => apphost::SizeLimits { min: Some((super::settings::SPLIT_MIN_PT + 1.0, MIN_H_PT)), ..Default::default() },
         _ => apphost::SizeLimits::default(),
     }
+}
+
+/// The content limits each running app set for its main window (`ToShell::SetContentLimits`): (slot, min, max) in
+/// points. They last until the app exits (`forget_content_limits`).
+static CONTENT_LIMITS: std::sync::Mutex<Vec<(u8, Option<(f32, f32)>, Option<(f32, f32)>)>> = std::sync::Mutex::new(Vec::new());
+
+/// Keeps the main-window content limits app `slot` asked for; both `None` drops them (the manifest's apply again).
+pub(super) fn set_content_limits(slot: u8, min: Option<(f32, f32)>, max: Option<(f32, f32)>) {
+    let mut all = CONTENT_LIMITS.lock().unwrap_or_else(|e| e.into_inner());
+    all.retain(|(s, _, _)| *s != slot);
+    if min.is_some() || max.is_some() {
+        all.push((slot, min, max));
+    }
+}
+
+/// Drops the content limits of app `slot` (it exited).
+pub(super) fn forget_content_limits(slot: u8) {
+    set_content_limits(slot, None, None);
+}
+
+fn content_limits(slot: u8) -> Option<(Option<(f32, f32)>, Option<(f32, f32)>)> {
+    CONTENT_LIMITS.lock().unwrap_or_else(|e| e.into_inner()).iter().find(|(s, _, _)| *s == slot).map(|&(_, min, max)| (min, max))
 }
 
 /// A content size in points as an outer window size in px (adds the title bar of a titled window).
@@ -954,6 +982,41 @@ impl Desk {
     /// The space a full-screen window takes: the whole screen, under the menu bar and over the Dock.
     pub fn screen_rect(m: &Metrics) -> Rect {
         Rect { x: 0, y: 0, w: m.w, h: m.h }
+    }
+
+    /// The app's own resize of window `i` to a content size in points (`ToShell::SetContentSize`, `NSWindow.setContentSize`).
+    /// The top-left corner stays where it is (moved only as far as the work area needs); the size is held to the app's
+    /// limits (a fixed-size window takes it as asked: only the person cannot resize it) and to the work area. A zoomed
+    /// or full-screen window keeps its frame and takes the size as the one it goes back to. Returns whether the frame
+    /// changed.
+    pub fn set_content_size(&mut self, m: &Metrics, i: usize, size: (f32, f32)) -> bool {
+        let Some(win) = self.wins.get(i).copied() else { return false };
+        let a = Self::area(m);
+        let (w, h) = outer_px(win.app, m, size);
+        let (w, h) = if size_limits(win.app).fixed {
+            (w, h)
+        } else {
+            let (min_w, min_h, max_w, max_h) = size_range(win.app, m);
+            (w.clamp(min_w, max_w), h.clamp(min_h, max_h))
+        };
+        let (w, h) = (w.min(a.w).max(1), h.min(a.h).max(1));
+        let fit = |r: Rect| {
+            let x = r.x.clamp(a.x, (a.x + a.w - w).max(a.x));
+            let y = r.y.clamp(a.y, (a.y + a.h - h).max(a.y));
+            Rect { x, y, w, h }
+        };
+        let win = &mut self.wins[i];
+        if win.full || win.maximized {
+            win.restore = fit(win.restore);
+            return false;
+        }
+        let r = fit(win.r);
+        if r == win.r {
+            return false;
+        }
+        win.r = r;
+        win.restore = r;
+        true
     }
 
     /// Enters (`on`) or leaves full screen for window `i`. The window keeps the size it had to go back to. A
@@ -1972,6 +2035,19 @@ impl Shell {
             }
         }
         self.dirty = true;
+    }
+
+    /// An app resized its main window (`ToShell::SetContentSize`): the window takes the new frame through the zoom
+    /// effect, and the app gets the new size as a configure (`desk_layout`).
+    pub(super) fn desk_set_content_size(&mut self, app: AppId, size: (f32, f32)) {
+        let m = self.desk_metrics();
+        let Some(d) = self.desk.as_mut() else { return };
+        let Some(i) = d.index_of(app) else { return };
+        if !d.set_content_size(&m, i, size) {
+            return;
+        }
+        self.desk_layout(i);
+        self.desk_frame_changed(i);
     }
 
     pub(super) fn desk_zoom_window(&mut self,i:usize) {let m=self.desk_metrics();self.desk.as_mut().unwrap().toggle_zoom(&m,i);self.desk_layout(i);if let Some(app)=self.desk.as_ref().and_then(|d|d.wins.get(i)).map(|w|w.app){let t=self.last_input;self.desk_fx_start(app,FxCall::Zoom,t);}self.dirty=true;}
@@ -4547,6 +4623,55 @@ mod tests {
         d.wins[1].minimized = true;
         assert!(d.pick(&m, x, y).map_or(true, |p| p.0 == 0));
         assert_eq!(d.front().map(|w| w.app), Some(AppId::Settings));
+    }
+
+    #[test]
+    fn an_app_resizes_its_window_from_the_top_left_inside_the_work_area() {
+        let m = metrics();
+        let app = AppId::External(250);
+        let mut d = Desk::new();
+        d.open(&m, app, (900, 600));
+        let before = d.wins[0].r;
+        assert!(d.set_content_size(&m, 0, (230.0, 510.0)));
+        let (w, h) = outer_px(app, &m, (230.0, 510.0));
+        assert_eq!(d.wins[0].r, Rect { x: before.x, y: before.y, w, h }, "the top-left corner stays");
+        assert_eq!(d.wins[0].restore, d.wins[0].r);
+        assert!(!d.set_content_size(&m, 0, (230.0, 510.0)), "the same size again changes nothing");
+        // larger than the screen: held to the work area, and moved back onto it
+        assert!(d.set_content_size(&m, 0, (100_000.0, 100_000.0)));
+        assert_eq!(d.wins[0].r, Desk::area(&m));
+        // under the window minimum: held to it
+        assert!(d.set_content_size(&m, 0, (1.0, 1.0)));
+        let (min_w, min_h, _, _) = size_range(app, &m);
+        assert_eq!((d.wins[0].r.w, d.wins[0].r.h), (min_w, min_h));
+    }
+
+    #[test]
+    fn a_zoomed_window_keeps_its_frame_and_returns_at_the_size_the_app_asked_for() {
+        let m = metrics();
+        let app = AppId::External(251);
+        let mut d = Desk::new();
+        d.open(&m, app, (900, 600));
+        d.toggle_zoom(&m, 0);
+        assert!(!d.set_content_size(&m, 0, (560.0, 522.0)));
+        assert_eq!(d.wins[0].r, Desk::area(&m));
+        d.toggle_zoom(&m, 0);
+        let (w, h) = outer_px(app, &m, (560.0, 522.0));
+        assert_eq!((d.wins[0].r.w, d.wins[0].r.h), (w, h));
+    }
+
+    #[test]
+    fn content_limits_hold_the_apps_own_resize_and_go_with_the_app() {
+        let m = metrics();
+        let app = AppId::External(252);
+        set_content_limits(252, Some((600.0, 500.0)), None);
+        let mut d = Desk::new();
+        d.open(&m, app, (2000, 1200));
+        assert!(d.set_content_size(&m, 0, (230.0, 300.0)));
+        let (w, h) = outer_px(app, &m, (600.0, 500.0));
+        assert_eq!((d.wins[0].r.w, d.wins[0].r.h), (w.min(Desk::area(&m).w), h.min(Desk::area(&m).h)));
+        forget_content_limits(252);
+        assert_eq!(size_limits(app).min, None, "the manifest's limits (none here) apply again");
     }
 
     #[test]

@@ -53,6 +53,33 @@ pub fn set_window_level(ctx: &Ctx, window: crate::app_windows::WindowId, level: 
     ctx.send_to_shell(crate::proto::ToShell::WindowLevelOf { id: window.0, level });
 }
 
+/// Resizes this app's main window to a content size of `w` x `h` points (`NSWindow.setContentSize`, or
+/// `setFrame:display:animate:` with the animation). The shell keeps the window's top-left corner, holds the size to the
+/// content limits ([`set_content_limits`], else the manifest's `min_size` / `max_size`) and the screen's work area, and
+/// animates the change like a zoom. The app then gets the new size as an ordinary configure, so it lays out from
+/// `ctx.cfg` as it does after the person resizes the window. A zoomed or full-screen window keeps its frame and goes
+/// back to this size when it leaves that state. A size that is not finite and positive is not sent.
+///
+/// The window's first size comes from the manifest (`window_size = "WxH"`, the preferred initial content size); an app
+/// whose size depends on its state (Calculator's keypads) sends the size it wants when that state changes.
+pub fn set_content_size(ctx: &Ctx, w: f32, h: f32) {
+    if w.is_finite() && h.is_finite() && w > 0.0 && h > 0.0 {
+        ctx.send_to_shell(crate::proto::ToShell::SetContentSize { w: w.min(crate::proto::MAX_CONTENT_PT), h: h.min(crate::proto::MAX_CONTENT_PT) });
+    }
+}
+
+/// Sets this app's main window content limits in points (`NSWindow.contentMinSize` and `contentMaxSize`): the person
+/// cannot resize the window outside them, and [`set_content_size`] is held to them. `None` uses the manifest's
+/// `min_size` / `max_size`. The limits hold for as long as the app runs. A limit that is not finite and positive is
+/// sent as `None`.
+pub fn set_content_limits(ctx: &Ctx, min: Option<(f32, f32)>, max: Option<(f32, f32)>) {
+    let ok = |s: Option<(f32, f32)>| {
+        s.filter(|&(w, h)| w.is_finite() && h.is_finite() && w > 0.0 && h > 0.0)
+            .map(|(w, h)| (w.min(crate::proto::MAX_CONTENT_PT), h.min(crate::proto::MAX_CONTENT_PT)))
+    };
+    ctx.send_to_shell(crate::proto::ToShell::SetContentLimits { min: ok(min), max: ok(max) });
+}
+
 pub fn decode_list(result: &Result<Json, String>) -> Result<Vec<WindowInfo>, String> {
     Ok(list_from_json(result.as_ref().map_err(|e| e.clone())?))
 }
@@ -121,6 +148,20 @@ mod tests {
         let ctx = crate::runtime::test_ctx();
         set_window_level(&ctx, crate::app_windows::WindowId(2), Level::Floating);
         assert_eq!(ctx.take_sent(), vec![crate::proto::ToShell::WindowLevelOf { id: 2, level: Level::Floating }]);
+    }
+
+    #[test]
+    fn content_size_requests_go_to_the_shell_and_bad_sizes_stay_home() {
+        use crate::proto::ToShell;
+        let ctx = crate::runtime::test_ctx();
+        set_content_size(&ctx, 230.0, 510.0);
+        set_content_size(&ctx, f32::NAN, 510.0);
+        set_content_size(&ctx, 0.0, 510.0);
+        set_content_limits(&ctx, Some((230.0, 400.0)), Some((f32::INFINITY, 900.0)));
+        assert_eq!(
+            ctx.take_sent(),
+            vec![ToShell::SetContentSize { w: 230.0, h: 510.0 }, ToShell::SetContentLimits { min: Some((230.0, 400.0)), max: None }]
+        );
     }
 
     #[test]

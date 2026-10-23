@@ -15,7 +15,8 @@ use bifrost_app::share::{self, Payload};
 use bifrost_app::{network_path, widgets_timeline, App, Ctx, Input, KeyInput, TouchKind};
 use bifrost_core::json::Json;
 use springboard::shell::keyboard::Out;
-use springboard::shell::music::radio::{Fetch, Http};
+use springboard::shell::market_quotes::{self, QuoteHttp};
+use springboard::shell::music::radio::{Chunk, Fetch, Http};
 use std::sync::Arc;
 
 struct WeatherApp {
@@ -87,7 +88,25 @@ fn pinned_fetcher() -> Arc<dyn Fetch> {
             Err(std::io::Error::other("offline"))
         }
     }
-    if bifrost_app::testing::pinned() { Arc::new(Offline) } else { Arc::new(Http::default()) }
+    if bifrost_app::testing::pinned() { Arc::new(Offline) } else { Arc::new(Network::default()) }
+}
+
+/// The app's network: forecasts and place search through the shared client, the watchlist's quotes through
+/// `QuoteHttp`, which sends the symbol and nothing else (no cookie, a generic agent).
+#[derive(Default)]
+struct Network {
+    web: Http,
+    quotes: QuoteHttp,
+}
+
+impl Fetch for Network {
+    fn get(&self, url: &str, limit: usize) -> std::io::Result<Vec<u8>> {
+        if url.starts_with(market_quotes::CHART_API) { self.quotes.get(url, limit) } else { self.web.get(url, limit) }
+    }
+
+    fn get_range(&self, url: &str, start: u64, len: u64) -> std::io::Result<Chunk> {
+        self.web.get_range(url, start, len)
+    }
 }
 
 impl App for WeatherApp {

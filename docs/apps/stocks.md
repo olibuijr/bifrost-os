@@ -20,12 +20,20 @@ Golden Gate SDK kit (`bifrost_app::kit`), with the add field and the list drawn 
 
 ## Data
 
-- Quotes: `https://stooq.com/q/l/` with one request for the whole list (`f=sd2t2ohlcv`, CSV).
-- History: `https://stooq.com/q/d/l/?s=<symbol>&i=d`, daily CSV, read oldest first; the last 90 sessions are kept.
-- Stooq is a free public source, not a licensed market feed, and its quotes may be delayed. The chart card shows when
-  each quote was priced ("Priced ..."). Do not use the figures for trading decisions.
-- The `Fetch` network is the shell's HTTPS client (`springboard::shell::music::radio::Http`). Under the testing kit
-  (`BIFROST_TEST_PIN=1`) the network is off, so snapshots never show live prices.
+- Quotes and history: Yahoo Finance's public chart endpoint, `https://query1.finance.yahoo.com/v8/finance/chart/<symbol>?range=1mo&interval=1d`
+  for a quote (the price, the name, the previous close and a month of closes for the sparkline) and `range=6mo` for
+  the chart; the last 90 sessions are kept. One request per symbol. The service code (symbol rules, addresses, the
+  parser and the fetcher) is `springboard/src/shell/market_quotes.rs`, shared with the Weather app's watchlist page.
+  Stooq, the source before, answers 404 and a browser check (E2E W4-14).
+- Privacy (owner rule, privacy-first): a request carries the symbol, the range and the interval and nothing else: no
+  key, account, cookie or crumb. The fetcher (`market_quotes::QuoteHttp`) sends the generic `User-Agent: Mozilla/5.0`,
+  keeps no cookie the service sets (`Client::without_cookies`) and refuses plain HTTP, redirects included; the test
+  `a_quote_request_sends_the_symbol_and_nothing_that_identifies_the_person` checks the bytes that leave.
+- The sidebar's foot credits the source: "Quotes from Yahoo Finance · delayed" (`market_quotes::ATTRIBUTION`); the
+  Weather app's watchlist page shows the same line. It is a free public source, not a licensed market feed, and its
+  quotes are delayed. The chart card shows when each quote was priced ("Priced ..."). Do not use the figures for
+  trading decisions.
+- Under the testing kit (`BIFROST_TEST_PIN=1`) the network is off, so snapshots never show live prices.
 
 ## Caching and offline use
 

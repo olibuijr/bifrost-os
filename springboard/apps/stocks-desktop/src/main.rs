@@ -13,7 +13,8 @@ mod view;
 use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::{App, Ctx, Input, KeyInput, TouchKind};
 use springboard::shell::keyboard::Out;
-use springboard::shell::music::radio::{Fetch, Http};
+use springboard::shell::market_quotes::QuoteHttp;
+use springboard::shell::music::radio::Fetch;
 use state::Stocks;
 use std::sync::Arc;
 
@@ -43,7 +44,8 @@ fn pinned_fetcher() -> Arc<dyn Fetch> {
             Err(std::io::Error::other("offline"))
         }
     }
-    if bifrost_app::testing::pinned() { Arc::new(Offline) } else { Arc::new(Http::default()) }
+    // quotes go through the private fetcher: the symbol and nothing else (no cookie, a generic agent)
+    if bifrost_app::testing::pinned() { Arc::new(Offline) } else { Arc::new(QuoteHttp::default()) }
 }
 
 impl App for StocksApp {

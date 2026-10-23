@@ -108,6 +108,8 @@ const FIELD_H: f32 = 36.0;
 const ROW: f32 = 56.0;
 const HEAD: f32 = 28.0;
 const QUOTE_ROW: f32 = 60.0;
+/// The line of the quotes' source credit under the watchlist, in points.
+const ATTRIBUTION_H: f32 = 24.0;
 const REMOVE_W: f32 = 48.0;
 /// The Next Hour card (minute-by-minute rain) above the hourly strip.
 const NEXT_TOP: f32 = 296.0;
@@ -1072,7 +1074,8 @@ impl Weather {
         match self.screen {
             Screen::Main => CONTENT_H,
             Screen::Places => self.place_rows().last().map_or(0.0, |&(_, t, h)| t + h) + 24.0,
-            Screen::Stocks => self.watch.len() as f32 * QUOTE_ROW + 48.0,
+            // the rows, the error line and the source credit under them
+            Screen::Stocks => self.watch.len() as f32 * QUOTE_ROW + 48.0 + ATTRIBUTION_H,
         }
     }
 
@@ -2210,9 +2213,15 @@ impl Weather {
                 }
                 self.put(&mut c, ui, "\u{d7}", MAC_TITLE1_PT, Weight::Regular, DESTRUCTIVE, Align::Centre, x + w - ui.pt(REMOVE_W / 2.0), y + ui.pt(27.0));
             }
-            if let Some(e) = self.quotes_error.clone().filter(|_| !self.watch.is_empty()) {
-                let y = oy + self.watch.len() as f32 * ui.pt(QUOTE_ROW) + ui.pt(SPACE_M);
-                self.put(&mut c, ui, &e, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), Align::Centre, self.w as f32 / 2.0, y);
+            let rows_end = oy + self.watch.len() as f32 * ui.pt(QUOTE_ROW);
+            let error = self.quotes_error.clone().filter(|_| !self.watch.is_empty());
+            if let Some(e) = &error {
+                self.put(&mut c, ui, e, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), Align::Centre, self.w as f32 / 2.0, rows_end + ui.pt(SPACE_M));
+            }
+            // the source of the prices, as the reference credits it: privacy-first, the person sees who answers
+            if !self.watch.is_empty() {
+                let y = rows_end + ui.pt(SPACE_M) + if error.is_some() { ui.pt(ATTRIBUTION_H) } else { 0.0 };
+                self.put(&mut c, ui, data::QUOTES_ATTRIBUTION, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), Align::Centre, self.w as f32 / 2.0, y);
             }
         }
         s.fill_rect(0, 0, self.w as usize, top, CONTENT_BG.now());

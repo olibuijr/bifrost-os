@@ -491,11 +491,20 @@ pub struct Client {
     jar: Mutex<Jar>,
     idle: Mutex<Idle>,
     https_only: bool,
+    /// whether the jar takes the cookies servers set and sends them back (`without_cookies` turns it off)
+    cookies: bool,
 }
 
 impl Client {
     pub fn new(transport: Arc<dyn Transport>, jar: Jar) -> Self {
-        Client { transport, jar: Mutex::new(jar), idle: Mutex::new(HashMap::new()), https_only: false }
+        Client { transport, jar: Mutex::new(jar), idle: Mutex::new(HashMap::new()), https_only: false, cookies: true }
+    }
+
+    /// Neither keeps the cookies a server sets nor sends any: every request stands alone, so a service cannot tell one
+    /// person's requests apart by a cookie (the quote fetcher, `shell::market_quotes::QuoteHttp`).
+    pub fn without_cookies(mut self) -> Self {
+        self.cookies = false;
+        self
     }
 
     /// Require TLS for the original request and every redirect.
@@ -627,7 +636,7 @@ impl Client {
             return Err(io::Error::other("unsupported scheme"));
         }
         let key = (host.clone(), port);
-        let cookie = self.jar.lock().unwrap().header(&host, tls);
+        let cookie = if self.cookies { self.jar.lock().unwrap().header(&host, tls) } else { None };
         let req = request_bytes(method, u, &host, extra, cookie.as_deref(), body);
         let mut reused = true;
         let mut attempt = 0;
@@ -643,7 +652,7 @@ impl Client {
             match result {
                 Ok(((status, headers, data), keep)) => {
                     let mut jar = self.jar.lock().unwrap();
-                    for (k, v) in &headers {
+                    for (k, v) in headers.iter().filter(|_| self.cookies) {
                         if k.eq_ignore_ascii_case("Set-Cookie") {
                             jar.set(&host, v);
                         }
@@ -870,6 +879,18 @@ pub(crate) mod tests {
         assert!(reqs[1].contains("Cookie: sid=42\r\n"), "{}", reqs[1]);
         assert_eq!(*fake.connects.lock().unwrap(), 1, "keep-alive reused the socket");
         assert_eq!(c.jar().header("www.example.net", true).unwrap(), "sid=42");
+    }
+
+    #[test]
+    fn a_client_without_cookies_neither_keeps_nor_sends_them() {
+        let fake = Fake::new(vec!["HTTP/1.1 302 Found\r\nLocation: /home\r\nSet-Cookie: sid=42; Path=/\r\nContent-Length: 0\r\n\r\n", &ok("<html>home</html>")]);
+        let mut jar = Jar::default();
+        jar.set("www.example.net", "old=1");
+        let c = Client::new(fake.clone(), jar).without_cookies();
+        assert_eq!(c.get("https://www.example.net/login", None, 1 << 20).unwrap().status, 200);
+        let reqs = fake.requests.lock().unwrap().clone();
+        assert!(reqs.iter().all(|r| !r.contains("Cookie:")), "{reqs:?}");
+        assert_eq!(c.jar().header("www.example.net", true).as_deref(), Some("old=1"), "the jar took nothing");
     }
 
     #[test]

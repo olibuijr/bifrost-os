@@ -1,5 +1,5 @@
 //! The Weather app's data: Open-Meteo forecasts and place search, the saved
-//! locations, the C/F setting, a Stooq watchlist and the disk cache.
+//! locations, the C/F setting, a stock watchlist and the disk cache.
 //!
 //! Open-Meteo needs no key. `api.open-meteo.com/v1/forecast` answers with
 //! the current conditions plus hourly and daily arrays; the geocoding host
@@ -13,12 +13,15 @@
 //! kept in its own small file next to the forecast. Fetching happens on
 //! worker threads (see `Weather`).
 //!
-//! Stocks-lite uses Stooq's CSV quote endpoint: no key, one request for the
-//! whole watchlist, answers `Symbol,Date,Time,Open,High,Low,Close,Volume`.
-//! It has no previous close, so the change shown is close against the day's
-//! open. When it fails the watchlist still lists the symbols.
+//! Stocks-lite takes its quotes from the same source as the Stocks app
+//! (`shell::market_quotes`, Yahoo Finance's public chart endpoint: the symbol
+//! and nothing else is sent, through `market_quotes::QuoteHttp`). The change
+//! shown is the price against the previous session's close. When it fails
+//! the watchlist still lists the symbols. Stooq, the source before, no longer
+//! answers (E2E W4-14).
 
 use crate::deildu::http::form_encode;
+use crate::shell::market_quotes;
 use crate::shell::calendar::Date;
 use crate::shell::music::radio::json::{self, Json};
 use crate::shell::music::radio::Fetch;
@@ -27,7 +30,6 @@ use std::path::{Path, PathBuf};
 
 pub const FORECAST_API: &str = "https://api.open-meteo.com/v1/forecast";
 pub const GEOCODE_API: &str = "https://geocoding-api.open-meteo.com/v1/search";
-pub const QUOTE_API: &str = "https://stooq.com/q/l/";
 pub const AIR_API: &str = "https://air-quality-api.open-meteo.com/v1/air-quality";
 pub const ARCHIVE_API: &str = "https://archive-api.open-meteo.com/v1/archive";
 const BODY_LIMIT: usize = 512 * 1024;
@@ -614,12 +616,14 @@ fn parse_glance(text: &str, place: &str) -> Vec<Hour> {
         .collect()
 }
 
-/// One watchlist row as the quote endpoint reports it.
+/// One watchlist row: the latest price against the previous session's close.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Quote {
-    /// as typed on the watchlist, e.g. "aapl.us"
+    /// as kept on the watchlist, in the service's form, e.g. "AAPL"
     pub symbol: String,
+    /// the previous session's close, which the change is measured from
     pub open: f64,
+    /// the latest price
     pub close: f64,
 }
 
@@ -629,37 +633,18 @@ impl Quote {
     }
 }
 
-/// "AAPL" -> "aapl.us"; symbols with a market suffix keep it.
+/// "aapl" -> "AAPL" (`market_quotes::normalise_symbol`); the old Stooq form "aapl.us" reads as "AAPL".
 pub fn normalise_symbol(raw: &str) -> Option<String> {
-    let s: String = raw.trim().to_lowercase();
-    if s.is_empty() || s.len() > 12 || !s.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '^' || c == '-') {
-        return None;
-    }
-    Some(if s.contains('.') || s.starts_with('^') { s } else { format!("{s}.us") })
+    market_quotes::normalise_symbol(raw)
 }
 
-/// "aapl.us" -> "AAPL"
+/// "AAPL" as the screen shows it.
 pub fn display_symbol(symbol: &str) -> String {
-    symbol.strip_suffix(".us").unwrap_or(symbol).to_uppercase()
+    market_quotes::display_symbol(symbol)
 }
 
-pub fn quote_url(symbols: &[String]) -> String {
-    format!("{QUOTE_API}?s={}&f=sd2t2ohlcv&h&e=csv", symbols.join("+"))
-}
-
-/// The rows of a quote CSV that carry prices (`N/D` rows are skipped).
-pub fn parse_quotes(csv: &str) -> Vec<Quote> {
-    csv.lines()
-        .skip(1)
-        .filter_map(|line| {
-            let f: Vec<&str> = line.trim().split(',').collect();
-            if f.len() < 7 {
-                return None;
-            }
-            Some(Quote { symbol: f[0].to_lowercase(), open: f[3].parse().ok()?, close: f[6].parse().ok()? })
-        })
-        .collect()
-}
+/// The credit the watchlist page shows under its rows (`market_quotes::ATTRIBUTION`).
+pub const QUOTES_ATTRIBUTION: &str = market_quotes::ATTRIBUTION;
 
 /// The directory the app keeps its files in.
 #[derive(Clone, Debug)]
@@ -730,7 +715,7 @@ impl Store {
     pub fn load_watchlist(&self) -> Vec<String> {
         let list: Vec<String> = self.read(WATCHLIST_FILE).lines().filter_map(normalise_symbol).collect();
         if list.is_empty() && !self.dir.join(WATCHLIST_FILE).exists() {
-            ["aapl.us", "msft.us", "googl.us", "tsla.us"].map(String::from).to_vec()
+            ["AAPL", "MSFT", "GOOGL", "TSLA"].map(String::from).to_vec()
         } else {
             list
         }
@@ -829,9 +814,25 @@ pub fn search_places(query: &str, net: &dyn Fetch) -> io::Result<Vec<Location>> 
     parse_places(&String::from_utf8_lossy(&body)).ok_or_else(|| io::Error::other("unexpected search answer"))
 }
 
+/// The latest quote of each of `symbols`, one request per symbol (`market_quotes`). A symbol the service does not know
+/// is left out, so its row keeps its dash; when no request got through at all the result is an error, so an outage is
+/// never an empty list. Pass a `market_quotes::QuoteHttp` as `net`: it sends the symbol and nothing else.
 pub fn fetch_quotes(symbols: &[String], net: &dyn Fetch) -> io::Result<Vec<Quote>> {
-    let body = net.get(&quote_url(symbols), BODY_LIMIT)?;
-    Ok(parse_quotes(&String::from_utf8_lossy(&body)))
+    let (mut quotes, mut answered, mut down) = (Vec::new(), false, None);
+    for symbol in symbols {
+        match market_quotes::fetch_chart(symbol, &market_quotes::quote_url(symbol), net) {
+            Ok(Ok(chart)) => {
+                answered = true;
+                quotes.push(Quote { symbol: symbol.clone(), open: chart.previous_close(), close: chart.price });
+            }
+            Ok(Err(_)) => answered = true,
+            Err(e) => down = Some(e),
+        }
+    }
+    if !answered && !symbols.is_empty() {
+        return Err(down.unwrap_or_else(|| io::Error::other("no quotes")));
+    }
+    Ok(quotes)
 }
 
 /// The summary the weather service keeps current for the Today widget and the lock screen. It needs no app
@@ -1036,17 +1037,41 @@ mod tests {
     }
 
     #[test]
-    fn symbols_normalise_and_quotes_parse() {
-        assert_eq!(normalise_symbol(" AAPL "), Some("aapl.us".into()));
-        assert_eq!(normalise_symbol("vod.uk"), Some("vod.uk".into()));
+    fn symbols_normalise_and_quotes_come_from_the_chart_endpoint() {
+        assert_eq!(normalise_symbol(" aapl "), Some("AAPL".into()));
+        assert_eq!(normalise_symbol("aapl.us"), Some("AAPL".into()), "a watchlist saved in the old Stooq form still reads");
+        assert_eq!(normalise_symbol("vod.l"), Some("VOD.L".into()));
         assert_eq!(normalise_symbol("a b"), None);
         assert_eq!(normalise_symbol(""), None);
-        assert_eq!(display_symbol("aapl.us"), "AAPL");
-        assert_eq!(quote_url(&["a.us".into(), "b.us".into()]), "https://stooq.com/q/l/?s=a.us+b.us&f=sd2t2ohlcv&h&e=csv");
-        let q = parse_quotes("Symbol,Date,Time,Open,High,Low,Close,Volume\nAAPL.US,2026-10-02,22:00:09,100.0,111,99,110.0,5\nXYZ.US,N/D,N/D,N/D,N/D,N/D,N/D,N/D\n");
-        assert_eq!(q.len(), 1);
-        assert_eq!(q[0].symbol, "aapl.us");
-        assert!((q[0].change_pct() - 10.0).abs() < 1e-9);
+        assert_eq!(display_symbol("AAPL"), "AAPL");
+        assert!(QUOTES_ATTRIBUTION.contains("Yahoo Finance") && QUOTES_ATTRIBUTION.contains("delayed"));
+
+        const CHART: &str = r#"{"chart":{"result":[{"meta":{"symbol":"AAPL","regularMarketPrice":110.0,"regularMarketTime":0,"gmtoffset":0},
+            "timestamp":[86400,172800],"indicators":{"quote":[{"close":[100.0,110.0]}]}}],"error":null}}"#;
+        /// Knows AAPL; MSFT is the service's 404 for an unknown symbol. Records every address asked.
+        struct Service(std::sync::Mutex<Vec<String>>);
+        impl Fetch for Service {
+            fn get(&self, url: &str, _: usize) -> io::Result<Vec<u8>> {
+                self.0.lock().unwrap().push(url.to_string());
+                if url.contains("/chart/AAPL?") { Ok(CHART.as_bytes().to_vec()) } else { Err(io::Error::other(format!("{url}: status 404"))) }
+            }
+        }
+        let net = Service(Default::default());
+        let q = fetch_quotes(&["AAPL".into(), "MSFT".into()], &net).unwrap();
+        assert_eq!(q, vec![Quote { symbol: "AAPL".into(), open: 100.0, close: 110.0 }], "the unknown symbol is left out");
+        assert!((q[0].change_pct() - 10.0).abs() < 1e-9, "against the previous close");
+        let asked = net.0.lock().unwrap().clone();
+        assert_eq!(asked, ["https://query1.finance.yahoo.com/v8/finance/chart/AAPL?range=1mo&interval=1d", "https://query1.finance.yahoo.com/v8/finance/chart/MSFT?range=1mo&interval=1d"]);
+        assert!(asked.iter().all(|u| !u.contains("stooq")));
+
+        struct Down;
+        impl Fetch for Down {
+            fn get(&self, _: &str, _: usize) -> io::Result<Vec<u8>> {
+                Err(io::Error::other("offline"))
+            }
+        }
+        assert!(fetch_quotes(&["AAPL".into()], &Down).is_err(), "an outage is an error, not an empty list");
+        assert_eq!(fetch_quotes(&[], &Down).unwrap(), vec![]);
     }
 
     struct Canned(String);
