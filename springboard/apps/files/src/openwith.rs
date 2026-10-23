@@ -1,8 +1,13 @@
-//! Open With: the apps that can open the focused file, as the shell's launch service names them, the default marked.
-//! The list is read-only: the default is chosen in Settings > General > Default Apps, and the shell has no call that
-//! opens a file in a chosen app yet, so a row cannot open the file.
+//! Open With: the apps that declare the focused file's type, as the shell's launch service names them, the default
+//! marked and first. A click on an app opens the file in it (`workspace::open_with`, `NSWorkspace.open(_:withApplicationAt:)`);
+//! the default itself is chosen in Settings > General > Default Apps.
 use crate::*;
 use bifrost_app::launch_services::Candidate;
+
+/// The panel's top in window points (the Get Info position), the first app row's top below it, and the row pitch.
+const PANEL_TOP: f32 = 72.;
+const ROWS_TOP: f32 = 62.;
+const ROW_H: f32 = 26.;
 
 /// The Open With panel: the file it is for, and the launch service's answer once it arrives (None while it waits).
 pub(crate) struct OpenWith {
@@ -21,6 +26,24 @@ impl OpenWith {
             Some(Ok(apps)) if apps.is_empty() => vec!["No app opens this file.".into()],
             Some(Ok(apps)) => apps.iter().map(|a| if a.is_default { format!("{} (Default)", a.name) } else { a.name.clone() }).collect(),
         }
+    }
+
+    /// The app of row `i` when the answer has one there (the rows are the apps in the answer's order).
+    pub(crate) fn app_at(&self, i: usize) -> Option<&Candidate> {
+        match &self.apps {
+            Some(Ok(apps)) => apps.get(i),
+            _ => None,
+        }
+    }
+
+    /// The row under the point `dy` below the panel's top, if it is one of the lines.
+    pub(crate) fn row_at(&self, dy: f32) -> Option<usize> {
+        let first = dy - ROWS_TOP;
+        if first < 0. {
+            return None;
+        }
+        let i = (first / ROW_H) as usize;
+        (i < self.lines().len()).then_some(i)
     }
 
     /// A number that changes with the answer, for the damage check.
@@ -46,28 +69,44 @@ impl Files {
         self.revision += 1;
     }
 
+    /// A click while the panel is up: an app row opens the file in that app and closes the panel. False for a click
+    /// outside the rows (the caller closes the panel then).
+    pub(crate) fn open_with_click(&mut self, x: f32, y: f32) -> bool {
+        let Some(panel) = &self.open_with else { return false };
+        let left = self.side() + 16.;
+        if x < left || x > self.w - 16. {
+            return false;
+        }
+        let Some(app) = panel.row_at(y - PANEL_TOP).and_then(|i| panel.app_at(i)).map(|c| c.app.clone()) else { return false };
+        let path = panel.path.clone();
+        self.open_with = None;
+        self.sys.effects.push(Effect::OpenFiles(vec![path], Some(app)));
+        self.revision += 1;
+        true
+    }
+
     /// The Open With panel, under the Get Info position.
     pub(crate) fn paint_open_with(&self, ui: &Ui, s: &mut Surface) {
         let Some(panel) = &self.open_with else {
             return;
         };
-        let (w, x, y) = (self.w, self.side() + 16., 72.);
+        let (w, x, y) = (self.w, self.side() + 16., PANEL_TOP);
         let lines = panel.lines();
-        let card_h = 62. + lines.len() as f32 * 26. + 40.;
+        let card_h = ROWS_TOP + lines.len() as f32 * ROW_H + 40.;
         rect(s, ui, x, y, w - x - 16., card_h, CARD_BG.now());
         text(s, ui, "Open With", 17., LABEL.now(), x + 20., y + 18., w - x - 56.);
         text(s, ui, &panel.name, 12., LABEL_2.now(), x + 20., y + 40., w - x - 56.);
         for (i, line) in lines.iter().enumerate() {
-            text(s, ui, line, 13., LABEL.now(), x + 20., y + 62. + i as f32 * 26., w - x - 56.);
+            text(s, ui, line, 13., LABEL.now(), x + 20., y + ROWS_TOP + i as f32 * ROW_H, w - x - 56.);
         }
         text(
             s,
             ui,
-            "Choose the default app in Settings > General > Default Apps. Press Escape or click to close.",
+            "Click an app to open the file with it. Choose the default app in Settings > General > Default Apps.",
             11.,
             LABEL_2.now(),
             x + 20.,
-            y + 62. + lines.len() as f32 * 26. + 10.,
+            y + ROWS_TOP + lines.len() as f32 * ROW_H + 10.,
             w - x - 56.,
         );
     }
@@ -103,6 +142,20 @@ mod tests {
     fn an_empty_answer_and_an_error_each_give_one_line() {
         assert_eq!(panel(Some(Ok(vec![]))).lines(), vec!["No app opens this file.".to_string()]);
         assert_eq!(panel(Some(Err("no service launch".into()))).lines(), vec!["no service launch".to_string()]);
+    }
+
+    #[test]
+    fn rows_map_to_the_apps_of_the_answer_and_nothing_else() {
+        let p = panel(Some(Ok(vec![app("is.olibuijr.preview.desktop", "Preview", true), app("bifrost.photos", "Photos", false)])));
+        assert_eq!(p.row_at(ROWS_TOP + 1.), Some(0));
+        assert_eq!(p.row_at(ROWS_TOP + ROW_H + 1.), Some(1));
+        assert_eq!(p.row_at(ROWS_TOP - 1.), None, "the title is not a row");
+        assert_eq!(p.row_at(ROWS_TOP + 2. * ROW_H + 1.), None, "below the last app");
+        assert_eq!(p.app_at(1).map(|c| c.app.as_str()), Some("bifrost.photos"));
+        // a message line is not an app
+        let waiting = panel(None);
+        assert_eq!(waiting.row_at(ROWS_TOP + 1.), Some(0));
+        assert!(waiting.app_at(0).is_none());
     }
 
     #[test]

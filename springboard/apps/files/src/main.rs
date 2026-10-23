@@ -382,7 +382,11 @@ impl App for Files {
         }
     }
     fn document(&mut self, ctx: &Ctx, ev: bifrost_app::DocumentEvent) -> bool {
-        self.drag_out_document(ctx, ev)
+        // a grant for an Open goes to the workspace; the rest belong to drag and drop
+        match system::open_answer(ctx, ev) {
+            Ok(changed) => changed,
+            Err(ev) => self.drag_out_document(ctx, ev),
+        }
     }
     fn window_event(&mut self, ctx: &Ctx, window: WindowId, ev: Input) -> bool {
         if window.is_main() {
@@ -415,6 +419,20 @@ impl App for Files {
         if let Some(name) = self.sys.take_app_open_failure() {
             self.notice = Some(format!("\u{201C}{name}\u{201D} can\u{2019}t be opened."));
             self.revision += 1;
+            changed = true;
+        }
+        // a file the shell would not open (no app declares its type, or the grant was refused)
+        if let Some(name) = system::take_open_failure() {
+            self.notice = Some(format!("The document \u{201C}{name}\u{201D} could not be opened."));
+            self.revision += 1;
+            changed = true;
+        }
+        // a provider download to open, or a mounted disk image to show
+        for work in system::take_from_workers() {
+            match work {
+                system::FromWorker::Open(path) => self.sys.effects.push(Effect::OpenFiles(vec![path], None)),
+                system::FromWorker::Show(folder) => self.navigate(folder, true),
+            }
             changed = true;
         }
         if self.poll_server() {

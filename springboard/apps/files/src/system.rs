@@ -14,7 +14,8 @@ use bifrost_app::proto::peek::PreviewItem;
 use bifrost_app::quick_look;
 use bifrost_app::quicksearch::{CSSearchableIndex, CSSearchableItem, CSSearchableItemAttributeSet};
 use bifrost_app::thumbnails::{self, ThumbKind};
-use bifrost_app::Ctx;
+use bifrost_app::proto::GrantId;
+use bifrost_app::{Ctx, DocumentEvent};
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::path::{Path, PathBuf};
 
@@ -57,6 +58,133 @@ pub(crate) enum Effect {
     /// Open in the Applications place: launch the installed app (id, name), or bring it to the front
     /// (`workspace::open_application`).
     OpenApplication(String, String),
+    /// Open (double-click, Cmd+O, the context menu's Open) and Open With: hand the files to the shell's workspace,
+    /// which opens each in the default app for its type, or in the installed app named here
+    /// (`workspace::open_file` / `open_with`, `NSWorkspace.open(_:)` parity). Files asks the shell for a read grant
+    /// per file first (`Ctx::grant_path`): the workspace names files by grant, never by path.
+    OpenFiles(Vec<PathBuf>, Option<String>),
+}
+
+/// The most files one Open hands to the workspace (the protocol's grant limit).
+pub(crate) const MAX_OPEN_FILES: usize = bifrost_app::proto::workspace::MAX_GRANTS;
+/// How long a grant made for an open is kept after the shell took the file: the shell may still need it when it
+/// holds the open for the person's answer on the malware card, then it goes back.
+const OPEN_GRANT_KEEP: std::time::Duration = std::time::Duration::from_secs(600);
+
+/// The files on their way to the workspace (main thread only; the workspace answers in closures).
+#[derive(Default)]
+struct Opening {
+    /// grant requests not yet answered: (request, the app for Open With or None for the default, file name)
+    asking: Vec<(u32, Option<String>, String)>,
+    /// files the shell could not open, by name, for the footer notice
+    failed: Vec<String>,
+    /// grants to hand back: (grant, when it may go)
+    release: Vec<(GrantId, std::time::Instant)>,
+}
+
+thread_local! {
+    static OPENING: std::cell::RefCell<Opening> = std::cell::RefCell::new(Opening::default());
+}
+
+/// Asks the shell for a read grant per file; `open_answer` sends the open once the grant arrives.
+fn open_files(ctx: &Ctx, paths: &[PathBuf], app: Option<&str>) {
+    for path in paths.iter().take(MAX_OPEN_FILES) {
+        let Some(text) = path.to_str() else {
+            OPENING.with(|o| o.borrow_mut().failed.push(file_name_of(path)));
+            continue;
+        };
+        let request = ctx.grant_path(text);
+        OPENING.with(|o| o.borrow_mut().asking.push((request, app.map(str::to_string), file_name_of(path))));
+    }
+}
+
+/// A document answer for an open this app asked for: the grant goes to the workspace, a refusal becomes a notice.
+/// `Err` hands back an answer that is not for an open (a drag's grant, a drop's files).
+pub(crate) fn open_answer(ctx: &Ctx, ev: DocumentEvent) -> Result<bool, DocumentEvent> {
+    let request = match &ev {
+        DocumentEvent::Opened(doc) => doc.request,
+        DocumentEvent::Failed { request, .. } => *request,
+        _ => return Err(ev),
+    };
+    let Some((app, name)) = OPENING.with(|o| {
+        let mut o = o.borrow_mut();
+        let at = o.asking.iter().position(|(r, ..)| *r == request)?;
+        let (_, app, name) = o.asking.remove(at);
+        Some((app, name))
+    }) else {
+        return Err(ev);
+    };
+    let DocumentEvent::Opened(doc) = ev else {
+        // the shell would not grant the file (outside the home folder, or gone)
+        OPENING.with(|o| o.borrow_mut().failed.push(name));
+        return Ok(true);
+    };
+    let grant = doc.grant;
+    drop(doc.file);
+    let done = move |ok: bool| {
+        OPENING.with(|o| {
+            let mut o = o.borrow_mut();
+            if !ok {
+                o.failed.push(name);
+            }
+            // a refused open needs the grant no more; a taken one is kept a while for a held open (malware card)
+            let keep = if ok { OPEN_GRANT_KEEP } else { std::time::Duration::ZERO };
+            o.release.push((grant, std::time::Instant::now() + keep));
+        })
+    };
+    match app {
+        Some(app) => {
+            bifrost_app::workspace::open_with(ctx, &[grant], &app, move |status| done(status == bifrost_app::workspace::Status::Ok));
+        }
+        None => {
+            bifrost_app::workspace::open_file(ctx, grant, done);
+        }
+    }
+    Ok(false)
+}
+
+/// Hands back the open grants whose time is up.
+fn release_open_grants(ctx: &Ctx, now: std::time::Instant) {
+    let due: Vec<GrantId> = OPENING.with(|o| {
+        let mut o = o.borrow_mut();
+        let (due, keep): (Vec<_>, Vec<_>) = std::mem::take(&mut o.release).into_iter().partition(|(_, at)| *at <= now);
+        o.release = keep;
+        due.into_iter().map(|(g, _)| g).collect()
+    });
+    for grant in due {
+        ctx.release_document(grant);
+    }
+}
+
+/// What a worker thread hands to the main thread: a file to open (a provider's download), or a folder to show (a
+/// disk image that was mounted). Opening needs the `Ctx`, which only the main thread has.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum FromWorker {
+    Open(PathBuf),
+    Show(PathBuf),
+}
+
+static FROM_WORKERS: std::sync::Mutex<Vec<FromWorker>> = std::sync::Mutex::new(Vec::new());
+
+/// Queues work for the main thread and wakes its loop.
+pub(crate) fn from_worker(work: FromWorker) {
+    FROM_WORKERS.lock().unwrap_or_else(std::sync::PoisonError::into_inner).push(work);
+    bifrost_app::dispatch::DispatchQueue::main().async_(|| {});
+}
+
+/// The work the worker threads queued, oldest first.
+pub(crate) fn take_from_workers() -> Vec<FromWorker> {
+    std::mem::take(&mut *FROM_WORKERS.lock().unwrap_or_else(std::sync::PoisonError::into_inner))
+}
+
+/// The name of a file the shell would not open since the last call, if any (the last one; the rest are dropped).
+pub(crate) fn take_open_failure() -> Option<String> {
+    OPENING.with(|o| {
+        let mut o = o.borrow_mut();
+        let last = o.failed.pop();
+        o.failed.clear();
+        last
+    })
 }
 
 /// What a waiting reply is for.
@@ -86,6 +214,7 @@ pub(crate) struct SystemState {
 impl SystemState {
     /// Sends the queued calls. Each call that expects a reply is remembered by its request id.
     pub(crate) fn flush(&mut self, ctx: &Ctx) {
+        release_open_grants(ctx, std::time::Instant::now());
         for effect in std::mem::take(&mut self.effects) {
             match effect {
                 Effect::CopyToBoard(paths) => {
@@ -127,6 +256,7 @@ impl SystemState {
                     let s = ctx.ui.s;
                     let _ = bifrost_app::share::show_picker(ctx, &items, Rect { x: x * s, y: y * s, w: w * s, h: h * s });
                 }
+                Effect::OpenFiles(paths, app) => open_files(ctx, &paths, app.as_deref()),
                 Effect::OpenApplication(id, name) => {
                     let failed = self.app_open_failed.clone();
                     bifrost_app::workspace::open_application(ctx, &id, move |status| {
@@ -442,6 +572,93 @@ mod tests {
         sys.app_open_failed.borrow_mut().push("Notes".into());
         assert_eq!(sys.take_app_open_failure().as_deref(), Some("Notes"));
         assert_eq!(sys.take_app_open_failure(), None);
+    }
+
+    fn granted(request: u32, grant: GrantId, name: &str) -> DocumentEvent {
+        let file = std::fs::File::open("/dev/null").unwrap();
+        DocumentEvent::Opened(bifrost_app::Document { request, grant, name: name.into(), size: 0, mode: bifrost_app::proto::DocMode::Read, file })
+    }
+
+    fn grant_request(sent: &[ToShell]) -> (u32, String) {
+        match sent {
+            [ToShell::DocGrantPath { request, path }] => (*request, path.clone()),
+            other => panic!("expected one grant request, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn open_asks_for_a_grant_then_hands_it_to_the_workspace_never_a_helper() {
+        let ctx = test_ctx();
+        let mut sys = SystemState::default();
+        sys.effects.push(Effect::OpenFiles(vec![PathBuf::from("/home/u/Pictures/a b.png")], None));
+        sys.flush(&ctx);
+        let (request, path) = grant_request(&ctx.take_sent());
+        assert_eq!(path, "/home/u/Pictures/a b.png");
+        let grant: GrantId = [7; 16];
+        assert_eq!(open_answer(&ctx, granted(request, grant, "a b.png")).ok(), Some(false));
+        match &ctx.take_sent()[..] {
+            [ToShell::WorkspaceRequest { op, grants, arg, .. }] => {
+                assert_eq!(*op, bifrost_app::proto::WorkspaceOp::OpenFile, "the shell picks the default app for the type");
+                assert_eq!(grants, &vec![grant]);
+                assert!(arg.is_empty());
+            }
+            other => panic!("expected a workspace open, got {other:?}"),
+        }
+        // the same request does not open twice
+        assert!(open_answer(&ctx, granted(request, grant, "a b.png")).is_err());
+    }
+
+    #[test]
+    fn open_with_names_the_chosen_app() {
+        let ctx = test_ctx();
+        let mut sys = SystemState::default();
+        sys.effects.push(Effect::OpenFiles(vec![PathBuf::from("/home/u/notes.txt")], Some("is.olibuijr.textedit.desktop".into())));
+        sys.flush(&ctx);
+        let (request, _) = grant_request(&ctx.take_sent());
+        assert!(open_answer(&ctx, granted(request, [9; 16], "notes.txt")).is_ok());
+        match &ctx.take_sent()[..] {
+            [ToShell::WorkspaceRequest { op, arg, .. }] => {
+                assert_eq!(*op, bifrost_app::proto::WorkspaceOp::OpenWith);
+                assert_eq!(arg, "is.olibuijr.textedit.desktop");
+            }
+            other => panic!("expected a workspace open with, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_refused_grant_is_a_notice_and_other_answers_pass_through() {
+        let ctx = test_ctx();
+        let mut sys = SystemState::default();
+        let _ = take_open_failure();
+        sys.effects.push(Effect::OpenFiles(vec![PathBuf::from("/mnt/x/report.pdf")], None));
+        sys.flush(&ctx);
+        let (request, _) = grant_request(&ctx.take_sent());
+        let refused = DocumentEvent::Failed { request, code: bifrost_app::proto::DocErrorCode::Denied };
+        assert_eq!(open_answer(&ctx, refused).ok(), Some(true));
+        assert!(ctx.take_sent().is_empty(), "nothing goes to the workspace without a grant");
+        assert_eq!(take_open_failure().as_deref(), Some("report.pdf"));
+        assert_eq!(take_open_failure(), None);
+        // a grant this app did not ask for an open (a drag's) is not taken
+        assert!(open_answer(&ctx, granted(request.wrapping_add(1000), [1; 16], "x")).is_err());
+    }
+
+    #[test]
+    fn at_most_the_protocol_limit_of_files_is_opened_at_once() {
+        let ctx = test_ctx();
+        let mut sys = SystemState::default();
+        let paths: Vec<PathBuf> = (0..MAX_OPEN_FILES + 4).map(|i| PathBuf::from(format!("/home/u/{i}.txt"))).collect();
+        sys.effects.push(Effect::OpenFiles(paths, None));
+        sys.flush(&ctx);
+        assert_eq!(ctx.take_sent().len(), MAX_OPEN_FILES);
+    }
+
+    #[test]
+    fn workers_hand_files_and_folders_to_the_main_thread_in_order() {
+        let _ = take_from_workers();
+        from_worker(FromWorker::Open(PathBuf::from("/home/u/.cache/a.pdf")));
+        from_worker(FromWorker::Show(PathBuf::from("/run/media/disk")));
+        assert_eq!(take_from_workers(), vec![FromWorker::Open(PathBuf::from("/home/u/.cache/a.pdf")), FromWorker::Show(PathBuf::from("/run/media/disk"))]);
+        assert!(take_from_workers().is_empty());
     }
 
     #[test]

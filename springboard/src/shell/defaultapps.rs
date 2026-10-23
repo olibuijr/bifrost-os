@@ -33,7 +33,8 @@ pub const CATEGORIES: &[Category] = &[
 fn builtin(app: AppId, icon: &str) -> Option<Handler> {
     let h = Handler::new(icon);
     Some(match app {
-        AppId::Photos => h.opens("public.png", Rank::Owner).opens("public.jpeg", Rank::Owner).scheme("photos"),
+        // the library app, not the file viewer: Preview owns pictures opened from Files (as in the reference)
+        AppId::Photos => h.opens("public.png", Rank::Default).opens("public.jpeg", Rank::Default).scheme("photos"),
         AppId::Files => h.opens("public.folder", Rank::Owner).opens("public.text", Rank::Alternate).opens("public.png", Rank::Alternate).opens("public.jpeg", Rank::Alternate).opens("public.audio", Rank::Alternate).opens("public.movie", Rank::Alternate),
         AppId::Browser => h.opens("public.html", Rank::Owner).opens("public.xml", Rank::Alternate).scheme("http").scheme("https"),
         AppId::Terminal => h.opens("public.shell-script", Rank::Alternate).opens("public.plain-text", Rank::None),
@@ -46,7 +47,8 @@ fn builtin(app: AppId, icon: &str) -> Option<Handler> {
 fn first_party(id: &str) -> Option<Handler> {
     let h = Handler::new(id);
     Some(match id {
-        "is.olibuijr.files.desktop" => h.opens("public.folder", Rank::Owner).opens("public.text", Rank::Alternate).opens("public.png", Rank::Alternate).opens("public.jpeg", Rank::Alternate).opens("public.audio", Rank::Alternate).opens("public.movie", Rank::Alternate).opens("public.archive", Rank::Alternate),
+        // Files opens folders only: a document it is handed would be copied into the folder shown, not opened
+        "is.olibuijr.files.desktop" => h.opens("public.folder", Rank::Owner),
         "is.olibuijr.browser.desktop" => h.opens("public.html", Rank::Owner).opens("public.xml", Rank::Alternate).opens("public.svg-image", Rank::Alternate).scheme("http").scheme("https"),
         "is.olibuijr.music.desktop" => h.opens("public.audio", Rank::Default),
         "is.olibuijr.notes.desktop" => h.opens("public.plain-text", Rank::Default).opens("net.daringfireball.markdown", Rank::Default),
@@ -248,13 +250,58 @@ mod tests {
         for id in ["is.olibuijr.files.desktop", "is.olibuijr.browser.desktop", "is.olibuijr.music.desktop", "is.olibuijr.notes.desktop"] {
             r.register(first_party(id).unwrap());
         }
-        assert_eq!(r.default_for_file("song.flac"), Some("is.olibuijr.music.desktop"), "Music (Default) beats Files (Alternate)");
+        assert_eq!(r.default_for_file("song.flac"), Some("is.olibuijr.music.desktop"), "Music declares audio");
         assert_eq!(r.default_for_file("todo.md"), Some("is.olibuijr.notes.desktop"));
         assert_eq!(r.default_for_file("page.html"), Some("is.olibuijr.browser.desktop"));
         assert_eq!(r.default_for_scheme("https"), Some("is.olibuijr.browser.desktop"));
         assert_eq!(r.default_for_type("public.folder"), Some("is.olibuijr.files.desktop"));
-        assert_eq!(r.default_for_file("archive.zip"), Some("is.olibuijr.files.desktop"));
+        assert_eq!(r.default_for_file("archive.zip"), None, "Files expands archives itself; it does not declare them");
+        assert!(r.open_with("photo.png").iter().all(|c| c.app != "is.olibuijr.files.desktop"), "Files is no viewer");
         assert!(first_party("is.x.unknown").is_none());
+    }
+
+    /// The shipped manifests of the document apps, registered after the built-in apps as `registry` does.
+    fn shipped() -> Registry {
+        let mut r = Registry::new();
+        for (id, app) in [("bifrost.photos", AppId::Photos), ("bifrost.terminal", AppId::Terminal), ("bifrost.deildu", AppId::Deildu)] {
+            r.register(builtin(app, id).unwrap());
+        }
+        for text in [
+            include_str!("../../apps/files/manifest.toml"),
+            include_str!("../../apps/preview-desktop/manifest.toml"),
+            include_str!("../../apps/textedit-desktop/manifest.toml"),
+            include_str!("../../apps/music-desktop/manifest.toml"),
+            include_str!("../../apps/videoplayer-desktop/manifest.toml"),
+            include_str!("../../apps/books-desktop/manifest.toml"),
+        ] {
+            let m = apphost::Manifest::parse(text).unwrap();
+            r.register(manifest_handler(&m).or_else(|| first_party(&m.id)).unwrap());
+        }
+        r.register(first_party("is.olibuijr.notes.desktop").unwrap());
+        r
+    }
+
+    #[test]
+    fn files_opens_documents_in_the_app_that_declares_them() {
+        let r = shipped();
+        let preview = "is.olibuijr.preview.desktop";
+        assert_eq!(r.default_for_file("holiday.JPG"), Some(preview), "Preview owns pictures, Photos is the library");
+        assert_eq!(r.default_for_file("shot.png"), Some(preview));
+        assert_eq!(r.default_for_file("report.pdf"), Some(preview), "Preview beats Books for PDF");
+        assert_eq!(r.default_for_file("notes.txt"), Some("is.olibuijr.textedit.desktop"));
+        assert_eq!(r.default_for_file("letter.rtf"), Some("is.olibuijr.textedit.desktop"));
+        assert_eq!(r.default_for_file("todo.md"), Some("is.olibuijr.notes.desktop"), "Markdown keeps its own declaration");
+        assert_eq!(r.default_for_file("song.mp3"), Some("is.olibuijr.music.desktop"));
+        assert_eq!(r.default_for_file("clip.mp4"), Some("is.olibuijr.videoplayer.desktop"));
+        assert_eq!(r.default_for_type("public.folder"), Some("is.olibuijr.files.desktop"));
+        // Open With lists the apps that declare the type, the default first and marked, and never Files for a document
+        let png = r.open_with("shot.png");
+        assert_eq!(png[0].app, preview);
+        assert!(png[0].is_default && png.iter().filter(|c| c.is_default).count() == 1);
+        assert!(png.iter().any(|c| c.app == "bifrost.photos"), "Photos can open it too: {png:?}");
+        assert!(png.iter().all(|c| c.app != "is.olibuijr.files.desktop" && c.app != "is.olibuijr.music.desktop"), "{png:?}");
+        let pdf = r.open_with("report.pdf");
+        assert!(pdf.iter().any(|c| c.app == "is.olibuijr.books.desktop") && pdf[0].app == preview, "{pdf:?}");
     }
 
     #[test]

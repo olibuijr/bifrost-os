@@ -2897,6 +2897,14 @@ API (all take a `Ctx`; answers arrive in a completion closure on the main thread
 - `open_application(ctx, app_id, done(Status))` (`openApplication(at:configuration:completionHandler:)`): launches the installed app, or brings it
   to the front when it runs, the way the Dock opens it (`Shell::desk_open_or_start`). `NotFound` for an unknown id, a service or a system package.
   Files' Applications place opens its rows with it (double-click, Return, File > Open); a refusal shows a notice in the status bar.
+- Files opens documents through the workspace (W4-18; `apps/files/src/system.rs` `Effect::OpenFiles`): double-click, Cmd+O (each file of a
+  selection), the context menu's Open and a provider download ask for a read grant per file (`Ctx::grant_path`, allowed because Files holds
+  `storage`), then `open_file` (default app) or `open_with` (a row of the Open With panel, which lists only the apps whose manifest declares the
+  type, the default first and marked). The sandboxed app never runs `/usr/bin/bifrost-apps`. A refused grant or open shows "could not be
+  opened" in the footer; the sender's grant goes back 10 minutes after the shell took the file (the malware card may hold the open that long).
+- Document types live in the manifests (`handles`): Preview owns PNG, JPEG, GIF, WebP and PDF (`public.image` default), Text Editor owns plain
+  text, RTF and RTFD, Music `public.audio`, Video Player `public.movie`, Files `public.folder` only. The built-in Photos library is `default`
+  rank for PNG/JPEG, so Preview wins as in the reference.
 - `url_for_application(ctx, id, done(Option<id>))`, `frontmost_application`, `running_applications`.
 - `icon_for_content_type(uti)` and `icon_for_file(name)`: pure, return a glyph name from the type tree (`uttype`).
 - `observe(ctx, kind, closure) -> ObserverToken`: did-launch, did-terminate, did-activate application (`user_info` `id`, `name`), will-sleep, did-wake,
@@ -2918,7 +2926,8 @@ Decisions:
   Events are a message of their own, not `DistNotify`, so no app can forge a workspace event.
 - Contract tests: `open_uses_the_default_app_for_the_type`, `recycle_moves_items_to_the_trash`, `apps_hear_did_launch_and_did_terminate` (SDK and shell side),
   `open_application_names_the_app_by_id_and_reports_the_status` (SDK), `open_application_launches_only_installed_apps_by_exact_id` (shell),
-  `opening_an_app_row_launches_the_app_by_id` (Files).
+  `opening_an_app_row_launches_the_app_by_id` (Files), `open_asks_for_a_grant_then_hands_it_to_the_workspace_never_a_helper` (Files),
+  `files_opens_documents_in_the_app_that_declares_them` (shell, against the shipped manifests).
 
 Gaps (explicit):
 - Sleep and wake events: the shell has `Shell::workspace_system_event(kind)` but nothing calls it yet (no suspend/lid hook located); launch, exit and

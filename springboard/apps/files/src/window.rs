@@ -175,17 +175,13 @@ impl Files {
                 }
                 let text = String::from_utf8_lossy(&out.stdout).into_owned();
                 if let Some((_, point)) = text.trim().split_once(' ') {
-                    let _ = std::process::Command::new("/usr/bin/bifrost-apps").arg("--open").arg(point).status();
+                    // the mounted folder opens in this window (`tick` takes it on the main thread)
+                    system::from_worker(system::FromWorker::Show(PathBuf::from(point)));
                 }
             });
         } else {
-            let path = e.path;
-            DispatchQueue::global(Qos::Utility).async_(move || {
-                let _ = std::process::Command::new("/usr/bin/bifrost-apps")
-                    .arg("--open")
-                    .arg(path)
-                    .status();
-            });
+            // the shell opens it in the default app for its type and grants that app the file (`workspace::open_file`)
+            self.sys.effects.push(Effect::OpenFiles(vec![e.path], None));
         }
     }
     pub(crate) fn go_back(&mut self) {
@@ -275,6 +271,9 @@ impl Files {
         // a pointer click does not leave a keyboard focus ring on a button (Golden Gate: only Tab moves the ring there)
         if self.controls.focused().is_some_and(|n|n.role==Role::Button) { self.controls.focus(None); }
         if self.info.is_some() && self.info_click(x, y) {
+            return;
+        }
+        if self.open_with.is_some() && self.open_with_click(x, y) {
             return;
         }
         if self.preview.is_some() || self.info.is_some() || self.open_with.is_some() {

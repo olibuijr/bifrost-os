@@ -265,7 +265,8 @@ impl Files {
         DispatchQueue::global(Qos::Utility).async_(move || match providers.fetch(&e.path) {
             Ok(local) => {
                 notify(String::new());
-                let _ = std::process::Command::new("/usr/bin/bifrost-apps").arg("--open").arg(local).status();
+                // the download opens with its app through the workspace, on the main thread
+                crate::system::from_worker(crate::system::FromWorker::Open(local));
             }
             Err(message) => notify(message),
         });
