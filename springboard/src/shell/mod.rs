@@ -994,6 +994,8 @@ pub struct Shell {
     /// Overview, the Apps grid and the desktops (see `overview.rs`)
     overview: overview::Overview,
     desktop_menu:Option<desktop_bar::Menu>,
+    /// How far the open menu is scrolled when it is taller than the screen, and the scroll arrow the pointer rests on.
+    desktop_menu_scroll:desktop_bar::MenuScrollState,
     /// Default-app registry and its Settings view, rebuilt when the set of apps changes (keyed by the app count).
     defaults:Option<(usize,bifrost_ui::launch::Registry,Vec<defaultapps::CategoryView>)>,
     /// The highlighted row of the open bar menu (keyboard or pointer), with the menu it belongs to.
@@ -1386,7 +1388,7 @@ impl Shell {
             bar_rects: Vec::new(),
             ext_frame: false,
             overview:Default::default(),
-            desktop_menu:None,defaults:None,recent_list:recent_items::new(),recent_dir:None,desktop_context:None,
+            desktop_menu:None,desktop_menu_scroll:Default::default(),defaults:None,recent_list:recent_items::new(),recent_dir:None,desktop_context:None,
             #[cfg(feature = "desktop-wayland")]
             desktop_menu_row:None,
             #[cfg(feature = "desktop-wayland")]
@@ -1482,7 +1484,12 @@ impl Shell {
         // a panel dropped at once (`cc.hide()` from Esc, Overview or a sheet) gets the frame that clears it even when
         // the caller did not mark the shell dirty: otherwise its overlay surface stays over the desktop (E2E-14)
         let panel_gone = self.desk_active() && self.desk_panels_open() != self.panels_were_open;
-        self.screen_on && (self.dirty || panel_gone || self.ext_frame || bifrost_render::appearance::fading() || self.anim.is_some() || self.turning() || self.pager.animating() || self.cc.animating() || self.switcher.animating() || self.keyboard.animating() || self.quicksearch.animating() || self.notify.animating() || self.lock_pager.animating() || self.today.animating() || self.home_animating() || files || desk_anim)
+        self.screen_on && (self.dirty || panel_gone || self.ext_frame || bifrost_render::appearance::fading() || self.anim.is_some() || self.turning() || self.pager.animating() || self.cc.animating() || self.switcher.animating() || self.keyboard.animating() || self.quicksearch.animating() || self.notify.animating() || self.lock_pager.animating() || self.today.animating() || self.home_animating() || files || desk_anim || self.menu_autoscrolling())
+    }
+
+    /// A menu taller than the screen scrolls while the pointer rests on its scroll arrow (`desktop_menu_autoscroll`).
+    fn menu_autoscrolling(&self) -> bool {
+        self.desktop_menu_scroll.arrow != 0 && self.desktop_menu.is_some() && self.desktop_menu == self.desktop_menu_scroll.menu
     }
 
     /// Whether a floating desktop panel is up (Control Center, Notification Center, the Cmd+Tab strip): the last drawn
@@ -3961,6 +3968,8 @@ impl Shell {
 
     pub fn tick(&mut self, t: f64) -> Vec<Effect> {
         self.st_mark(t);
+        #[cfg(feature = "desktop-wayland")]
+        self.desktop_menu_autoscroll(t);
         // the keyboard follows text focus on the tablet desktop: raised when a field gains it (edge-triggered, so a
         // dismissal sticks while the field keeps it), lowered whenever the front window has no field
         let now = self.desk_text_focus();
