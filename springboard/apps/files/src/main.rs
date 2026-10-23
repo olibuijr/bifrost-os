@@ -489,10 +489,13 @@ impl App for Files {
                 self.ancestors = done.ancestors;
                 match done.result {
                     Ok(rows) => {
-                        // the worker already ordered the rows (and renamed the Trash's)
+                        // the worker already ordered the rows (and renamed the Trash's). An item clicked while the
+                        // first batches were on screen stays selected: the final listing used to clear it, so the first
+                        // click on a freshly opened folder's icon selected nothing (W5-15)
+                        let keep = self.selected_paths();
                         self.listing = rows;
                         self.refresh_rows();
-                        self.selection.clear();
+                        self.reselect(&keep);
                         // a renamed item stays selected, and a new folder opens its name for editing
                         self.apply_pending();
                     }
@@ -855,6 +858,22 @@ mod tests {
             show_hidden:false,clip:None,naming:None,work:None,notice:None,info:None,tag_index:TagIndex::default(),tag_panel:false,smart:vec![],open_with:None,dragging:false,drop_target:None,undo:vec![],columns:false,ancestors:vec![],watch:None,journal:bifrost_app::fswatch::EventJournal::new(JOURNAL_CAP),journal_seen:0,fx:FileManagerState::default(),vo:ViewOpts::default(),data_dir:None,labels:new_labels(),row_text:Default::default(),sys:SystemState::default(),ext:Default::default(),
         }
     }
+    #[test]
+    fn a_selection_made_before_the_final_listing_survives_it() {
+        let mut f = fixture(vec![folder("a"), folder("b")]);
+        f.selection = vec![1];
+        let keep = f.selected_paths();
+        // the final listing has another item in front and the clicked one moved
+        f.listing = vec![folder("0"), folder("a"), folder("b")];
+        f.refresh_rows();
+        f.reselect(&keep);
+        assert_eq!(f.selected_paths(), vec![PathBuf::from("/fixture/b")]);
+        f.listing = vec![folder("a")];
+        f.refresh_rows();
+        f.reselect(&keep);
+        assert!(f.selection.is_empty(), "an item gone from the folder leaves the selection");
+    }
+
     pub(crate) fn folder(name: &str) -> Entry {
         Entry {name:name.into(),path:format!("/fixture/{name}").into(),is_dir:true,size:0,mtime:0,kind:Kind::Folder,items:None}
     }

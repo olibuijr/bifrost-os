@@ -74,7 +74,14 @@ impl Files {
         let base = self.hits.clone().unwrap_or_else(|| self.listing.clone());
         self.rows = self.expand_rows(base);
     }
+    /// Selects the items at `paths` again after the rows were rebuilt (indices move when the rows do). Paths no longer
+    /// listed drop out.
+    pub(crate) fn reselect(&mut self, paths: &[PathBuf]) {
+        self.selection = self.rows.iter().enumerate().filter(|(_, e)| paths.contains(&e.path)).map(|(i, _)| i).collect();
+    }
     pub(crate) fn sort_rows(&mut self) {
+        // the selection follows its items to their new places, as the reference keeps it across a sort
+        let keep = self.selected_paths();
         let mut listing = std::mem::take(&mut self.listing);
         self.order(&mut listing);
         self.listing = listing;
@@ -83,7 +90,7 @@ impl Files {
             self.hits = Some(hits);
         }
         self.refresh_rows();
-        self.selection.clear();
+        self.reselect(&keep);
     }
 }
 
