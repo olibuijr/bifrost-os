@@ -33,7 +33,7 @@ def scan(app: Path) -> dict:
         'fixed': count(FIXED),
         'pairs': count(PAIRS),
         'widgets': widgets,
-        'full_size': bool(re.search(r'^window\s*=\s*"full-size"', text, re.M)),
+        'full_size': bool(re.search(r'^window\s*=\s*"(full-size|borderless)"', text, re.M)),
     }
 
 

@@ -910,14 +910,24 @@ impl Shell {
         self.dirty = true;
     }
 
-    /// Cmd+`: the next window of the front app. The shell's own apps have one window each, so this acts on the
-    /// windows of a native app; the compositor raises the one named.
+    /// Whether the window in front is a native client's (a window the window server owns), so Cmd+` cycles by
+    /// activating its app's other native windows (`switcher_same_app`) instead of the desk's windows.
+    pub(super) fn foreign_cycle_owned(&self) -> bool {
+        #[cfg(feature = "desktop-wayland")]
+        { self.desk.as_ref().is_some_and(|d| d.native_windows.iter().chain(d.linux_apps.iter().flat_map(|a| a.windows.iter())).any(|w| w.active)) }
+        #[cfg(not(feature = "desktop-wayland"))]
+        { false }
+    }
+
+    /// Cmd+` (Shift: backwards) in front of a native client: its app's next native window; the compositor raises the
+    /// one named.
     pub(super) fn switcher_same_app(&mut self, reverse: bool) -> Vec<super::Effect> {
         #[cfg(feature = "desktop-wayland")]
         {
             let Some(d) = self.desk.as_ref() else { return vec![] };
-            let Some(active) = d.native_windows.iter().find(|w| w.active) else { return vec![] };
-            let same: Vec<_> = d.native_windows.iter().filter(|w| w.app_id == active.app_id).collect();
+            let all = || d.native_windows.iter().chain(d.linux_apps.iter().flat_map(|a| a.windows.iter()));
+            let Some(active) = all().find(|w| w.active) else { return vec![] };
+            let same: Vec<_> = all().filter(|w| w.app_id == active.app_id).collect();
             if same.len() < 2 {
                 return vec![];
             }

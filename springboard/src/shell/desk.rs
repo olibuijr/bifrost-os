@@ -270,7 +270,9 @@ enum Grab {
     Resize { edges: u8, start: Rect, x: f32, y: f32, app: AppId },
     /// a press on a traffic light that acts on release
     Light(usize, Light),
-    DockDrag{from:usize,x:f32,y:f32,at_x:f32,at_y:f32,moved:bool},
+    /// a press on Dock slot `from`: `entry` is the dock list entry and `rect` the icon as hit-tested at the press, so the
+    /// release opens the icon that was pressed even when the row re-centres in between (W2-23)
+    DockDrag{from:usize,entry:usize,rect:Rect,x:f32,y:f32,at_x:f32,at_y:f32,moved:bool},
     /// the touch belongs to this window's app until it lifts
     Content(usize),
 }
@@ -318,6 +320,9 @@ pub struct Desk {
     pub(super) lights_hover:Option<AppId>,
     /// the open Cmd/Alt+Tab switcher: the windows most recent first, and the selected one
     pub(super) cmdtab: Option<(Vec<AppId>, usize)>,
+    /// the front app's windows as Cmd+` found them (front first) and the one it brought forward last: consecutive
+    /// presses walk this order, so raising one window at a time still visits every window (W2-25)
+    pub(super) window_cycle: Option<(Vec<AppId>, usize)>,
     /// the dock slot under the pointer, whose name shows above it
     pub(super) dock_hover:Option<usize>,
     /// the pointer while it magnifies the dock (None when magnification is off or the pointer is away)
@@ -333,6 +338,9 @@ pub struct Desk {
     pub(super) dock_bounce:Vec<(usize,f64)>,
     /// the outer size each app's window had when it was last closed (the window comes back at it when reopened)
     pub(super) closed_sizes:std::collections::HashMap<AppId,(i32,i32)>,
+    /// where each app's window was when it was last closed: a window opened again comes back there (W2-26), as an app's
+    /// autosaved frame does, instead of at the window server's next cascade position
+    pub(super) closed_origins:std::collections::HashMap<AppId,(i32,i32)>,
     /// the last title-bar press (window, time in ms): a second press within the Double-Click Speed gap zooms
     last_title: Option<(AppId, f64)>,
     pub(super) dock_hide_at:Option<f64>,
@@ -366,6 +374,9 @@ pub struct Desk {
     /// (Overview, a minimize) its toplevel is destroyed, and the new toplevel must map where the window was, not at the
     /// window server's cascade
     pub(super) placed: std::collections::HashSet<AppId>,
+    /// the input shape of each borderless window (window px, `alpha_shape` of its last frame): the window server gives
+    /// it the pointer only there, and `pick` hits it only there
+    pub(super) shapes: std::collections::HashMap<AppId, std::sync::Arc<[[i32; 4]]>>,
     /// windows of apps that have not committed a frame yet: not drawn and not hit until the first frame arrives
     /// (`Shell::desk_refresh_unmapped`), so an app that opened a window it never drew leaves no black shell behind
     pub(super) unmapped: Vec<AppId>,
@@ -463,6 +474,73 @@ pub struct Metrics {
 /// A full-size-content window (`NativeWindowStyleMaskFullSizeContentView`): no title bar, the app draws to the top edge
 /// and the traffic lights sit inside its sidebar. Settings is one; an installed app asks with `window = "full-size"`
 /// in its manifest.
+/// Whether `app`'s window is borderless (`window = "borderless"`): a full-size window without shell chrome (no traffic
+/// lights, title band, rim, shadow, dim or corner clip) whose transparent pixels let the pointer through
+/// (`alpha_shape`), for an app that draws free-floating pieces such as Sticky Notes' notes (W2-22).
+pub fn borderless(app: AppId) -> bool {
+    match app {
+        AppId::External(slot) => apphost::installed().get(slot as usize).is_some_and(|a| a.manifest.borderless()),
+        _ => false,
+    }
+}
+
+/// The parts of a window of `width` x `height` px that its pixels cover (alpha above zero), as rects in window px:
+/// a run of covered pixels per row, and rows with the same runs merged into one rect. A borderless window takes the
+/// pointer only there (`WindowFrame::input`). More than `MAX_SHAPE_RECTS` rects (a noisy picture) falls back to one
+/// bounding box per run of rows, so the region stays small.
+pub fn alpha_shape(px: &[u32], width: usize, height: usize) -> Vec<[i32; 4]> {
+    let mut out: Vec<[i32; 4]> = Vec::new();
+    // the rects of the row band still growing: (x0, x1) runs and the row they started on
+    let mut open: Vec<(usize, usize)> = Vec::new();
+    let mut start = 0usize;
+    let flush = |out: &mut Vec<[i32; 4]>, runs: &[(usize, usize)], y0: usize, y1: usize| {
+        for &(a, b) in runs { out.push([a as i32, y0 as i32, (b - a) as i32, (y1 - y0) as i32]); }
+    };
+    for y in 0..=height {
+        let runs: Vec<(usize, usize)> = if y == height { Vec::new() } else {
+            let row = &px[y * width..(y + 1) * width];
+            let mut v = Vec::new();
+            let mut x = 0;
+            while x < width {
+                if row[x] >> 24 == 0 { x += 1; continue; }
+                let a = x;
+                while x < width && row[x] >> 24 != 0 { x += 1; }
+                v.push((a, x));
+            }
+            v
+        };
+        if runs != open {
+            flush(&mut out, &open, start, y);
+            open = runs;
+            start = y;
+        }
+    }
+    if out.len() > MAX_SHAPE_RECTS {
+        // one box per band of rows that has any pixel
+        let mut boxes: Vec<[i32; 4]> = Vec::new();
+        for r in out {
+            match boxes.last_mut() {
+                Some(b) if b[1] + b[3] == r[1] || (b[1] == r[1]) => {
+                    let (x0, x1) = (b[0].min(r[0]), (b[0] + b[2]).max(r[0] + r[2]));
+                    let (y0, y1) = (b[1].min(r[1]), (b[1] + b[3]).max(r[1] + r[3]));
+                    *b = [x0, y0, x1 - x0, y1 - y0];
+                }
+                _ => boxes.push(r),
+            }
+        }
+        return boxes;
+    }
+    out
+}
+
+/// The most rects a borderless window's input region holds before `alpha_shape` merges them into boxes.
+pub const MAX_SHAPE_RECTS: usize = 512;
+
+/// Whether window-local (`x`, `y`) is inside one of `shape`'s rects.
+pub fn shape_contains(shape: &[[i32; 4]], x: f32, y: f32) -> bool {
+    shape.iter().any(|r| x >= r[0] as f32 && x < (r[0] + r[2]) as f32 && y >= r[1] as f32 && y < (r[1] + r[3]) as f32)
+}
+
 pub fn full_size(app: AppId) -> bool {
     match app {
         AppId::Settings => true,
@@ -485,6 +563,10 @@ pub fn bar_hidden(full: bool, pointer_y: Option<f32>, bar_h: f32) -> bool {
 }
 
 pub fn drag_zone(w: &Win, m: &Metrics, controls: &[bifrost_proto::Node]) -> (i32, Vec<[i32; 4]>) {
+    // a borderless window has no title band: every press is the app's (a sticky note moves itself)
+    if borderless(w.app) {
+        return (0, Vec::new());
+    }
     zone_of(w, m, controls, full_size(w.app) && w.app != AppId::Settings)
 }
 
@@ -585,8 +667,8 @@ impl Win {
         if !outer.contains(x, y) {
             return None;
         }
-        // a full-screen window is the app alone: no resize edges, no title bar, no traffic lights
-        if self.full {
+        // a full-screen window is the app alone: no resize edges, no title bar, no traffic lights; so is a borderless one
+        if self.full || borderless(self.app) {
             return self.r.contains(x, y).then_some(Hit::Content);
         }
         if !self.maximized && !size_limits(self.app).fixed {
@@ -659,6 +741,9 @@ impl Desk {
     }
 
     pub(super) fn grab_idle(&self)->bool{self.grab.is_none()}
+    /// Whether the Dock keeps magnifying: with no grab, or while a Dock icon is pressed but not dragged, so the row does
+    /// not jump back to rest under the pointer between the press and the release (W2-23).
+    pub(super) fn dock_grab_magnifies(&self)->bool{matches!(self.grab,None|Some(Grab::DockDrag{moved:false,..}))}
     pub fn new() -> Self {
         Desk {dock_visible:true,..Default::default()}
     }
@@ -708,7 +793,10 @@ impl Desk {
 
     /// The frontmost visible window hit at (x, y).
     pub fn pick(&self, m: &Metrics, x: f32, y: f32) -> Option<(usize, Hit)> {
-        self.wins.iter().enumerate().rev().filter(|(_, w)| !w.minimized && !self.unmapped.contains(&w.app)).find_map(|(i, w)| w.hit(m, x, y).map(|h| (i, h)))
+        self.wins.iter().enumerate().rev().filter(|(_, w)| !w.minimized && !self.unmapped.contains(&w.app))
+            // a shaped (borderless) window is hit only where it drew: the rest belongs to the window below (W2-22)
+            .filter(|(_, w)| self.shapes.get(&w.app).map_or(true, |s| shape_contains(s, x - w.r.x as f32, y - w.r.y as f32)))
+            .find_map(|(i, w)| w.hit(m, x, y).map(|h| (i, h)))
     }
 
     /// The work area windows live in: below the menu bar, above the dock.
@@ -725,9 +813,19 @@ impl Desk {
         let (w, h) = (size.0.min(a.w), size.1.min(a.h));
         let step = (m.title as f32 * 1.1) as i32;
         let n = (self.opened % 8) as i32;
-        self.opened += 1;
-        let x = (a.x + (a.w - w) / 2 + (n - 3) * step).clamp(a.x, (a.x + a.w - w).max(a.x));
-        let y = (a.y + (a.h - h) / 3 + n * step / 2).clamp(a.y, (a.y + a.h - h).max(a.y));
+        let (x, y) = match self.closed_origins.get(&app) {
+            // a window opened again comes back where it was closed (W2-26); its toplevel asks to map there (`placed`)
+            Some(&(x, y)) => {
+                self.placed.insert(app);
+                (x, y)
+            }
+            None => {
+                self.opened += 1;
+                (a.x + (a.w - w) / 2 + (n - 3) * step, a.y + (a.h - h) / 3 + n * step / 2)
+            }
+        };
+        let x = x.clamp(a.x, (a.x + a.w - w).max(a.x));
+        let y = y.clamp(a.y, (a.y + a.h - h).max(a.y));
         let r = Rect { x, y, w, h };
         let at = self.band_top(app);
         self.wins.insert(at, Win { app, r, maximized: false, minimized: false, full: false, restore: r });
@@ -837,8 +935,10 @@ impl Desk {
         // the frame the user left the window at (the zoomed one goes back to the frame before zoom)
         let r = if w.maximized { w.restore } else { w.r };
         self.closed_sizes.insert(w.app, (r.w, r.h));
-        // a window opened again is a new window: the window server places it
+        self.closed_origins.insert(w.app, (r.x, r.y));
+        // the toplevel is gone; `open` asks the next one to map where this one was (`closed_origins`)
         self.placed.remove(&w.app);
+        self.shapes.remove(&w.app);
         self.release_app_buffers(w.app);
         self.collapsed.remove(&w.app);
         // a window closed while full screen from a zoom must not leave its way back for the window opened next
@@ -992,6 +1092,32 @@ pub fn dock_rects(m: &Metrics, icon: i32, pad: i32, gap: i32, n: usize, sep_afte
 }
 
 /// Like `dock_rects` with a divider after each index in `seps` (pinned | recents | minimized and Trash).
+/// One step through `n` items from `i`, wrapping: forwards, or backwards when `reverse`.
+pub(super) fn cycle_step(i: usize, n: usize, reverse: bool) -> usize {
+    if n == 0 { 0 } else if reverse { (i + n - 1) % n } else { (i + 1) % n }
+}
+
+/// The next Cmd+` stop: the order to walk and the window to bring forward. `stack` is the front app's windows, front
+/// first. A walk continues while the window in front is the one it raised last and the app has the same windows;
+/// otherwise a new walk starts from the stack as it is. None with fewer than two windows.
+pub(super) fn window_cycle_next(prev: Option<(Vec<AppId>, usize)>, stack: &[AppId], reverse: bool) -> Option<(Vec<AppId>, usize)> {
+    if stack.len() < 2 { return None; }
+    let same = |order: &Vec<AppId>| order.len() == stack.len() && stack.iter().all(|a| order.contains(a));
+    let (order, at) = match prev {
+        Some((order, at)) if same(&order) && order.get(at) == stack.first() => (order, at),
+        _ => (stack.to_vec(), 0),
+    };
+    let next = cycle_step(at, order.len(), reverse);
+    Some((order, next))
+}
+
+/// Whether the release of a Dock press at (`x`, `y`) opens the pressed icon: the icon as it was hit at the press
+/// (`pressed`) decides, so a row that re-centred under a still pointer cannot drop the click or move it to a neighbour
+/// (W2-23); the slot's current rect counts too while it still holds the same entry (`now`, `now_entry`).
+pub(super) fn dock_release_hits(pressed: Rect, now: Option<Rect>, now_entry: Option<usize>, entry: usize, x: f32, y: f32) -> bool {
+    pressed.contains(x, y) || (now_entry == Some(entry) && now.is_some_and(|r| r.contains(x, y)))
+}
+
 pub fn dock_rects_seps(m: &Metrics, icon: i32, pad: i32, gap: i32, n: usize, seps: &[usize], sep: i32) -> (Rect, Vec<Rect>) {
     let extra = seps.len() as i32 * sep;
     let total = n as i32 * icon + (n as i32 - 1).max(0) * gap + extra + 2 * pad;
@@ -1082,7 +1208,7 @@ impl Shell {
             let Some(id)=win_id(w.app) else{return false};
             // a covered window has no cache entry by design (see `hidden_ids`); anything else without one needs a full draw
             if !desk.window_cache.contains_key(&id) && !desk.hidden_ids.contains(&id) {return false;}
-            frames.push(crate::bare::wayland::WindowFrame {id,title:frame_title(id),x:w.r.x,y:w.r.y,width:w.r.w as usize,height:w.r.h as usize,pixels:None,damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize),maximized:w.maximized,fullscreen:w.full,title_height,drag_height:0,no_drag:Vec::new(),floating:false,fx:bifrost_render::glass::Fx::IDENTITY,opaque:!matches!(w.app,AppId::External(_)),origin:None,min_size:(0,0)});
+            frames.push(crate::bare::wayland::WindowFrame {id,title:frame_title(id),x:w.r.x,y:w.r.y,width:w.r.w as usize,height:w.r.h as usize,pixels:None,damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize),maximized:w.maximized,fullscreen:w.full,title_height,drag_height:0,no_drag:Vec::new(),floating:false,fx:bifrost_render::glass::Fx::IDENTITY,opaque:!matches!(w.app,AppId::External(_)),origin:None,min_size:(0,0),input:None});
             let controls=match w.app {AppId::External(slot)=>ext.get(slot as usize).and_then(Option::as_ref).map_or(&[][..],|h|&h.controls[..]),_=>&[][..]};
             let (dh,nd)=drag_zone(w,&m,controls);
             if let Some(f)=frames.last_mut(){f.drag_height=dh;f.no_drag=nd;}
@@ -1166,6 +1292,14 @@ impl Shell {
             }
             frames.sort_by_key(|f| f.floating);
             for f in frames.iter_mut() {
+                // a borderless window takes the pointer only where its newest pixels cover (W2-22)
+                if let Some(a) = frame_app(f.id).filter(|a| borderless(*a)) {
+                    if let Some(px) = f.pixels.as_ref().filter(|p| p.len() == f.width * f.height) {
+                        let shape: std::sync::Arc<[[i32; 4]]> = alpha_shape(px, f.width, f.height).into();
+                        d.shapes.insert(a, shape);
+                    }
+                    f.input = Some(d.shapes.get(&a).cloned().unwrap_or_else(|| std::sync::Arc::from(Vec::new())));
+                }
                 f.origin = frame_app(f.id).and_then(|a| origin_hint(&d.placed, a, f.x, f.y));
                 // the toplevel advertises the app's own minimum (outer px, as its window geometry), not a fixed one
                 f.min_size = frame_app(f.id).map_or((0, 0), |a| { let (w, h, _, _) = size_range(a, &m); (w, h) });
@@ -1923,10 +2057,12 @@ impl Shell {
         let (w, h) = ((w as i32).min(m.w * 9 / 10), (h as i32).min(m.h * 85 / 100));
         // the manifest's window_size (content points) replaces the default size
         let (w, h) = size_limits(app).initial.map(|s| outer_px(app, &m, s)).unwrap_or((w, h));
+        // a borderless window is a transparent layer over the whole work area, so what it draws can go anywhere on it
+        let (w, h) = if borderless(app) { let a = Desk::area(&m); (a.w, a.h) } else { (w, h) };
         // a window opened again comes back at the size it was closed with; a fixed manifest size still wins
         let (w, h) = match (size_limits(app).initial, self.desk.as_ref().and_then(|d| d.closed_sizes.get(&app).copied())) {
             // held to the window's range: a size below the minimum must not come back with the window (E2E-12)
-            (None, Some(closed)) => clamp_size(app, &m, closed),
+            (None, Some(closed)) if !borderless(app) => clamp_size(app, &m, closed),
             _ => (w, h),
         };
         let existed = self.desk.as_ref().is_some_and(|d| d.index_of(app).is_some());
@@ -1969,16 +2105,18 @@ impl Shell {
     /// Alt/Ctrl/Meta+Tab on the desktop: raises the visible window behind the front one,
     /// so repeated presses toggle between the two most recent windows.
     #[cfg(any(test, feature = "desktop-wayland"))]
-    pub(super) fn desk_cycle_window(&mut self) {
+    /// Cmd+` (`reverse`: Shift+Cmd+`) brings the front app's next (previous) window forward, its extra windows
+    /// included; minimized windows are skipped. While the Cmd+Tab strip is open it moves the selection instead.
+    pub(super) fn desk_cycle_window(&mut self, reverse: bool) {
         if let Some(d) = &mut self.desk {
-            // Cmd+` walks the windows of the front app, its extra windows included
-            let front = d.front().map(|w| w.app.parent());
             match &mut d.cmdtab {
-                Some((order, sel)) => *sel = (*sel + 1) % order.len(),
+                Some((order, sel)) => *sel = cycle_step(*sel, order.len(), reverse),
                 None => {
-                    let order: Vec<AppId> = d.wins.iter().rev().map(|w| w.app).filter(|a| Some(a.parent()) == front).collect();
-                    if order.len() >= 2 {
-                        d.cmdtab = Some((order, 1));
+                    let front = d.front().map(|w| w.app.parent());
+                    let stack: Vec<AppId> = d.wins.iter().rev().filter(|w| !w.minimized && Some(w.app.parent()) == front).map(|w| w.app).collect();
+                    if let Some((order, sel)) = window_cycle_next(d.window_cycle.take(), &stack, reverse) {
+                        d.window_cycle = Some((order.clone(), sel));
+                        d.cmdtab = Some((order, sel));
                     }
                 }
             }
@@ -2327,6 +2465,9 @@ impl Shell {
 
     /// Touches over the desktop. `None` leaves the event to the normal path.
     pub(super) fn desk_event(&mut self, ev: Event, t: f64) -> Option<Vec<Effect>> {
+        // a press is also a pointer position: the magnified row is centred on it before the hit test, so the press
+        // resolves the icon drawn under the pointer, not one laid out around where the pointer was a moment ago (W2-23)
+        if let Event::Down(x, y) = ev { let _ = self.dock_pointer(super::desktop_dock::Pointer::Hover(x, y), t); }
         let m = self.desk_metrics();
         let (list, bar0, icons) = self.desk_dock(&m);
         let (dock_bar, icons) = self.dock_live(bar0, &icons, t / 1000.0);
@@ -2335,7 +2476,7 @@ impl Shell {
                 self.desk.as_mut()?.grab = None;
                 // the dock sits over the windows
                 if let Some(k) = icons.iter().position(|r| self.dock_is_visible()&&r.contains(x, y)) {
-                    self.desk.as_mut()?.grab = Some(Grab::DockDrag{from:k,x,y,at_x:x,at_y:y,moved:false});
+                    self.desk.as_mut()?.grab = Some(Grab::DockDrag{from:k,entry:list[k],rect:icons[k],x,y,at_x:x,at_y:y,moved:false});
                     self.desk.as_mut()?.dock_drop = None;
                     // an app that already has a window comes forward on the press, not after the release
                     if let Some(a) = apps().get(list[k]).map(|a| Self::dock_app(a.id)) {
@@ -2426,10 +2567,10 @@ impl Shell {
                         let fx = self.with_size(b.w, b.h, |sh| sh.app_touch_single(w.app, Event::Move(x - b.x as f32, y - b.y as f32), t));
                         Some(fx)
                     }
-                    Grab::DockDrag{from,x:x0,y:y0,..}=>{
+                    Grab::DockDrag{from,entry,rect,x:x0,y:y0,..}=>{
                         let moved=(x-x0).abs()+(y-y0).abs()>self.ui.pt(8.);
                         let desk=self.desk.as_mut()?;
-                        desk.grab=Some(Grab::DockDrag{from,x:x0,y:y0,at_x:x,at_y:y,moved});
+                        desk.grab=Some(Grab::DockDrag{from,entry,rect,x:x0,y:y0,at_x:x,at_y:y,moved});
                         if moved {
                             let centres:Vec<(f32,f32)>=icons.iter().map(|r|((r.x+r.w/2) as f32,(r.y+r.h/2) as f32)).collect();
                             if let Some(slot)=bifrost_ui::dockdrag::slot_at(&centres,x,y) {
@@ -2488,55 +2629,56 @@ impl Shell {
                         self.ext_window_dropped(moved);
                         Some(vec![])
                     }
-                    Some(Grab::DockDrag{from:k,x:x0,y:y0,..}) if (x-x0).abs()+(y-y0).abs()>self.ui.pt(8.) => {
+                    Some(Grab::DockDrag{from:k,entry,x:x0,y:y0,..}) if (x-x0).abs()+(y-y0).abs()>self.ui.pt(8.) => {
                         // the neighbours already show the final order, so dropping them in place is seamless
                         let slot=self.desk.as_mut()?.dock_drop.take();
                         self.desk.as_ref()?.dock_slide.borrow_mut().clear();
                         // an app pinned in the Dock and dragged well off it leaves the Dock (its Pin toggles off)
-                        if slot.is_none() && self.dock_removable(list[k]) && super::desktop_dock::dock_drag_off(dock_bar, x, y, self.ui.pt(DOCK_REMOVE_PT)) {
-                            self.dock_change(super::desktop_dock::Change::Pin(list[k]), t);
-                        } else if let Some(target)=slot{self.dock_reorder(list[k],list[target],target>k);}
+                        if slot.is_none() && self.dock_removable(entry) && super::desktop_dock::dock_drag_off(dock_bar, x, y, self.ui.pt(DOCK_REMOVE_PT)) {
+                            self.dock_change(super::desktop_dock::Change::Pin(entry), t);
+                        } else if let Some(&to)=slot.and_then(|target|list.get(target)){self.dock_reorder(entry,to,slot.unwrap_or(0)>k);}
                         Some(vec![])
                     },
-                    Some(Grab::DockDrag{from:k,..}) => {
-                        if icons.get(k).is_some_and(|r| r.contains(x, y)) {
-                            if list[k] == DOCK_TRASH {
+                    Some(Grab::DockDrag{from:k,entry,rect,..}) => {
+                        // the icon latched at the press decides: the row may have re-centred since (W2-23)
+                        if dock_release_hits(rect, icons.get(k).copied(), list.get(k).copied(), entry, x, y) {
+                            if entry == DOCK_TRASH {
                                 // the account's Trash as Files keeps it; the shell runs as root, so not $HOME, and Files creates it
                                 let trash=crate::files::trash::dir(&super::dock_stack::home_dir());
                                 if let Err(e)=self.desktop_open_folder(FILES_APP,&trash.to_string_lossy(),t){eprintln!("BifrOSt Trash: {e}");}
                                 return Some(vec![]);
                             }
-                            if list[k] == super::dock_stack::DOCK_STACK {
+                            if entry == super::dock_stack::DOCK_STACK {
                                 // the Downloads stack opens its folder in Files
                                 let folder = super::dock_stack::downloads_dir();
                                 if let Err(e)=self.desktop_open_folder(FILES_APP,&folder.to_string_lossy(),t){eprintln!("BifrOSt Downloads: {e}");}
                                 return Some(vec![]);
                             }
-                            if let Some(wi) = super::desktop_dock::dock_min_index(list[k]) {
+                            if let Some(wi) = super::desktop_dock::dock_min_index(entry) {
                                 // a minimized window comes back from its slot
                                 let app = self.desk.as_ref()?.wins.get(wi)?.app;
                                 self.desk_open(app, t);
                                 return Some(vec![]);
                             }
                             #[cfg(feature = "desktop-wayland")]
-                            if list[k] > apps().len() {
-                                let app=&self.desk.as_ref()?.linux_apps[list[k]-apps().len()-1];
+                            if entry > apps().len() {
+                                let app=self.desk.as_ref()?.linux_apps.get(entry-apps().len()-1)?;
                                 if app.windows.is_empty() {
                                     let id = app.app_id.clone();
-                                    self.dock_start_bounce(list[k], t);
+                                    self.dock_start_bounce(entry, t);
                                     crate::bare::sys::spawn_named("launch-apps", move || { let _ = std::process::Command::new("/usr/bin/bifrost-apps").arg(id).status(); });
                                     return Some(vec![]);
                                 }
                                 let next=app.windows.iter().position(|w|w.active).map(|i|(i+1)%app.windows.len()).unwrap_or(0);
                                 return Some(vec![Effect::ActivateForeign(app.windows[next].id)]);
                             }
-                            if list[k] == apps().len() {
+                            if entry == apps().len() {
                                 // the Apps icon opens the Apps grid
                                 self.appgrid_toggle(t);
                                 return Some(vec![]);
                             }
-                            let app = apps()[list[k]].id;
-                            self.dock_start_bounce(list[k], t);
+                            let Some(app) = apps().get(entry).map(|a| a.id) else { return Some(vec![]) };
+                            self.dock_start_bounce(entry, t);
                             self.desk_dock_tap(app, t);
                         }
                         Some(vec![])
@@ -2792,7 +2934,7 @@ impl Shell {
                         id, title: frame_title(id), x:w.r.x, y:w.r.y,
                         width:w.r.w as usize, height:w.r.h as usize, pixels:None,
                         damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize), maximized:w.maximized, fullscreen:w.full, title_height:m.title,
-                        drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None, min_size:(0,0),
+                        drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None, min_size:(0,0),input:None,
                     });
                     continue;
                 }
@@ -2801,7 +2943,7 @@ impl Shell {
                         id, title: frame_title(id), x:w.r.x, y:w.r.y,
                         width:w.r.w as usize, height:w.r.h as usize, pixels:None,
                         damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize), maximized:w.maximized, fullscreen:w.full, title_height:m.title,
-                        drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None, min_size:(0,0),
+                        drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None, min_size:(0,0),input:None,
                     });
                     self.desk.as_mut().unwrap().window_cache.insert(id,cached.unwrap());
                     continue;
@@ -2825,7 +2967,7 @@ impl Shell {
                             desk.frames.push(crate::bare::wayland::WindowFrame {
                                 id, title: frame_title(id), x:w.r.x, y:w.r.y, width:cw, height:ch, pixels:None,
                                 damage:crate::gfx::Damage::new(cw,ch), maximized:w.maximized, fullscreen:w.full, title_height:m.title,
-                                drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None, min_size:(0,0),
+                                drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None, min_size:(0,0),input:None,
                             });
                             continue;
                         }
@@ -2843,18 +2985,21 @@ impl Shell {
                         }
                         let mut damage=crate::gfx::Damage::new(width,height);
                         for a in body_damage.areas() {damage.add(a.x0 as i32,(a.y0+top) as i32,(a.x1-a.x0) as i32,(a.y1-a.y0) as i32);}
-                        if !focused { for a in body_damage.areas() { dim_rect(pixels, width, a.x0, a.y0 + top, a.x1, a.y1 + top, BACKGROUND_DIM); } }
+                        // a borderless window is the app's pixels alone: no dim, rim, corner clip or lights (its notes, or
+                        // whatever it draws, carry their own edges)
+                        let bare = borderless(w.app);
+                        if !focused && !bare { for a in body_damage.areas() { dim_rect(pixels, width, a.x0, a.y0 + top, a.x1, a.y1 + top, BACKGROUND_DIM); } }
                         let src=self.ext.get(slot as usize).and_then(Option::as_ref).and_then(|h|h.frame());
-                        let dim=(!focused).then_some(BACKGROUND_DIM);
+                        let dim=(!focused && !bare).then_some(BACKGROUND_DIM);
                         // the app drew into the window's edge band: the band is taken again from the app's frame and the
                         // dark-mode inner rim and the corner clip are applied once over it (stroking the retained buffer
                         // stacked 15% white per repaint into a solid white border, E2E-10)
                         let mut edge:Vec<(i32,i32,i32,i32)>=Vec::new();
-                        if !w.maximized && body_damage.areas().iter().any(|a| edge_band_rects(width,height,corner).iter().any(|r| overlaps(r,a,top))) {
+                        if !w.maximized && !bare && body_damage.areas().iter().any(|a| edge_band_rects(width,height,corner).iter().any(|r| overlaps(r,a,top))) {
                             if let Some(src)=src { edge=restore_window_edge(pixels,width,height,top,src,dim,corner,window_rim_color()); }
                             for r in &edge {damage.add(r.0,r.1,r.2,r.3);}
                         }
-                        if full_size(w.app) {
+                        if full_size(w.app) && !bare {
                             // the lights sit over the app: repaint them where the app just drew under them
                             let mut local=*w; local.r.x=0; local.r.y=0;
                             let mut surf=Surface{w:width,h:height,stride:width,px:&mut pixels[..],y0:0};
@@ -2876,7 +3021,7 @@ impl Shell {
                         let desk=self.desk.as_mut().unwrap();
                         desk.body_cache.remove(&w.app);
                         desk.window_cache.insert(id,retained);
-                        desk.frames.push(crate::bare::wayland::WindowFrame{id,title:frame_title(id),x:w.r.x,y:w.r.y,width,height,pixels:outgoing,damage,maximized:w.maximized,fullscreen:w.full,title_height:m.title,drag_height,no_drag,fx:bifrost_render::glass::Fx::IDENTITY,opaque,floating:false,origin:None,min_size:(0,0)});
+                        desk.frames.push(crate::bare::wayland::WindowFrame{id,title:frame_title(id),x:w.r.x,y:w.r.y,width,height,pixels:outgoing,damage,maximized:w.maximized,fullscreen:w.full,title_height:m.title,drag_height,no_drag,fx:bifrost_render::glass::Fx::IDENTITY,opaque,floating:false,origin:None,min_size:(0,0),input:None});
                         continue;
                     }
                 }
@@ -2898,7 +3043,7 @@ impl Shell {
                     self.draw_window(&mut surf, &local, Some(i) == front, &m, t, false);
                     self.desk_cover(&mut surf, &local, &m, t);
                 }
-                if !w.maximized { clip_corners(&mut image,corner); }
+                if !w.maximized && !borderless(w.app) { clip_corners(&mut image,corner); }
                 let previous = cached.as_ref().filter(|c| c.width == image.w && c.height == image.h).map_or(&[][..], |c| c.pixels.as_ref());
                 let damage = crate::gfx::Damage::between(previous, &image.px, image.w, image.h);
                 let pixels:std::sync::Arc<[u32]> = if damage.is_empty() {cached.unwrap().pixels} else {std::sync::Arc::from(&image.px[..])};
@@ -2911,7 +3056,7 @@ impl Shell {
                 desk.frames.push(crate::bare::wayland::WindowFrame {
                     id, title: frame_title(id), x:w.r.x, y:w.r.y,
                     width:w.r.w as usize, height:w.r.h as usize, pixels, damage, maximized:w.maximized, fullscreen:w.full, title_height:m.title,
-                    drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None, min_size:(0,0),
+                    drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None, min_size:(0,0),input:None,
                 });
                 continue;
             }
@@ -2969,14 +3114,15 @@ impl Shell {
     fn draw_window(&mut self, s: &mut Surface, w: &Win, focused: bool, m: &Metrics, t: f64, shadow: bool) {
         let ui = &self.ui;
         let r = w.r;
-        let rad = if w.maximized || w.full { 0.0 } else { ui.pt(bifrost_ui::prefs_layout::m::WINDOW_RADIUS) };
+        let bare = borderless(w.app);
+        let rad = if w.maximized || w.full || bare { 0.0 } else { ui.pt(bifrost_ui::prefs_layout::m::WINDOW_RADIUS) };
         // shadow (CPU path; the GPU presenter draws its own): Golden Gate's key window casts a
         // large soft shadow (~40 pt blur, ~16 pt down, ~30% under the bottom edge), others a light one
-        if !w.maximized && shadow {
+        if !w.maximized && shadow && !bare {
             cached_window_shadow(s, ui, r.x as f32, r.y as f32, r.w as f32, r.h as f32, rad, focused);
         }
         let bar = if focused { super::ui::WINDOW_FRAME_FOCUSED.now() } else { super::ui::WINDOW_FRAME_BLURRED.now() };
-        s.fill_rrect(r.x as f32, r.y as f32, r.w as f32, r.h as f32, rad, bar);
+        if !bare { s.fill_rrect(r.x as f32, r.y as f32, r.w as f32, r.h as f32, rad, bar); }
         // the body: the app, drawn at the body size
         let b = w.body(m);
         let (bw, bh) = (b.w.max(1) as usize, b.h.max(1) as usize);
@@ -3012,15 +3158,15 @@ impl Shell {
             }
         }
         if full_size(w.app) && rad > 0.0 { copy_rect_rounded(s, &buf, bw, bh, b.x, b.y, rad); } else { copy_rect(s, &buf, bw, bh, b.x, b.y); }
-        if !focused { dim_rect(s.px, s.stride, b.x.max(0) as usize, (b.y.max(0) as usize).saturating_sub(s.y0), ((b.x + b.w).max(0) as usize).min(s.w), ((b.y + b.h).max(0) as usize).saturating_sub(s.y0).min(s.h), BACKGROUND_DIM); }
+        if !focused && !bare { dim_rect(s.px, s.stride, b.x.max(0) as usize, (b.y.max(0) as usize).saturating_sub(s.y0), ((b.x + b.w).max(0) as usize).min(s.w), ((b.y + b.h).max(0) as usize).saturating_sub(s.y0).min(s.h), BACKGROUND_DIM); }
         #[cfg(feature = "desktop-wayland")]
         if persistent || builtin { self.desk.as_mut().unwrap().body_cache.insert(w.app,buf); }
         else { self.desk.as_mut().unwrap().buf = buf; }
         #[cfg(not(feature = "desktop-wayland"))]
         { self.desk.as_mut().unwrap().buf = buf; }
         let ui = &self.ui;
-        // a full-screen window is the app alone: no rim, title or traffic lights
-        if w.full { return; }
+        // a full-screen window is the app alone: no rim, title or traffic lights; so is a borderless one
+        if w.full || bare { return; }
         // hairline under the title bar and around the window
         if !w.maximized { window_rim(s, r.x as f32, r.y as f32, r.w as f32, r.h as f32, rad); }
         if !full_size(w.app) { s.fill_rect(r.x.max(0) as usize, (r.y + m.title - 1).max(0) as usize, r.w.max(0) as usize, 1, super::ui::SEPARATOR_C.now()); }
@@ -3082,8 +3228,10 @@ impl Shell {
         let (list, bar0, rects0) = self.desk_dock(m);
         // autohide slide, then magnification around the pointer (both pure functions of the clock)
         let (bar, slid) = self.dock_slid(bar0, &rects0, t / 1000.0);
-        self.note_dock_glass(bifrost_render::glass::gpu().then_some(bar));
         let rects = self.dock_magnified(&slid, t / 1000.0);
+        // the plate grows along the axis with the magnified row, so the end icons stay on it (W2-24)
+        let bar = super::desktop_dock::dock_plate(bar, &slid, &rects, self.dock_preferences().position != super::desktop_dock::Position::Bottom);
+        self.note_dock_glass(bifrost_render::glass::gpu().then_some(bar));
         let ui = &self.ui;
         // frosted material: blur what is behind the dock, tint it, and edge it with a hairline
         let (bx, by) = (bar.x.max(0) as usize, bar.y.max(0) as usize);
@@ -3112,7 +3260,12 @@ impl Shell {
         }
         // dividers: pinned | recents | minimized windows and the Trash
         for k in self.dock_seps(&list) {
-            let (a, b) = (slid[k], slid[k + 1]);
+            // placed between the icons as drawn (magnified), at the resting icons' depth
+            let (a, b) = if slid[k].y == slid[k + 1].y {
+                (Rect { x: rects[k].x, w: rects[k].w, ..slid[k] }, Rect { x: rects[k + 1].x, ..slid[k + 1] })
+            } else {
+                (Rect { y: rects[k].y, h: rects[k].h, ..slid[k] }, Rect { y: rects[k + 1].y, ..slid[k + 1] })
+            };
             // a hairline of the Dock's own divider colour: the separator grey vanished into the dark glass
             let t = ui.pt(1.0).round().max(1.0);
             if a.y == b.y {
@@ -3845,6 +3998,80 @@ mod tests {
         assert_eq!(d.closed_sizes.get(&AppId::Photos), Some(&(800, 500)));
     }
 
+    /// W2-22: a borderless window's shape is where its pixels cover, row runs merged into rects.
+    #[test]
+    fn the_alpha_shape_covers_the_drawn_pixels_only() {
+        let (w, h) = (10, 6);
+        let mut px = vec![0u32; w * h];
+        // a 3x2 block at (1,1) and a 2x3 block at (6,2)
+        for (x0, y0, bw, bh) in [(1, 1, 3, 2), (6, 2, 2, 3)] {
+            for y in y0..y0 + bh { for x in x0..x0 + bw { px[y * w + x] = 0x80ff_ff00; } }
+        }
+        let shape = alpha_shape(&px, w, h);
+        let covered = |x: usize, y: usize| shape_contains(&shape, x as f32 + 0.5, y as f32 + 0.5);
+        for y in 0..h { for x in 0..w {
+            assert_eq!(covered(x, y), px[y * w + x] >> 24 != 0, "({x},{y})");
+        }}
+        assert!(shape.len() <= 4, "rows with the same runs merge: {shape:?}");
+        assert!(alpha_shape(&vec![0u32; w * h], w, h).is_empty(), "nothing drawn, nothing hit");
+        assert_eq!(alpha_shape(&vec![0xff00_0000u32; w * h], w, h), vec![[0, 0, w as i32, h as i32]], "an opaque window is one rect");
+        // a noisy picture falls back to boxes that still cover every drawn pixel
+        let (w, h) = (2 * MAX_SHAPE_RECTS, 4);
+        let noisy: Vec<u32> = (0..w * h).map(|i| if (i + i / w) % 2 == 0 { 0xff00_0000 } else { 0 }).collect();
+        let shape = alpha_shape(&noisy, w, h);
+        assert!(shape.len() <= MAX_SHAPE_RECTS);
+        assert!((0..w * h).filter(|i| noisy[*i] != 0).all(|i| shape_contains(&shape, (i % w) as f32 + 0.5, (i / w) as f32 + 0.5)));
+    }
+
+    /// W2-22: a click on the transparent part of a shaped window picks the window behind it.
+    #[test]
+    fn a_shaped_window_lets_a_click_through_where_it_drew_nothing() {
+        let m = metrics();
+        let mut d = Desk::new();
+        let back = d.open(&m, AppId::Photos, (900, 600));
+        let back_r = d.wins[back].r;
+        let front = d.open(&m, AppId::External(3), (1600, 900));
+        let r = d.wins[front].r;
+        let note = [100, 100, 200, 150];
+        d.shapes.insert(AppId::External(3), std::sync::Arc::from(vec![note]));
+        let on_note = ((r.x + 150) as f32, (r.y + 150) as f32);
+        assert_eq!(d.pick(&m, on_note.0, on_note.1).map(|(i, _)| d.wins[i].app), Some(AppId::External(3)), "the note takes the click");
+        // a point inside both windows but off the note reaches the window behind
+        let (x, y) = ((back_r.x + back_r.w / 2) as f32, (back_r.y + back_r.h / 2) as f32);
+        assert!(r.contains(x, y) && !shape_contains(&[note], x - r.x as f32, y - r.y as f32));
+        assert_eq!(d.pick(&m, x, y).map(|(i, _)| d.wins[i].app), Some(AppId::Photos));
+        d.close(d.index_of(AppId::External(3)).unwrap());
+        assert!(d.shapes.is_empty(), "closing forgets the shape");
+    }
+
+    /// W2-26: a window closed and opened again comes back at the frame it was closed with, and its toplevel asks the
+    /// window server to map it there; a window never closed is cascaded as before.
+    #[test]
+    fn a_reopened_window_comes_back_where_it_was_closed() {
+        let m = metrics();
+        let mut d = Desk::new();
+        let i = d.open(&m, AppId::Settings, (700, 600));
+        let a = Desk::area(&m);
+        let at = Rect { x: a.x + 40, y: a.y + 30, w: 700, h: 600 };
+        d.place(&m, i, at);
+        d.close(i);
+        assert!(!d.placed.contains(&AppId::Settings), "the closed toplevel is gone");
+        let i = d.open(&m, AppId::Settings, (700, 600));
+        assert_eq!((d.wins[i].r.x, d.wins[i].r.y), (at.x, at.y), "back where it was");
+        assert!(d.placed.contains(&AppId::Settings), "its new toplevel maps there (origin_hint)");
+        assert_eq!(origin_hint(&d.placed, AppId::Settings, d.wins[i].r.x, d.wins[i].r.y), Some((at.x, at.y)));
+        // a remembered spot off the work area (a smaller screen now) is held inside it
+        d.close(i);
+        d.closed_origins.insert(AppId::Settings, (a.x + a.w + 500, a.y - 200));
+        let i = d.open(&m, AppId::Settings, (700, 600));
+        let r = d.wins[i].r;
+        assert!(r.x >= a.x && r.x + r.w <= a.x + a.w && r.y >= a.y, "inside the work area");
+        // a window never closed is cascaded and asks nothing
+        let j = d.open(&m, AppId::Photos, (500, 400));
+        let p = d.wins[j].app;
+        assert!(!d.placed.contains(&p));
+    }
+
     #[test]
     fn oversized_windows_are_clamped_to_the_work_area() {
         let m = metrics();
@@ -4015,7 +4242,7 @@ mod tests {
         assert_eq!((rect(&sh, placed).x, rect(&sh, placed).y), (1065, 524), "the shell follows the reported frame");
         let frames: Vec<_> = [placed, fresh].iter().map(|&app| {
             let r = rect(&sh, app);
-            crate::bare::wayland::WindowFrame { id: win_id(app).unwrap(), title: "", x: r.x, y: r.y, width: r.w as usize, height: r.h as usize, pixels: None, damage: crate::gfx::Damage::new(1, 1), maximized: false, fullscreen: false, title_height: 0, drag_height: 0, no_drag: Vec::new(), floating: false, fx: bifrost_render::glass::Fx::IDENTITY, opaque: true, origin: None, min_size: (0, 0) }
+            crate::bare::wayland::WindowFrame { id: win_id(app).unwrap(), title: "", x: r.x, y: r.y, width: r.w as usize, height: r.h as usize, pixels: None, damage: crate::gfx::Damage::new(1, 1), maximized: false, fullscreen: false, title_height: 0, drag_height: 0, no_drag: Vec::new(), floating: false, fx: bifrost_render::glass::Fx::IDENTITY, opaque: true, origin: None, min_size: (0, 0), input: None }
         }).collect();
         sh.desk.as_mut().unwrap().frames = frames;
         let out = sh.take_wayland_windows();
@@ -4192,6 +4419,62 @@ mod tests {
         assert_eq!(d.wins[0].r.x, start.x - 50);
         assert!(d.wins[0].r.y >= m.menubar);
         assert_eq!(d.wins[0].r.y + d.wins[0].r.h, start.y + start.h, "the bottom edge stays put");
+    }
+
+    /// W2-23: a press latches the icon it hit, so the release opens it even when the row has re-centred under the
+    /// pointer since (or the layout fell back to rest); a different entry now in that slot does not count.
+    #[test]
+    fn a_dock_release_opens_the_icon_latched_at_the_press() {
+        let row: Vec<Rect> = (0..5).map(|i| Rect { x: 100 + i * 58, y: 700, w: 48, h: 48 }).collect();
+        // the icon under the pointer in the row magnified around it, as the press hit-tests it
+        let live = super::super::desktop_dock::magnified_rects(&row, false, true, 175.0, 96, 150.0, 1.0);
+        let k = live.iter().position(|r| r.contains(175.0, 740.0)).expect("an icon under the pointer");
+        assert!(dock_release_hits(live[k], Some(row[k]), Some(7), 7, 175.0, 740.0), "the latched rect decides");
+        assert!(!dock_release_hits(live[k], Some(live[k]), Some(8), 7, 400.0, 740.0), "a release elsewhere opens nothing");
+        assert!(dock_release_hits(Rect { x: 0, y: 0, w: 1, h: 1 }, Some(row[2]), Some(7), 7, 230.0, 720.0), "the slot's current rect counts for the same entry");
+        assert!(!dock_release_hits(Rect { x: 0, y: 0, w: 1, h: 1 }, Some(row[2]), Some(8), 7, 230.0, 720.0), "but not once another entry is there");
+    }
+
+    /// W2-23: pressing a Dock icon keeps the row magnified (it used to drop to the resting layout under the pointer);
+    /// a drag that moved, and any other grab, lay the row out at rest.
+    #[test]
+    fn a_pressed_dock_icon_keeps_the_dock_magnified_until_it_is_dragged() {
+        let mut d = Desk::new();
+        assert!(d.dock_grab_magnifies());
+        let r = Rect { x: 0, y: 0, w: 48, h: 48 };
+        d.grab = Some(Grab::DockDrag { from: 1, entry: 3, rect: r, x: 0.0, y: 0.0, at_x: 0.0, at_y: 0.0, moved: false });
+        assert!(d.dock_grab_magnifies());
+        d.grab = Some(Grab::DockDrag { from: 1, entry: 3, rect: r, x: 0.0, y: 0.0, at_x: 40.0, at_y: 0.0, moved: true });
+        assert!(!d.dock_grab_magnifies());
+        d.grab = Some(Grab::Content(0));
+        assert!(!d.dock_grab_magnifies());
+    }
+
+    /// W2-25: Cmd+` visits every window of the app in turn although each press only raises one, and Shift+Cmd+`
+    /// walks the other way; a window brought forward some other way starts a new walk.
+    #[test]
+    fn cmd_grave_walks_every_window_of_the_app_both_ways() {
+        let (a, b, c) = (AppId::External(3), AppId::ExternalWindow(3, 1), AppId::ExternalWindow(3, 2));
+        // raising only: the window raised goes in front, the rest keep their order
+        let raise = |stack: &[AppId], w: AppId| { let mut s: Vec<AppId> = stack.iter().copied().filter(|x| *x != w).collect(); s.insert(0, w); s };
+        let mut stack = vec![a, b, c];
+        let mut cycle = None;
+        let mut seen = vec![];
+        for _ in 0..3 {
+            let (order, sel) = window_cycle_next(cycle.take(), &stack, false).expect("three windows cycle");
+            stack = raise(&stack, order[sel]);
+            seen.push(order[sel]);
+            cycle = Some((order, sel));
+        }
+        assert_eq!(seen, vec![b, c, a], "forwards: every window once, then back to the first");
+        let (order, sel) = window_cycle_next(None, &[a, b, c], true).unwrap();
+        assert_eq!(order[sel], c, "Shift+Cmd+` brings the last window forward");
+        // the person clicked b: a new walk from the stack as it is now
+        let (order, sel) = window_cycle_next(Some((vec![a, b, c], 0)), &[b, a, c], false).unwrap();
+        assert_eq!(order[sel], a);
+        assert!(window_cycle_next(None, &[a], false).is_none(), "one window: nothing to cycle");
+        assert_eq!(cycle_step(0, 3, true), 2);
+        assert_eq!(cycle_step(2, 3, false), 0);
     }
 
     #[test]

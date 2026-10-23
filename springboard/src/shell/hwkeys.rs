@@ -195,8 +195,10 @@ pub enum Shortcut {
     FullScreen,
     /// Ctrl+Cmd+arrows: tile the front desktop window (left, right, fill with Up, centre with Down)
     Tile(Tile),
-    /// Cmd+`: bring the window behind the front one forward (the Window menu's Next Window)
+    /// Cmd+`: bring the front app's next window forward (the Window menu's Next Window)
     CycleWindow,
+    /// Shift+Cmd+`: bring the front app's previous window forward (cycles the other way)
+    CycleWindowBack,
     /// Ctrl+Space: the next enabled input source (`kb_layouts::cycle`); the binary moves the hardware layout with it
     InputSource,
     /// Ctrl+Alt+Right (true) and Ctrl+Alt+Left (false): the screen reader's cursor moves to the next or previous element
@@ -245,7 +247,7 @@ impl Shortcut {
             Shortcut::SelectAll => "SelectAll",
             Shortcut::Undo => "Undo",
             Shortcut::Redo => "Redo",
-            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Quit | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) | Shortcut::ReaderRotor(_) | Shortcut::ReaderActivate | Shortcut::SpeakSelection | Shortcut::AccessibilityShortcut | Shortcut::Capture | Shortcut::CaptureScreen | Shortcut::CaptureSelection | Shortcut::ZoomToggle | Shortcut::ZoomStep(_) | Shortcut::LookUp | Shortcut::Photo(_) | Shortcut::HelpSearch | Shortcut::Lock | Shortcut::ForceQuit | Shortcut::LogOut | Shortcut::Assistant => return None,
+            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Quit | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::CycleWindowBack | Shortcut::InputSource | Shortcut::ReaderStep(_) | Shortcut::ReaderRotor(_) | Shortcut::ReaderActivate | Shortcut::SpeakSelection | Shortcut::AccessibilityShortcut | Shortcut::Capture | Shortcut::CaptureScreen | Shortcut::CaptureSelection | Shortcut::ZoomToggle | Shortcut::ZoomStep(_) | Shortcut::LookUp | Shortcut::Photo(_) | Shortcut::HelpSearch | Shortcut::Lock | Shortcut::ForceQuit | Shortcut::LogOut | Shortcut::Assistant => return None,
         }))
     }
 }
@@ -520,7 +522,7 @@ impl HwKeys {
                 KEY_UP => Tile::Fill,
                 _ => Tile::Center,
             })),
-            KEY_GRAVE if meta && !ctrl && !alt && self.shift == 0 => Some(Shortcut::CycleWindow),
+            KEY_GRAVE if meta && !ctrl && !alt => Some(if self.shift == 0 { Shortcut::CycleWindow } else { Shortcut::CycleWindowBack }),
             KEY_LEFT | KEY_RIGHT if ctrl && alt && !meta && self.shift == 0 => Some(Shortcut::ReaderStep(code == KEY_RIGHT)),
             KEY_UP | KEY_DOWN if ctrl && alt && !meta && self.shift == 0 => Some(Shortcut::ReaderRotor(code == KEY_DOWN)),
             KEY_SPACE if ctrl && alt && !meta && self.shift == 0 => Some(Shortcut::ReaderActivate),
@@ -1314,8 +1316,13 @@ impl Shell {
                 vec![]
             }
             #[cfg(feature = "desktop-wayland")]
-            Shortcut::CycleWindow if self.desk_active() && !self.is_locked() && !in_terminal => {
-                self.desk_cycle_window();
+            // every app's windows cycle, an installed app's extra windows (Mail's compose) included (W2-25): the
+            // terminal guard kept Cmd+` from every installed app; only the built-in Terminal keeps it
+            Shortcut::CycleWindow | Shortcut::CycleWindowBack if self.desk_active() && !self.is_locked() && self.screen != Screen::App(AppId::Terminal) => {
+                let reverse = sc == Shortcut::CycleWindowBack;
+                // a native client's windows are the window server's: they cycle by activation
+                if self.foreign_cycle_owned() { return self.switcher_same_app(reverse); }
+                self.desk_cycle_window(reverse);
                 self.cmdtab_release(t);
                 vec![]
             }
@@ -1662,6 +1669,9 @@ mod tests {
         assert_eq!(chord(&mut k, &[KEY_LEFTMETA, KEY_LEFTALT], KEY_MINUS), Some(Shortcut::ZoomStep(false)));
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL], KEY_SPACE), Some(Shortcut::InputSource));
         assert_eq!(chord(&mut k, &[KEY_LEFTALT], KEY_RIGHT), None, "Alt alone is not the cursor");
+        // W2-25: Cmd+` cycles the front app's windows, Shift+Cmd+` the other way
+        assert_eq!(chord(&mut k, &[KEY_LEFTMETA], KEY_GRAVE), Some(Shortcut::CycleWindow));
+        assert_eq!(chord(&mut k, &[KEY_LEFTMETA, KEY_LEFTSHIFT], KEY_GRAVE), Some(Shortcut::CycleWindowBack));
     }
 
     #[test]

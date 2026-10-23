@@ -61,7 +61,7 @@ RULES = {
     'APP-04': ('error', 'APP-02', 'CHANGELOG has no entry for the version', 'add a CHANGELOG.md entry for the manifest version'),
     'APP-05': ('error', 'APP-02', 'Cargo.toml version differs from manifest', 'bump manifest.toml and Cargo.toml together'),
     'APP-06': ('warning', 'APP-01', 'permissions not minimal', 'drop a permission the code does not use; an unknown one is rejected at install'),
-    'APP-07': ('error', 'APP-01', 'invalid kind or window', 'kind is app|system-app|system|service; window is "full-size" or "native" (or absent)'),
+    'APP-07': ('error', 'APP-01', 'invalid kind or window', 'kind is app|system-app|system|service; window is "full-size", "borderless" or "native" (or absent)'),
     'APP-08': ('warning', 'GG-01', 'full-size window with old min_shell', 'full-size windows need min_shell >= 0.4.84'),
     'APP-10': ('error', 'APP-01', 'icon is not a 180x180 PNG', 'export the manifest icon as a square 180x180 PNG (PNG signature and IHDR size are read; no re-encoding needed)'),
     'APP-11': ('error', 'APP-01', 'manifest declares an app without an executable target', 'add a binary target before publishing this app'),
@@ -290,7 +290,7 @@ def check_manifest(app, native, findings):
             f('APP-05', f'{rel(cargo)}:1', f"Cargo.toml version {c.get('package', {}).get('version')} != manifest {ver}")
     if m.get('kind', '') not in ('', 'app', 'system-app', 'system', 'service'):
         f('APP-07', f'{rel(mp)}:1', f"unknown kind {m.get('kind')!r}")
-    if m.get('window', '') not in ('', 'full-size', 'native'):
+    if m.get('window', '') not in ('', 'full-size', 'borderless', 'native'):
         f('APP-07', f'{rel(mp)}:1', f"unknown window {m.get('window')!r}")
     if m.get('window') == 'full-size':
         have = tuple(int(x) for x in re.findall(r'\d+', str(m.get('min_shell', '0')))[:3])

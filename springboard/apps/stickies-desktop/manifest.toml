@@ -9,7 +9,7 @@ category = "Productivity"
 kind = "system-app"
 architecture = "x86_64-linux"
 permissions = ["storage", "documents"]
-window = "full-size"
+window = "borderless"
 
 [[intent]]
 id = "create-sticky"
