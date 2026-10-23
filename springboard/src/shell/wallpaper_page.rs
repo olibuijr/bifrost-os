@@ -2,6 +2,10 @@
 //! tools/pack.py) and photos; tapping one opens a preview with Set Lock
 //! Screen / Set Home Screen / Set Both and the "Dark Appearance Dims
 //! Wallpaper" switch. The navigation bar above is drawn by Settings.
+//!
+//! On the desktop (a pointer form factor) the page follows the Golden Gate Wallpaper pane instead: a click on a
+//! thumbnail applies it at once, to the desktop and the lock screen together or to the lock screen only (the Show On
+//! row), and "Add Photo…" / "Add Folder…" bring up the shell's open panel (`docpanel`) to add the user's own pictures.
 
 use super::list::{nav_bottom, GROUP_GAP_PT, MARGIN_PT};
 use super::controls::{draw_switch, SWITCH_H_PT, SWITCH_W_PT};
@@ -46,6 +50,239 @@ pub fn gradient_wallpapers(dir: &str, w: usize, h: usize) -> Vec<Wallpaper> {
         }
     }
     out
+}
+
+/// The id a picture the user added (Add Photo…, Add Folder…) is cached under: `added_<stem>`, every character that is
+/// not ASCII alphanumeric replaced by `_` and the stem cut to 48 characters, so it is a valid wallpaper id. None for a
+/// path without a file name. (The Pictures folder's own pictures are `photo_<stem>`.)
+pub fn added_id(path: &std::path::Path) -> Option<String> {
+    let stem = path.file_stem()?.to_string_lossy();
+    (!stem.is_empty()).then(|| format!("added_{}", stem.chars().take(48).map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect::<String>()))
+}
+
+/// The pictures the user added, `id=name` (the stills themselves are `wallpapers/<id>.raw` beside it).
+pub const ADDED_INDEX: &str = "wallpapers/added.ini";
+
+/// The most pictures one Add Folder… takes, and the largest picture file read (bytes).
+pub const MAX_FOLDER_PICTURES: usize = 64;
+pub const MAX_PICTURE_BYTES: u64 = 64 << 20;
+
+/// The pictures added earlier (`ADDED_INDEX`) whose thumbnails are still cached, for the catalogue at start-up.
+pub fn added_wallpapers(dir: &std::path::Path) -> Vec<Wallpaper> {
+    let index = super::prefs::Prefs::load(dir.join(ADDED_INDEX));
+    index
+        .entries()
+        .filter_map(|(id, name)| {
+            let thumb = Image::from_raw(&std::fs::read(dir.join(format!("wallpapers/{id}.thumb.raw"))).ok()?)?;
+            Some(Wallpaper { id: id.to_string(), name: name.to_string(), thumb })
+        })
+        .collect()
+}
+
+/// The wallpaper size: the default still's (`wallpaper.raw`, a RIMG header `RIMG` + width + height, little-endian u32).
+fn raw_size(path: &std::path::Path) -> Option<(usize, usize)> {
+    use std::io::Read;
+    let mut head = [0u8; 12];
+    std::fs::File::open(path).ok()?.read_exact(&mut head).ok()?;
+    let le = |i: usize| u32::from_le_bytes([head[i], head[i + 1], head[i + 2], head[i + 3]]) as usize;
+    (&head[..4] == b"RIMG" && le(4) > 0 && le(8) > 0).then(|| (le(4), le(8)))
+}
+
+impl Import {
+    /// The open panel's request number for this kind (`Panel::request` of a shell-owned panel).
+    pub fn request(self) -> u32 {
+        match self {
+            Import::Photo => 1,
+            Import::Folder => 2,
+        }
+    }
+
+    pub fn from_request(r: u32) -> Option<Self> {
+        Import::ALL.into_iter().find(|k| k.request() == r)
+    }
+
+    /// What the panel may choose: several pictures, or one folder.
+    #[cfg(feature = "desktop-wayland")]
+    pub fn options(self) -> super::docpanel::Options {
+        match self {
+            Import::Photo => super::docpanel::Options { multiple: true, files: true, dirs: false, create_dirs: false },
+            Import::Folder => super::docpanel::Options { multiple: false, files: false, dirs: true, create_dirs: false },
+        }
+    }
+}
+
+#[cfg(feature = "desktop-wayland")]
+impl super::Shell {
+    /// Settings > Wallpaper > Add Photo… or Add Folder…: the open panel as a sheet on the Settings window, starting in
+    /// Pictures. Its answer comes back through `doc_finish` to `wallpaper_panel_done`.
+    pub(super) fn wallpaper_open_panel(&mut self, kind: Import) {
+        use super::docpanel::{Kind, Panel, SHELL_SLOT};
+        if self.doc_panel.is_some() {
+            return;
+        }
+        let Some(b) = self.doc_broker() else { return };
+        let title = kind.label().trim_end_matches('…');
+        let mut panel = Panel::new(SHELL_SLOT, kind.request(), Kind::Open(bifrost_proto::DocMode::Read), title, vec!["public.image".into()], "", &b.opener).with_options(kind.options(), &b.opener);
+        panel.go_to(std::path::Path::new("Pictures"), &b.opener);
+        self.doc_panel = Some(panel);
+        self.doc_fit_width();
+        self.desktop_menu = Some(super::desktop_bar::Menu::Document);
+        self.dirty = true;
+    }
+
+    /// The Settings open panel was answered: read the chosen pictures (every picture in a chosen folder) as the account,
+    /// through the broker's opener, never as the shell, then add them.
+    pub(super) fn wallpaper_panel_done(&mut self, request: u32, out: super::docpanel::Outcome) {
+        use super::docpanel::Outcome;
+        use std::io::Read;
+        let Some(kind) = Import::from_request(request) else { return };
+        let chosen = match out {
+            Outcome::Open(p) => vec![p],
+            Outcome::OpenMany(v) => v,
+            _ => return,
+        };
+        let Some(b) = self.doc_broker() else { return };
+        let mut files = Vec::new();
+        for rel in chosen {
+            let paths: Vec<std::path::PathBuf> = match kind {
+                Import::Photo => vec![rel],
+                Import::Folder => {
+                    let mut v: Vec<_> = b.opener.list(&rel).unwrap_or_default().into_iter().filter(|(n, dir)| !dir && !n.starts_with('.')).map(|(n, _)| rel.join(n)).collect();
+                    v.sort();
+                    v
+                }
+            };
+            for p in paths.into_iter().filter(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(is_picture)).take(MAX_FOLDER_PICTURES) {
+                let Ok(f) = b.opener.open(&p, bifrost_proto::DocMode::Read) else { continue };
+                let mut bytes = Vec::new();
+                if f.take(MAX_PICTURE_BYTES).read_to_end(&mut bytes).is_ok() {
+                    files.push((p, bytes));
+                }
+            }
+        }
+        self.wallpapers_import(files);
+    }
+}
+
+impl super::Shell {
+    /// Caches each picture (`path`, bytes) as a wallpaper still, lists it in the catalogue (and `ADDED_INDEX`, so it is
+    /// there after a restart), and lets Settings apply the first one as a click on it would.
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+    pub(super) fn wallpapers_import(&mut self, files: Vec<(std::path::PathBuf, Vec<u8>)>) {
+        let dir = self.data_dir.clone();
+        let (tw, th) = raw_size(&dir.join("wallpaper.raw")).unwrap_or((self.w.max(1) as usize, self.h.max(1) as usize));
+        let mut index = super::prefs::Prefs::load(dir.join(ADDED_INDEX));
+        let mut list = (*self.wallpapers).clone();
+        let mut added = Vec::new();
+        for (path, bytes) in files {
+            let Some(id) = added_id(&path) else { continue };
+            let Some(thumb) = cache_picture(&dir, &id, &bytes, tw, th) else { continue };
+            let name = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| id.clone());
+            if let Err(e) = index.set(&id, &name) {
+                eprintln!("springboard: {ADDED_INDEX}: {e}");
+            }
+            // adding the same picture again replaces it
+            list.retain(|w| w.id != id);
+            list.push(Wallpaper { id: id.clone(), name, thumb });
+            added.push(id);
+        }
+        if added.is_empty() {
+            return;
+        }
+        self.set_wallpapers(list);
+        let catalogue = self.wallpapers.clone();
+        if let Some(st) = self.settings.as_mut() {
+            let fx = st.wallpapers_added(&self.ui, &mut self.prefs, catalogue, &added);
+            self.wallpaper_fx.extend(fx);
+        }
+        self.dirty = true;
+    }
+}
+
+/// Whether `name` is a picture the wallpaper importer takes: its extension is a format the image reader decodes.
+pub fn is_picture(name: &str) -> bool {
+    crate::cg::imageio::is_image_name(name)
+}
+
+/// Decodes the picture `bytes` once, cover-fits it to the `tw` x `th` wallpaper size and caches it as
+/// `dir/wallpapers/<id>.raw` with its 320 x 180 thumbnail as `<id>.thumb.raw`, so `Effect::Wallpaper(id)` can map it.
+/// Returns the thumbnail; None when the bytes are not a picture or the files cannot be written.
+pub fn cache_picture(dir: &std::path::Path, id: &str, bytes: &[u8], tw: usize, th: usize) -> Option<Image> {
+    use super::photos::thumbs::to_raw;
+    if tw == 0 || th == 0 {
+        return None;
+    }
+    let img = crate::cg::imageio::decode(bytes)?;
+    let full = cover_fit(&img, tw, th);
+    let base = dir.join("wallpapers");
+    std::fs::create_dir_all(&base).ok()?;
+    let thumb = cover_fit(&full, THUMB.0, THUMB.1);
+    std::fs::write(base.join(format!("{id}.raw")), to_raw(&full)).ok()?;
+    std::fs::write(base.join(format!("{id}.thumb.raw")), to_raw(&thumb)).ok()?;
+    Some(thumb)
+}
+
+/// Where a click on a desktop thumbnail puts the wallpaper (the Show On row).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ShowOn {
+    /// the desktop and the lock screen together
+    #[default]
+    All,
+    /// the lock screen only; the desktop keeps its wallpaper
+    LockScreen,
+}
+
+/// The pref the Show On choice is kept under.
+pub const SHOW_ON_PREF: &str = "wallpaper_show_on";
+
+impl ShowOn {
+    pub const ALL: [ShowOn; 2] = [ShowOn::All, ShowOn::LockScreen];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            ShowOn::All => "Desktop and Lock Screen",
+            ShowOn::LockScreen => "Lock Screen Only",
+        }
+    }
+
+    pub fn pref(self) -> &'static str {
+        match self {
+            ShowOn::All => "all",
+            ShowOn::LockScreen => "lock",
+        }
+    }
+
+    pub fn parse(v: &str) -> Self {
+        if v == "lock" { ShowOn::LockScreen } else { ShowOn::All }
+    }
+
+    /// What a click on a thumbnail sets.
+    pub fn target(self) -> Target {
+        match self {
+            ShowOn::All => Target::Both,
+            ShowOn::LockScreen => Target::Lock,
+        }
+    }
+}
+
+/// What the desktop's add buttons choose in the open panel.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Import {
+    /// one or more pictures
+    Photo,
+    /// a folder: every picture in it
+    Folder,
+}
+
+impl Import {
+    pub const ALL: [Import; 2] = [Import::Photo, Import::Folder];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Import::Photo => "Add Photo…",
+            Import::Folder => "Add Folder…",
+        }
+    }
 }
 
 /// One packed wallpaper: `id` names `wallpapers/<id>.raw`.
@@ -119,6 +356,39 @@ fn dynamic_row_top(ui: &Ui) -> f32 {
     nav_bottom(ui) + ui.pt(GROUP_GAP_PT)
 }
 
+/// Top of the desktop's Show On row, where the tablet's grid starts.
+fn show_on_row_top(ui: &Ui) -> f32 {
+    grid_top(ui)
+}
+
+/// The desktop's Show On row (x, y, w, h): one segment per `ShowOn`.
+pub fn show_on_row(ui: &Ui, w: i32) -> (f32, f32, f32, f32) {
+    (ui.pt(MARGIN_PT), show_on_row_top(ui), w as f32 - 2.0 * ui.pt(MARGIN_PT), ui.pt(ROW_PT))
+}
+
+/// Segment `i` of the Show On row (x, y, w, h).
+pub fn show_on_segment(ui: &Ui, w: i32, i: usize) -> (f32, f32, f32, f32) {
+    let (x, y, rw, rh) = show_on_row(ui, w);
+    let inset = ui.pt(SEGMENT_INSET_PT);
+    let sw = (rw - 2.0 * inset) / ShowOn::ALL.len() as f32;
+    (x + inset + i as f32 * sw, y + inset, sw, rh - 2.0 * inset)
+}
+
+/// The desktop's add button `i` (`Import::ALL` order), right-aligned under the Show On row like the reference's pane
+/// buttons (x, y, w, h).
+pub fn add_button(ui: &Ui, w: i32, i: usize) -> (f32, f32, f32, f32) {
+    let (_, y, _, rh) = show_on_row(ui, w);
+    let (bw, bh, gap) = (ui.pt(ADD_BUTTON_W_PT), ui.pt(ADD_BUTTON_H_PT), ui.pt(BUTTON_GAP_PT));
+    let right = w as f32 - ui.pt(MARGIN_PT);
+    let n = Import::ALL.len();
+    (right - (n - i) as f32 * bw - (n - 1 - i) as f32 * gap, y + rh + ui.pt(GROUP_GAP_PT), bw, bh)
+}
+
+/// The desktop grid starts under the add buttons.
+pub fn desktop_grid_top(ui: &Ui) -> f32 {
+    show_on_row_top(ui) + ui.pt(ROW_PT) + ui.pt(GROUP_GAP_PT) + ui.pt(ADD_BUTTON_H_PT) + ui.pt(GROUP_GAP_PT)
+}
+
 /// Top of the Live Look row, under the Dynamic Wallpaper switch.
 fn look_row_top(ui: &Ui) -> f32 {
     dynamic_row_top(ui) + ui.pt(ROW_PT) + ui.pt(GROUP_GAP_PT)
@@ -149,10 +419,15 @@ pub fn dynamic_row(ui: &Ui, w: i32) -> (f32, f32, f32, f32) {
 
 /// Thumbnail rect (x, y, w, h) in px of item `i`.
 pub fn cell(ui: &Ui, w: i32, aspect: f32, i: usize) -> (f32, f32, f32, f32) {
+    cell_from(ui, w, aspect, i, grid_top(ui))
+}
+
+/// `cell` for a grid whose first row is at `top`.
+fn cell_from(ui: &Ui, w: i32, aspect: f32, i: usize, top: f32) -> (f32, f32, f32, f32) {
     let (cw, ch) = cell_size(ui, w, aspect);
     let (c, r) = ((i % COLS) as f32, (i / COLS) as f32);
     let x = ui.pt(MARGIN_PT) + c * (cw + ui.pt(GAP_PT));
-    let y = grid_top(ui) + r * (ch + ui.pt(LABEL_ROW_PT) + ui.pt(GAP_PT));
+    let y = top + r * (ch + ui.pt(LABEL_ROW_PT) + ui.pt(GAP_PT));
     (x, y, cw, ch)
 }
 
@@ -179,6 +454,10 @@ pub enum Tap {
     Dynamic,
     /// a segment of the Live Look row: still photo, or an animated or time-of-day wallpaper
     Look(Look),
+    /// a segment of the desktop's Show On row
+    ShowOn(ShowOn),
+    /// a desktop add button: bring up the open panel
+    Add(Import),
 }
 
 const ROW_PT: f32 = 44.0;
@@ -186,6 +465,9 @@ const ROW_PT: f32 = 44.0;
 const SEGMENT_INSET_PT: f32 = 4.0;
 const BUTTON_PT: f32 = 50.0;
 const BUTTON_GAP_PT: f32 = 12.0;
+/// The desktop's add buttons (the reference's pane buttons, a 28 pt plate).
+const ADD_BUTTON_W_PT: f32 = 120.0;
+const ADD_BUTTON_H_PT: f32 = 28.0;
 const BUTTONS: [(&str, Option<Target>); 4] = [("Set Lock Screen", Some(Target::Lock)), ("Set Home Screen", Some(Target::Home)), ("Set Both", Some(Target::Both)), ("Cancel", None)];
 
 /// The open preview: the picked item's enlarged thumbnail and button labels.
@@ -213,6 +495,12 @@ pub struct WallpaperPage {
     aspect: f32,
     /// unmasked thumbnails, enlarged for the preview
     sources: Vec<Image>,
+    /// the desktop layout: a click applies a thumbnail at once, with the Show On row and the add buttons
+    desktop: bool,
+    show_on: ShowOn,
+    /// each Show On choice's name, in the label colour and in white for the selected plate
+    show_on_labels: Vec<(Image, Image)>,
+    add_labels: Vec<Image>,
 }
 
 impl WallpaperPage {
@@ -228,7 +516,38 @@ impl WallpaperPage {
                 (wp.id.clone(), thumb, label)
             })
             .collect();
-        WallpaperPage { current: wallpapers.iter().position(|wp| wp.id == current), items, empty: ui.text("No wallpapers packed", 17.0, Weight::Regular, SECONDARY), dynamic_label: ui.text("Dynamic Wallpaper", 17.0, Weight::Regular, LABEL.now()), preview: None, dim, dynamic: false, look: Look::Still, look_labels: Look::ALL.iter().map(|l| (ui.text(l.label(), LABEL_PT, Weight::Regular, LABEL.now()), ui.text(l.label(), LABEL_PT, Weight::Semibold, WHITE))).collect(), aspect, sources: wallpapers.iter().map(|wp| wp.thumb.clone()).collect() }
+        WallpaperPage { current: wallpapers.iter().position(|wp| wp.id == current), items, empty: ui.text("No wallpapers packed", 17.0, Weight::Regular, SECONDARY), dynamic_label: ui.text("Dynamic Wallpaper", 17.0, Weight::Regular, LABEL.now()), preview: None, dim, dynamic: false, look: Look::Still, look_labels: Look::ALL.iter().map(|l| (ui.text(l.label(), LABEL_PT, Weight::Regular, LABEL.now()), ui.text(l.label(), LABEL_PT, Weight::Semibold, WHITE))).collect(), aspect, sources: wallpapers.iter().map(|wp| wp.thumb.clone()).collect(), desktop: false, show_on: ShowOn::All, show_on_labels: Vec::new(), add_labels: Vec::new() }
+    }
+
+    /// Switches to the desktop layout (click to apply, Show On, Add Photo… and Add Folder…).
+    pub fn set_desktop(&mut self, ui: &Ui, on: bool) {
+        self.desktop = on;
+        if on && self.add_labels.is_empty() {
+            self.show_on_labels = ShowOn::ALL.iter().map(|o| (ui.text(o.label(), LABEL_PT, Weight::Regular, LABEL.now()), ui.text(o.label(), LABEL_PT, Weight::Semibold, WHITE))).collect();
+            self.add_labels = Import::ALL.iter().map(|k| ui.text(k.label(), LABEL_PT, Weight::Regular, LABEL.now())).collect();
+        }
+    }
+
+    pub fn desktop(&self) -> bool {
+        self.desktop
+    }
+
+    pub fn show_on(&self) -> ShowOn {
+        self.show_on
+    }
+
+    pub fn set_show_on(&mut self, show_on: ShowOn) {
+        self.show_on = show_on;
+    }
+
+    /// Where the grid starts in this layout.
+    fn grid_y(&self, ui: &Ui) -> f32 {
+        if self.desktop { desktop_grid_top(ui) } else { grid_top(ui) }
+    }
+
+    /// Thumbnail rect of item `i` in this layout.
+    pub fn cell(&self, ui: &Ui, w: i32, i: usize) -> (f32, f32, f32, f32) {
+        cell_from(ui, w, self.aspect, i, self.grid_y(ui))
     }
 
     pub fn len(&self) -> usize {
@@ -329,6 +648,14 @@ impl WallpaperPage {
             if let Some(l) = Look::ALL.iter().enumerate().find(|&(i, _)| inside(look_segment(ui, w, i))).map(|(_, &l)| l) {
                 return Some(Tap::Look(l));
             }
+            if self.desktop {
+                if let Some(o) = ShowOn::ALL.iter().enumerate().find(|&(i, _)| inside(show_on_segment(ui, w, i))).map(|(_, &o)| o) {
+                    return Some(Tap::ShowOn(o));
+                }
+                if let Some(k) = Import::ALL.iter().enumerate().find(|&(i, _)| inside(add_button(ui, w, i))).map(|(_, &k)| k) {
+                    return Some(Tap::Add(k));
+                }
+            }
             return self.hit(ui, w, h, x, y).map(Tap::Thumb);
         };
         if inside(self.dim_row(ui, w, h)) {
@@ -343,13 +670,13 @@ impl WallpaperPage {
     /// How many items fit above the home indicator.
     fn visible(&self, ui: &Ui, w: i32, h: i32) -> usize {
         let limit = h as f32 - home_zone(ui);
-        (0..self.items.len()).take_while(|&i| cell(ui, w, self.aspect, i).1 + cell_size(ui, w, self.aspect).1 + ui.pt(LABEL_ROW_PT) <= limit).count()
+        (0..self.items.len()).take_while(|&i| self.cell(ui, w, i).1 + cell_size(ui, w, self.aspect).1 + ui.pt(LABEL_ROW_PT) <= limit).count()
     }
 
     /// The thumbnail under (x, y).
     pub fn hit(&self, ui: &Ui, w: i32, h: i32, x: f32, y: f32) -> Option<usize> {
         (0..self.visible(ui, w, h)).find(|&i| {
-            let (cx, cy, cw, ch) = cell(ui, w, self.aspect, i);
+            let (cx, cy, cw, ch) = self.cell(ui, w, i);
             x >= cx && x < cx + cw && y >= cy && y < cy + ch
         })
     }
@@ -385,12 +712,30 @@ impl WallpaperPage {
             let label = if on { white } else { plain };
             centred(s, label, (sx + sw / 2.0) as i32, (sy + (sh - label.h as f32) / 2.0) as i32);
         }
+        if self.desktop {
+            let (x, y, rw, rh) = show_on_row(ui, w);
+            s.fill_rrect(x, y, rw, rh, ui.pt(CELL_RADIUS_PT), CARD_BG.now());
+            for (i, (o, (plain, white))) in ShowOn::ALL.iter().zip(&self.show_on_labels).enumerate() {
+                let (sx, sy, sw, sh) = show_on_segment(ui, w, i);
+                let on = *o == self.show_on;
+                if on {
+                    s.fill_rrect(sx, sy, sw, sh, ui.pt(CELL_RADIUS_PT) - ui.pt(SEGMENT_INSET_PT) / 2.0, BLUE);
+                }
+                let label = if on { white } else { plain };
+                centred(s, label, (sx + sw / 2.0) as i32, (sy + (sh - label.h as f32) / 2.0) as i32);
+            }
+            for (i, label) in self.add_labels.iter().enumerate() {
+                let (bx, by, bw, bh) = add_button(ui, w, i);
+                s.fill_rrect(bx, by, bw, bh, BUTTON_RADIUS.min(bh / 2.0), FIELD_BG.now());
+                centred(s, label, (bx + bw / 2.0) as i32, (by + (bh - label.h as f32) / 2.0) as i32);
+            }
+        }
         if self.items.is_empty() {
-            s.blit(&self.empty, (m + ui.pt(16.0)) as i32, grid_top(ui) as i32, 255, 255);
+            s.blit(&self.empty, (m + ui.pt(16.0)) as i32, self.grid_y(ui) as i32, 255, 255);
             return;
         }
         for (i, (_, thumb, label)) in self.items.iter().take(self.visible(ui, w, h)).enumerate() {
-            let (x, y, cw, ch) = cell(ui, w, self.aspect, i);
+            let (x, y, cw, ch) = self.cell(ui, w, i);
             let tint = if pressed == Some(i) { 150 } else { 255 };
             s.blit(thumb, x as i32, y as i32, tint, 255);
             if self.current == Some(i) {
@@ -503,6 +848,95 @@ mod tests {
         img.px.fill(u32::MAX);
         page.draw(&mut Surface { w: w as usize, h: h as usize, stride: w as usize, px: &mut img.px, y0: 0 }, &ui, w, h, None);
         std::fs::write(std::path::Path::new(&dir).join("wallpaper-grid.png"), crate::shell::screenshot::encode(&img)).unwrap();
+    }
+
+    #[test]
+    fn the_desktop_layout_has_show_on_and_add_buttons_above_a_lower_grid() {
+        let ui = ui();
+        let mut page = WallpaperPage::new(&ui, 1200, 9.0 / 16.0, &wallpapers(3), "wp0", true);
+        page.set_desktop(&ui, true);
+        assert!(page.desktop());
+        assert_eq!(page.show_on(), ShowOn::All);
+        let (_, ly, _, lh) = look_row(&ui, 1200);
+        let (_, sy, _, sh) = show_on_row(&ui, 1200);
+        assert!(sy >= ly + lh, "the Show On row is under the Live Look row");
+        for (i, o) in ShowOn::ALL.into_iter().enumerate() {
+            let (x, y, w, h) = show_on_segment(&ui, 1200, i);
+            assert_eq!(page.tap(&ui, 1200, 1920, x + w / 2.0, y + h / 2.0), Some(Tap::ShowOn(o)));
+        }
+        for (i, k) in Import::ALL.into_iter().enumerate() {
+            let (x, y, w, h) = add_button(&ui, 1200, i);
+            assert!(y >= sy + sh && x + w <= 1200.0 - ui.pt(MARGIN_PT) + 0.5, "the add buttons sit right-aligned under the row");
+            assert_eq!(page.tap(&ui, 1200, 1920, x + w / 2.0, y + h / 2.0), Some(Tap::Add(k)));
+        }
+        let (_, by, _, bh) = add_button(&ui, 1200, 0);
+        let (cx, cy, cw, ch) = page.cell(&ui, 1200, 1);
+        assert!(cy >= by + bh, "the grid starts under the add buttons");
+        assert_eq!(page.tap(&ui, 1200, 1920, cx + cw / 2.0, cy + ch / 2.0), Some(Tap::Thumb(1)));
+        // the tablet layout has none of it
+        let tablet = WallpaperPage::new(&ui, 1200, 9.0 / 16.0, &wallpapers(3), "wp0", true);
+        let (x, y, w, h) = show_on_segment(&ui, 1200, 1);
+        assert!(!matches!(tablet.tap(&ui, 1200, 1920, x + w / 2.0, y + h / 2.0), Some(Tap::ShowOn(_) | Tap::Add(_))));
+        page.set_show_on(ShowOn::LockScreen);
+        let mut buf = vec![0u32; 1200 * 1920];
+        page.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, &ui, 1200, 1920, None);
+        let (x, y, w, _) = show_on_segment(&ui, 1200, 1);
+        assert_eq!(buf[(y + 2.0) as usize * 1200 + (x + w / 2.0) as usize], BLUE, "the chosen Show On plate is tinted");
+    }
+
+    #[test]
+    fn show_on_picks_the_click_target_and_round_trips_its_pref() {
+        assert_eq!(ShowOn::All.target(), Target::Both);
+        assert_eq!(ShowOn::LockScreen.target(), Target::Lock);
+        for o in ShowOn::ALL {
+            assert_eq!(ShowOn::parse(o.pref()), o);
+        }
+        assert_eq!(ShowOn::parse(""), ShowOn::All, "the default shows a wallpaper everywhere");
+    }
+
+    #[test]
+    fn an_added_picture_is_cached_as_a_wallpaper_still_with_its_thumbnail() {
+        use std::path::Path;
+        assert_eq!(added_id(Path::new("/home/u/Pictures/Fjord view.jpg")).as_deref(), Some("added_Fjord_view"));
+        assert_eq!(added_id(Path::new("")), None);
+        assert!(is_picture("a.png") && is_picture("b.JPG") && !is_picture("notes.txt"));
+        assert!(crate::installer::plan::valid_wallpaper_id("added_Fjord_view"), "Settings can set it by id");
+        let long = added_id(Path::new(&format!("{}.png", "x".repeat(200)))).unwrap();
+        assert!(crate::installer::plan::valid_wallpaper_id(&long), "a long name still gives a valid id");
+        assert_eq!(Import::from_request(Import::Folder.request()), Some(Import::Folder));
+        #[cfg(feature = "desktop-wayland")]
+        assert!(Import::Folder.options().dirs && !Import::Folder.options().files && Import::Photo.options().multiple);
+        let dir = std::env::temp_dir().join(format!("wp-import-{}", std::process::id()));
+        // a 4 x 2 BMP: 24-bit, bottom-up rows padded to 4 bytes
+        let mut bmp = Vec::new();
+        let row = 12usize;
+        let size = 54 + row * 2;
+        bmp.extend(b"BM");
+        bmp.extend((size as u32).to_le_bytes());
+        bmp.extend([0u8; 4]);
+        bmp.extend(54u32.to_le_bytes());
+        bmp.extend(40u32.to_le_bytes());
+        bmp.extend(4i32.to_le_bytes());
+        bmp.extend(2i32.to_le_bytes());
+        bmp.extend(1u16.to_le_bytes());
+        bmp.extend(24u16.to_le_bytes());
+        bmp.extend([0u8; 24]);
+        bmp.extend(std::iter::repeat([0u8, 0, 255]).take(8).flatten());
+        assert!(cache_picture(&dir, "photo_x", b"not a picture", 64, 36).is_none());
+        let thumb = cache_picture(&dir, "photo_x", &bmp, 64, 36).expect("a decodable picture is cached");
+        assert_eq!((thumb.w, thumb.h), THUMB);
+        let still = Image::from_raw(&std::fs::read(dir.join("wallpapers/photo_x.raw")).unwrap()).unwrap();
+        assert_eq!((still.w, still.h), (64, 36), "cover-fitted to the wallpaper size");
+        assert!(dir.join("wallpapers/photo_x.thumb.raw").exists());
+        assert_eq!(raw_size(&dir.join("wallpapers/photo_x.raw")), Some((64, 36)), "the size comes from the RIMG header");
+        assert_eq!(raw_size(&dir.join("missing.raw")), None);
+        // an index entry lists the picture again at start-up; one whose thumbnail is gone is left out
+        let mut index = super::super::prefs::Prefs::load(dir.join(ADDED_INDEX));
+        index.set("photo_x", "Fjord").unwrap();
+        index.set("gone", "Gone").unwrap();
+        let listed = added_wallpapers(&dir);
+        assert_eq!(listed.iter().map(|w| (w.id.as_str(), w.name.as_str())).collect::<Vec<_>>(), [("photo_x", "Fjord")]);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

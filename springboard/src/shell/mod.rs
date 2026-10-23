@@ -560,6 +560,8 @@ pub struct Shell {
     pub h: i32,
     /// effects a spoken Voice Control command produced; the next tick returns them to the main loop
     voice_fx: Vec<Effect>,
+    /// effects of a picture added from the open panel (Settings > Wallpaper > Add Photo…), returned on the next tick
+    wallpaper_fx: Vec<Effect>,
     ui: Ui,
     layout: Layout,
     /// the caller's mapping of the home still (stays mapped; never owned here)
@@ -1382,6 +1384,7 @@ impl Shell {
             popup_cues: Default::default(),
             battery_checked: f64::NEG_INFINITY,
             voice_fx: Vec::new(),
+            wallpaper_fx: Vec::new(),
             dirty: true,
             perf_only: false,
             bar_only: false,
@@ -3845,6 +3848,7 @@ impl Shell {
                 let login_approved = st.take_login_approved();
                 let firewall_edits = st.take_firewall_edits();
                 let preview = st.take_screensaver_preview();
+                let import = st.take_wallpaper_import();
                 for change in changes {
                     match change {
                         notify_page::NotifyChange::Schedule(s) => self.set_dnd_schedule(s),
@@ -3881,6 +3885,12 @@ impl Shell {
                 }
                 if preview {
                     self.saver_preview(t);
+                }
+                if let Some(kind) = import {
+                    #[cfg(feature = "desktop-wayland")]
+                    self.wallpaper_open_panel(kind);
+                    #[cfg(not(feature = "desktop-wayland"))]
+                    let _ = kind;
                 }
                 return fx;
             }
@@ -4034,6 +4044,7 @@ impl Shell {
         self.switch_control_tick(t);
         let mut fx = self.tick_inner(t);
         fx.append(&mut self.voice_fx);
+        fx.append(&mut self.wallpaper_fx);
         fx.extend(self.voice_click_tick(t));
         fx.extend(self.gated_clicks().into_iter().map(Effect::KeyClick));
         fx.extend(self.bell_tick(t));

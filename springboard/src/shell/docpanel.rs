@@ -117,6 +117,15 @@ pub enum Focus {
 
 /// Recents shows at most this many documents.
 pub const MAX_RECENTS: usize = 20;
+/// The `Panel::slot` of a panel the shell itself asks for (Settings > Wallpaper > Add Photo…): no app slot is this high.
+/// Its answer goes to the shell (`Shell::wallpaper_panel_done`), and the sheet hangs from the Settings window.
+pub const SHELL_SLOT: u8 = u8::MAX;
+
+/// The window a panel of `slot` hangs from: the app's, or Settings' for a shell-owned panel.
+pub fn parent_app(slot: u8) -> super::AppId {
+    if slot == SHELL_SLOT { super::AppId::Settings } else { super::AppId::External(slot) }
+}
+
 /// How many folders back and forward remember.
 const MAX_HISTORY: usize = 50;
 
@@ -1627,11 +1636,11 @@ impl super::Shell {
     }
 
     /// Fits the panel's width to its window (`fit_width`): the app's main window, or the screen when it has none.
-    fn doc_fit_width(&mut self) {
+    pub(super) fn doc_fit_width(&mut self) {
         let Some(slot) = self.doc_panel.as_ref().map(|p| p.slot) else { return };
         let pt = self.ui.pt(1.0).max(f32::EPSILON);
         let m = self.desk_metrics();
-        let parent = self.desk.as_ref().and_then(|d| d.index_of(super::AppId::External(slot)).map(|i| d.wins[i].body(&m).w as f32 / pt));
+        let parent = self.desk.as_ref().and_then(|d| d.index_of(parent_app(slot)).map(|i| d.wins[i].body(&m).w as f32 / pt));
         let screen = self.w as f32 / pt;
         let w = fit_width(parent.unwrap_or(screen), screen);
         if let Some(p) = self.doc_panel.as_mut() {
@@ -1677,6 +1686,9 @@ impl super::Shell {
         let Some(p) = self.doc_panel.take() else { return };
         self.desktop_menu = None;
         self.dirty = true;
+        if p.slot == SHELL_SLOT {
+            return self.wallpaper_panel_done(p.request, out);
+        }
         let Some(app_id) = self.doc_app_id(p.slot) else { return };
         let Some(b) = self.doc_broker() else { return };
         if out != Outcome::Cancel && !p.in_recents {
@@ -1759,10 +1771,10 @@ impl super::Shell {
         let l = p.layout();
         let (w, h) = (self.ui.pt(l.w).ceil() as i32, self.ui.pt(l.h).ceil() as i32);
         let m = self.desk_metrics();
-        let win = self.desk.as_ref().and_then(|d| d.index_of(super::AppId::External(p.slot)).map(|i| (d.wins[i].body(&m), d.wins[i].full)));
+        let win = self.desk.as_ref().and_then(|d| d.index_of(parent_app(p.slot)).map(|i| (d.wins[i].body(&m), d.wins[i].full)));
         // a sheet drops from under the title bar; a full-size window's title bar is its unified toolbar band, which the
         // body includes, so the sheet starts below that band (QA W2-13: it covered the window's toolbar)
-        let band = if super::desk::full_size(super::AppId::External(p.slot)) && !win.as_ref().is_some_and(|(_, full)| *full) { self.ui.pt(super::desk::UNIFIED_BAR_PT).round() as i32 } else { 0 };
+        let band = if super::desk::full_size(parent_app(p.slot)) && !win.as_ref().is_some_and(|(_, full)| *full) { self.ui.pt(super::desk::UNIFIED_BAR_PT).round() as i32 } else { 0 };
         let (cx, top) = win.map_or((self.w / 2, (self.h - h) / 2), |(b, _)| (b.x + b.w / 2, b.y + band));
         let bar = self.desktop_bar_height() as i32;
         let x = (cx - w / 2).clamp(0, (self.w - w).max(0));
@@ -1774,7 +1786,7 @@ impl super::Shell {
     /// itself hangs from the top of that window (`doc_panel_rect`). Drawn before the panel's material.
     pub(super) fn draw_doc_dim(&self, s: &mut crate::gfx::Surface) {
         let Some(p) = self.doc_panel.as_ref() else { return };
-        let Some(body) = self.desk.as_ref().and_then(|d| d.index_of(super::AppId::External(p.slot)).map(|i| d.wins[i].body(&self.desk_metrics()))) else { return };
+        let Some(body) = self.desk.as_ref().and_then(|d| d.index_of(parent_app(p.slot)).map(|i| d.wins[i].body(&self.desk_metrics()))) else { return };
         let radius = self.ui.pt(bifrost_ui::prefs_layout::m::WINDOW_RADIUS);
         s.fill_rrect(body.x as f32, body.y as f32, body.w as f32, body.h as f32, radius, crate::gfx::rgba(0, 0, 0, SHEET_DIM_ALPHA));
     }
