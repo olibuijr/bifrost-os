@@ -200,23 +200,22 @@ fn favorite_items(mail: &Mail, ui: &Ui, y: f32, h: f32) -> Vec<(usize, Rect)> {
     items
 }
 
-/// The toolbar buttons and their rectangles, from the right edge inwards: Compose, then Reply, Reply All (only when the
-/// message has other recipients), Archive and Trash when a message is open, then the filter chip while a filter is
-/// applied, then Refresh.
-fn toolbar_items(open: bool, others: bool, filter: Filter) -> Vec<(Button, String)> {
-    let mut order: Vec<(Button, String)> = vec![(Button::Compose, "Compose".to_string())];
-    if open {
-        order.push((Button::Reply, "Reply".to_string()));
-        if others {
-            order.push((Button::ReplyAll, "Reply All".to_string()));
-        }
-        order.push((Button::Archive, "Archive".to_string()));
-        order.push((Button::Trash, "Trash".to_string()));
-    }
+/// The toolbar buttons from the right edge inwards, each with whether it can act: Compose, then Reply, Reply All,
+/// Archive and Trash, then the filter chip while a filter is applied, then Refresh. The message actions stay in the bar
+/// with no message open, disabled (HIG: disable an item that cannot act rather than remove it, so the bar does not
+/// shift); Reply All also needs other recipients.
+fn toolbar_items(open: bool, others: bool, filter: Filter) -> Vec<(Button, String, bool)> {
+    let mut order: Vec<(Button, String, bool)> = vec![
+        (Button::Compose, "Compose".to_string(), true),
+        (Button::Reply, "Reply".to_string(), open),
+        (Button::ReplyAll, "Reply All".to_string(), open && others),
+        (Button::Archive, "Archive".to_string(), open),
+        (Button::Trash, "Trash".to_string(), open),
+    ];
     if filter != Filter::All {
-        order.push((Button::Filter, filter.label().to_string()));
+        order.push((Button::Filter, filter.label().to_string(), true));
     }
-    order.push((Button::Refresh, "Refresh".to_string()));
+    order.push((Button::Refresh, "Refresh".to_string(), true));
     order
 }
 
@@ -244,7 +243,7 @@ fn toolbar_glyph(button: &Button) -> Option<(&'static str, &'static str)> {
 fn toolbar_model(mail: &Mail) -> Toolbar {
     let mut items = vec![ToolbarItem::custom(90, "Mailbox title", 180.0), ToolbarItem::flexible_space()];
     let visible = toolbar_items(mail.open.is_some(), open_has_others(mail), mail.filter);
-    for (button, label) in visible.into_iter().rev() {
+    for (button, label, enabled) in visible.into_iter().rev() {
         let id = match button {
             Button::Refresh => 1, Button::Compose => 2, Button::Reply => 3, Button::ReplyAll => 4,
             Button::Archive => 5, Button::Trash => 6, Button::Filter => 7,
@@ -255,10 +254,11 @@ fn toolbar_model(mail: &Mail) -> Toolbar {
             Button::Archive | Button::Trash => 2,
             _ => 0,
         };
-        items.push(match toolbar_glyph(&button) {
+        let item = match toolbar_glyph(&button) {
             Some((symbol, name)) => ToolbarItem::icon(id, name, symbol).in_group(group),
             None => ToolbarItem::button(id, &label),
-        });
+        };
+        items.push(item.enabled(enabled));
     }
     Toolbar::new(items)
 }
@@ -710,7 +710,9 @@ impl MailWindow {
             let scale = ui.pt(1.0);
             let model = toolbar_model(&self.mail);
             let placed = widgets::toolbar_layout(ui, toolbar_bounds(ui, w), &model);
-            return placed.hit(x / scale, y / scale).and_then(toolbar_button).map_or(Hit::None, Hit::Button);
+            // a disabled button takes no click
+            let enabled = |id: &u32| model.items.iter().any(|i| i.id == *id && i.enabled);
+            return placed.hit(x / scale, y / scale).filter(enabled).and_then(toolbar_button).map_or(Hit::None, Hit::Button);
         }
         if y < top {
             return favorite_items(&self.mail, ui, bar, top - bar).into_iter().find(|(_, r)| inside(*r, x, y)).map_or(Hit::None, |(i, _)| Hit::Favorite(i));
@@ -1393,6 +1395,22 @@ impl MailWindow {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_message_actions_stay_in_the_toolbar_disabled_with_nothing_selected() {
+        let enabled = |open: bool, others: bool| -> Vec<(Button, bool)> { toolbar_items(open, others, Filter::All).into_iter().map(|(b, _, on)| (b, on)).collect() };
+        let idle = enabled(false, false);
+        assert_eq!(idle.iter().map(|(b, _)| b.clone()).collect::<Vec<_>>(), enabled(true, true).iter().map(|(b, _)| b.clone()).collect::<Vec<_>>(), "the same buttons either way");
+        for (button, on) in &idle {
+            let acts = matches!(button, Button::Compose | Button::Refresh);
+            assert_eq!(*on, acts, "{button:?}");
+        }
+        assert!(enabled(true, false).iter().any(|(b, on)| matches!(b, Button::ReplyAll) && !on), "Reply All needs other recipients");
+        assert!(enabled(true, true).iter().all(|(_, on)| *on));
+        // the model carries the state to the kit's toolbar, which greys a disabled item
+        let model = toolbar_model(&Mail::new(vec![]));
+        assert!(model.items.iter().any(|i| i.id == 3 && !i.enabled), "Reply is there, disabled");
+    }
 
     #[test]
     fn the_unread_dot_has_a_gutter_before_the_sender() {
