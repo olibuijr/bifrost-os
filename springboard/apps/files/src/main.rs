@@ -74,6 +74,7 @@ mod undo;
 mod views;
 mod window;
 mod windows;
+mod info_window;
 use barmenu::*;
 use extensions::*;
 use go::*;
@@ -194,6 +195,10 @@ struct Files {
     sys: SystemState,
     /// The windows opened with New Window (⌘N), in the order they were opened. The main window is `self`.
     windows: Vec<windows::ExtraWindow>,
+    /// This `Files` is a Get Info window (`info_window.rs`): it shows only its `info`, filling the window.
+    info_window: bool,
+    /// Get Info asked for its own window; `open_info_window` opens it once a `Ctx` is at hand.
+    info_wanted: bool,
     /// File-manager sync extensions: apps that badge items and add menu items for the folders they declare. A cell,
     /// because drawing asks for the badges.
     ext: std::cell::RefCell<Extensions>,
@@ -289,6 +294,8 @@ impl Files {
             row_text: Default::default(),
             sys: SystemState::default(),
             windows: Vec::new(),
+            info_window: false,
+            info_wanted: false,
             ext,
         };
         // a folder given on the command line opens there (Show in Files)
@@ -357,6 +364,7 @@ impl App for Files {
     }
     fn event(&mut self, ctx: &Ctx, input: Input) -> bool {
         let handled = self.route_input(ctx, input);
+        self.open_info_window(ctx);
         self.flush_services(ctx);
         handled
     }
@@ -396,7 +404,13 @@ impl App for Files {
         let Some(e) = self.windows.iter_mut().find(|e| e.id == window) else { return false };
         match ev {
             // an extra window's touches arrive in window points (`WindowTouch`); `event` takes px, as the main window's
-            Input::Touch { .. } => e.files.event(ctx, bifrost_app::app_windows::window_touch_in_px(ev, ctx.ui.pt(1.0))),
+            Input::Touch { .. } => {
+                let changed = e.files.event(ctx, bifrost_app::app_windows::window_touch_in_px(ev, ctx.ui.pt(1.0)));
+                // a window that window opened (Get Info) is drawn and closed from here, with the others
+                let opened = std::mem::take(&mut e.files.windows);
+                self.windows.extend(opened);
+                changed
+            }
             _ => false,
         }
     }
@@ -833,7 +847,7 @@ mod tests {
     pub(crate) fn fixture(rows: Vec<Entry>) -> Files {
         Files {
             scope_bar: ScopeBar::default(),
-            dnd: Default::default(), windows: Vec::new(), home:"/fixture".into(), path:"/fixture".into(), history:vec![], at:0,
+            dnd: Default::default(), windows: Vec::new(), info_window: false, info_wanted: false, home:"/fixture".into(), path:"/fixture".into(), history:vec![], at:0,
             tabs: tabs::TabStrip::new(tabs::TabState { path: "/fixture".into(), history: vec![], at: 0 }),
             listing: rows.clone(), rows, hits: None, search: None, selection:vec![], select_mode:false, sidebar_hidden:false, status_bar:false, title_w:120., path_segs:vec![], loading:false, error:None, job:None,grid:true,sort:Sort::Name,
             query:TextField::new(),controls:Controls::default(),searching:false,scroll:0.,down:None,last_click:None,preview:None,

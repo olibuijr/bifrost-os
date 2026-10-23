@@ -148,6 +148,12 @@ pub(crate) struct ScopeBar {
     pub(crate) plates: Vec<(Scope, Rect)>,
 }
 
+/// In a place with no tree of its own (Recents, a tag, a smart folder) whether a search only filters the listing: under
+/// the place's own plate, or when the bar is not offered there; This Computer, Home and Disk walk their trees.
+pub(crate) fn filters_in_place(scope: Scope, bar_shown: bool) -> bool {
+    scope == Scope::Folder || !bar_shown
+}
+
 /// Where each scope plate sits: `(x, width)` pairs left to right, the first after the "Search:" label that starts at
 /// `left` and is `label_w` wide. Each plate is as wide as its text (`texts`, in points) plus padding.
 pub(crate) fn scope_plates(left: f32, label_w: f32, texts: &[f32]) -> Vec<(f32, f32)> {
@@ -232,15 +238,15 @@ impl Files {
         self.scroll = 0.;
         self.selection.clear();
         let q = self.query.trim().to_string();
-        if q.is_empty() || self.in_recents() || self.in_bin() {
+        let terms = parse_terms(&q);
+        let scope = terms.scope.unwrap_or(self.scope_bar.scope);
+        if q.is_empty() || self.in_bin() || (self.in_recents() && filters_in_place(scope, self.scope_bar_shown())) {
             self.refresh_rows();
             return;
         }
         let (tx, rx) = feed();
         let cancel = Arc::new(AtomicBool::new(false));
         let flag = cancel.clone();
-        let terms = parse_terms(&q);
-        let scope = terms.scope.unwrap_or(self.scope_bar.scope);
         let (open, home) = (self.path.clone(), self.home.clone());
         let (search_for, kind) = (terms.words.clone(), terms.kind);
         DispatchQueue::global(Qos::Utility).async_(move || {
@@ -282,9 +288,11 @@ impl Files {
     pub(crate) fn effective_scope(&self) -> Scope {
         parse_terms(self.query.trim()).scope.unwrap_or(self.scope_bar.scope)
     }
-    /// The scope bar shows while a query is searching a tree (not in Recents, Tags or the Trash).
+    /// The scope bar shows while there is a query, as in the reference ("Search: This Computer | the place"), also in
+    /// Recents, a tag and a smart folder, where the place's plate filters the listing in place. Not in the Trash, the
+    /// Applications place or a provider's folder, which are only filtered.
     pub(crate) fn scope_bar_shown(&self) -> bool {
-        !self.query.trim().is_empty() && !self.in_recents() && !self.in_bin()
+        !self.query.trim().is_empty() && !self.in_bin() && !applications::is_store_dir(&self.path) && !provider::is_path(&self.path)
     }
     /// The scope bar's height now: 0 while it is not shown.
     pub(crate) fn scope_bar_h(&self) -> f32 {
@@ -534,9 +542,15 @@ mod tests {
         files.query.clear();
         assert_eq!(files.title(), "Music");
         assert_eq!(files.body_top(), HEADER_H);
-        // Recents is only filtered in place: no bar there
+        // Recents, a tag or a smart folder offers the bar too; its own plate filters in place, This Computer walks
         files.query.push_str("aqua");
         files.path = PathBuf::from(fs::RECENTS);
+        assert!(files.scope_bar_shown(), "the reference offers This Computer from Recents and the tags");
+        assert!(filters_in_place(Scope::Folder, true));
+        assert!(!filters_in_place(Scope::Computer, true));
+        assert!(filters_in_place(Scope::Computer, false), "no bar: only the listing is filtered");
+        // the Trash is only filtered
+        files.path = files.bin();
         assert!(!files.scope_bar_shown());
     }
 

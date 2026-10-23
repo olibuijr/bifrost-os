@@ -239,6 +239,11 @@ impl Files {
         self.controls.update(nodes);
     }
     pub(crate) fn click(&mut self, x: f32, y: f32, t: f64) {
+        // a Get Info window only has its permission grid to click
+        if self.info_window {
+            let _ = self.info_click(x, y);
+            return;
+        }
         if self.tag_panel {
             // a colour row toggles that colour on the selection; anywhere else closes the panel
             let row = ((y - TAG_ROWS_TOP) / TAG_ROW).floor();
@@ -438,6 +443,10 @@ impl Files {
         // Reset every dirty pixel opaquely, including fractional-scale edge rows. The content area is the window's
         // white in Light and the dark content grey in Dark (CONTENT_BG), not the pure black of DETAIL_BG.
         s.fill_rect(0,0,s.w,s.h,CONTENT_BG.now());
+        if self.info_window {
+            self.paint_info(ui, s);
+            return;
+        }
         // Golden Gate full-size window: the sidebar runs to the top edge under the traffic lights (the shell draws them)
         if !self.sidebar_hidden {
             let pressed = if self.dragging { self.drop_target.as_ref().and_then(|t| self.sidebar_id(t)) } else { None };
