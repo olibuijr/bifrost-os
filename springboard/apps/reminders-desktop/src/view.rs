@@ -192,8 +192,12 @@ impl Reminders {
             let pictures = format!("{n} {}", if n == 1 { "image" } else { "images" });
             sub = if sub.is_empty() { pictures } else { format!("{sub} · {pictures}") };
         }
-        // right-hand decorations, laid out right to left
+        // right-hand decorations, laid out right to left; the selected row's "i" is the last (`details.rs`)
         let mut rx = right_edge;
+        if self.info_shown(r.id) {
+            self.draw_info(c, ui, x + w + shift, cy);
+            rx -= ui.pt(details::INFO_W);
+        }
         if kids {
             let collapsed = self.collapsed.contains(&r.id);
             self.chevron(c, (rx - ui.pt(SPACE_M), cy), ui.pt(SPACE_XS), !collapsed, LABEL_2.now());
@@ -268,14 +272,18 @@ impl Reminders {
             ),
         };
         // the large title in the list's colour with the open count at the right (Golden Gate Reminders)
-        let title = if self.searching { format!("Results for \u{201c}{}\u{201d}", self.title.text().trim()) } else { title };
+        // under a Details popover the title field holds the reminder's title, and the query waits in `saved_query`
+        let query = if self.screen == Screen::Items { self.title.text().trim().to_string() } else { self.saved_query.trim().to_string() };
+        let title = if self.searching { format!("Results for \u{201c}{query}\u{201d}") } else { title };
         let open = self.rows.iter().filter(|r| matches!(r, Row::Item { idx, .. } if !self.data.items[*idx].completed)).count();
         let title = ui.fit(&title, MAC_LARGE_TITLE_PT, wpx - ui.pt(SPACE_HUGE + 60.0));
         // compliance-allow: LAY-07 the list title is tinted and has the open count at its right, which widgets::large_title cannot draw
         self.text(s, ui, &title, MAC_LARGE_TITLE_PT, Weight::Bold, color, ui.pt(SPACE_XL), ui.pt(self.top_pt + 62.0));
         self.right(s, ui, &open.to_string(), MAC_LARGE_TITLE_PT, Weight::Regular, color, wpx - ui.pt(SPACE_XL), ui.pt(self.top_pt + 62.0));
+        // "N Completed • Clear" and Show or Hide, on a list with completed reminders (`completed.rs`)
+        self.draw_strip(s, ui);
         let _ = t;
-        let (top, bottom) = (self.top_px(ui), self.bottom(ui));
+        let (top, bottom) = (self.list_top_px(ui), self.bottom(ui));
         let mut c = s.rows(top as usize, bottom.max(top) as usize);
         let rows = self.rows.clone();
         let dragged = self.drag.as_ref().map(|d| d.id);
@@ -392,7 +400,7 @@ impl Reminders {
         }
     }
 
-    fn draw_form(&mut self, s: &mut Surface, ui: &Ui, t: f64) {
+    pub(super) fn draw_form(&mut self, s: &mut Surface, ui: &Ui, t: f64) {
         // Cancel, the heading and Done are in the toolbar (`chrome`)
         let (top, bottom) = (self.top_px(ui), self.view_bottom(ui));
         let mut c = s.rows(top as usize, bottom.max(top) as usize);
@@ -654,6 +662,11 @@ impl Reminders {
             match self.screen {
                 Screen::Items if self.deleted.is_some() => self.draw_deleted(&mut content, ui),
                 Screen::Items => self.draw_items(&mut content, ui, t),
+                // a saved reminder's details: the list stays, the details are in a popover over it (`details.rs`)
+                Screen::Editor if self.details_popover() => {
+                    self.draw_items(&mut content, ui, t);
+                    self.draw_details(&mut content, ui, t);
+                }
                 Screen::Editor | Screen::ListEditor => self.draw_form(&mut content, ui, t),
             }
             if self.options_open && matches!(self.screen, Screen::Items) {
@@ -680,6 +693,7 @@ impl Reminders {
             }
         }
         self.draw_chrome(s, ui);
+        self.draw_clear_ask(s, ui);
         self.dirty = false;
     }
 }

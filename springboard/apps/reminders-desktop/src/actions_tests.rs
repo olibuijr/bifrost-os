@@ -1182,3 +1182,148 @@ fn deleting_a_list_asks_first_and_the_more_button_and_right_click_open_its_menu(
     assert!(app.data.items.is_empty(), "with its reminders");
     cleanup(&path);
 }
+
+/// A list with "Open" and two completed reminders, shown.
+fn list_with_completed(name: &str) -> (Reminders, Ui, PathBuf) {
+    let (mut app, ui, path) = app(name);
+    let list = app.data.lists[0].id;
+    app.view = View::List(list);
+    add(&mut app, &ui, "Done one", 0.0);
+    add(&mut app, &ui, "Open", 10.0);
+    add(&mut app, &ui, "Done two", 20.0);
+    for title in ["Done one", "Done two"] {
+        let id = app.data.items.iter().find(|r| r.title == title).unwrap().id;
+        let mut next = app.data.clone();
+        assert!(model::toggle_complete(&mut next.items, id, app.today).is_some());
+        assert!(app.commit(next));
+    }
+    app.screen = Screen::Items;
+    app.rebuild(&ui);
+    (app, ui, path)
+}
+
+/// Window pixels at the middle of a published control.
+fn centre_of(node: &bifrost_app::controls::Node, ui: &Ui) -> (f32, f32) {
+    (ui.pt(node.bounds.x + node.bounds.w / 2.0), ui.pt(node.bounds.y + node.bounds.h / 2.0))
+}
+
+fn click(app: &mut Reminders, ui: &Ui, (x, y): (f32, f32), t: f64) {
+    app.touch(ui, Event::Down(x, y), t);
+    app.touch(ui, Event::Up(x, y), t + 20.0);
+}
+
+#[test]
+fn a_list_with_completed_reminders_shows_the_completed_strip_and_show_toggles_them() {
+    let (mut app, ui, path) = list_with_completed("completed-strip");
+    assert_eq!(app.completed_in_list(), 2);
+    assert_eq!(app.strip_h(), completed::STRIP_H, "the strip shows");
+    let p = app.strip_parts(&ui).expect("laid out");
+    assert!(p.y + p.h <= app.list_top_px(&ui) + 0.5, "the rows start under the strip");
+    assert!(p.clear.0 > p.label_x && p.toggle.0 > p.clear.0 + p.clear.1, "count, Clear, then Show at the trailing edge");
+    render(&mut app, &ui);
+    let controls = app.controls(&ui);
+    let show = controls.iter().find(|n| n.label == "Show Completed").expect("Show is published");
+    assert!(!app.opts.show_completed);
+    click(&mut app, &ui, centre_of(show, &ui), 100.0);
+    assert!(app.opts.show_completed, "Show shows the completed reminders");
+    assert!(app.controls(&ui).iter().any(|n| n.label == "Hide Completed"), "and becomes Hide");
+    // a smart list has no strip
+    app.activate(&ui, Target::Smart(Smart::All), 200.0);
+    assert_eq!(app.strip_h(), 0.0);
+    assert!(app.strip_parts(&ui).is_none());
+    cleanup(&path);
+}
+
+#[test]
+fn clear_on_the_completed_strip_asks_first_then_removes_the_completed_reminders() {
+    let (mut app, ui, path) = list_with_completed("completed-clear");
+    render(&mut app, &ui);
+    let clear = app.controls(&ui).into_iter().find(|n| n.label == "Clear Completed").expect("Clear is published");
+    click(&mut app, &ui, centre_of(&clear, &ui), 100.0);
+    assert!(app.clear_ask, "Clear asks first");
+    assert_eq!(app.data.items.len(), 3, "nothing is removed yet");
+    let sheet = app.clear_sheet().expect("the alert");
+    assert_eq!(sheet.title, completed::clear_question(2));
+    render(&mut app, &ui);
+    // the alert blocks the window: a click on the list does nothing
+    let (x, y, w, h) = row_of(&app, &ui, "Open");
+    click(&mut app, &ui, (x + w / 2.0, y + h / 2.0), 200.0);
+    assert!(app.clear_ask && app.editor.is_none());
+    // Cancel keeps them
+    let (parent, bar) = app.sheet_parent(&ui);
+    let layout = sheet.layout(parent, bar, 1.0);
+    let button = |id: u32| layout.buttons.iter().find(|(b, _)| *b == id).map(|(_, r)| (ui.pt(r.x + r.w / 2.0), ui.pt(r.y + r.h / 2.0))).unwrap();
+    click(&mut app, &ui, button(2), 300.0);
+    assert!(!app.clear_ask && app.data.items.len() == 3, "Cancel keeps the completed reminders");
+    // Escape is Cancel too; Return is Clear
+    app.activate(&ui, Target::ClearAsk, 400.0);
+    assert!(app.escape(&ui, 410.0) && !app.clear_ask);
+    app.activate(&ui, Target::ClearAsk, 500.0);
+    app.key(&ui, Out::Enter, 510.0);
+    assert!(!app.clear_ask);
+    assert_eq!(titles(&app), ["Open"], "Clear removes the list's completed reminders");
+    assert!(app.undo.is_some(), "with Undo");
+    assert_eq!(app.strip_h(), 0.0, "and the strip goes");
+    app.activate(&ui, Target::ClearAsk, 600.0);
+    assert!(!app.clear_ask, "nothing to ask about");
+    cleanup(&path);
+}
+
+#[test]
+fn the_i_on_the_selected_row_opens_details_in_a_popover_over_the_list() {
+    let (mut app, ui, path) = app("details-popover");
+    add(&mut app, &ui, "Feed cat", 0.0);
+    add(&mut app, &ui, "Water plants", 1.0);
+    app.screen = Screen::Items;
+    app.rebuild(&ui);
+    let id = app.data.items.iter().find(|r| r.title == "Feed cat").unwrap().id;
+    let (x, y, w, h) = row_of(&app, &ui, "Feed cat");
+    click(&mut app, &ui, (x + w / 2.0, y + h / 2.0), 10.0);
+    assert_eq!(app.selected, Some(id));
+    render(&mut app, &ui);
+    let info = app.controls(&ui).into_iter().find(|n| n.label == "Show Details").expect("the selected row has its i");
+    click(&mut app, &ui, centre_of(&info, &ui), 100.0);
+    assert_eq!(app.editor.as_ref().and_then(|e| e.id), Some(id), "the i opens the reminder's details");
+    assert!(app.details_popover(), "in a popover, not the full pane");
+    assert!(app.bar_px(&ui, chrome::B_DONE).is_none(), "the list's toolbar stays");
+    let g = app.details_geometry(&ui).expect("placed");
+    let k = ui.pt(1.0);
+    assert!(g.panel.x >= g.bounds.x && g.panel.x + g.panel.w <= g.bounds.x + g.bounds.w + 0.01, "inside the content");
+    assert!(g.panel.x >= g.anchor.x + g.anchor.w || g.panel.x + g.panel.w <= g.anchor.x, "beside the i, not over it");
+    let (fx, fy, fw, _) = app.field_frame(&ui, Field::Title).expect("the title field");
+    assert!(fx / k >= g.panel.x && (fx + fw) / k <= g.panel.x + g.panel.w + 0.01 && fy / k >= g.panel.y, "the form is in the popover");
+    // the list stays drawn under it at its own place
+    assert_eq!(row_of(&app, &ui, "Feed cat").1, y);
+    render(&mut app, &ui);
+    // a click outside the popover closes it and keeps the edits
+    app.title.set_text(&ui, "Feed the cat");
+    // the popover opens to the left of the i (no room on its right): the list's leading edge is outside it
+    let (_, wy, _, wh) = row_of(&app, &ui, "Water plants");
+    assert!(g.panel.x > 4.0, "room left of the popover");
+    let outside = (app.x0 + ui.pt(g.panel.x / 2.0), wy + wh / 2.0);
+    assert!(!g.panel.contains((outside.0 - app.x0) / k, outside.1 / k));
+    click(&mut app, &ui, outside, 200.0);
+    assert!(app.editor.is_none() && app.screen == Screen::Items, "the popover closed");
+    assert_eq!(app.data.items.iter().find(|r| r.id == id).unwrap().title, "Feed the cat", "and kept the edit");
+    cleanup(&path);
+}
+
+#[test]
+fn escape_drops_the_details_edits_and_a_new_reminder_keeps_the_full_form() {
+    let (mut app, ui, path) = app("details-escape");
+    add(&mut app, &ui, "Feed cat", 0.0);
+    app.screen = Screen::Items;
+    app.rebuild(&ui);
+    let row = app.rows.iter().position(|r| matches!(r, Row::Item { .. })).unwrap();
+    app.activate(&ui, Target::Info(row), 10.0);
+    assert!(app.details_popover());
+    app.title.set_text(&ui, "Changed");
+    assert!(app.escape(&ui, 20.0));
+    assert!(app.editor.is_none());
+    assert_eq!(app.data.items[0].title, "Feed cat", "Escape cancels");
+    app.activate(&ui, Target::New, 30.0);
+    assert!(app.editor.is_some() && !app.details_popover(), "a new reminder still opens the full form");
+    assert!(app.details_geometry(&ui).is_none());
+    app.activate(&ui, Target::Cancel, 40.0);
+    cleanup(&path);
+}
