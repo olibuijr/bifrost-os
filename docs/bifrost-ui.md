@@ -574,6 +574,18 @@ item shows a check mark glyph in its title, there are no item icons, tooltips, `
 (Option) items or `NSMenuDelegate.menuNeedsUpdate` before opening; state is pushed on change instead. Menu items with
 a modifier-less key equivalent are ignored by the chord path.
 
+**The app's own Print (`AppMenuItem::print`, 2026-10-23).** The shell ends every SDK app's File menu with its own Print…
+(Cmd+P), which prints a snapshot of the window. An app that prints its documents itself (Apple parity: the app owns
+`NSDocument.printDocument:` / `print:` behind File > Print…) declares that item with `AppMenuItem::print(id)` (title "Print…",
+key Cmd+P, the `prints` flag, bit 4 of the item flags on the wire) and handles it in `menu_action` like any item. The shell
+then shows the app's item in place of its own row, at the end of File, whichever app menu declares it
+(`desktop_bar::app_print_row`; `app_menu_rows` leaves it out elsewhere), so File has one Print…; `app_menu_chord` sends Cmd+P to
+it. Publish it disabled when there is nothing to print; the shell's snapshot does not come back while the app declares one.
+Contacts uses it (File > Print… prints the contact list; Print Address Labels… stays a separate item). Tests: proto
+`the_apps_own_print_item_keeps_its_flag_over_the_wire`, shell `an_apps_own_print_replaces_the_shells_print_row`, Contacts
+`group_actions_lead_the_detail_bar_and_file_has_one_print`. Not matched yet: there is no app-side print panel hook
+(`printOperation(withSettings:)` handing the shell's print sheet the app's pages); the app runs its own `PrintOperation`.
+
 ### App context menus (`Ctx::context_menu`, `NSMenu.popUpContextMenu`)
 
 A right click arrives as `Input::Context { x, y }` (window-local px). The app answers with
@@ -4127,6 +4139,23 @@ An app that does not ask keeps the touch stream it had (the wheel as a drag, no 
   scroll twice. `Shell::pointer_hover` (called from `desktop_pointer`) sends `Hover` over the content of an app that asked
   and `HoverExit` when the pointer leaves it or moves to another app. `Shell::pinch_contact` feeds the first two touchscreen
   contacts of the app in front to `TwoFinger` and sends `Magnify` and `Rotate`.
+- **Extra windows** (2026-10-23, E2E): the wheel and hover go to the window under the pointer, extra windows included. Before,
+  `ext_content_at` matched only an app's main window, so an extra window (Calendar's event editor, Mail's viewer and compose
+  windows) never got the wheel and the app had no window id for it. Now an extra window gets `ToApp::WindowInput { window,
+  input: WindowInput::Pointer(event) }` (kind 6, the `ToApp::Pointer` bytes after it) in window points, like its
+  `WindowTouch`; the main window keeps `ToApp::Pointer` in surface pixels. The emulated drag is dropped for an extra window that
+  took the wheel too (`ext_window_touch` checks `swallows_touch`); an app that did not ask keeps the drag in every window. SDK:
+  `App::window_pointer(ctx, window, &event)` (default: the main window goes to `pointer`, extra windows drop it), reached
+  through `default_window_input`; an app that overrides `window_input` passes `WindowInput::Pointer` on to it (Activity and
+  Dictionary do). Scroll views take the wheel: `View::scroll_wheel(dx, dy)` (default none), `ScrollView` scrolls by the wheel's
+  travel within its range and passes it on when the document fits, `Window::wheel(x, y, dx, dy)` offers it to the deepest view
+  under the pointer and then its ancestors, and `ViewApp::pointer` (pixels) / `pointer_points` (an extra window's points) feed it.
+  Hand-drawn lists use `Scroller::wheel(dy)` (`bifrost_ui::scroll`). Tests: proto
+  `a_window_pointer_event_has_the_pointer_layout_after_kind_six`, apphost `the_wheel_over_an_extra_window_carries_the_window_id`,
+  pointer_events `an_extra_window_gets_its_pointer_events_in_points_and_the_main_window_in_pixels`, app_windows
+  `the_wheel_reaches_the_extra_window_it_is_over_with_its_id`, view scroll `the_window_hands_the_wheel_to_the_scroll_view_under_the_pointer`,
+  ui scroll `the_wheel_moves_the_offset_by_its_travel_within_the_range`. The pinch and rotate gestures still go to the main
+  window of the app in front only.
 - **Not built, said plainly**: the Wayland layer reads only the vertical axis of a notched wheel (no `axis_source`, no phases,
   no momentum, no horizontal scroll), binds no pointer-gestures protocol (a touchpad pinch does not arrive; only touchscreen
   fingers do), and no shipped app or view takes the events yet. Apple's trackpad momentum and phase behaviour cannot be
@@ -5143,7 +5172,8 @@ cannot be closed) and the windows the app opens, front to back, the first one fo
 Wire protocol (`springboard/proto`, tags 0x240 to 0x24e; 0x1c0 to 0x1cf belongs to Search): the app sends `WindowOpen {id, title, w, h, position, flags}`, `WindowClose {id}`,
 `WindowTitle {id, title}`, `WindowResize {id, w, h}`, and for the pixels `WindowBuffers {id, w, h, generation}` and `WindowFrame {id, buf, damage}`.
 The shell sends `WindowClosed {id}` (its own close control), `WindowConfigure {id, w, h}`, `WindowTouch {id, touch, kind, x, y,
-t_ms}` and `WindowRelease {id, buf, generation}`. Titles are cut to 512 bytes; non-finite or negative sizes are refused.
+t_ms}` and `WindowRelease {id, buf, generation}`; the wheel and hover over an extra window arrive as `WindowInput::Pointer` for
+that window (`App::window_pointer`, see "Pointer events"). Titles are cut to 512 bytes; non-finite or negative sizes are refused.
 
 Placement, collapse and title double-click (tags 0x246, 0x247, 0x24d, 0x24e). `WindowOpen` carries an optional `position`
 (points, relative to the visible desktop area) and a `flags` word (`window_flags::TITLE_DOUBLE_CLICK`). The app sends
