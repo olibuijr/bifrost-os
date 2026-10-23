@@ -155,6 +155,16 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_window_touch_in_points_hits_play_only_once_scaled_to_px() {
+        // the shell sends the MiniPlayer's touches in window points; the layout is in px (`App::window_event` scales)
+        let k = 1200.0 / 768.0;
+        let lay = layout(size_px(k).0, k);
+        let play_pt = (WIDTH_PT / 2.0, 140.0);
+        assert_eq!(lay.hit(play_pt.0 * k, play_pt.1 * k), Some(Part::PlayPause));
+        assert_ne!(lay.hit(play_pt.0, play_pt.1), Some(Part::PlayPause), "points read as px miss the button at 1.5625");
+    }
+
+    #[test]
     fn every_part_sits_inside_the_window_at_each_scale() {
         for scale in [1.0_f32, 1.5625, 2.0] {
             let (w, h) = size_px(scale);

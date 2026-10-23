@@ -4252,6 +4252,30 @@ mod tests {
     }
 
     #[test]
+    fn a_card_window_click_in_window_points_lands_under_the_pointer_at_a_non_1_scale() {
+        use crate::card_windows::card_touch;
+        use bifrost_app::TouchKind;
+        let path = file_with("card-touch", &[contact(1, "Anna As")]);
+        let ui = test_ui();
+        assert!((ui.s - 1.5625).abs() < 1e-6, "Midget's scale");
+        let mut app = Contacts::new(&ui, 1200, 780, path);
+        let (w, h) = ((480.0 * ui.s) as usize, (560.0 * ui.s) as usize);
+        let mut px = vec![0u32; w * h];
+        app.draw_card(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, &ui, 1);
+        // the middle of the card's Edit button, in window points, as the shell sends it (`WindowTouch`)
+        let edit = app.card_edit_rect();
+        let (x, y) = (edit.x + edit.w / 2.0, edit.y + edit.h / 2.0);
+        let k = ui.pt(1.0);
+        app.touch_card(&ui, 1, card_touch(TouchKind::Down, x, y, k), 0.0);
+        app.touch_card(&ui, 1, card_touch(TouchKind::Up, x, y, k), 0.05);
+        assert_eq!(app.take_card_edit(), Some(1), "Edit is under the pointer");
+        // the old reading (points taken as px) put the same click at (x / s, y / s) pt, left of and above the button
+        app.touch_card(&ui, 1, Event::Down(x, y), 0.1);
+        app.touch_card(&ui, 1, Event::Up(x, y), 0.15);
+        assert_eq!(app.take_card_edit(), None);
+    }
+
+    #[test]
     fn copy_contact_queues_the_open_contact_once_from_the_card_and_the_accessibility_control() {
         let path = file_with("copy", &[contact(1, "Anna As"), contact(2, "Bo Berg")]);
         let ui = test_ui();

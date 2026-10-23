@@ -92,6 +92,24 @@ impl Keyboard {
         self.layout
     }
 
+    /// The pending dead key as the spacing mark it shows while it waits for a letter (´ for a dead acute), or None.
+    /// The shell shows it as marked text in the field being typed in (`shell::dead_key`).
+    pub fn pending_mark(&self) -> Option<char> {
+        self.dead.map(mark_alone)
+    }
+
+    /// Takes the pending dead key (its combining mark), leaving none: a key that does not type text cancels it.
+    pub fn take_dead(&mut self) -> Option<char> {
+        self.dead.take()
+    }
+
+    /// Puts back a dead key taken with `take_dead`, for the key that types next to compose with.
+    pub fn restore_dead(&mut self, dead: Option<char>) {
+        if dead.is_some() {
+            self.dead = dead;
+        }
+    }
+
     fn lookup(&self, code: u16, shift: bool, altgr: bool) -> Option<char> {
         let level = usize::from(shift) + 2 * usize::from(altgr);
         KEYMAPS[self.layout].iter().find(|k| k.0 == code).map(|k| k.1[level]).filter(|c| *c != '\0')
@@ -239,6 +257,33 @@ mod tests {
         // the apostrophe key is dead acute on US international
         assert_eq!(typed(&mut k, &[40, 18]), "é");
         assert_eq!(typed(&mut k, &[40, 57]), "´");
+    }
+
+    #[test]
+    fn a_pending_dead_key_shows_its_mark_until_a_letter_composes_or_it_is_taken() {
+        let mut k = kb("is");
+        assert_eq!(k.pending_mark(), None);
+        // the Icelandic acute key (code 40) is dead: it types nothing and waits with its mark showing
+        assert_eq!(k.feed(40, true), None);
+        k.feed(40, false);
+        assert_eq!(k.pending_mark(), Some('´'));
+        assert_eq!(k.feed(30, true), Some(Typed::Char('á')));
+        assert_eq!(k.pending_mark(), None, "the letter used the mark");
+        // taken and put back: the next letter still composes
+        k.feed(40, true);
+        let dead = k.take_dead();
+        assert_eq!(k.pending_mark(), None);
+        k.restore_dead(dead);
+        assert_eq!(k.feed(18, true), Some(Typed::Char('é')));
+        // taken and dropped (a click, a shortcut): the letter types plain
+        k.feed(40, true);
+        assert!(k.take_dead().is_some());
+        k.restore_dead(None);
+        assert_eq!(k.feed(30, true), Some(Typed::Char('a')));
+        // a layout switch drops it too
+        k.feed(40, true);
+        k.set_layout(layout_index("is").unwrap());
+        assert_eq!(k.pending_mark(), None);
     }
 
     #[test]

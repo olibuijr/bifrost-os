@@ -474,6 +474,8 @@ fn run() -> std::io::Result<()> {
     // text inputs in this process compose kana while the Japanese source is on (`compose_method::type_text`)
     bifrost_ui::compose_method::set_japanese_source(seen_source == springboard::shell::kb_layouts::Layout::Japanese);
     let mut key_repeat = springboard::shell::hwkeys::KeyRepeat::default();
+    // the field showing a pending dead key's mark as marked text (´ on the Icelandic layout), `shell::dead_key`
+    let mut dead_shown: Option<springboard::shell::dead_key::DeadTarget> = None;
     // the word typed since the last break, for Settings > Keyboard > Text Replacements
     let mut words = springboard::shell::kb_input::WordBuffer::default();
     // touchscreen contacts run on the gesture recognizers (a Contact only comes from a touchscreen, on any form);
@@ -961,6 +963,11 @@ fn run() -> std::io::Result<()> {
             let e = match *ev {
                 input::Event::Down { x, y, .. } => {
                     words.clear();
+                    // a click cancels a pending dead key: its mark goes, and is never committed
+                    hw_keys.cancel_dead();
+                    if let Some(target) = dead_shown.take() {
+                        shell.dead_key_clear(target);
+                    }
                     let (x, y) = map(x, y);
                     Event::Down(x, y)
                 }
@@ -1045,6 +1052,19 @@ fn run() -> std::io::Result<()> {
                     });
                     shell.set_photos_shift(hw_keys.shift_held());
                     shell.set_key_mods(hw_keys.modifier_flags());
+                    // a pending dead key: any key-down but a modifier takes its mark back first (UnmarkText without a commit);
+                    // only a key that types gets the dead key back to compose with, and Esc or Backspace just cancel it
+                    let mut dead = if down { hw_keys.take_dead(code) } else { None };
+                    if dead.is_some() {
+                        let shown = dead_shown.take();
+                        if let Some(target) = shown {
+                            shell.dead_key_clear(target);
+                        }
+                        if shown.is_some() && hw_keys.cancels_dead(code) {
+                            key_repeat.press(code, None, t);
+                            continue;
+                        }
+                    }
                     if trace {
                         eprintln!("springboard: key {code} {} shortcut={raw_sc:?}", if down { "down" } else { "up" });
                     }
@@ -1109,12 +1129,29 @@ fn run() -> std::io::Result<()> {
                         seen_source = source;
                         bifrost_ui::compose_method::set_japanese_source(source == springboard::shell::kb_layouts::Layout::Japanese);
                         hw_keys.set_layout(springboard::installer::keymaps::layout_index(source.keymap()).unwrap_or(0));
+                        // a layout switch drops a pending dead key
+                        dead = None;
                         springboard::shell::fcitx_bridge::follow(source);
                     }
                     // Home, End, the word and line keys, Shift with the arrows and the deletes edit a shell text field (an app in front
                     // gets them as chords, the Terminal as its own keys)
                     let field_edit = if down && !(shell.sdk_app_front() && !shell.shell_takes_typing()) && !shell.term_front() { hw_keys.field_edit(code) } else { None };
-                    let typed = if down { field_edit.or_else(|| hw_keys.typed(code)) } else { None };
+                    let typed = if down {
+                        field_edit.or_else(|| {
+                            hw_keys.restore_dead(dead);
+                            hw_keys.typed(code)
+                        })
+                    } else {
+                        None
+                    };
+                    // a dead key now waits for its letter: the field being typed in shows its mark, underlined
+                    if let Some(mark) = hw_keys.dead_mark().filter(|_| down && dead_shown.is_none()) {
+                        if let Some(target) = shell.dead_key_target() {
+                            if shell.dead_key_show(target, mark) {
+                                dead_shown = Some(target);
+                            }
+                        }
+                    }
                     if let Some(out) = typed {
                         key_repeat.press(code, Some(out.clone()), t);
                         // a replacement whose word this key ends: erase the word and type its phrase first
@@ -1148,6 +1185,15 @@ fn run() -> std::io::Result<()> {
                 }
             };
             effects.extend(shell.event(e, t));
+        }
+        // the mark of a pending dead key goes when the typing moves elsewhere (another window, app or field) or the dead
+        // key went (a layout switch from the input menu): never committed
+        if let Some(target) = dead_shown {
+            if hw_keys.dead_mark().is_none() || shell.dead_key_target() != Some(target) {
+                hw_keys.cancel_dead();
+                shell.dead_key_clear(target);
+                dead_shown = None;
+            }
         }
         // a held letter with accents opens its accent list (Search only); other held keys repeat once their delay is up
         if let Some(letter) = key_repeat.accent_hold(t, shell.accent_popup_ready()) {

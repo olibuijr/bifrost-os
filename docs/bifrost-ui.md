@@ -5194,6 +5194,16 @@ The shell sends `WindowClosed {id}` (its own close control), `WindowConfigure {i
 t_ms}` and `WindowRelease {id, buf, generation}`; the wheel and hover over an extra window arrive as `WindowInput::Pointer` for
 that window (`App::window_pointer`, see "Pointer events"). Titles are cut to 512 bytes; non-finite or negative sizes are refused.
 
+Units (2026-10-23, E2E follow-up). `WindowTouch` and an extra window's pointer events are in the window's **points**, while
+the main window's `ToApp::Touch` is in surface pixels. An app that hit-tests an extra window in px, or hands its touches to code
+written for the main window, scales them first: `app_windows::window_touch_in_px(ev, ctx.ui.pt(1.0))` returns the touch in px
+and leaves other input alone. Contacts card windows (`card_windows::card_touch`), Dictionary and Files extra windows, the
+Maps window and the Music MiniPlayer read the points as px (or divided them by the scale again), so clicks missed at
+Midget's 1.5625 scale; Mail, Notes and Calendar already scaled. Tests: sdk
+`a_window_touch_in_points_becomes_px_at_the_display_scale_and_other_input_is_kept`, contacts
+`a_card_window_click_in_window_points_lands_under_the_pointer_at_a_non_1_scale`, music
+`a_window_touch_in_points_hits_play_only_once_scaled_to_px`.
+
 Placement, collapse and title double-click (tags 0x246, 0x247, 0x24d, 0x24e). `WindowOpen` carries an optional `position`
 (points, relative to the visible desktop area) and a `flags` word (`window_flags::TITLE_DOUBLE_CLICK`). The app sends
 `WindowMove {window, x, y}` to place a window and `WindowCollapse {window, collapsed}` to fold it to its title bar. The shell
@@ -5299,8 +5309,15 @@ routing, focus and the late lost focus, closed windows, menu items and text edit
 `marked_text_and_accent_holds_follow_the_key_window`); SDK `marked_text_and_accent_holds_reach_the_key_window_with_its_id`;
 proto `an_accent_hold_goes_to_the_key_window_and_a_bad_code_point_is_refused`. Hardware dead keys (the Icelandic `´` then
 `a`) are composed by the shell's keymap (`installer::keymaps::Keyboard::press`) and arrive in the key window as the composed
-text `á`, so they never were marked text; the reference shows the pending accent as marked text, which the shell does not
-send yet. Not verified: no build or test run was done
+text `á`. Since 2026-10-23 the pending accent shows as marked text, as the reference shows it (`shell::dead_key`): the
+key window gets `SetMarkedText("´")` (underlined by the field), and the next key sends `UnmarkText { commit: false }` before
+the composed text. A click, a shortcut or edit key, Esc and Backspace (which only cancel), a layout switch, and the typing
+moving to another window, app or field take the mark back the same way; it is never committed. The shell's Search field and
+a Wayland client's field (the input method's preedit) show it too; Settings search and the sheets compose without showing it
+(their fields are not reachable from the key path yet). A dead key with a letter it has no composition for still types the
+letter alone (the reference types the accent and the letter). Tests: keymaps
+`a_pending_dead_key_shows_its_mark_until_a_letter_composes_or_it_is_taken`, hwkeys
+`a_dead_key_is_taken_by_the_next_key_and_given_back_only_to_typing`, `dead_key` tests (Search, Wayland, no target). Not verified: no build or test run was done
 for this change; the desk's `sync_key_windows` has no test of its own. Apps: Contacts 1.14.0 (Cmd+W), Dictionary 0.6.0 (own
 keys and Copy per window, Cmd+W, prefs read back before each change), Activity Monitor 0.9.0 (Cmd+W in CPU windows).
 `min_shell` is not raised: an older shell sends none of these messages.

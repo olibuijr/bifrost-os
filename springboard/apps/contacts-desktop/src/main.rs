@@ -357,11 +357,8 @@ impl App for ContactsApp {
         }
         let Some(contact) = self.cards.card_of(window) else { return false };
         let Input::Touch { kind, x, y, t, .. } = ev else { return false };
-        let e = match kind {
-            TouchKind::Down => Event::Down(x, y),
-            TouchKind::Move => Event::Move(x, y),
-            TouchKind::Up | TouchKind::Cancel => Event::Up(x, y),
-        };
+        // window touches are in points; the card hit-tests in px
+        let e = card_windows::card_touch(kind, x, y, ctx.ui.pt(1.0));
         if let Some(c) = &mut self.app {
             c.touch_card(&ctx.ui, contact, e, t);
         }

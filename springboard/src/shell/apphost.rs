@@ -1199,6 +1199,12 @@ impl AppHost {
         self.send(&m);
     }
 
+    /// Input for one window of the app, key or not: a dead key's mark is taken back from the window it was shown in after
+    /// the focus has moved on (`shell::dead_key`).
+    pub fn input_to(&mut self, window: u32, input: WindowInput) {
+        self.send(&input.to_app(window));
+    }
+
     /// The desk made `window` the key window (0 is the main window). The app hears that the old one lost focus and that
     /// the new one gained it, so an app with extra windows always knows which one takes the keys.
     pub fn set_key_window(&mut self, window: u32) {
@@ -3304,6 +3310,20 @@ mod window_table_tests {
             ],
             "a repeated focus sends nothing; the main window's keys keep the legacy message"
         );
+    }
+
+    #[test]
+    fn input_to_reaches_the_named_window_whichever_is_key() {
+        let (channel, peer) = sys::socketpair_pair().unwrap();
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
+        // a dead key's mark is taken back from the window it was shown in after the focus moved on
+        host.input_to(3, WindowInput::UnmarkText { commit: false });
+        host.input_to(0, WindowInput::UnmarkText { commit: false });
+        let got = sent(&peer);
+        assert!(got.ends_with(&[
+            ToApp::WindowInput { window: 3, input: WindowInput::UnmarkText { commit: false } },
+            ToApp::UnmarkText { commit: false },
+        ]), "{got:?}");
     }
 
     #[test]

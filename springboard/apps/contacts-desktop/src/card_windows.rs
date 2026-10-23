@@ -5,10 +5,13 @@
 //! window is forgotten when the shell or the app closes it.
 //!
 //! Card > Open in Separate Window and a double-click on a row open a card here (`main.rs`, `open_card_window`), and the
-//! window draws the card (`draw_window`, `Contacts::draw_card`). Touches in a card window are not routed yet.
+//! window draws the card (`draw_window`, `Contacts::draw_card`). A card window's touches arrive in window points
+//! (`WindowTouch`) and become px for `Contacts::touch_card` through `card_touch`.
 #![cfg_attr(not(test), allow(dead_code))]
 
 use bifrost_app::app_windows::{WindowId, WindowSpec};
+use bifrost_app::kit::Event;
+use bifrost_app::TouchKind;
 
 /// The size of a card window, in points.
 pub const CARD_WIDTH: f32 = 480.0;
@@ -23,6 +26,18 @@ pub fn card_title(name: &str) -> String {
 /// What to ask the SDK for when a card opens in its own window.
 pub fn card_spec(name: &str) -> WindowSpec {
     WindowSpec::new(&card_title(name), CARD_WIDTH, CARD_HEIGHT)
+}
+
+/// A card window's touch as `Contacts::touch_card` takes it. The shell sends an extra window's touches in the window's
+/// points (`ToApp::WindowTouch`), while the card is laid out and hit-tested from px, as the main window's touches are;
+/// `px_per_pt` is `ctx.ui.pt(1.0)`. A cancelled touch ends as a release.
+pub fn card_touch(kind: TouchKind, x: f32, y: f32, px_per_pt: f32) -> Event {
+    let (x, y) = (x * px_per_pt, y * px_per_pt);
+    match kind {
+        TouchKind::Down => Event::Down(x, y),
+        TouchKind::Move => Event::Move(x, y),
+        TouchKind::Up | TouchKind::Cancel => Event::Up(x, y),
+    }
 }
 
 /// The card windows: the window of each open card, with the contact it shows, in the order they were opened.
@@ -71,6 +86,16 @@ impl CardWindows {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_card_touch_in_window_points_becomes_px_at_the_display_scale() {
+        // Midget's 1.5625 scale: a touch at (450, 26) pt is under the pointer at (703.125, 40.625) px
+        let k = 1200.0 / 768.0;
+        assert!(matches!(card_touch(TouchKind::Down, 450.0, 26.0, k), Event::Down(x, y) if x == 703.125 && y == 40.625));
+        assert!(matches!(card_touch(TouchKind::Move, 2.0, 4.0, k), Event::Move(x, y) if x == 3.125 && y == 6.25));
+        assert!(matches!(card_touch(TouchKind::Cancel, 2.0, 4.0, k), Event::Up(x, y) if x == 3.125 && y == 6.25));
+        assert!(matches!(card_touch(TouchKind::Up, 10.0, 20.0, 1.0), Event::Up(x, y) if x == 10.0 && y == 20.0));
+    }
 
     #[test]
     fn a_card_spec_is_titled_with_the_trimmed_name_at_the_card_size() {

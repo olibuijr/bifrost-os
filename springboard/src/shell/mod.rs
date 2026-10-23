@@ -77,6 +77,7 @@ pub mod icons;
 pub mod row_glyphs;
 pub mod keyboard;
 pub mod textinput;
+pub mod dead_key;
 pub mod compose_window;
 pub mod input_providers;
 pub mod pointer_events;
