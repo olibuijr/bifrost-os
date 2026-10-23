@@ -26,6 +26,7 @@ use crate::shell::music::nowplaying::Target as Media;
 use bifrost_core::json::Json;
 use bifrost_ui::media_content::{optional_text, MediaContent, MediaDuration, MediaType};
 use bifrost_ui::media_session::{CommandState, MediaSession, PlaybackState, RemoteCommand};
+#[cfg(not(test))]
 use std::sync::Mutex;
 use std::time::Instant;
 
@@ -395,12 +396,29 @@ impl Store {
     }
 }
 
+#[cfg(not(test))]
 static STORE: Mutex<Store> =
     Mutex::new(Store { owner: None, session: None, published: None, feedback: None, pending: Vec::new(), queue: Vec::new() });
 
+#[cfg(not(test))]
 fn with<T>(f: impl FnOnce(&mut Store) -> T) -> Option<T> {
     let mut g = STORE.lock().ok()?;
     Some(f(&mut g))
+}
+
+// Under test each test thread has its own store. The store is process-wide so that the shell and the app channel see one
+// session, but the tests run in parallel: every Shell that ticks its services runs `NowPlaying::tick`, which prunes a
+// session whose owner is not a running app, so a test that published one for a made-up owner lost it to whichever other
+// test ticked first. A test drives its shell on its own thread, so a per-thread store keeps the code path and drops the race.
+#[cfg(test)]
+thread_local! {
+    static STORE: std::cell::RefCell<Store> =
+        const { std::cell::RefCell::new(Store { owner: None, session: None, published: None, feedback: None, pending: Vec::new(), queue: Vec::new() }) };
+}
+
+#[cfg(test)]
+fn with<T>(f: impl FnOnce(&mut Store) -> T) -> Option<T> {
+    STORE.with(|s| s.try_borrow_mut().ok().map(|mut g| f(&mut g)))
 }
 
 /// The session Control Center shows, if an app has published one.
