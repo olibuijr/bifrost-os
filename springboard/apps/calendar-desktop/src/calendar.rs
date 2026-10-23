@@ -8,11 +8,13 @@ pub mod clip;
 mod colours;
 pub mod connect;
 mod drag;
+mod eventpop;
 pub mod exchange;
 pub mod extras;
 mod inviting;
 mod linesheet;
 mod lookup;
+mod minimonth;
 mod goto;
 mod pickers;
 mod quickentry;
@@ -211,6 +213,15 @@ enum Target {
     AddInvitee,
     InviteeSuggest(usize),
     InviteeDrop(usize),
+    /// The toolbar's "+": a new event with the quick-event popover beside it (`eventpop.rs`).
+    NewPopover,
+    /// A part of the quick-event popover, and a press outside it (which closes it).
+    Pop(eventpop::PopPart),
+    PopDismiss,
+    /// The calendar list's mini month (`minimonth.rs`): its chevrons and a day.
+    MiniPrev,
+    MiniNext,
+    MiniDay(Date),
 }
 
 /// Which of the Starts / Ends rows has its picker expanded.
@@ -272,6 +283,12 @@ pub struct Calendar {
     pointer: bool,
     /// Quick Event: the line typed in the sheet while it is open (`quickentry.rs`).
     quick_line: Option<bifrost_app::controls::TextField>,
+    /// The quick-event popover on a new event, while it is open (`eventpop.rs`), and the last click on an empty slot of
+    /// the grid with its time (a second click there in time is a double-click, which opens the popover).
+    event_pop: Option<eventpop::EventPop>,
+    last_slot: Option<(Date, u16, f64)>,
+    /// The month the sidebar's mini month was paged to; None follows the selected day (`minimonth.rs`).
+    mini_shown: Option<Date>,
     /// A press in the Day or Week grid that becomes a drag if it is held, and the drag itself (`drag.rs`).
     press: Option<drag::Press>,
     drag: Option<drag::Drag>,
@@ -409,6 +426,9 @@ impl Calendar {
             book: None,
             pointer: false,
             quick_line: None,
+            event_pop: None,
+            last_slot: None,
+            mini_shown: None,
             press: None,
             drag: None,
             search_box: bifrost_app::controls::TextField::new(),
@@ -654,6 +674,10 @@ impl Calendar {
     }
 
     fn hit(&self, ui: &Ui, x: f32, y: f32) -> Option<Target> {
+        // the quick-event popover is transient: a press outside it closes it before it reaches anything else
+        if self.event_pop.is_some() {
+            return Some(self.pop_target(ui, x + self.x0, y));
+        }
         if let Some(r) = self.search_rect(ui) {
             let k = ui.pt(1.0);
             if within(x + self.x0, y, (ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h))) {
@@ -666,6 +690,9 @@ impl Calendar {
         }
         // the calendar list is left of the content column
         if x < 0.0 {
+            if let Some(t) = self.mini_target(ui, x + self.x0, y) {
+                return Some(t);
+            }
             return self.layer_at(ui, x + self.x0, y).map(Target::Layer);
         }
         if self.editor.is_none() && self.undo.is_some() && within(x, y, self.undo_rect(ui)) {
@@ -1048,7 +1075,7 @@ impl Calendar {
     /// Month and Year. Not while an event is open. False when unused here.
     pub fn chord(&mut self, ui: &Ui, key: u32, mods: u32, t: f64) -> bool {
         use bifrost_app::proto::{CHORD_ALT, CHORD_CTRL, CHORD_META};
-        if mods & (CHORD_CTRL | CHORD_META) == 0 || mods & CHORD_ALT != 0 || self.editor.is_some() || self.sheet_open() {
+        if mods & (CHORD_CTRL | CHORD_META) == 0 || mods & CHORD_ALT != 0 || self.editor.is_some() || self.sheet_open() || self.event_pop.is_some() {
             return false;
         }
         let target = match key {
@@ -1071,6 +1098,10 @@ impl Calendar {
 
     /// Escape closes the open event editor without saving.
     pub fn escape(&mut self, ui: &Ui, t: f64) -> bool {
+        // Escape drops the new event of the quick-event popover
+        if self.pop_cancel() {
+            return true;
+        }
         // Escape closes the invitee line before it closes the form
         if self.invitee_line_open() {
             self.invitee_key(Out::Hide);
@@ -1093,8 +1124,12 @@ impl Calendar {
         self.notice = None;
         self.dirty = true;
         // choosing another view or day, or a new event, ends a search
-        if matches!(target, Target::Today | Target::Prev | Target::Next | Target::View(_) | Target::Add) {
+        if matches!(target, Target::Today | Target::Prev | Target::Next | Target::View(_) | Target::Add | Target::NewPopover | Target::MiniDay(_)) {
             self.end_search(ui);
+        }
+        // the mini month follows the selected day again once the main view moves
+        if matches!(target, Target::Today | Target::Prev | Target::Next | Target::Pick(_) | Target::Day(_) | Target::MonthOf(_) | Target::GoConfirm) {
+            self.mini_shown = None;
         }
         match target {
             Target::SearchField => self.focus_search(),
@@ -1129,10 +1164,15 @@ impl Calendar {
                 self.scroll.jump_top();
             }
             Target::Add => self.open(ui, None),
+            Target::NewPopover => self.open_event_pop(self.selected, 9 * 60),
+            Target::Pop(part) => self.pop_tap(ui, part, t),
+            Target::PopDismiss => self.pop_dismiss(ui, t),
+            Target::MiniPrev | Target::MiniNext | Target::MiniDay(_) => self.mini_tap(target),
             Target::Row(id) if overlay::is_overlay(id) => self.explain_overlay(id),
             Target::Row(id) => self.open(ui, Some(id)),
             Target::Layer(id) => self.toggle_layer(id),
             Target::Cancel => {
+                self.event_pop = None;
                 self.goto = None;
                 self.goto_line.clear();
                 self.colour_sheet = None;
@@ -1255,6 +1295,10 @@ impl Calendar {
 
     pub fn key(&mut self, ui: &Ui, out: Out, t: f64) {
         self.sync_overlay();
+        if self.event_pop.is_some() {
+            self.pop_key(ui, out, t);
+            return;
+        }
         if self.line_sheet.is_some() {
             self.line_key(ui, out, t);
             return;
@@ -1334,6 +1378,7 @@ impl Calendar {
                 return;
             }
             // Arrow keys move the selected day: Left/Right one day, Up/Down one week.
+            self.mini_shown = None;
             let step = match out {
                 Out::Named("Left") => -1,
                 Out::Named("Right") => 1,
@@ -1453,7 +1498,14 @@ impl Calendar {
                                 return;
                             }
                         }
+                        // a double-click on an empty slot of the grid makes an event there, with its popover
+                        let slot = if self.event_pop.is_none() && self.editor.is_none() { self.slot_of(ui, target, x, y) } else { None };
                         self.activate(ui, target, t);
+                        if let Some((date, minute)) = slot {
+                            if self.slot_double(date, minute, t) {
+                                self.open_event_pop(date, minute);
+                            }
+                        }
                     }
                 }
             }
@@ -1563,6 +1615,7 @@ impl Calendar {
             }
         }
         self.draw_chrome(s, ui);
+        self.draw_event_pop(s, ui);
         self.dirty = false;
     }
 
@@ -1961,7 +2014,7 @@ impl Calendar {
     pub fn enabled(&self, cmd: Command) -> bool {
         let editing = self.editor.is_some();
         // the Go to Date sheet is modal too
-        let busy = editing || self.sheet_open();
+        let busy = editing || self.sheet_open() || self.event_pop.is_some();
         let saved = self.editor.as_ref().is_some_and(|d| d.existing);
         match cmd {
             Command::Save | Command::Duplicate => editing,
@@ -2051,7 +2104,7 @@ impl Calendar {
 
     /// Whether the Settings menu can be used now (not while an event is open).
     pub fn settings_enabled(&self) -> bool {
-        self.editor.is_none() && !self.sheet_open()
+        self.editor.is_none() && !self.sheet_open() && self.event_pop.is_none()
     }
 
     /// Whether Settings menu choice `setting` is the current one (its check mark).
