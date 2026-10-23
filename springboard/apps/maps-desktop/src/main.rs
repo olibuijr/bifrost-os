@@ -23,6 +23,8 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 const GPX_LIMIT: u64 = 16 * 1024 * 1024;
 /// The File > New Window item. Not a menu `Act`: the menu ids of `Act` stop before it.
 const NEW_WINDOW_MENU: u32 = 10_000;
+/// The greyed item Add Place to Collection holds while there are no collections. Not a menu `Act`.
+const NO_COLLECTIONS_MENU: u32 = 10_001;
 /// The Dock menu item that opens a window, chosen as `Input::ContextAction`.
 const DOCK_NEW_WINDOW: u32 = 1;
 /// The size of a window opened with New Window, in points.
@@ -63,8 +65,9 @@ fn item(w: &Window, act: Act, title: &str, key: &str) -> AppMenuItem {
     it
 }
 
-/// The Go menu: finding places and routes, the saved places, and the collections. The collection slots are named after
-/// the collections the person has made; a slot with no collection behind it is greyed out.
+/// The Go menu: finding places and routes, the saved places, and the collections. Add Place to Collection lists the
+/// collections the person has made; with none it holds one greyed No Collections item, not placeholder slots named
+/// "Collection 1/2/3" (E2E W4-15).
 fn go_items(w: &Window) -> Vec<AppMenuItem> {
     let sub = |it: AppMenuItem| AppMenuItem { depth: 1, ..it };
     let mut items = vec![
@@ -86,9 +89,12 @@ fn go_items(w: &Window) -> Vec<AppMenuItem> {
         item(w, Act::NewCollection, "New Collection", "cmd+shift+n"),
         AppMenuItem::submenu("Add Place to Collection"),
     ];
-    for i in 0..MENU_COLLECTIONS {
-        let title = w.maps.lib().collections.get(i).map_or_else(|| format!("Collection {}", i + 1), |c| c.name.clone());
-        items.push(sub(item(w, Act::AddToCollection(i), &title, "")));
+    let names: Vec<String> = w.maps.lib().collections.iter().take(MENU_COLLECTIONS).map(|c| c.name.clone()).collect();
+    if names.is_empty() {
+        items.push(sub(AppMenuItem::new(NO_COLLECTIONS_MENU, "No Collections").enabled(false)));
+    }
+    for (i, name) in names.iter().enumerate() {
+        items.push(sub(item(w, Act::AddToCollection(i), name, "")));
     }
     items.push(AppMenuItem::separator());
     items.push(item(w, Act::ClearRecents, "Clear Recents", ""));
@@ -176,9 +182,16 @@ impl App for MapsApp {
             Input::Key(k) => w.key(ctx, k, now),
             Input::Activate(id) => w.activate(ctx, &ctx.ui, id, now),
             Input::Command(c) => w.command(c, now),
-            Input::Context { x, y } => w.context(&ctx.ui, x, y),
+            // a Recents row has its own menu; anywhere else on the map a right click drops a pin
+            Input::Context { x, y } => match w.row_context(&ctx.ui, x, y) {
+                Some(items) => {
+                    ctx.context_menu(x, y, items);
+                    true
+                }
+                None => w.context(&ctx.ui, x, y),
+            },
             Input::Open(url) => w.open_link(ctx, &url, now),
-            Input::ContextAction(_) => false,
+            Input::ContextAction(id) => w.context_action(id),
             Input::QuickAction(_) => false,
         };
         self.sync_keyboard(ctx);
@@ -404,5 +417,6 @@ mod tests {
     fn new_window_menu_id_is_not_a_map_action() {
         assert!(MENU_ACTS.len() < NEW_WINDOW_MENU as usize);
         assert!(Act::from_menu_id(NEW_WINDOW_MENU).is_none());
+        assert!(Act::from_menu_id(NO_COLLECTIONS_MENU).is_none());
     }
 }

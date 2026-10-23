@@ -5,7 +5,7 @@
 use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPACE_XXL, SPACE_XXS, SPACE_XXXL};
 use bifrost_app::kit::ui::{DISPLAY_LARGE_PT, DISPLAY_MEDIUM_PT, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_LARGE_TITLE_PT};
 use bifrost_app::kit::ui::{MAC_CALLOUT_PT, MAC_TITLE1_PT};
-use bifrost_app::kit::ui::{home_zone, Ui, Weight, CARD_BG, CONTROL_PRESSED, DESTRUCTIVE, FIELD_BG, LABEL, LABEL_2, LABEL_3, LINK, SEGMENT_ON, SEPARATOR_C, WHITE};
+use bifrost_app::kit::ui::{home_zone, Ui, Weight, CARD_BG, CONTROL_PRESSED, DESTRUCTIVE, FIELD_BG, LABEL, LABEL_2, LABEL_3, SEGMENT_ON, SEPARATOR_C, WHITE};
 use bifrost_app::controls::prefs_layout::m;
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::{Node, Rect, Role};
@@ -42,7 +42,6 @@ fn key_down() -> u32 { LABEL_3.now() }
 const BAR_HISTORY: u32 = 1;
 const BAR_BASIC: u32 = 2;
 const BAR_SCIENTIFIC: u32 = 3;
-const BAR_DECIMAL: u32 = 4;
 const BAR_CONVERT: u32 = 5;
 const BAR_PROGRAMMER: u32 = 6;
 
@@ -110,6 +109,18 @@ fn category_rows() -> usize {
 fn units_top_pt() -> f32 {
     CATEGORY_TOP_PT + category_rows() as f32 * CATEGORY_H_PT + 8.0
 }
+
+/// Height of Convert's whole band (both category rows, the gap and the unit row, plus a gap to the display), in
+/// points: the keys shrink by this so the display never runs under the capsules (E2E W4-7).
+fn convert_band_pt() -> f32 {
+    units_top_pt() + UNITS_H_PT + SPACE_M - UNIFIED_BAR_PT
+}
+
+/// A line of text of `pt` points is about this many times `pt` tall (ascent plus descent).
+const LINE_EM: f32 = 1.25;
+
+/// The widest Convert band, in points: seven categories of up to 120 points each.
+const CONVERT_MAX_W_PT: f32 = 840.0;
 
 /// Corner radius of a key or capsule: half its shorter side, so it stays a capsule at any size.
 fn capsule(w: f32, h: f32) -> f32 {
@@ -257,7 +268,6 @@ enum Target {
     CopyTape,
     Result(usize),
     Scientific,
-    Decimal,
     MenuCopy,
     MenuPaste,
     MenuDismiss,
@@ -396,12 +406,14 @@ impl Calculator {
         self.engine.display()
     }
 
+    /// Whether the scientific keypad shows. On the desktop only the Basic / Scientific choice decides it: a landscape
+    /// window is the norm here, so the tablet rule "landscape is scientific" would pin the keypad (E2E W4-6).
     fn sci_active(&self, ui: &Ui) -> bool {
         self.convert.is_none()
             && self.programmer.is_none()
             && !self.settings.rpn
             && self.w as f32 >= Self::wide_min_width(ui)
-            && (self.settings.scientific || self.w > self.h)
+            && self.settings.scientific
     }
 
     /// Whether the Programmer keypad is showing (it needs the wide layout, like the scientific one).
@@ -433,6 +445,17 @@ impl Calculator {
         self.layout(ui).y - self.strip_h(ui)
     }
 
+    /// The largest display size, in points, that fits. In Convert the entry line and the result share the room between
+    /// the unit row and the keys, so the result shrinks (down to title 1) instead of running under the capsules.
+    fn display_pt_max(&self, ui: &Ui) -> f32 {
+        if self.convert.is_none() {
+            return DISPLAY_LARGE_PT;
+        }
+        let room = self.deck_top(ui) - ui.pt(62.0) - ui.pt(units_top_pt() + UNITS_H_PT + SPACE_S);
+        let line = ui.pt(MAC_TITLE1_PT * LINE_EM + SPACE_M);
+        ((room - line) / ui.pt(1.0) / LINE_EM).clamp(MAC_TITLE1_PT, DISPLAY_LARGE_PT)
+    }
+
     fn save_settings(&self) {
         if let Some(path) = &self.settings_path {
             self.settings.save(path);
@@ -442,7 +465,7 @@ impl Calculator {
     fn layout(&self, ui: &Ui) -> Layout {
         let bottom = self.h as f32 - home_zone(ui) - ui.pt(SPACE_XXL);
         let extra = self.strip_h(ui)
-            + if self.convert.is_some() { ui.pt((category_rows() - 1) as f32 * CATEGORY_H_PT) } else { 0.0 }
+            + if self.convert.is_some() { ui.pt(convert_band_pt()) } else { 0.0 }
             + if self.convert_is_currency() { ui.pt(RATES_NOTE_H_PT) } else { 0.0 };
         let available = bottom - ui.pt(DISPLAY_AND_KEYS_RESERVE_PT) - extra;
         if self.wide(ui) {
@@ -530,10 +553,10 @@ impl Calculator {
         Some((x + w / 2.0, y + h / 2.0))
     }
 
-    /// The unified toolbar: the history sidebar toggle, Basic / Scientific, and the decimal separator.
+    /// The unified toolbar: the history sidebar toggle and the keypad segments. The decimal separator is a View menu
+    /// item ("Decimal Comma"), not an unlabelled toolbar chip (E2E W4-7).
     fn bar(&self, ui: &Ui) -> Toolbar {
         let sci = self.sci_active(ui);
-        let sample = if self.settings.locale.decimal() == ',' { "1,5" } else { "1.5" };
         Toolbar::new(vec![
             ToolbarItem::icon(BAR_HISTORY, "History", "sidebar.left").selected(self.history_open),
             ToolbarItem::flexible_space(),
@@ -541,7 +564,6 @@ impl Calculator {
             ToolbarItem::button(BAR_SCIENTIFIC, "Scientific").in_group(1).selected(sci),
             ToolbarItem::button(BAR_PROGRAMMER, "Programmer").in_group(1).selected(self.programmer.is_some() && self.convert.is_none()),
             ToolbarItem::button(BAR_CONVERT, "Convert").in_group(1).selected(self.convert.is_some()),
-            ToolbarItem::button(BAR_DECIMAL, sample),
         ])
     }
 
@@ -576,11 +598,6 @@ impl Calculator {
     #[cfg(test)]
     fn scientific_button(&self, ui: &Ui) -> (f32, f32, f32, f32) {
         self.bar_rect(ui, if self.sci_active(ui) { BAR_BASIC } else { BAR_SCIENTIFIC })
-    }
-
-    #[cfg(test)]
-    fn decimal_button(&self, ui: &Ui) -> (f32, f32, f32, f32) {
-        self.bar_rect(ui, BAR_DECIMAL)
     }
 
     /// The label of the Clear key: AC when there is nothing to clear, else C.
@@ -791,7 +808,6 @@ impl Calculator {
                 BAR_SCIENTIFIC if self.programmer.is_some() => Some(Target::Mode(Mode::Scientific)),
                 BAR_BASIC if self.sci_active(ui) => Some(Target::Scientific),
                 BAR_SCIENTIFIC if !self.sci_active(ui) => Some(Target::Scientific),
-                BAR_DECIMAL => Some(Target::Decimal),
                 _ => None,
             };
         }
@@ -829,12 +845,21 @@ impl Calculator {
         Self::contains(self.display_rect(ui), x, y).then_some(Target::Display)
     }
 
-    /// The category segments of Convert: rows of `CATEGORY_COLS` across the keypad's width.
-    fn category_rect(&self, ui: &Ui, index: usize) -> (f32, f32, f32, f32) {
+    /// Where Convert's band runs across the window (x and width in pixels): the window's width inside the side margins,
+    /// at most `CONVERT_MAX_W_PT` and never narrower than the keypad, centred. The keypad alone is too narrow for
+    /// seven category titles ("Len...", "Te...", E2E W4-7).
+    fn convert_band(&self, ui: &Ui) -> (f32, f32) {
         let l = self.layout(ui);
+        let w = (self.w as f32 - 2.0 * ui.pt(SPACE_XL)).min(ui.pt(CONVERT_MAX_W_PT)).max(l.width);
+        ((self.w as f32 - w) / 2.0, w)
+    }
+
+    /// The category segments of Convert: rows of `CATEGORY_COLS` across the band's width.
+    fn category_rect(&self, ui: &Ui, index: usize) -> (f32, f32, f32, f32) {
+        let (bx, bw) = self.convert_band(ui);
         let (col, row) = ((index % CATEGORY_COLS) as f32, (index / CATEGORY_COLS) as f32);
-        let w = l.width / CATEGORY_COLS as f32;
-        (l.x + w * col, ui.pt(CATEGORY_TOP_PT) + row * ui.pt(CATEGORY_H_PT), w, ui.pt(CATEGORY_H_PT))
+        let w = bw / CATEGORY_COLS as f32;
+        (bx + w * col, ui.pt(CATEGORY_TOP_PT) + row * ui.pt(CATEGORY_H_PT), w, ui.pt(CATEGORY_H_PT))
     }
 
     /// The From unit, the Swap control and the To unit, left to right, across the keypad's width.
@@ -853,12 +878,12 @@ impl Calculator {
     }
 
     fn unit_rects(&self, ui: &Ui) -> [(f32, f32, f32, f32); 3] {
-        let l = self.layout(ui);
+        let (bx, bw) = self.convert_band(ui);
         let gap = ui.pt(SPACE_M);
         let swap = ui.pt(96.0);
-        let chip = (l.width - swap - 2.0 * gap) / 2.0;
+        let chip = (bw - swap - 2.0 * gap) / 2.0;
         let (y, h) = (ui.pt(units_top_pt()), ui.pt(UNITS_H_PT));
-        [(l.x, y, chip, h), (l.x + chip + gap, y, swap, h), (l.x + l.width - chip, y, chip, h)]
+        [(bx, y, chip, h), (bx + chip + gap, y, swap, h), (bx + bw - chip, y, chip, h)]
     }
 
     fn convert_hit(&self, ui: &Ui, x: f32, y: f32) -> Option<Target> {
@@ -882,11 +907,11 @@ impl Calculator {
     /// Convert's chrome: the category segments, then the From, Swap and To controls.
     fn draw_convert(&mut self, s: &mut dyn Canvas, ui: &Ui) {
         let Some(conv) = self.convert.clone() else { return };
-        let l = self.layout(ui);
+        let (bx, bw) = self.convert_band(ui);
         for row in 0..category_rows() {
             let in_row = (Category::ALL.len() - row * CATEGORY_COLS).min(CATEGORY_COLS);
-            let (rw, rh) = (l.width * in_row as f32 / CATEGORY_COLS as f32, ui.pt(CATEGORY_H_PT));
-            s.fill_rrect(RectF::new(l.x, ui.pt(CATEGORY_TOP_PT) + row as f32 * rh, rw, rh), capsule(rw, rh), utility());
+            let (rw, rh) = (bw * in_row as f32 / CATEGORY_COLS as f32, ui.pt(CATEGORY_H_PT));
+            s.fill_rrect(RectF::new(bx, ui.pt(CATEGORY_TOP_PT) + row as f32 * rh, rw, rh), capsule(rw, rh), utility());
         }
         for (index, category) in Category::ALL.iter().enumerate() {
             let rect = self.category_rect(ui, index);
@@ -901,7 +926,7 @@ impl Calculator {
         let [from, swap, to] = self.unit_rects(ui);
         if conv.category == Category::Currency {
             let note = convert::rates_note(conv.rates.as_ref(), self.rates_pending);
-            let (x, w) = (l.x, l.width);
+            let (x, w) = (bx, bw);
             let y = ui.pt(units_top_pt() + UNITS_H_PT + 2.0);
             let note = ui.fit(&note, MAC_FOOTNOTE_PT, w);
             self.label(s, ui, &note, MAC_FOOTNOTE_PT, LABEL_2.now(), (x, y, w, ui.pt(RATES_NOTE_H_PT)));
@@ -909,7 +934,10 @@ impl Calculator {
         let from_text = ui.fit(&format!("From: {}", conv.from_unit().name), MAC_BODY_PT, from.2 - ui.pt(SPACE_L));
         s.fill_rrect(RectF::new(from.0, from.1, from.2, from.3), capsule(from.2, from.3), utility());
         self.label(s, ui, &from_text, MAC_BODY_PT, LABEL.now(), from);
-        self.label(s, ui, "Swap", MAC_BODY_PT, LINK, swap);
+        // Swap is a bordered button like the unit capsules beside it, not a bare link (E2E W4-7)
+        let swap_fill = if self.pressed == Some(Target::Swap) { key_down() } else { utility() };
+        s.fill_rrect(RectF::new(swap.0, swap.1, swap.2, swap.3), capsule(swap.2, swap.3), swap_fill);
+        self.label(s, ui, "Swap", MAC_BODY_PT, LABEL.now(), swap);
         let to_text = ui.fit(&format!("To: {}", conv.to_unit().name), MAC_BODY_PT, to.2 - ui.pt(SPACE_L));
         s.fill_rrect(RectF::new(to.0, to.1, to.2, to.3), capsule(to.2, to.3), utility());
         self.label(s, ui, &to_text, MAC_BODY_PT, LABEL.now(), to);
@@ -1310,10 +1338,6 @@ impl Calculator {
                 }
                 self.save_settings();
             }
-            Target::Decimal => {
-                self.settings.locale = self.settings.locale.toggled();
-                self.save_settings();
-            }
             Target::MenuCopy => {
                 self.menu = false;
                 self.copy(ui);
@@ -1610,15 +1634,30 @@ impl Calculator {
         let row_h = (self.row_height(ui) / scale - 16.0).max(8.0);
         let list = SourceList::new(items, row_h, 72.0);
         let scroll = self.hist_offset as f32 * (row_h + 16.0);
-        let bounds = bifrost_app::controls::Rect { x: x / scale, y: y / scale, w: w / scale, h: (h - ui.pt(64.0)) / scale };
+        // The sidebar runs the panel's full height, so its footer row sits on the sidebar and not on the keypad behind
+        // (E2E W4-7: the labels floated over the keys in an empty strip). Rows past the last visible one are left out so
+        // none runs under the footer.
+        let shown = 1 + self.hist_offset + self.rows_visible(ui);
+        let list = SourceList::new(list.items.into_iter().take(shown).collect(), row_h, 72.0);
+        let bounds = bifrost_app::controls::Rect { x: x / scale, y: y / scale, w: w / scale, h: h / scale };
         let pressed = match self.pressed { Some(Target::Result(i)) => Some(ID_HISTORY + i as u32), _ => None };
         widgets::source_list(s, ui, bounds, &list, scroll, pressed);
-        // Copy Tape takes the left half of the bottom row, Clear History the right half.
+        // the footer: a hairline, then Copy Tape and Clear as two bordered buttons (left and right halves)
         let (row_y, half) = (y + h - ui.pt(64.0), w / 2.0);
-        let tape_color = if self.store.is_empty() { LABEL_3.now() } else { LINK };
-        self.label(s, ui, "Copy Tape", MAC_BODY_PT, tape_color, (x, row_y, half, ui.pt(64.0)));
-        let clear = if self.clear_confirm { CLEAR_CONFIRM_LABEL } else { "Clear History" };
-        self.label(s, ui, clear, MAC_BODY_PT, DESTRUCTIVE, (x + half, row_y, w - half, ui.pt(64.0)));
+        s.fill_rect(RectF::new(x + ui.pt(SPACE_L), row_y, w - 2.0 * ui.pt(SPACE_L), 1.0), SEPARATOR_C.now());
+        let button = |left: f32, width: f32| {
+            let (bw, bh) = ((width - 1.5 * ui.pt(SPACE_L)).max(ui.pt(SPACE_XXL)), ui.pt(28.0));
+            (left + (width - bw) / 2.0, row_y + (ui.pt(64.0) - bh) / 2.0, bw, bh)
+        };
+        let (tape, clear_rect) = (button(x, half), button(x + half, w - half));
+        let tape_color = if self.store.is_empty() { LABEL_3.now() } else { LABEL.now() };
+        let fill = |pressed: bool| if pressed { key_down() } else { utility() };
+        s.fill_rrect(RectF::new(tape.0, tape.1, tape.2, tape.3), capsule(tape.2, tape.3), fill(self.pressed == Some(Target::CopyTape)));
+        self.label(s, ui, "Copy Tape", MAC_BODY_PT, tape_color, tape);
+        let clear = if self.clear_confirm { CLEAR_CONFIRM_LABEL } else { "Clear" };
+        let clear_color = if self.store.is_empty() { LABEL_3.now() } else { DESTRUCTIVE };
+        s.fill_rrect(RectF::new(clear_rect.0, clear_rect.1, clear_rect.2, clear_rect.3), capsule(clear_rect.2, clear_rect.3), fill(self.pressed == Some(Target::ClearHistory)));
+        self.label(s, ui, clear, MAC_BODY_PT, clear_color, clear_rect);
     }
 
     fn draw_menu(&mut self, s: &mut dyn Canvas, ui: &Ui) {
@@ -1656,7 +1695,7 @@ impl Calculator {
             Some(conv) => conv.result_text(locale),
             None => self.display_shown(ui),
         };
-        let mut pt = DISPLAY_LARGE_PT;
+        let mut pt = self.display_pt_max(ui).floor();
         let room = l.width - ui.pt(SPACE_XL);
         while ui.measure(&display, pt, Weight::Regular) > room && pt > MAC_LARGE_TITLE_PT {
             pt -= 2.0;
@@ -1710,7 +1749,6 @@ impl Calculator {
         chrome::toolbar_band(s, ui, Rect { x: side, y: 0.0, w: self.w as f32 / p - side, h: UNIFIED_BAR_PT });
         let pressed = match self.pressed {
             Some(Target::History) | Some(Target::Done) => Some(BAR_HISTORY),
-            Some(Target::Decimal) => Some(BAR_DECIMAL),
             Some(Target::ShowConvert) | Some(Target::LeaveConvert) => Some(BAR_CONVERT),
             Some(Target::Scientific) => Some(if self.sci_active(ui) { BAR_BASIC } else { BAR_SCIENTIFIC }),
             Some(Target::Mode(Mode::Basic)) => Some(BAR_BASIC),
@@ -1818,9 +1856,11 @@ mod tests {
         assert!(image.px.iter().all(|p| p >> 24 == 255));
     }
 
+    /// A wide window showing the scientific keypad (chosen, as the desktop opens on Basic).
     fn landscape() -> (Ui, Calculator) {
         let ui = crate::test_ui();
-        let app = Calculator::new(&ui, 1920, 1200);
+        let mut app = Calculator::new(&ui, 1920, 1200);
+        app.settings.scientific = true;
         (ui, app)
     }
 
@@ -1901,8 +1941,7 @@ mod tests {
             for key in [Key::Digit(6), Key::Operator(Operator::Multiply), Key::Digit(7), Key::Equals] {
                 tap_key(&mut app, &ui, key);
             }
-            let (x, y, w, h) = app.decimal_button(&ui);
-            tap(&mut app, &ui, x + w / 2.0, y + h / 2.0);
+            assert!(app.menu_action(&ui, menu::MENU_DECIMAL_COMMA));
         }
         let mut app = Calculator::new(&ui, 1200, 1920).with_storage(dir.clone());
         assert_eq!(app.store.len(), 1);
@@ -2047,8 +2086,7 @@ mod tests {
     fn the_icelandic_locale_shows_decimal_commas_and_grouping() {
         let ui = crate::test_ui();
         let mut app = Calculator::new(&ui, 1200, 1920);
-        let (x, y, w, h) = app.decimal_button(&ui);
-        tap(&mut app, &ui, x + w / 2.0, y + h / 2.0);
+        assert!(app.menu_action(&ui, menu::MENU_DECIMAL_COMMA));
         assert_eq!(app.settings.locale, format::Locale::Is);
         assert!(app.describe().contains("calculator_locale=is"));
         assert!(app.paste_text(&ui, "1.234,5"));
@@ -2082,6 +2120,91 @@ mod tests {
         app.draw(&mut Surface { w: 1920, h: 1200, stride: 1920, px: &mut buf, y0: 0 }, &ui, 0.0);
         assert!(buf.contains(&scientific()));
         assert!(buf.contains(&ORANGE));
-        
+
+    }
+
+    /// E2E W4-6: a landscape desktop window opens on Basic, and the Basic segment leaves Scientific.
+    #[test]
+    fn a_wide_desktop_window_opens_on_basic_and_the_basic_segment_leaves_scientific() {
+        let ui = crate::test_ui();
+        let mut app = Calculator::new(&ui, 1875, 1290);
+        assert!(!app.sci_active(&ui), "landscape alone does not pick the scientific keypad");
+        assert_eq!(app.key_count(&ui), KEYS.len());
+        let (x, y) = centre(app.bar_rect(&ui, BAR_SCIENTIFIC));
+        tap(&mut app, &ui, x, y);
+        assert!(app.sci_active(&ui));
+        let (x, y) = centre(app.bar_rect(&ui, BAR_BASIC));
+        tap(&mut app, &ui, x, y);
+        assert!(!app.sci_active(&ui), "Basic leaves Scientific");
+        assert!(app.bar(&ui).items.iter().any(|i| i.label == "Basic" && i.selected));
+        assert!(app.menu_action(&ui, 11), "View > Scientific");
+        assert!(app.sci_active(&ui));
+        assert!(app.menu_action(&ui, 10), "View > Basic (Cmd+1)");
+        assert!(!app.sci_active(&ui));
+    }
+
+    /// E2E W4-7: the decimal separator is a labelled View menu item, not an unlabelled toolbar chip.
+    #[test]
+    fn the_decimal_comma_is_a_view_menu_item_not_a_toolbar_chip() {
+        let ui = crate::test_ui();
+        let mut app = Calculator::new(&ui, 1875, 1290);
+        assert!(!app.bar(&ui).items.iter().any(|i| i.label == "1.5" || i.label == "1,5"));
+        let checked = |app: &Calculator| {
+            let menus = app.menus(&ui);
+            let view = menus.iter().find(|m| m.title == "View").unwrap();
+            view.items.iter().find(|i| i.title == "Decimal Comma (1,5)").unwrap().checked
+        };
+        assert!(!checked(&app));
+        assert!(app.menu_action(&ui, menu::MENU_DECIMAL_COMMA));
+        assert_eq!(app.settings.locale, format::Locale::Is);
+        assert!(checked(&app));
+        assert!(app.menu_action(&ui, menu::MENU_DECIMAL_COMMA));
+        assert_eq!(app.settings.locale, format::Locale::En);
+    }
+
+    /// E2E W4-7: Convert's categories fit their titles, Swap is a filled button, and the display sits under the unit row.
+    #[test]
+    fn convert_titles_fit_and_the_display_stays_under_the_unit_row() {
+        let ui = crate::test_ui();
+        let mut app = Calculator::new(&ui, 1875, 1290);
+        let (x, y) = centre(app.bar_rect(&ui, BAR_CONVERT));
+        tap(&mut app, &ui, x, y);
+        assert!(app.convert.is_some());
+        for (index, category) in Category::ALL.iter().enumerate() {
+            let (cx, _, cw, _) = app.category_rect(&ui, index);
+            assert!(cx >= 0.0 && cx + cw <= 1875.0, "{} inside the window", category.title());
+            assert!(ui.measure(category.title(), MAC_CALLOUT_PT, Weight::Regular) <= cw - ui.pt(SPACE_S), "{} fits", category.title());
+        }
+        let [_, swap, to] = app.unit_rects(&ui);
+        let units_bottom = to.1 + to.3;
+        let pt = app.display_pt_max(&ui);
+        assert!(pt > MAC_TITLE1_PT, "the display is not squeezed to its minimum, got {pt}");
+        let lines_top = app.deck_top(&ui) - ui.pt(62.0) - ui.pt(pt * LINE_EM) - ui.pt(MAC_TITLE1_PT * LINE_EM + SPACE_M);
+        assert!(lines_top >= units_bottom, "the entry and result lines start under the unit row");
+        let mut buf = vec![0; 1875 * 1290];
+        app.draw(&mut Surface { w: 1875, h: 1290, stride: 1875, px: &mut buf, y0: 0 }, &ui, 0.0);
+        let (sx, sy) = ((swap.0 + swap.2 / 8.0) as usize, (swap.1 + swap.3 / 2.0) as usize);
+        assert_eq!(buf[sy * 1875 + sx], utility(), "Swap has a capsule fill");
+    }
+
+    /// E2E W4-7: the history footer is on the sidebar, with Copy Tape and Clear as buttons.
+    #[test]
+    fn the_history_footer_sits_on_the_sidebar_with_a_clear_button() {
+        let ui = crate::test_ui();
+        let mut app = Calculator::new(&ui, 1875, 1290);
+        for key in [Key::Digit(4), Key::Operator(Operator::Add), Key::Digit(2), Key::Equals] {
+            tap_key(&mut app, &ui, key);
+        }
+        let (x, y) = centre(app.history_button(&ui));
+        tap(&mut app, &ui, x, y);
+        assert!(app.history_open);
+        let mut buf = vec![0; 1875 * 1290];
+        app.draw(&mut Surface { w: 1875, h: 1290, stride: 1875, px: &mut buf, y0: 0 }, &ui, 0.0);
+        let (px, py, pw, ph) = app.panel(&ui);
+        let row_y = py + ph - ui.pt(64.0);
+        // left of the Clear label, inside its button: the button's fill, not a key's colour from behind
+        let (bx, by) = ((px + pw * 0.625) as usize, (row_y + ui.pt(32.0)) as usize);
+        assert_eq!(buf[by * 1875 + bx], utility());
+        assert_eq!(app.hit(&ui, px + pw * 0.75, row_y + ui.pt(32.0)), Some(Target::ClearHistory));
     }
 }

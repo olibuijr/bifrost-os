@@ -152,17 +152,43 @@ impl App for ClockApp {
     }
 
     fn draw(&mut self, ctx: &Ctx, s: &mut Surface, t: f64) -> Damage {
-        if let Some(c) = &mut self.clock {
-            c.draw(s, &ctx.ui, t);
-        }
         let mut d = Damage::new(s.w, s.h);
-        d.all();
+        // a countdown second repaints only the timer cards; anything else repaints the window
+        match self.clock.as_mut().map(|c| c.draw(s, &ctx.ui, t)) {
+            Some(Some(rects)) => {
+                for (x, y, w, h) in rects {
+                    d.add(x.floor() as i32, y.floor() as i32, w.ceil() as i32 + 1, h.ceil() as i32 + 1);
+                }
+            }
+            _ => d.all(),
+        }
         d
     }
 }
 
 impl ClockApp {
     fn input(&mut self, ctx: &Ctx, ev: Input) -> bool {
+        // a right click on an alarm card opens its menu (Edit, Turn On/Off, Delete); the answer is a ContextAction
+        if let Input::Context { x, y } = &ev {
+            let Some(c) = &mut self.clock else { return false };
+            if let Some(items) = c.alarm_context(&ctx.ui, *x, *y) {
+                ctx.context_menu(*x, *y, items);
+                return true;
+            }
+            return false;
+        }
+        if let Input::ContextAction(id) = &ev {
+            let Some(c) = &mut self.clock else { return false };
+            return c.context_action(&ctx.ui, *id, bifrost_app::proto::sys::now_ms()).is_some();
+        }
+        // Delete (Backspace) and forward Delete remove the selected alarm, or the one open in the editor
+        if let Input::Key(KeyInput::Code(8 | 46)) = &ev {
+            if let Some(c) = &mut self.clock {
+                if c.delete_key(bifrost_app::proto::sys::now_ms()).is_some() {
+                    return true;
+                }
+            }
+        }
         if let Input::Key(key) = &ev {
             let out = match key {
                 KeyInput::Text(text) => Out::Text(text.clone()),

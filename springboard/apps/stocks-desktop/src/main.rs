@@ -1,6 +1,7 @@
-//! Stocks as an installed BifrOSt app: a watchlist with the latest quote of each symbol, and a price chart of the
-//! selected one, in a full-size window. Quotes and daily history come from Stooq over HTTPS and are cached on disk, so
-//! the last values show when the network does not answer.
+//! Stocks as an installed BifrOSt app: a watchlist sidebar with the latest quote and a sparkline of each symbol, and
+//! a price chart of the selected one, in a full-size window. Quotes and daily history come from Yahoo Finance's public
+//! chart endpoint over HTTPS (no key, no account) and are cached on disk, so the last values show when the network
+//! does not answer.
 
 mod data;
 mod feed;
@@ -86,6 +87,19 @@ impl App for StocksApp {
                 };
                 stocks.key(&ctx.ui, out, bifrost_app::proto::sys::now_ms());
             }
+            // a right click on a row: Move Up, Move Down, Remove from Watchlist
+            Input::Context { x, y } => {
+                let items = stocks.context_items(&ctx.ui, x, y, bifrost_app::proto::sys::now_ms());
+                if items.is_empty() {
+                    return false;
+                }
+                ctx.context_menu(x, y, items);
+            }
+            Input::ContextAction(id) => {
+                if !stocks.context_action(id, bifrost_app::proto::sys::now_ms()) {
+                    return false;
+                }
+            }
             _ => return false,
         }
         self.sync_keyboard(ctx);
@@ -119,4 +133,14 @@ impl App for StocksApp {
 
 fn main() {
     bifrost_app::run(StocksApp { stocks: None, kb: false, started: false });
+}
+
+#[cfg(test)]
+pub fn test_ui() -> bifrost_app::Ui {
+    use bifrost_app::kit::Font;
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets");
+    let data: &'static [u8] = Box::leak(std::fs::read(format!("{dir}/SFUI.ttf")).unwrap().into_boxed_slice());
+    let mut ui = bifrost_app::Ui::new(Font::parse(data).unwrap(), 1200.0 / 768.0);
+    ui.symbols = springboard::symbols::Symbols::load(dir);
+    ui
 }

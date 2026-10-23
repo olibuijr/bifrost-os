@@ -15,7 +15,8 @@ fn centre((x, y, w, h): (f32, f32, f32, f32)) -> (f32, f32) {
 
 fn landscape() -> (Ui, Calculator) {
     let ui = crate::test_ui();
-    let app = Calculator::new(&ui, 1920, 1200);
+    let mut app = Calculator::new(&ui, 1920, 1200);
+    app.settings.scientific = true;
     (ui, app)
 }
 

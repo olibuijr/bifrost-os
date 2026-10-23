@@ -159,6 +159,21 @@ impl App for WeatherApp {
         true
     }
 
+    /// The scroll wheel comes as itself (E2E W4-11): before, only the touch stream reached the window, and the shell's
+    /// emulated drag for the wheel did not scroll the forecast.
+    fn pointer_interest(&self) -> u32 {
+        bifrost_app::pointer_events::WHEEL
+    }
+
+    /// The main window's wheel, in surface pixels: the forecast, Locations or Stocks page (or the hourly strip) scrolls.
+    fn pointer(&mut self, ctx: &Ctx, ev: &bifrost_app::pointer_events::PointerEvent) -> bool {
+        let Some(c) = &mut self.w else { return false };
+        match *ev {
+            bifrost_app::pointer_events::PointerEvent::Wheel { x, y, dx, dy, .. } => c.wheel(&ctx.ui, x, y, dx, dy),
+            _ => false,
+        }
+    }
+
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
         if let Some(c) = &mut self.w {
             c.location_tick(ctx, t);

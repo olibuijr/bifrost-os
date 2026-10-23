@@ -15,6 +15,9 @@ const MENU_CONVERT: u32 = 14;
 const MENU_HISTORY: u32 = 15;
 const MENU_THOUSANDS: u32 = 16;
 const MENU_SCI_NOTATION: u32 = 17;
+/// View > Decimal Comma: shows "1,5" instead of "1.5" (and "." to group thousands). It was an unlabelled "1.5" toolbar
+/// chip before (E2E W4-7).
+pub(crate) const MENU_DECIMAL_COMMA: u32 = 18;
 const MENU_PLACES_AUTO: u32 = 20;
 /// Decimal Places 0 to 15 are `MENU_PLACES + places`.
 const MENU_PLACES: u32 = 100;
@@ -61,6 +64,7 @@ impl Calculator {
             AppMenuItem::new(MENU_HISTORY, if self.history_open { "Hide History" } else { "Show History" }).key("cmd+y"),
             AppMenuItem::separator(),
             AppMenuItem::new(MENU_THOUSANDS, "Thousands Separator").checked(self.settings.thousands),
+            AppMenuItem::new(MENU_DECIMAL_COMMA, "Decimal Comma (1,5)").checked(self.settings.locale.decimal() == ','),
             AppMenuItem::submenu("Decimal Places"),
             AppMenuItem::new(MENU_PLACES_AUTO, "Automatic").checked(places.is_none()).depth(1),
         ];
@@ -124,6 +128,7 @@ impl Calculator {
                 self.hist_offset = 0;
             }
             MENU_THOUSANDS => self.settings.thousands = !self.settings.thousands,
+            MENU_DECIMAL_COMMA => self.settings.locale = self.settings.locale.toggled(),
             MENU_SCI_NOTATION => self.settings.sci_notation = !self.settings.sci_notation,
             MENU_PLACES_AUTO => self.settings.places = None,
             _ if (MENU_PLACES..MENU_PLACES + u32::from(MAX_PLACES) + 1).contains(&id) => {
@@ -267,7 +272,8 @@ mod tests {
 
     fn landscape() -> (Ui, Calculator) {
         let ui = crate::test_ui();
-        let app = Calculator::new(&ui, 1920, 1200);
+        let mut app = Calculator::new(&ui, 1920, 1200);
+        app.settings.scientific = true;
         (ui, app)
     }
 

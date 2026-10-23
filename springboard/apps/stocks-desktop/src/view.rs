@@ -1,36 +1,49 @@
-//! Stocks' layout and drawing. The screen is one column under the unified toolbar band: the add field, the watchlist
-//! with a quote on each row and the Up, Down and remove buttons, and a price chart of the selected symbol. The
-//! geometry is computed once (`layout`) for both drawing and hit testing. All positions are pixels; the layout
-//! constants are points, scaled with `Ui::pt`.
+//! Stocks' layout and drawing (Golden Gate Stocks): a sidebar with the add field and the watchlist, each row with
+//! the symbol and its name, a sparkline of the last month and the price over a green or red change pill; and the
+//! detail pane with the selected symbol's name, price, change and price chart. The geometry is computed once
+//! (`layout`) for both drawing and hit testing. All positions are pixels; the layout constants are points, scaled
+//! with `Ui::pt`. Rows are reordered and removed from their context menu or with the Delete key.
 
 use crate::data;
 use crate::feed::Feed;
-use crate::model::{self, Bar};
+use crate::model::{self, Bar, Quote};
 use crate::state::{now_unix, Stocks};
 use bifrost_app::kit::ui::{
-    CARD_BG, CONTENT_BG, DESTRUCTIVE, LABEL, LABEL_2, LINK, MAC_BODY_PT, MAC_CAPTION1_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT,
-    MAC_TITLE3_PT, ROW_PRESSED, SEPARATOR_C, SPACE_L, SPACE_M, SPACE_XXL, SYSTEM_GREEN, SYSTEM_RED,
+    CARD_BG, CONTENT_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_CAPTION1_PT, MAC_FOOTNOTE_PT, MAC_LARGE_TITLE_PT, MAC_SUBHEAD_PT,
+    MAC_TITLE1_PT, MAC_TITLE3_PT, SEPARATOR_C, SIDEBAR_BG, SIDEBAR_PLATE, SPACE_L, SPACE_M, SPACE_S, SPACE_XS, SPACE_XXL,
+    SYSTEM_GREEN, SYSTEM_RED, WHITE,
 };
 use bifrost_app::kit::{Surface, TextCache, Ui, Weight};
-use bifrost_app::controls::prefs_layout::m::CARD_RADIUS;
-use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
+use bifrost_app::controls::prefs_layout::m::{CARD_RADIUS, SELECTION_RADIUS};
+use bifrost_app::layout::UNIFIED_BAR_PT;
 
-/// Points: the side margin of the column.
+/// Points: the side margin inside the sidebar and the detail pane.
 const MARGIN_PT: f32 = 16.0;
+/// Points: the sidebar's width range and its share of the window.
+const SIDEBAR_MIN_PT: f32 = 260.0;
+const SIDEBAR_MAX_PT: f32 = 340.0;
+const SIDEBAR_SHARE: f32 = 0.34;
 /// Points: the add field's height and its top, under the band.
-const FIELD_H_PT: f32 = 32.0;
-const FIELD_TOP_PT: f32 = UNIFIED_BAR_PT + 10.0;
-/// Points: the line under the field for notes, and where the list card starts.
+const FIELD_H_PT: f32 = 28.0;
+const FIELD_TOP_PT: f32 = UNIFIED_BAR_PT + 8.0;
+/// Points: the line under the field for notes, and where the list starts.
 const NOTE_H_PT: f32 = 16.0;
-const LIST_TOP_PT: f32 = FIELD_TOP_PT + FIELD_H_PT + NOTE_H_PT + 8.0;
-/// Points: one watchlist row, and the width of each row button.
-const ROW_PT: f32 = 44.0;
-const BUTTON_PT: f32 = 36.0;
-/// Points: the chart card's height and the gap above it.
-const CHART_PT: f32 = 300.0;
-const GAP_PT: f32 = 12.0;
+const LIST_TOP_PT: f32 = FIELD_TOP_PT + FIELD_H_PT + NOTE_H_PT + 6.0;
+/// Points: one watchlist row (symbol over name, sparkline, price over the change pill).
+const ROW_PT: f32 = 56.0;
+/// Points: the sparkline's width and height, and the change pill's size.
+const SPARK_W_PT: f32 = 58.0;
+const SPARK_H_PT: f32 = 22.0;
+const PILL_W_PT: f32 = 62.0;
+const PILL_H_PT: f32 = 18.0;
+/// Points: the detail header's height above the chart card.
+const HEADER_PT: f32 = 66.0;
 /// Points: the corner radius of the cards.
 const RADIUS_PT: f32 = CARD_RADIUS;
+/// What a row without a price says while quotes are out, when its symbol is unknown, and after a failed request.
+pub const ROW_LOADING: &str = "Loading\u{2026}";
+pub const ROW_NOT_FOUND: &str = "Not Found";
+pub const ROW_UNAVAILABLE: &str = "Unavailable";
 
 /// A pixel rectangle: x, y, width, height.
 pub type Rect = (f32, f32, f32, f32);
@@ -40,18 +53,18 @@ pub type Rect = (f32, f32, f32, f32);
 pub enum Hit {
     Field,
     Row(usize),
-    Up(usize),
-    Down(usize),
-    Remove(usize),
 }
 
 /// The screen's rectangles in pixels.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Layout {
+    /// The sidebar's width.
+    pub side: f32,
     pub field: Rect,
-    /// The top of the note line under the field (pixels).
+    /// The middle of the note line under the field (pixels).
     pub note_y: f32,
     pub list: Rect,
+    /// The detail pane: the header and the chart card under it.
     pub chart: Rect,
     /// One row's height in pixels.
     pub row_px: f32,
@@ -61,32 +74,29 @@ pub struct Layout {
 pub fn layout(ui: &Ui, size: (usize, usize)) -> Layout {
     let (w, h) = (size.0 as f32, size.1 as f32);
     let margin = ui.pt(MARGIN_PT);
-    let card_w = (w - 2.0 * margin).max(0.0);
-    let chart_h = ui.pt(CHART_PT);
-    let chart_y = (h - margin - chart_h).max(0.0);
+    let side = (w * SIDEBAR_SHARE).clamp(ui.pt(SIDEBAR_MIN_PT), ui.pt(SIDEBAR_MAX_PT)).min(w * 0.5).round();
     let list_top = ui.pt(LIST_TOP_PT);
-    let list_bottom = (chart_y - ui.pt(GAP_PT)).max(list_top);
+    let chart_top = ui.pt(UNIFIED_BAR_PT + SPACE_S);
     Layout {
-        field: (margin, ui.pt(FIELD_TOP_PT), card_w, ui.pt(FIELD_H_PT)),
-        note_y: ui.pt(FIELD_TOP_PT + FIELD_H_PT + 4.0),
-        list: (margin, list_top, card_w, list_bottom - list_top),
-        chart: (margin, chart_y, card_w, chart_h),
+        side,
+        field: (margin, ui.pt(FIELD_TOP_PT), (side - 2.0 * margin).max(0.0), ui.pt(FIELD_H_PT)),
+        note_y: ui.pt(FIELD_TOP_PT + FIELD_H_PT + 4.0 + NOTE_H_PT / 2.0),
+        list: (0.0, list_top, side, (h - list_top).max(0.0)),
+        chart: (side + margin, chart_top, (w - side - 2.0 * margin).max(0.0), (h - chart_top - margin).max(0.0)),
         row_px: ui.pt(ROW_PT),
     }
 }
 
-/// Whether a pixel row lies inside the watchlist card.
-pub fn in_list(ui: &Ui, size: (usize, usize), y: f32) -> bool {
-    let l = layout(ui, size);
-    y >= l.list.1 && y < l.list.1 + l.list.3
+/// Whether a pixel position lies inside the watchlist.
+pub fn in_list(ui: &Ui, size: (usize, usize), x: f32, y: f32) -> bool {
+    inside(layout(ui, size).list, x, y)
 }
 
 fn inside(r: Rect, x: f32, y: f32) -> bool {
     x >= r.0 && x < r.0 + r.2 && y >= r.1 && y < r.1 + r.3
 }
 
-/// The control under a pixel position: the field, a row, or one of a row's three buttons (right to left: remove,
-/// down, up).
+/// The control under a pixel position: the field or a row.
 pub fn hit(s: &Stocks, ui: &Ui, x: f32, y: f32) -> Option<Hit> {
     let l = layout(ui, s.size);
     if inside(l.field, x, y) {
@@ -99,22 +109,8 @@ pub fn hit(s: &Stocks, ui: &Ui, x: f32, y: f32) -> Option<Hit> {
     if index < 0.0 || index as usize >= s.list.len() {
         return None;
     }
-    let i = index as usize;
-    let button = ui.pt(BUTTON_PT);
-    let right = l.list.0 + l.list.2 - ui.pt(SPACE_M);
-    if x >= right - button {
-        Some(Hit::Remove(i))
-    } else if x >= right - 2.0 * button {
-        Some(Hit::Down(i))
-    } else if x >= right - 3.0 * button {
-        Some(Hit::Up(i))
-    } else {
-        Some(Hit::Row(i))
-    }
+    Some(Hit::Row(index as usize))
 }
-
-/// A colour that stands for a selected row: a fixed tone for both appearances.
-const SELECTED: bifrost_app::kit::appearance::Pair = ROW_PRESSED;
 
 #[derive(Clone, Copy, PartialEq)]
 enum Align {
@@ -124,6 +120,7 @@ enum Align {
 }
 
 /// Draws `text` with its anchor at pixel `x` (left, centre or right edge) and its middle at pixel `mid`.
+#[allow(clippy::too_many_arguments)]
 fn put(labels: &mut TextCache, s: &mut Surface, ui: &Ui, text: &str, pt: f32, weight: Weight, color: u32, align: Align, x: f32, mid: f32) {
     let img = labels.get(ui, text, pt, weight, color);
     let left = match align {
@@ -162,9 +159,57 @@ fn status(feed: &Feed, now: f64) -> String {
     }
 }
 
+/// What a row without a price says: "Not Found" for a symbol the service does not know, "Loading" while quotes are
+/// out or before the first answer, "Unavailable" after a failed request (E2E W4-14: a dash stayed for ever before).
+pub fn row_status(feed: &Feed, symbol: &str) -> &'static str {
+    if feed.quote_failed.contains_key(symbol) {
+        ROW_NOT_FOUND
+    } else if feed.is_quotes_pending() || (feed.quotes_error.is_none() && feed.quotes_at.is_none()) {
+        ROW_LOADING
+    } else {
+        ROW_UNAVAILABLE
+    }
+}
+
 /// The colour of a change: green for a rise or no change, red for a fall.
 fn change_colour(pct: f64) -> u32 {
     if pct < 0.0 { SYSTEM_RED } else { SYSTEM_GREEN }
+}
+
+/// "+4.23" or "-0.57": a change with its sign.
+fn signed(value: f64) -> String {
+    format!("{value:+.2}")
+}
+
+/// A line through `points` (pixels), `width` thick.
+fn polyline(s: &mut Surface, points: &[(f32, f32)], width: f32, color: u32) {
+    if let [only] = points {
+        fill(s, only.0 - width, only.1 - width, 2.0 * width, 2.0 * width, color);
+    }
+    for pair in points.windows(2) {
+        let ((xa, ya), (xb, yb)) = (pair[0], pair[1]);
+        let steps = (xb - xa).abs().max((yb - ya).abs()).ceil().max(1.0) as usize;
+        for k in 0..=steps {
+            let f = k as f32 / steps as f32;
+            let (px, py) = (xa + (xb - xa) * f, ya + (yb - ya) * f);
+            fill(s, px - width / 2.0, py - width / 2.0, width, width, color);
+        }
+    }
+}
+
+/// The points of `values` spread across `r` (the high at the top), in pixels.
+fn plot(values: &[f64], r: Rect) -> Vec<(f32, f32)> {
+    let Some((lo, hi)) = model::value_range(values) else { return Vec::new() };
+    let (lo, hi) = model::padded_range(lo, hi);
+    let n = values.len();
+    values
+        .iter()
+        .enumerate()
+        .map(|(i, &v)| {
+            let px = if n == 1 { r.0 + r.2 / 2.0 } else { r.0 + r.2 * i as f32 / (n - 1) as f32 };
+            (px, model::plot_y(v, lo, hi, r.1, r.3))
+        })
+        .collect()
 }
 
 impl Stocks {
@@ -173,19 +218,22 @@ impl Stocks {
         self.dirty = false;
         let l = layout(ui, (s.w, s.h));
         s.fill_rect(0, 0, s.w, s.h, CONTENT_BG.now());
+        // the sidebar runs the window's full height, under the traffic lights, with a hairline at its edge
+        fill(s, 0.0, 0.0, l.side, s.h as f32, SIDEBAR_BG.now());
+        fill(s, l.side - 1.0, 0.0, 1.0, s.h as f32, SEPARATOR_C.now());
         self.draw_band(s, ui);
         self.draw_field(s, ui, &l, t);
         if let Some(note) = self.note.clone() {
-            put(&mut self.labels, s, ui, &note, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), Align::Left, l.field.0 + ui.pt(SPACE_L), l.note_y);
+            let note = ui.fit(&note, MAC_FOOTNOTE_PT, l.field.2);
+            put(&mut self.labels, s, ui, &note, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), Align::Left, l.field.0 + ui.pt(SPACE_XS), l.note_y);
         }
         self.draw_list(s, ui, &l);
         self.draw_chart(s, ui, &l);
     }
 
-    /// The title at the left of the band (after the traffic lights) and the quote status at the right.
+    /// The quote status at the trailing end of the band.
     fn draw_band(&mut self, s: &mut Surface, ui: &Ui) {
         let mid = ui.pt(UNIFIED_BAR_PT / 2.0);
-        put(&mut self.labels, s, ui, "Stocks", MAC_TITLE3_PT, Weight::Semibold, LABEL.now(), Align::Left, ui.pt(traffic_lights_trailing() + SPACE_M), mid);
         let right = s.w as f32 - ui.pt(MARGIN_PT);
         let text = status(&self.feed, now_unix());
         if !text.is_empty() {
@@ -193,15 +241,15 @@ impl Stocks {
         }
     }
 
+    /// The add field: a capsule at the top of the sidebar.
     fn draw_field(&self, s: &mut Surface, ui: &Ui, l: &Layout, t: f64) {
         let (x, y, w, h) = l.field;
-        s.fill_rrect(x, y, w, h, ui.pt(RADIUS_PT), CARD_BG.now());
+        s.fill_rrect(x, y, w, h, h / 2.0, CARD_BG.now());
         self.field.draw(s, ui, (x + ui.pt(SPACE_M), y, w - ui.pt(SPACE_XXL), h), t);
     }
 
     fn draw_list(&mut self, s: &mut Surface, ui: &Ui, l: &Layout) {
         let (x, y, w, h) = l.list;
-        s.fill_rrect(x, y, w, h, ui.pt(RADIUS_PT), CARD_BG.now());
         let row = l.row_px;
         let content = self.list.len() as f32 * row;
         self.scroll.set_max((content - h).max(0.0));
@@ -209,15 +257,17 @@ impl Stocks {
         let (top, bottom) = (y as usize, (y + h) as usize);
         let symbols = self.list.symbols().to_vec();
         if symbols.is_empty() {
-            put(&mut self.labels, s, ui, "Your watchlist is empty. Type a symbol above to add one.", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), Align::Centre, x + w / 2.0, y + ui.pt(SPACE_XXL));
+            let msg = ui.fit("Type a symbol above to add one.", MAC_BODY_PT, w - 2.0 * ui.pt(MARGIN_PT));
+            put(&mut self.labels, s, ui, &msg, MAC_BODY_PT, Weight::Regular, LABEL_2.now(), Align::Centre, x + w / 2.0, y + ui.pt(SPACE_XXL));
             return;
         }
         let selected = self.list.selected();
         let count = symbols.len();
-        let right = x + w - ui.pt(SPACE_M);
-        let button = ui.pt(BUTTON_PT);
-        let price_x = right - 3.0 * button - ui.pt(SPACE_M);
-        let pct_x = price_x - ui.pt(92.0);
+        let inset = ui.pt(SPACE_S);
+        let left = x + ui.pt(MARGIN_PT);
+        let right = x + w - ui.pt(MARGIN_PT);
+        let spark_r = right - ui.pt(PILL_W_PT) - ui.pt(SPACE_M);
+        let spark_l = spark_r - ui.pt(SPARK_W_PT);
         let mut c = s.rows(top, bottom);
         for (i, sym) in symbols.iter().enumerate() {
             let ry = y - offset + i as f32 * row;
@@ -226,97 +276,117 @@ impl Stocks {
             }
             let mid = ry + row / 2.0;
             if i == selected {
-                fill(&mut c, x, ry, w, row, SELECTED.now());
+                c.fill_rrect(x + inset, ry + 2.0, w - 2.0 * inset, row - 4.0, ui.pt(SELECTION_RADIUS), SIDEBAR_PLATE.now());
+            } else if i + 1 < count && i + 1 != selected {
+                fill(&mut c, left, ry + row - 1.0, right - left, 1.0, SEPARATOR_C.now());
             }
-            if i + 1 < count {
-                fill(&mut c, x + ui.pt(SPACE_L), ry + row - 1.0, w - 2.0 * ui.pt(SPACE_L), 1.0, SEPARATOR_C.now());
+            let quote = self.feed.quotes.get(sym).cloned();
+            let text_w = spark_l - left - ui.pt(SPACE_S);
+            let shown = ui.fit(&data::display_symbol(sym), MAC_BODY_PT, text_w);
+            put(&mut self.labels, &mut c, ui, &shown, MAC_BODY_PT, Weight::Bold, LABEL.now(), Align::Left, left, mid - ui.pt(8.0));
+            if let Some(name) = quote.as_ref().map(|q| q.name.clone()).filter(|n| !n.is_empty()) {
+                let name = ui.fit(&name, MAC_SUBHEAD_PT, text_w);
+                put(&mut self.labels, &mut c, ui, &name, MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), Align::Left, left, mid + ui.pt(9.0));
             }
-            put(&mut self.labels, &mut c, ui, &data::display_symbol(sym), MAC_BODY_PT, Weight::Semibold, LABEL.now(), Align::Left, x + ui.pt(SPACE_L), mid);
-            match self.feed.quotes.get(sym) {
-                Some(q) => {
-                    put(&mut self.labels, &mut c, ui, &format!("{:.2}", q.close), MAC_BODY_PT, Weight::Semibold, LABEL.now(), Align::Right, price_x, mid);
-                    let pct = q.change_pct();
-                    put(&mut self.labels, &mut c, ui, &format!("{:+.2}%", pct), MAC_BODY_PT, Weight::Medium, change_colour(pct), Align::Right, pct_x, mid);
+            match quote {
+                Some(q) => self.draw_row_quote(&mut c, ui, &q, (spark_l, spark_r), right, mid),
+                None => {
+                    let word = row_status(&self.feed, sym);
+                    let ink = if word == ROW_NOT_FOUND { SYSTEM_RED } else { LABEL_2.now() };
+                    put(&mut self.labels, &mut c, ui, word, MAC_SUBHEAD_PT, Weight::Regular, ink, Align::Right, right, mid);
                 }
-                None => put(&mut self.labels, &mut c, ui, "\u{2013}", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), Align::Right, price_x, mid),
             }
-            let slot = |n: f32| right - button * n + button / 2.0;
-            put(&mut self.labels, &mut c, ui, "Up", MAC_CAPTION1_PT, Weight::Medium, if i == 0 { LABEL_2.now() } else { LINK }, Align::Centre, slot(2.5), mid);
-            put(&mut self.labels, &mut c, ui, "Down", MAC_CAPTION1_PT, Weight::Medium, if i + 1 == count { LABEL_2.now() } else { LINK }, Align::Centre, slot(1.5), mid);
-            put(&mut self.labels, &mut c, ui, "\u{d7}", MAC_TITLE1_PT, Weight::Regular, DESTRUCTIVE, Align::Centre, slot(0.5), mid);
         }
+    }
+
+    /// A row's sparkline (the previous close dotted across it), the price and the change pill.
+    fn draw_row_quote(&mut self, c: &mut Surface, ui: &Ui, q: &Quote, (spark_l, spark_r): (f32, f32), right: f32, mid: f32) {
+        let colour = change_colour(q.change());
+        let spark_h = ui.pt(SPARK_H_PT);
+        if q.spark.len() >= 2 {
+            // the previous close goes into the scale too, so its dotted line stays inside the sparkline's box
+            let mut values = q.spark.clone();
+            values.push(q.open);
+            let points = plot(&values, (spark_l, mid - spark_h / 2.0, spark_r - spark_l, spark_h));
+            let base_y = points.last().map_or(mid, |p| p.1);
+            let mut dx = spark_l;
+            while dx < spark_r {
+                fill(c, dx, base_y, ui.pt(2.0), 1.0, LABEL_2.now());
+                dx += ui.pt(4.0);
+            }
+            polyline(c, &points[..points.len() - 1], ui.pt(1.2), colour);
+        }
+        put(&mut self.labels, c, ui, &format!("{:.2}", q.close), MAC_BODY_PT, Weight::Semibold, LABEL.now(), Align::Right, right, mid - ui.pt(9.0));
+        let (pw, ph) = (ui.pt(PILL_W_PT), ui.pt(PILL_H_PT));
+        let (px, py) = (right - pw, mid + ui.pt(2.0));
+        c.fill_rrect(px, py, pw, ph, ui.pt(SPACE_XS), colour);
+        put(&mut self.labels, c, ui, &signed(q.change()), MAC_SUBHEAD_PT, Weight::Semibold, WHITE, Align::Right, right - ui.pt(SPACE_XS + 2.0), py + ph / 2.0);
     }
 
     fn draw_chart(&mut self, s: &mut Surface, ui: &Ui, l: &Layout) {
         let (x, y, w, h) = l.chart;
-        s.fill_rrect(x, y, w, h, ui.pt(RADIUS_PT), CARD_BG.now());
         let Some(symbol) = self.list.selected_symbol().map(str::to_string) else {
             put(&mut self.labels, s, ui, "Add a symbol to see its chart.", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), Align::Centre, x + w / 2.0, y + h / 2.0);
             return;
         };
         let quote = self.feed.quotes.get(&symbol).cloned();
         let bars: Option<Vec<Bar>> = self.feed.history.get(&symbol).cloned();
-        let left = x + ui.pt(SPACE_L);
-        let right = x + w - ui.pt(SPACE_L);
-        put(&mut self.labels, s, ui, &data::display_symbol(&symbol), MAC_TITLE3_PT, Weight::Semibold, LABEL.now(), Align::Left, left, y + ui.pt(26.0));
+        let (left, right) = (x, x + w);
+        // the header: the symbol large with its name after it, and the price at the trailing end
+        let title_mid = y + ui.pt(22.0);
+        let title = data::display_symbol(&symbol);
+        put(&mut self.labels, s, ui, &title, MAC_LARGE_TITLE_PT, Weight::Bold, LABEL.now(), Align::Left, left, title_mid);
+        if let Some(name) = quote.as_ref().map(|q| q.name.clone()).filter(|n| !n.is_empty()) {
+            let after = left + ui.measure(&title, MAC_LARGE_TITLE_PT, Weight::Bold) + ui.pt(SPACE_M);
+            let room = (right - after - ui.pt(160.0)).max(0.0);
+            let name = ui.fit(&name, MAC_TITLE3_PT, room);
+            put(&mut self.labels, s, ui, &name, MAC_TITLE3_PT, Weight::Regular, LABEL_2.now(), Align::Left, after, title_mid + ui.pt(2.0));
+        }
         let last = quote.as_ref().map(|q| q.close).or_else(|| bars.as_ref().and_then(|b| b.last()).map(|b| b.close));
         if let Some(price) = last {
-            put(&mut self.labels, s, ui, &format!("{:.2}", price), MAC_TITLE1_PT, Weight::Semibold, LABEL.now(), Align::Right, right, y + ui.pt(26.0));
+            put(&mut self.labels, s, ui, &format!("{:.2}", price), MAC_TITLE1_PT, Weight::Semibold, LABEL.now(), Align::Right, right, title_mid);
         }
+        let sub_mid = y + ui.pt(48.0);
         if let Some(q) = &quote {
-            put(&mut self.labels, s, ui, &format!("Priced {}", q.stamp), MAC_CAPTION1_PT, Weight::Regular, LABEL_2.now(), Align::Left, left, y + ui.pt(46.0));
+            put(&mut self.labels, s, ui, &format!("Priced {}", q.stamp), MAC_CAPTION1_PT, Weight::Regular, LABEL_2.now(), Align::Left, left, sub_mid);
             let pct = q.change_pct();
-            put(&mut self.labels, s, ui, &format!("{:+.2} ({:+.2}%) since the open", q.change(), pct), MAC_CAPTION1_PT, Weight::Medium, change_colour(pct), Align::Right, right, y + ui.pt(46.0));
+            let change = format!("{} ({:+.2}%) since the previous close", signed(q.change()), pct);
+            put(&mut self.labels, s, ui, &change, MAC_CAPTION1_PT, Weight::Medium, change_colour(pct), Align::Right, right, sub_mid);
+        } else if let Some(message) = self.feed.quote_failed.get(&symbol).cloned() {
+            put(&mut self.labels, s, ui, &message, MAC_CAPTION1_PT, Weight::Regular, SYSTEM_RED, Align::Left, left, sub_mid);
         }
-        let plot_x0 = x + ui.pt(SPACE_L + 52.0);
-        let plot_x1 = right;
-        let plot_y0 = y + ui.pt(86.0);
-        let plot_y1 = y + h - ui.pt(30.0);
+        // the chart card under the header
+        let card = (x, y + ui.pt(HEADER_PT), w, (h - ui.pt(HEADER_PT)).max(0.0));
+        s.fill_rrect(card.0, card.1, card.2, card.3, ui.pt(RADIUS_PT), CARD_BG.now());
+        let plot_x0 = card.0 + ui.pt(SPACE_L);
+        let plot_x1 = card.0 + card.2 - ui.pt(SPACE_L + 52.0);
+        let plot_y0 = card.1 + ui.pt(SPACE_L);
+        let plot_y1 = card.1 + card.3 - ui.pt(30.0);
         let values: Vec<f64> = bars.as_ref().map(|b| b.iter().map(|x| x.close).collect()).unwrap_or_default();
         let Some((vlo, vhi)) = model::value_range(&values) else {
             let msg = if self.feed.is_history_pending(&symbol) {
-                "Loading price history...".to_string()
+                "Loading price history\u{2026}".to_string()
             } else {
                 self.feed.history_failed.get(&symbol).cloned().unwrap_or_else(|| "No price history yet.".to_string())
             };
-            put(&mut self.labels, s, ui, &msg, MAC_BODY_PT, Weight::Regular, LABEL_2.now(), Align::Centre, (plot_x0 + plot_x1) / 2.0, (plot_y0 + plot_y1) / 2.0);
+            put(&mut self.labels, s, ui, &msg, MAC_BODY_PT, Weight::Regular, LABEL_2.now(), Align::Centre, card.0 + card.2 / 2.0, (plot_y0 + plot_y1) / 2.0);
             return;
         };
-        let (lo, hi) = model::padded_range(vlo, vhi);
         let plot_h = plot_y1 - plot_y0;
         let plot_w = plot_x1 - plot_x0;
         for gy in [plot_y0, plot_y0 + plot_h / 2.0, plot_y1] {
             fill(s, plot_x0, gy, plot_w, 1.0, SEPARATOR_C.now());
         }
-        put(&mut self.labels, s, ui, &format!("{:.2}", vhi), MAC_CAPTION1_PT, Weight::Regular, LABEL_2.now(), Align::Right, plot_x0 - ui.pt(6.0), plot_y0);
-        put(&mut self.labels, s, ui, &format!("{:.2}", vlo), MAC_CAPTION1_PT, Weight::Regular, LABEL_2.now(), Align::Right, plot_x0 - ui.pt(6.0), plot_y1);
+        // the value scale on the trailing side, as the reference draws it
+        put(&mut self.labels, s, ui, &format!("{:.2}", vhi), MAC_CAPTION1_PT, Weight::Regular, LABEL_2.now(), Align::Left, plot_x1 + ui.pt(6.0), plot_y0);
+        put(&mut self.labels, s, ui, &format!("{:.2}", vlo), MAC_CAPTION1_PT, Weight::Regular, LABEL_2.now(), Align::Left, plot_x1 + ui.pt(6.0), plot_y1);
         if let (Some(first), Some(last_bar)) = (bars.as_ref().and_then(|b| b.first()), bars.as_ref().and_then(|b| b.last())) {
             put(&mut self.labels, s, ui, &first.date, MAC_CAPTION1_PT, Weight::Regular, LABEL_2.now(), Align::Left, plot_x0, plot_y1 + ui.pt(SPACE_L));
             put(&mut self.labels, s, ui, &last_bar.date, MAC_CAPTION1_PT, Weight::Regular, LABEL_2.now(), Align::Right, plot_x1, plot_y1 + ui.pt(SPACE_L));
         }
-        let n = values.len();
-        let points: Vec<(f32, f32)> = values
-            .iter()
-            .enumerate()
-            .map(|(i, &v)| {
-                let px = if n == 1 { (plot_x0 + plot_x1) / 2.0 } else { plot_x0 + plot_w * i as f32 / (n - 1) as f32 };
-                (px, model::plot_y(v, lo, hi, plot_y0, plot_h))
-            })
-            .collect();
-        let rising = values.last() >= values.first();
-        let line = if rising { SYSTEM_GREEN } else { SYSTEM_RED };
-        if n == 1 {
-            fill(s, points[0].0 - 1.0, points[0].1 - 1.0, 3.0, 3.0, line);
-        }
-        for pair in points.windows(2) {
-            let ((xa, ya), (xb, yb)) = (pair[0], pair[1]);
-            let steps = (xb - xa).ceil().max(1.0) as usize;
-            for k in 0..=steps {
-                let f = k as f32 / steps as f32;
-                let (px, py) = (xa + (xb - xa) * f, ya + (yb - ya) * f);
-                fill(s, px - 1.0, py - 1.0, 2.0, 2.0, line);
-            }
-        }
+        let points = plot(&values, (plot_x0, plot_y0, plot_w, plot_h));
+        let line = if values.last() >= values.first() { SYSTEM_GREEN } else { SYSTEM_RED };
+        polyline(s, &points, ui.pt(1.5), line);
     }
 }
 
@@ -336,6 +406,8 @@ mod tests {
         assert_eq!(change_colour(-0.1), SYSTEM_RED);
         assert_eq!(change_colour(0.0), SYSTEM_GREEN);
         assert_eq!(change_colour(2.0), SYSTEM_GREEN);
+        assert_eq!(signed(4.234), "+4.23");
+        assert_eq!(signed(-0.57), "-0.57");
     }
 
     #[test]
@@ -344,9 +416,36 @@ mod tests {
         assert_eq!(status(&feed, 100.0), "", "nothing yet");
         feed.quotes_error = Some("down".into());
         assert_eq!(status(&feed, 100.0), "Quotes unavailable");
-        feed.load_quotes("Symbol,Date,Time,Open,High,Low,Close,Volume\nAAPL.US,2026-10-02,22:00:09,100,1,1,105,5\n", 0.0);
+        feed.load_quotes("Symbol,Date,Time,Previous,Close,Name,Spark\nAAPL,2026-10-02,22:00,100,105,Apple Inc.,\n", 0.0);
         assert_eq!(status(&feed, 100.0), "Offline. Showing saved quotes.");
         feed.quotes_error = None;
         assert_eq!(status(&feed, 60.0 * 7.0), "Updated 7 min ago");
+    }
+
+    /// E2E W4-14: a row without a price says why instead of a dash.
+    #[test]
+    fn a_row_without_a_price_says_why() {
+        let mut feed = Feed::default();
+        assert_eq!(row_status(&feed, "AAPL"), ROW_LOADING, "before the first answer");
+        feed.begin_quotes();
+        assert_eq!(row_status(&feed, "AAPL"), ROW_LOADING);
+        feed.apply(crate::feed::Done::Quotes(Err("down".into())), 10.0);
+        assert_eq!(row_status(&feed, "AAPL"), ROW_UNAVAILABLE);
+        feed.apply(crate::feed::Done::Quotes(Ok((vec![], vec![("NOPE".into(), "NOPE was not found.".into())]))), 100.0);
+        assert_eq!(row_status(&feed, "NOPE"), ROW_NOT_FOUND);
+    }
+
+    #[test]
+    fn the_layout_puts_the_list_in_a_sidebar_and_the_chart_beside_it() {
+        let ui = crate::test_ui();
+        let l = layout(&ui, (1875, 1219));
+        assert!(l.side >= ui.pt(SIDEBAR_MIN_PT) && l.side <= ui.pt(SIDEBAR_MAX_PT));
+        assert_eq!(l.list.0, 0.0);
+        assert!(l.list.0 + l.list.2 <= l.side && l.chart.0 >= l.side, "the chart is right of the sidebar");
+        assert!(l.field.0 + l.field.2 <= l.side);
+        let points = plot(&[1.0, 3.0, 2.0], (0.0, 10.0, 100.0, 50.0));
+        assert_eq!(points.len(), 3);
+        assert!(points[1].1 < points[0].1, "the high is above the low");
+        assert_eq!((points[0].0, points[2].0), (0.0, 100.0));
     }
 }

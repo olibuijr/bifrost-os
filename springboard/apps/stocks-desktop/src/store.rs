@@ -1,6 +1,5 @@
-//! The app's saved files in its data directory: the watchlist, the last good quote answer and one history answer
-//! per symbol. The raw service answers are kept as they came, so the same parsers read them on the next start, and
-//! the file's age says how old the data is. Writes go to a temporary file first, so a crash never leaves half a file.
+//! The app's saved files in its data directory: the watchlist, the last good quotes and one history per symbol, as
+//! the small CSV files `data` writes and reads, and the file's age says how old the data is. Writes go to a temporary file first, so a crash never leaves half a file.
 
 use crate::data;
 use std::path::PathBuf;
@@ -98,7 +97,7 @@ mod tests {
 
     #[test]
     fn the_watchlist_round_trips_in_order() {
-        let list = vec!["aapl.us".to_string(), "^spx".to_string(), "nvda.us".to_string()];
+        let list = vec!["AAPL".to_string(), "^GSPC".to_string(), "NVDA".to_string()];
         assert_eq!(decode_watchlist(&encode_watchlist(&list)), list);
         assert!(decode_watchlist("").is_empty());
     }
@@ -106,13 +105,13 @@ mod tests {
     #[test]
     fn a_hand_edited_watchlist_keeps_only_valid_unique_symbols() {
         let got = decode_watchlist("AAPL\n\n bad symbol \nmsft.us\naapl.us\n");
-        assert_eq!(got, ["aapl.us", "msft.us"]);
+        assert_eq!(got, ["AAPL", "MSFT"], "the old Stooq form reads as the service's form");
     }
 
     #[test]
     fn history_files_have_safe_names_per_symbol() {
-        assert_eq!(history_file("aapl.us"), "history-aapl.us.csv");
-        assert_eq!(history_file("^spx"), "history-_spx.csv");
-        assert_ne!(history_file("a.us"), history_file("a-us"), "different symbols never share a file");
+        assert_eq!(history_file("AAPL"), "history-AAPL.csv");
+        assert_eq!(history_file("^GSPC"), "history-_GSPC.csv");
+        assert_ne!(history_file("A.US"), history_file("A-US"), "different symbols never share a file");
     }
 }
