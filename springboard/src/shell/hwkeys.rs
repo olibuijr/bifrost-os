@@ -1022,12 +1022,11 @@ impl Shell {
         if matches!(out, Out::Named("Tab")) && !super::kb_input::get().tab_navigation && !matches!(self.screen, Screen::App(AppId::Terminal | AppId::External(_))) {
             return vec![];
         }
-        // with a panel open, typing goes to its name field and nowhere else
+        // with a panel open, typing goes to its name or search field and nowhere else: text, Backspace, the caret keys
+        // (Left, Right, Shift and Option with them, Home, End, Delete) and Select All, Cut, Copy and Paste
         #[cfg(feature = "desktop-wayland")]
         if self.doc_panel.is_some() {
-            if let Out::Text(text) = &out {
-                self.doc_type(text);
-            }
+            self.doc_edit(&out);
             return vec![];
         }
         // the compose sheet takes the typing: it edits the post text
