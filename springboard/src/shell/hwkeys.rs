@@ -1176,7 +1176,9 @@ impl Shell {
                     },
                     _ => false,
                 };
-                if !stepped {
+                // on the desktop an app is a window: Escape with nothing to step back from does nothing (it never
+                // minimises the windows to show the desktop, as `go_home` does there); the touch presentation leaves the app
+                if !stepped && !self.desk_active() {
                     self.go_home(t);
                 }
             }
@@ -1445,6 +1447,25 @@ mod tests {
         assert!(!sh.hw_builtin_chord(27, CHORD_META, 6000.0), "Cmd+] is not Back");
         assert!(sh.hw_builtin_chord(26, CHORD_META, 6000.0), "Cmd+[ goes Back");
         assert_eq!(sh.settings.as_ref().unwrap().stack().len(), depth - 1);
+    }
+
+    /// E2E W3-4: Escape in Settings on a first-level page minimised every desktop window (Back fell through to
+    /// `go_home`, which shows the desktop). On the desktop it does nothing when there is no page to pop.
+    #[test]
+    fn escape_at_a_settings_root_page_leaves_the_desktop_windows_alone() {
+        let mut sh = crate::shell::tests::shell();
+        sh.desk = Some(super::super::desk::Desk::new());
+        sh.screen = Screen::Home;
+        sh.anim = None;
+        sh.desk_open(AppId::Terminal, 0.0);
+        sh.desk_open(AppId::Settings, 0.0);
+        // Settings in front with its first-level page (no page to pop)
+        sh.screen = Screen::App(AppId::Settings);
+        let before = sh.screen;
+        sh.hw_shortcut(Shortcut::Back, 1000.0);
+        let d = sh.desk.as_ref().expect("desk");
+        assert!(d.wins.iter().all(|w| !w.minimized), "no window is minimised by Escape");
+        assert_eq!(sh.screen, before, "Settings stays in front");
     }
 
     #[test]
