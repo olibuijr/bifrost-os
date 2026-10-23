@@ -3122,7 +3122,9 @@ impl Shell {
         #[cfg(feature = "desktop-wayland")]
         {
             let desk = self.desk.as_mut().unwrap();
-            desk.window_cache.retain(|id,_| desk.wins.iter().zip(&fading).any(|(w, f)| (!w.minimized || *f) && frame_app(*id) == Some(w.app)));
+            // keyed exactly as the windows are drawn below (`win_id(app).unwrap_or(0)`): an app with no catalogue id is
+            // drawn as 0, and `frame_app(0)` names no app, so matching on it dropped that window's cache every frame
+            desk.window_cache.retain(|id,_| desk.wins.iter().zip(&fading).any(|(w, f)| (!w.minimized || *f) && win_id(w.app).unwrap_or(0) == *id));
             desk.body_cache.retain(|app,_| desk.wins.iter().zip(&fading).any(|(w, f)| (!w.minimized || *f) && w.app == *app));
         }
         self.desk_refresh_unmapped();
