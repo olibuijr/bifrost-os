@@ -1064,11 +1064,21 @@ pub struct AppMenuItem {
     pub separator: bool,
     pub submenu: bool,
     pub depth: u8,
+    /// The app's own Print (`printDocument:` / `print:` parity: the app owns File > Print… for its documents).
+    /// The shell then shows this item in place of its own File > Print… (the window snapshot) instead of next to it,
+    /// and Cmd+P chooses it. See `AppMenuItem::print`. Bit 4 of the item flags on the wire.
+    pub prints: bool,
 }
 
 impl AppMenuItem {
     pub fn new(id: u32, title: &str) -> Self {
-        AppMenuItem { id, title: title.into(), key: String::new(), enabled: true, checked: false, separator: false, submenu: false, depth: 0 }
+        AppMenuItem { id, title: title.into(), key: String::new(), enabled: true, checked: false, separator: false, submenu: false, depth: 0, prints: false }
+    }
+    /// The app's own File > Print… (`printDocument:`): titled "Print…" with Cmd+P, it replaces the shell's Print… row
+    /// (which prints a snapshot of the window) while the app is in front. Put it in the app's "File" menu; it is shown
+    /// where the shell's row was, at the end of File, whichever menu it is declared in.
+    pub fn print(id: u32) -> Self {
+        AppMenuItem { prints: true, ..AppMenuItem::new(id, "Print\u{2026}").key("cmd+p") }
     }
     pub fn separator() -> Self {
         AppMenuItem { separator: true, enabled: false, ..AppMenuItem::new(0, "") }
@@ -2060,7 +2070,7 @@ impl ToShell {
                         u32_(&mut b, i.id);
                         str_(&mut b, &title);
                         str_(&mut b, &key);
-                        b.push(i.enabled as u8 | (i.checked as u8) << 1 | (i.separator as u8) << 2 | (i.submenu as u8) << 3);
+                        b.push(i.enabled as u8 | (i.checked as u8) << 1 | (i.separator as u8) << 2 | (i.submenu as u8) << 3 | (i.prints as u8) << 4);
                         b.push(i.depth.min(MAX_APP_MENU_DEPTH));
                         n += 1;
                     }
@@ -2462,10 +2472,10 @@ impl ToShell {
                         let key = r.str()?;
                         let flags = r.u8()?;
                         let depth = r.u8()?;
-                        if title.len() > 512 || key.len() > 128 || depth > MAX_APP_MENU_DEPTH || flags > 15 {
+                        if title.len() > 512 || key.len() > 128 || depth > MAX_APP_MENU_DEPTH || flags > 31 {
                             return Err(DecodeError::BadValue);
                         }
-                        items.push(AppMenuItem { id, title, key, enabled: flags & 1 != 0, checked: flags & 2 != 0, separator: flags & 4 != 0, submenu: flags & 8 != 0, depth });
+                        items.push(AppMenuItem { id, title, key, enabled: flags & 1 != 0, checked: flags & 2 != 0, separator: flags & 4 != 0, submenu: flags & 8 != 0, depth, prints: flags & 16 != 0 });
                     }
                     menus.push(AppMenu { title, items });
                 }
@@ -2926,6 +2936,21 @@ mod sys_tests {
         let ToShell::AppMenus(m) = ToShell::decode(&bytes).unwrap() else { panic!() };
         assert!(!m.is_empty() && m.len() <= MAX_APP_MENUS);
         assert_eq!((m[0].items.len(), m[0].items[0].title.chars().count()), (MAX_APP_MENU_ITEMS, MAX_APP_MENU_TITLE));
+    }
+    #[test]
+    fn the_apps_own_print_item_keeps_its_flag_over_the_wire() {
+        let print = AppMenuItem::print(7);
+        assert_eq!((print.title.as_str(), print.key.as_str(), print.prints), ("Print\u{2026}", "cmd+p", true));
+        assert!(!AppMenuItem::new(8, "Print Address Labels\u{2026}").prints, "only the declared item is the app's Print");
+        let packet = ToShell::AppMenus(vec![AppMenu { title: "File".into(), items: vec![print.clone().enabled(false), AppMenuItem::new(8, "Export")] }]);
+        let bytes = packet.encode();
+        assert_eq!(ToShell::decode(&bytes), Ok(packet));
+        // a flag byte past the five known bits is refused
+        let flags_at = 4 + 4 + (4 + 4) + 4 + 4 + (4 + "Print\u{2026}".len()) + (4 + 5);
+        assert_eq!(bytes[flags_at], 16, "disabled, with the print bit");
+        let mut bad = bytes.clone();
+        bad[flags_at] = 32;
+        assert_eq!(ToShell::decode(&bad), Err(DecodeError::BadValue));
     }
 }
 
