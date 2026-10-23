@@ -1252,6 +1252,7 @@ impl Shell {
     /// it on every key event.
     pub fn set_key_mods(&mut self, mods: bifrost_proto::ModifierFlags) {
         self.key_mods = mods;
+        self.login_caps(mods.caps_lock());
     }
     /// Tells Photos whether Shift is held, so a tap on the grid extends the selection. The shell calls it on every key event.
     pub fn set_photos_shift(&mut self, held: bool) {

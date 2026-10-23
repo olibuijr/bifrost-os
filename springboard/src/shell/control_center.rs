@@ -2114,6 +2114,11 @@ pub(super) fn request_shell_material(req: MaterialRequest) -> u32 {
 pub(super) fn desk_glass(s: &mut Surface, surface: ShellSurface, (x, y, w, h): (f32, f32, f32, f32), r: f32, alpha: u32) {
     let fill = request_shell_material(surface.request((x, y, w, h), r));
     s.fill_rrect(x, y, w, h, r, scale(fill, alpha));
+    // Increase Contrast: the panel, its modules and cards get the material outline (Control Centre, Notification
+    // Centre, Overview's pill)
+    if let Some(b) = bifrost_render::ui::material_border() {
+        s.stroke_rrect(x, y, w, h, r, 1.0, scale(b, alpha));
+    }
 }
 
 /// A Control Center module's glass: the presenter's blur under `CC_MODULE_TINT`, light enough in Light that the desktop

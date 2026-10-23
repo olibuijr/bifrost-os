@@ -164,6 +164,10 @@ pub struct WmState {
     /// Night Shift for every output (`set_white_point`): the shell's target, the fade towards it, and how the backend
     /// applies it (`white_point::Mode`, reported to the shell when it binds).
     pub white_point: crate::white_point::WhitePoint,
+    /// Screen Zoom of the whole output (`set_zoom`, `zoom.rs`): the shell's factor as sent, 256 being 1.0.
+    pub zoom: u32,
+    /// Reduce Transparency and Increase Contrast as the shell last wrote them (`display_options.rs`).
+    pub display: crate::display_options::DisplayPoll,
     /// `bifrost_window_capture_v1` (the shell captures one window's pixels; shell only, `window_capture.rs`).
     pub bifrost_window_capture: smithay::reexports::wayland_server::backend::GlobalId,
     /// Content serials and snapshots for window capture.
@@ -286,6 +290,8 @@ impl WmState {
             bifrost_window_level: crate::window_level::init(&dh),
             frame_reports: Default::default(),
             white_point: Default::default(),
+            zoom: crate::zoom::ONE,
+            display: Default::default(),
             bifrost_window_capture: crate::window_capture::init(&dh),
             window_capture: Default::default(),
             hidden: Vec::new(),

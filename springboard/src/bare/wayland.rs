@@ -131,6 +131,8 @@ struct State {
     /// the window server applies Night Shift to the whole output (`white_point_mode` not none), and the white point it was
     /// last sent (None: nothing sent yet)
     wm_white_point:bool, white_point_sent:Option<Option<[u32;3]>>,
+    /// the Screen Zoom factor last sent to the window server (`set_zoom`, 256 = 1.0)
+    zoom_sent:Option<u32>,
     foreign_manager:Option<foreign_manager::ZwlrForeignToplevelManagerV1>, foreign:Vec<Foreign>, foreign_dirty:bool,
     /// window capture (the global is listed on the privileged socket only): the manager, the requests in flight by token, the answers
     cap_mgr:Option<cap_manager::BifrostWindowCaptureManagerV1>, cap_jobs:HashMap<u64,CapJob>, cap_results:Vec<(u64,ShotOutcome)>,
@@ -854,7 +856,7 @@ fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_
         let Some(g) = &mut self.gpu else { return };
         let Some(v) = self.state.gpu_slots.get_mut(&GPU_BG) else { return };
         let busy: Vec<bool> = v.iter().map(|s| s.busy).collect();
-        if gpu_pool_step(&busy, false, g.last_frame.elapsed().as_secs_f32()) == PoolStep::Shrink {
+        if gpu_pool_step(&busy, false, g.last_frame.elapsed().as_secs_f32(), gpu_pool_max(self.state.lock_wanted)) == PoolStep::Shrink {
             if let Some(s) = v.pop() { s.buffer.destroy(); }
             g.p.pop_drawable(GPU_BG);
             let _ = self.conn.flush();
@@ -890,8 +892,26 @@ fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_
     pub fn note_draw(&mut self, ms: f64) { if let Some(g) = &mut self.gpu { g.draw.0 += 1; g.draw.1 += ms; } }
     /// Screen Zoom for the next present: the shell's zoom state and the pointer in screen px. The presenter magnifies
     /// the composed frame around the pointer. Without a GPU presenter (the CPU path) zoom is not drawn.
+    ///
+    /// Under a window server with `set_zoom` (bifrost-wm, protocol version 6) Full Screen zoom is the window server's:
+    /// it magnifies the whole output, the wallpaper and every window included, around its own pointer, and the
+    /// presenter magnifies nothing (W5-17: magnifying the shell's frame alone left the windows, bar and Dock at 1x and
+    /// blacked out the wallpaper, which the presenter does not hold). The factor is sent once per change.
     pub fn set_zoom(&mut self, zoom: ScreenZoom, pointer: (f32, f32)) {
-        if let Some(g) = &mut self.gpu { g.zoom = zoom; g.pointer = pointer; }
+        let wm = self.state.level_mgr.as_ref().filter(|mgr| mgr.version() >= super::window_level_client::ZOOM_SINCE);
+        let local = match wm {
+            Some(mgr) => {
+                let wire = super::window_level_client::zoom_wire(zoom);
+                if self.state.zoom_sent != Some(wire) {
+                    mgr.set_zoom(wire);
+                    self.state.zoom_sent = Some(wire);
+                    let _ = transient(self.conn.flush());
+                }
+                if zoom.mode == Mode::Full { ScreenZoom { on: false, ..zoom } } else { zoom }
+            }
+            None => zoom,
+        };
+        if let Some(g) = &mut self.gpu { g.zoom = local; g.pointer = pointer; }
     }
     pub fn present(&mut self, pixels: &[u32], damage: &Damage) -> io::Result<()> {
         if self.state.lock_wanted && !self.state.lock.as_ref().is_some_and(|l|l.configured) { return Ok(()); }
@@ -930,7 +950,7 @@ fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_
             if free.is_none() {
                 // the compositor holds every drawable: allocate the spare one (never draw into a held buffer)
                 let busy: Vec<bool> = self.state.gpu_slots.get(&GPU_BG).map(|v| v.iter().map(|s| s.busy).collect()).unwrap_or_default();
-                if gpu_pool_step(&busy, true, 0.0) == PoolStep::Grow {
+                if gpu_pool_step(&busy, true, 0.0, gpu_pool_max(self.state.lock_wanted)) == PoolStep::Grow {
                     if let Ok(info) = g.p.add_drawable(GPU_BG) {
                         let qh = self.queue.handle();
                         match gpu_buffers(&self.state, &[info], &qh) {
@@ -1387,14 +1407,20 @@ impl Starved {
 const GPU_POOL_MIN: usize = 1;
 const GPU_POOL_MAX: usize = 2;
 const GPU_POOL_IDLE_SECS: f32 = 5.0;
+/// The drawables the background pool may hold. Under a session lock the desktop surface stays mapped and the window
+/// server keeps its last buffer for as long as the lock lasts, while the lock surface holds the frame on screen: with two
+/// drawables both were held after the first lock frame, every later frame was dropped (W5-16: typed dots, the shake
+/// and "Incorrect password" never appeared, the clock froze), and the release that repays a dropped frame never came.
+/// The lock surface gets one drawable of its own on top.
+fn gpu_pool_max(locked: bool) -> usize { if locked { GPU_POOL_MAX + 1 } else { GPU_POOL_MAX } }
 #[derive(Debug, PartialEq, Clone, Copy)]
 enum PoolStep { Keep, Grow, Shrink }
 /// Buffer-pool policy for the full-screen drawables. `busy[i]`: the compositor still holds drawable i.
 /// Grow only when a frame needs drawing and every drawable is held; shrink the last one after the
 /// idle period, and only if the compositor is not holding it.
-fn gpu_pool_step(busy: &[bool], need_frame: bool, idle_secs: f32) -> PoolStep {
+fn gpu_pool_step(busy: &[bool], need_frame: bool, idle_secs: f32, max: usize) -> PoolStep {
     let n = busy.len();
-    if need_frame && n < GPU_POOL_MAX && busy.iter().all(|&b| b) { PoolStep::Grow }
+    if need_frame && n < max && busy.iter().all(|&b| b) { PoolStep::Grow }
     else if !need_frame && n > GPU_POOL_MIN && idle_secs >= GPU_POOL_IDLE_SECS && !busy[n - 1] { PoolStep::Shrink }
     else { PoolStep::Keep }
 }
@@ -1527,13 +1553,22 @@ mod tests {
     }
     #[test]
     fn gpu_pool_grows_only_when_all_held_and_shrinks_when_idle() {
-        assert_eq!(gpu_pool_step(&[true], true, 0.0), PoolStep::Grow);
-        assert_eq!(gpu_pool_step(&[false], true, 0.0), PoolStep::Keep);
-        assert_eq!(gpu_pool_step(&[true, true], true, 0.0), PoolStep::Keep);
-        assert_eq!(gpu_pool_step(&[false, false], false, 4.9), PoolStep::Keep);
-        assert_eq!(gpu_pool_step(&[true, false], false, 6.0), PoolStep::Shrink);
-        assert_eq!(gpu_pool_step(&[false, true], false, 6.0), PoolStep::Keep);
-        assert_eq!(gpu_pool_step(&[false], false, 60.0), PoolStep::Keep);
+        assert_eq!(gpu_pool_step(&[true], true, 0.0, GPU_POOL_MAX), PoolStep::Grow);
+        assert_eq!(gpu_pool_step(&[false], true, 0.0, GPU_POOL_MAX), PoolStep::Keep);
+        assert_eq!(gpu_pool_step(&[true, true], true, 0.0, GPU_POOL_MAX), PoolStep::Keep);
+        assert_eq!(gpu_pool_step(&[false, false], false, 4.9, GPU_POOL_MAX), PoolStep::Keep);
+        assert_eq!(gpu_pool_step(&[true, false], false, 6.0, GPU_POOL_MAX), PoolStep::Shrink);
+        assert_eq!(gpu_pool_step(&[false, true], false, 6.0, GPU_POOL_MAX), PoolStep::Keep);
+        assert_eq!(gpu_pool_step(&[false], false, 60.0, GPU_POOL_MAX), PoolStep::Keep);
+    }
+    #[test]
+    fn under_a_lock_the_pool_grows_past_the_held_desktop_buffer() {
+        // the desktop surface keeps one drawable, the lock surface the frame on screen: a third one draws the next frame
+        assert_eq!(gpu_pool_step(&[true, true], true, 0.0, gpu_pool_max(false)), PoolStep::Keep);
+        assert_eq!(gpu_pool_step(&[true, true], true, 0.0, gpu_pool_max(true)), PoolStep::Grow, "W5-16: typed dots must reach the screen");
+        assert_eq!(gpu_pool_step(&[true, true, true], true, 0.0, gpu_pool_max(true)), PoolStep::Keep);
+        // after the unlock the extra drawable goes once it is idle and free
+        assert_eq!(gpu_pool_step(&[true, false, false], false, 6.0, gpu_pool_max(false)), PoolStep::Shrink);
     }
     #[test]
     fn window_buffers_grow_only_when_a_dirty_frame_would_wait() {

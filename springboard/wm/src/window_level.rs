@@ -9,6 +9,9 @@
 //!
 //! Version 5 adds the output's white point (Night Shift, `white_point.rs`): the shell sends the target, the window
 //! server fades to it and applies it to the whole output, and tells each manager how (`white_point_mode`).
+//!
+//! Version 6 adds Screen Zoom (`set_zoom`, `zoom.rs`): the shell sends the factor and the window server magnifies the
+//! whole output around the pointer, every client's windows included.
 
 #[allow(
     dead_code,
@@ -52,8 +55,8 @@ use crate::{
 };
 
 /// The protocol version the global offers: 2 adds the `frame` event, 3 the `tile` request, 4 `set_origin`, 5
-/// `set_white_point` and `white_point_mode`.
-pub const VERSION: u32 = 5;
+/// `set_white_point` and `white_point_mode`, 6 `set_zoom`.
+pub const VERSION: u32 = 6;
 /// The version that introduced `frame`; a manager bound at an older version is never sent one.
 pub const FRAME_SINCE: u32 = 2;
 /// The version that introduced `tile`.
@@ -62,6 +65,8 @@ pub const TILE_SINCE: u32 = 3;
 pub const ORIGIN_SINCE: u32 = 4;
 /// The version that introduced `set_white_point` and `white_point_mode`.
 pub const WHITE_POINT_SINCE: u32 = 5;
+/// The version that introduced `set_zoom`.
+pub const ZOOM_SINCE: u32 = 6;
 
 /// Most managers one client may keep bound: each one is a reporter that `report_frames` walks, so a client that binds in
 /// a loop would otherwise make every frame report cost more. The shell binds once.
@@ -78,6 +83,8 @@ pub enum LevelRequest {
     Tile,
     /// `set_white_point`: the tint of every output, every client's windows included.
     WhitePoint,
+    /// `set_zoom`: the magnification of every output.
+    Zoom,
 }
 
 /// Which requests a client may make. Every request names a surface of the requesting client only (a client holds no
@@ -88,7 +95,7 @@ pub enum LevelRequest {
 pub fn request_allowed(privileged: bool, request: LevelRequest) -> bool {
     match request {
         LevelRequest::SetLevel(Level::Normal) | LevelRequest::SetOrigin => true,
-        LevelRequest::SetLevel(_) | LevelRequest::Tile | LevelRequest::WhitePoint => privileged,
+        LevelRequest::SetLevel(_) | LevelRequest::Tile | LevelRequest::WhitePoint | LevelRequest::Zoom => privileged,
     }
 }
 
@@ -265,6 +272,16 @@ impl Dispatch<BifrostWindowLevelManagerV1, ()> for WmState {
                 // the backend's tick steps the fade; a frame is due for the compositor pass
                 state.dirty = true;
             }
+            bifrost_window_level_manager_v1::Request::SetZoom { factor } => {
+                if !request_allowed(privileged, LevelRequest::Zoom) {
+                    return;
+                }
+                let factor = factor.clamp(crate::zoom::ONE, crate::zoom::MAX);
+                if state.zoom != factor {
+                    state.zoom = factor;
+                    state.dirty = true;
+                }
+            }
             _ => {}
         }
     }
@@ -308,7 +325,8 @@ mod tests {
         assert!(xml.contains(&format!("<request name=\"set_origin\" since=\"{ORIGIN_SINCE}\">")));
         assert!(xml.contains(&format!("<request name=\"set_white_point\" since=\"{WHITE_POINT_SINCE}\">")));
         assert!(xml.contains(&format!("<event name=\"white_point_mode\" since=\"{WHITE_POINT_SINCE}\">")));
-        assert!(FRAME_SINCE <= TILE_SINCE && TILE_SINCE <= ORIGIN_SINCE && ORIGIN_SINCE <= WHITE_POINT_SINCE && WHITE_POINT_SINCE <= VERSION);
+        assert!(xml.contains(&format!("<request name=\"set_zoom\" since=\"{ZOOM_SINCE}\">")));
+        assert!(FRAME_SINCE <= TILE_SINCE && TILE_SINCE <= ORIGIN_SINCE && ORIGIN_SINCE <= WHITE_POINT_SINCE && WHITE_POINT_SINCE <= ZOOM_SINCE && ZOOM_SINCE <= VERSION);
     }
 
     #[test]
@@ -330,11 +348,12 @@ mod tests {
         assert!(request_allowed(false, LevelRequest::SetLevel(Level::Normal)));
         assert!(request_allowed(false, LevelRequest::SetOrigin));
         assert!(!request_allowed(false, LevelRequest::WhitePoint), "an app may not tint the whole screen");
+        assert!(!request_allowed(false, LevelRequest::Zoom), "an app may not magnify the whole screen");
     }
 
     #[test]
     fn the_shell_may_make_every_request() {
-        for request in [LevelRequest::SetLevel(Level::Normal), LevelRequest::SetLevel(Level::Floating), LevelRequest::SetOrigin, LevelRequest::Tile, LevelRequest::WhitePoint] {
+        for request in [LevelRequest::SetLevel(Level::Normal), LevelRequest::SetLevel(Level::Floating), LevelRequest::SetOrigin, LevelRequest::Tile, LevelRequest::WhitePoint, LevelRequest::Zoom] {
             assert!(request_allowed(true, request), "{request:?}");
         }
     }

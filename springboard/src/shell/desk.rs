@@ -2287,6 +2287,12 @@ impl Shell {
         if !existed {
             let (bw, bh) = (w, h - title_of(app, &m));
             self.with_size(bw, bh, |sh| sh.init_app(app, t));
+            // a new App Store window opens on the front page, not where the last one was closed (W5-20)
+            if app == AppId::AppStore {
+                if let Some(s) = self.store.as_mut() {
+                    s.show_front_page();
+                }
+            }
         }
         let i = self.desk.as_mut().unwrap().open(&m, app, (w, h));
         if !existed {
@@ -3476,7 +3482,16 @@ impl Shell {
         // frosted material: blur what is behind the dock, tint it, and edge it with a hairline
         let (bx, by) = (bar.x.max(0) as usize, bar.y.max(0) as usize);
         let (bw, bh) = ((bar.w as usize).min(s.w.saturating_sub(bx)), (bar.h as usize).min(s.h.saturating_sub(by)));
-        if bw > 0 && bh > 0 && bifrost_render::glass::gpu() {
+        if bw > 0 && bh > 0 && bifrost_render::appearance::reduce_transparency() {
+            // Reduce Transparency: an opaque plate, nothing blurred or seen through it; Increase Contrast outlines it
+            let rad = bar.w.min(bar.h) as f32 * DOCK_RADIUS_K;
+            soft_shadow(s, ui, bar.x as f32, bar.y as f32, bar.w as f32, bar.h as f32, rad);
+            s.fill_rrect(bar.x as f32, bar.y as f32, bar.w as f32, bar.h as f32, rad, super::ui::DOCK_SOLID.now());
+            match bifrost_render::ui::material_border() {
+                Some(b) => s.stroke_rrect(bar.x as f32, bar.y as f32, bar.w as f32, bar.h as f32, rad, ui.pt(1.0).max(1.0), b),
+                None => dock_rim(s, bar, rad),
+            }
+        } else if bw > 0 && bh > 0 && bifrost_render::glass::gpu() {
             let rad = bar.w.min(bar.h) as f32 * DOCK_RADIUS_K;
             bifrost_render::glass::push(super::control_center::shell_glass_rect(&bifrost_ui::material_request::ShellSurface::Dock.request((bar.x as f32, bar.y as f32, bar.w as f32, bar.h as f32), rad)));
             soft_shadow(s, ui, bar.x as f32, bar.y as f32, bar.w as f32, bar.h as f32, rad);

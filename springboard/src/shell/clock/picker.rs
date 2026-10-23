@@ -20,11 +20,13 @@ pub struct Picker {
     drag: Option<(f32, f64, f32, f32)>,
     /// (from, to, start) of the snap in progress
     snap: Option<(f32, f32, f64)>,
+    /// a precise (trackpad) scroll's travel not yet worth a row, px
+    wheel_acc: f32,
 }
 
 impl Picker {
     pub fn new(count: usize, row_h: f32, selected: usize) -> Self {
-        Picker { count, row_h, pos: selected.min(count.saturating_sub(1)) as f32, drag: None, snap: None }
+        Picker { count, row_h, pos: selected.min(count.saturating_sub(1)) as f32, drag: None, snap: None, wheel_acc: 0.0 }
     }
 
     pub fn selected(&self) -> usize {
@@ -90,6 +92,36 @@ impl Picker {
         }
     }
 
+    /// The scroll wheel over the drum (`dy` the content's travel in px, negative for the wheel turned down): one notch
+    /// of a mouse wheel moves the selection one row, the way the arrow keys would; a precise (trackpad) scroll moves one
+    /// row per row height of travel. The drum snaps to the row and stops at its ends. True when the row changed. Before,
+    /// the wheel arrived as an emulated 60 px flick, which carried the drum dozens of rows (W5-3).
+    pub fn wheel(&mut self, dy: f32, precise: bool, t: f64) -> bool {
+        if self.drag.is_some() || dy == 0.0 {
+            return false;
+        }
+        let rows = if precise {
+            self.wheel_acc += dy;
+            let n = (self.wheel_acc / self.row_h.max(1.0)).trunc();
+            self.wheel_acc -= n * self.row_h.max(1.0);
+            n as i32
+        } else {
+            self.wheel_acc = 0.0;
+            if dy > 0.0 { 1 } else { -1 }
+        };
+        if rows == 0 {
+            return false;
+        }
+        // the content moving up (the wheel turned down) brings the later rows to the centre
+        let from = self.snap.map_or(self.pos.round(), |(_, to, _)| to);
+        let target = (from - rows as f32).clamp(0.0, self.max());
+        if (target - from).abs() < 1e-3 {
+            return false;
+        }
+        self.snap_to(target, t);
+        true
+    }
+
     /// Advances the snap; true while it is still moving.
     pub fn tick(&mut self, t: f64) -> bool {
         let Some((from, to, start)) = self.snap else { return false };
@@ -123,6 +155,35 @@ mod tests {
         assert!(!p.tick(400.0));
         assert_eq!(p.selected(), 16);
         assert_eq!(p.position(), 16.0);
+    }
+
+    #[test]
+    fn one_wheel_notch_moves_one_row_and_stops_at_the_ends() {
+        let mut p = Picker::new(60, 50.0, 0);
+        assert!(!p.wheel(40.0, false, 0.0), "the wheel up at the first row does not wrap");
+        assert!(p.wheel(-40.0, false, 0.0), "one notch down");
+        p.tick(1000.0);
+        assert_eq!(p.selected(), 1);
+        for k in 0..3 {
+            p.wheel(-120.0, false, 1000.0 + k as f64);
+        }
+        p.tick(2000.0);
+        assert_eq!(p.selected(), 4, "three notches are three rows, however large the notch");
+        p.wheel(30.0, false, 2000.0);
+        p.tick(3000.0);
+        assert_eq!(p.selected(), 3);
+        let mut last = Picker::new(60, 50.0, 59);
+        assert!(!last.wheel(-40.0, false, 0.0), "no wrap past the last row");
+    }
+
+    #[test]
+    fn a_precise_scroll_moves_a_row_per_row_of_travel() {
+        let mut p = Picker::new(60, 50.0, 10);
+        assert!(!p.wheel(-20.0, true, 0.0));
+        assert!(!p.wheel(-20.0, true, 10.0), "40 px is not a row yet");
+        assert!(p.wheel(-20.0, true, 20.0), "60 px is one");
+        p.tick(1000.0);
+        assert_eq!(p.selected(), 11);
     }
 
     #[test]

@@ -26,6 +26,16 @@ fn wipe(s: &mut String) {
     s.clear();
 }
 
+/// The wait (s) the window imposes after `wrong` wrong passwords in a row: none before `BACKOFF_AFTER`, then 30 s,
+/// doubling with each further miss up to `BACKOFF_MAX_SECS`.
+pub fn local_backoff(wrong: u32) -> u64 {
+    if wrong < BACKOFF_AFTER {
+        return 0;
+    }
+    let steps = (wrong - BACKOFF_AFTER).min(8);
+    (30u64 << steps).min(BACKOFF_MAX_SECS)
+}
+
 /// Wrong-password shake length (same curve as the old keypad).
 pub const SHAKE_MS: f64 = super::passcode::SHAKE_MS;
 /// Longest password the field takes.
@@ -34,6 +44,11 @@ pub const MAX_LEN: usize = 256;
 const RETRY_MS: f64 = 5000.0;
 /// Wrong passwords in a row before the password hint is shown.
 pub const HINT_AFTER: u32 = 3;
+/// Wrong passwords in a row before the window itself waits between attempts (privd keeps its own, longer lockout;
+/// this one holds even when the helper answers without a retry time).
+pub const BACKOFF_AFTER: u32 = 5;
+/// The longest wait the window imposes between attempts.
+pub const BACKOFF_MAX_SECS: u64 = 300;
 /// The power button's size in the status bar.
 const POWER_PT: f32 = 22.0;
 /// How long the account group takes to move for the on-screen keyboard.
@@ -227,6 +242,9 @@ pub struct Login {
     name_focus: bool,
     /// the touch form: tapping the password field raises the on-screen keyboard
     pub touch_keyboard: bool,
+    /// the computer's accounts (full name, this session's account) when there is more than one, listed low on the
+    /// screen as the reference's login window lists them; empty for a single account
+    pub accounts: Vec<(String, bool)>,
     /// the on-screen keyboard is up for this window
     kb_up: bool,
     /// a raise or hide the shell has not carried out yet
@@ -263,6 +281,7 @@ impl Login {
             typed_name: String::new(),
             name_focus: false,
             touch_keyboard: tablet_form(),
+            accounts: Vec::new(),
             kb_up: false,
             kb_request: None,
             lift: 0.0,
@@ -413,6 +432,26 @@ impl Login {
             [a, .., z] => vec![*a, *z],
         };
         pick.into_iter().flat_map(char::to_uppercase).collect()
+    }
+
+    /// The accounts row at the bottom: `users` is (user name, full name) of every person's account, `me` this
+    /// session's user name. One account shows no list (the avatar above already is that account).
+    pub fn set_accounts(&mut self, users: &[(String, String)], me: &str) {
+        self.accounts = if users.len() > 1 {
+            users.iter().map(|(name, full)| (if full.is_empty() { name.clone() } else { full.clone() }, name == me)).collect()
+        } else {
+            Vec::new()
+        };
+    }
+
+    /// The account list's rows (full name, signed in, avatar rect), stacked under the password field.
+    fn account_rows(&self, ui: &Ui) -> Vec<(&str, bool, Rect)> {
+        let (d, gap) = (ui.pt(30.0), ui.pt(12.0));
+        // under the field, past the room its Caps Lock, message and hint lines take
+        let (_, fy, _, fh) = self.field(ui);
+        let top = fy + fh + ui.pt(72.0);
+        let x = self.w as f32 / 2.0 - ui.pt(80.0);
+        self.accounts.iter().enumerate().map(|(i, (name, me))| (name.as_str(), *me, (x, top + i as f32 * (d + gap), d, d))).collect()
     }
 
     /// Edits the field: text, backspace and Escape (clear). Return submits.
@@ -610,11 +649,13 @@ impl Login {
                 return Some(token);
             }
             Reply::Wrong { retry_secs } => {
+                // the field was emptied on submit; a wrong password shakes it and counts towards the hint and the wait
                 self.shake = Some(t);
                 self.wrong_count += 1;
                 self.msg = Msg::Wrong;
-                if retry_secs > 0 {
-                    self.lock_for(retry_secs, t);
+                let wait = retry_secs.max(local_backoff(self.wrong_count));
+                if wait > 0 {
+                    self.lock_for(wait, t);
                 }
             }
             Reply::LockedOut { retry_secs } => self.lock_for(retry_secs.max(1), t),
@@ -845,6 +886,27 @@ impl Login {
             let hi = ui.text(&h, 12.0, Weight::Regular, ink_2());
             centred(s, &hi, cx, line as i32);
         }
+        for (full, me, (ax, ay, ad, _)) in self.account_rows(ui) {
+            s.fill_rrect(ax, ay, ad, ad, ad / 2.0, avatar());
+            let words: Vec<char> = full.split_whitespace().filter_map(|w| w.chars().next()).collect();
+            let ini: String = match words.as_slice() {
+                [] => String::new(),
+                [a] => a.to_uppercase().collect(),
+                [a, .., z] => a.to_uppercase().chain(z.to_uppercase()).collect(),
+            };
+            let it = ui.text(&ini, 12.0, Weight::Medium, rgba(255, 255, 255, 255));
+            centred(s, &it, (ax + ad / 2.0) as i32, (ay + (ad - it.h as f32) / 2.0) as i32);
+            if me {
+                // the signed-in account carries a check badge at its lower right, as the reference draws it
+                let b = ui.pt(11.0);
+                let (bx, by) = (ax + ad - b * 0.8, ay + ad - b * 0.8);
+                s.fill_rrect(bx, by, b, b, b / 2.0, super::ui::LINK);
+                let ck = ui.text("\u{2713}", 8.0, Weight::Bold, rgba(255, 255, 255, 255));
+                centred(s, &ck, (bx + b / 2.0) as i32, (by + (b - ck.h as f32) / 2.0) as i32);
+            }
+            let nt = ui.text(full, 13.0, Weight::Semibold, rgba(255, 255, 255, 255));
+            s.blit(&nt, (ax + ad + ui.pt(10.0)) as i32, (ay + (ad - nt.h as f32) / 2.0) as i32, 255, 255);
+        }
         if let Some(m) = &self.lock_message {
             let mi = ui.text(m, 13.0, Weight::Regular, ink_2());
             centred(s, &mi, cx, (h - ui.pt(64.0) - mi.h as f32) as i32);
@@ -1072,14 +1134,41 @@ impl super::Shell {
         if self.login.is_some() || self.screen != super::Screen::Lock || self.anim.is_some() || self.session_token.is_some() {
             return;
         }
+        self.login_open_window(t);
+    }
+
+    /// Builds the login window: the lock message, the name-and-password option, the account list and the Caps Lock
+    /// state. Both ways in (a tick and a lock or key that cannot wait for one) open the same window. A backend that
+    /// was missing when the shell started (privd's socket came up later) is looked up again here, so a lock screen on
+    /// an installed system always has a working field; without one (host previews) nothing opens.
+    fn login_open_window(&mut self, t: f64) {
+        #[cfg(not(test))]
+        if self.login_backend.is_none() {
+            self.login_backend = Privd::from_env().map(|p| Arc::new(p) as Arc<dyn Backend>);
+        }
         let Some(b) = self.login_backend.clone() else { return };
-        let fallback = super::account::load().full_name;
-        let mut l = Login::new(b, &fallback, self.w, self.h, t);
+        let me = super::account::load();
+        let mut l = Login::new(b, &me.full_name, self.w, self.h, t);
         l.lock_message = load_lock_message();
         l.name_mode = self.options().login_name_password;
         l.name_focus = l.name_mode;
+        l.caps = self.key_mods.caps_lock();
+        if !l.name_mode {
+            let read = |p: &str| std::fs::read_to_string(p).unwrap_or_default();
+            let view = super::users_page::View::from_text(&read("/etc/passwd"), &read("/etc/group"), &me.username);
+            let users: Vec<(String, String)> = view.users.into_iter().map(|u| (u.name, u.full_name)).collect();
+            l.set_accounts(&users, &me.username);
+        }
         self.login = Some(l);
         self.dirty = true;
+    }
+
+    /// Caps Lock changed (every key event passes the held modifiers): the login window's hint follows it.
+    pub(super) fn login_caps(&mut self, on: bool) {
+        if let Some(l) = self.login.as_mut().filter(|l| l.caps != on) {
+            l.caps = on;
+            self.dirty = true;
+        }
     }
 
     /// Brings the login window up at once (input that arrives before the next tick must not reach the old unlock):
@@ -1089,10 +1178,7 @@ impl super::Shell {
         if self.login.is_some() || self.screen != super::Screen::Lock || self.session_token.is_some() {
             return;
         }
-        let Some(b) = self.login_backend.clone() else { return };
-        let fallback = super::account::load().full_name;
-        self.login = Some(Login::new(b, &fallback, self.w, self.h, t));
-        self.dirty = true;
+        self.login_open_window(t);
     }
 
     pub(super) fn login_touch(&mut self, ev: Event, t: f64) -> Vec<Effect> {
@@ -1444,6 +1530,65 @@ mod tests {
         let mut none = login(Reply::Wrong { retry_secs: 0 });
         none.wrong_count = 9;
         assert_eq!(none.hint_line(), None, "no hint is set");
+    }
+
+    #[test]
+    fn a_wrong_password_clears_the_field_and_repeated_misses_make_the_window_wait() {
+        let mut l = login(Reply::Wrong { retry_secs: 0 });
+        l.key(&Out::Text("wrongpass".into()), 0.0);
+        assert_eq!(l.len(), 9, "typing shows one dot per character");
+        l.key(&Out::Enter, 0.0);
+        assert!(wait(&mut l, 0.0).is_none(), "a wrong password never unlocks");
+        assert!(l.is_empty(), "the field is cleared");
+        assert!(l.shaking(10.0) && l.msg == Msg::Wrong);
+        assert!(!l.locked(10.0), "one miss does not make the window wait");
+        for _ in 1..BACKOFF_AFTER {
+            l.apply(Reply::Wrong { retry_secs: 0 }, 1000.0);
+        }
+        assert!(l.locked(1000.0 + 29_000.0), "the fifth miss in a row waits 30 s even when privd gave no retry time");
+        l.key(&Out::Text("x".into()), 2000.0);
+        assert!(l.is_empty(), "typing is refused while the window waits");
+        assert!(!l.locked(1000.0 + 31_000.0));
+    }
+
+    #[test]
+    fn the_local_backoff_doubles_and_is_capped() {
+        assert_eq!(local_backoff(0), 0);
+        assert_eq!(local_backoff(BACKOFF_AFTER - 1), 0);
+        assert_eq!(local_backoff(BACKOFF_AFTER), 30);
+        assert_eq!(local_backoff(BACKOFF_AFTER + 1), 60);
+        assert_eq!(local_backoff(BACKOFF_AFTER + 3), 240);
+        assert_eq!(local_backoff(BACKOFF_AFTER + 4), BACKOFF_MAX_SECS);
+        assert_eq!(local_backoff(u32::MAX), BACKOFF_MAX_SECS);
+    }
+
+    #[test]
+    fn the_account_list_shows_only_for_several_accounts_and_marks_this_one() {
+        let mut l = login(Reply::NoPassword);
+        l.set_accounts(&[("owner".into(), "Owner".into())], "owner");
+        assert!(l.accounts.is_empty(), "one account: the avatar above is the only one");
+        l.set_accounts(&[("kid".into(), String::new()), ("owner".into(), "Owner Name".into())], "owner");
+        assert_eq!(l.accounts, vec![("kid".to_string(), false), ("Owner Name".to_string(), true)]);
+        let ui = super::super::tests::ui();
+        let rows = l.account_rows(&ui);
+        assert_eq!(rows.len(), 2);
+        let (_, _, (_, y0, d, _)) = rows[0];
+        let (_, _, (_, y1, _, _)) = rows[1];
+        assert!(y1 > y0 + d, "the rows stack downwards");
+        let (fx, fy, _, fh) = l.field(&ui);
+        assert!(y0 > fy + fh, "the list sits below the password field");
+        let _ = fx;
+    }
+
+    #[test]
+    fn the_caps_lock_hint_is_drawn_from_the_flag() {
+        let mut l = login(Reply::NoPassword);
+        assert!(!l.caps);
+        l.caps = true;
+        let ui = super::super::tests::ui();
+        let mut px = vec![0u32; 1200 * 800];
+        let mut s = Surface { w: 1200, h: 800, stride: 1200, px: &mut px, y0: 0 };
+        l.draw(&mut s, &ui, 0.0);
     }
 
     #[test]

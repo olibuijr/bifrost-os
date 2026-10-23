@@ -5,6 +5,7 @@ pub mod bifrost_material;
 pub mod boot;
 pub mod capture;
 pub mod decorations;
+pub mod display_options;
 #[cfg(feature = "drm")]
 pub mod drm;
 #[cfg(feature = "drm")]
@@ -41,6 +42,7 @@ pub mod window_capture;
 pub mod window_level;
 pub mod white_point;
 pub mod wm;
+pub mod zoom;
 #[cfg(feature = "xwayland")]
 pub mod xwayland;
 

@@ -30,6 +30,8 @@ pub struct Banner {
     current: Option<(String, f64)>,
     /// the last frame drew the banner, so the frame that clears it repaints the area
     drawn: bool,
+    /// the screen reader was on at the last tick (its switch going off clears the banner)
+    reader_was_on: bool,
 }
 
 impl Banner {
@@ -63,6 +65,12 @@ impl Banner {
     pub fn busy(&self) -> bool {
         self.current.is_some() || self.drawn
     }
+
+    /// Drops the text on screen and everything queued (the screen reader was switched off: its captions go with it).
+    pub fn clear(&mut self) {
+        self.current = None;
+        while self.queue.take_next().is_some() {}
+    }
 }
 
 impl Shell {
@@ -78,9 +86,15 @@ impl Shell {
                 self.announce.post(&text, priority);
             }
         }
+        let reader_on = self.screen_reader_on();
+        // the screen reader going off takes its caption (and what it still had queued) off the screen at once
+        if std::mem::replace(&mut self.announce.reader_was_on, reader_on) && !reader_on {
+            self.announce.clear();
+            self.dirty = true;
+        }
         let started = self.announce.tick(t);
         // Spoken only while the screen reader is on; the engine is silent when none is installed.
-        if self.screen_reader_on() {
+        if reader_on {
             if started {
                 if let Some(text) = self.announce.shown().map(str::to_string) {
                     // rate, pitch and voice follow Settings > Accessibility > Screen Reader
@@ -103,6 +117,7 @@ impl Shell {
     pub(in crate::shell) fn draw_announce(&mut self, s: &mut Surface) {
         let Some(text) = self.announce.shown().map(str::to_string) else {
             self.announce.drawn = false;
+            self.a11y_layers[0] = None;
             return;
         };
         let img = self.ui.text(&text, MAC_CALLOUT_PT, Weight::Regular, WHITE);
@@ -111,8 +126,19 @@ impl Shell {
         let h = img.h as f32 + 2.0 * pad_y;
         let x = ((self.w as f32 - w) / 2.0).round();
         let y = self.ui.pt(TOP_PT);
-        s.fill_rrect(x, y, w, h, h / 2.0, FILL);
-        s.blit_colored(&img, (x + pad_x) as i32, (y + pad_y) as i32, WHITE, 255);
+        // on the desktop the caption is a surface of its own above the windows and the menu bar
+        if self.overlays_on_desk() && !self.is_locked() {
+            let (iw, ih) = (w.ceil().max(1.0) as usize, h.ceil().max(1.0) as usize);
+            let mut image = crate::gfx::Image::new(iw, ih);
+            let mut ls = Surface { w: iw, h: ih, stride: iw, px: &mut image.px, y0: 0 };
+            ls.fill_rrect(0.0, 0.0, w, h, h / 2.0, FILL);
+            ls.blit_colored(&img, pad_x as i32, pad_y as i32, WHITE, 255);
+            self.a11y_layers[0] = Some(crate::shell::capture_flow::Layer { x: x as i32, y: y as i32, image, input: Some([0, 0, 0, 0]) });
+        } else {
+            self.a11y_layers[0] = None;
+            s.fill_rrect(x, y, w, h, h / 2.0, FILL);
+            s.blit_colored(&img, (x + pad_x) as i32, (y + pad_y) as i32, WHITE, 255);
+        }
         self.announce.drawn = true;
     }
 }
@@ -120,6 +146,19 @@ impl Shell {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn clear_takes_the_caption_and_the_queue_off_the_screen() {
+        let mut b = Banner::default();
+        b.post("menu, system", AnnouncePriority::High);
+        b.post("menu, Settings", AnnouncePriority::Medium);
+        b.tick(0.0);
+        assert_eq!(b.shown(), Some("menu, system"));
+        b.clear();
+        assert_eq!(b.shown(), None, "the caption goes at once");
+        b.tick(SHOW_MS);
+        assert_eq!(b.shown(), None, "and nothing queued follows it");
+    }
 
     #[test]
     fn blank_and_repeated_announcements_are_refused() {

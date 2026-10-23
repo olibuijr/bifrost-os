@@ -33,6 +33,27 @@ pub const APP_ID: &str = "is.olibuijr.clock";
 /// are filed under the installed app with this id, which is found whether or not the app is running.
 pub const MANIFEST_ID: &str = "is.olibuijr.clock.desktop";
 
+/// The files the Clock app and this service share.
+pub const FILES: [&str; 4] = ["clock.ini", "clock-timers.ini", "clock-stopwatch.ini", "world-cities.ini"];
+
+/// The folder the service reads: the installed Clock app's own data folder (`appdata/<manifest id>`, the app's
+/// `ctx.data_dir`). The service read `appdata/is.olibuijr.clock`, a folder the installed app never writes, so its timers
+/// and alarms never rang and no notification was posted (W5-2).
+pub fn service_dir(root: &std::path::Path) -> std::path::PathBuf {
+    root.join("appdata").join(MANIFEST_ID)
+}
+
+/// Moves the files of the old package folder (`appdata/is.olibuijr.clock`) into `new` where `new` has none of its own,
+/// once, so alarms set before the move are kept. Best effort.
+pub fn adopt_old_dir(old: &std::path::Path, new: &std::path::Path) {
+    for name in FILES {
+        let (from, to) = (old.join(name), new.join(name));
+        if from.exists() && !to.exists() {
+            let _ = std::fs::rename(&from, &to);
+        }
+    }
+}
+
 /// How often the service looks for changes the app made to its files while the Clock app runs (it is their only
 /// writer), and while it does not: a once-a-second poll with no app open was the shell's main idle wake-up (round 75).
 const POLL_MS: f64 = 1000.0;
@@ -448,6 +469,29 @@ impl Clock {
             self.label(s, ui, "Snooze", 20.0, Weight::Regular, WHITE, sx + sw / 2.0, sy + sh / 2.0, 0.5);
             self.label(s, ui, &format!("Rings again in {} min", alarm::SNOOZE_SECS / 60), 13.0, Weight::Regular, SECONDARY, cx, sy + sh + ui.pt(18.0), 0.5);
         }
+    }
+}
+
+#[cfg(test)]
+mod service_dir_tests {
+    use super::*;
+
+    #[test]
+    fn the_service_reads_the_installed_app_s_data_folder_and_adopts_the_old_one() {
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/test-clock-service-dir");
+        let _ = std::fs::remove_dir_all(&root);
+        let new = service_dir(&root);
+        assert_eq!(new, root.join("appdata").join("is.olibuijr.clock.desktop"), "the folder apphost gives the app as ctx.data_dir");
+        let old = root.join("appdata").join(APP_ID);
+        std::fs::create_dir_all(&old).unwrap();
+        std::fs::create_dir_all(&new).unwrap();
+        std::fs::write(old.join("clock.ini"), "alarm.0.time=07:00\n").unwrap();
+        std::fs::write(old.join("clock-timers.ini"), "old").unwrap();
+        std::fs::write(new.join("clock-timers.ini"), "new").unwrap();
+        adopt_old_dir(&old, &new);
+        assert_eq!(std::fs::read_to_string(new.join("clock.ini")).unwrap(), "alarm.0.time=07:00\n", "old alarms are kept");
+        assert_eq!(std::fs::read_to_string(new.join("clock-timers.ini")).unwrap(), "new", "the app's own file wins");
+        let _ = std::fs::remove_dir_all(&root);
     }
 }
 

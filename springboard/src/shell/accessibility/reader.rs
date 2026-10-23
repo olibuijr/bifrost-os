@@ -454,18 +454,37 @@ impl Shell {
     /// Draws the focus ring around the cursor's element when the screen reader is on.
     pub(in crate::shell) fn draw_reader(&mut self, s: &mut Surface) {
         let mut drawn = false;
+        let mut ring_layer = None;
         if self.reader_active() || self.switch_scan_on() {
             let els = self.reader_walk();
             if let Some(b) = self.reader.focused(&els).and_then(|e| e.bounds) {
                 let t = self.ui.pt(RING_PT);
                 let r = self.ui.pt(SELECTION_RADIUS);
-                s.stroke_rrect(b.x - t, b.y - t, b.w + 2.0 * t, b.h + 2.0 * t, r + t, t, LINK);
+                let ring = ring_rect(b.x, b.y, b.w, b.h, t);
+                if self.overlays_on_desk() && !self.is_locked() {
+                    // on the desktop the ring is a surface of its own: drawn into the shell's frame it was under the
+                    // windows and the menu bar, around exactly the elements it speaks (W5-19)
+                    let (x0, y0) = (ring.0.floor(), ring.1.floor());
+                    let (iw, ih) = ((ring.0 + ring.2 - x0).ceil().max(1.0) as usize + 1, (ring.1 + ring.3 - y0).ceil().max(1.0) as usize + 1);
+                    let mut image = crate::gfx::Image::new(iw, ih);
+                    let mut ls = Surface { w: iw, h: ih, stride: iw, px: &mut image.px, y0: 0 };
+                    ls.stroke_rrect(ring.0 - x0, ring.1 - y0, ring.2, ring.3, r + t, t, LINK);
+                    ring_layer = Some(crate::shell::capture_flow::Layer { x: x0 as i32, y: y0 as i32, image, input: Some([0, 0, 0, 0]) });
+                } else {
+                    s.stroke_rrect(ring.0, ring.1, ring.2, ring.3, r + t, t, LINK);
+                }
                 drawn = true;
             }
         }
+        self.a11y_layers[1] = ring_layer;
         self.reader.pending = false;
         self.reader.drawn = drawn;
     }
+}
+
+/// The focus ring's rectangle (x, y, w, h) around an element's bounds, `t` px out on every side.
+pub fn ring_rect(x: f32, y: f32, w: f32, h: f32, t: f32) -> (f32, f32, f32, f32) {
+    (x - t, y - t, w + 2.0 * t, h + 2.0 * t)
 }
 
 #[cfg(test)]
@@ -544,6 +563,11 @@ mod tests {
         let only_disabled = vec![el("x", "text", "X", "", false)];
         assert!(r.step(&only_disabled, false).is_none());
         assert!(r.busy(), "a move, even an empty one, repaints the frame");
+    }
+
+    #[test]
+    fn the_ring_surrounds_the_element_by_its_stroke() {
+        assert_eq!(ring_rect(10.0, 20.0, 100.0, 30.0, 3.0), (7.0, 17.0, 106.0, 36.0));
     }
 
     #[test]

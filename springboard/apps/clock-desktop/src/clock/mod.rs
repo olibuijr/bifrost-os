@@ -836,6 +836,14 @@ impl Clock {
         }
     }
 
+    /// The scroll wheel at (`x`, `y`): over a picker drum it moves the drum one row per notch (`Picker::wheel`) and
+    /// returns `Some(changed)`; `None` elsewhere, where the wheel scrolls as a drag does.
+    pub fn wheel(&mut self, ui: &Ui, x: f32, y: f32, dy: f32, precise: bool, t: f64) -> Option<bool> {
+        let Some(Target::Picker(i)) = self.hit(ui, x, y) else { return None };
+        self.rows_only = false;
+        Some(self.picker_mut(i).is_some_and(|p| p.wheel(dy, precise, t)))
+    }
+
     fn picker_mut(&mut self, i: usize) -> Option<&mut Picker> {
         match &mut self.add {
             Some(a) => [&mut a.hour, &mut a.min].into_iter().nth(i),
@@ -1818,6 +1826,23 @@ pub(crate) mod tests {
         tap(&mut c, &ui, x, y, 6000.0);
         assert_eq!(c.take_export().unwrap(), "Lap\tSplit\tTotal\n1\t00:03,61\t00:03,61\n2\t00:01,39\t00:05,00\n");
         assert!(c.take_export().is_none(), "the text is handed over once");
+    }
+
+    #[test]
+    fn a_wheel_notch_over_a_timer_drum_moves_it_one_row() {
+        let ui = ui();
+        let mut c = clock(&ui);
+        select_tab(&mut c, &ui, 3);
+        c.tick(&ui, 500.0);
+        let before = c.picked_ms();
+        let (sx, sw, cy) = c.timer_column(&ui, 2);
+        assert_eq!(c.wheel(&ui, sx + sw / 2.0, cy, -45.0, false, 1000.0), Some(true));
+        c.tick(&ui, 2000.0);
+        assert_eq!(c.picked_ms() - before, 1000, "one notch down is one second more");
+        assert_eq!(c.wheel(&ui, sx + sw / 2.0, cy, 45.0, false, 2100.0), Some(true));
+        c.tick(&ui, 3000.0);
+        assert_eq!(c.picked_ms(), before, "one notch up takes it back");
+        assert_eq!(c.wheel(&ui, 1.0, 1.0, -45.0, false, 3100.0), None, "away from the drums the wheel scrolls as a drag");
     }
 
     #[test]

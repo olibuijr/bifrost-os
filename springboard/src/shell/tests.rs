@@ -1307,6 +1307,32 @@
     }
 
     #[test]
+    fn desktop_lock_screen_field_takes_typing_shows_caps_lock_and_refuses_a_wrong_password() {
+        let mut sh = desktop_shell();
+        sh.login_backend = Some(std::sync::Arc::new(FixedLogin(login::Reply::Wrong { retry_secs: 0 })));
+        sh.screen = Screen::Home;
+        sh.anim = None;
+        sh.lock_screen();
+        sh.hw_type(keyboard::Out::Text("w".into()), 10.0);
+        sh.hw_type(keyboard::Out::Text("p".into()), 20.0);
+        assert_eq!(sh.login.as_ref().map(login::Login::len), Some(2), "each key is a dot in the field");
+        sh.set_key_mods(bifrost_proto::ModifierFlags::CAPS_LOCK);
+        assert!(sh.login.as_ref().is_some_and(|l| l.caps), "Caps Lock on shows the hint");
+        sh.set_key_mods(bifrost_proto::ModifierFlags::EMPTY);
+        assert!(sh.login.as_ref().is_some_and(|l| !l.caps));
+        sh.hw_type(keyboard::Out::Enter, 30.0);
+        for k in 0..200 {
+            sh.tick(40.0 + k as f64 * 20.0);
+            if sh.login.as_ref().is_some_and(|l| !l.busy()) { break; }
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        assert!(sh.is_locked(), "a wrong password never unlocks");
+        assert!(sh.session_token.is_none());
+        let l = sh.login.as_ref().expect("the window stays up");
+        assert!(l.is_empty() && l.msg == login::Msg::Wrong, "the field is cleared and says so");
+    }
+
+    #[test]
     fn tablet_lock_screen_still_turns_the_screen_off() {
         let mut sh = shell();
         sh.login_backend = Some(std::sync::Arc::new(FixedLogin(login::Reply::Unavailable)));
