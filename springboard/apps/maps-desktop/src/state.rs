@@ -262,6 +262,8 @@ pub struct Maps {
     suggestor: Suggestor,
     pub results: Vec<Place>,
     pub searching: bool,
+    /// the text Return searched for: when its answer lands, the map moves to the first place (E2E W4-15)
+    submitted: Option<String>,
     pub selected: Option<Place>,
     /// the pin the card shows, when it is one of the dropped pins
     pub selected_pin: Option<usize>,
@@ -340,6 +342,7 @@ impl Maps {
             suggestor: Suggestor::default(),
             results: Vec::new(),
             searching: false,
+            submitted: None,
             selected: None,
             selected_pin: None,
             profile: Profile::Driving,
@@ -494,6 +497,9 @@ impl Maps {
     pub fn query_edited(&mut self, now_ms: u64) {
         let q = self.query.to_string();
         self.suggestor.typed(&q, now_ms);
+        if self.submitted.as_deref().is_some_and(|s| s.trim() != q.trim()) {
+            self.submitted = None;
+        }
         if q.trim().is_empty() {
             self.results.clear();
             self.searching = false;
@@ -525,7 +531,8 @@ impl Maps {
             self.choose(Place::new(&links::coordinates_text(lat, lon), lat, lon));
             return vec![];
         }
-        if let Some(first) = self.suggestions().into_iter().next().filter(|s| s.local) {
+        // the first suggestion, saved or already found while typing, is the answer: the map moves to it
+        if let Some(first) = self.suggestions().into_iter().next() {
             self.choose(first.place);
             return vec![];
         }
@@ -533,6 +540,7 @@ impl Maps {
         self.suggestor.sent(q, now_ms + wait_ms);
         self.searching = true;
         self.note = None;
+        self.submitted = Some(q.to_string());
         vec![Effect::Search { query: q.to_string(), wait_ms }]
     }
 
@@ -542,10 +550,17 @@ impl Maps {
             return;
         }
         self.searching = false;
+        let submitted = self.submitted.take().is_some_and(|q| q.trim() == query.trim());
         match result {
             Ok(places) => {
                 self.note = places.is_empty().then(|| "No places found".to_string());
                 self.results = places;
+                // Return was pressed before the answer came: show the first place, as Return does once it is known
+                if submitted {
+                    if let Some(first) = self.suggestions().into_iter().next() {
+                        self.choose(first.place);
+                    }
+                }
             }
             Err(_) => {
                 self.results.clear();
@@ -585,6 +600,7 @@ impl Maps {
         self.query.clear();
         self.results.clear();
         self.searching = false;
+        self.submitted = None;
         self.suggestor = Suggestor::default();
         self.show_place(place);
     }
@@ -1393,6 +1409,24 @@ mod tests {
             [Effect::Search { wait_ms, .. }] => assert!(*wait_ms > 0 && *wait_ms <= 1000, "{wait_ms}"),
             other => panic!("{other:?}"),
         }
+    }
+
+    /// E2E W4-15: Return moves the map to the first place, whether the answer was already listed or comes later.
+    #[test]
+    fn return_moves_the_map_to_the_first_result() {
+        let mut m = maps("return-first");
+        type_query(&mut m, "akureyri", 0);
+        assert!(!m.submit_search(0).is_empty(), "nothing listed yet: the text is searched");
+        m.search_done("akureyri", Ok(vec![Place::new("Akureyri, Iceland", 65.6835, -18.1262), Place::new("Akureyri Airport", 65.66, -18.07)]));
+        assert_eq!(m.selected.as_ref().map(|p| p.name.as_str()), Some("Akureyri, Iceland"), "the answer to Return is shown");
+        assert!((m.view.centre().0 - 65.6835).abs() < 1e-3);
+        assert!(m.query.is_empty());
+        // suggestions found while typing: Return takes the first at once
+        type_query(&mut m, "perlan", 10_000);
+        m.search_done("perlan", Ok(vec![Place::new("Perlan, Reykjavik", 64.1295, -21.9186)]));
+        assert_eq!(m.selected.as_ref().map(|p| p.name.as_str()), Some("Akureyri, Iceland"), "typing alone moves nothing");
+        assert!(m.submit_search(10_100).is_empty());
+        assert_eq!(m.selected.as_ref().map(|p| p.title()), Some("Perlan"));
     }
 
     #[test]

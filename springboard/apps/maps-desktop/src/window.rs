@@ -21,7 +21,7 @@ use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_CAPTION1_PT, MAC_FOOTNOTE_PT, MAC_SU
 use bifrost_app::kit::{Image, Surface, TextCache, Ui, Weight};
 use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
 use bifrost_app::core_location::{AuthorizationStatus, Delegate, Location, LocationError, LocationManager};
-use bifrost_app::{privacy_permissions, widgets, Ctx, KeyInput};
+use bifrost_app::{privacy_permissions, widgets, ContextItem, Ctx, KeyInput};
 use bifrost_core::json::Json;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -51,6 +51,14 @@ const FAV_ID: u32 = 100;
 const COLL_ID: u32 = 200;
 const REC_ID: u32 = 300;
 const SUG_ID: u32 = 400;
+/// The Recents row menu (ids above the Dock menu's New Window, 1).
+const CTX_SHOW: u32 = 101;
+const CTX_FORGET: u32 = 102;
+const CTX_CLEAR_RECENTS: u32 = 103;
+/// How many levels up a missing tile looks for a loaded ancestor to stand in for it.
+const FALLBACK_LEVELS: u8 = 4;
+/// While a search or tiles are out, the loop looks again this often (ms), so they show when they land.
+const BUSY_POLL_MS: f64 = 100.0;
 
 /// How long (ms) the Allow sheet of the location permission is waited for.
 const ALLOW_WAIT_MS: f64 = 90_000.0;
@@ -172,6 +180,64 @@ fn wake_loop() -> Wake {
 }
 
 /// Draws a map tile at its place, scaled to the size on screen (the scaled copies are kept in `scaled`).
+/// What stands in for a tile that has not loaded yet (E2E W4-15: zooming out left black squares for seconds).
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum StandIn {
+    /// the part of a loaded ancestor `levels` up that covers the tile, scaled up
+    Ancestor { tile: TileId, levels: u8 },
+    /// a loaded child (the level the view just left when it zoomed out) in quadrant (`dx`, `dy`), at half size
+    Child { tile: TileId, dx: u32, dy: u32 },
+}
+
+/// The stand-ins for missing tile `id`, back to front: the nearest loaded ancestor, then whichever of its four children
+/// are loaded. Empty when nothing near is loaded.
+fn stand_ins(id: TileId, loaded: impl Fn(TileId) -> bool) -> Vec<StandIn> {
+    let mut out = Vec::new();
+    for levels in 1..=FALLBACK_LEVELS.min(id.z) {
+        let tile = TileId { z: id.z - levels, x: id.x >> levels, y: id.y >> levels };
+        if loaded(tile) {
+            out.push(StandIn::Ancestor { tile, levels });
+            break;
+        }
+    }
+    if id.z < u8::MAX {
+        for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+            let tile = TileId { z: id.z + 1, x: id.x * 2 + dx, y: id.y * 2 + dy };
+            if loaded(tile) {
+                out.push(StandIn::Child { tile, dx, dy });
+            }
+        }
+    }
+    out
+}
+
+/// Draws the stand-ins for missing tile `id` at (`x`, `y`), `tile_px` square. `crops` keeps the scaled ancestor parts.
+#[allow(clippy::too_many_arguments)]
+fn blit_stand_ins(c: &mut Surface, loader: &TileLoader, scaled: &mut HashMap<(TileId, usize), Image>, crops: &mut HashMap<(TileId, TileId, usize), Image>, id: TileId, x: i32, y: i32, tile_px: usize) {
+    for stand in stand_ins(id, |t| loader.image(t).is_some()) {
+        match stand {
+            StandIn::Ancestor { tile, levels } => {
+                let Some(img) = loader.image(tile) else { continue };
+                if crops.len() > 200 {
+                    crops.clear();
+                }
+                let part = crops.entry((tile, id, tile_px)).or_insert_with(|| {
+                    let n = 1u32 << levels;
+                    let side = (img.w / n as usize).max(1);
+                    let (cx, cy) = ((id.x % n) as usize * side, (id.y % n) as usize * side);
+                    img.crop(cx, cy, side, side).resized(tile_px.max(1), tile_px.max(1))
+                });
+                c.blit(part, x, y, 255, 255);
+            }
+            StandIn::Child { tile, dx, dy } => {
+                let Some(img) = loader.image(tile) else { continue };
+                let half = tile_px.div_ceil(2);
+                blit_tile(c, scaled, tile, img, x + (dx as usize * half) as i32, y + (dy as usize * half) as i32, half);
+            }
+        }
+    }
+}
+
 fn blit_tile(c: &mut Surface, scaled: &mut HashMap<(TileId, usize), Image>, id: TileId, img: &Image, x: i32, y: i32, tile_px: usize) {
     if img.w == tile_px && img.h == tile_px {
         c.blit(img, x, y, 255, 255);
@@ -198,6 +264,10 @@ pub struct Window {
     last_tap: Option<(f32, f32, f64)>,
     pressed: Option<u64>,
     scaled: HashMap<(TileId, usize), Image>,
+    /// ancestor parts scaled up to stand in for tiles that have not loaded: (ancestor, tile, size)
+    stand_in_crops: HashMap<(TileId, TileId, usize), Image>,
+    /// the Recents row a context menu was opened on, until its answer comes back
+    ctx_recent: Option<usize>,
     labels: TextCache,
     card_scroll: f32,
     gpx_request: Option<u32>,
@@ -275,6 +345,8 @@ impl Window {
             last_tap: None,
             pressed: None,
             scaled: HashMap::new(),
+            stand_in_crops: HashMap::new(),
+            ctx_recent: None,
             labels: TextCache::default(),
             card_scroll: 0.0,
             gpx_request: None,
@@ -1254,7 +1326,13 @@ impl Window {
         for d in finished {
             changed = true;
             match d {
-                Done::Search { query, result } => self.maps.search_done(&query, result),
+                Done::Search { query, result } => {
+                    self.maps.search_done(&query, result);
+                    // the answer to Return chose a place: the field is done
+                    if self.maps.query.is_empty() {
+                        self.focused = false;
+                    }
+                }
                 Done::Route(r) => self.maps.route_done(r),
                 Done::Printed(r) => {
                     self.maps.note = Some(match r {
@@ -1314,10 +1392,45 @@ impl Window {
     pub fn next_wake(&self, t: f64) -> Option<f64> {
         let search = self.maps.next_search_wake(t as u64).map(|ms| ms as f64);
         let poll = self.allow_until.map(|until| self.next_status_poll.min(until));
-        match (search, poll) {
-            (Some(a), Some(b)) => Some(a.min(b)),
-            (a, b) => a.or(b),
+        // a search answer or tiles on their way: look soon, so they show when they land and not on the next input
+        let busy = (self.maps.searching || self.loader.busy()).then_some(t + BUSY_POLL_MS);
+        [search, poll, busy].into_iter().flatten().reduce(f64::min)
+    }
+
+    /// A secondary click over a Recents row of the sidebar: Show on Map, Remove from Recents and Clear Recents (E2E
+    /// W4-15: a right click there did nothing). `None` anywhere else, where the map's own context action applies.
+    pub fn row_context(&mut self, ui: &Ui, px: f32, py: f32) -> Option<Vec<ContextItem>> {
+        self.pt_px = ui.pt(1.0).max(0.01);
+        let (x, y) = (px / self.pt(), py / self.pt());
+        let recents = REC_ID..REC_ID + RECENTS_SHOWN as u32;
+        let row = self.buttons(ui).into_iter().find_map(|b| match b.what {
+            What::Row(id) if recents.contains(&id) && b.rect.contains(x, y) => Some((id - REC_ID) as usize),
+            _ => None,
+        })?;
+        self.ctx_recent = Some(row);
+        let item = |id: u32, label: &str| ContextItem { id, label: label.to_string(), enabled: true };
+        Some(vec![item(CTX_SHOW, "Show on Map"), item(CTX_FORGET, "Remove from Recents"), item(CTX_CLEAR_RECENTS, "Clear Recents")])
+    }
+
+    /// The choice from a Recents row's menu; true when something changed.
+    pub fn context_action(&mut self, id: u32) -> bool {
+        let Some(row) = self.ctx_recent.take() else { return false };
+        match id {
+            CTX_SHOW => self.row_activate(REC_ID + row as u32),
+            CTX_FORGET => {
+                let mut lib = self.maps.lib_mut();
+                if row < lib.recents.len() {
+                    lib.recents.remove(row);
+                }
+            }
+            CTX_CLEAR_RECENTS => {
+                self.maps.act(Act::ClearRecents, 0);
+            }
+            _ => return false,
         }
+        self.maps.persist();
+        self.dirty = true;
+        true
     }
 
     // ---- drawing ----
@@ -1411,8 +1524,11 @@ impl Window {
         let tiles = self.maps.view.tiles();
         for &(id, tx, ty) in &tiles {
             let (x, y) = ((tx as f32 * p).round() as i32, (ty as f32 * p).round() as i32 + oy as i32);
-            let Some(img) = self.loader.image(id) else { continue };
-            blit_tile(&mut c, &mut self.scaled, id, img, x, y, tile_px);
+            match self.loader.image(id) {
+                Some(img) => blit_tile(&mut c, &mut self.scaled, id, img, x, y, tile_px),
+                // not loaded yet: the scaled parent (or the children of the level just left) stands in, not black
+                None => blit_stand_ins(&mut c, &self.loader, &mut self.scaled, &mut self.stand_in_crops, id, x, y, tile_px),
+            }
         }
         // the traffic layer, over the base tiles
         if self.maps.show_traffic {
@@ -2097,5 +2213,55 @@ mod tests {
         w.draw(&mut s, &ui, 0.0);
         let first = px[0];
         assert!(px.iter().any(|p| *p != first));
+    }
+
+    /// E2E W4-15: a missing tile borrows its nearest loaded ancestor, then any loaded children (after a zoom out).
+    #[test]
+    fn a_missing_tile_is_stood_in_for_by_its_parent_or_its_children() {
+        let id = TileId { z: 10, x: 6, y: 9 };
+        assert!(stand_ins(id, |_| false).is_empty(), "nothing loaded: nothing to draw");
+        let grand = TileId { z: 8, x: 1, y: 2 };
+        assert_eq!(stand_ins(id, |t| t == grand), vec![StandIn::Ancestor { tile: grand, levels: 2 }]);
+        let parent = TileId { z: 9, x: 3, y: 4 };
+        assert_eq!(stand_ins(id, |t| t == parent || t == grand), vec![StandIn::Ancestor { tile: parent, levels: 1 }], "the nearest ancestor");
+        // zooming out from level 11: the four children of the level just left are drawn at half size
+        let children = stand_ins(id, |t| t.z == 11);
+        assert_eq!(children.len(), 4);
+        assert!(children.contains(&StandIn::Child { tile: TileId { z: 11, x: 13, y: 19 }, dx: 1, dy: 1 }));
+        assert!(stand_ins(TileId { z: 0, x: 0, y: 0 }, |t| t.z > 1).is_empty(), "no ancestor above the world tile");
+    }
+
+    /// E2E W4-15: a Recents row has a context menu (Show on Map, Remove from Recents, Clear Recents).
+    #[test]
+    fn a_recents_row_has_a_context_menu() {
+        let (mut w, ui, _ctx) = window("recents-menu", 1200, 780);
+        w.maps.lib_mut().add_recent(crate::store::Saved::new("Akureyri, Iceland", 65.6835, -18.1262));
+        w.maps.lib_mut().add_recent(crate::store::Saved::new("Perlan, Reykjavik", 64.1295, -21.9186));
+        let p = ui.pt(1.0);
+        let (x, y) = centre_of(&find(&w, &ui, "Akureyri"));
+        let items = w.row_context(&ui, x * p, y * p).expect("a menu on the row");
+        assert_eq!(items.iter().map(|i| i.label.as_str()).collect::<Vec<_>>(), ["Show on Map", "Remove from Recents", "Clear Recents"]);
+        assert!(items.iter().all(|i| i.id > 1), "the ids stay clear of the Dock menu's New Window");
+        assert!(w.context_action(CTX_FORGET));
+        assert_eq!(w.maps.lib().recents.iter().map(|r| r.title().to_string()).collect::<Vec<_>>(), ["Perlan"]);
+        let (x, y) = centre_of(&find(&w, &ui, "Perlan"));
+        w.row_context(&ui, x * p, y * p).unwrap();
+        assert!(w.context_action(CTX_SHOW));
+        assert_eq!(w.maps.panel, Panel::Place);
+        let (x, y) = centre_of(&find(&w, &ui, "Perlan"));
+        w.row_context(&ui, x * p, y * p).unwrap();
+        assert!(w.context_action(CTX_CLEAR_RECENTS));
+        assert!(w.maps.lib().recents.is_empty());
+        let (x, y) = centre_of(&find(&w, &ui, "Home"));
+        assert!(w.row_context(&ui, x * p, y * p).is_none(), "Home has no Recents menu");
+        assert!(!w.context_action(CTX_SHOW), "no menu open, nothing to do");
+    }
+
+    /// While a search answer or tiles are on their way, the window wakes soon to show them.
+    #[test]
+    fn a_search_in_flight_wakes_the_window() {
+        let (mut w, _ui, _ctx) = window("busy", 1200, 780);
+        w.maps.searching = true;
+        assert!(w.next_wake(1000.0).is_some_and(|t| t <= 1000.0 + BUSY_POLL_MS));
     }
 }
