@@ -846,6 +846,9 @@ pub struct Shell {
     osk_pinned: bool,
     /// the touchscreen fingers that are down, so the pointer stream does not report them twice (`touch_frames`)
     touch_contacts: touch_frames::Contacts,
+    /// the modifier keys the hardware keyboard holds now (`HwKeys::modifier_flags`), set on every key event; each press
+    /// forwarded to an external app carries them (`ToApp::Touch::mods`, `NSEvent.modifierFlags`)
+    key_mods: bifrost_proto::ModifierFlags,
     /// the focused text field of a Wayland client (the window server's input method), and the requests the keyboard
     /// made for it since the last `take_input_method_out`
     im: textinput::ImField,
@@ -1306,6 +1309,7 @@ impl Shell {
             hw_keyboard: false,
             osk_pinned: false,
             touch_contacts: touch_frames::Contacts::default(),
+            key_mods: bifrost_proto::ModifierFlags::EMPTY,
             im: Default::default(),
             im_out: Vec::new(),
             haptics: false,
@@ -3666,7 +3670,7 @@ impl Shell {
             _ => return,
         };
         if let Some(Some(host)) = self.ext.get_mut(slot) {
-            host.touch_window(id, 1, kind, x / k, y / k, t as u32);
+            host.touch_window(id, 1, kind, x / k, y / k, t as u32, self.key_mods);
         }
     }
 

@@ -1143,8 +1143,9 @@ impl AppHost {
         true
     }
 
-    pub fn touch(&mut self, kind: TouchKind, id: u32, x: f32, y: f32, t_ms: u32) {
-        self.send(&ToApp::Touch { kind, id, x, y, t_ms });
+    /// A press, drag or release for the app's main window, with the modifier keys held (`NSEvent.modifierFlags`).
+    pub fn touch(&mut self, kind: TouchKind, id: u32, x: f32, y: f32, t_ms: u32, mods: bifrost_proto::ModifierFlags) {
+        self.send(&ToApp::Touch { kind, id, x, y, t_ms, mods });
     }
 
     /// Sends one frame of touches (`ToApp::Touches`). Call it before the matching `touch` so the app can drop the
@@ -1588,11 +1589,11 @@ impl AppHost {
 
     /// A touch inside one of the app's extra windows, with window-local coordinates in points. False when it is not open.
     #[allow(dead_code)]
-    pub fn touch_window(&mut self, id: u32, touch: u32, kind: TouchKind, x: f32, y: f32, t_ms: u32) -> bool {
+    pub fn touch_window(&mut self, id: u32, touch: u32, kind: TouchKind, x: f32, y: f32, t_ms: u32, mods: bifrost_proto::ModifierFlags) -> bool {
         if !self.window_open(id) {
             return false;
         }
-        self.send(&ToApp::WindowTouch { id, touch, kind, x, y, t_ms });
+        self.send(&ToApp::WindowTouch { id, touch, kind, x, y, t_ms, mods });
         true
     }
 
@@ -2209,7 +2210,7 @@ impl Shell {
         if let Some((raw, s)) = super::touch_frames::pointer_sample(kind, x, y, &self.touch_contacts) {
             h.feed_touch(raw, s, t);
         }
-        h.touch(kind, 0, x, y, t as u32);
+        h.touch(kind, 0, x, y, t as u32, self.key_mods);
     }
 
     /// A touchscreen contact (`Event::Contact`) at (`x`, `y`) in screen pixels. The foreground external app gets it as a
@@ -3417,17 +3418,36 @@ mod window_table_tests {
         let mut out = Pumped::default();
         host.handle(ToShell::WindowOpen { id: 3, title: "Card".into(), w: 10.0, h: 10.0, position: None, flags: 0 }, Vec::new(), &mut out);
         assert!(host.configure_window(3, 20.0, 30.0));
-        assert!(host.touch_window(3, 1, TouchKind::Down, 1.0, 2.0, 5));
+        assert!(host.touch_window(3, 1, TouchKind::Down, 1.0, 2.0, 5, bifrost_proto::ModifierFlags::EMPTY));
         assert!(host.close_window_from_shell(3));
         assert!(!host.close_window_from_shell(3), "a window closes once");
-        assert!(!host.touch_window(3, 1, TouchKind::Down, 1.0, 2.0, 6), "no touch reaches a closed window");
+        assert!(!host.touch_window(3, 1, TouchKind::Down, 1.0, 2.0, 6, bifrost_proto::ModifierFlags::EMPTY), "no touch reaches a closed window");
         assert!(host.windows.of_app("fixture").is_empty());
         assert_eq!(
             sent(&peer),
             vec![
                 ToApp::WindowConfigure { id: 3, w: 20.0, h: 30.0 },
-                ToApp::WindowTouch { id: 3, touch: 1, kind: TouchKind::Down, x: 1.0, y: 2.0, t_ms: 5 },
+                ToApp::WindowTouch { id: 3, touch: 1, kind: TouchKind::Down, x: 1.0, y: 2.0, t_ms: 5, mods: bifrost_proto::ModifierFlags::EMPTY },
                 ToApp::WindowClosed { id: 3 },
+            ]
+        );
+    }
+
+    /// E2E-3: a Shift-click or Cmd-click reaches the app with its modifiers, on the main window and on an extra window.
+    #[test]
+    fn a_press_reaches_the_app_with_the_modifier_keys_held() {
+        use bifrost_proto::ModifierFlags as F;
+        let (channel, peer) = sys::socketpair_pair().unwrap();
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
+        let mut out = Pumped::default();
+        host.handle(ToShell::WindowOpen { id: 3, title: "Card".into(), w: 10.0, h: 10.0, position: None, flags: 0 }, Vec::new(), &mut out);
+        host.touch(TouchKind::Down, 0, 4.0, 5.0, 7, F::SHIFT);
+        assert!(host.touch_window(3, 1, TouchKind::Down, 1.0, 2.0, 8, F::COMMAND));
+        assert_eq!(
+            sent(&peer),
+            vec![
+                ToApp::Touch { kind: TouchKind::Down, id: 0, x: 4.0, y: 5.0, t_ms: 7, mods: F::SHIFT },
+                ToApp::WindowTouch { id: 3, touch: 1, kind: TouchKind::Down, x: 1.0, y: 2.0, t_ms: 8, mods: F::COMMAND },
             ]
         );
     }

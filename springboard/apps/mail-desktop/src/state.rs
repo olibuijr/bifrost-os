@@ -829,8 +829,14 @@ pub struct Mail {
     pub drafts_mailbox: Option<String>,
     /// The messages of the shown mailbox, newest first.
     pub rows: Vec<Row>,
-    /// The UID of the message open in the reader.
+    /// The UID of the message open in the reader: the selected message, or the one clicked last into a selection of
+    /// several (`selection`).
     pub open: Option<u32>,
+    /// The messages selected together with Cmd-click and Shift-click (`NSTableView` multiple selection), in the order
+    /// they were selected. Empty while one message or none is selected: `open` is the selection then. Never one long.
+    selection: Vec<u32>,
+    /// The message a Shift-click or Shift-arrow extends the selection from: the last one clicked on its own.
+    anchor: Option<u32>,
     /// Message text by UID, for the shown mailbox only.
     pub bodies: HashMap<u32, String>,
     /// Passwords read from the Passwords group for this run. They are never written to the shared account list.
@@ -926,6 +932,8 @@ impl Mail {
             drafts_mailbox: None,
             rows: Vec::new(),
             open: None,
+            selection: Vec::new(),
+            anchor: None,
             bodies: HashMap::new(),
             passwords: HashMap::new(),
             baseline: HashMap::new(),
@@ -1017,6 +1025,7 @@ impl Mail {
         // the old account's selection is kept under its own id before the account changes
         self.remember_selection();
         self.open = None;
+        self.clear_selection();
         self.account = index;
         self.mailboxes = vec![INBOX.to_string()];
         self.show_mailbox(INBOX);
@@ -1043,6 +1052,7 @@ impl Mail {
         self.attachments.clear();
         self.found = None;
         self.open = None;
+        self.clear_selection();
         self.collapsed.clear();
     }
 
@@ -1079,6 +1089,13 @@ impl Mail {
                 self.mailboxes = mailboxes;
             }
             self.rows = newest_first(messages);
+            // a selected message the server no longer lists leaves the selection
+            let listed: HashSet<u32> = self.rows.iter().map(|r| r.uid).collect();
+            if !self.selection.is_empty() {
+                let kept: Vec<u32> = self.selection.iter().copied().filter(|uid| listed.contains(uid)).collect();
+                let open = self.open.filter(|uid| kept.contains(uid)).or_else(|| kept.last().copied());
+                self.set_selection(kept, open);
+            }
             // the first listing after coming back selects the message the mailbox had, when it is still there and
             // nothing was clicked meanwhile
             if let Some(uid) = self.restore.take() {
@@ -1104,11 +1121,125 @@ impl Mail {
         self.found.iter().flatten().chain(self.rows.iter()).find(|r| r.uid == uid)
     }
 
-    /// Opens a message in the reader. Returns true when its text is not loaded yet.
+    /// Opens a message in the reader, as the only one selected (a plain click, an arrow key). Returns true when its text
+    /// is not loaded yet.
     pub fn open_message(&mut self, uid: u32) -> bool {
+        self.clear_selection();
+        self.anchor = Some(uid);
+        self.show(uid)
+    }
+
+    /// Shows a message in the reader without changing which others are selected. True when its text is not loaded yet.
+    fn show(&mut self, uid: u32) -> bool {
         self.open = Some(uid);
         self.mark_seen_locally(uid);
         !self.bodies.contains_key(&uid)
+    }
+
+    fn clear_selection(&mut self) {
+        self.selection.clear();
+        self.anchor = None;
+    }
+
+    /// Makes `set` the selection with `open` in the reader. One message (or none) is the plain selection: `open` alone.
+    fn set_selection(&mut self, mut set: Vec<u32>, open: Option<u32>) {
+        let mut seen = HashSet::new();
+        set.retain(|uid| seen.insert(*uid));
+        if set.len() <= 1 {
+            self.selection.clear();
+            self.open = set.first().copied();
+        } else {
+            self.open = open.filter(|uid| set.contains(uid)).or_else(|| set.last().copied());
+            self.selection = set;
+        }
+    }
+
+    /// Every selected message: the selection of several, or the open message alone. The actions of the toolbar, the
+    /// menus and the context menu (Archive, Move to Trash, Move To, Flag, Mark as Unread) act on all of them.
+    pub fn selected(&self) -> Vec<u32> {
+        if self.selection.len() > 1 {
+            self.selection.clone()
+        } else {
+            self.open.into_iter().collect()
+        }
+    }
+
+    /// True when message `uid` is selected (its row wears the selection plate).
+    pub fn is_selected(&self, uid: u32) -> bool {
+        if self.selection.len() > 1 {
+            self.selection.contains(&uid)
+        } else {
+            self.open == Some(uid)
+        }
+    }
+
+    /// How many messages are selected together; 0 or 1 is the plain selection. Above 1 the reader says so.
+    pub fn selected_count(&self) -> usize {
+        if self.selection.len() > 1 {
+            self.selection.len()
+        } else {
+            usize::from(self.open.is_some())
+        }
+    }
+
+    /// Cmd-click on message `uid`: it joins the selection, or leaves it when it was selected. A message clicked into the
+    /// selection is shown in the reader and becomes the anchor of the next Shift-click; when the shown one leaves, the last
+    /// one selected before it is shown, and the shown message is the anchor. Returns the message whose text must be
+    /// fetched, if any.
+    pub fn toggle_selected(&mut self, uid: u32) -> Option<u32> {
+        let mut set = self.selected();
+        let added = !set.contains(&uid);
+        let open = if added {
+            set.push(uid);
+            Some(uid)
+        } else {
+            set.retain(|u| *u != uid);
+            if self.open == Some(uid) { set.last().copied() } else { self.open }
+        };
+        self.set_selection(set, open);
+        self.anchor = if added { Some(uid) } else { self.open };
+        let shown = self.open?;
+        self.show(shown).then_some(shown)
+    }
+
+    /// Shift-click on message `uid` (or Shift-arrow onto it): the selection becomes every line of the list from the
+    /// anchor to `uid`, and `uid` is shown. The anchor stays, so the next Shift-click redraws the range from it. With no
+    /// anchor in the list, `uid` alone is selected. Returns the message whose text must be fetched, if any.
+    pub fn extend_selection(&mut self, uid: u32) -> Option<u32> {
+        let lines: Vec<u32> = self.visible_lines().iter().map(|l| l.row.uid).collect();
+        let Some(to) = lines.iter().position(|u| *u == uid) else { return None };
+        let from = self.anchor.or(self.open).and_then(|a| lines.iter().position(|u| *u == a));
+        let Some(from) = from else {
+            return self.open_message(uid).then_some(uid);
+        };
+        let range = lines[from.min(to)..=from.max(to)].to_vec();
+        let anchor = self.anchor.or(self.open);
+        self.set_selection(range, Some(uid));
+        self.anchor = anchor;
+        self.show(uid).then_some(uid)
+    }
+
+    /// Edit > Select All in the message list: every line the list shows. The open message stays in the reader when it
+    /// is listed. Returns the message whose text must be fetched, if any.
+    pub fn select_all_messages(&mut self) -> Option<u32> {
+        let lines: Vec<u32> = self.visible_lines().iter().map(|l| l.row.uid).collect();
+        let open = self.open.filter(|uid| lines.contains(uid)).or_else(|| lines.first().copied());
+        let anchor = self.anchor;
+        self.set_selection(lines, open);
+        self.anchor = anchor.or(self.open);
+        let shown = self.open?;
+        self.show(shown).then_some(shown)
+    }
+
+    /// Shift-Down Arrow (`down`) or Shift-Up Arrow: the selection grows or shrinks by the line below or above the shown
+    /// message, from the anchor. None at either end of the list; otherwise the line's index and whether its text must be
+    /// fetched.
+    pub fn extend_by_arrow(&mut self, down: bool) -> Option<(usize, Option<u32>)> {
+        if self.anchor.is_none() {
+            self.anchor = self.open;
+        }
+        let (index, uid) = self.neighbour(down)?;
+        Some((index, self.extend_selection(uid)))
     }
 
     /// The message Down Arrow (`down`) or Up Arrow selects in the list: the line below or above the selected one, and
@@ -1162,7 +1293,14 @@ impl Mail {
         }
         self.bodies.remove(&uid);
         self.attachments.remove(&uid);
-        if self.open == Some(uid) {
+        if self.anchor == Some(uid) {
+            self.anchor = None;
+        }
+        if self.selection.contains(&uid) {
+            let kept: Vec<u32> = self.selection.iter().copied().filter(|u| *u != uid).collect();
+            let open = self.open.filter(|u| *u != uid);
+            self.set_selection(kept, open);
+        } else if self.open == Some(uid) {
             self.open = None;
         }
     }
@@ -2555,6 +2693,79 @@ mod tests {
         assert_eq!(mail.neighbour(false), Some((0, 3)));
         mail.open_message(1);
         assert_eq!(mail.neighbour(true), None, "the last message stays selected");
+    }
+
+    /// E2E-3: a click selects one message, Cmd-click toggles one, Shift-click selects the range from the anchor.
+    #[test]
+    fn cmd_click_toggles_and_shift_click_extends_from_the_anchor() {
+        let mut mail = Mail::new(vec![account("work")]);
+        // newest first: 5, 4, 3, 2, 1
+        mail.apply_listing("work", INBOX, vec![], (1..=5).map(|uid| listed(uid, "m")).collect());
+        mail.open_message(4);
+        assert_eq!((mail.selected(), mail.selected_count()), (vec![4], 1));
+        mail.toggle_selected(2);
+        assert_eq!(mail.selected(), vec![4, 2]);
+        assert_eq!(mail.open, Some(2), "the message clicked into the selection is shown");
+        assert!(mail.is_selected(4) && mail.is_selected(2) && !mail.is_selected(3));
+        assert_eq!(mail.selected_count(), 2);
+        // Cmd-click on a selected message takes it out; the one shown before it comes back
+        mail.toggle_selected(2);
+        assert_eq!((mail.selected(), mail.open), (vec![4], Some(4)));
+        // Shift-click from the anchor (2, the last Cmd-clicked) to 5 selects 5, 4, 3, 2 in list order
+        mail.toggle_selected(2);
+        mail.extend_selection(5);
+        assert_eq!(mail.selected(), vec![5, 4, 3, 2]);
+        assert_eq!(mail.open, Some(5));
+        // another Shift-click redraws the range from the same anchor
+        mail.extend_selection(1);
+        assert_eq!(mail.selected(), vec![2, 1]);
+        // a plain click ends the multiple selection
+        mail.open_message(3);
+        assert_eq!((mail.selected(), mail.selected_count()), (vec![3], 1));
+        assert!(!mail.is_selected(1));
+        // the last selected message Cmd-clicked away leaves nothing selected
+        mail.toggle_selected(3);
+        assert_eq!((mail.selected(), mail.open, mail.selected_count()), (vec![], None, 0));
+    }
+
+    #[test]
+    fn shift_arrows_grow_and_shrink_the_selection_from_the_anchor() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.apply_listing("work", INBOX, vec![], (1..=4).map(|uid| listed(uid, "m")).collect());
+        // 4, 3, 2, 1: start on 3
+        mail.open_message(3);
+        assert_eq!(mail.extend_by_arrow(true).map(|(i, _)| i), Some(2));
+        assert_eq!(mail.selected(), vec![3, 2]);
+        mail.extend_by_arrow(true);
+        assert_eq!(mail.selected(), vec![3, 2, 1]);
+        assert_eq!(mail.extend_by_arrow(true), None, "the end of the list");
+        mail.extend_by_arrow(false);
+        mail.extend_by_arrow(false);
+        assert_eq!((mail.selected(), mail.open), (vec![3], Some(3)), "back at the anchor");
+        mail.extend_by_arrow(false);
+        assert_eq!(mail.selected(), vec![4, 3], "past the anchor the range grows upward");
+    }
+
+    #[test]
+    fn select_all_and_moving_messages_keep_the_selection_consistent() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.apply_listing("work", INBOX, vec![], (1..=3).map(|uid| listed(uid, "m")).collect());
+        mail.select_all_messages();
+        assert_eq!(mail.selected(), vec![3, 2, 1]);
+        assert_eq!(mail.open, Some(3), "with nothing open the first line is shown");
+        mail.remove_row(3);
+        assert_eq!((mail.selected(), mail.open), (vec![2, 1], Some(1)));
+        mail.remove_row(2);
+        assert_eq!((mail.selected(), mail.selected_count()), (vec![1], 1), "one left is the plain selection");
+        mail.remove_row(1);
+        assert_eq!((mail.selected(), mail.open), (vec![], None));
+        // a listing that no longer has a selected message drops it; another mailbox starts with nothing selected
+        mail.apply_listing("work", INBOX, vec![], (1..=3).map(|uid| listed(uid, "m")).collect());
+        mail.select_all_messages();
+        mail.apply_listing("work", INBOX, vec![], vec![listed(1, "m"), listed(2, "m")]);
+        assert_eq!(mail.selected(), vec![2, 1]);
+        mail.show_mailbox("Drafts");
+        assert_eq!(mail.selected_count(), 0);
     }
 
     #[test]

@@ -11,6 +11,9 @@ architecture = "x86_64-linux"
 permissions = ["storage", "network", "keychain", "notifications", "documents", "calendars"]
 keychain_groups = ["is.bifrost.passwords"]
 window = "full-size"
+# the message list takes Shift-Up and Shift-Down Arrow to extend its selection: the shell sends the arrows with their
+# modifiers as chords
+edit_keys = true
 schemes = ["mailto"]
 
 [background]

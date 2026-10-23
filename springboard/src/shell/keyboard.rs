@@ -701,7 +701,7 @@ impl Keyboard {
         }
         SERVICE.with(|s| {
             if let Some(host) = s.borrow_mut().host.as_mut() {
-                host.touch(kind, 0, x, y, t as u32);
+                host.touch(kind, 0, x, y, t as u32, bifrost_proto::ModifierFlags::EMPTY);
             }
         });
     }

@@ -348,6 +348,11 @@ fn sidebar_model(mail: &Mail) -> (SourceList, Vec<(u32, Side)>) {
     (SourceList::new(items, SIDE_ROW_PT, SIDE_HEAD_PT), actions)
 }
 
+/// What the reader says while several messages are selected.
+pub fn selection_placeholder(count: usize) -> String {
+    format!("{count} messages selected")
+}
+
 /// True when the open message has recipients besides its sender and the user (Reply All is offered).
 pub fn open_has_others(mail: &Mail) -> bool {
     mail.open.and_then(|uid| mail.row(uid)).is_some_and(|row| mail.has_other_recipients(&row.summary))
@@ -856,7 +861,6 @@ impl MailWindow {
         let offset = self.list_scroll.offset();
         s.fill_rect(px(x0), px(top), px(width), px(area), CONTENT_BG.now());
         let right = x0 + width - pad;
-        let open = self.mail.open;
         for (i, line) in lines.iter().enumerate() {
             let r = &line.row;
             let y = top + i as f32 * row - offset;
@@ -864,7 +868,8 @@ impl MailWindow {
                 continue;
             }
             let text_x = list_text_x(ui, x0, line.depth);
-            let selected = open == Some(r.uid);
+            // every message of a selection of several wears the plate, as the one selected alone does
+            let selected = self.mail.is_selected(r.uid);
             if selected {
                 s.fill_rrect(x0 + inset, y + inset / 2.0, width - 2.0 * inset, row - inset, ui.pt(RADIUS_PT), colors::SYSTEM_BLUE.now());
             } else if !r.flags.contains(Flag::Seen) {
@@ -939,6 +944,13 @@ impl MailWindow {
         self.remote_rect = None;
         self.found_rects.clear();
         self.find_hits = None;
+        let count = self.mail.selected_count();
+        if count > 1 {
+            // a selection of several shows no message: the reader says how many are selected (as the reference does)
+            self.reader_scroll.set_max(0.0);
+            put_centred(s, &mut self.labels, ui, &selection_placeholder(count), MAC_BODY_PT, Weight::Regular, LABEL_2.now(), x0 + width / 2.0, top + area / 2.0);
+            return;
+        }
         let Some(uid) = self.mail.open else {
             self.reader_scroll.set_max(0.0);
             let message = if self.mail.accounts.is_empty() { "Add an account to read your mail" } else { "Select a message" };

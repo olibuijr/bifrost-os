@@ -1044,6 +1044,7 @@ fn run() -> std::io::Result<()> {
                         !(match *sc { Shortcut::SelectAll => true, Shortcut::Redo => !hw_keys.shift_held(), _ => false } && hw_keys.ctrl_held() && !hw_keys.meta_held() && shell.ext_takes_edit_keys() && !shell.shell_takes_typing())
                     });
                     shell.set_photos_shift(hw_keys.shift_held());
+                    shell.set_key_mods(hw_keys.modifier_flags());
                     if trace {
                         eprintln!("springboard: key {code} {} shortcut={raw_sc:?}", if down { "down" } else { "up" });
                     }
@@ -1246,6 +1247,7 @@ fn run() -> std::io::Result<()> {
                 }
                 Effect::ScreenOff => {
                     hw_keys.reset();
+                    shell.set_key_mods(hw_keys.modifier_flags());
                     key_repeat = Default::default();
                     power::set_brightness(0);
                     if let Err(e) = disp.set_dpms(false) {
@@ -1276,6 +1278,7 @@ fn run() -> std::io::Result<()> {
                 }
                 Effect::ScreenOn => {
                     hw_keys.reset();
+                    shell.set_key_mods(hw_keys.modifier_flags());
                     key_repeat = Default::default();
                     sleeper.screen_on(t);
                     boost.restore_wifi_power_save();

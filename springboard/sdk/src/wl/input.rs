@@ -18,7 +18,7 @@
 //! Ctrl/Alt/Meta chords on printable keys are `KeyInput::chord` with the evdev key.
 
 use crate::proto::sys::now_ms;
-use crate::proto::{KeyInput, TouchKind, CHORD_ALT, CHORD_CTRL, CHORD_META, CHORD_SHIFT};
+use crate::proto::{KeyInput, ModifierFlags, TouchKind, CHORD_ALT, CHORD_CTRL, CHORD_META, CHORD_SHIFT};
 use crate::Input;
 use std::fs::File;
 use std::io::{self, Read};
@@ -132,6 +132,11 @@ impl Mods {
             alt: held & 8 != 0,
             meta: held & 64 != 0,
         }
+    }
+
+    /// The state as `NSEvent.modifierFlags` (Caps Lock counts while it is locked on).
+    pub fn flags(self) -> ModifierFlags {
+        ModifierFlags::from_held(self.shift, self.ctrl, self.alt, self.meta, self.caps)
     }
 
     /// The `CHORD_*` bits of the Ctrl, Shift, Alt and Meta state.
@@ -471,7 +476,8 @@ impl Seat {
     }
 
     fn touch(&mut self, kind: TouchKind, x: f32, y: f32, t: f64) {
-        self.out.push(Input::Touch { kind, id: 0, x, y, t });
+        // a press carries the modifiers held at the time, as the shell's touches do (`NSEvent.modifierFlags`)
+        self.out.push(Input::Touch { kind, id: 0, x, y, t, mods: self.mods.flags() });
     }
 }
 
@@ -783,6 +789,23 @@ mod tests {
         seat.keymap(OwnedFd::from(file), body.len() as u32).unwrap();
         assert_eq!(seat.keymap_text(), Some("xkb_keymap { };"));
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_click_carries_the_modifiers_the_compositor_reported() {
+        let mut seat = Seat::new();
+        seat.pointer_enter(10.0, 20.0);
+        // Shift (bit 0) and Super (bit 6) held
+        seat.modifiers(1 | 64, 0, 0);
+        seat.pointer_button(5, BTN_LEFT, true);
+        let mods = seat.take_inputs().into_iter().find_map(|i| match i {
+            Input::Touch { kind: TouchKind::Down, mods, .. } => Some(mods),
+            _ => None,
+        });
+        assert_eq!(mods, Some(ModifierFlags::SHIFT | ModifierFlags::COMMAND));
+        seat.modifiers(0, 0, 0);
+        seat.pointer_button(6, BTN_LEFT, false);
+        assert!(matches!(seat.take_inputs().as_slice(), [Input::Touch { kind: TouchKind::Up, mods, .. }] if mods.is_empty()));
     }
 
     #[test]

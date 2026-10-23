@@ -48,6 +48,7 @@ const KEY_M: u16 = 50;
 const KEY_COMMA: u16 = 51;
 const KEY_F5: u16 = 63;
 const KEY_LEFTSHIFT: u16 = 42;
+const KEY_CAPSLOCK: u16 = 58;
 const KEY_RIGHTSHIFT: u16 = 54;
 const KEY_LEFTALT: u16 = 56;
 const KEY_SPACE: u16 = 57;
@@ -259,6 +260,8 @@ pub struct HwKeys {
     /// Right Alt only: AltGr selects the third and fourth characters of a key
     altgr: u8,
     meta: u8,
+    /// Caps Lock is on (each press of the key turns it over)
+    caps: bool,
     /// Meta went down and nothing else has been pressed since
     meta_alone: bool,
     /// The desktop form factor: a lone Cmd press does nothing (it is the Home key of a tablet only), see `set_desktop`
@@ -371,6 +374,12 @@ impl HwKeys {
         self.alt > 0
     }
 
+    /// The modifier keys held now, as `NSEvent.modifierFlags`: every press the shell forwards to an app carries them, so a
+    /// click can be a Shift-click or a Cmd-click. AltGr types characters and is not Option; Caps Lock counts while it is on.
+    pub fn modifier_flags(&self) -> bifrost_proto::ModifierFlags {
+        bifrost_proto::ModifierFlags::from_held(self.shift > 0, self.ctrl > 0, self.alt > self.altgr, self.meta > 0, self.caps)
+    }
+
     /// True while any Ctrl, Alt or Meta key is held (the app switcher commits when the last one is released).
     pub fn mods_held(&self) -> bool {
         self.ctrl + self.alt + self.meta > 0
@@ -402,6 +411,9 @@ impl HwKeys {
                     self.sticky_release();
                 }
             }
+        }
+        if code == KEY_CAPSLOCK && down {
+            self.caps = !self.caps;
         }
         if code == KEY_RIGHTALT {
             self.altgr = if down { self.altgr.saturating_add(1) } else { self.altgr.saturating_sub(1) };
@@ -1183,6 +1195,11 @@ impl Shell {
     pub fn photos_front(&self) -> bool {
         self.screen_on && self.screen == Screen::App(AppId::Photos) && !self.is_locked()
     }
+    /// The modifier keys held now (`HwKeys::modifier_flags`): presses forwarded to external apps carry them. The shell calls
+    /// it on every key event.
+    pub fn set_key_mods(&mut self, mods: bifrost_proto::ModifierFlags) {
+        self.key_mods = mods;
+    }
     /// Tells Photos whether Shift is held, so a tap on the grid extends the selection. The shell calls it on every key event.
     pub fn set_photos_shift(&mut self, held: bool) {
         if let Some(p) = self.photos.as_mut() {
@@ -1750,6 +1767,32 @@ mod tests {
         assert_eq!(k.key(KEY_C, true), None);
         k.key(KEY_LEFTCTRL, false);
         assert_eq!(k.key(KEY_C, true), None, "stray releases never underflow");
+    }
+
+    #[test]
+    fn modifier_flags_follow_the_held_keys_for_clicks() {
+        use bifrost_proto::ModifierFlags as F;
+        let mut k = HwKeys::default();
+        assert!(k.modifier_flags().is_empty());
+        k.key(KEY_LEFTSHIFT, true);
+        assert_eq!(k.modifier_flags(), F::SHIFT);
+        k.key(KEY_LEFTMETA, true);
+        assert_eq!(k.modifier_flags(), F::SHIFT | F::COMMAND, "Shift-Cmd-click");
+        k.key(KEY_LEFTSHIFT, false);
+        k.key(KEY_LEFTMETA, false);
+        k.key(KEY_LEFTCTRL, true);
+        k.key(KEY_LEFTALT, true);
+        assert_eq!(k.modifier_flags(), F::CONTROL | F::OPTION);
+        k.key(KEY_LEFTCTRL, false);
+        k.key(KEY_LEFTALT, false);
+        k.key(KEY_RIGHTALT, true);
+        assert!(k.modifier_flags().is_empty(), "AltGr types characters and is not Option");
+        k.key(KEY_RIGHTALT, false);
+        k.key(KEY_CAPSLOCK, true);
+        k.key(KEY_CAPSLOCK, false);
+        assert_eq!(k.modifier_flags(), F::CAPS_LOCK, "Caps Lock counts while it is on");
+        k.key(KEY_CAPSLOCK, true);
+        assert!(k.modifier_flags().is_empty());
     }
 
     #[test]

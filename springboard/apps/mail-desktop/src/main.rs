@@ -142,12 +142,12 @@ impl App for MailApp {
                 false
             }
             Some(mail) => match ev {
-                Input::Touch { kind, x, y, t, .. } => {
+                Input::Touch { kind, x, y, t, mods, .. } => {
                     // a touch on the main window hands the sheet slot back to the main window
                     if matches!(kind, TouchKind::Down) && !self.composes.deactivate(mail) {
                         return false;
                     }
-                    mail.touch(ctx, kind, x, y, t)
+                    mail.touch(ctx, kind, x, y, t, mods)
                 }
                 Input::Key(_) | Input::Command(_) => key_or_command(mail, ctx, ev),
                 // a right-click on the main window, and the item chosen from its context menu: both act on the main
@@ -179,14 +179,14 @@ impl App for MailApp {
             return false;
         }
         let changed = match ev {
-            Input::Touch { kind, x, y, t, .. } => {
+            Input::Touch { kind, x, y, t, mods, .. } => {
                 if matches!(kind, TouchKind::Down) && !self.composes.activate(mail, window) {
                     return false;
                 }
                 if self.composes.active != Some(window) {
                     return false;
                 }
-                mail.touch(ctx, kind, x, y, t)
+                mail.touch(ctx, kind, x, y, t, mods)
             }
             // the compose window is the key window: its keys and editing commands go to its message (the shell sends
             // them tagged with the window, not to the main window)
@@ -443,7 +443,7 @@ mod tests {
     use bifrost_app::controls::internet_accounts::{Account, Kind, Security, Server};
     use bifrost_app::kit::{Font, Ui};
     use bifrost_app::proto::{Configure, ToShell};
-    use bifrost_app::KeyInput;
+    use bifrost_app::{KeyInput, ModifierFlags};
     use bifrost_mail::compose_windows::{COMPOSE_H, COMPOSE_W};
     use bifrost_mail::draw::{choice_count, sheet_layout, Hit};
     use bifrost_mail::state::{Sheet, INBOX};
@@ -560,10 +560,83 @@ mod tests {
     }
 
     /// A click (press and release) on the main window at `t` milliseconds.
-    fn click(app: &mut MailApp, ctx: &Ctx, (x, y): (f32, f32), t: f64) {
+    fn click(app: &mut MailApp, ctx: &Ctx, at: (f32, f32), t: f64) {
+        click_with(app, ctx, at, t, ModifierFlags::EMPTY);
+    }
+
+    /// A click with modifier keys held (a Shift-click, a Cmd-click), as the shell sends it.
+    fn click_with(app: &mut MailApp, ctx: &Ctx, (x, y): (f32, f32), t: f64, mods: ModifierFlags) {
         for kind in [TouchKind::Down, TouchKind::Up] {
-            app.event(ctx, Input::Touch { kind, id: 0, x, y, t });
+            app.event(ctx, Input::Touch { kind, id: 0, x, y, t, mods });
         }
+    }
+
+    fn selected(app: &MailApp) -> Vec<u32> {
+        app.window.as_ref().unwrap().mail.selected()
+    }
+
+    /// E2E-3: Cmd-click toggles a message into the selection and Shift-click selects the range from the anchor; the
+    /// context menu keeps the selection and its actions take every selected message.
+    #[test]
+    fn cmd_click_and_shift_click_select_several_messages_and_archive_takes_them_all() {
+        let dir = std::env::temp_dir().join(format!("bifrost-mail-multi-{}", std::process::id()));
+        let ctx = ctx(&dir);
+        let mut app = app_with_account(&ctx);
+        let listed = |uid: u32| Listed { uid, flags: Flags::empty(), header: format!("Subject: m{uid}\r\nFrom: Ana <ana@x.is>\r\n\r\n") };
+        let mailboxes = vec![INBOX.to_string(), "Archive".to_string()];
+        app.window.as_mut().unwrap().mail.apply_listing("work", INBOX, mailboxes, (1..=4).map(listed).collect());
+        // the list is newest first: 4, 3, 2, 1
+        let at = row_point(&app, &ctx.ui, 4);
+        click(&mut app, &ctx, at, 1000.0);
+        assert_eq!(selected(&app), vec![4]);
+        let at = row_point(&app, &ctx.ui, 2);
+        click_with(&mut app, &ctx, at, 3000.0, ModifierFlags::COMMAND);
+        assert_eq!(selected(&app), vec![4, 2], "Cmd-click adds a message");
+        assert_eq!(app.window.as_ref().unwrap().mail.open, Some(2), "the reader follows the last click");
+        let at = row_point(&app, &ctx.ui, 4);
+        click_with(&mut app, &ctx, at, 5000.0, ModifierFlags::COMMAND);
+        assert_eq!(selected(&app), vec![2], "Cmd-click takes a selected message out");
+        let at = row_point(&app, &ctx.ui, 4);
+        click_with(&mut app, &ctx, at, 7000.0, ModifierFlags::SHIFT);
+        assert_eq!(selected(&app), vec![4, 3, 2], "Shift-click selects from the anchor to the click");
+        assert_eq!(app.window.as_ref().unwrap().mail.selected_count(), 3);
+        assert!(app.window.as_mut().unwrap().take_viewers().is_empty(), "modifier clicks never count as a double-click");
+        // a right-click inside the selection keeps it, and Archive from its menu moves all three
+        let (x, y) = row_point(&app, &ctx.ui, 3);
+        assert!(app.event(&ctx, Input::Context { x, y }));
+        assert_eq!(selected(&app), vec![4, 3, 2]);
+        app.event(&ctx, Input::ContextAction(bifrost_mail::window::MENU_ARCHIVE));
+        let rows: Vec<u32> = app.window.as_ref().unwrap().mail.rows.iter().map(|r| r.uid).collect();
+        assert_eq!(rows, vec![1], "every selected message left the list");
+        assert!(selected(&app).is_empty());
+        // a plain click is a single selection again
+        let at = row_point(&app, &ctx.ui, 1);
+        click(&mut app, &ctx, at, 9000.0);
+        assert_eq!(selected(&app), vec![1]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn shift_arrows_extend_the_selection_and_select_all_takes_the_list() {
+        let dir = std::env::temp_dir().join(format!("bifrost-mail-shift-arrows-{}", std::process::id()));
+        let ctx = ctx(&dir);
+        let mut app = app_with_inbox(&ctx);
+        let (down, shift_down, shift_up) = (
+            Input::Key(KeyInput::Code(40)),
+            Input::Key(KeyInput::chord(108, bifrost_app::proto::CHORD_SHIFT)),
+            Input::Key(KeyInput::chord(103, bifrost_app::proto::CHORD_SHIFT)),
+        );
+        app.event(&ctx, down.clone());
+        assert_eq!(selected(&app), vec![9]);
+        assert!(app.event(&ctx, shift_down.clone()), "Shift-Down extends the selection");
+        assert_eq!(selected(&app), vec![9, 3]);
+        assert!(!app.event(&ctx, shift_down), "the end of the list");
+        app.event(&ctx, shift_up);
+        assert_eq!(selected(&app), vec![9]);
+        // Edit > Select All with no sheet selects every message the list shows
+        assert!(app.event(&ctx, Input::Command(Command::SelectAll)));
+        assert_eq!(selected(&app), vec![9, 3]);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -654,7 +727,7 @@ mod tests {
         // a click on Subject moves the focus there, and typing follows it
         let (x, y) = field_centre(&app, &ctx.ui, "Subject", COMPOSE_W, COMPOSE_H);
         for kind in [TouchKind::Down, TouchKind::Up] {
-            app.window_event(&ctx, id, Input::Touch { kind, id: 0, x, y, t: 10.0 });
+            app.window_event(&ctx, id, Input::Touch { kind, id: 0, x, y, t: 10.0, mods: bifrost_app::ModifierFlags::EMPTY });
         }
         app.window_event(&ctx, id, Input::Key(KeyInput::Text("Fundur".into())));
         assert_eq!(compose_field(&app, "Subject"), "Fundur");
