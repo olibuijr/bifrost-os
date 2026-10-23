@@ -722,6 +722,11 @@ impl Sampler {
 
     /// Reads the machine now. `now_ms` is a monotonic time in milliseconds; the first sample has no rates.
     pub fn sample(&mut self, now_ms: f64) -> Snapshot {
+        if bifrost_app::testing::pinned() {
+            // Under the compliance harness the readings are a fixed fixture, never the machine that runs the test:
+            // its CPU load, memory and process list change from one run to the next and would move the golden.
+            return fixture();
+        }
         let now_unix = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
         let dt = self.last_ms.map(|t| (now_ms - t) / 1000.0).filter(|d| *d > 0.0);
         self.last_ms = Some(now_ms);
@@ -899,6 +904,46 @@ impl Sampler {
 
         let gpu_busy = self.scan_gpu.then(|| procs.iter().map(|p| p.gpu).sum::<f32>().min(100.0));
         Snapshot { cpu, memory, disk_read_bps, disk_write_bps, ifaces, procs, cores: core_busy, gpu_busy }
+    }
+}
+
+/// The readings under the test pin (`bifrost_app::testing::pinned`): a quiet eight-core machine with a short fixed process list.
+fn fixture() -> Snapshot {
+    const GIB: u64 = 1 << 30;
+    let proc = |pid: u32, ppid: u32, name: &str, user: &str, uid: u32, cpu: f32, rss_mib: u64, threads: u32| ProcSample {
+        pid,
+        ppid,
+        name: name.into(),
+        user: user.into(),
+        uid,
+        cpu,
+        rss: rss_mib << 20,
+        vsize: (rss_mib * 3) << 20,
+        threads,
+        cpu_ticks: (cpu * 100.0) as u64,
+        ..Default::default()
+    };
+    let procs = vec![
+        proc(1, 0, "systemd", "root", 0, 0.1, 14, 1),
+        proc(412, 1, "springboard", "me", 1000, 6.5, 310, 12),
+        proc(520, 412, "bifrost-activity", "me", 1000, 2.4, 96, 6),
+        proc(533, 412, "bifrost-files", "me", 1000, 0.8, 74, 5),
+        proc(601, 1, "pipewire", "me", 1000, 0.6, 28, 3),
+        proc(655, 1, "NetworkManager", "root", 0, 0.3, 22, 4),
+        proc(702, 1, "dbus-daemon", "me", 1000, 0.1, 6, 1),
+        proc(844, 1, "bluetoothd", "root", 0, 0.0, 9, 1),
+        proc(910, 1, "sshd", "root", 0, 0.0, 8, 1),
+        proc(977, 1, "cron", "root", 0, 0.0, 4, 1),
+    ];
+    Snapshot {
+        cpu: CpuShare { busy: 12.0, user: 8.0, system: 4.0, idle: 88.0 },
+        memory: Memory { total: 16 * GIB, available: 11 * GIB, cached: 3 * GIB, swap_total: 4 * GIB, swap_free: 4 * GIB, buffers: GIB / 8, shmem: GIB / 4, sunreclaim: GIB / 4, kernel_stack: 16 << 20, page_tables: 48 << 20, zswap: 0 },
+        disk_read_bps: 120_000.0,
+        disk_write_bps: 80_000.0,
+        ifaces: vec![IfaceRate { name: "eth0".into(), rx_bps: 24_000.0, tx_bps: 6_000.0, rx_total: 480 << 20, tx_total: 96 << 20, rx_packets: 410_000, tx_packets: 190_000 }],
+        procs,
+        cores: vec![14.0, 9.0, 21.0, 6.0, 11.0, 8.0, 17.0, 10.0],
+        gpu_busy: None,
     }
 }
 

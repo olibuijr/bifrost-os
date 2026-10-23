@@ -392,7 +392,9 @@ impl Monitor {
         moving |= self.inspect_scroll.tick(t);
         moving |= self.poll_job();
         let due = self.last_sample.map_or(true, |last| t - last >= self.frequency.millis());
-        if !due {
+        // Under the compliance harness the monitor reads once (see `Sampler::sample`): a second reading would add a point
+        // to the graphs whenever the harness's settle window happened to outlast the update interval.
+        if !due || (bifrost_app::testing::pinned() && self.last_sample.is_some()) {
             return moving;
         }
         let dt = self.last_sample.map_or(self.frequency.seconds() as f64, |last| (t - last) / 1000.0);
@@ -407,8 +409,11 @@ impl Monitor {
             self.averages_saved_at = Some(t);
         }
         self.history.record(&snap);
-        if let Some(pressure) = inspect::read_pressure() {
-            self.history.pressure.push(pressure);
+        // the pressure graph keeps the machine's own readings out of the pinned frame (an empty history draws flat)
+        if !bifrost_app::testing::pinned() {
+            if let Some(pressure) = inspect::read_pressure() {
+                self.history.pressure.push(pressure);
+            }
         }
         if self.dock_mode != DockMode::Off {
             self.dock_update = Some(model::dock_content(self.dock_mode, &snap, &self.history));

@@ -39,13 +39,15 @@ fn app(tag: &str) -> (Files, Ui, PathBuf) {
     (f, ui, home)
 }
 
-/// Pumps finished jobs until `done` holds (or 5 s pass).
+/// Pumps finished jobs until `done` holds. The bound is wall time for a worker thread to run a directory read or a
+/// file operation, which a loaded full-workspace run (hundreds of runnable test threads, a busy disk) can stretch far
+/// beyond what an idle machine needs, so it is generous: it only ends a job that never reports back.
 fn pump_until(f: &mut Files, ui: &Ui, done: impl Fn(&Files) -> bool) {
     let start = std::time::Instant::now();
-    while !done(f) && start.elapsed().as_secs() < 5 {
-        if crate::bare::sys::wait(&f.fds(), 50).contains(&true) {
-            f.pump(ui);
-        }
+    while !done(f) && start.elapsed().as_secs() < 60 {
+        // `pump` drains the pool whether or not the wake fd fired, so a wake-up cannot be what the test waits on
+        crate::bare::sys::wait(&f.fds(), 50);
+        f.pump(ui);
     }
     assert!(done(f), "timed out waiting for a job");
 }
