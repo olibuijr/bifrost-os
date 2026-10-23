@@ -1892,6 +1892,34 @@ and secure stream upgrade; upload tasks and OS-level background transfer; an mDN
 transport); no `Vary`, `Expires` or `Age` handling; `URLError` has the few codes used here. The shared session's
 `url::URLCache` stays memory only.
 
+### Networking and privacy (2026-10-23)
+
+Rule: a request to a third-party service carries nothing that tells one person's requests apart. Both HTTP stacks
+are privacy-first by default, and a caller opts in only where a sign-in genuinely needs it.
+
+- **No cookies by default.** `deildu::http::Client::new` keeps no cookies and sends none (`with_cookies()` opts in,
+  `keeps_cookies()` says which). `URLSession` never adds a `Cookie` header on its own. A `ConfiguredSession` sends
+  cookies from its configuration's `http_cookie_storage` when `http_should_set_cookies` is on (the reference default);
+  no app builds one today, and an app that does for a third-party service turns `http_should_set_cookies` off.
+- **Generic `User-Agent`.** Both send `Mozilla/5.0` (`deildu::http::USER_AGENT`, `url::DEFAULT_USER_AGENT`): no
+  product, version or device. A request that names its own `User-Agent` replaces it; `Client::user_agent(..)` sets
+  another default for one client.
+- **Who opts in, and why.**
+  | Caller | Cookies | User-Agent |
+  |---|---|---|
+  | Browser page loader (`shell/browser/fetch.rs`) | kept (sites sign the person in) | `BROWSER_USER_AGENT` (browser-style, no product name) |
+  | Deildu site (`deildu/mod.rs`) | kept (the sign-in is a cookie session, saved to disk) | `BROWSER_USER_AGENT` |
+  | Maps tiles, geocoding, routing, transit (`maptiles::net::Live`) | none | the app's identifying agent only for `*.openstreetmap.org` (the tile and Nominatim usage policies require it), generic elsewhere (`net::agent_for`) |
+  | Weather forecasts and place search, Podcasts directories (fyyd, gpodder) and feeds, Music radio directory, News pictures (`shell::music::radio::Http`) | none | generic |
+  | Stocks and the Weather watchlist (`market_quotes::QuoteHttp`) | none | generic |
+  | Radio streams (`media/stream.rs`), the captive-portal probe (`net/captive.rs`) | none | generic |
+  | Mail autoconfig, Messages (Matrix, bearer token), DAW AI (API key) | none | generic |
+  | First party: App Store and updates (`shell/store/net.rs`), BifrOSt Account (`account_page.rs`, session token sent explicitly from the keychain) | none | generic (a product agent may be set with `user_agent(..)` if the server ever needs the version; nothing does today) |
+  | `URLSession` apps (Assistant, Calculator rates, News feeds, Calendar subscriptions, Locate) | none | generic |
+- **Apple parity, decided divergence.** `URLSession.shared` on the reference platform uses `HTTPCookieStorage.shared`
+  and a `User-Agent` naming the app and the OS version. Ours does neither by default; the parity API is still there
+  (`attach_cookies`, `store_cookies`, `ConfiguredSession` with a cookie store, a caller-set `User-Agent`).
+
 ## Unified Logging (`os.Logger`, `OSLogStore`, `log` CLI; milestone `docs/milestone-unified-logging.md`, Phase 1)
 
 Code: `springboard/core/src/log.rs` (shared with the shell, which cannot depend on the SDK), re-exported as

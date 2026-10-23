@@ -1,7 +1,8 @@
-//! The network the app reads through: one GET with the identifying user agent the tile and geocoder usage policies ask
-//! for. The window uses `Live`; tests and the pinned testing kit use fakes, so no test reaches a server.
+//! The network the app reads through: one GET, cookie-less, with the identifying user agent only where the usage policy
+//! asks for one (the OpenStreetMap tile and Nominatim servers) and the generic one everywhere else. The window uses
+//! `Live`; tests and the pinned testing kit use fakes, so no test reaches a server.
 
-use crate::deildu::http::{Client, Tls, Transport};
+use crate::deildu::http::{Client, Tls, Transport, USER_AGENT};
 use std::collections::HashMap;
 use std::io;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -17,8 +18,8 @@ pub trait Net: Send + Sync {
 /// The most clients (one per scheme and host) kept; past it they are all dropped and made again.
 const MAX_CLIENTS: usize = 32;
 
-/// HTTPS and HTTP through the shell's own client. Each host gets a client of its own, so the cookies one service sets are
-/// never sent to another, and a request to an `https` address is made by a client that refuses a redirect to plain
+/// HTTPS and HTTP through the shell's own client, which keeps no cookies. Each host gets a client of its own, and a
+/// request to an `https` address is made by a client that refuses a redirect to plain
 /// `http` (the replies of a tile, search or route server cannot be swapped by a network attacker that way). An address
 /// the person configured as `http` is still read over `http`.
 #[derive(Default)]
@@ -66,10 +67,24 @@ impl Live {
     }
 }
 
+/// Hosts whose usage policy requires an agent that names the app and a contact: the OpenStreetMap Foundation's tile and
+/// Nominatim servers. Every other service (imagery, routing, transit, a server the person set) learns nothing from it.
+fn wants_identification(host: &str) -> bool {
+    let host = host.to_ascii_lowercase();
+    host == "openstreetmap.org" || host.ends_with(".openstreetmap.org")
+}
+
+/// The `User-Agent` a request to `url` sends: `identifying` (the app's, `source::user_agent`) where the policy asks for
+/// it, else the generic [`USER_AGENT`].
+pub fn agent_for<'a>(url: &str, identifying: &'a str) -> &'a str {
+    let host = url::Url::parse(url).ok().and_then(|u| u.host_str().map(str::to_string)).unwrap_or_default();
+    if wants_identification(&host) { identifying } else { USER_AGENT }
+}
+
 impl Net for Live {
     fn get(&self, url: &str, user_agent: &str, limit: usize) -> io::Result<Vec<u8>> {
         let client = self.client_for(url)?;
-        let r = client.get_with_headers(url, &[("User-Agent", user_agent)], limit)?;
+        let r = client.get_with_headers(url, &[("User-Agent", agent_for(url, user_agent))], limit)?;
         if r.status != 200 {
             return Err(io::Error::other(format!("status {}", r.status)));
         }
@@ -195,6 +210,32 @@ mod tests {
         assert!(Arc::ptr_eq(&a, &a_again));
         let plain = live.client_for("http://a.example/x").unwrap();
         assert!(!Arc::ptr_eq(&a, &plain), "the https-only client is not the plain one");
+    }
+
+    #[test]
+    fn only_the_openstreetmap_servers_are_told_the_app() {
+        let app = "BifrOSt-Maps/1.0 (contact)";
+        assert_eq!(agent_for("https://tile.openstreetmap.org/1/2/3.png", app), app);
+        assert_eq!(agent_for("https://nominatim.openstreetmap.org/search?q=x", app), app);
+        assert_eq!(agent_for("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/1/2/3", app), "Mozilla/5.0");
+        assert_eq!(agent_for("https://router.example/route/v1/driving/1,2;3,4", app), "Mozilla/5.0");
+        assert_eq!(agent_for("https://notopenstreetmap.org/x", app), "Mozilla/5.0", "a look-alike host is not the foundation");
+        assert_eq!(agent_for("not a url", app), "Mozilla/5.0");
+    }
+
+    #[test]
+    fn a_request_carries_no_cookie_and_the_agent_its_host_calls_for() {
+        use crate::deildu::http::tests::{ok, Fake};
+        let fake = Fake::new(vec!["HTTP/1.1 200 OK\r\nSet-Cookie: t=1\r\nContent-Length: 1\r\n\r\na", &ok("b")]);
+        let live = Live::with_transport(fake.clone());
+        live.get("https://imagery.example/1/2/3", "BifrOSt-Maps/1.0", 1000).unwrap();
+        live.get("https://imagery.example/1/2/4", "BifrOSt-Maps/1.0", 1000).unwrap();
+        let reqs = fake.requests.lock().unwrap().clone();
+        assert_eq!(reqs.len(), 2);
+        for r in &reqs {
+            assert!(!r.contains("Cookie:"), "{r}");
+            assert!(r.contains("\r\nUser-Agent: Mozilla/5.0\r\n") && !r.contains("BifrOSt"), "{r}");
+        }
     }
 
     #[test]

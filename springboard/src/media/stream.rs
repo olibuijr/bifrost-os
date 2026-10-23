@@ -29,7 +29,8 @@ use std::time::Duration;
 use symphonia_core::io::MediaSource;
 use url::Url;
 
-const USER_AGENT: &str = "SpringBoard/1.0 (radio)";
+// radio stations are third parties: the generic agent of the shared client, no product name
+use crate::deildu::http::USER_AGENT;
 const MAX_REDIRECTS: usize = 5;
 const HEADER_LIMIT: usize = 16 * 1024;
 /// Longest chunk-size line we accept, extensions included.
@@ -597,6 +598,15 @@ mod tests {
     use std::net::TcpListener;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::time::Instant;
+
+    #[test]
+    fn a_station_is_asked_with_the_generic_agent_and_no_cookie() {
+        let u = Url::parse("https://radio.example/live?x=1").unwrap();
+        let req = request(&u, "radio.example");
+        assert!(req.contains("\r\nUser-Agent: Mozilla/5.0\r\n"), "{req}");
+        assert!(!req.to_ascii_lowercase().contains("springboard") && !req.to_ascii_lowercase().contains("bifrost"), "{req}");
+        assert!(!req.contains("Cookie:"), "{req}");
+    }
 
     fn handle() -> (LiveHandle, Arc<AtomicUsize>) {
         let wakes = Arc::new(AtomicUsize::new(0));

@@ -9,7 +9,12 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use url::Url;
 
-const USER_AGENT: &str = "Mozilla/5.0 (bifrost; CPU OS 15_7 like Golden Gate) WebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Browser/604.1";
+/// The `User-Agent` every client sends unless told otherwise: generic, so a third-party service learns no product,
+/// version or device from it (docs/bifrost-ui.md, "Networking and privacy").
+pub const USER_AGENT: &str = "Mozilla/5.0";
+/// The browser-style agent for the clients that load web pages for the person (the shell's Browser, the Deildu site):
+/// sites lay pages out by it. It names no product either.
+pub const BROWSER_USER_AGENT: &str = "Mozilla/5.0 (CPU OS 15_7 like Golden Gate) WebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Browser/604.1";
 const MAX_REDIRECTS: usize = 5;
 const IDLE_PER_HOST: usize = 4;
 const HEADER_LIMIT: usize = 64 * 1024;
@@ -485,25 +490,48 @@ fn read_response(s: &mut dyn Stream, limit: usize, head_only: bool) -> io::Resul
 
 type Idle = HashMap<(String, u16), Vec<Box<dyn Stream>>>;
 
-/// A browsing session: cookies, connection reuse and redirects.
+/// An HTTP session: connection reuse, redirects and, only when asked for (`with_cookies`), a cookie jar.
+///
+/// Privacy first: a new client keeps no cookies and sends none, and its `User-Agent` is the generic [`USER_AGENT`].
+/// Only a client that signs the person in with a cookie session (the Browser, the Deildu site) opts in.
 pub struct Client {
     transport: Arc<dyn Transport>,
     jar: Mutex<Jar>,
     idle: Mutex<Idle>,
     https_only: bool,
-    /// whether the jar takes the cookies servers set and sends them back (`without_cookies` turns it off)
+    /// whether the jar takes the cookies servers set and sends them back (off unless `with_cookies`)
     cookies: bool,
+    /// the `User-Agent` sent when a request names none of its own
+    agent: String,
 }
 
 impl Client {
     pub fn new(transport: Arc<dyn Transport>, jar: Jar) -> Self {
-        Client { transport, jar: Mutex::new(jar), idle: Mutex::new(HashMap::new()), https_only: false, cookies: true }
+        Client { transport, jar: Mutex::new(jar), idle: Mutex::new(HashMap::new()), https_only: false, cookies: false, agent: USER_AGENT.to_string() }
+    }
+
+    /// Keeps the cookies servers set (in the jar given to `new`) and sends them back. Only for a sign-in that is a
+    /// cookie session: the Browser and the Deildu site. Every other client stays cookie-less.
+    pub fn with_cookies(mut self) -> Self {
+        self.cookies = true;
+        self
     }
 
     /// Neither keeps the cookies a server sets nor sends any: every request stands alone, so a service cannot tell one
-    /// person's requests apart by a cookie (the quote fetcher, `shell::market_quotes::QuoteHttp`).
+    /// person's requests apart by a cookie. This is the default; the call states it where it matters (quotes).
     pub fn without_cookies(mut self) -> Self {
         self.cookies = false;
+        self
+    }
+
+    /// Whether this client keeps and sends cookies.
+    pub fn keeps_cookies(&self) -> bool {
+        self.cookies
+    }
+
+    /// The `User-Agent` sent when a request names none of its own (the default is the generic [`USER_AGENT`]).
+    pub fn user_agent(mut self, agent: &str) -> Self {
+        self.agent = agent.to_string();
         self
     }
 
@@ -524,7 +552,7 @@ impl Client {
             let host=u.host_str().ok_or_else(||io::Error::other("missing host"))?;
             let mut stream=self.transport.connect(host,u.port_or_known_default().unwrap_or(443),tls)?;
             let extra=if start>0 {vec![("Range".into(),format!("bytes={start}-"))]} else {vec![]};
-            stream.write_all(&request_bytes("GET",&u,host,&extra,None,None))?;stream.flush()?;
+            stream.write_all(&request_bytes("GET",&u,host,&extra,&self.agent,None,None))?;stream.flush()?;
             let mut reader=std::io::BufReader::new(stream);
             let mut head=Vec::new();
             loop {
@@ -637,7 +665,7 @@ impl Client {
         }
         let key = (host.clone(), port);
         let cookie = if self.cookies { self.jar.lock().unwrap().header(&host, tls) } else { None };
-        let req = request_bytes(method, u, &host, extra, cookie.as_deref(), body);
+        let req = request_bytes(method, u, &host, extra, &self.agent, cookie.as_deref(), body);
         let mut reused = true;
         let mut attempt = 0;
         loop {
@@ -673,7 +701,7 @@ impl Client {
     }
 }
 
-fn request_bytes(method: &str, u: &Url, host: &str, extra: &[(String, String)], cookie: Option<&str>, body: Option<&[u8]>) -> Vec<u8> {
+fn request_bytes(method: &str, u: &Url, host: &str, extra: &[(String, String)], default_agent: &str, cookie: Option<&str>, body: Option<&[u8]>) -> Vec<u8> {
     let mut target = u.path().to_string();
     if let Some(q) = u.query() {
         target.push('?');
@@ -681,7 +709,7 @@ fn request_bytes(method: &str, u: &Url, host: &str, extra: &[(String, String)], 
     }
     // a caller that names its own User-Agent (a tile or geocoder service that asks clients to identify themselves) replaces the default
     let own_agent = extra.iter().any(|(k, _)| k.eq_ignore_ascii_case("User-Agent"));
-    let agent = if own_agent { String::new() } else { format!("User-Agent: {USER_AGENT}\r\n") };
+    let agent = if own_agent { String::new() } else { format!("User-Agent: {default_agent}\r\n") };
     let mut req = format!("{method} {target} HTTP/1.1\r\nHost: {host}\r\n{agent}Accept: */*\r\nConnection: keep-alive\r\n");
     for (k, v) in extra {
         req.push_str(&format!("{k}: {v}\r\n"));
@@ -869,7 +897,7 @@ pub(crate) mod tests {
     #[test]
     fn get_follows_redirects_sends_cookies_and_reuses_the_connection() {
         let fake = Fake::new(vec!["HTTP/1.1 302 Found\r\nLocation: /home\r\nSet-Cookie: sid=42; Path=/\r\nContent-Length: 0\r\n\r\n", &ok("<html>home</html>")]);
-        let c = Client::new(fake.clone(), Jar::default());
+        let c = Client::new(fake.clone(), Jar::default()).with_cookies();
         let r = c.get("https://www.example.net/login?x=1", None, 1 << 20).unwrap();
         assert_eq!(r.status, 200);
         assert_eq!(r.body, b"<html>home</html>");
@@ -891,6 +919,37 @@ pub(crate) mod tests {
         let reqs = fake.requests.lock().unwrap().clone();
         assert!(reqs.iter().all(|r| !r.contains("Cookie:")), "{reqs:?}");
         assert_eq!(c.jar().header("www.example.net", true).as_deref(), Some("old=1"), "the jar took nothing");
+    }
+
+    #[test]
+    fn a_new_client_is_cookie_less_and_sends_the_generic_agent() {
+        let fake = Fake::new(vec!["HTTP/1.1 302 Found\r\nLocation: /home\r\nSet-Cookie: sid=42; Path=/\r\nContent-Length: 0\r\n\r\n", &ok("<html>home</html>")]);
+        let mut jar = Jar::default();
+        jar.set("www.example.net", "old=1");
+        let c = Client::new(fake.clone(), jar);
+        assert!(!c.keeps_cookies());
+        assert_eq!(c.get("https://www.example.net/login", None, 1 << 20).unwrap().status, 200);
+        let reqs = fake.requests.lock().unwrap().clone();
+        assert_eq!(reqs.len(), 2);
+        for r in &reqs {
+            assert!(!r.contains("Cookie:"), "{r}");
+            assert!(r.contains("\r\nUser-Agent: Mozilla/5.0\r\n"), "{r}");
+            assert!(!r.to_ascii_lowercase().contains("bifrost"), "no product name: {r}");
+        }
+        assert_eq!(c.jar().header("www.example.net", true).as_deref(), Some("old=1"), "the jar took nothing");
+    }
+
+    #[test]
+    fn a_client_given_an_agent_sends_it_unless_the_request_names_one() {
+        let fake = Fake::new(vec![&ok("a"), &ok("b")]);
+        let c = Client::new(fake.clone(), Jar::default()).user_agent(BROWSER_USER_AGENT);
+        c.get("https://h.example/a", None, 1024).unwrap();
+        c.get_with_headers("https://h.example/b", &[("User-Agent", "Own/1")], 1024).unwrap();
+        let reqs = fake.requests.lock().unwrap().clone();
+        assert!(reqs[0].contains(&format!("User-Agent: {BROWSER_USER_AGENT}\r\n")), "{}", reqs[0]);
+        assert_eq!(reqs[1].matches("User-Agent:").count(), 1, "{}", reqs[1]);
+        assert!(reqs[1].contains("User-Agent: Own/1\r\n"));
+        assert!(!BROWSER_USER_AGENT.to_ascii_lowercase().contains("bifrost"));
     }
 
     #[test]

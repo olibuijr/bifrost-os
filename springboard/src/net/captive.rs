@@ -123,6 +123,11 @@ pub fn classify(probe_url: &str, reply: Option<&Reply>) -> Verdict {
     }
 }
 
+/// The probe request: the probe server is a third party, so it gets the generic agent and no cookie.
+fn probe_request(host: &str, path: &str) -> String {
+    format!("GET {path} HTTP/1.0\r\nHost: {host}\r\nUser-Agent: {}\r\nConnection: close\r\n\r\n", crate::deildu::http::USER_AGENT)
+}
+
 /// Sends the probe and classifies the answer. Blocking: call it from a thread, never from the shell's loop.
 pub fn probe(url: &str, timeout: Duration) -> Verdict {
     let Some((host, port, path)) = split_http_url(url) else { return Verdict::Offline };
@@ -130,8 +135,7 @@ pub fn probe(url: &str, timeout: Duration) -> Verdict {
     let Ok(mut stream) = TcpStream::connect_timeout(&addr, timeout) else { return Verdict::Offline };
     let _ = stream.set_read_timeout(Some(timeout));
     let _ = stream.set_write_timeout(Some(timeout));
-    let request = format!("GET {path} HTTP/1.0\r\nHost: {host}\r\nUser-Agent: BifrOSt\r\nConnection: close\r\n\r\n");
-    if stream.write_all(request.as_bytes()).is_err() {
+    if stream.write_all(probe_request(&host, &path).as_bytes()).is_err() {
         return Verdict::Offline;
     }
     let mut buf = Vec::new();
@@ -197,6 +201,14 @@ impl Assistant {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_probe_names_no_product() {
+        let req = probe_request("connectivitycheck.example", "/generate_204");
+        assert!(req.starts_with("GET /generate_204 HTTP/1.0\r\nHost: connectivitycheck.example\r\n"), "{req}");
+        assert!(req.contains("\r\nUser-Agent: Mozilla/5.0\r\n"), "{req}");
+        assert!(!req.to_ascii_lowercase().contains("bifrost") && !req.contains("Cookie:"), "{req}");
+    }
 
     fn reply(status: u16, location: Option<&str>) -> Reply {
         Reply { status, location: location.map(str::to_string), body: Vec::new() }

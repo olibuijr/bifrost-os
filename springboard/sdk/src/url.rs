@@ -552,10 +552,7 @@ impl URLSession {
             None => self.transport.connect(&p.host, p.port, p.tls).map_err(|e| URLError::CannotConnect(format!("{}: {e}", p.host)))?,
         };
         let target = request_target(&p, url, proxy.is_some());
-        let mut head = format!("{method} {target} HTTP/1.1\r\nHost: {}\r\nUser-Agent: BifrostApp/1\r\nAccept: */*\r\nConnection: close\r\n", p.host_header);
-        for (k, v) in headers {
-            head.push_str(&format!("{k}: {v}\r\n"));
-        }
+        let mut head = request_head(method, &target, &p.host_header, headers);
         if let Some(b) = payload {
             head.push_str(&format!("Content-Length: {}\r\n", b.len()));
         }
@@ -731,6 +728,45 @@ fn resolve(base: &str, loc: &str) -> Result<String, URLError> {
     let dir = p.target.split('?').next().unwrap_or("/");
     let dir = &dir[..dir.rfind('/').map_or(0, |i| i + 1)];
     Ok(format!("{origin}{dir}{loc}"))
+}
+
+/// The `User-Agent` a request sends when it names none: the shared client's generic one, so a third-party service
+/// learns no product, version or device (docs/bifrost-ui.md, "Networking and privacy").
+pub const DEFAULT_USER_AGENT: &str = springboard::deildu::http::USER_AGENT;
+
+/// The request head up to the caller's headers (no blank line yet). A `User-Agent` among `headers` replaces the
+/// default one. No `Cookie` is added here: a session sends cookies only when the app attaches them (`attach_cookies`).
+fn request_head(method: &str, target: &str, host: &str, headers: &[(String, String)]) -> String {
+    let mut head = format!("{method} {target} HTTP/1.1\r\nHost: {host}\r\n");
+    if !headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("User-Agent")) {
+        head.push_str(&format!("User-Agent: {DEFAULT_USER_AGENT}\r\n"));
+    }
+    head.push_str("Accept: */*\r\nConnection: close\r\n");
+    for (k, v) in headers {
+        head.push_str(&format!("{k}: {v}\r\n"));
+    }
+    head
+}
+
+#[cfg(test)]
+mod head_tests {
+    use super::*;
+
+    #[test]
+    fn a_request_names_no_product_and_carries_no_cookie() {
+        let head = request_head("GET", "/v1/forecast?lat=64", "api.example", &[]);
+        assert!(head.starts_with("GET /v1/forecast?lat=64 HTTP/1.1\r\nHost: api.example\r\n"), "{head}");
+        assert!(head.contains("\r\nUser-Agent: Mozilla/5.0\r\n"), "{head}");
+        assert!(!head.to_ascii_lowercase().contains("bifrost"), "{head}");
+        assert!(!head.contains("Cookie:"), "{head}");
+    }
+
+    #[test]
+    fn a_named_user_agent_replaces_the_default() {
+        let head = request_head("GET", "/", "h", &[("user-agent".into(), "Own/1".into()), ("Accept-Language".into(), "is".into())]);
+        assert_eq!(head.to_ascii_lowercase().matches("user-agent:").count(), 1, "{head}");
+        assert!(head.contains("user-agent: Own/1\r\n") && head.contains("Accept-Language: is\r\n"), "{head}");
+    }
 }
 
 /// Cookie hand-off for `URLSession` (`HTTPCookieStorage` parity): sets the `Cookie` header of `request` to the cookies

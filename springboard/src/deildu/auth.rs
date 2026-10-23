@@ -137,7 +137,7 @@ mod tests {
     fn login_posts_the_form_and_checks_a_listing() {
         let listing = ok(r#"<html><a href="/browse.php?cat=6">Movies</a></html>"#);
         let fake = Fake::new(vec![&ok(LOGIN_HTML), "HTTP/1.1 302 Found\r\nLocation: /my.php\r\nSet-Cookie: pass=1\r\nContent-Length: 0\r\n\r\n", &ok("<html>my</html>"), &listing]);
-        let c = Client::new(fake.clone(), Jar::default());
+        let c = Client::new(fake.clone(), Jar::default()).with_cookies();
         assert_eq!(login(&c, "me", "pw"), Ok(()));
         let reqs = fake.requests.lock().unwrap().clone();
         assert!(reqs[1].starts_with("POST /takelogin.php"));

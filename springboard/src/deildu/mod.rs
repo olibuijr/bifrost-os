@@ -187,7 +187,8 @@ impl Deildu {
 
     /// `dir` holds the session and caches; `transport` opens connections.
     pub fn new(ui: &Ui, w: i32, h: i32, dir: PathBuf, transport: Arc<dyn Transport>) -> std::io::Result<Self> {
-        let client = Arc::new(Client::new(transport, auth::load_session(&dir)));
+        // the site's sign-in is a cookie session (saved in `dir`), so this is one of the clients that keeps cookies
+        let client = Arc::new(Client::new(transport, auth::load_session(&dir)).with_cookies().user_agent(http::BROWSER_USER_AGENT));
         let compat = std::fs::read_to_string(dir.join(COMPAT_FILE))
             .unwrap_or_default()
             .lines()
