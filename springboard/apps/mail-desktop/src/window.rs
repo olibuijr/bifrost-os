@@ -873,6 +873,10 @@ impl MailWindow {
             return self.chord(key, mods);
         }
         if self.mail.sheet.is_none() {
+            // Up and Down Arrow move the selection in the message list (the find bar takes no arrows)
+            if let KeyInput::Code(code @ (KEY_UP | KEY_DOWN)) = k {
+                return self.step_selection(&ctx.ui, code == KEY_DOWN);
+            }
             return self.find_key(k);
         }
         self.ensure_address_book(ctx);
@@ -927,6 +931,25 @@ impl MailWindow {
         self.mail.sync_recipient_field();
         self.dirty = true;
         true
+    }
+
+    /// Up Arrow (`down` false) or Down Arrow in the message list: the message above or below the selected one is
+    /// selected and opened, and the list scrolls to keep it in view. False at either end of the list.
+    fn step_selection(&mut self, ui: &Ui, down: bool) -> bool {
+        let Some((index, uid)) = self.mail.neighbour(down) else { return false };
+        self.open_message(uid);
+        self.scroll_list_to(ui, index);
+        self.dirty = true;
+        true
+    }
+
+    /// Scrolls the message list just far enough that line `index` is in view.
+    fn scroll_list_to(&mut self, ui: &Ui, index: usize) {
+        let offset = self.list_scroll.offset();
+        let wanted = crate::draw::list_offset_showing(ui, &self.mail, self.h as f32, index, offset);
+        if wanted != offset {
+            self.list_scroll.jump_to(wanted);
+        }
     }
 
     /// Keys for the find bar over the reader, when no sheet is open: text goes to the search, Return steps to the next

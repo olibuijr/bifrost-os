@@ -588,6 +588,24 @@ mod tests {
     }
 
     #[test]
+    fn the_arrow_keys_move_the_selection_in_the_list() {
+        let dir = std::env::temp_dir().join(format!("bifrost-mail-arrows-{}", std::process::id()));
+        let ctx = ctx(&dir);
+        let mut app = app_with_inbox(&ctx);
+        let open = |app: &MailApp| app.window.as_ref().unwrap().mail.open;
+        let (up, down) = (Input::Key(KeyInput::Code(38)), Input::Key(KeyInput::Code(40)));
+        assert!(app.event(&ctx, down.clone()), "Down selects the first message");
+        assert_eq!(open(&app), Some(9));
+        app.event(&ctx, down.clone());
+        assert_eq!(open(&app), Some(3));
+        assert!(!app.event(&ctx, down), "the last message stays selected");
+        assert_eq!(open(&app), Some(3));
+        app.event(&ctx, up);
+        assert_eq!(open(&app), Some(9));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn a_compose_window_takes_its_clicks_keys_and_escape() {
         let dir = std::env::temp_dir().join(format!("bifrost-mail-compose-{}", std::process::id()));
         let ctx = ctx(&dir);

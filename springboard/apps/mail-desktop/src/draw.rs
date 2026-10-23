@@ -51,6 +51,25 @@ const INDENT_PT: f32 = 14.0;
 const MAX_INDENT_LEVELS: usize = 6;
 const RADIUS_PT: f32 = m::ICON_RADIUS;
 
+/// The list offset that shows line `index` whole in a window `h` pixels tall, from `offset`: unchanged while the line
+/// is in view, otherwise scrolled just far enough that it meets the top or the bottom (above the status footer). Up and
+/// Down Arrow keep the selection on screen this way.
+pub fn list_offset_showing(ui: &Ui, mail: &Mail, h: f32, index: usize, offset: f32) -> f32 {
+    use bifrost_app::controls::scroll::{offset_for_rect, Anchor};
+    let row = ui.pt(ROW_PT);
+    let footer = ui.pt(FOOT_LINE_PT) + 2.0 * ui.pt(SPACE_M);
+    let view = (h - chrome_height(ui, mail) - footer).max(row);
+    let y = index as f32 * row;
+    let anchor = if y < offset {
+        Anchor::Leading
+    } else if y + row > offset + view {
+        Anchor::Trailing
+    } else {
+        return offset;
+    };
+    offset_for_rect(y, row, view, mail.visible_lines().len() as f32 * row + footer, anchor)
+}
+
 /// Where a message row's sender and subject start in a list column at `x0`: past the unread dot's gutter (the dot, then
 /// a space so it never touches the first letter) and the conversation indent of `depth`.
 pub fn list_text_x(ui: &Ui, x0: f32, depth: usize) -> f32 {

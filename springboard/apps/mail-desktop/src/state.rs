@@ -1077,6 +1077,20 @@ impl Mail {
         !self.bodies.contains_key(&uid)
     }
 
+    /// The message Down Arrow (`down`) or Up Arrow selects in the list: the line below or above the selected one, and
+    /// the first (Down) or the last (Up) line with nothing selected. None at either end, or for an empty list.
+    pub fn neighbour(&self, down: bool) -> Option<(usize, u32)> {
+        let lines = self.visible_lines();
+        let at = self.open.and_then(|uid| lines.iter().position(|l| l.row.uid == uid));
+        let next = match (at, down) {
+            (None, true) => 0,
+            (None, false) => lines.len().checked_sub(1)?,
+            (Some(i), true) => i + 1,
+            (Some(i), false) => i.checked_sub(1)?,
+        };
+        lines.get(next).map(|l| (next, l.row.uid))
+    }
+
     pub fn mark_seen_locally(&mut self, uid: u32) {
         self.set_flag_locally(uid, Flag::Seen, true);
     }
@@ -2492,6 +2506,21 @@ mod tests {
         assert_eq!(files.iter().map(|a| a.name.as_str()).collect::<Vec<_>>(), vec!["tolur.csv"]);
         mail.show_mailbox("Sent");
         assert!(mail.attachments.is_empty());
+    }
+
+    #[test]
+    fn the_arrows_step_through_the_list_and_stop_at_its_ends() {
+        let mut mail = Mail::new(vec![account("work")]);
+        assert_eq!(mail.neighbour(true), None, "an empty list");
+        mail.apply_listing("work", INBOX, vec![], vec![listed(1, "a"), listed(2, "b"), listed(3, "c")]);
+        // newest first: 3, 2, 1
+        assert_eq!(mail.neighbour(true), Some((0, 3)), "Down with nothing selected takes the first");
+        assert_eq!(mail.neighbour(false), Some((2, 1)), "Up with nothing selected takes the last");
+        mail.open_message(2);
+        assert_eq!(mail.neighbour(true), Some((2, 1)));
+        assert_eq!(mail.neighbour(false), Some((0, 3)));
+        mail.open_message(1);
+        assert_eq!(mail.neighbour(true), None, "the last message stays selected");
     }
 
     #[test]
