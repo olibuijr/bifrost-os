@@ -1513,6 +1513,22 @@ impl Calendar {
         }
     }
 
+    /// `scrollWheel:` at `(x, y)` in window pixels: the wheel moved the content `dy` pixels (positive toward the start).
+    /// The hour grid, the search results and the event form scroll by the wheel's travel (`Scroller::wheel`); the
+    /// calendar list and a view with nothing to scroll (the month grid) take none. Not taken while a press or drag is in
+    /// progress. True when the content moved.
+    pub fn wheel(&mut self, ui: &Ui, x: f32, _y: f32, dy: f32) -> bool {
+        self.layout_columns(ui);
+        if x < self.x0 || self.drag.is_some() || self.scrolling || self.field_touch {
+            return false;
+        }
+        if !self.scroll.wheel(dy) {
+            return false;
+        }
+        self.dirty = true;
+        true
+    }
+
     pub fn tick(&mut self, ui: &Ui, t: f64) -> bool {
         if self.undo.as_ref().is_some_and(|(_, until)| t >= *until) {
             self.undo = None;

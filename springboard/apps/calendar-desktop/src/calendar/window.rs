@@ -214,6 +214,14 @@ impl Calendar {
         Some((result, open))
     }
 
+    /// The scroll wheel over the editor window `window`, at `(x, y)` with travel `dy`, all in window points (as
+    /// `App::window_pointer` delivers them; the editor lays out in pixels). True when the form scrolled; false when it did
+    /// not, or no editor window has `window`.
+    pub fn wheel_pane(&mut self, ui: &Ui, window: u32, x: f32, y: f32, dy: f32) -> bool {
+        let k = ui.s;
+        self.with_pane(window, |c| c.wheel(ui, x * k, y * k, dy * k)).is_some_and(|(moved, _)| moved)
+    }
+
     /// Draws the editor of `window` at the size of the surface `s` (pixels), with the editor's toolbar. Returns false when
     /// no editor window has `window`.
     pub fn draw_pane(&mut self, window: u32, s: &mut Surface, ui: &Ui, t: f64) -> bool {

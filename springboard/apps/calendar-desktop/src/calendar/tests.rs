@@ -2746,3 +2746,50 @@ fn the_sidebar_mini_month_pages_and_shows_a_clicked_day() {
     c.activate(&ui, Target::Sidebar, 500.0);
     assert!(c.mini_rect(&ui).is_none(), "hidden with the calendar list");
 }
+
+#[test]
+fn the_wheel_scrolls_the_hour_grid_but_not_the_calendar_list() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.set_size(1200, 780);
+    c.activate(&ui, Target::View(View::Week), 0.0);
+    c.layout_columns(&ui);
+    c.scroll.jump_top();
+    let x = c.x0 + ui.pt(200.0);
+    // a wheel turned down: the content travels up and the offset grows
+    assert!(c.wheel(&ui, x, ui.pt(300.0), -ui.pt(40.0)));
+    assert!((c.scroll.offset() - ui.pt(40.0)).abs() < 0.5);
+    assert!(c.wheel(&ui, x, ui.pt(300.0), ui.pt(10.0)), "and back up");
+    assert!((c.scroll.offset() - ui.pt(30.0)).abs() < 0.5);
+    if c.x0 > 0.0 {
+        assert!(!c.wheel(&ui, c.x0 / 2.0, ui.pt(300.0), -ui.pt(40.0)), "the calendar list does not scroll");
+    }
+    // the month grid fits the window
+    c.activate(&ui, Target::View(View::Month), 10.0);
+    assert!(!c.wheel(&ui, x, ui.pt(300.0), -ui.pt(40.0)));
+}
+
+#[test]
+fn the_wheel_scrolls_the_form_of_an_editor_window_and_leaves_the_grid() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    store::save(&temp.file(), &[event(1, "Standup")]).unwrap();
+    let mut c = week_calendar(&ui, temp.file());
+    let grid = c.scroll.offset();
+    assert!(c.open_pane(&ui, 7, 1));
+    // a long form (pickers open): give the window's form something to scroll
+    c.with_pane(7, |c| {
+        c.scroll.set_max(ui.pt(300.0));
+        c.scroll.jump_top();
+    });
+    let top = c.with_pane(7, |c| c.rows()[0].1).unwrap().0;
+    // window points, as `App::window_pointer` delivers them
+    assert!(c.wheel_pane(&ui, 7, 100.0, 200.0, -50.0));
+    let ((offset, now), open) = c.with_pane(7, |c| (c.scroll.offset(), c.rows()[0].1)).unwrap();
+    assert!(open);
+    assert!((offset - ui.pt(50.0)).abs() < 0.5, "the form scrolled 50 pt");
+    assert!((top - now - 50.0).abs() < 0.5, "its rows moved up 50 pt");
+    assert!((c.scroll.offset() - grid).abs() < 0.5, "the main window's grid stays where it was");
+    assert!(!c.wheel_pane(&ui, 8, 100.0, 200.0, -50.0), "no such window");
+}
