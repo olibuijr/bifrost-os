@@ -568,9 +568,16 @@ key. They also win over the shell's window chords: while the app in front publis
 app's Close Tab) or Cmd+M, the shell does not close or minimize the window with it (`Shell::app_owns_chord`, checked in
 `bin/shell.rs` before `hw_shortcut`). Publish the item disabled and without a key when it has nothing to do (the
 Browser's last tab) and the shell closes the window again. Shift+Cmd+W always closes the window, and the File menu's
-Close Window shows it while the app owns Cmd+W. Cmd+Y is not Redo, so an app can use it. In the shell's own fields Ctrl+Y redoes; in an SDK app the shell leaves it to the app, where the text engine reads it as the yank (Ctrl+K then Ctrl+Y puts the killed text back) and redo is Shift+Cmd+Z. Limits: 8 menus, 48 items each, titles cut
-to 64 characters, and the whole message fits one 16 KiB packet (extra items and menus are dropped, never split).
-Gaps against AppKit, recorded: submenus are drawn flat (a header row with indented children, not a flyout), a checked
+Close Window shows it while the app owns Cmd+W. Cmd+Y is not Redo, so an app can use it. In the shell's own fields Ctrl+Y redoes; in an SDK app the shell leaves it to the app, where the text engine reads it as the yank (Ctrl+K then Ctrl+Y puts the killed text back) and redo is Shift+Cmd+Z. Limits: 8 menus; 512 items
+in each menu level, counted apart for the menu's own items and for each submenu's children (`AppMenu::kept_items`), and
+1024 in one menu with its submenus; titles cut to 64 characters. A set that does not fit one 16 KiB packet goes as
+`AppMenus` and then `AppMenusMore` packets (tag 0x251, `proto::app_menu_packets`), whole menus each; anything still left
+out is logged by the SDK (and menus past 8 by the shell), never dropped silently. A submenu header is a row with a
+chevron that opens the submenu in place of its menu, under the same bar item, with a row back (`Menu::AppSub`, as Recent
+Items and Services); submenus nest to `MAX_APP_MENU_DEPTH`. A menu taller than the screen is held to the room below the
+bar and scrolls between arrows at its top and bottom edge (resting on an arrow, the wheel, or the keyboard).
+Gaps against AppKit, recorded: a submenu opens in place of its menu, not as a flyout beside it (the popup is one surface
+under the window server), a checked
 item shows a check mark glyph in its title, there are no item icons, tooltips, `representedObject`, alternate
 (Option) items or `NSMenuDelegate.menuNeedsUpdate` before opening; state is pushed on change instead. Menu items with
 a modifier-less key equivalent are ignored by the chord path.
