@@ -2806,6 +2806,16 @@ impl Shell {
                         let mut damage=crate::gfx::Damage::new(width,height);
                         for a in body_damage.areas() {damage.add(a.x0 as i32,(a.y0+top) as i32,(a.x1-a.x0) as i32,(a.y1-a.y0) as i32);}
                         if !focused { for a in body_damage.areas() { dim_rect(pixels, width, a.x0, a.y0 + top, a.x1, a.y1 + top, BACKGROUND_DIM); } }
+                        let src=self.ext.get(slot as usize).and_then(Option::as_ref).and_then(|h|h.frame());
+                        let dim=(!focused).then_some(BACKGROUND_DIM);
+                        // the app drew into the window's edge band: the band is taken again from the app's frame and the
+                        // dark-mode inner rim and the corner clip are applied once over it (stroking the retained buffer
+                        // stacked 15% white per repaint into a solid white border, E2E-10)
+                        let mut edge:Vec<(i32,i32,i32,i32)>=Vec::new();
+                        if !w.maximized && body_damage.areas().iter().any(|a| edge_band_rects(width,height,corner).iter().any(|r| overlaps(r,a,top))) {
+                            if let Some(src)=src { edge=restore_window_edge(pixels,width,height,top,src,dim,corner,window_rim_color()); }
+                            for r in &edge {damage.add(r.0,r.1,r.2,r.3);}
+                        }
                         if full_size(w.app) {
                             // the lights sit over the app: repaint them where the app just drew under them
                             let mut local=*w; local.r.x=0; local.r.y=0;
@@ -2813,19 +2823,15 @@ impl Shell {
                             for (k,c) in [SYSTEM_RED, SYSTEM_YELLOW, SYSTEM_GREEN].into_iter().enumerate() {
                                 let lr=local.light_rect_px(&m,k);
                                 let under=body_damage.areas().iter().any(|a| (a.x0 as i32) < lr.x+lr.w && (a.x1 as i32) > lr.x && ((a.y0+top) as i32) < lr.y+lr.h && ((a.y1+top) as i32) > lr.y);
-                                if !under { continue; }
+                                let in_edge=edge.iter().any(|r| r.0 < lr.x+lr.w+2 && r.0+r.2 > lr.x-2 && r.1 < lr.y+lr.h+2 && r.1+r.3 > lr.y-2);
+                                if !under && !in_edge { continue; }
+                                // the light is drawn over the app's own pixels, never over the light of an earlier frame
+                                // (its antialiased edge would darken a little more on every repaint)
+                                if let Some(src)=src { restore_from_frame(surf.px,width,height,top,src,dim,lr.x-2,lr.y-2,lr.x+lr.w+2,lr.y+lr.h+2); }
                                 draw_light(&mut surf,&lr,if focused {c} else {TRAFFIC_INACTIVE_C.now()},focused,self.ui.pt(1.));
                                 if focused && hover { draw_light_glyph(&mut surf,&lr,k,w.maximized,self.ui.pt(1.)); }
                                 damage.add(lr.x-2,lr.y-2,lr.w+4,lr.h+4);
                             }
-                        }
-                        if !w.maximized {
-                            // the app drew up to the edge: put the dark-mode inner rim back over it
-                            if body_damage.areas().iter().any(|a|a.x0==0||a.x1>=width||a.y1>=body_h) {
-                                window_rim(&mut Surface{w:width,h:height,stride:width,px:&mut pixels[..],y0:0},0.,0.,width as f32,height as f32,corner);
-                                for (x,y,dw,dh) in [(0,0,2,height),(width-2,0,2,height),(0,height-2,width,2)] {damage.add(x as i32,y as i32,dw as i32,dh as i32);}
-                            }
-                            clip_window_corners(pixels,width,height,corner,Some(&damage));
                         }
                         retained.drawn=t;
                         let outgoing=(!damage.is_empty()).then(||retained.pixels.clone());
@@ -4160,8 +4166,82 @@ mod tests {
 /// Dark appearance: a white ~15% hairline just inside the window edge (Golden Gate's window rim);
 /// in Light it fades to nothing and the dark outer hairline (shadow pass) edges the window.
 fn window_rim(s: &mut Surface, x: f32, y: f32, w: f32, h: f32, rad: f32) {
-    let c = bifrost_render::appearance::Pair::new(rgba(255, 255, 255, 38), rgba(255, 255, 255, 0)).now();
+    stroke_window_rim(s, x, y, w, h, rad, window_rim_color());
+}
+
+fn window_rim_color() -> u32 {
+    bifrost_render::appearance::Pair::new(rgba(255, 255, 255, 38), rgba(255, 255, 255, 0)).now()
+}
+
+fn stroke_window_rim(s: &mut Surface, x: f32, y: f32, w: f32, h: f32, rad: f32, c: u32) {
     if c >> 24 != 0 { s.stroke_rrect(x, y, w, h, rad, 1.0, c); }
+}
+
+/// Width of the band along each window edge that the rim stroke and the corner clip can change.
+const EDGE_BAND: usize = 3;
+
+/// The parts of a `width` x `height` window that the rim stroke and the corner clip touch, as (x, y, w, h): a band
+/// `EDGE_BAND` wide along each edge and a square over each rounded corner.
+#[allow(dead_code)]
+fn edge_band_rects(width: usize, height: usize, radius: f32) -> [(i32, i32, i32, i32); 8] {
+    let n = (radius.ceil() as usize).min(width / 2).min(height / 2);
+    let (w, h) = (width as i32, height as i32);
+    let b = EDGE_BAND.min(width).min(height) as i32;
+    let c = (n + EDGE_BAND).min(width).min(height) as i32;
+    [(0, 0, w, b), (0, h - b, w, b), (0, 0, b, h), (w - b, 0, b, h),
+     (0, 0, c, c), (w - c, 0, c, c), (0, h - c, c, c), (w - c, h - c, c, c)]
+}
+
+/// Whether window rect `r` overlaps body damage area `a` (body coordinates, `top` rows below the window's top).
+#[allow(dead_code)]
+fn overlaps(r: &(i32, i32, i32, i32), a: &crate::gfx::Area, top: usize) -> bool {
+    (a.x0 as i32) < r.0 + r.2 && (a.x1 as i32) > r.0 && ((a.y0 + top) as i32) < r.1 + r.3 && ((a.y1 + top) as i32) > r.1
+}
+
+/// Copies [x0, x1) x [y0, y1) of a retained window (window coordinates) from the app's frame `src` (pixels, width,
+/// height; the frame starts `top` rows down), dimmed by `dim` for a background window as the fast path dims a fresh
+/// blit. Pixels outside the frame (the title bar) are left as they are.
+#[allow(dead_code, clippy::too_many_arguments)]
+fn restore_from_frame(pixels: &mut [u32], width: usize, height: usize, top: usize, src: (&[u32], usize, usize), dim: Option<u32>, x0: i32, y0: i32, x1: i32, y1: i32) {
+    let (spx, sw, sh) = src;
+    let cx = |v: i32| (v.max(0) as usize).min(width).min(sw);
+    let (x0, x1) = (cx(x0), cx(x1));
+    let y0 = (y0.max(0) as usize).max(top);
+    let y1 = (y1.max(0) as usize).min(height).min(top + sh);
+    if x0 >= x1 { return; }
+    for y in y0..y1 {
+        let sy = y - top;
+        let (Some(d), Some(s)) = (pixels.get_mut(y * width + x0..y * width + x1), spx.get(sy * sw + x0..sy * sw + x1)) else { continue };
+        d.copy_from_slice(s);
+        if let Some(amount) = dim { dim_rect(pixels, width, x0, y, x1, y + 1, amount); }
+    }
+}
+
+/// Puts the inner rim and the rounded corners back on a retained external window whose app drew into the edge band.
+/// Every band pixel inside the app's frame is first taken again from the frame (dimmed by `dim`), and every band pixel
+/// outside it (the title bar, which already carries the rim from the full draw) is kept as it was; then the rim is
+/// stroked once and the corners clipped once. So an edge pixel always holds exactly one stroke over the app's pixel,
+/// however often the app repaints (stroking the retained buffer again blended 15% white per repaint, E2E-10).
+/// Returns the window rects it changed (for the frame's damage).
+#[allow(dead_code, clippy::too_many_arguments)]
+fn restore_window_edge(pixels: &mut [u32], width: usize, height: usize, top: usize, src: (&[u32], usize, usize), dim: Option<u32>, radius: f32, rim: u32) -> Vec<(i32, i32, i32, i32)> {
+    let rects = edge_band_rects(width, height, radius);
+    let (_, sw, sh) = src;
+    let in_frame = |x: usize, y: usize| y >= top && y - top < sh && x < sw;
+    // pixels the frame does not cover keep their value: saved here, put back after the stroke and the clip
+    let mut kept: Vec<(usize, u32)> = Vec::new();
+    for &(x, y, w, h) in &rects {
+        for py in y.max(0) as usize..((y + h).max(0) as usize).min(height) {
+            for px in x.max(0) as usize..((x + w).max(0) as usize).min(width) {
+                if !in_frame(px, py) { kept.push((py * width + px, pixels[py * width + px])); }
+            }
+        }
+    }
+    for &(x, y, w, h) in &rects { restore_from_frame(pixels, width, height, top, src, dim, x, y, x + w, y + h); }
+    stroke_window_rim(&mut Surface { w: width, h: height, stride: width, px: &mut pixels[..], y0: 0 }, 0., 0., width as f32, height as f32, radius, rim);
+    clip_window_corners(pixels, width, height, radius, None);
+    for (i, v) in kept { pixels[i] = v; }
+    rects.to_vec()
 }
 
 #[cfg(feature = "desktop-wayland")]
@@ -4308,6 +4388,75 @@ pub(super) fn dim_rect(px: &mut [u32], stride: usize, x0: usize, y0: usize, x1: 
             let ch = |sh: u32| (((*p >> sh) & 0xff) * keep / 255) << sh;
             *p = (*p & 0xff00_0000) | ch(16) | ch(8) | ch(0);
         }
+    }
+}
+
+#[cfg(test)]
+mod rim_tests {
+    use super::*;
+
+    const RIM: u32 = 0x2626_2626; // white at 15%, as `window_rim_color` gives in Dark
+    const TITLE: u32 = 0xff30_3030;
+    const APP: u32 = 0xff20_2020;
+
+    /// The window as the full draw makes it: title bar, the app's frame below it (dimmed behind), one rim stroke, the
+    /// corners clipped.
+    fn full_draw(width: usize, height: usize, top: usize, src: &[u32], dim: Option<u32>, radius: f32) -> Vec<u32> {
+        let mut px = vec![TITLE; width * height];
+        px[top * width..].copy_from_slice(src);
+        if let Some(a) = dim { dim_rect(&mut px, width, 0, top, width, height, a); }
+        stroke_window_rim(&mut Surface { w: width, h: height, stride: width, px: &mut px[..], y0: 0 }, 0., 0., width as f32, height as f32, radius, RIM);
+        clip_window_corners(&mut px, width, height, radius, None);
+        px
+    }
+
+    /// The app repainted [x0, x1) x [y0, y1) of its body: the fast path copies that part of its frame in again.
+    fn app_repaint(px: &mut [u32], width: usize, top: usize, src: &[u32], dim: Option<u32>, (x0, y0, x1, y1): (usize, usize, usize, usize)) {
+        for y in y0..y1 {
+            px[(y + top) * width + x0..(y + top) * width + x1].copy_from_slice(&src[y * width + x0..y * width + x1]);
+            if let Some(a) = dim { dim_rect(px, width, x0, y + top, x1, y + top + 1, a); }
+        }
+    }
+
+    /// E2E-10: repeated retained-path repaints that touch an edge leave every edge pixel at the single-stroke value
+    /// (the Dark rim stacked 15% white per repaint into a solid white border before).
+    #[test]
+    fn repeated_edge_repaints_keep_the_rim_at_one_stroke() {
+        for (top, dim, radius) in [(0usize, None, 8.0f32), (10, None, 8.0), (0, Some(BACKGROUND_DIM), 6.0), (12, Some(BACKGROUND_DIM), 10.0)] {
+            let (width, height) = (64usize, 48usize);
+            let body_h = height - top;
+            let src = vec![APP; width * body_h];
+            let want = full_draw(width, height, top, &src, dim, radius);
+            let mut px = want.clone();
+            // list click (left and bottom), body scroll (right), a full repaint, a corner
+            let repaints = [(0, 0, 20, body_h), (width - 20, 0, width, body_h), (0, 0, width, body_h), (0, body_h - 5, 30, body_h), (width - 4, 0, width, 4)];
+            for round in 0..8 {
+                let r = repaints[round % repaints.len()];
+                app_repaint(&mut px, width, top, &src, dim, r);
+                restore_window_edge(&mut px, width, height, top, (&src, width, body_h), dim, radius, RIM);
+                assert_eq!(px, want, "round {round}: top {top}, dim {dim:?}: the edge holds exactly one rim stroke");
+            }
+            // the left edge pixel half way down is the app's colour with one 15% white stroke over it, not white
+            let edge = px[(top + body_h / 2) * width];
+            assert!(edge & 0xff < 0x50, "left edge {edge:08x} stays dark");
+        }
+    }
+
+    /// The edge band covers the 1 px rim and every pixel the corner clip changes.
+    #[test]
+    fn the_edge_band_covers_the_rim_and_the_corners() {
+        let (width, height, radius) = (40usize, 30usize, 9.0f32);
+        let mut a = vec![APP; width * height];
+        let b = a.clone();
+        stroke_window_rim(&mut Surface { w: width, h: height, stride: width, px: &mut a[..], y0: 0 }, 0., 0., width as f32, height as f32, radius, RIM);
+        clip_window_corners(&mut a, width, height, radius, None);
+        let rects = edge_band_rects(width, height, radius);
+        for y in 0..height { for x in 0..width {
+            if a[y * width + x] != b[y * width + x] {
+                let (x, y) = (x as i32, y as i32);
+                assert!(rects.iter().any(|r| x >= r.0 && x < r.0 + r.2 && y >= r.1 && y < r.1 + r.3), "({x},{y}) changed outside the band");
+            }
+        }}
     }
 }
 
