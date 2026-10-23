@@ -2045,6 +2045,8 @@ impl Settings {
         let Hit::Row(g, i) = hit else { return vec![] };
         let Some(item) = self.sidebar.as_ref().map(|p| p.item(g, i).clone()) else { return vec![] };
         match item.action {
+            // a Search result may be a page inside a pane (Night Shift): it goes on its pane, so Back leads there
+            Action::Push(id) if !self.search.query().trim().is_empty() => self.open_page_id(ui, id, t),
             Action::Push(id) => self.select(ui, id, t),
             Action::Toggle(which) => self.toggle(ui, prefs, which, g, i, t),
             _ => vec![],
@@ -5221,5 +5223,24 @@ mod e2e_w3_tests {
         let tablet = Settings::new(&ui, &info(), &Prefs::memory(), 1200, 1920, Rc::new(vec![]));
         let first = tablet.sidebar_list().expect("split").spec().groups[1].items[0].label.clone();
         assert_eq!(first, "Airplane Mode");
+    }
+
+    /// W3-3: a Search result in the sidebar that is a page inside a pane (Night Shift) opens on its pane, with a back
+    /// target, instead of as a first page with none.
+    #[test]
+    fn a_sidebar_search_hit_inside_a_pane_has_a_back_target() {
+        let ui = crate::shell::tests::ui();
+        let (mut st, mut prefs) = split(&ui);
+        st.search.active = true;
+        st.key(&ui, Out::Text("night shift".into()), 0.0);
+        let label = st.sidebar_list().expect("split").spec().groups[0].items[0].label.clone();
+        let want = settings_search::first_hit(st.index.as_deref().unwrap_or(&[]), "night shift").expect("a match");
+        assert_eq!(want, PageId::NightShift);
+        let (x, y) = st.sidebar_centre(&ui, &label).expect("the result row");
+        tap(&mut st, &ui, &mut prefs, x, y);
+        assert_eq!(st.page(), PageId::NightShift);
+        assert!(st.stack().len() >= 2, "Night Shift sits on its pane: {:?}", st.stack());
+        assert!(st.list().expect("list").nav().has_back());
+        assert!(st.back_page(0.0), "Esc goes back to the pane");
     }
 }
