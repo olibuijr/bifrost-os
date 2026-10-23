@@ -525,6 +525,11 @@ pub(crate) fn seek_length_ms() -> Option<u64> {
     .flatten()
 }
 
+/// Whether the session owner `owner` is among the running apps `alive` (their ids).
+fn owner_alive(alive: &[String], owner: &str) -> bool {
+    alive.iter().any(|id| id == owner)
+}
+
 pub struct NowPlaying;
 
 impl SystemService for NowPlaying {
@@ -557,12 +562,12 @@ impl SystemService for NowPlaying {
     }
 
     fn tick(&mut self, shell: &mut Shell, _t: f64) -> Vec<Event> {
-        let apps = crate::shell::apphost::installed();
-        let running = |owner: &str| {
-            shell.ext.iter().enumerate().any(|(slot, host)| host.is_some() && apps.get(slot).is_some_and(|a| a.manifest.id == owner))
-        };
+        // An app host stays in its slot after the app quits or its channel drops (status Exited), so "has a host" is not
+        // "runs": the session of a quit Voice Memos stayed in Control Center and on the lock screen (W5-12).
+        let mut alive: Vec<String> = shell.ext.iter().flatten().filter(|h| h.running()).map(|h| h.id.clone()).collect();
+        alive.extend(shell.desk.as_ref().map(|d| d.native_running_ids()).unwrap_or_default());
         with(|s| {
-            s.prune(running);
+            s.prune(|owner| owner_alive(&alive, owner));
             s.drain()
         })
         .unwrap_or_default()
@@ -671,6 +676,20 @@ mod tests {
         store.publish("app.one", parse_session("app.one", &song()).unwrap(), Vec::new());
         store.clear("app.one");
         assert!(store.current().is_none());
+    }
+
+    #[test]
+    fn a_session_whose_owner_quit_or_disconnected_is_pruned() {
+        let mut store = Store::default();
+        store.publish("is.olibuijr.voicememos.desktop", parse_session("is.olibuijr.voicememos.desktop", &song()).unwrap(), vec![QueueItem { title: "a".into(), artist: String::new(), playable: true }]);
+        let alive = vec!["is.olibuijr.notes.desktop".to_string()];
+        store.prune(|owner| owner_alive(&alive, owner));
+        assert!(store.current().is_none(), "the quit owner's session is gone");
+        assert!(store.queue.is_empty(), "and so is its Up Next queue");
+        store.publish("is.a.music", parse_session("is.a.music", &song()).unwrap(), Vec::new());
+        let alive = vec!["is.a.music".to_string()];
+        store.prune(|owner| owner_alive(&alive, owner));
+        assert!(store.current().is_some(), "a running owner keeps its session");
     }
 
     #[test]

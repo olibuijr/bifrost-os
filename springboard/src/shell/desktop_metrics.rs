@@ -25,6 +25,8 @@ pub struct Snapshot {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct AppUsage {
     pub id: String,
+    /// What the menus print: the app's manifest name (the id when no installed app has it).
+    pub name: String,
     pub memory: u64,
     pub cpu_usec: u64,
     pub processes: u64,
@@ -38,9 +40,27 @@ fn apps(text: &str) -> Vec<AppUsage> {
         .skip(1)
         .filter_map(|chunk| {
             let id = chunk.split('"').next()?.to_owned();
-            Some(AppUsage { id, memory: number(chunk, "memory_bytes"), cpu_usec: number(chunk, "usage_usec"), processes: number(chunk, "processes") })
+            Some(AppUsage { name: id.clone(), id, memory: number(chunk, "memory_bytes"), cpu_usec: number(chunk, "usage_usec"), processes: number(chunk, "processes") })
         })
         .collect()
+}
+/// The app groups the CPU and RAM menus list: only those with a process in them (a quit app's group stays with its
+/// page cache and CPU time, and listed Browser, Font Book and Disk Utility after they quit, W5-13), each named by
+/// `name_of` (the manifest name) instead of its id.
+pub fn running_apps(apps: Vec<AppUsage>, name_of: impl Fn(&str) -> Option<String>) -> Vec<AppUsage> {
+    apps.into_iter()
+        .filter(|a| a.processes > 0)
+        .map(|mut a| {
+            if let Some(name) = name_of(&a.id).filter(|n| !n.trim().is_empty()) {
+                a.name = name;
+            }
+            a
+        })
+        .collect()
+}
+/// The installed app's manifest name for `id`.
+fn manifest_name(id: &str) -> Option<String> {
+    crate::shell::apphost::installed().iter().find(|a| a.manifest.id == id).map(|a| a.manifest.name.clone())
 }
 impl Snapshot {
     /// RAM % as Golden Gate "Memory Used": (active + wired + compressed) / physical memory.
@@ -156,7 +176,8 @@ impl Sampler {
             out.uptime = self.host.system_uptime() as u64;
             #[cfg(feature = "desktop-wayland")]
             crate::bare::app_manager::want_resources();
-            out.apps = std::fs::read_to_string("/run/bifrost/app-resources.json").map(|t| apps(&t)).unwrap_or_default();
+            let groups = std::fs::read_to_string("/run/bifrost/app-resources.json").map(|t| apps(&t)).unwrap_or_default();
+            out.apps = running_apps(groups, manifest_name);
         }
     }
 }
@@ -213,6 +234,20 @@ mod tests {
 
     #[test]
     fn counts_app_groups() {
-        assert_eq!(apps("[{\"id\":\"a\",\"memory_bytes\":5,\"usage_usec\":7,\"processes\":2}]"), vec![AppUsage { id: "a".into(), memory: 5, cpu_usec: 7, processes: 2 }]);
+        assert_eq!(apps("[{\"id\":\"a\",\"memory_bytes\":5,\"usage_usec\":7,\"processes\":2}]"), vec![AppUsage { id: "a".into(), name: "a".into(), memory: 5, cpu_usec: 7, processes: 2 }]);
+    }
+
+    #[test]
+    fn the_menus_list_running_apps_by_their_manifest_name() {
+        let groups = apps(concat!(
+            "[{\"id\":\"is.olibuijr.browser.desktop\",\"memory_bytes\":900,\"usage_usec\":1,\"processes\":0},",
+            "{\"id\":\"is.olibuijr.notes.desktop\",\"memory_bytes\":50,\"usage_usec\":9,\"processes\":3},",
+            "{\"id\":\"is.a.unknown\",\"memory_bytes\":10,\"usage_usec\":2,\"processes\":1}]"
+        ));
+        let name_of = |id: &str| (id == "is.olibuijr.notes.desktop").then(|| "Notes".to_string());
+        let shown = running_apps(groups, name_of);
+        let names: Vec<&str> = shown.iter().map(|a| a.name.as_str()).collect();
+        assert_eq!(names, vec!["Notes", "is.a.unknown"], "the quit Browser is gone; an app without a manifest keeps its id");
+        assert_eq!(shown[0].id, "is.olibuijr.notes.desktop", "the id stays for lookups");
     }
 }

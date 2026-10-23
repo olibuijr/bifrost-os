@@ -483,7 +483,7 @@ pub(super) fn bar_after_app(app_menus:&[bifrost_proto::AppMenu],image:bool)->Vec
 fn top_app_rows(apps:&[super::desktop_metrics::AppUsage],header:&str,key:impl Fn(&super::desktop_metrics::AppUsage)->u64,show:impl Fn(u64)->String)->Vec<Row> {
     let mut sorted:Vec<_>=apps.iter().collect();sorted.sort_by_key(|a|std::cmp::Reverse(key(a)));
     if sorted.is_empty() {return Vec::new();}
-    let mut rows=vec![Row::label(header)];rows.extend(sorted.into_iter().take(5).map(|a|Row::label(format!("{}: {}",a.id,show(key(a))))));rows
+    let mut rows=vec![Row::label(header)];rows.extend(sorted.into_iter().take(5).map(|a|Row::label(format!("{}: {}",a.name,show(key(a))))));rows
 }
 /// The screen rectangles (x, y, w, h; the bar's full `height`, `pad` px more on each side, kept inside `[0, width]`) of
 /// the bar items that differ between two layouts: an item whose label or place changed (old and new place both), one
