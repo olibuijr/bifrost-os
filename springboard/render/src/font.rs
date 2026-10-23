@@ -858,7 +858,7 @@ impl Font<'_> {
         let chars: Vec<char> = if text.chars().any(is_default_ignorable) { text.chars().collect() } else { Vec::new() };
         let ignored = |g: &shape_ot::ShapedGlyph| chars.get(g.cluster as usize).is_some_and(|&c| is_default_ignorable(c) && (g.gid == 0 || g.gid == self.glyph(c)));
         out.iter()
-            .filter(|g| !ignored(g))
+            .filter(|g| !ignored(*g))
             .map(|g| PlacedGlyph { gid: g.gid, advance: g.x_advance as f32, dx: g.x_offset as f32, dy: g.y_offset as f32 })
             .collect()
     }
