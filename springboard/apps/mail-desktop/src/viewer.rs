@@ -13,9 +13,6 @@ use bifrost_app::TouchKind;
 pub const VIEWER_W: f32 = 560.0;
 pub const VIEWER_H: f32 = 640.0;
 
-/// Two taps on the same message within this many seconds count as a double-click.
-pub const DOUBLE_TAP_SECS: f64 = 0.4;
-
 /// The part of a message a viewer shows, copied when the viewer opens.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Snapshot {

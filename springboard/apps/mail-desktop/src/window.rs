@@ -29,6 +29,7 @@ use crate::transport;
 use bifrost_app::calendar;
 use bifrost_app::contacts::{self, Key as ContactKey, SaveRequest};
 use bifrost_app::controls::internet_accounts::Account;
+use bifrost_app::controls::text::ClickCounter;
 use bifrost_app::keychain::{self, Error as LegacyError, Reply as KeyReply};
 use bifrost_app::kit::{clipboard, Scroller, TextCache, Ui};
 use bifrost_app::passwords::{self, Error as KeyError};
@@ -319,8 +320,10 @@ pub struct MailWindow {
     pub laid: Option<crate::draw::Laid>,
     /// Messages to open in viewer windows; the app takes them with `take_viewers`.
     viewer_requests: Vec<u32>,
-    /// The last message tapped and when, for the double-click that opens a viewer window.
-    last_tap: Option<(u32, f64)>,
+    /// The clicks of the main window counted for a double-click (the kit's interval and slop, in milliseconds and
+    /// points), and the message the last click landed on: a double-click on one message opens a viewer window.
+    clicks: ClickCounter,
+    last_tap: Option<u32>,
     /// The address book was asked for while the compose sheet is open (asked again for the next compose sheet).
     book_asked: bool,
     dirty: bool,
@@ -619,6 +622,7 @@ impl MailWindow {
             labels: TextCache::default(),
             laid: None,
             viewer_requests: Vec::new(),
+            clicks: ClickCounter::default(),
             last_tap: None,
             book_asked: false,
             dirty: true,
@@ -3132,6 +3136,9 @@ impl MailWindow {
 
     fn tap(&mut self, ctx: &Ctx, x: f32, y: f32, t: f64) -> bool {
         let hit = self.hit(&ctx.ui, x, y);
+        // every click counts, so a click elsewhere in between breaks a double-click; `t` is milliseconds
+        let scale = ctx.ui.pt(1.0).max(f32::EPSILON);
+        let clicks = self.clicks.press(t, x / scale, y / scale);
         match hit {
             crate::draw::Hit::Button(button) => match button {
                 crate::draw::Button::Refresh => self.refresh_selected(),
@@ -3162,10 +3169,11 @@ impl MailWindow {
                 crate::draw::Side::Add => self.mail.open_setup(),
             },
             crate::draw::Hit::Message(uid) => {
-                // a second tap on the same message within the double-click time opens it in a viewer window
-                let double = matches!(self.last_tap, Some((last, when)) if last == uid && t - when <= crate::viewer::DOUBLE_TAP_SECS);
-                self.last_tap = if double { None } else { Some((uid, t)) };
+                // a double-click on a message opens it in a viewer window (the first click already selected it)
+                let double = clicks >= 2 && self.last_tap == Some(uid);
+                self.last_tap = Some(uid);
                 if double {
+                    self.clicks = ClickCounter::default();
                     self.viewer_requests.push(uid);
                 } else {
                     self.open_message(uid);

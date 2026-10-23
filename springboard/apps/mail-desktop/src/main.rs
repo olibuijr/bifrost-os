@@ -441,8 +441,8 @@ mod tests {
     use bifrost_app::proto::{Configure, ToShell};
     use bifrost_app::KeyInput;
     use bifrost_mail::compose_windows::{COMPOSE_H, COMPOSE_W};
-    use bifrost_mail::draw::{choice_count, sheet_layout};
-    use bifrost_mail::state::Sheet;
+    use bifrost_mail::draw::{choice_count, sheet_layout, Hit};
+    use bifrost_mail::state::{Sheet, INBOX};
     use bifrost_core::json::Json;
     use bifrost_mail::flags::{Flag, Flags};
     use bifrost_mail::session::Listed;
@@ -532,6 +532,59 @@ mod tests {
         let at = sheet.form().fields.iter().position(|f| f.label == label).expect("the field");
         let r = sheet_layout(ui, w, h, &sheet, choice_count(&mail.mail)).fields[at];
         (r[0] + r[2] / 2.0, r[1] + r[3] / 2.0)
+    }
+
+    /// The test app with its inbox listed: message 9 ("Fundur") above message 3 ("Old").
+    fn app_with_inbox(ctx: &Ctx) -> MailApp {
+        let mut app = app_with_account(ctx);
+        let listed = |uid: u32, subject: &str| Listed { uid, flags: Flags::empty(), header: format!("Subject: {subject}\r\nFrom: Ana <ana@x.is>\r\n\r\n") };
+        app.window.as_mut().unwrap().mail.apply_listing("work", INBOX, vec![], vec![listed(3, "Old"), listed(9, "Fundur")]);
+        app
+    }
+
+    /// A point of the main window on message `uid`'s row.
+    fn row_point(app: &MailApp, ui: &Ui, uid: u32) -> (f32, f32) {
+        let mail = app.window.as_ref().unwrap();
+        for y in (0..600).step_by(4) {
+            for x in (0..800).step_by(8) {
+                if matches!(mail.hit(ui, x as f32, y as f32), Hit::Message(u) if u == uid) {
+                    return (x as f32, y as f32);
+                }
+            }
+        }
+        panic!("message {uid} is not in the list");
+    }
+
+    /// A click (press and release) on the main window at `t` milliseconds.
+    fn click(app: &mut MailApp, ctx: &Ctx, (x, y): (f32, f32), t: f64) {
+        for kind in [TouchKind::Down, TouchKind::Up] {
+            app.event(ctx, Input::Touch { kind, id: 0, x, y, t });
+        }
+    }
+
+    #[test]
+    fn a_double_click_on_a_message_opens_a_viewer_window() {
+        let dir = std::env::temp_dir().join(format!("bifrost-mail-double-{}", std::process::id()));
+        let ctx = ctx(&dir);
+        let mut app = app_with_inbox(&ctx);
+        let at = row_point(&app, &ctx.ui, 9);
+        click(&mut app, &ctx, at, 1000.0);
+        assert_eq!(app.window.as_ref().unwrap().mail.open, Some(9), "one click selects");
+        assert!(app.window.as_mut().unwrap().take_viewers().is_empty());
+        // the second click 100 ms later (the event clock is in milliseconds) is a double-click
+        click(&mut app, &ctx, at, 1100.0);
+        let viewers: Vec<u32> = app.window.as_mut().unwrap().take_viewers().iter().map(|v| v.uid).collect();
+        assert_eq!(viewers, vec![9]);
+        // clicks a second apart are single clicks
+        click(&mut app, &ctx, at, 5000.0);
+        click(&mut app, &ctx, at, 6000.0);
+        assert!(app.window.as_mut().unwrap().take_viewers().is_empty());
+        // a double-click needs both clicks on the same message
+        let other = row_point(&app, &ctx.ui, 3);
+        click(&mut app, &ctx, at, 9000.0);
+        click(&mut app, &ctx, other, 9100.0);
+        assert!(app.window.as_mut().unwrap().take_viewers().is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
