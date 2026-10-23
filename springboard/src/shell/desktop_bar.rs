@@ -995,14 +995,17 @@ impl Shell {
     fn root_popup_rect(&self,menu:Menu)->Option<(usize,usize,usize,usize)> {
         if menu==Menu::Dock{return self.dock_popup_rect();}if menu==Menu::Arrange{
             // under the green button, kept on the screen like a context menu (the size is the drawn rows')
-            let a=self.desk.as_ref()?.arrange?;let rows=self.menu_rows(menu);let width=self.menu_width(&rows);let height=self.ui.pt(self.menu_scroll_for(menu,&rows).height).ceil() as usize;
+            let a=self.desk.as_ref()?.arrange?;let rows=self.menu_rows(menu);let width=self.menu_width(&rows);
             let area=super::desk::Desk::area(&self.desk_metrics());
+            // a menu held to the area's height (it scrolls) must not round a pixel past it, or its last row is cut
+            let height=(self.ui.pt(self.menu_scroll_for(menu,&rows).height).ceil() as usize).min(area.h.max(1) as usize);
             let (x,y)=context_menu_origin((a.x,a.y),(width,height),(0,area.y,self.w,area.h));
             return Some((x,y,width,height));
         }if menu==Menu::Document{return self.doc_panel_rect();}if menu==Menu::Context{
             // the size is the drawn rows' (`menu_spans`, the same call the bar menus use), so the surface fits its items
-            let c=self.desktop_context.as_ref()?;let rows=self.menu_rows(menu);let width=self.menu_width(&rows);let height=self.ui.pt(self.menu_scroll_for(menu,&rows).height).ceil() as usize;
+            let c=self.desktop_context.as_ref()?;let rows=self.menu_rows(menu);let width=self.menu_width(&rows);
             let area=super::desk::Desk::area(&self.desk_metrics());
+            let height=(self.ui.pt(self.menu_scroll_for(menu,&rows).height).ceil() as usize).min(area.h.max(1) as usize);
             let (x,y)=context_menu_origin((c.x,c.y),(width,height),(0,area.y,self.w,area.h));
             return Some((x,y,width,height));
         }// the Recent Items submenu hangs from the system menu's bar item
@@ -2348,6 +2351,40 @@ mod context_menu_shell_tests {
         for shift in [0, 8, 16] {
             let (a, b) = ((edge >> shift & 0xff) as i32, (want >> shift & 0xff) as i32);
             assert!((a - b).abs() <= 3, "the top edge is the separator colour (channel at {shift}: {a} vs {b})");
+        }
+    }
+
+    /// Mail's message menu (21 rows) from a right-click low in the list opened upward; wherever an app opens its menu,
+    /// the whole menu stays on the screen (inside the area under the bar and above the Dock, which may be outside the
+    /// app's window, as in Golden Gate), and a menu taller than that area scrolls instead of losing rows.
+    #[test]
+    fn a_long_app_menu_stays_inside_the_desktop_area_wherever_it_opens_and_scrolls_when_taller() {
+        let long = |n: u32| -> Vec<ContextItem> {
+            (1..=n).flat_map(|i| if i % 5 == 0 { vec![ContextItem::separator(), ContextItem::new(i, "Move to Trash")] } else { vec![ContextItem::new(i, "Forward as Attachment")] }).collect()
+        };
+        for (n, height) in [(17, None), (17, Some(700)), (28, Some(500)), (28, Some(420))] {
+            let mut sh = open_at(0., 0.);
+            if let Some(h) = height {
+                sh.h = h;
+            }
+            let area = crate::shell::desk::Desk::area(&sh.desk_metrics());
+            let (top, bottom) = (area.y as usize, (area.y + area.h) as usize);
+            for at in [(20., 20.), (300., (bottom - 4) as f32), (sh.w as f32 - 4., (top + 4) as f32), (sh.w as f32 / 2., (top + bottom) as f32 / 2.), (sh.w as f32 + 50., sh.h as f32 + 50.)] {
+                sh.desktop_context = Some(ContextMenu { slot: 0, x: at.0, y: at.1, items: long(n) });
+                sh.desktop_menu = Some(Menu::Context);
+                let (x, y, w, h) = sh.desktop_popup_rect().unwrap();
+                let tag = format!("{n} items, screen {}, pointer {at:?}: menu {x},{y} {w}x{h}, area {top}..{bottom}", sh.h);
+                assert!(y >= top && y + h <= bottom, "no row is cut at the top or the bottom ({tag})");
+                assert!(x + w <= sh.w as usize, "nor at the right ({tag})");
+                let rows = sh.menu_rows(Menu::Context);
+                let content = sh.ui.pt(menu_spans(&rows).1).ceil() as usize;
+                let sc = sh.menu_scroll_for(Menu::Context, &rows);
+                if content > bottom - top {
+                    assert!(sc.down && h < content, "a menu taller than the area scrolls ({tag})");
+                } else {
+                    assert!(!sc.up && !sc.down && h == content, "one that fits shows every row ({tag})");
+                }
+            }
         }
     }
 
