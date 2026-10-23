@@ -42,11 +42,13 @@ impl Files {
         let now = std::time::SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64);
         // the stand-in listings have no folder above them to show
         let in_provider = provider::is_path(&path);
-        let virtual_folder = path == Path::new(fs::RECENTS) || path.starts_with(TAGGED) || smart::folder_index(&path).is_some() || path == self.bin() || in_provider;
+        // the store apps folder is listed as the installed apps by name (Applications), with no folders above it
+        let store_apps = applications::is_store_dir(&path);
+        let virtual_folder = path == Path::new(fs::RECENTS) || path.starts_with(TAGGED) || smart::folder_index(&path).is_some() || path == self.bin() || in_provider || store_apps;
         // a provider folder is listed by its extension, which the host starts if it is not running
         let providers = in_provider.then(provider::shared);
         let (sort, bin) = (self.sort, self.bin());
-        let chain = if virtual_folder { vec![] } else { ancestor_chain(&path) };
+        let chain = if virtual_folder { vec![] } else { ancestor_chain(&path, &self.home) };
         let work = move || {
             let batch_path = path.clone();
             let result = if let Some(list) = tagged {
@@ -57,6 +59,8 @@ impl Files {
                 Ok(fs::recent_in(&roots, fs::RECENT_LIMIT))
             } else if let Some(providers) = providers {
                 providers.list(&path)
+            } else if store_apps {
+                Ok(applications::installed_rows(&path))
             } else {
                 // a folder's rows go to the UI as they are read, so a large folder shows its first rows at once
                 fs::list_batched(&path, |batch| {
@@ -143,6 +147,12 @@ impl Files {
         };
         if provider::is_path(&e.path) {
             self.open_provider_item(e);
+            return;
+        }
+        if applications::is_store_dir(&self.path) {
+            // an SDK app has no call that launches another app yet; browsing into the package is not what was asked
+            self.notice = Some(format!("Open {} from Launchpad or the Dock.", e.name));
+            self.revision += 1;
             return;
         }
         self.index_opened(&e);
@@ -376,7 +386,7 @@ impl Files {
                 .map(|i| self.rows[i].path.clone())
         }?;
         // never into the bin (use Delete), the stand-in listings, or the folder already open
-        let blocked = target == self.bin() || target == self.path || target == Path::new(fs::RECENTS) || target.starts_with(TAGGED) || smart::folder_index(&target).is_some();
+        let blocked = target == self.bin() || target == self.path || target == Path::new(fs::RECENTS) || target.starts_with(TAGGED) || smart::folder_index(&target).is_some() || applications::is_store_dir(&target);
         (!blocked).then_some(target)
     }
     pub(crate) fn render(&mut self, ui: &Ui, s: &mut Surface) -> Damage {
@@ -507,8 +517,8 @@ impl Files {
         self.paint_server(ui, s);
         self.paint_empty_trash(ui, s);
     }
-    /// Recents, Tags and Smart Folders list files from several places; nothing can be created or pasted into them.
+    /// Recents, Tags, Smart Folders and Applications are stand-in lists; nothing can be created or pasted into them.
     pub(crate) fn in_recents(&self) -> bool {
-        self.path == Path::new(fs::RECENTS) || self.path.starts_with(TAGGED) || smart::folder_index(&self.path).is_some() || provider::is_path(&self.path)
+        self.path == Path::new(fs::RECENTS) || self.path.starts_with(TAGGED) || smart::folder_index(&self.path).is_some() || provider::is_path(&self.path) || applications::is_store_dir(&self.path)
     }
 }

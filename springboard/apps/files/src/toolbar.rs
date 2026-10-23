@@ -97,6 +97,8 @@ impl Files {
             self.smart.get(i).map_or("Smart Folder", |f| f.name.as_str()).into()
         } else if provider::is_path(&self.path) {
             provider::shared().title(&self.path)
+        } else if applications::is_store_dir(&self.path) {
+            "Applications".into()
         } else if self.in_recents() {
             "Recents".into()
         } else {

@@ -13,6 +13,9 @@ impl Files {
         if provider::is_path(&self.path) {
             return provider::shared().path_items(&self.path);
         }
+        if applications::is_store_dir(&self.path) {
+            return vec![("Applications".into(), "square.grid.2x2", self.path.clone())];
+        }
         if self.in_recents() {
             return vec![("Recents".into(), "clock", self.path.clone())];
         }

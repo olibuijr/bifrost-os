@@ -42,6 +42,7 @@ use std::{
 };
 use bifrost_app::kit::ui::{SPACE_L, SPACE_XL, SPACE_XS};
 
+mod applications;
 mod barmenu;
 mod control;
 mod dragout;

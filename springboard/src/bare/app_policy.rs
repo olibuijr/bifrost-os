@@ -420,6 +420,13 @@ pub fn command(
         "--dir",
         "/home",
     ]);
+    // `storage` (Files): every installed package read-only, so the Applications place lists the installed apps by name.
+    // Packages hold no user data (that is under `appdata/`); the app's own package is bound again on top below.
+    if policy.storage {
+        if let Some(apps) = store_apps_dir(id, package) {
+            c.arg("--ro-bind-try").arg(apps).arg(apps);
+        }
+    }
     c.arg("--ro-bind")
         .arg(package)
         .arg(package)
@@ -498,6 +505,15 @@ pub fn command(
     crate::bare::app_manager::configure(&mut c, id)?;
     drop_identity(&mut c, &account)?;
     Ok(c)
+}
+
+/// The folder every store package is installed in (`<root>/apps`), from app `id`'s own package folder
+/// (`<root>/apps/<id>/<version>`); `None` when the package is not laid out that way (a development build run in place).
+fn store_apps_dir<'a>(id: &str, package: &'a Path) -> Option<&'a Path> {
+    let app = package.parent()?;
+    (app.file_name()? == id).then_some(())?;
+    let apps = app.parent()?;
+    (apps.file_name()? == "apps").then_some(apps)
 }
 
 /// The sandbox arguments that give a client the GPU and the compositor connection.
@@ -602,6 +618,16 @@ pub fn remote_sharing(id: &str, policy: Policy, on: bool, package: &Path) -> io:
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn the_store_apps_folder_is_found_from_an_apps_own_package() {
+        let package = Path::new("/var/lib/springboard/apps/is.olibuijr.files.desktop/1.33.1");
+        assert_eq!(store_apps_dir("is.olibuijr.files.desktop", package), Some(Path::new("/var/lib/springboard/apps")));
+        // another app's id, or a package outside an apps folder, binds nothing
+        assert_eq!(store_apps_dir("is.olibuijr.mail.desktop", package), None);
+        assert_eq!(store_apps_dir("x", Path::new("/home/u/build/x/target")), None);
+        assert_eq!(store_apps_dir("x", Path::new("/")), None);
+    }
+
     #[test]
     fn input_and_display_permissions_are_recognised_and_bind_nothing() {
         let p = Policy::from_permissions("example", &["accessibility".into(), "display-config".into()]).unwrap();
