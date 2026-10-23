@@ -129,6 +129,28 @@ pub fn ppd_name(p: Profile) -> &'static str {
     }
 }
 
+/// The profile names in `powerprofilesctl list` output: the unindented `name:` lines (the active one starts with
+/// `* `); the indented `Key: value` lines under each are details. A daemon with no platform driver lists none.
+pub fn ppd_profiles(list: &str) -> Vec<String> {
+    list.lines()
+        .filter_map(|line| {
+            let name = line.trim().trim_start_matches('*').trim().strip_suffix(':')?;
+            (!name.is_empty() && !name.contains(char::is_whitespace)).then(|| name.to_string())
+        })
+        .collect()
+}
+
+/// Asks power-profiles-daemon for `profile` when it offers it. A machine whose daemon offers no profiles (no platform
+/// driver: `powerprofilesctl set` then fails with `invalid choice ... (choose from )`) or does not run is left alone.
+fn ppd_set(profile: Profile) {
+    let Ok(out) = std::process::Command::new("powerprofilesctl").arg("list").stderr(std::process::Stdio::null()).output() else { return };
+    let name = ppd_name(profile);
+    if !out.status.success() || !ppd_profiles(&String::from_utf8_lossy(&out.stdout)).iter().any(|p| p == name) {
+        return;
+    }
+    let _ = std::process::Command::new("powerprofilesctl").args(["set", name]).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).status();
+}
+
 impl Boost {
     /// Desktop: no governor or clock writes, only the power-profiles-daemon hand-off.
     pub fn new() -> Self {
@@ -176,10 +198,8 @@ impl Boost {
         }
         self.applied = Some(profile);
         if self.desktop {
-            // best effort: no daemon, no profile switch
-            crate::bare::sys::spawn_named("powerprofile", move || {
-                let _ = std::process::Command::new("powerprofilesctl").args(["set", ppd_name(profile)]).status();
-            });
+            // best effort: no daemon or no such profile, no profile switch
+            crate::bare::sys::spawn_named("powerprofile", move || ppd_set(profile));
             return;
         }
         let rule = profile.rule();
@@ -265,6 +285,15 @@ impl Default for Boost {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_daemons_profile_list_is_read_and_an_empty_one_offers_nothing() {
+        let list = "  performance:\n    CpuDriver:\tintel_pstate\n    Degraded:  no\n\n* balanced:\n    CpuDriver:\tintel_pstate\n\n  power-saver:\n    CpuDriver:\tintel_pstate\n";
+        assert_eq!(ppd_profiles(list), ["performance", "balanced", "power-saver"]);
+        // a daemon without a platform driver lists only some or none, so `set performance` is skipped
+        assert_eq!(ppd_profiles("* balanced:\n    PlatformDriver:\tplaceholder\n\n  power-saver:\n"), ["balanced", "power-saver"]);
+        assert!(ppd_profiles("").is_empty());
+    }
 
     #[test]
     fn desktop_profiles_map_to_power_profiles_daemon() {
