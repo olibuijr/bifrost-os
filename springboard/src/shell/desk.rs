@@ -4663,11 +4663,12 @@ mod tests {
         let mut d = Desk::new();
         d.open(&m, app, (900, 600));
         let before = d.wins[0].r;
-        assert!(d.set_content_size(&m, 0, (230.0, 510.0)));
-        let (w, h) = outer_px(app, &m, (230.0, 510.0));
+        // a size inside the window's range (the desktop minimum is m.min_w wide; smaller is held to it, below)
+        assert!(d.set_content_size(&m, 0, (430.0, 510.0)));
+        let (w, h) = outer_px(app, &m, (430.0, 510.0));
         assert_eq!(d.wins[0].r, Rect { x: before.x, y: before.y, w, h }, "the top-left corner stays");
         assert_eq!(d.wins[0].restore, d.wins[0].r);
-        assert!(!d.set_content_size(&m, 0, (230.0, 510.0)), "the same size again changes nothing");
+        assert!(!d.set_content_size(&m, 0, (430.0, 510.0)), "the same size again changes nothing");
         // larger than the screen: held to the work area, and moved back onto it
         assert!(d.set_content_size(&m, 0, (100_000.0, 100_000.0)));
         assert_eq!(d.wins[0].r, Desk::area(&m));
