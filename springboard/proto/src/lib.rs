@@ -1044,7 +1044,7 @@ pub const MAX_APP_MENUS: usize = 8;
 /// Items in one menu level: a top-level menu's own items, or the direct children of one submenu (separators count).
 /// Each submenu has a budget of its own, so a long Font submenu does not crowd out the rest of its Format menu. Items
 /// past it are left out (`AppMenu::kept_items`) and the SDK logs a warning; the shell scrolls a menu taller than the screen.
-pub const MAX_APP_MENU_ITEMS: usize = 256;
+pub const MAX_APP_MENU_ITEMS: usize = 512;
 /// Items in one top-level menu with all its submenus.
 pub const MAX_APP_MENU_TOTAL: usize = 1024;
 /// Item titles are cut to this many characters.
