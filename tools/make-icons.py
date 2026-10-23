@@ -8,7 +8,7 @@ With no arguments it writes every icon where the build expects it:
                                               turns them into the icons/<bundle id>.raw the Dock and Launchpad load
   springboard/apps/<app>-desktop/icon.png     the desktop app icons that used to be copies of other makers' artwork,
                                               180 px RGBA like the other app icons
-  springboard/res/settings-icons/<pane>.png   the 26 Settings pane tiles at 58 px RGBA (29 pt at 2x, 6.5 pt corners, as
+  springboard/res/settings-icons/<pane>.png   the 27 Settings pane tiles at 58 px RGBA (29 pt at 2x, 6.5 pt corners, as
                                               springboard/src/shell/icons.rs draws them); a second spec table, PANE_SPEC
 --size and --out render every selected icon at one size into a directory instead (for previews); --only limits the
 set by name; --sheet also writes a contact sheet (each icon at 180 px, and at 32 px on light and dark; the Settings
@@ -750,6 +750,16 @@ def account(c):
     c.paint(lambda p: p.ellipse(50, 84, 29, 26), shadow=PANE_SHADOW, clip=lambda p: p.rrect(0, 0, 100, 80, 0))
 
 
+def appearance(c):
+    """Light and dark: a white ring whose left half is filled, the right half showing the dark tile."""
+    def ring(p):
+        p.circle(50, 50, 30)
+        with p.erase():
+            p.circle(50, 50, 24)
+    c.paint(ring, shadow=PANE_SHADOW)
+    c.paint(lambda p: p.circle(50, 50, 20), clip=lambda p: p.rrect(0, 0, 50, 100, 0))
+
+
 # ---- the spec table: name, shell bundle id (or None), desktop app folder (or None), tile top, tile bottom, symbol ----
 
 def lit(base, up=0.28, down=0.0):
@@ -784,6 +794,7 @@ GRAPHITE = mix(TRACK, WHITE, 0.2)
 
 PANE_SPEC = [
     ("accessibility", *lit(SYSTEM_BLUE, 0.22, 0.1),                                      accessibility),
+    ("appearance",    mix(CELL, WHITE, 0.12), mix(CELL, BLACK, 0.45),                    appearance),
     ("airplane",      mix(SYSTEM_TEAL, SYSTEM_BLUE, 0.25), mix(SYSTEM_TEAL, SYSTEM_BLUE, 0.85), airplane),
     ("battery",       *lit(SYSTEM_GREEN, 0.22, 0.14),                                    battery),
     ("bluetooth",     *lit(mix(SYSTEM_BLUE, SYSTEM_INDIGO, 0.5), 0.2, 0.14),             bluetooth),
