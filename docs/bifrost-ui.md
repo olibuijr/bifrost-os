@@ -573,11 +573,21 @@ in each menu level, counted apart for the menu's own items and for each submenu'
 1024 in one menu with its submenus; titles cut to 64 characters. A set that does not fit one 16 KiB packet goes as
 `AppMenus` and then `AppMenusMore` packets (tag 0x251, `proto::app_menu_packets`), whole menus each; anything still left
 out is logged by the SDK (and menus past 8 by the shell), never dropped silently. A submenu header is a row with a
-chevron that opens the submenu in place of its menu, under the same bar item, with a row back (`Menu::AppSub`, as Recent
-Items and Services); submenus nest to `MAX_APP_MENU_DEPTH`. A menu taller than the screen is held to the room below the
+chevron whose submenu cascades beside it as `NSMenu` does (`Menu::AppSub`, as Recent Items and Services): to the right
+of the row, overlapping the menu's edge by 3 pt with its first row level with the header, or to the left when the right
+has no room (a cascade that turned left keeps going left, `desktop_bar::flyout_origin`). The parent stays open with the
+header highlighted (`Shell::menu_chain`, `menu_level_rects`). Resting on a header for 200 ms opens it
+(`FLYOUT_OPEN_MS`); a click on it opens it at once. While the pointer heads for the open submenu across other rows of
+the parent (the safe triangle from the pointer's last position to the submenu's near corners, `in_safe_triangle`) the
+submenu stays, and a row there takes over only after a 300 ms rest (`FLYOUT_SAFE_MS`). Right opens the highlighted
+header's submenu with its first item highlighted, Left and Esc close one level back to the header, and a click on an
+item of any level reaches the app. Each submenu level is an overlay surface of its own under the window server (chrome
+ids from 17, `FLYOUT_CHROME_ID`; the menu is id 1), the parent's surface left clear where the submenu's covers it, and
+the pointer Leave sent when the pointer crosses from one level's surface to the next closes nothing. Submenus nest to
+`MAX_APP_MENU_DEPTH`. A menu taller than the screen is held to the room below the
 bar and scrolls between arrows at its top and bottom edge (resting on an arrow, the wheel, or the keyboard).
-Gaps against AppKit, recorded: a submenu opens in place of its menu, not as a flyout beside it (the popup is one surface
-under the window server), a checked
+Gaps against AppKit, recorded: context menus (`ContextItem`) have no submenus yet; with a submenu open by hover, Up and
+Down move in the submenu rather than the parent; a checked
 item shows a check mark glyph in its title, there are no item icons, tooltips, `representedObject`, alternate
 (Option) items or `NSMenuDelegate.menuNeedsUpdate` before opening; state is pushed on change instead. Menu items with
 a modifier-less key equivalent are ignored by the chord path.

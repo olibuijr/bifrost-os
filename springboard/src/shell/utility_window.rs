@@ -915,13 +915,16 @@ mod tests {
             sh.desk_open(AppId::Settings, 0.);
             sh.desktop_menu = Some(Menu::System);
             let _ = sh.run_menu_action(Action::Submenu(Menu::Recent), 0.);
-            assert_eq!(sh.desktop_menu, Some(Menu::Recent), "the submenu replaces the menu in place");
+            assert_eq!(sh.desktop_menu, Some(Menu::Recent), "the submenu opens");
             let rows = sh.menu_row_texts(Menu::Recent);
             assert!(rows.iter().any(|t| t == "Settings") && rows.iter().any(|t| t == "Term"), "{rows:?}");
             assert_eq!(rows.last().map(String::as_str), Some("Clear Menu"));
             let (x, _, _, _) = sh.desktop_popup_rect().expect("the submenu has a popup");
-            sh.desktop_menu = Some(Menu::System);
-            assert_eq!(sh.desktop_popup_rect().map(|r| r.0), Some(x), "the submenu opens under the same bar item");
+            let levels = sh.menu_level_rects();
+            assert_eq!(levels.iter().map(|l| l.0).collect::<Vec<_>>(), vec![Menu::System, Menu::Recent], "the system menu stays open beside it");
+            assert_eq!(levels[1].1 .0, x);
+            let (sx, _, sw, _) = levels[0].1;
+            assert!(x > sx && x + sh.ui.pt(4.) as usize >= sx + sw, "the submenu cascades to the right of the system menu: {x} vs {sx}+{sw}");
         }
 
         #[test]

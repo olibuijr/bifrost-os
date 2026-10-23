@@ -206,18 +206,18 @@ mod tests {
         let system = sh.menu_row_texts(Menu::System);
         assert!(system.iter().any(|t| t == "Recent Items"), "{system:?}");
         assert!(!system.iter().any(|t| t == "Clear Menu" || t == "Settings"), "the entries are not inline rows: {system:?}");
-        // the submenu: a way back, then the entries newest first, then Clear Menu
+        // the submenu: the entries newest first, then Clear Menu (no row back: it cascades beside the system menu)
         let rows = sh.menu_row_texts(Menu::Recent);
         let at = rows.iter().position(|t| t == "Settings").expect("the newest launch is listed");
         assert_eq!(rows[at..at + 4].to_vec(), vec!["Settings", "Term", "", "Clear Menu"]);
-        assert_eq!(rows[0], "Recent Items", "the first row leads back to the system menu");
+        assert_eq!(at, 0, "the newest launch is the first row");
         // Choosing the second entry opens Term again, which moves it to the front.
         let _ = sh.run_menu_action(Action::Recent(1), 0.);
         let rows = sh.menu_row_texts(Menu::Recent);
         assert_eq!(rows[at..at + 4].to_vec(), vec!["Term", "Settings", "", "Clear Menu"]);
         let _ = sh.run_menu_action(Action::ClearRecent, 0.);
         let rows = sh.menu_row_texts(Menu::Recent);
-        assert_eq!(rows[2..].to_vec(), vec!["No Recent Items", "", "Clear Menu"]);
+        assert_eq!(rows, vec!["No Recent Items", "", "Clear Menu"]);
         assert!(sh.recent_app_at(0).is_none());
     }
 

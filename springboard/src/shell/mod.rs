@@ -997,6 +997,8 @@ pub struct Shell {
     desktop_menu:Option<desktop_bar::Menu>,
     /// How far the open menu is scrolled when it is taller than the screen, and the scroll arrow the pointer rests on.
     desktop_menu_scroll:desktop_bar::MenuScrollState,
+    /// The cascading submenus' hover delay and safe triangle (`desktop_bar::Flyout`).
+    desktop_flyout:desktop_bar::Flyout,
     /// Default-app registry and its Settings view, rebuilt when the set of apps changes (keyed by the app count).
     defaults:Option<(usize,bifrost_ui::launch::Registry,Vec<defaultapps::CategoryView>)>,
     /// The highlighted row of the open bar menu (keyboard or pointer), with the menu it belongs to.
@@ -1389,7 +1391,7 @@ impl Shell {
             bar_rects: Vec::new(),
             ext_frame: false,
             overview:Default::default(),
-            desktop_menu:None,desktop_menu_scroll:Default::default(),defaults:None,recent_list:recent_items::new(),recent_dir:None,desktop_context:None,
+            desktop_menu:None,desktop_menu_scroll:Default::default(),desktop_flyout:Default::default(),defaults:None,recent_list:recent_items::new(),recent_dir:None,desktop_context:None,
             #[cfg(feature = "desktop-wayland")]
             desktop_menu_row:None,
             #[cfg(feature = "desktop-wayland")]
@@ -2337,6 +2339,8 @@ impl Shell {
         if self.bell.pending() { due.add(Some(t)); }
         if let Some(end) = self.bell.flash_end(t) { due.add(Some(end.min(t + 33.0))); }
         if let Some(when)=self.desk.as_ref().and_then(|d|d.dock_hide_at){due.add(Some(when));}
+        // a submenu opens when its hover delay is over, a row in the safe triangle takes over after its rest
+        if self.desktop_menu.is_some() { due.add(self.desktop_flyout.due()); }
         // a rest on a green button opens its menu when the dwell is over
         if self.desktop_menu.is_none() { if let Some((_,since))=self.desk.as_ref().and_then(|d|d.arrange_at) { if since.is_finite() { due.add(Some(since+desk::ARRANGE_DWELL_MS)); } } }
         if self.dock_animating(t) || self.fx_animating(t) { due.add(Some(t)); }
@@ -3971,6 +3975,8 @@ impl Shell {
         self.st_mark(t);
         #[cfg(feature = "desktop-wayland")]
         self.desktop_menu_autoscroll(t);
+        #[cfg(feature = "desktop-wayland")]
+        self.desktop_menu_flyout_tick(t);
         // the keyboard follows text focus on the tablet desktop: raised when a field gains it (edge-triggered, so a
         // dismissal sticks while the field keeps it), lowered whenever the front window has no field
         let now = self.desk_text_focus();
