@@ -2854,7 +2854,7 @@ impl Shell {
             desk.activate.push(windows[next].id); return true;
         }
         if desk.native_children.get_mut(&package.manifest.id).is_some_and(|c|matches!(c.try_wait(),Ok(None))) {return true;}
-        let launch=crate::bare::account_policy::check_launch(&package.manifest.id).and_then(|()|crate::bare::app_policy::Policy::from_permissions(&package.manifest.id,&package.manifest.permissions)).and_then(|policy|crate::bare::app_policy::command(&package.manifest.id,&package.exec_path(),&apphost::root().join("appdata").join(&package.manifest.id),policy,true)).and_then(|mut cmd|cmd.spawn());
+        let launch=crate::bare::account_policy::check_launch(&package.manifest.id).and_then(|()|crate::bare::app_policy::Policy::from_permissions(&package.manifest.id,&package.manifest.permissions)).and_then(|policy|{crate::bare::app_policy::ask_microphone_at_launch(&package.manifest.id,&package.manifest.name,policy,true,package.manifest.records_audio);crate::bare::app_policy::command(&package.manifest.id,&package.exec_path(),&apphost::root().join("appdata").join(&package.manifest.id),policy,true)}).and_then(|mut cmd|cmd.spawn());
         match launch {
             Ok(child) => {desk.native_children.insert(package.manifest.id.clone(),child);}
             Err(e) => eprintln!("BifrOSt native app {}: {e}",package.manifest.id),

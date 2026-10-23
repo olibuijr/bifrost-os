@@ -8,6 +8,8 @@ summary = "Multitrack audio recording and mixing (a Pro Tools-style app). By Art
 category = "Music"
 architecture = "x86_64-linux"
 permissions = ["storage", "documents", "audio"]
+# opens the capture PCM itself (multitrack recording): the shell asks for the microphone at launch
+records_audio = true
 window = "native"
 wayland_app_id = "ai.storyteller.soundcraft"
 publisher = "ArtCraft (storytold)"
