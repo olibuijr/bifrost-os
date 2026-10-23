@@ -2199,6 +2199,12 @@ impl Shell {
         if !existed {
             let (bw, bh) = (w, h - title_of(app, &m));
             self.with_size(bw, bh, |sh| sh.init_app(app, t));
+            // a new App Store window opens on the front page, not where the last one was closed (W5-20)
+            if app == AppId::AppStore {
+                if let Some(s) = self.store.as_mut() {
+                    s.show_front_page();
+                }
+            }
         }
         let i = self.desk.as_mut().unwrap().open(&m, app, (w, h));
         if !existed {

@@ -744,6 +744,21 @@ impl AppStore {
         changed
     }
 
+    /// A new App Store window starts on the front page (Today, the desktop's Discover), as the reference opens it:
+    /// not on the product page, category or sheet the last window was closed on (W5-20). Installs keep running.
+    pub fn show_front_page(&mut self) {
+        self.tab = Tab::Today;
+        self.page = None;
+        self.category = None;
+        self.sheet = None;
+        self.review = None;
+        self.confirm_remove = None;
+        self.pressed = None;
+        self.scrolling = false;
+        self.scroll.jump_top();
+        self.dirty = true;
+    }
+
     /// Fetches the catalogue again on the next tick (opening the store, the Updates tab), so a
     /// version published a moment ago shows up without waiting for the 10-minute refresh.
     pub fn refresh_soon(&mut self) {
@@ -2331,6 +2346,18 @@ mod tests {
 
     fn local(id: &str, v: &str) -> InstalledApp {
         InstalledApp { id: id.into(), name: id.into(), version: v.into(), ..Default::default() }
+    }
+
+    #[test]
+    fn a_new_window_starts_on_the_front_page() {
+        let mut s = store();
+        s.tab = Tab::Apps;
+        s.category = Some(0);
+        s.confirm_remove = Some("is.o.calc".into());
+        s.page = Some(Page { id: "is.o.calc".into(), back: Tab::Apps, desc: Vec::new(), list_scroll: 0.0, whatsnew: Vec::new(), history: false, hist: Vec::new() });
+        s.show_front_page();
+        assert_eq!(s.tab, Tab::Today);
+        assert!(s.page.is_none() && s.category.is_none() && s.confirm_remove.is_none());
     }
 
     #[test]
