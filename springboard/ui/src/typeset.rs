@@ -171,6 +171,11 @@ struct Inner {
     source: Rc<dyn GlyphSource>,
 }
 
+/// U+00AD SOFT HYPHEN: a break opportunity that is drawn only when a line breaks at it.
+const SOFT_HYPHEN: char = '\u{ad}';
+/// What a soft hyphen shows at a line break (hyphen-minus: every text face has it).
+const SHOWN_HYPHEN: &str = "-";
+
 fn is_hard(c: char) -> bool {
     matches!(c, '\n' | '\r' | '\u{85}' | '\u{b}' | '\u{c}' | '\u{2028}' | '\u{2029}')
 }
@@ -242,6 +247,15 @@ impl Inner {
             let c = self.cluster_at(i, range.end);
             i = c.chars.end;
             out.push(c);
+        }
+        // A soft hyphen is invisible (no advance), except where the line breaks at it: there it shows as a hyphen.
+        if let Some(last) = out.last_mut() {
+            let para_end = self.para_ranges[self.para_index(last.chars.start)].end;
+            if self.chars[last.chars.start] == SOFT_HYPHEN && last.chars.end < para_end {
+                let font = self.styles[last.style].effective_font();
+                last.adv = glyph_advances(self.source.as_ref(), &font, SHOWN_HYPHEN).iter().sum();
+                last.token = Some(SHOWN_HYPHEN.to_string());
+            }
         }
         out
     }
@@ -550,7 +564,7 @@ impl Typesetter {
             let v = glyph_advances(source.as_ref(), &font, &text);
             for (k, w) in v.into_iter().enumerate() {
                 let idx = a + k;
-                adv[idx] = if grapheme[idx] && !is_hard(chars[idx]) && chars[idx] != '\t' { w } else { 0.0 };
+                adv[idx] = if grapheme[idx] && !is_hard(chars[idx]) && chars[idx] != '\t' && chars[idx] != SOFT_HYPHEN { w } else { 0.0 };
             }
             a = b;
         }
@@ -1470,6 +1484,20 @@ mod tests {
         assert_eq!(line.image_bounds(), Rect { x: 0.0, y: -8.0, w: 50.0, h: 10.0 });
         assert_eq!(line.runs()[0].positions()[1], (10.0, 0.0));
         assert_eq!(line.runs()[0].typographic_bounds(1..3).width, 20.0);
+    }
+
+    #[test]
+    fn a_soft_hyphen_is_invisible_unless_the_line_breaks_at_it() {
+        let t = ts("abc\u{ad}defgh");
+        let whole = t.create_line(0..8);
+        assert_eq!(whole.typographic_bounds().width, 70.0, "mid-line the soft hyphen takes no room");
+        assert_eq!(t.suggest_line_break(0, 45.0), 4, "the line may break after the soft hyphen");
+        let first = t.create_line(0..4);
+        assert_eq!(line_text(&first), "abc-", "and there it shows as a hyphen");
+        assert_eq!(first.typographic_bounds().width, 40.0);
+        assert_eq!(line_text(&t.create_line(4..8)), "defgh");
+        let end = ts("abc\u{ad}").create_line(0..4);
+        assert_eq!(end.typographic_bounds().width, 30.0, "at the end of the paragraph it stays invisible");
     }
 
     #[test]

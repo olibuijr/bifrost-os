@@ -94,7 +94,8 @@ pub fn runs<'t>(primary: &Font<'_>, text: &'t str) -> Option<(Faces, Runs<'t>)> 
     if faces.is_empty() {
         return None;
     }
-    let skip = |c: char| c.is_ascii() || c.is_whitespace() || c.is_control();
+    // default-ignorable characters draw nothing on any face (`Font::shape_run`), so they never start a fallback run
+    let skip = |c: char| c.is_ascii() || c.is_whitespace() || c.is_control() || crate::font::is_default_ignorable(c);
     if text.chars().all(|c| skip(c) || primary.glyph(c) != 0) {
         return None;
     }

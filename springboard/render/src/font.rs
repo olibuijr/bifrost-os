@@ -7,6 +7,18 @@ use crate::gfx::{pack, scale, Image};
 use crate::gvar::{self, Axis, Gvar};
 use crate::shape_ot::{self, Features, OtLayout, ShapeOptions};
 
+/// Unicode `Default_Ignorable_Code_Point` (DerivedCoreProperties): characters that take no room and have no shape
+/// unless a font gives them a special rendering, such as zero-width spaces and joiners, the soft hyphen, the byte order
+/// mark, bidi controls, variation selectors and tag characters. Text layout draws nothing for them and gives them no
+/// advance, so a font that lacks them never shows its missing-glyph box (`.notdef`). The soft hyphen is shown only
+/// where a line breaks at it, which the line breaker does (`bifrost_ui::typeset`).
+pub fn is_default_ignorable(c: char) -> bool {
+    matches!(c as u32,
+        0x00AD | 0x034F | 0x061C | 0x115F..=0x1160 | 0x17B4..=0x17B5 | 0x180B..=0x180F | 0x200B..=0x200F
+        | 0x202A..=0x202E | 0x2060..=0x206F | 0x3164 | 0xFE00..=0xFE0F | 0xFEFF | 0xFFA0 | 0xFFF0..=0xFFF8
+        | 0x1BCA0..=0x1BCA3 | 0x1D173..=0x1D17A | 0xE0000..=0xE0FFF)
+}
+
 /// One glyph placed by the shaper: advance and offsets in font units (offset y is up).
 struct PlacedGlyph {
     gid: u16,
@@ -824,11 +836,31 @@ impl Font<'_> {
     fn shape_run(&self, text: &str, norm: &[f32], features: &Features) -> Vec<PlacedGlyph> {
         let layout = self.ot.get_or_init(|| OtLayout::from_sfnt(self.data));
         if layout.is_trivial() {
-            return text.chars().map(|c| { let gid = self.glyph(c); PlacedGlyph { gid, advance: self.advance_at(gid, norm), dx: 0.0, dy: 0.0 } }).collect();
+            return text
+                .chars()
+                .filter(|&c| !is_default_ignorable(c))
+                .map(|c| { let gid = self.glyph(c); PlacedGlyph { gid, advance: self.advance_at(gid, norm), dx: 0.0, dy: 0.0 } })
+                .collect();
         }
+        // Default-ignorable characters leave the run before shaping, so kerning and ligatures see their visible
+        // neighbours side by side. The joiners (ZWNJ, ZWJ) stay in for the shaper, since they steer the substitutions
+        // around them, and their own glyphs are dropped afterwards: no ink, no advance, never `.notdef`. A glyph the
+        // shaper substituted for a joiner is kept.
+        let stripped: String;
+        let text = if text.chars().any(|c| is_default_ignorable(c) && !matches!(c, '\u{200c}' | '\u{200d}')) {
+            stripped = text.chars().filter(|&c| !is_default_ignorable(c) || matches!(c, '\u{200c}' | '\u{200d}')).collect();
+            stripped.as_str()
+        } else {
+            text
+        };
         let opts = ShapeOptions { script: shape_ot::detect_script(text), language: None, features, coords: norm };
         let out = layout.shape_text(text, &|c| self.glyph(c), &|g| self.advance_at(g, norm).round() as i32, &opts);
-        out.iter().map(|g| PlacedGlyph { gid: g.gid, advance: g.x_advance as f32, dx: g.x_offset as f32, dy: g.y_offset as f32 }).collect()
+        let chars: Vec<char> = if text.chars().any(is_default_ignorable) { text.chars().collect() } else { Vec::new() };
+        let ignored = |g: &shape_ot::ShapedGlyph| chars.get(g.cluster as usize).is_some_and(|&c| is_default_ignorable(c) && (g.gid == 0 || g.gid == self.glyph(c)));
+        out.iter()
+            .filter(|g| !ignored(*g))
+            .map(|g| PlacedGlyph { gid: g.gid, advance: g.x_advance as f32, dx: g.x_offset as f32, dy: g.y_offset as f32 })
+            .collect()
     }
 
     /// Runs of `text`, emoji clusters (drawn from the color emoji font) flagged true.
@@ -1355,6 +1387,26 @@ mod run_cache_tests {
         off.set(tag("liga"), 0);
         assert!(!std::sync::Arc::ptr_eq(&first, &f.shaped("Hello", &[], &off)), "features are part of the key");
         assert!(!std::sync::Arc::ptr_eq(&first, &f.shaped("World", &[], &Features::new())), "the text is part of the key");
+    }
+
+    #[test]
+    fn default_ignorable_characters_take_no_room_and_draw_no_box() {
+        let data = sf();
+        let f = Font::parse(&data).unwrap();
+        let st = Style { px: 20.0, embolden: 0.0, color: 0xffff_ffff, shadow: false };
+        let plain = "548 Market St.";
+        let padded = "5\u{200c}4\u{200b}8 M\u{2060}a\u{feff}rket S\u{ad}t.\u{200e}";
+        assert_eq!(f.measure(padded, 20.0), f.measure(plain, 20.0), "the invisible characters add no width");
+        let (a, b) = (f.render(plain, &st), f.render(padded, &st));
+        assert_eq!((a.w, a.h), (b.w, b.h));
+        assert_eq!(a.px, b.px, "and draw exactly the same pixels: no missing-glyph boxes");
+        for c in ['\u{ad}', '\u{200b}', '\u{200c}', '\u{200d}', '\u{2060}', '\u{feff}', '\u{fe0f}', '\u{e0041}'] {
+            assert!(is_default_ignorable(c), "{:04X}", c as u32);
+            assert_eq!(f.measure(&c.to_string(), 20.0), 0.0, "{:04X} alone measures zero", c as u32);
+        }
+        for c in ['a', ' ', '-', '\u{a0}', '\u{2010}', '\u{25cf}'] {
+            assert!(!is_default_ignorable(c), "{:04X} is visible", c as u32);
+        }
     }
 
     #[test]
