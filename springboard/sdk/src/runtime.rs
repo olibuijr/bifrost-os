@@ -875,7 +875,13 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                     // a background window is still on screen on the desktop: repaint it once even while suspended
                     repaint_suspended = true;
                 }
-                m @ (ToApp::SetMarkedText { .. } | ToApp::UnmarkText { .. } | ToApp::DeleteSurrounding { .. } | ToApp::AccentHold { .. } | ToApp::AccessoryAction(_)) => {
+                // the main window's composition takes the same route as an extra window's (`window_text_input`)
+                m @ (ToApp::SetMarkedText { .. } | ToApp::UnmarkText { .. } | ToApp::DeleteSurrounding { .. } | ToApp::AccentHold { .. }) => {
+                    if let Some(c) = &ctx {
+                        need_frame |= app.window_text_input(c, crate::app_windows::WindowId::MAIN, m);
+                    }
+                }
+                m @ ToApp::AccessoryAction(_) => {
                     if let Some(c) = &ctx {
                         need_frame |= app.text_input(c, m);
                     }

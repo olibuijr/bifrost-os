@@ -5262,14 +5262,18 @@ Key window (keys, text, menus, commands). One window of an app has key focus: th
 the app's extra windows, otherwise the main window (`WindowId::MAIN`). Wire (`springboard/proto`): the shell sends
 `WindowFocus {window, focused}` (0x24f) when key focus moves (the old window `focused: false`, the new one `true`; the main
 window is 0), and `WindowInput {window, input}` (0x250) carrying a `WindowInput`: `Key`, `Command`, `MenuAction`,
-`SetMarkedText`, `UnmarkText` or `DeleteSurrounding`. Window 0 is sent as the messages every app already handles (`Key`,
+`SetMarkedText`, `UnmarkText`, `DeleteSurrounding` or `AccentHold` (kind 7, the held letter as a code point). Window 0 is sent as the messages every app already handles (`Key`,
 `Command`, `MenuAction`, `SetMarkedText`, ...), so an app without extra windows is unchanged. Shell
 (`springboard/src/shell/apphost.rs`, `desk.rs`): `sync_key_windows` makes each host's `key_window` follow the desk's front
 window before input and on each tick; `AppHost::input` tags keys, commands, menu items and composition with it;
 `set_key_window` sends the focus pair. The keyboard's composition goes through `textinput::to_input`. SDK
 (`springboard/sdk`): `Ctx::key_window()` (falls back to the main window once the key window is closed); `App::window_input(ctx,
 window, input)`, whose default (`app_windows::default_window_input`) sends keys and commands to `window_event` as `Input::Key`
-and `Input::Command`, and sends a menu item and a text edit to the main window's `menu_action` and `text_input` only;
+and `Input::Command`, sends a text edit (marked text, unmark, delete surrounding, accent hold) to
+`App::window_text_input(ctx, window, ev)` with the window's id (default: the main window goes to `text_input`, an extra
+window's is dropped; the runtime sends the main window's plain `ToApp` composition through the same hook), and sends a menu
+item to the main window's `menu_action` only; an app whose extra windows edit text overrides `window_text_input` (Notes'
+note windows do, so an input method's marked text lands in the note being typed in, not in the main editor);
 `App::menus_for(ctx, window)`, whose default is `main_menu`, is what the runtime sends as the app's menus. Clipboard calls
 are not window-scoped and did not change. Cmd+W (`app_windows::is_close_window_key`) closes the window it is typed in: the
 desk's own Close action already does that for an extra window (it sends `WindowClosed`), and an app that handles the key
@@ -5284,7 +5288,12 @@ before a change, as Dictionary's `change_prefs` does, so one window's save does 
 Tests: proto (`key_window_messages_round_trip_through_the_codec`, `window_input_has_the_documented_layout`,
 `a_bad_window_focus_or_window_input_is_refused`); SDK (`app_windows` tests drive the messages through their wire bytes: key
 routing, focus and the late lost focus, closed windows, menu items and text edits, `menus_for`, Cmd+W); shell
-(`apphost` `the_key_window_gets_the_input_and_the_app_hears_each_focus_change`). Not verified: no build or test run was done
+(`apphost` `the_key_window_gets_the_input_and_the_app_hears_each_focus_change`,
+`marked_text_and_accent_holds_follow_the_key_window`); SDK `marked_text_and_accent_holds_reach_the_key_window_with_its_id`;
+proto `an_accent_hold_goes_to_the_key_window_and_a_bad_code_point_is_refused`. Hardware dead keys (the Icelandic `´` then
+`a`) are composed by the shell's keymap (`installer::keymaps::Keyboard::press`) and arrive in the key window as the composed
+text `á`, so they never were marked text; the reference shows the pending accent as marked text, which the shell does not
+send yet. Not verified: no build or test run was done
 for this change; the desk's `sync_key_windows` has no test of its own. Apps: Contacts 1.14.0 (Cmd+W), Dictionary 0.6.0 (own
 keys and Copy per window, Cmd+W, prefs read back before each change), Activity Monitor 0.9.0 (Cmd+W in CPU windows).
 `min_shell` is not raised: an older shell sends none of these messages.

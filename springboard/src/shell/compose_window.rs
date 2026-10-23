@@ -10,7 +10,6 @@ use super::keyboard::Out;
 use super::ui::{Ui, Weight, LABEL, MAC_BODY_PT, MENU_HIGHLIGHT, MENU_HIGHLIGHT_TEXT, MENU_SOLID, WHITE};
 use super::{Effect, Shell};
 use crate::gfx::Surface;
-use bifrost_proto::ToApp;
 use bifrost_ui::compose_method::{self, ComposeTarget, Composer};
 use bifrost_ui::imk_host::KeyResult;
 use bifrost_ui::prefs_layout::m;
@@ -116,10 +115,11 @@ impl Shell {
 
     /// A letter held down (`KeyRepeat::accent_hold`): the letter typed at the press is taken back and shown as marked
     /// text over its accents, with digits to pick one. With no Search field open, the focused field of the app in front
-    /// takes the hold (`ToApp::AccentHold`) and composes the accents in its own compose method.
+    /// takes the hold (`ToApp::AccentHold`, or `WindowInput::AccentHold` for an extra key window) and composes the
+    /// accents in its own compose method.
     pub fn accent_hold(&mut self, letter: char, t: f64) -> Vec<Effect> {
         if !self.quicksearch.is_shown() {
-            self.ext_fg_send(&ToApp::AccentHold { letter });
+            self.ext_fg_input(bifrost_proto::WindowInput::AccentHold { letter });
             return vec![];
         }
         let mut composer = std::mem::take(&mut self.compose_ime.composer);

@@ -794,8 +794,9 @@ pub trait App {
     fn menu_action(&mut self, _ctx: &Ctx, _id: u32) -> bool { false }
     /// Input for the key window (`ToApp::WindowInput`): a key, a command, a menu item or a text edit that the shell
     /// sent to `window`, which is an extra window or the main window. The default sends keys and commands to
-    /// `window_event` (as `Input::Key` and `Input::Command`), a menu item and a text edit to the main window's
-    /// `menu_action` and `text_input`, and drops the rest for extra windows. True when the app needs a new frame.
+    /// `window_event` (as `Input::Key` and `Input::Command`), text edits (marked text, accent holds) to
+    /// `window_text_input` with the window's id, a menu item to the main window's `menu_action`, and drops the rest
+    /// for extra windows. True when the app needs a new frame.
     fn window_input(&mut self, ctx: &Ctx, window: app_windows::WindowId, input: crate::proto::WindowInput) -> bool {
         app_windows::default_window_input(self, ctx, window, input)
     }
@@ -849,6 +850,14 @@ pub trait App {
     /// `bifrost_ui::text::TextBuffer` map them onto `set_marked_text`, `unmark_text(commit)` and `delete_surrounding`. Return true when a frame is needed.
     fn text_input(&mut self, _ctx: &Ctx, _ev: crate::proto::ToApp) -> bool {
         false
+    }
+    /// IME and keyboard composition for `window`, the key window (`NSTextInputClient` of the window's first
+    /// responder): `SetMarkedText`, `UnmarkText`, `DeleteSurrounding` and `AccentHold`, as `text_input` takes them. The
+    /// shell sends them to the window that has the keys, so marked text (an input method's candidate, a held letter's
+    /// accent list) lands in the window being typed in. The default sends the main window's to `text_input` and drops
+    /// an extra window's; an app whose extra windows edit text overrides it. True when a frame is needed.
+    fn window_text_input(&mut self, ctx: &Ctx, window: app_windows::WindowId, ev: crate::proto::ToApp) -> bool {
+        if window.is_main() { self.text_input(ctx, ev) } else { false }
     }
     /// Keyboard system app only (`provides = ["keyboard"]`): the shell configured the keyboard from the focused field
     /// (layout, return key, predictive text, shown). Other apps never receive it. Return true when a frame is needed.
