@@ -1580,10 +1580,11 @@ impl Shell {
         self.ui.symbols = crate::symbols::Symbols::load(dir);
         self.apply_options();
         self.ota_enable();
-        // the Clock app's files: the shell service shares them with the package
-        let data = PathBuf::from(dir).join("appdata").join(clock::APP_ID);
+        // the Clock app's files: the shell service shares them with the installed app, in the app's own data folder
+        let data = clock::service_dir(Path::new(dir));
         apphost::migrate_legacy(Path::new(dir), clock::APP_ID, &data);
         let _ = std::fs::create_dir_all(&data);
+        clock::adopt_old_dir(&PathBuf::from(dir).join("appdata").join(clock::APP_ID), &data);
         // first run: the Setup Assistant opens over the desktop until its state file says the run finished
         if crate::setup::needs_window(Path::new(dir)) {
             if let Some(slot) = apphost::slot_of(crate::setup::APP_ID) {
