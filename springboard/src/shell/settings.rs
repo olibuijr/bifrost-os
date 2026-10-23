@@ -46,7 +46,7 @@ pub const PUSH_MS: f64 = 350.0;
 /// How far the page underneath slides left while one is pushed over it.
 const PARALLAX: f32 = 0.3;
 /// Frames at least this wide get the bifrost's sidebar + detail layout.
-const SPLIT_MIN_PT: f32 = 600.0;
+pub(crate) const SPLIT_MIN_PT: f32 = 600.0;
 /// Desktop frames: the sidebar grows with the width up to this, and the detail rows stay within
 /// a column of `DETAIL_MAX_PT`.
 const SIDEBAR_MAX_PT: f32 = 420.0;
