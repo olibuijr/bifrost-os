@@ -2832,7 +2832,7 @@ Decisions, recorded for the disk-arbitration matrix rows (`docs/parity-matrix/da
 
 ## Workspace (NSWorkspace parity, `bifrost_app::workspace`)
 
-Reference: AppKit `NSWorkspace` (`open(_:)`, `open(_:withApplicationAt:configuration:)`, `activateFileViewerSelecting(_:)`,
+Reference: AppKit `NSWorkspace` (`open(_:)`, `open(_:withApplicationAt:configuration:)`, `openApplication(at:configuration:completionHandler:)`, `activateFileViewerSelecting(_:)`,
 `recycle(_:completionHandler:)`, `urlForApplication(withBundleIdentifier:)`, `icon(forFile:)`, `icon(for:)`, `frontmostApplication`,
 `runningApplications`, and the workspace `notificationCenter`).
 
@@ -2840,6 +2840,9 @@ API (all take a `Ctx`; answers arrive in a completion closure on the main thread
 - `open(ctx, url, done(bool))`: web links open in the default browser, another scheme in the app that declares it (`schemes` in the manifest).
 - `open_file(ctx, item, done(bool))`: opens with the default app for the file's type (Settings > Default Apps, `shell/defaultapps.rs`, `launch::Registry`).
 - `open_with(ctx, items, app_id, done(Status))`, `activate_file_viewer_selecting(ctx, items, done)`, `recycle(ctx, items, done(Status, moved))`.
+- `open_application(ctx, app_id, done(Status))` (`openApplication(at:configuration:completionHandler:)`): launches the installed app, or brings it
+  to the front when it runs, the way the Dock opens it (`Shell::desk_open_or_start`). `NotFound` for an unknown id, a service or a system package.
+  Files' Applications place opens its rows with it (double-click, Return, File > Open); a refusal shows a notice in the status bar.
 - `url_for_application(ctx, id, done(Option<id>))`, `frontmost_application`, `running_applications`.
 - `icon_for_content_type(uti)` and `icon_for_file(name)`: pure, return a glyph name from the type tree (`uttype`).
 - `observe(ctx, kind, closure) -> ObserverToken`: did-launch, did-terminate, did-activate application (`user_info` `id`, `name`), will-sleep, did-wake,
@@ -2850,18 +2853,25 @@ Decisions:
 - A file is a document grant (`workspace::Item = GrantId`), never a path. The shell resolves the grant against the grants the app owns (`Denied` for
   anyone else's or an unknown one, same answer, so grants cannot be probed). The app needs the `documents` permission. `recycle` needs a write grant,
   and never moves the home folder or the trash itself. Open and open-with hand the file to the target as a fresh read-only grant (the share-sheet path).
-- Nothing launches a binary. `open_with` takes an installed app id whose package kind is `app` or `system-app`; services and system packages are refused.
+- Nothing launches a binary. `open_with` and `open_application` take an installed app id whose package kind is `app` or `system-app`; services,
+  system packages, removed packages, and an id with a `/` or a control character are refused (`workspace::application_to_open`). Apple's
+  `openApplication` takes an app URL; ours takes the id, since an app has no path to another app's package. Like Apple's, it needs no
+  entitlement: launching an installed app is what the Dock and Launchpad already let any person do.
   Links with `file`, `javascript`, `data`, `blob`, `vbscript` or `about` schemes, or with control characters, are refused.
 - Recycle uses the same Recently Deleted folder and `.origins` record as Files, so Put Back works. Reveal opens Files at the file's folder.
-- Wire: `ToShell::WorkspaceRequest` 0x230, `WorkspaceSubscribe` 0x231, `ToApp::WorkspaceReply` 100, `WorkspaceEvent` 101 (`proto/src/workspace.rs`).
+- Wire: `ToShell::WorkspaceRequest` 0x230 (op 8 is `OpenApplication`, the id in `arg`), `WorkspaceSubscribe` 0x231, `ToApp::WorkspaceReply` 100,
+  `WorkspaceEvent` 101 (`proto/src/workspace.rs`).
   Events are a message of their own, not `DistNotify`, so no app can forge a workspace event.
-- Contract tests: `open_uses_the_default_app_for_the_type`, `recycle_moves_items_to_the_trash`, `apps_hear_did_launch_and_did_terminate` (SDK and shell side).
+- Contract tests: `open_uses_the_default_app_for_the_type`, `recycle_moves_items_to_the_trash`, `apps_hear_did_launch_and_did_terminate` (SDK and shell side),
+  `open_application_names_the_app_by_id_and_reports_the_status` (SDK), `open_application_launches_only_installed_apps_by_exact_id` (shell),
+  `opening_an_app_row_launches_the_app_by_id` (Files).
 
 Gaps (explicit):
 - Sleep and wake events: the shell has `Shell::workspace_system_event(kind)` but nothing calls it yet (no suspend/lid hook located); launch, exit and
   activation are wired in `apphost.rs`.
 - Reveal opens one Files window, at the first file's folder, and does not select the files. `open_file` for a built-in app (no process) raises the app
-  but delivers no file. `icon_for_*` return glyph names, not images. No `open(_:configuration:)` options (activates, hides, new instance), no
+  but delivers no file. `icon_for_*` return glyph names, not images. No `open(_:configuration:)` or `openApplication` configuration options (activates, hides, new instance, arguments; an app is
+  always activated), no
   `runningApplications` details beyond ids, no `urlForApplication` path (apps have no URL an app may use), no `selectFile(_:inFileViewerRootedAtPath:)`.
 - Not verified on a device or built; the lead runs the tests.
 

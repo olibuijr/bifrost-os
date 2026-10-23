@@ -150,9 +150,10 @@ impl Files {
             return;
         }
         if applications::is_store_dir(&self.path) {
-            // an SDK app has no call that launches another app yet; browsing into the package is not what was asked
-            self.notice = Some(format!("Open {} from Launchpad or the Dock.", e.name));
-            self.revision += 1;
+            // an app row opens the app (the shell launches it by id, or brings it to the front), never its package folder
+            if let Some(id) = applications::app_id_of(&e) {
+                self.sys.effects.push(Effect::OpenApplication(id, e.name.clone()));
+            }
             return;
         }
         self.index_opened(&e);

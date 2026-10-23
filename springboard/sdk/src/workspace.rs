@@ -78,6 +78,13 @@ pub fn open_with(ctx: &Ctx, items: &[Item], app_id: &str, done: impl FnOnce(Stat
     ask(ctx, WorkspaceOp::OpenWith, items, app_id, move |s, _| done(s))
 }
 
+/// `openApplication(at:configuration:completionHandler:)`: launches the installed app `app_id`, or brings it to the
+/// front when it runs. The app is named by its id, never by a path: the shell launches only installed apps whose package
+/// is an app (`NotFound` for an unknown id, a service or a system package). `done` gets the status.
+pub fn open_application(ctx: &Ctx, app_id: &str, done: impl FnOnce(Status) + 'static) -> u32 {
+    ask(ctx, WorkspaceOp::OpenApplication, &[], app_id, move |s, _| done(s))
+}
+
 /// `activateFileViewerSelecting(_:)`: shows the files in Files.
 pub fn activate_file_viewer_selecting(ctx: &Ctx, items: &[Item], done: impl FnOnce(Status) + 'static) -> u32 {
     ask(ctx, WorkspaceOp::Reveal, items, "", move |s, _| done(s))
@@ -302,6 +309,19 @@ mod tests {
         reply_incoming(r, Status::Denied, vec![]);
         reply_incoming(r, Status::Denied, vec![]);
         assert_eq!(seen.get(), 1);
+    }
+
+    #[test]
+    fn open_application_names_the_app_by_id_and_reports_the_status() {
+        reset();
+        let ctx = crate::runtime::test_ctx();
+        let seen = Rc::new(Cell::new(None));
+        let s = seen.clone();
+        let r = open_application(&ctx, "is.example.notes", move |status| s.set(Some(status)));
+        // no grants and no path: the shell resolves the id against the installed apps
+        assert_eq!(ctx.take_sent(), [ToShell::WorkspaceRequest { request: r, op: WorkspaceOp::OpenApplication, grants: vec![], arg: "is.example.notes".into() }]);
+        reply_incoming(r, Status::NotFound, vec![]);
+        assert_eq!(seen.get(), Some(Status::NotFound));
     }
 
     #[test]

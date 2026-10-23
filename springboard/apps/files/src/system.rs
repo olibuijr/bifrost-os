@@ -54,6 +54,9 @@ pub(crate) enum Effect {
     PopUp(f32, f32, Vec<ContextItem>),
     /// Share: the shell's share menu for these files, under the button at (x, y, w, h) window points.
     Share(Vec<PathBuf>, (f32, f32, f32, f32)),
+    /// Open in the Applications place: launch the installed app (id, name), or bring it to the front
+    /// (`workspace::open_application`).
+    OpenApplication(String, String),
 }
 
 /// What a waiting reply is for.
@@ -76,6 +79,8 @@ pub(crate) struct SystemState {
     thumb_ids: std::collections::HashSet<u32>,
     /// The last progress fraction sent to the Dock tile; None when no bar is up.
     dock: Option<f32>,
+    /// The names of the apps the shell would not open (the workspace answers in a closure; `tick` shows them).
+    app_open_failed: std::rc::Rc<std::cell::RefCell<Vec<String>>>,
 }
 
 impl SystemState {
@@ -122,8 +127,24 @@ impl SystemState {
                     let s = ctx.ui.s;
                     let _ = bifrost_app::share::show_picker(ctx, &items, Rect { x: x * s, y: y * s, w: w * s, h: h * s });
                 }
+                Effect::OpenApplication(id, name) => {
+                    let failed = self.app_open_failed.clone();
+                    bifrost_app::workspace::open_application(ctx, &id, move |status| {
+                        if status != bifrost_app::workspace::Status::Ok {
+                            failed.borrow_mut().push(name);
+                        }
+                    });
+                }
             }
         }
+    }
+
+    /// The name of an app the shell would not open since the last call, if any.
+    pub(crate) fn take_app_open_failure(&mut self) -> Option<String> {
+        let mut failed = self.app_open_failed.borrow_mut();
+        let last = failed.pop();
+        failed.clear();
+        last
     }
 
     /// Takes the thumbnail request `request` when it is one of this app's; its reply is then a thumbnail answer.
@@ -401,6 +422,26 @@ mod tests {
         assert_eq!(path_from_file_url("file://host/share/a"), None);
         assert_eq!(path_from_file_url("file:///a%2"), None);
         assert_eq!(path_from_file_url("file:///a%zz"), None);
+    }
+
+    #[test]
+    fn opening_an_application_asks_the_shell_by_id() {
+        let ctx = test_ctx();
+        let mut sys = SystemState::default();
+        sys.effects.push(Effect::OpenApplication("is.example.notes".into(), "Notes".into()));
+        sys.flush(&ctx);
+        match &ctx.take_sent()[..] {
+            [ToShell::WorkspaceRequest { op, grants, arg, .. }] => {
+                assert_eq!(*op, bifrost_app::proto::WorkspaceOp::OpenApplication);
+                assert!(grants.is_empty(), "an app is named by id, not by a grant or a path");
+                assert_eq!(arg, "is.example.notes");
+            }
+            other => panic!("expected a workspace request, got {other:?}"),
+        }
+        assert_eq!(sys.take_app_open_failure(), None, "no answer yet, no notice");
+        sys.app_open_failed.borrow_mut().push("Notes".into());
+        assert_eq!(sys.take_app_open_failure().as_deref(), Some("Notes"));
+        assert_eq!(sys.take_app_open_failure(), None);
     }
 
     #[test]

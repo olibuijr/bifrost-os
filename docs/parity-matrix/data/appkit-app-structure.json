@@ -40,7 +40,7 @@
       "apple": "NSApplication, NSWorkspace, NSRunningApplication, app delegate, process info",
       "bifrost": "springboard/sdk/src/runtime.rs (App trait, Ctx); springboard/sdk/src/workspace.rs; springboard/sdk/src/process_info.rs; springboard/sdk/src/service_management.rs; springboard/sdk/tests/parity_sdk-complete-17.rs",
       "status": "partial",
-      "note": "Sudden termination, activity unions, thermal states, low power and workspace notification names are tested headless; memory-pressure callbacks exist through dispatch. Gap: occlusion-driven suspension is still planned (task/008-lifecycle-recovery.md) and needs the lab machine. Refreshed 2026-10-17: memory-pressure callbacks are DispatchSource::memory_pressure in springboard/sdk/src/dispatch.rs and the level in springboard/sdk/src/memory_pressure.rs, so that part of the gap is closed."
+      "note": "Sudden termination, activity unions, thermal states, low power and workspace notification names are tested headless; NSWorkspace.openApplication is workspace::open_application (installed apps by id, used by Files' Applications place; not yet verified on Midget); memory-pressure callbacks exist through dispatch. Gap: occlusion-driven suspension is still planned (task/008-lifecycle-recovery.md) and needs the lab machine. Refreshed 2026-10-17: memory-pressure callbacks are DispatchSource::memory_pressure in springboard/sdk/src/dispatch.rs and the level in springboard/sdk/src/memory_pressure.rs, so that part of the gap is closed."
     },
     {
       "feature": "Documents (NSDocument, NSDocumentController)",

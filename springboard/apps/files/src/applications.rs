@@ -1,9 +1,9 @@
 //! The Applications place: the store apps installed under `<shell data>/apps/<id>/current/`, listed by the names the
 //! Dock and Launchpad show (the folder itself is named by app ids, which is not what a person looks for).
 //!
-//! The list is read-only, like Recents: nothing is created, pasted or dropped into it. An app cannot be opened from
-//! here yet: an SDK app has no launch call (`workspace::open_with` opens documents in an app), so a double-click
-//! explains where to open it instead of browsing into the package.
+//! The list is read-only, like Recents: nothing is created, pasted or dropped into it. Opening a row (double-click,
+//! Return, File > Open) launches the app through the shell (`workspace::open_application`, by id), or brings it to the
+//! front when it runs, instead of browsing into the package.
 use crate::*;
 
 /// Where the store apps are installed: the folder the sidebar's Applications row opens when the home folder and the
@@ -29,6 +29,11 @@ pub(crate) fn installed_rows(dir: &Path) -> Vec<Entry> {
             Entry { kind: fs::kind_of(&name, false), path: dir.join(&app.manifest.id), name, is_dir: false, size: 0, mtime, items: None }
         })
         .collect()
+}
+
+/// The app id of an Applications row: its path is `<store>/<id>` (`installed_rows`).
+pub(crate) fn app_id_of(e: &Entry) -> Option<String> {
+    e.path.file_name().and_then(|n| n.to_str()).filter(|id| !id.is_empty()).map(str::to_string)
 }
 
 #[cfg(test)]
@@ -69,6 +74,19 @@ mod tests {
         assert_eq!(items.len(), 1, "one path bar item, not Computer > var > lib > springboard > apps");
         assert_eq!(items[0].0, "Applications");
         assert!(files.in_recents(), "nothing is created or pasted into the Applications list");
+    }
+
+    #[test]
+    fn opening_an_app_row_launches_the_app_by_id() {
+        let mut files = crate::tests::fixture(vec![]);
+        files.path = store_dir();
+        let id = "is.olibuijr.calculator.desktop";
+        files.rows = vec![Entry { kind: fs::kind_of("Calculator", false), path: store_dir().join(id), name: "Calculator".into(), is_dir: false, size: 0, mtime: 0, items: None }];
+        let path = files.path.clone();
+        files.open(0);
+        assert!(matches!(files.sys.effects.last(), Some(Effect::OpenApplication(i, n)) if i == id && n == "Calculator"), "the shell is asked to open the app");
+        assert_eq!(files.path, path, "the package folder is not browsed into");
+        assert!(files.notice.is_none(), "no 'open it from the Dock' notice any more");
     }
 
     #[test]
