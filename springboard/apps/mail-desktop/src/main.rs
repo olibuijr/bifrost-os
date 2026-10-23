@@ -5,6 +5,7 @@ use bifrost_app::app_windows::WindowId;
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::background_tasks::{self, TaskEvent};
 use bifrost_app::{passwords, usernotif};
+use bifrost_app::proto::WindowInput;
 use bifrost_app::{App, AppMenu, Command, Commands, Ctx, DocumentEvent, Input, TouchKind};
 use bifrost_mail::background::{self, Check};
 use bifrost_mail::compose_windows::Composes;
@@ -148,11 +149,7 @@ impl App for MailApp {
                     }
                     mail.touch(ctx, kind, x, y, t)
                 }
-                Input::Key(k) => mail.key(ctx, k),
-                Input::Command(Command::Paste) => mail.paste(),
-                Input::Command(Command::SelectAll) => mail.select_all(),
-                Input::Command(Command::Copy) => mail.copy(),
-                Input::Command(Command::Cut) => mail.cut(),
+                Input::Key(_) | Input::Command(_) => key_or_command(mail, ctx, ev),
                 Input::Open(url) => {
                     mail.open_handoff(&url);
                     true
@@ -173,19 +170,44 @@ impl App for MailApp {
                 _ => false,
             };
         }
-        let Input::Touch { kind, x, y, t, .. } = ev else { return false };
         let Some(mail) = &mut self.window else { return false };
         if !self.composes.owns(window) {
             return false;
         }
-        if matches!(kind, TouchKind::Down) && !self.composes.activate(mail, window) {
-            return false;
-        }
-        if self.composes.active != Some(window) {
-            return false;
-        }
-        let changed = mail.touch(ctx, kind, x, y, t);
+        let changed = match ev {
+            Input::Touch { kind, x, y, t, .. } => {
+                if matches!(kind, TouchKind::Down) && !self.composes.activate(mail, window) {
+                    return false;
+                }
+                if self.composes.active != Some(window) {
+                    return false;
+                }
+                mail.touch(ctx, kind, x, y, t)
+            }
+            // the compose window is the key window: its keys and editing commands go to its message (the shell sends
+            // them tagged with the window, not to the main window)
+            Input::Key(_) | Input::Command(_) => {
+                if !self.composes.activate(mail, window) {
+                    return false;
+                }
+                key_or_command(mail, ctx, ev)
+            }
+            _ => false,
+        };
         self.sync(ctx) | changed
+    }
+
+    fn window_input(&mut self, ctx: &Ctx, window: WindowId, input: WindowInput) -> bool {
+        match input {
+            // a menu item chosen while a compose window is key (Send, Format, Attach) acts on that window's message
+            WindowInput::MenuAction(id) if self.composes.owns(window) => {
+                if let Some(mail) = &mut self.window {
+                    self.composes.activate(mail, window);
+                }
+                self.with_window(ctx, |mail| mail.menu(ctx, id))
+            }
+            other => bifrost_app::app_windows::default_window_input(self, ctx, window, other),
+        }
     }
 
     fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<bifrost_core::json::Json, String>) -> bool {
@@ -263,7 +285,7 @@ impl App for MailApp {
             viewer.draw(s, &ctx.ui);
         } else if let Some(mail) = &mut self.window {
             if let Some(compose) = self.composes.compose_of(window) {
-                self.composes.resized(window, s.w as f32, s.h as f32);
+                self.composes.resized(mail, window, s.w as f32, s.h as f32);
                 // the window that asks the question shows it; the others show the message
                 let asking = self.composes.active == Some(window) && matches!(mail.mail.sheet, Some(bifrost_mail::state::Sheet::Question(_)));
                 let sheet = if asking { bifrost_mail::state::Sheet::Question(compose) } else { bifrost_mail::state::Sheet::Compose(compose) };
@@ -296,6 +318,19 @@ impl App for MailApp {
 
     fn wake_fd(&self) -> Option<i32> {
         self.window.as_ref().and_then(|mail| mail.wake_fd())
+    }
+}
+
+/// A key or a standard editing command for the main window's message list or its sheet (the active compose's message
+/// while a compose window is key).
+fn key_or_command(mail: &mut MailWindow, ctx: &Ctx, ev: Input) -> bool {
+    match ev {
+        Input::Key(k) => mail.key(ctx, k),
+        Input::Command(Command::Paste) => mail.paste(),
+        Input::Command(Command::SelectAll) => mail.select_all(),
+        Input::Command(Command::Copy) => mail.copy(),
+        Input::Command(Command::Cut) => mail.cut(),
+        _ => false,
     }
 }
 
@@ -354,7 +389,10 @@ impl MailApp {
 
     /// The window with focus decides which compose a key or a command acts on: the focused compose window's message.
     fn route_focus(&mut self, ctx: &Ctx) {
-        let focused = ctx.windows().focused();
+        // the key window the shell reported (`WindowFocus`), not the registry's front window: the registry keeps the
+        // order windows were opened in, so a compose window opened once would stay "focused" after a click on the main
+        // window and take its keys
+        let focused = ctx.key_window();
         if let Some(mail) = &mut self.window {
             if self.composes.owns(focused) {
                 self.composes.activate(mail, focused);
@@ -401,6 +439,10 @@ mod tests {
     use bifrost_app::controls::internet_accounts::{Account, Kind, Security, Server};
     use bifrost_app::kit::{Font, Ui};
     use bifrost_app::proto::{Configure, ToShell};
+    use bifrost_app::KeyInput;
+    use bifrost_mail::compose_windows::{COMPOSE_H, COMPOSE_W};
+    use bifrost_mail::draw::{choice_count, sheet_layout};
+    use bifrost_mail::state::Sheet;
     use bifrost_core::json::Json;
     use bifrost_mail::flags::{Flag, Flags};
     use bifrost_mail::session::Listed;
@@ -462,12 +504,93 @@ mod tests {
             .collect()
     }
 
+    /// A Mail app with its main window and one account, and no server behind it.
+    fn app_with_account(ctx: &Ctx) -> MailApp {
+        let mut app = MailApp::new(std::sync::Arc::new(Canned));
+        let mut mail = MailWindow::new(ctx);
+        mail.mail.accounts = vec![work()];
+        mail.mail.account = 0;
+        mail.set_size(800, 600);
+        app.window = Some(mail);
+        app.composes.main_size = (800, 600);
+        app
+    }
+
+    /// The value of field `label` in the first compose window's message (the sheet's while it is active).
+    fn compose_field(app: &MailApp, label: &str) -> String {
+        let compose = match &app.window.as_ref().unwrap().mail.sheet {
+            Some(Sheet::Compose(c)) if app.composes.active.is_some() => c.clone(),
+            _ => app.composes.slots[0].compose.clone(),
+        };
+        compose.form.fields.iter().find(|f| f.label == label).map(|f| f.value.clone()).unwrap_or_default()
+    }
+
+    /// The centre of field `label` of the active compose, as a compose window of `w` x `h` pixels draws it.
+    fn field_centre(app: &MailApp, ui: &Ui, label: &str, w: f32, h: f32) -> (f32, f32) {
+        let mail = app.window.as_ref().unwrap();
+        let sheet = mail.mail.sheet.clone().expect("the compose is in the sheet slot");
+        let at = sheet.form().fields.iter().position(|f| f.label == label).expect("the field");
+        let r = sheet_layout(ui, w, h, &sheet, choice_count(&mail.mail)).fields[at];
+        (r[0] + r[2] / 2.0, r[1] + r[3] / 2.0)
+    }
+
+    #[test]
+    fn a_compose_window_takes_its_clicks_keys_and_escape() {
+        let dir = std::env::temp_dir().join(format!("bifrost-mail-compose-{}", std::process::id()));
+        let ctx = ctx(&dir);
+        let mut app = app_with_account(&ctx);
+        app.with_window(&ctx, |mail| {
+            mail.mail.open_compose(None);
+            true
+        });
+        let id = app.composes.active.expect("the new message opens in a window of its own");
+        // the clicks of the compose window are hit-tested at its size, not at the main window's
+        let mail = app.window.as_ref().unwrap();
+        assert_eq!((mail.w, mail.h), (COMPOSE_W as u32, COMPOSE_H as u32));
+        // the shell sends the compose window's keys tagged with that window: they type into its message
+        app.window_event(&ctx, id, Input::Key(KeyInput::Text("ana@x.is".into())));
+        assert_eq!(compose_field(&app, "To"), "ana@x.is");
+        // a click on Subject moves the focus there, and typing follows it
+        let (x, y) = field_centre(&app, &ctx.ui, "Subject", COMPOSE_W, COMPOSE_H);
+        for kind in [TouchKind::Down, TouchKind::Up] {
+            app.window_event(&ctx, id, Input::Touch { kind, id: 0, x, y, t: 10.0 });
+        }
+        app.window_event(&ctx, id, Input::Key(KeyInput::Text("Fundur".into())));
+        assert_eq!(compose_field(&app, "Subject"), "Fundur");
+        // Escape closes the message, asking first because it has text
+        app.window_event(&ctx, id, Input::Key(KeyInput::Code(1)));
+        assert!(matches!(app.window.as_ref().unwrap().mail.sheet, Some(Sheet::Question(_))), "Save This Message, Don't Save, Cancel");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_main_window_keeps_its_keys_once_it_is_key_again() {
+        let dir = std::env::temp_dir().join(format!("bifrost-mail-key-{}", std::process::id()));
+        let ctx = ctx(&dir);
+        let mut app = app_with_account(&ctx);
+        app.with_window(&ctx, |mail| {
+            mail.mail.open_compose(None);
+            true
+        });
+        let id = app.composes.active.expect("a compose window");
+        app.window_event(&ctx, id, Input::Key(KeyInput::Text("bo@x.is".into())));
+        // the main window is key (no compose window was reported focused): its keys never reach the compose, although
+        // the compose window is the newest in the app's window list
+        app.event(&ctx, Input::Key(KeyInput::Text("zz".into())));
+        assert_eq!(app.composes.active, None, "the compose waits in its window");
+        assert_eq!(compose_field(&app, "To"), "bo@x.is");
+        let mail = app.window.as_ref().unwrap();
+        assert_eq!((mail.w, mail.h), (800, 600), "the main window's size is back for its own clicks");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn a_refresh_task_checks_the_inbox_posts_new_mail_and_asks_for_the_next_check() {
         let root = std::env::temp_dir().join(format!("bifrost-mail-bg-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         let (data, accounts_home) = (root.join("data"), root.join("home"));
-        // the shared account list lives under XDG_DATA_HOME; this is the only test of this binary
+        // the shared account list lives under XDG_DATA_HOME; this is the only test of this binary that sets it (the
+        // compose tests put their account into the window directly)
         std::env::set_var("XDG_DATA_HOME", &accounts_home);
         bifrost_mail::accounts::add(work()).unwrap();
         // the last check saw uid 3 in the inbox
