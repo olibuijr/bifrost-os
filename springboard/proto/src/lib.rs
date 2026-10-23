@@ -915,6 +915,14 @@ pub enum ToShell {
     SetBadge { label: String },
     /// Enter (`on`) or leave full screen for the app's window (`NSWindow.toggleFullScreen`). Answered by `ToApp::FullScreen`.
     SetFullScreen { on: bool },
+    /// The content size, in points, the app wants for its main window (`NSWindow.setContentSize`). The shell keeps the
+    /// window's top-left corner, holds the size to the window's limits and the work area, and animates the change as it
+    /// animates a zoom; the app hears the new size as an ordinary configure. A zoomed or full-screen window keeps its frame
+    /// and takes the size as the one it goes back to. Tag 0x252.
+    SetContentSize { w: f32, h: f32 },
+    /// The main window's content size limits in points (`NSWindow.contentMinSize`, `contentMaxSize`); `None` falls back
+    /// to the manifest's `min_size` / `max_size`. They hold for as long as the app runs. Tag 0x253.
+    SetContentLimits { min: Option<(f32, f32)>, max: Option<(f32, f32)> },
     /// Sent only by the keyboard system app.
     KeyboardOut(KeyboardOut),
     /// Ask the user for a file (`NativeOpenPanel`). `filters` are UTIs or extensions; they only narrow the panel's list.
@@ -1316,6 +1324,10 @@ mod tag {
     pub const SET_BADGE: u32 = 0x10e;
     /// App -> shell: enter or leave full screen for the app's window (`ToShell::SetFullScreen`).
     pub const SET_FULL_SCREEN: u32 = 0x24d;
+    /// App -> shell: the main window's content size (`ToShell::SetContentSize`).
+    pub const SET_CONTENT_SIZE: u32 = 0x252;
+    /// App -> shell: the main window's content size limits (`ToShell::SetContentLimits`).
+    pub const SET_CONTENT_LIMITS: u32 = 0x253;
     /// Shell -> app: the window's full-screen state changed (`ToApp::FullScreen`).
     pub const FULL_SCREEN: u32 = 0x24c;
     pub const KEYBOARD_OUT: u32 = 0x10f;
@@ -1354,6 +1366,14 @@ mod tag {
     pub const WINDOW_MOVED: u32 = 0x24d;
     pub const WINDOW_TITLE_DOUBLE_CLICK: u32 = 0x24e;
 }
+
+/// Whether `(w, h)` is a content size a window can have: finite, positive and at most `MAX_CONTENT_PT` on a side.
+fn content_size_ok((w, h): (f32, f32)) -> bool {
+    w.is_finite() && h.is_finite() && w > 0.0 && h > 0.0 && w <= MAX_CONTENT_PT && h <= MAX_CONTENT_PT
+}
+
+/// The largest side, in points, of a content size an app may ask for (`ToShell::SetContentSize`, `SetContentLimits`).
+pub const MAX_CONTENT_PT: f32 = 16384.0;
 
 /// The part of `text` sent as surrounding text: at most `MAX_SURROUNDING` bytes around `caret`, cut on character
 /// boundaries. Returns the slice and its start offset in `text`.
@@ -2311,6 +2331,19 @@ impl ToShell {
                 u32_(&mut b, tag::SET_FULL_SCREEN);
                 b.push(*on as u8);
             }
+            ToShell::SetContentSize { w, h } => {
+                u32_(&mut b, tag::SET_CONTENT_SIZE);
+                f32_(&mut b, *w);
+                f32_(&mut b, *h);
+            }
+            ToShell::SetContentLimits { min, max } => {
+                u32_(&mut b, tag::SET_CONTENT_LIMITS);
+                // a missing limit is sent as 0 x 0 (no window has a zero-sized limit)
+                for (w, h) in [min.unwrap_or((0.0, 0.0)), max.unwrap_or((0.0, 0.0))] {
+                    f32_(&mut b, w);
+                    f32_(&mut b, h);
+                }
+            }
             ToShell::OpenUrl { url } => {
                 u32_(&mut b, tag::OPEN_URL);
                 str_(&mut b, url);
@@ -2540,6 +2573,28 @@ impl ToShell {
             tag::HAPTIC => ToShell::Haptic,
             tag::SET_BADGE => ToShell::SetBadge { label: r.str()? },
             tag::SET_FULL_SCREEN => ToShell::SetFullScreen { on: r.u8()? != 0 },
+            tag::SET_CONTENT_SIZE => {
+                let (w, h) = (r.f32()?, r.f32()?);
+                if !content_size_ok((w, h)) {
+                    return Err(DecodeError::BadValue);
+                }
+                ToShell::SetContentSize { w, h }
+            }
+            tag::SET_CONTENT_LIMITS => {
+                let mut limit = || -> Result<Option<(f32, f32)>, DecodeError> {
+                    let s = (r.f32()?, r.f32()?);
+                    if s == (0.0, 0.0) {
+                        Ok(None)
+                    } else if content_size_ok(s) {
+                        Ok(Some(s))
+                    } else {
+                        Err(DecodeError::BadValue)
+                    }
+                };
+                let min = limit()?;
+                let max = limit()?;
+                ToShell::SetContentLimits { min, max }
+            }
             tag::DOCUMENT_STATE => ToShell::DocumentState { title: r.str()?, edited: r.u8()? != 0, represented: r.str()? },
             tag::OPEN_URL => ToShell::OpenUrl { url: r.str()? },
             tag::PLAY_SYSTEM_SOUND => ToShell::PlaySystemSound { name: r.str()? },
@@ -2948,6 +3003,10 @@ mod tests {
             ToShell::SetBadge { label: String::new() },
             ToShell::SetFullScreen { on: true },
             ToShell::SetFullScreen { on: false },
+            ToShell::SetContentSize { w: 230.0, h: 510.0 },
+            ToShell::SetContentLimits { min: Some((230.0, 400.0)), max: None },
+            ToShell::SetContentLimits { min: None, max: Some((1200.0, 900.0)) },
+            ToShell::SetContentLimits { min: None, max: None },
             ToShell::Materials(vec![Material { kind: MaterialKind::Sidebar, rect: UiRect { x: 0., y: 0., w: 220., h: 600. }, radius: 17., state: MaterialState::FollowsWindowActiveState, blending: BlendingMode::BehindWindow, emphasized: false, corners: None },
                 Material { kind: MaterialKind::Titlebar, rect: UiRect { x: 220., y: 0., w: 580., h: 52. }, radius: 0., state: MaterialState::Active, blending: BlendingMode::WithinWindow, emphasized: true, corners: Some(Corners { tl: 1., tr: 2., br: 3., bl: 4. }) }]),
             ToShell::Materials(MaterialKind::ALL.iter().map(|&kind| Material { kind, rect: UiRect { x: 1., y: 2., w: 3., h: 4. }, radius: 5., state: MaterialState::Inactive, blending: BlendingMode::BehindWindow, emphasized: false, corners: None }).collect()),
@@ -3712,6 +3771,20 @@ mod quick_action_tests {
         let mut bad_touch = ToApp::WindowTouch { id: 1, touch: 0, kind: TouchKind::Down, x: 0.0, y: 0.0, t_ms: 0, mods: ModifierFlags::EMPTY }.encode();
         bad_touch[12] = 9;
         assert!(ToApp::decode(&bad_touch).is_err());
+    }
+
+    #[test]
+    fn a_content_size_must_be_finite_positive_and_bounded() {
+        let size = ToShell::SetContentSize { w: 230.0, h: 510.0 };
+        assert_eq!(tag_of(&size.encode()), 0x252);
+        assert_eq!(ToShell::decode(&size.encode()), Ok(size));
+        for bad in [f32::NAN, f32::INFINITY, -1.0, 0.0, MAX_CONTENT_PT + 1.0] {
+            assert!(ToShell::decode(&ToShell::SetContentSize { w: bad, h: 100.0 }.encode()).is_err(), "width {bad}");
+            assert!(ToShell::decode(&ToShell::SetContentLimits { min: Some((100.0, bad)), max: None }.encode()).is_err(), "min height {bad}");
+        }
+        let limits = ToShell::SetContentLimits { min: Some((230.0, 400.0)), max: Some((800.0, 900.0)) };
+        assert_eq!(tag_of(&limits.encode()), 0x253);
+        assert_eq!(ToShell::decode(&limits.encode()), Ok(limits));
     }
 }
 

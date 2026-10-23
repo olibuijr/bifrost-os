@@ -1353,6 +1353,29 @@ the windows behind the window. Ours, end to end:
   within-window `widgets::material` blurs on the CPU (apps draw on the CPU; the presenter never sees the pixels
   under a within-window material).
 
+## Main window size from the app (`NSWindow.setContentSize`, `contentMinSize`; `bifrost_app::windows::set_content_size`)
+
+Apple parity gap closed (E2E follow-up): an SDK app could not resize its own main window. Golden Gate Calculator
+resizes its window per keypad (27-Golden-Gate-Calculator.png is the 230-point Basic window), which needs it.
+
+- Protocol: `ToShell::SetContentSize { w, h }` (tag 0x252, two f32 points) and `ToShell::SetContentLimits { min, max }`
+  (tag 0x253, four f32; a 0 x 0 pair is `None`). The decoder refuses sizes that are not finite and positive or are over
+  `MAX_CONTENT_PT` (16384) on a side.
+- SDK: `windows::set_content_size(ctx, w, h)` and `windows::set_content_limits(ctx, min, max)`. A bad size is not sent.
+  The preferred initial content size stays the manifest's `window_size`; `min_size` / `max_size` are the defaults that
+  `set_content_limits(.., None, None)` falls back to.
+- Shell: `apphost` queues the size and applies it after its message loop (`Shell::desk_set_content_size`), keeps the
+  limits per running app (`desk::set_content_limits`, merged in `size_limits` with `SizeLimits::with_content_limits`,
+  dropped when the app exits). `Desk::set_content_size` keeps the top-left corner, holds the size to the limits and the
+  work area, and moves the window only as far as the work area needs; the change runs the zoom effect
+  (`desk_frame_changed`) and the app hears the size as a configure. A zoomed or full-screen window keeps its frame and
+  takes the size as the one it goes back to (Apple sets the frame even then; ours leaves the window server's zoom
+  state alone). A `fixed:` window takes the app's size as asked: only the person cannot resize it.
+- Not yet: the direct route (`BIFROST_DIRECT=1`, the app's own Wayland toplevel) does not resize its toplevel on this
+  request; there is no `ToApp` answer beyond the configure (`windowDidResize`), and no `setFrameOrigin` equivalent.
+- Calculator uses it: Basic 230 x 512, Scientific 560 x 522, Programmer 560 x 586, Convert 640 x 660 points, each
+  also the window's minimum; a window too narrow for the four keypad segments shows one keypad pull-down instead.
+
 ## Window level (`NSWindow.level`, floating windows; `bifrost_app::windows::set_level`)
 
 Apple parity: an app can ask for its window to float above the normal windows (Calculator's Always on Top, Stickies'
