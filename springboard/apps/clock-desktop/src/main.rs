@@ -147,6 +147,27 @@ impl App for ClockApp {
         self.clock.as_ref().and_then(|c| c.next_wake(t, true))
     }
 
+    /// The wheel comes as itself: one notch moves a picker drum one row (W5-3). Elsewhere it scrolls as the drag the
+    /// shell emulated before (the lists and the World Clock cards).
+    fn pointer_interest(&self) -> u32 {
+        bifrost_app::pointer_events::WHEEL
+    }
+
+    fn pointer(&mut self, ctx: &Ctx, ev: &bifrost_app::pointer_events::PointerEvent) -> bool {
+        let bifrost_app::pointer_events::PointerEvent::Wheel { x, y, dy, precise, .. } = *ev else { return false };
+        let Some(c) = &mut self.clock else { return false };
+        let t = bifrost_app::proto::sys::now_ms();
+        if let Some(changed) = c.wheel(&ctx.ui, x, y, dy, precise, t) {
+            return changed;
+        }
+        // not over a drum: a short drag of the content's travel, resting before the lift so it does not fling
+        c.touch(&ctx.ui, Event::Down(x, y), t);
+        c.touch(&ctx.ui, Event::Move(x, y + dy / 2.0), t + 8.0);
+        c.touch(&ctx.ui, Event::Move(x, y + dy), t + 16.0);
+        c.touch(&ctx.ui, Event::Up(x, y + dy), t + 16.0 + 200.0);
+        true
+    }
+
     fn controls(&self, ctx: &Ctx) -> Vec<bifrost_app::controls::Node> {
         self.clock.as_ref().map(|c| c.controls(&ctx.ui)).unwrap_or_default()
     }
