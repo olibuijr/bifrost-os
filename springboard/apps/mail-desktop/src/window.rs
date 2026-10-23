@@ -1684,6 +1684,13 @@ impl MailWindow {
                     self.note(format!("{}: {mailbox} read, {count} message{}", self.account_name(&account), if count == 1 { "" } else { "s" }));
                     self.mail.drafts_mailbox = listing.drafts.clone();
                     let notices = self.mail.apply_listing_of(&account, &mailbox, listing.uid_validity, listing.mailboxes, listing.messages);
+                    // back in a mailbox: the message it had selected is selected and opened again
+                    if let Some(uid) = self.mail.reopen.take() {
+                        self.open_message(uid);
+                        if let Some(index) = self.mail.visible_lines().iter().position(|l| l.row.uid == uid) {
+                            self.scroll_list_to(&ctx.ui, index);
+                        }
+                    }
                     // a message a rule moves or reads raises no notification
                     let quiet = self.apply_rules_to_arrivals();
                     for notice in notices {
