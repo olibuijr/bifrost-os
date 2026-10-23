@@ -179,6 +179,17 @@ const KEY_DOWN: u32 = 108;
 const KEY_TAB: u32 = 15;
 /// evdev K (Cmd+K adds a link).
 const KEY_K: u32 = 37;
+/// evdev keys of the editing chords: Backspace, A, C, V, X, Home, End, Left, Right and forward Delete.
+const KEY_BACKSPACE: u32 = 14;
+const KEY_A: u32 = 30;
+const KEY_C: u32 = 46;
+const KEY_V: u32 = 47;
+const KEY_X: u32 = 45;
+const KEY_HOME: u32 = 102;
+const KEY_END: u32 = 107;
+const KEY_LEFT: u32 = 105;
+const KEY_RIGHT: u32 = 106;
+const KEY_DELETE: u32 = 111;
 const MENU_ROW_PT: f32 = bifrost_app::widgets::MENU_ROW_PT;
 const MENU_PAD_PT: f32 = bifrost_app::widgets::MENU_PAD_PT;
 /// width of one formatting button in the shortcut row
@@ -207,6 +218,18 @@ const CHARACTER_STYLES: [(&str, Fmt); 6] = [
 ];
 /// the formatting buttons in the shortcut row, left to right
 const FMT_BUTTONS: [(&str, Fmt); 6] = [("B", Fmt::Bold), ("I", Fmt::Italic), ("Code", Fmt::Code), ("List", Fmt::Bullet), ("1.", Fmt::Number), ("[ ]", Fmt::Check)];
+
+/// The Markdown marker of an inline character style.
+fn marker_of(f: Fmt) -> &'static str {
+    match f {
+        Fmt::Bold => "**",
+        Fmt::Italic => "*",
+        Fmt::Strike => "~~",
+        Fmt::Underline => "++",
+        Fmt::Highlight => "==",
+        _ => "`",
+    }
+}
 
 /// Which notes the list shows.
 #[derive(Clone, Debug, PartialEq)]
@@ -317,6 +340,8 @@ enum Act {
     ToggleResumeQuick,
     /// the list sections by date on or off
     ToggleGroupDate,
+    /// a toolbar item chosen from a bar's `»` overflow menu (`chrome::B_*`)
+    Bar(u32),
 }
 
 /// Find > Replace: the replacement text being typed in the replace card over the editor.
@@ -386,8 +411,12 @@ pub enum Target {
     Undo,
     UndoDelete,
     Redo,
-    /// cycles the paragraph style marker
+    /// cycles the paragraph style marker (the touch shortcut row)
     Format,
+    /// the toolbar's Aa button: the paragraph style popover
+    StyleMenu,
+    /// the `»` button of toolbar `n`: the items the bar had no room for
+    Overflow(usize),
     Text,
     /// the disclosure chevron of the heading on this paragraph (folds or unfolds its section)
     Fold(usize),
@@ -521,6 +550,18 @@ pub struct Notes {
     scrolling: bool,
     labels: TextCache,
     dirty: bool,
+    /// Shift was held for the pointer event being delivered (`set_pointer_shift`): a Shift-click extends the selection
+    pointer_shift: bool,
+    /// the mouse button went down on the note text (desktop): moves extend the selection instead of scrolling
+    text_drag: bool,
+    /// character styles chosen with nothing selected (Cmd+B at the caret): the next text typed at `pending_at` gets
+    /// them, as the typing attributes of the reference do; nothing is inserted until then
+    pending: Vec<Fmt>,
+    pending_at: usize,
+    /// the Markdown of the last Copy or Cut from the note, so a paste of the same text keeps its styles
+    copied: Option<String>,
+    /// what each row of the context menu the shell shows does (row id = index + 1)
+    context: Vec<Act>,
 }
 
 /// Every note on disk (root, folders and the bin after purging the expired),
@@ -551,9 +592,177 @@ impl Notes {
     /// With a physical keyboard (desktop) the docked keyboard is never shown.
     pub fn set_hardware_keyboard(&mut self, on: bool) {
         self.hw_kb = on;
+        // a desktop window is driven by a mouse: clicks and drags select, and there are no touch handles
+        self.editor.set_pointer_mode(on);
         if on {
             self.keyboard.set_shown(false, 0.0);
         }
+    }
+
+    /// Whether Shift is held for the pointer event about to be delivered (`touch`): a Shift-click extends the selection.
+    pub fn set_pointer_shift(&mut self, on: bool) {
+        self.pointer_shift = on;
+    }
+
+    /// The scroll wheel (or a two-finger scroll) at pixel `(x, y)`: `dy` px moves the content of the column under the
+    /// pointer (positive scrolls toward the top). True when something moved.
+    pub fn wheel(&mut self, ui: &Ui, x: f32, _y: f32, dy: f32) -> bool {
+        if self.menu.is_some() || self.settings_open || self.sketch.is_some() || self.picker.is_some() || dy == 0.0 {
+            return false;
+        }
+        self.fit_scroll(ui);
+        let s = if x >= self.ed_px(ui).0 {
+            if !matches!(self.screen, Screen::Editor(_)) {
+                return false;
+            }
+            &mut self.scroll
+        } else if x >= self.list_px(ui).0 {
+            &mut self.list_scroll
+        } else {
+            return false;
+        };
+        let before = s.offset();
+        s.jump_to(before - dy);
+        let moved = s.offset() != before;
+        self.dirty |= moved;
+        moved
+    }
+
+    /// A text field over the list or the note has the keys: the search field, a name prompt, or the replace card.
+    pub fn field_focused(&self) -> bool {
+        self.search.focused || self.naming.is_some() || self.replacing.is_some()
+    }
+
+    /// Sends a standard editing command (`Copy`, `Cut`, `Paste`, `SelectAll`) to the focused text field. False when no
+    /// field has the keys.
+    pub fn field_command(&mut self, ui: &Ui, name: &'static str, t: f64) -> bool {
+        if !self.field_focused() {
+            return false;
+        }
+        self.key(ui, Out::Named(name), t);
+        true
+    }
+
+    /// Something is selected where the keys go: the focused field's text, or the note's.
+    pub fn has_selection(&self) -> bool {
+        if let Some(r) = &self.replacing {
+            let (a, b) = r.field.selection();
+            return a != b;
+        }
+        if let Some(n) = &self.naming {
+            let (a, b) = n.field.selection();
+            return a != b;
+        }
+        if self.search.focused {
+            let (a, b) = self.search.selection();
+            return a != b;
+        }
+        self.selected_markdown().is_some()
+    }
+
+    /// Edit > Select All: the focused field's text, or the whole note. False when neither takes it.
+    pub fn select_all(&mut self, ui: &Ui, t: f64) -> bool {
+        if self.field_command(ui, "SelectAll", t) {
+            return true;
+        }
+        if !self.is_editing() {
+            return false;
+        }
+        self.editor.select_all();
+        self.editor.focused = true;
+        self.pending.clear();
+        self.dirty = true;
+        true
+    }
+
+    /// Edit > Paste: the pasteboard's text goes into the focused field, or into the note at the caret (replacing the
+    /// selection). Text this note copied comes back with its Markdown styles.
+    pub fn paste(&mut self, ui: &Ui, t: f64) -> bool {
+        if self.field_command(ui, "Paste", t) {
+            return true;
+        }
+        if !self.is_editing() {
+            return false;
+        }
+        let Some(text) = springboard::shell::clipboard::text() else { return false };
+        let text = match &self.copied {
+            Some(copied) if md::to_plain(copied) == text || *copied == text => copied.clone(),
+            _ => text,
+        };
+        self.pending.clear();
+        self.paste_text(ui, &text, t);
+        true
+    }
+
+    /// Edit > Copy and Cut from the note: remembers the Markdown for a paste back into Notes and, for `cut`, removes
+    /// the selection. The caller puts the text on the pasteboard. `None` when nothing is selected in the note.
+    pub fn take_selection(&mut self, ui: &Ui, cut: bool, t: f64) -> Option<String> {
+        let markdown = self.selected_markdown()?;
+        self.copied = Some(markdown.clone());
+        if cut {
+            self.editor.replace_selection(ui, "", t);
+            self.changed(ui, t);
+        }
+        Some(markdown)
+    }
+
+    /// The character styles waiting for the next typing at the caret (Cmd+B with nothing selected).
+    pub fn pending_styles(&self) -> &[Fmt] {
+        &self.pending
+    }
+
+    /// The right click at pixel `(x, y)`: the rows of the context menu for what is under it, as `(id, title)`. A note
+    /// row is selected first and offers Pin, Duplicate, Move and Delete; a folder in the sidebar is shown and offers
+    /// New, Rename and Delete Folder. Empty when nothing there has a menu.
+    pub fn context_menu(&mut self, ui: &Ui, x: f32, y: f32, t: f64) -> Vec<(u32, String)> {
+        self.context.clear();
+        let mut rows: Vec<(String, Act)> = vec![];
+        match self.hit(ui, x, y) {
+            Some(Target::Sidebar(id)) => {
+                let Some(view) = self.row_view(id) else { return vec![] };
+                let folder = matches!(view, View::Folder(_));
+                self.show_view(ui, view, t);
+                rows.push(("New Folder".into(), Act::NewFolder));
+                if folder {
+                    rows.push(("Rename Folder".into(), Act::RenameFolder));
+                    rows.push(("Delete Folder".into(), Act::DeleteFolder));
+                }
+            }
+            Some(Target::Row(i) | Target::Pin(i) | Target::Delete(i)) => {
+                let Some(&k) = self.shown.get(i) else { return vec![] };
+                self.reveal = None;
+                self.open_note(ui, k, false, t);
+                let Screen::Editor(k) = self.screen else { return vec![] };
+                let id = self.notes[k].id.clone();
+                let here = self.loc_of(&id).to_string();
+                if here == folders::TRASH {
+                    rows.push(("Recover Note".into(), Act::Recover));
+                    rows.push(("Delete Permanently".into(), Act::EraseNote));
+                } else {
+                    rows.push((if self.is_pinned(&id) { "Unpin Note" } else { "Pin Note" }.into(), Act::TogglePin));
+                    rows.push(("Duplicate Note".into(), Act::Duplicate));
+                    if !here.is_empty() {
+                        rows.push(("Move to All Notes".into(), Act::MoveTo(String::new())));
+                    }
+                    for f in self.folders.iter().filter(|f| **f != here) {
+                        rows.push((format!("Move to {f}"), Act::MoveTo(f.clone())));
+                    }
+                    rows.push(("Delete Note".into(), Act::DeleteNote));
+                }
+            }
+            _ => return vec![],
+        }
+        self.dirty = true;
+        self.context = rows.iter().map(|(_, act)| act.clone()).collect();
+        rows.into_iter().enumerate().map(|(i, (title, _))| (i as u32 + 1, title)).collect()
+    }
+
+    /// A row of the context menu `context_menu` built was chosen. False for an id it did not hand out.
+    pub fn context_action(&mut self, ui: &Ui, id: u32, t: f64) -> bool {
+        let Some(act) = id.checked_sub(1).and_then(|i| self.context.get(i as usize).cloned()) else { return false };
+        self.context.clear();
+        self.run(ui, act, t);
+        true
     }
 
     /// Loads the notes in `dir`; `wall` anchors dates to the frame clock.
@@ -633,6 +842,12 @@ impl Notes {
             scrolling: false,
             labels: TextCache::default(),
             dirty: true,
+            pointer_shift: false,
+            text_drag: false,
+            pending: vec![],
+            pending_at: 0,
+            copied: None,
+            context: vec![],
         };
         n.search.focused = false;
         n.editor.set_markdown(ui, true);
@@ -1084,6 +1299,12 @@ impl Notes {
         (self.ed_px(ui).0 + ui.pt(TEXT_INSET_PT), ui.pt(nav_bottom_pt() + TEXT_TOP_PT) - self.scroll.offset())
     }
 
+    /// True when pixel `(x, y)` is on a link or a checkbox of the note: a click there acts on the release, as a tap.
+    fn on_link_or_checkbox(&self, ui: &Ui, x: f32, y: f32) -> bool {
+        let (ox, oy) = self.text_origin(ui);
+        self.editor.link_at(x - ox, y - oy).is_some() || self.editor.checkbox_at(x - ox, y - oy).is_some()
+    }
+
     fn editor_hit(&self, ui: &Ui, x: f32, y: f32) -> Option<Target> {
         if self.find_strip() && y >= self.find_top(ui) && y < self.find_top(ui) + ui.pt(SHORTCUT_PT) {
             let m = self.ed_px(ui).0 + ui.pt(MARGIN_PT);
@@ -1111,20 +1332,11 @@ impl Notes {
         if let Some(t) = self.shortcut_hit(ui, x, y) {
             return Some(t);
         }
+        if let Some((bar, _)) = self.overflow_hit(ui, x, y) {
+            return Some(Target::Overflow(bar));
+        }
         if let Some(id) = self.bar_hit(ui, x, y) {
-            return Some(match id {
-                chrome::B_NEW_FOLDER => Target::FolderNew,
-                chrome::B_SIDEBAR => Target::SidebarToggle,
-                chrome::B_LIST_MORE => Target::Title,
-                chrome::B_COMPOSE => Target::Compose,
-                chrome::B_STYLE => Target::Format,
-                chrome::B_CHECK => Target::Fmt(Fmt::Check),
-                chrome::B_BULLET => Target::Fmt(Fmt::Bullet),
-                chrome::B_SHARE => Target::EditorShare,
-                chrome::B_MORE => Target::EditorMore,
-                chrome::B_SEARCH => Target::Search,
-                other => Target::Bar(other),
-            });
+            return Some(Self::bar_target(id));
         }
         if y < ui.pt(nav_bottom_pt()) {
             return None;
@@ -1138,6 +1350,23 @@ impl Notes {
         match self.screen {
             Screen::List => None,
             Screen::Editor(_) => self.editor_hit(ui, x, y),
+        }
+    }
+
+    /// What a toolbar item does (`chrome::B_*`).
+    fn bar_target(id: u32) -> Target {
+        match id {
+            chrome::B_NEW_FOLDER => Target::FolderNew,
+            chrome::B_SIDEBAR => Target::SidebarToggle,
+            chrome::B_LIST_MORE => Target::Title,
+            chrome::B_COMPOSE => Target::Compose,
+            chrome::B_STYLE => Target::StyleMenu,
+            chrome::B_CHECK => Target::Fmt(Fmt::Check),
+            chrome::B_BULLET => Target::Fmt(Fmt::Bullet),
+            chrome::B_SHARE => Target::EditorShare,
+            chrome::B_MORE => Target::EditorMore,
+            chrome::B_SEARCH => Target::Search,
+            other => Target::Bar(other),
         }
     }
 
@@ -1467,6 +1696,11 @@ impl Notes {
     /// New Note (File menu, Cmd+N): the same path as the Compose button.
     pub fn compose(&mut self, ui: &Ui, t: f64) {
         self.activate(ui, Target::Compose, 0.0, 0.0, t);
+    }
+
+    /// File > New Folder (Shift+Cmd+N): the folder name prompt, its proposed name selected.
+    pub fn new_folder(&mut self, ui: &Ui, t: f64) {
+        self.activate(ui, Target::FolderNew, 0.0, 0.0, t);
     }
 
     /// Find (Edit menu, Cmd+F): the same path as the search field.
@@ -1942,19 +2176,50 @@ impl Notes {
     /// Cycles the current paragraph through body, heading ("## ") and
     /// title ("# ") markers.
     fn cycle_format(&mut self, ui: &Ui, t: f64) {
-        let text: Vec<char> = self.editor.text().chars().collect();
         let caret = self.editor.caret();
-        let start = text[..caret].iter().rposition(|&c| c == '\n').map_or(0, |p| p + 1);
-        let para: String = text[start..].iter().take_while(|&&c| c != '\n').collect();
-        let (old, new) = if para.starts_with("# ") {
-            (2, "")
-        } else if para.starts_with("## ") {
-            (3, "# ")
-        } else {
-            (0, "## ")
+        let para = self.editor.paragraph_of(caret);
+        let line: String = self.editor.text().chars().skip(para.start).take(para.len()).collect();
+        let info = md::classify(&line);
+        // a list or checklist line becomes the heading with its marker gone (`md::set_block`), never `## - [ ] item`
+        let next = match info.block {
+            md::Block::Heading => md::Block::Title,
+            md::Block::Title => md::Block::Body,
+            _ => md::Block::Heading,
         };
-        self.editor.replace_range(ui, start..start + old, new, t, false);
+        let new = md::set_block(&line, next);
+        let into = caret.saturating_sub(para.start + info.prefix);
+        let at = para.start + md::classify(&new).prefix + into;
+        self.editor.replace_range(ui, para.clone(), &new, t, false);
+        self.editor.set_caret(at.min(para.start + new.chars().count()));
         self.changed(ui, t);
+    }
+
+    /// The Aa button: the paragraph styles as a popover under it (Title, Heading, Subheading, Body, Monostyled, Block
+    /// Quote and the lists), the caret's style checked. With the button behind `»` the popover opens there.
+    fn open_style_menu(&mut self, ui: &Ui) {
+        if !self.is_editing() {
+            return;
+        }
+        let para = self.editor.paragraph_of(self.editor.caret());
+        let line: String = self.editor.text().chars().skip(para.start).take(para.len()).collect();
+        let current = md::classify(&line).block;
+        let same = |b: md::Block| std::mem::discriminant(&b) == std::mem::discriminant(&current);
+        let items = PARAGRAPH_STYLES.iter().map(|(label, block)| (label.to_string(), Act::Style(*block), same(*block))).collect();
+        let (x, y, _, h) = match self.bar_rect(ui, chrome::B_STYLE).or_else(|| self.editor_overflow(ui)) {
+            Some(r) => chrome::px(ui, r),
+            None => (self.ed_px(ui).0, 0.0, 0.0, ui.pt(bifrost_app::layout::UNIFIED_BAR_PT)),
+        };
+        self.show_menu(ui, items, x, y + h + ui.pt(SPACE_XS));
+    }
+
+    /// The `»` button of toolbar `bar`: a menu of the items the bar had no room for.
+    fn open_overflow_menu(&mut self, ui: &Ui, bar: usize, x: f32, y: f32) {
+        let items: Vec<(String, Act, bool)> = self.overflow_items(ui, bar).into_iter().filter(|(_, _, on)| *on).map(|(id, label, _)| (label, Act::Bar(id), false)).collect();
+        if items.is_empty() {
+            return;
+        }
+        let (bx, by, bw, bh) = self.overflow_hit(ui, x, y).map_or((x, y, 0.0, 0.0), |(_, r)| chrome::px(ui, r));
+        self.show_menu(ui, items, bx + bw - ui.pt(MENU_W_PT), by + bh + ui.pt(SPACE_XS));
     }
 
     /// Replaces the editor text with `new` as one small undo step, keeping the
@@ -1990,15 +2255,23 @@ impl Notes {
         let sel = self.editor.selection().unwrap_or(self.editor.caret()..self.editor.caret());
         match f {
             Fmt::Bold | Fmt::Italic | Fmt::Code | Fmt::Strike | Fmt::Underline | Fmt::Highlight => {
-                let marker = match f {
-                    Fmt::Bold => "**",
-                    Fmt::Italic => "*",
-                    Fmt::Strike => "~~",
-                    Fmt::Underline => "++",
-                    Fmt::Highlight => "==",
-                    _ => "`",
-                };
-                let r = md::toggle_wrap(&text, sel, marker);
+                if sel.is_empty() {
+                    // nothing selected: the style waits for the next typing (a typing attribute), so no markers
+                    // appear in the note until there is text for them to hold
+                    if self.pending_at != sel.start {
+                        self.pending.clear();
+                        self.pending_at = sel.start;
+                    }
+                    match self.pending.iter().position(|p| *p == f) {
+                        Some(k) => {
+                            self.pending.remove(k);
+                        }
+                        None => self.pending.push(f),
+                    }
+                    self.dirty = true;
+                    return;
+                }
+                let r = md::toggle_wrap(&text, sel, marker_of(f));
                 self.editor.replace_range(ui, r.range, &r.with, t, false);
                 self.editor.select(r.select);
             }
@@ -2013,6 +2286,26 @@ impl Notes {
             }
         }
         self.changed(ui, t);
+    }
+
+    /// Typed `s` at the caret with styles pending (Cmd+B with nothing selected): the text goes in wrapped in their
+    /// markers and the caret stays inside them, so the typing that follows keeps the style. False (nothing done) when
+    /// no style is pending at the caret; a pending style left behind by a caret move is dropped.
+    fn type_pending(&mut self, ui: &Ui, s: &str, t: f64) -> bool {
+        if self.pending.is_empty() {
+            return false;
+        }
+        let caret = self.editor.caret();
+        if self.editor.selection().is_some() || caret != self.pending_at {
+            self.pending.clear();
+            return false;
+        }
+        let open: String = self.pending.iter().map(|f| marker_of(*f)).collect();
+        let close: String = self.pending.iter().rev().map(|f| marker_of(*f)).collect();
+        self.pending.clear();
+        self.editor.replace_range(ui, caret..caret, &format!("{open}{s}{close}"), t, false);
+        self.editor.set_caret(caret + open.chars().count() + s.chars().count());
+        true
     }
 
     /// Gives every paragraph touched by `sel` the paragraph style `block`.
@@ -2173,6 +2466,8 @@ impl Notes {
     fn start_naming(&mut self, ui: &Ui, old: Option<String>, t: f64) {
         let mut field = TextField::new(ui, "Folder Name", MAC_BODY_PT, false, 40);
         field.set_text(ui, &old.clone().unwrap_or_else(|| folders::unique_name(&self.folders, "New Folder")));
+        // the proposed name is selected, as in the reference: typing replaces it instead of appending to it
+        field.edit(ui, &Out::Named("SelectAll"), t);
         field.focused = true;
         self.naming = Some(Naming { old, field, link: None });
         self.searching = false;
@@ -2235,6 +2530,11 @@ impl Notes {
             Ok(name) => {
                 self.notice = None;
                 if naming.old.as_ref().is_none_or(|o| self.view == View::Folder(o.clone())) {
+                    // a search left in the field would list every folder's matches in the new, empty folder
+                    if naming.old.is_none() {
+                        self.search.set_text(ui, "");
+                        self.searching = false;
+                    }
                     self.view = View::Folder(name);
                 }
                 self.reload(ui, t);
@@ -2495,6 +2795,7 @@ impl Notes {
                 self.save_prefs();
             }
             Act::ChoosePhoto => self.picker = Some(picker::Picker::open(ui.pt(PICK_THUMB_PT) as usize)),
+            Act::Bar(id) => self.activate(ui, Self::bar_target(id), 0.0, 0.0, t),
         }
     }
 
@@ -3021,6 +3322,12 @@ impl Notes {
                     self.shift_indent(ui, true, t);
                     return;
                 }
+                if let Out::Text(s) = &out {
+                    if self.type_pending(ui, s, t) {
+                        self.changed(ui, t);
+                        return;
+                    }
+                }
                 if self.editor.edit(ui, &out, t) {
                     if self.prefs.math_results && matches!(&out, Out::Text(s) if s == "=") {
                         self.answer_math(ui, t);
@@ -3033,34 +3340,92 @@ impl Notes {
         }
     }
 
-    /// Desktop chords (Cmd or Ctrl; evdev keys): N new note and F search in the list, Z undo and
-    /// Shift+Z redo in the editor. False when the chord has no meaning on this screen.
+    /// Desktop chords (evdev keys with `CHORD_*` modifiers). Cmd or Ctrl: N new note and F search, Z undo and Shift+Z
+    /// redo, B, I, U and Shift+X, Shift+E the character styles, Shift+T, H, J, B, M, L the paragraph styles, K a link,
+    /// A select all, V paste, Backspace Delete Note (the Note menu's key equivalent, which wins over the text's
+    /// delete-to-line-start as a menu key equivalent does). Without them, and for every other key, the editing keys of
+    /// `bifrost_ui::text::binding` (the manifest's `edit_keys` sends the arrows, Home, End and Delete with their
+    /// modifiers): Shift extends the selection, Option moves by word, Cmd to the line and text ends, and the emacs Ctrl
+    /// keys. A focused field (search, a name prompt) takes the movement keys itself. False when the chord has no
+    /// meaning here.
     pub fn chord(&mut self, ui: &Ui, key: u32, mods: u32, t: f64) -> bool {
         use bifrost_app::proto::{CHORD_ALT, CHORD_CTRL, CHORD_META, CHORD_SHIFT};
-        if key == KEY_TAB && mods == CHORD_SHIFT && matches!(self.screen, Screen::Editor(_)) {
+        let editing = matches!(self.screen, Screen::Editor(_));
+        let field = self.field_focused();
+        let (ctrl, shift, alt, meta) = (mods & CHORD_CTRL != 0, mods & CHORD_SHIFT != 0, mods & CHORD_ALT != 0, mods & CHORD_META != 0);
+        if key == KEY_TAB && mods == CHORD_SHIFT && editing {
             // Shift+Tab takes a level off the list lines
             self.shift_indent(ui, false, t);
             return true;
         }
-        if mods & (CHORD_CTRL | CHORD_META) == 0 || mods & CHORD_ALT != 0 {
+        if (ctrl || meta) && !alt {
+            if let Some(done) = self.command_chord(ui, key, ctrl, shift, meta, t) {
+                self.dirty = true;
+                return done;
+            }
+        }
+        if field {
+            return self.field_chord(ui, key, shift, alt || ctrl, meta, t);
+        }
+        if !editing {
             return false;
         }
-        let shift = mods & CHORD_SHIFT != 0;
-        if matches!(self.screen, Screen::Editor(_)) && mods & CHORD_CTRL != 0 && mods & CHORD_META != 0 && (key == KEY_UP || key == KEY_DOWN) {
+        let Some(combo) = bifrost_app::controls::keys::KeyCombo::from_evdev(key, ctrl, shift, alt, meta) else { return false };
+        let Some(changed) = self.editor.key_combo(ui, combo, t) else { return false };
+        self.dirty = true;
+        if changed {
+            self.pending.clear();
+            self.changed(ui, t);
+        } else {
+            self.show_caret(ui);
+        }
+        true
+    }
+
+    /// The Cmd (or Ctrl) chords that are commands rather than editing keys. `None` when `key` is not one of them here,
+    /// so the editing keys get it; `Some(false)` when it is but there was nothing to do.
+    fn command_chord(&mut self, ui: &Ui, key: u32, ctrl: bool, shift: bool, meta: bool, t: f64) -> Option<bool> {
+        let editing = matches!(self.screen, Screen::Editor(_));
+        let field = self.field_focused();
+        if editing && ctrl && meta && (key == KEY_UP || key == KEY_DOWN) {
             // Ctrl+Cmd+Up and Down move the list item
             self.move_items(ui, key == KEY_UP, t);
-            return true;
+            return Some(true);
         }
-        if key == KEY_K && !shift && matches!(self.screen, Screen::Editor(_)) {
+        if key == KEY_K && !shift && editing && !field {
             // Cmd+K asks for a web address
             self.start_link(ui, t);
-            return true;
+            return Some(true);
         }
-        if key == 14 && !shift && self.screen == Screen::List {
-            // Cmd+Backspace deletes the arrow-selected note
-            let Some(i) = self.selected_index() else { return false };
-            self.delete_row(ui, i, t);
-            return true;
+        if key == KEY_BACKSPACE && meta && !ctrl && !shift && !field {
+            // Cmd+Backspace: Note > Delete Note, for the open note or the arrow-selected row
+            return Some(self.can_delete() && self.delete_current(ui, t));
+        }
+        if editing && !field && meta && shift && !ctrl {
+            // the Format menu's paragraph styles: Shift+Cmd+T, H, J, B, M, L
+            let block = match key {
+                20 => Some(md::Block::Title),
+                35 => Some(md::Block::Heading),
+                36 => Some(md::Block::Subheading),
+                48 => Some(md::Block::Body),
+                50 => Some(md::Block::Mono),
+                38 => Some(md::Block::Check(false)),
+                _ => None,
+            };
+            if let Some(block) = block {
+                return Some(self.style(ui, block, t));
+            }
+        }
+        if !shift {
+            match key {
+                // Cmd+A selects all (Ctrl+A is the line start: an editing key)
+                KEY_A if meta => return Some(self.select_all(ui, t)),
+                KEY_V => return Some(self.paste(ui, t)),
+                // Copy and Cut in the note go through the app (the pasteboard service); here only a field's
+                KEY_C if field => return Some(self.field_command(ui, "Copy", t)),
+                KEY_X if field => return Some(self.field_command(ui, "Cut", t)),
+                _ => {}
+            }
         }
         let target = match (self.screen, key, shift) {
             (_, 49, false) => Target::Compose,
@@ -3071,15 +3436,44 @@ impl Notes {
             (Screen::Editor(_), 23, false) => Target::Fmt(Fmt::Italic),
             (Screen::Editor(_), 22, false) => Target::Fmt(Fmt::Underline),
             (Screen::Editor(_), 45, true) => Target::Fmt(Fmt::Strike),
-            (Screen::Editor(_), 35, true) => Target::Fmt(Fmt::Highlight),
-            _ => return false,
+            (Screen::Editor(_), 18, true) => Target::Fmt(Fmt::Highlight),
+            _ => return None,
         };
         self.activate(ui, target, 0.0, 0.0, t);
+        Some(true)
+    }
+
+    /// A movement or delete chord for the focused field (search, a name prompt, the replace card), in the names the
+    /// shell's text field reads. False for any other key.
+    fn field_chord(&mut self, ui: &Ui, key: u32, shift: bool, word: bool, line: bool, t: f64) -> bool {
+        let pick = |plain: &'static str, extend: &'static str| if shift { extend } else { plain };
+        let name = match key {
+            KEY_HOME => pick("Home", "ShiftHome"),
+            KEY_END => pick("End", "ShiftEnd"),
+            KEY_LEFT if line => pick("Home", "ShiftHome"),
+            KEY_RIGHT if line => pick("End", "ShiftEnd"),
+            KEY_LEFT if word => pick("WordLeft", "ShiftWordLeft"),
+            KEY_RIGHT if word => pick("WordRight", "ShiftWordRight"),
+            KEY_LEFT => pick("Left", "ShiftLeft"),
+            KEY_RIGHT => pick("Right", "ShiftRight"),
+            KEY_DELETE if word => "DeleteWordForward",
+            KEY_DELETE => "DeleteForward",
+            KEY_BACKSPACE if line => "DeleteLine",
+            KEY_BACKSPACE if word => "DeleteWord",
+            _ => return false,
+        };
+        self.key(ui, Out::Named(name), t);
         true
     }
 
-    /// Escape: cancels a name prompt, closes the open note, or leaves the search field.
+    /// Escape: closes a menu, cancels a name prompt, leaves the search field, or drops the note's selection and any
+    /// pending style. The open note stays open, as in the reference (Back and the list close it).
     pub fn escape(&mut self, ui: &Ui, t: f64) -> bool {
+        let _ = ui;
+        if self.menu.take().is_some() {
+            self.dirty = true;
+            return true;
+        }
         if self.replacing.is_some() {
             self.cancel_replacing(t);
             return true;
@@ -3097,8 +3491,12 @@ impl Notes {
         }
         match self.screen {
             Screen::Editor(_) => {
-                self.close_note(ui, t);
-                true
+                let had = self.editor.selection().is_some() || !self.pending.is_empty();
+                let caret = self.editor.caret();
+                self.editor.set_caret(caret);
+                self.pending.clear();
+                self.dirty |= had;
+                had
             }
             Screen::List => false,
         }
@@ -3185,6 +3583,8 @@ impl Notes {
                 }
             }
             Target::Format => self.cycle_format(ui, t),
+            Target::StyleMenu => self.open_style_menu(ui),
+            Target::Overflow(bar) => self.open_overflow_menu(ui, bar, x, y),
             Target::Text => {
                 let (ox, oy) = self.text_origin(ui);
                 // a tap on a link opens it; the caret stays where it was
@@ -3279,6 +3679,16 @@ impl Notes {
                         self.list_scroll.down(y, t);
                         self.scrolling = true;
                     }
+                    Some(Target::Text) if self.hw_kb && !self.on_link_or_checkbox(ui, x, y) => {
+                        // the desktop: the press places the caret (a double or triple click selects the word or the
+                        // paragraph, Shift extends) and a drag selects; the wheel scrolls (`wheel`)
+                        let (ox, oy) = self.text_origin(ui);
+                        self.pressed = None;
+                        self.text_drag = true;
+                        self.pending.clear();
+                        self.search.focused = false;
+                        self.editor.press(ui, x - ox, y - oy, t, self.pointer_shift);
+                    }
                     Some(Target::Text) => {
                         self.scroll.down(y, t);
                         self.scrolling = true;
@@ -3287,7 +3697,10 @@ impl Notes {
                 }
             }
             Event::Move(..) => {
-                if self.kb_touch {
+                if self.text_drag {
+                    let (ox, oy) = self.text_origin(ui);
+                    self.editor.drag_to(x - ox, y - oy);
+                } else if self.kb_touch {
                     self.keyboard.moved(x, y - kb_top);
                 } else if let Some(mut rt) = self.row_touch {
                     let (dx, dy) = (x - rt.x0, y - rt.y0);
@@ -3320,6 +3733,12 @@ impl Notes {
             }
             Event::Up(..) | Event::Power | Event::Wake | Event::VolumeUp | Event::VolumeDown | Event::Screenshot => {
                 let pressed = self.pressed.take();
+                if std::mem::take(&mut self.text_drag) {
+                    let (ox, oy) = self.text_origin(ui);
+                    self.editor.drag_to(x - ox, y - oy);
+                    self.editor.release();
+                    return;
+                }
                 if self.kb_touch {
                     self.kb_touch = false;
                     if let Some(out) = self.keyboard.up(x, y - kb_top, t) {
@@ -3433,6 +3852,7 @@ impl Notes {
     fn remake_editor(&mut self, ui: &Ui, t: f64) {
         let (text, caret, focused) = (self.editor.text().to_string(), self.editor.caret(), self.editor.focused);
         let mut e = new_editor(ui, self.editor_w.max(1.0), &self.note_settings);
+        e.set_pointer_mode(self.hw_kb);
         e.set_text(ui, &text);
         e.set_caret(caret);
         e.focused = focused;
@@ -4465,16 +4885,212 @@ mod tests {
         let before = n.listed().len();
         assert!(n.chord(&ui, 14, bifrost_app::proto::CHORD_META, 1001.0), "Cmd+Backspace");
         assert_eq!(n.listed().len(), before - 1, "one note moved to Recently Deleted");
-        // Cmd+B and Cmd+I wrap the editor's text in the markers
+        // Cmd+B and Cmd+I with nothing selected insert nothing: they style the next typing
         n.activate(&ui, Target::Compose, 0.0, 0.0, 2000.0);
         assert!(n.chord(&ui, 48, bifrost_app::proto::CHORD_CTRL, 2001.0), "Ctrl+B");
-        assert!(n.editing().unwrap().text.contains("**"), "bold markers");
+        assert!(!n.editing().unwrap().text.contains('*'), "no visible markers");
+        assert_eq!(n.pending_styles(), &[Fmt::Bold]);
         assert!(n.chord(&ui, 23, bifrost_app::proto::CHORD_META, 2002.0), "Cmd+I");
-        assert!(n.editing().unwrap().text.contains('*'), "italic marker");
-        // Escape closes the open note and returns to the list
-        assert!(n.escape(&ui, 2003.0));
+        type_text(&mut n, &ui, "hi", 2003.0);
+        assert_eq!(n.editing().unwrap().text, "***hi***", "the typing carries both styles");
+        assert!(n.pending_styles().is_empty());
+        // with a selection Cmd+B toggles the style of the selection: "hi" was bold, so the bold goes
+        n.editor.select(3..5);
+        assert!(n.chord(&ui, 48, bifrost_app::proto::CHORD_META, 2004.0));
+        assert_eq!(n.editing().unwrap().text, "*hi*");
+        // Escape drops the selection but keeps the note open, as in the reference
+        assert!(n.escape(&ui, 2005.0), "the selection goes");
+        assert!(matches!(n.screen, Screen::Editor(_)), "the note stays open");
+        assert!(!n.escape(&ui, 2006.0), "nothing left to cancel");
+        // Cmd+Backspace in the open note is Note > Delete Note
+        let open = n.listed().len();
+        assert!(n.chord(&ui, 14, bifrost_app::proto::CHORD_META, 2007.0), "Cmd+Backspace");
         assert!(matches!(n.screen, Screen::List));
-        assert!(!n.escape(&ui, 2004.0), "nothing left to close");
+        assert_eq!(n.listed().len(), open - 1, "the open note moved to Recently Deleted");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The pixel of the boundary before char `c` of the open note, in the middle of its line.
+    fn char_px(n: &mut Notes, ui: &Ui, c: usize) -> (f32, f32) {
+        let keep = n.editor.selection();
+        let caret = n.editor.caret();
+        n.editor.set_caret(c);
+        let (x, y, _, h) = n.editor.caret_rect(ui);
+        n.editor.set_caret(caret);
+        if let Some(r) = keep {
+            n.editor.select(r);
+        }
+        let (ox, oy) = n.text_origin(ui);
+        (ox + x, oy + y + h / 2.0)
+    }
+
+    #[test]
+    fn the_mouse_selects_note_text_by_drag_double_and_triple_click_and_shift_click() {
+        let dir = scratch("mouse-select");
+        let ui = ui();
+        let mut n = app(&ui, &dir);
+        n.set_hardware_keyboard(true);
+        open_with(&mut n, &ui, "Title\nthe quick brown fox\nnext line");
+        // a press, a drag and a release select by characters
+        let (x0, y0) = char_px(&mut n, &ui, 10);
+        let (x1, y1) = char_px(&mut n, &ui, 15);
+        n.touch(&ui, Event::Down(x0, y0), 5000.0);
+        n.touch(&ui, Event::Move(x1, y1), 5010.0);
+        n.touch(&ui, Event::Up(x1, y1), 5020.0);
+        assert_eq!(n.selected_markdown().as_deref(), Some("quick"), "drag");
+        assert_eq!(n.scroll.offset(), 0.0, "the drag did not scroll");
+        // a double click selects the word, a triple click the paragraph
+        let (xw, yw) = char_px(&mut n, &ui, 18);
+        for (k, t) in [5600.0, 5700.0].into_iter().enumerate() {
+            n.touch(&ui, Event::Down(xw, yw), t);
+            n.touch(&ui, Event::Up(xw, yw), t + 20.0);
+            if k == 1 {
+                assert_eq!(n.selected_markdown().as_deref(), Some("brown"), "double click");
+            }
+        }
+        n.touch(&ui, Event::Down(xw, yw), 5800.0);
+        n.touch(&ui, Event::Up(xw, yw), 5820.0);
+        assert_eq!(n.selected_markdown().as_deref(), Some("the quick brown fox"), "triple click");
+        // a click places the caret; a Shift-click extends from it
+        n.touch(&ui, Event::Down(x0, y0), 7000.0);
+        n.touch(&ui, Event::Up(x0, y0), 7020.0);
+        assert_eq!(n.selected_markdown(), None);
+        n.set_pointer_shift(true);
+        n.touch(&ui, Event::Down(x1, y1), 8000.0);
+        n.touch(&ui, Event::Up(x1, y1), 8020.0);
+        n.set_pointer_shift(false);
+        assert_eq!(n.selected_markdown().as_deref(), Some("quick"), "Shift-click");
+        // the keys: Shift+Option+Right takes the next word, Cmd+A everything
+        use bifrost_app::proto::{CHORD_ALT, CHORD_META, CHORD_SHIFT};
+        assert!(n.chord(&ui, 106, CHORD_SHIFT | CHORD_ALT, 8100.0), "Shift+Option+Right");
+        assert_eq!(n.selected_markdown().as_deref(), Some("quick brown"));
+        assert!(n.chord(&ui, 102, CHORD_SHIFT, 8200.0), "Shift+Home");
+        assert_eq!(n.selected_markdown().as_deref(), Some("the "), "from the anchor back to the line start");
+        assert!(n.chord(&ui, 30, CHORD_META, 8300.0), "Cmd+A");
+        assert_eq!(n.selected_markdown().as_deref(), Some("Title\nthe quick brown fox\nnext line"));
+        // the wheel scrolls the note column (nothing to scroll in a short note) and never selects
+        assert!(!n.wheel(&ui, x0, y0, -40.0));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn edit_commands_reach_the_note_and_the_focused_field() {
+        let dir = scratch("edit-commands");
+        let ui = ui();
+        let mut n = app(&ui, &dir);
+        open_with(&mut n, &ui, "Title\n**bold** words");
+        assert!(!n.has_selection());
+        assert!(n.select_all(&ui, 3000.0));
+        assert!(n.has_selection());
+        // Cut takes the Markdown out; a paste of the same text brings the styles back
+        n.editor.select(6..14);
+        assert_eq!(n.take_selection(&ui, true, 3100.0).as_deref(), Some("**bold**"));
+        assert_eq!(n.editor.text(), "Title\n words");
+        springboard::shell::clipboard::set_text("bold");
+        n.editor.set_caret(6);
+        assert!(n.paste(&ui, 3200.0));
+        assert_eq!(n.editor.text(), "Title\n**bold** words", "the copied Markdown comes back");
+        // with the search field focused the commands are the field's
+        n.activate(&ui, Target::Search, 0.0, 0.0, 3300.0);
+        assert!(n.field_focused());
+        springboard::shell::clipboard::set_text("words");
+        assert!(n.paste(&ui, 3400.0));
+        assert_eq!(n.search.text(), "words");
+        assert!(n.select_all(&ui, 3500.0));
+        assert!(n.has_selection());
+        assert_eq!(n.editor.text(), "Title\n**bold** words", "the note is untouched");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_aa_button_opens_the_style_popover_and_headings_drop_list_markers() {
+        let dir = scratch("style-popover");
+        let ui = ui();
+        let mut n = app(&ui, &dir);
+        open_with(&mut n, &ui, "Title\n- [ ] Item two");
+        let (x, y, w, h) = n.bar_px(&ui, chrome::B_STYLE);
+        assert!(w > 0.0, "Aa is on the bar");
+        assert_eq!(n.hit(&ui, x + w / 2.0, y + h / 2.0), Some(Target::StyleMenu));
+        tap(&mut n, &ui, x + w / 2.0, y + h / 2.0, 2000.0);
+        let menu = n.menu.as_ref().expect("the popover");
+        let labels: Vec<&str> = menu.items.iter().map(|(l, ..)| l.as_str()).collect();
+        assert_eq!(&labels[..4], ["Title", "Heading", "Subheading", "Body"]);
+        let checked: Vec<&str> = menu.items.iter().filter(|(_, _, on)| *on).map(|(l, ..)| l.as_str()).collect();
+        assert_eq!(checked, ["Checklist"], "the caret's style is checked");
+        assert_eq!(n.editor.text(), "Title\n- [ ] Item two", "opening the popover changes nothing");
+        n.menu = None;
+        n.run(&ui, Act::Style(md::Block::Heading), 2100.0);
+        assert_eq!(n.editor.text(), "Title\n## Item two", "the checkbox goes, not `## - [ ] Item two`");
+        // the touch shortcut row's cycle treats a checklist line the same way
+        n.editor.set_text(&ui, "Title\n- [ ] Item two");
+        n.editor.set_caret(n.editor.len());
+        n.activate(&ui, Target::Format, 0.0, 0.0, 2200.0);
+        assert_eq!(n.editor.text(), "Title\n## Item two");
+        assert_eq!(n.editor.caret(), n.editor.len(), "the caret stays at the end of the line");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_narrow_window_keeps_the_open_search_field_and_the_overflow_button_works() {
+        let dir = scratch("toolbar-overflow");
+        let ui = ui();
+        // 1200 px at 1.5625 is the E2E window: 768 pt, too narrow for everything beside an open search field
+        let mut n = Notes::new(&ui, 1200, 800, dir.clone(), wall());
+        n.set_hardware_keyboard(true);
+        open_with(&mut n, &ui, "Title\nbody");
+        assert!(n.bar_rect(&ui, chrome::B_SEARCH).is_some(), "the closed search fits");
+        assert!(n.bar_rect(&ui, chrome::B_COMPOSE).is_some());
+        n.find(&ui, 2000.0);
+        let field = n.bar_rect(&ui, chrome::B_SEARCH).expect("the open search field stays on the bar");
+        assert!(field.w >= 100.0, "a usable field: {field:?}");
+        // the format buttons went behind the » button, which opens them as a menu
+        let over = n.editor_overflow(&ui).expect("an overflow button");
+        let (px, py) = (ui.pt(over.x + over.w / 2.0), ui.pt(over.y + over.h / 2.0));
+        assert!(matches!(n.hit(&ui, px, py), Some(Target::Overflow(_))));
+        tap(&mut n, &ui, px, py, 2100.0);
+        let labels: Vec<String> = n.menu.as_ref().expect("the overflow menu").items.iter().map(|(l, ..)| l.clone()).collect();
+        assert!(labels.contains(&"Format".to_string()) && labels.contains(&"Checklist".to_string()), "{labels:?}");
+        n.run(&ui, Act::Bar(chrome::B_CHECK), 2200.0);
+        assert_eq!(n.editor.text(), "Title\n- [ ] body");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_new_folder_proposes_a_selected_name_and_lists_no_notes_while_a_search_was_typed() {
+        let ui = ui();
+        let dir = scratch("folder-new");
+        let mut n = seeded(&ui, &dir);
+        // a search typed earlier would otherwise fill the new folder with every match
+        n.search.set_text(&ui, "rust");
+        n.rebuild(&ui, 0.5);
+        n.run(&ui, Act::NewFolder, 1.0);
+        n.key(&ui, Out::Text("E".into()), 2.0);
+        n.key(&ui, Out::Text("2E".into()), 2.1);
+        assert_eq!(n.naming.as_ref().unwrap().field.text(), "E2E", "typing replaced the proposed name");
+        n.key(&ui, Out::Enter, 3.0);
+        assert_eq!(n.view(), &View::Folder("E2E".into()));
+        assert!(n.listed().is_empty(), "the new folder is empty");
+        assert_eq!(n.count_in(&View::Folder("E2E".into())), 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn right_clicks_offer_note_and_folder_menus() {
+        let ui = ui();
+        let dir = scratch("context");
+        let mut n = seeded(&ui, &dir);
+        let (rx, ry, rw, rh) = n.row_rect(&ui, 0);
+        let rows = n.context_menu(&ui, rx + rw / 2.0, ry + rh / 2.0, 1.0);
+        let titles: Vec<&str> = rows.iter().map(|(_, t)| t.as_str()).collect();
+        assert!(titles.contains(&"Pin Note") && titles.contains(&"Delete Note"), "{titles:?}");
+        assert!(matches!(n.screen, Screen::Editor(_)), "the row is selected");
+        let before = n.listed().len();
+        let delete = rows.iter().find(|(_, t)| t == "Delete Note").unwrap().0;
+        assert!(n.context_action(&ui, delete, 2.0));
+        assert_eq!(n.listed().len(), before - 1);
+        assert!(!n.context_action(&ui, delete, 3.0), "a menu is used once");
+        // nothing under the pointer: no menu
+        assert!(n.context_menu(&ui, 1.0, 1.0, 4.0).is_empty());
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -4486,7 +5102,7 @@ mod tests {
         assert!(n.chord(&ui, 49, bifrost_app::proto::CHORD_CTRL, 0.0), "Ctrl+N");
         assert!(matches!(n.screen, Screen::Editor(_)), "a new note opens");
         assert!(n.chord(&ui, 44, bifrost_app::proto::CHORD_CTRL, 1.0), "Ctrl+Z in the editor");
-        assert!(!n.chord(&ui, 30, bifrost_app::proto::CHORD_CTRL, 2.0), "Ctrl+A is not bound");
+        assert!(n.chord(&ui, 30, bifrost_app::proto::CHORD_CTRL, 2.0), "Ctrl+A is the line start in the note (edit_keys)");
         n.activate(&ui, Target::Back, 0.0, 0.0, 3.0);
         assert!(n.chord(&ui, 33, bifrost_app::proto::CHORD_META, 4.0), "Cmd+F on the list");
         let _ = std::fs::remove_dir_all(&dir);
