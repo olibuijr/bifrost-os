@@ -38,6 +38,12 @@ pub(super) const B_MORE: u32 = 11;
 pub(super) const B_SEARCH: u32 = 12;
 /// the list's List / Gallery toggle
 pub(super) const B_LAYOUT: u32 = 13;
+/// The published control id of bar `i`'s `»` overflow button (the bars in `bars` order).
+pub(super) const B_OVERFLOW: u32 = 20;
+/// The narrowest the open search field is drawn beside the format buttons (points); with less room they move
+/// behind the `»` button so the field keeps a usable width.
+const SEARCH_MIN_PT: f32 = 120.0;
+const SEARCH_MAX_PT: f32 = 220.0;
 
 /// Sidebar row ids: All Notes, Recently Deleted, then folder `i` as `FOLDER_ROW + i`.
 const ROW_ALL: u32 = 100;
@@ -68,6 +74,36 @@ fn item_w(ui: &Ui) -> impl Fn(&ToolbarItem) -> f32 + '_ {
             (ui.measure(&it.label, MAC_BODY_PT, Weight::Regular) / ui.pt(1.0) + 2.0 * SPACE_S * 1.5).max(CAPSULE_PT)
         }
     }
+}
+
+/// The width a run of toolbar items takes, as the kit lays it out (`Toolbar::layout_with`): each item's width plus the
+/// gap before it, no gap inside a group, and nothing for a flexible space beyond its gap.
+fn items_need(ui: &Ui, items: &[ToolbarItem]) -> f32 {
+    use bifrost_app::controls::nav::ToolbarKind;
+    let width = item_w(ui);
+    items
+        .iter()
+        .enumerate()
+        .map(|(k, it)| {
+            let joined = k > 0 && it.group != 0 && it.group == items[k - 1].group;
+            let gap = if k == 0 || joined { 0.0 } else { TOOLBAR_GAP_PT };
+            let w = match it.kind {
+                ToolbarKind::Button => width(it),
+                ToolbarKind::Custom => it.width,
+                ToolbarKind::Separator => TOOLBAR_GAP_PT,
+                ToolbarKind::FlexibleSpace => 0.0,
+            };
+            gap + w
+        })
+        .sum()
+}
+
+/// The search field's width when it is open in a bar of width `bar_w` whose other items take `others` (points):
+/// what is left after the gap before it, at most `SEARCH_MAX_PT` and the 30 % of the editor column the field likes.
+fn search_width(bar_w: f32, others: f32, editor_w: f32) -> f32 {
+    let want = (editor_w * 0.3).clamp(SEARCH_MIN_PT, SEARCH_MAX_PT);
+    // half a point of slack: the kit sums the same widths in another order
+    (bar_w - others - TOOLBAR_GAP_PT - 0.5).min(want)
 }
 
 fn band(x: f32, w: f32) -> Rect {
@@ -143,22 +179,70 @@ impl Notes {
         bars.push((Toolbar::new(items), band(x0, w)));
         let (ex, ew) = self.editor_col(ui);
         let open = matches!(self.screen, Screen::Editor(_));
-        let search_w = if self.search_open() { (ew * 0.3).clamp(120.0, 220.0) } else { CAPSULE_PT };
-        bars.push((
-            Toolbar::new(vec![
-                ToolbarItem::button(B_COMPOSE, "New Note"),
-                ToolbarItem::button(B_STYLE, "Aa").in_group(1).enabled(open),
-                ToolbarItem::icon(B_CHECK, "Checklist", "checkmark.circle").in_group(1).enabled(open),
-                ToolbarItem::icon(B_BULLET, "Bulleted List", "list.bullet").in_group(1).enabled(open),
-                ToolbarItem::icon(B_PHOTO, "Add Photo", "photo").in_group(1).enabled(open),
-                ToolbarItem::icon(B_SHARE, "Share", "square.and.arrow.up").in_group(2).enabled(open),
-                ToolbarItem::icon(B_MORE, "More", "ellipsis").in_group(2).enabled(open),
-                ToolbarItem::flexible_space(),
-                ToolbarItem::custom(B_SEARCH, "Search", search_w),
-            ]),
-            band(ex + 12.0, ew - 24.0),
-        ));
+        let bounds = band(ex + 8.0, ew - 16.0);
+        // the reference's bar: the compose glyph, the format group (Aa, checklist, list, photo), the share group, then
+        // search at the trailing end
+        let compose = ToolbarItem::icon(B_COMPOSE, "New Note", "square.and.pencil");
+        let format = vec![
+            ToolbarItem::icon(B_STYLE, "Format", "textformat").in_group(1).enabled(open),
+            ToolbarItem::icon(B_CHECK, "Checklist", "checkmark.circle").in_group(1).enabled(open),
+            ToolbarItem::icon(B_BULLET, "Bulleted List", "list.bullet").in_group(1).enabled(open),
+            ToolbarItem::icon(B_PHOTO, "Add Photo", "photo").in_group(1).enabled(open),
+        ];
+        let share = vec![
+            ToolbarItem::icon(B_SHARE, "Share", "square.and.arrow.up").in_group(2).enabled(open),
+            ToolbarItem::icon(B_MORE, "More", "ellipsis").in_group(2).enabled(open),
+        ];
+        let searching = self.search_open();
+        let mut items: Vec<ToolbarItem> = std::iter::once(compose.clone()).chain(format.iter().cloned()).chain(share.iter().cloned()).collect();
+        items.push(ToolbarItem::flexible_space());
+        let others = items_need(ui, &items);
+        let room = bounds.w - others - TOOLBAR_GAP_PT - 0.5;
+        if !searching && room >= CAPSULE_PT {
+            items.push(ToolbarItem::custom(B_SEARCH, "Search", CAPSULE_PT));
+        } else if searching && search_width(bounds.w, others, ew) >= SEARCH_MIN_PT {
+            items.push(ToolbarItem::custom(B_SEARCH, "Search", search_width(bounds.w, others, ew)));
+        } else {
+            // too narrow for everything: the search keeps its place at the trailing end, the groups that still fit lead
+            // (format before share), and the rest follow the field, so the kit puts them behind the `»` button
+            let reserve = TOOLBAR_GAP_PT + CAPSULE_PT;
+            let field = if searching { SEARCH_MIN_PT } else { CAPSULE_PT };
+            let (mut lead, mut trail) = (vec![compose], Vec::new());
+            for group in [format, share] {
+                let mut probe = lead.clone();
+                probe.extend(group.iter().cloned());
+                probe.push(ToolbarItem::flexible_space());
+                if trail.is_empty() && items_need(ui, &probe) + TOOLBAR_GAP_PT + field + reserve <= bounds.w - 0.5 {
+                    lead.extend(group);
+                } else {
+                    trail.extend(group);
+                }
+            }
+            lead.push(ToolbarItem::flexible_space());
+            let w = if searching { search_width(bounds.w - reserve, items_need(ui, &lead), ew).max(CAPSULE_PT) } else { CAPSULE_PT };
+            lead.push(ToolbarItem::custom(B_SEARCH, "Search", w));
+            lead.extend(trail);
+            items = lead;
+        }
+        bars.push((Toolbar::new(items), bounds));
         bars
+    }
+
+    /// The bar whose `»` overflow button is under pixel `(x, y)`, with that button's rectangle (points).
+    pub(super) fn overflow_hit(&self, ui: &Ui, x: f32, y: f32) -> Option<(usize, Rect)> {
+        let (x, y) = (x / ui.pt(1.0), y / ui.pt(1.0));
+        self.layouts(ui).into_iter().enumerate().find_map(|(i, (_, l))| l.overflow_button.filter(|r| r.contains(x, y)).map(|r| (i, r)))
+    }
+
+    /// The items of bar `bar` that are behind its `»` button, as `(id, label, enabled)`.
+    pub(super) fn overflow_items(&self, ui: &Ui, bar: usize) -> Vec<(u32, String, bool)> {
+        let Some((toolbar, l)) = self.layouts(ui).into_iter().nth(bar) else { return vec![] };
+        l.overflow.iter().filter_map(|id| toolbar.items.iter().find(|i| i.id == *id)).map(|i| (i.id, i.label.clone(), i.enabled)).collect()
+    }
+
+    /// The `»` button of the editor's bar (points), when something overflowed there.
+    pub(super) fn editor_overflow(&self, ui: &Ui) -> Option<Rect> {
+        self.layouts(ui).last().and_then(|(_, l)| l.overflow_button)
     }
 
     fn layouts(&self, ui: &Ui) -> Vec<(Toolbar, ToolbarLayout)> {
@@ -201,7 +285,10 @@ impl Notes {
                 nodes.push(Node { id: *id as u64, role: Role::Row, label: label.clone(), value: String::new(), bounds: r, enabled: *enabled });
             }
         }
-        for (bar, l) in self.layouts(ui) {
+        for (i, (bar, l)) in self.layouts(ui).into_iter().enumerate() {
+            if let Some(r) = l.overflow_button {
+                nodes.push(Node { id: (B_OVERFLOW + i as u32) as u64, role: Role::Button, label: "More Toolbar Items".into(), value: String::new(), bounds: r, enabled: true });
+            }
             for (id, r) in l.visible {
                 let Some(item) = bar.items.iter().find(|i| i.id == id) else { continue };
                 match id {

@@ -154,6 +154,8 @@ const MENU_FLOAT_ON_TOP: u32 = 15;
 const MENU_EXCHANGE: u32 = 17;
 /// Notes > Settings: the pane over the window (text size, new note start, dark background, sort and grouping).
 const MENU_SETTINGS: u32 = 16;
+/// File > New Folder: the folder name prompt over the list.
+const MENU_NEW_FOLDER: u32 = 18;
 /// The Recent Notes submenu: `MENU_RECENT + n` is the n-th newest note.
 const MENU_RECENT: u32 = 100;
 /// The Format menu: `FORMAT_BASE + n` is the n-th row of `format_table`, `TABLE_BASE + n` the n-th table command.
@@ -176,23 +178,23 @@ fn format_table() -> Vec<Option<(&'static str, &'static str, FormatCmd)>> {
     use ::notes::notes::{Fmt, Format};
     use FormatCmd::{Do, Style};
     vec![
-        Some(("Title", "", Style(Block::Title))),
-        Some(("Heading", "", Style(Block::Heading))),
-        Some(("Subheading", "", Style(Block::Subheading))),
-        Some(("Body", "", Style(Block::Body))),
-        Some(("Monostyled", "", Style(Block::Mono))),
+        Some(("Title", "cmd+shift+t", Style(Block::Title))),
+        Some(("Heading", "cmd+shift+h", Style(Block::Heading))),
+        Some(("Subheading", "cmd+shift+j", Style(Block::Subheading))),
+        Some(("Body", "cmd+shift+b", Style(Block::Body))),
+        Some(("Monostyled", "cmd+shift+m", Style(Block::Mono))),
         Some(("Block Quote", "", Style(Block::Quote))),
         None,
         Some(("Bulleted List", "", Style(Block::Bullet))),
         Some(("Dashed List", "", Style(Block::Dashed))),
         Some(("Numbered List", "", Style(Block::Numbered(1)))),
-        Some(("Checklist", "", Style(Block::Check(false)))),
+        Some(("Checklist", "cmd+shift+l", Style(Block::Check(false)))),
         None,
         Some(("Bold", "cmd+b", Do(Format::Char(Fmt::Bold)))),
         Some(("Italic", "cmd+i", Do(Format::Char(Fmt::Italic)))),
         Some(("Underline", "cmd+u", Do(Format::Char(Fmt::Underline)))),
         Some(("Strikethrough", "cmd+shift+x", Do(Format::Char(Fmt::Strike)))),
-        Some(("Highlight", "cmd+shift+h", Do(Format::Char(Fmt::Highlight)))),
+        Some(("Highlight", "cmd+shift+e", Do(Format::Char(Fmt::Highlight)))),
         None,
         Some(("Increase Indent", "", Do(Format::Indent))),
         Some(("Decrease Indent", "", Do(Format::Outdent))),
@@ -265,8 +267,9 @@ fn quick_note_item(ctx: &Ctx) -> StatusItem {
 }
 /// evdev Z (the Undo and Redo chords are the editor's: Cmd+Z, Cmd+Shift+Z).
 const KEY_Z: u32 = 44;
-/// evdev C: Cmd+C copies the editor's selection to the pasteboard (rich text with a plain fallback).
+/// evdev C: Cmd+C copies the editor's selection to the pasteboard (rich text with a plain fallback); X cuts it.
 const KEY_C: u32 = 46;
+const KEY_X: u32 = 45;
 
 impl NotesApp {
     /// Opens a note in a window of its own (`Ctx::open_window`). A note that is already open is focused, not opened
@@ -286,6 +289,19 @@ impl NotesApp {
             }
             Err(_) => false,
         }
+    }
+
+    /// Edit > Copy (or Cut, with `cut`): the focused field's selection, or the note's selection, which goes to the
+    /// pasteboard as rich text with a plain fallback (`system::copy`). True when the window changed.
+    fn copy_selection(&mut self, ctx: &Ctx, cut: bool) -> bool {
+        let now = bifrost_app::proto::sys::now_ms();
+        let Some(n) = &mut self.notes else { return false };
+        if n.field_focused() {
+            return n.field_command(&ctx.ui, if cut { "Cut" } else { "Copy" }, now);
+        }
+        let Some(markdown) = n.take_selection(&ctx.ui, cut, now) else { return false };
+        system::copy(ctx, &markdown);
+        cut
     }
 
     /// File > Import to Notes (Cmd+O): the open panel answers in `document`.
@@ -382,14 +398,23 @@ impl App for NotesApp {
 
     fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
         let Some(n) = &self.notes else { return Vec::new() };
-        // "Note" and "Format" are the app's own menus: File, Edit, View, Window and Help are the shell's, so none is
-        // repeated. Undo and Redo are the shell's Edit commands (`commands` and `Input::Command`), not items here.
+        // "File" merges into the shell's File menu (New Note, New Folder, Import and Print, as in the reference);
+        // "Note" and "Format" are the app's own. Undo, Redo, Cut, Copy, Paste and Select All are the shell's Edit
+        // commands (`commands` and `Input::Command`), not items here.
         let editing = n.is_editing();
+        let file = AppMenu {
+            title: "File".into(),
+            items: vec![
+                AppMenuItem::new(MENU_NEW, "New Note").key("cmd+n"),
+                AppMenuItem::new(MENU_NEW_FOLDER, "New Folder").key("cmd+shift+n"),
+                AppMenuItem::separator(),
+                AppMenuItem::new(MENU_IMPORT, "Import to Notes...").key("cmd+o"),
+                AppMenuItem::separator(),
+                AppMenuItem::new(MENU_PRINT, "Print...").key("cmd+p").enabled(editing),
+            ],
+        };
         let mut note = vec![
-            AppMenuItem::new(MENU_NEW, "New Note").key("cmd+n"),
             AppMenuItem::new(MENU_DELETE, "Delete Note").key("cmd+backspace").enabled(n.can_delete()),
-            AppMenuItem::separator(),
-            AppMenuItem::new(MENU_IMPORT, "Import to Notes...").key("cmd+o"),
             AppMenuItem::separator(),
             AppMenuItem::new(MENU_FIND, "Find").key("cmd+f"),
             AppMenuItem::separator(),
@@ -412,8 +437,6 @@ impl App for NotesApp {
         note.push(AppMenuItem::new(MENU_SPEAK_START, "Start Speaking").enabled(n.speakable_text().is_some()).depth(1));
         note.push(AppMenuItem::new(MENU_SPEAK_STOP, "Stop Speaking").depth(1));
         note.push(AppMenuItem::separator());
-        note.push(AppMenuItem::new(MENU_PRINT, "Print...").key("cmd+p").enabled(editing));
-        note.push(AppMenuItem::separator());
         note.push(AppMenuItem::new(MENU_OPEN_WINDOW, "Open in Separate Window").enabled(editing));
         note.push(AppMenuItem::new(MENU_EXCHANGE, "Sync Exchange Notes").enabled(!self.exchange.busy()));
         note.push(AppMenuItem::new(MENU_SETTINGS, "Settings...").key("cmd+,"));
@@ -422,13 +445,22 @@ impl App for NotesApp {
             title: "Window".into(),
             items: vec![AppMenuItem::new(MENU_FLOAT_ON_TOP, "Float on Top").enabled(focused.is_some()).checked(focused.is_some_and(|w| n.windows.is_floating(w)))],
         };
-        vec![AppMenu { title: "Note".into(), items: note }, view_menu(n), format_menu(n), float]
+        vec![file, AppMenu { title: "Note".into(), items: note }, view_menu(n), format_menu(n), float]
     }
 
     fn commands(&self, _ctx: &Ctx) -> Commands {
         let Some(n) = &self.notes else { return Commands::default() };
         let (undo, redo) = n.can_undo_redo();
-        Commands::default().with(Command::Undo, undo).with(Command::Redo, redo)
+        // the note or a focused field takes the text commands (Edit menu, Cmd+X, C, V, A)
+        let text = n.is_editing() || n.field_focused();
+        let selected = n.has_selection();
+        Commands::default()
+            .with(Command::Undo, undo)
+            .with(Command::Redo, redo)
+            .with(Command::Cut, selected)
+            .with(Command::Copy, selected)
+            .with(Command::Paste, text && bifrost_app::kit::clipboard::text().is_some_and(|s| !s.is_empty()))
+            .with(Command::SelectAll, text)
     }
 
     fn undo_titles(&self, _ctx: &Ctx) -> (String, String) {
@@ -474,6 +506,10 @@ impl App for NotesApp {
             }
             MENU_NEW => {
                 n.compose(&ctx.ui, now);
+                true
+            }
+            MENU_NEW_FOLDER => {
+                n.new_folder(&ctx.ui, now);
                 true
             }
             MENU_DELETE => n.delete_current(&ctx.ui, now),
@@ -632,7 +668,17 @@ impl App for NotesApp {
                 let Some(id) = notes::note_url::note_id(&url) else { return false };
                 n.show_note(&ctx.ui, id, bifrost_app::proto::sys::now_ms())
             }
-            Input::Touch { kind, x, y, t, .. } => {
+            // a right click: the menu for the note row or the folder under the pointer
+            Input::Context { x, y } => {
+                let rows = n.context_menu(&ctx.ui, x, y, bifrost_app::proto::sys::now_ms());
+                if !rows.is_empty() {
+                    ctx.context_menu(x, y, rows.into_iter().map(|(id, title)| bifrost_app::proto::ContextItem::new(id, &title)).collect());
+                }
+                true
+            }
+            Input::ContextAction(id) => n.context_action(&ctx.ui, id, bifrost_app::proto::sys::now_ms()),
+            Input::Touch { kind, x, y, t, mods, .. } => {
+                n.set_pointer_shift(mods.contains(bifrost_app::proto::ModifierFlags::SHIFT));
                 let e = match kind {
                     TouchKind::Down => Event::Down(x, y),
                     TouchKind::Move => Event::Move(x, y),
@@ -649,14 +695,19 @@ impl App for NotesApp {
                 }
                 true
             }
-            // the shell's Edit > Undo and Redo: the editor's own undo and redo, as the Cmd+Z chords are
+            // the shell's Edit menu (and Cmd+X, C, V, A, Z): Undo and Redo are the editor's own, as the Cmd+Z chords
+            // are; Cut, Copy, Paste and Select All act on the focused field or the note
             Input::Command(command) => {
+                let now = bifrost_app::proto::sys::now_ms();
                 let mods = match command {
                     Command::Undo => bifrost_app::proto::CHORD_META,
                     Command::Redo => bifrost_app::proto::CHORD_META | bifrost_app::proto::CHORD_SHIFT,
-                    _ => return false,
+                    Command::Cut => return self.copy_selection(ctx, true),
+                    Command::Copy => return self.copy_selection(ctx, false),
+                    Command::Paste => return n.paste(&ctx.ui, now),
+                    Command::SelectAll => return n.select_all(&ctx.ui, now),
                 };
-                n.chord(&ctx.ui, KEY_Z, mods, bifrost_app::proto::sys::now_ms())
+                n.chord(&ctx.ui, KEY_Z, mods, now)
             }
             Input::Key(k) => {
                 if let Some((key, mods)) = k.as_chord() {
@@ -665,12 +716,9 @@ impl App for NotesApp {
                         self.open_import(ctx);
                         return false;
                     }
-                    // Copy with a selection in the editor goes to the pasteboard; without one the chord is left alone
-                    if key == KEY_C && mods & (CHORD_CTRL | CHORD_META) != 0 && mods & (CHORD_SHIFT | CHORD_ALT) == 0 {
-                        if let Some(md) = n.selected_markdown() {
-                            system::copy(ctx, &md);
-                            return false;
-                        }
+                    // Copy and Cut with a selection in the note go to the pasteboard (a field's selection is the field's)
+                    if (key == KEY_C || key == KEY_X) && mods & (CHORD_CTRL | CHORD_META) != 0 && mods & (CHORD_SHIFT | CHORD_ALT) == 0 && !n.field_focused() {
+                        return self.copy_selection(ctx, key == KEY_X);
                     }
                     return n.chord(&ctx.ui, key, mods, bifrost_app::proto::sys::now_ms());
                 }
@@ -831,6 +879,19 @@ impl App for NotesApp {
         self.track_restorable(ctx);
         let opened = requested.is_some_and(|id| self.open_note_window(ctx, &id));
         redraw || opened
+    }
+
+    /// The scroll wheel comes as itself rather than as a drag, so a drag on the note can select text.
+    fn pointer_interest(&self) -> u32 {
+        bifrost_app::pointer_events::WHEEL
+    }
+
+    fn pointer(&mut self, ctx: &Ctx, ev: &bifrost_app::pointer_events::PointerEvent) -> bool {
+        let Some(n) = &mut self.notes else { return false };
+        if let bifrost_app::pointer_events::PointerEvent::Wheel { x, y, dy, .. } = ev {
+            return n.wheel(&ctx.ui, *x, *y, *dy);
+        }
+        false
     }
 
     fn next_wake(&self, t: f64) -> Option<f64> {

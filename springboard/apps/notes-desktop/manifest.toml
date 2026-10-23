@@ -13,6 +13,7 @@ permissions = ["storage", "documents", "network", "keychain"]
 keychain_groups = ["is.bifrost.passwords"]
 index_extension = true
 window = "full-size"
+edit_keys = true
 
 [[intent]]
 id = "new-note"
