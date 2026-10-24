@@ -509,7 +509,11 @@ impl Settings {
                 let entry = self.build(ui, PageId::General, None);
                 self.stack.push(entry);
             }
-            self.sidebar = Some(self.build_sidebar(ui));
+            // a resize keeps where the sidebar was scrolled to (clamped to the new height)
+            let offset = self.sidebar.as_ref().map_or(0.0, ListPage::offset);
+            let mut sb = self.build_sidebar(ui);
+            sb.jump_to(offset);
+            self.sidebar = Some(sb);
         } else {
             // the split view's default detail page (General, opened by itself) is not a page the
             // user navigated to: the single column starts at the root list again
@@ -5340,6 +5344,19 @@ mod e2e_w3_tests {
         st.key(&ui, Out::Named("Up"), 0.0);
         settle(&mut st, &ui);
         assert_eq!(st.page(), first, "Up goes back");
+    }
+
+    /// N4: a window resize rebuilt the sidebar from its top.
+    #[test]
+    fn a_resize_keeps_the_sidebar_scroll() {
+        let ui = crate::shell::tests::ui();
+        let (mut st, _) = split(&ui);
+        st.set_size(&ui, 1200, 700);
+        st.sidebar.as_mut().expect("split").jump_to(150.0);
+        let before = st.sidebar_list().expect("split").offset();
+        assert!(before > 0.0, "the sidebar scrolls at this height");
+        st.set_size(&ui, 1210, 680);
+        assert_eq!(st.sidebar_list().expect("split").offset(), before);
     }
 
     #[test]
