@@ -660,8 +660,11 @@ pub mod photos {
 /// `effective_sort_order` resolves "system default" against the system's order.
 pub mod display {
     pub use bifrost_ui::contact_display::{
-        compare_names, normalize_country_code, sort_contacts, sort_key, ContactsDefaults, SortOrder,
+        compare_names, full_name, name_order_for_language, normalize_country_code, sort_contacts, sort_key, ContactsDefaults,
+        DisplayNameOrder, SortOrder,
     };
+    /// Postal addresses laid out for their country (CNPostalAddressFormatter with the address's ISO country code).
+    pub use bifrost_ui::contact_address::{lines, lines_for_country, single_line, Style as AddressStyle};
 }
 
 /// The contact picker (ContactsUI, CNContactPicker and the people picker): the user chooses one whole contact, or one

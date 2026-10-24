@@ -35,6 +35,96 @@ impl SortOrder {
     }
 }
 
+impl SortOrder {
+    /// The reference raw value (`CNContactSortOrder`): none 0, user default 1, given name 2, family name 3.
+    pub fn raw(self) -> u8 {
+        match self {
+            SortOrder::None => 0,
+            SortOrder::UserDefault => 1,
+            SortOrder::GivenName => 2,
+            SortOrder::FamilyName => 3,
+        }
+    }
+
+    /// The order for a raw value, or `None` for an unknown one.
+    pub fn from_raw(raw: u8) -> Option<SortOrder> {
+        [SortOrder::None, SortOrder::UserDefault, SortOrder::GivenName, SortOrder::FamilyName].into_iter().find(|o| o.raw() == raw)
+    }
+}
+
+/// The order a full name is shown in (`CNContactDisplayNameOrder`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DisplayNameOrder {
+    /// The order the person's language uses ([`name_order_for_language`]).
+    UserDefault,
+    GivenNameFirst,
+    FamilyNameFirst,
+}
+
+impl DisplayNameOrder {
+    /// The reference raw value: user default 0, given name first 1, family name first 2.
+    pub fn raw(self) -> u8 {
+        match self {
+            DisplayNameOrder::UserDefault => 0,
+            DisplayNameOrder::GivenNameFirst => 1,
+            DisplayNameOrder::FamilyNameFirst => 2,
+        }
+    }
+
+    /// A concrete order: `UserDefault` becomes the order of `language`.
+    pub fn resolve(self, language: &str) -> DisplayNameOrder {
+        match self {
+            DisplayNameOrder::UserDefault => name_order_for_language(language),
+            other => other,
+        }
+    }
+}
+
+/// Languages whose names are written family name first.
+const FAMILY_FIRST_LANGUAGES: [&str; 6] = ["ja", "zh", "ko", "hu", "vi", "mn"];
+
+/// The name order of a language tag such as `ja`, `zh-Hant` or `hu_HU` (only the language part counts): family name
+/// first for Japanese, Chinese, Korean, Hungarian, Vietnamese and Mongolian, given name first otherwise.
+pub fn name_order_for_language(language: &str) -> DisplayNameOrder {
+    let lang = language.trim().split(['-', '_']).next().unwrap_or("").to_ascii_lowercase();
+    if FAMILY_FIRST_LANGUAGES.contains(&lang.as_str()) {
+        DisplayNameOrder::FamilyNameFirst
+    } else {
+        DisplayNameOrder::GivenNameFirst
+    }
+}
+
+/// Whether a name is written in a script that puts no space between the family and given name (Han, kana, Hangul).
+fn joins_without_space(text: &str) -> bool {
+    let mut letters = text.chars().filter(|c| !c.is_whitespace()).peekable();
+    letters.peek().is_some()
+        && letters.all(|c| {
+            matches!(c as u32,
+                0x3040..=0x30FF   // kana
+                | 0x3400..=0x4DBF // Han extension A
+                | 0x4E00..=0x9FFF // Han
+                | 0xAC00..=0xD7AF // Hangul syllables
+                | 0x1100..=0x11FF // Hangul jamo
+                | 0xF900..=0xFAFF) // Han compatibility
+        })
+}
+
+/// The full name in `order` (resolved against `language` when it is the user default). Empty parts leave no gap. A
+/// name whose parts are all Han, kana or Hangul is written family name first with no spaces, whatever the order, as
+/// the reference formatter writes such names.
+pub fn full_name(given: &str, middle: &str, family: &str, order: DisplayNameOrder, language: &str) -> String {
+    let parts = [given.trim(), middle.trim(), family.trim()];
+    let present: Vec<&str> = parts.iter().copied().filter(|p| !p.is_empty()).collect();
+    if !present.is_empty() && present.iter().all(|p| joins_without_space(p)) {
+        return [parts[2], parts[0], parts[1]].concat();
+    }
+    let ordered = match order.resolve(language) {
+        DisplayNameOrder::FamilyNameFirst => [parts[2], parts[0], parts[1]],
+        _ => parts,
+    };
+    ordered.into_iter().filter(|p| !p.is_empty()).collect::<Vec<_>>().join(" ")
+}
+
 /// Lower-cases and trims one name part, so that sorting ignores case and stray spaces.
 fn fold(part: &str) -> String {
     part.trim().to_lowercase()
@@ -195,5 +285,33 @@ mod tests {
         assert_eq!(d.effective_sort_order(SortOrder::FamilyName), SortOrder::GivenName);
         d.clear_country_code();
         assert_eq!(d.country_code(), None);
+    }
+
+    #[test]
+    fn raw_values_match_the_reference_enumerations() {
+        assert_eq!([SortOrder::None, SortOrder::UserDefault, SortOrder::GivenName, SortOrder::FamilyName].map(SortOrder::raw), [0, 1, 2, 3]);
+        assert_eq!(SortOrder::from_raw(3), Some(SortOrder::FamilyName));
+        assert_eq!(SortOrder::from_raw(9), None);
+        assert_eq!(DisplayNameOrder::FamilyNameFirst.raw(), 2);
+        assert_eq!(DisplayNameOrder::UserDefault.raw(), 0);
+    }
+
+    #[test]
+    fn the_language_decides_the_default_name_order() {
+        assert_eq!(name_order_for_language("ja"), DisplayNameOrder::FamilyNameFirst);
+        assert_eq!(name_order_for_language("zh-Hant"), DisplayNameOrder::FamilyNameFirst);
+        assert_eq!(name_order_for_language("hu_HU"), DisplayNameOrder::FamilyNameFirst);
+        assert_eq!(name_order_for_language("is"), DisplayNameOrder::GivenNameFirst);
+        assert_eq!(name_order_for_language(""), DisplayNameOrder::GivenNameFirst);
+        assert_eq!(DisplayNameOrder::GivenNameFirst.resolve("ja"), DisplayNameOrder::GivenNameFirst);
+    }
+
+    #[test]
+    fn full_names_follow_the_order_and_east_asian_names_join_without_spaces() {
+        assert_eq!(full_name("Ada", "", "Lovelace", DisplayNameOrder::GivenNameFirst, "en"), "Ada Lovelace");
+        assert_eq!(full_name("Ferenc", "", "Puskás", DisplayNameOrder::UserDefault, "hu"), "Puskás Ferenc");
+        assert_eq!(full_name("\u{592a}\u{90ce}", "", "\u{5c71}\u{7530}", DisplayNameOrder::GivenNameFirst, "en"), "\u{5c71}\u{7530}\u{592a}\u{90ce}");
+        assert_eq!(full_name("", "", "Cher", DisplayNameOrder::FamilyNameFirst, "en"), "Cher");
+        assert_eq!(full_name(" ", "", "", DisplayNameOrder::UserDefault, "en"), "");
     }
 }
