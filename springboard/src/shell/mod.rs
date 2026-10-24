@@ -3351,7 +3351,10 @@ impl Shell {
         self.quick_look_hide();
         if self.desktop_menu != Some(desktop_bar::Menu::Document) {
             self.desktop_menu = None;
-            self.desktop_menu_row = None;
+            #[cfg(feature = "desktop-wayland")]
+            {
+                self.desktop_menu_row = None;
+            }
         }
         self.modal_layer = None;
         self.drawn = Drawn::Nothing;
