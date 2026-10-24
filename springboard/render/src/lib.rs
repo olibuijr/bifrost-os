@@ -84,6 +84,7 @@ pub mod composite_filters;
 pub mod composite_ops;
 pub mod render_destination;
 pub mod perspective;
+pub mod geometry_filters;
 pub mod distortion_filters;
 pub mod stylize_filters;
 pub mod halftone_tile_filters;
