@@ -335,8 +335,9 @@ Accessibility round, partial. What is built:
   `window` elements already (`walk::window`). The AT-SPI role map (`axmap::item_role`) is unchanged, so Orca still sees the
   pop-up row as a choice.
 - **Not built.** Help viewer, assistant panel and permission sheets are not walked for their content (only their windows).
-  Speak Selection (Option+Esc) and Speak Items Under the Pointer need a selection source and a pointer-hover option; neither
-  exists. Speech on the Midget is not verified.
+  Speak Selection (Option+Esc, `accessibility/spoken.rs`) and Speak Items Under the Pointer (`accessibility/hover_speech.rs`)
+  are built since; see "Accessibility custom actions, settings, spoken content and audio graphs". Speech on the Midget is
+  not verified.
 - **Display options.** Reduce Motion, Reduce Transparency and Increase Contrast are already read by the shell's motion
   (`anim_ms`, desk, switcher, jiggle), material (`vibrancy.rs`, `glass.rs`, Control Centre, menu bar, Spotlight) and colour
   (`ui.rs` separators and material borders, `appearance.rs` contrast) code. Nothing new was wired.
@@ -355,6 +356,59 @@ run with `perform_custom_action`, which posts `layoutChanged`) and `accessibilit
 `sdk::accessibility_display::options` and `options_changed`: `DisplayOptions` holds `increase_contrast`,
 `reduce_transparency`, `differentiate_without_color` (Button Shapes), `invert_colors` (always false), `reduce_motion` and
 `dim_flashing_lights`. The shell pushes `options_changed` once per change.
+
+### Accessibility custom actions, settings, spoken content and audio graphs
+
+Parity round 2026-10-24 (branch `parity/accessibility`), host tests only, not verified on Midget. Reference behaviour was
+measured clean-room from the macOS 27 (26A434) bridge metadata of the Accessibility framework
+(`Accessibility.arm64e.bridgesupport`, sha256 `cbdd7b816637b0b83edf78ef992738040854771a47a11490a1d6360efd394fcf`) and of
+HIServices (`HIServices.arm64e.bridgesupport`, sha256 `09862b46ebe5ecf1bf611243378cdd653f61183f965d548af5d0a550d13011ca`),
+extracted with `macos-ref/tools/aa_stream.py --match`; names, raw values and signatures only, nothing copied. REA cannot
+open XML metadata (`open_binary`: unsupported format), so the framework evidence stays
+`ev_2a505504e4634c45494730263b3e9dd7da9a8a53b707a6c6c2a02409b4820b58` plus the hashes above.
+
+- **Named custom actions** (`accessibilityCustomActions`). `bifrost_ui::ax_action`: `AxActionSet { id, names }`, `clean`
+  (blank and repeated names dropped case-insensitively, at most 64 elements, 8 actions each, 64-byte names), `record(id,
+  names)` for immediate-mode apps right after `ax::record`, `merge`. SDK: `App::ax_custom_actions` (declared sets) and
+  `App::ax_custom_action(ctx, id, name)` (runs one; the runtime calls it only for a listed name, with the app's own
+  spelling). Wire: `ToShell::AxActions` (tag `0x215`, `proto/src/axaction.rs`) and `AxAction::Custom(name)` (code 5 in
+  `ToApp::AxSet`). Shell: `AppHost::ax_actions`; the AT-SPI `Action` interface lists them after `press` (and `increment`,
+  `decrement` on a slider) and `DoAction(i)` past the standard ones sends `Custom`; an element with only custom actions gets
+  the interface; the ax map lists them so `ax actions` / `ax action` reach app elements (`axmap::add_app_actions`).
+  Decision: no selector crosses the wire (the reference's `AXCustomActions` entries pair a name with a target selector);
+  the app gets the name back. `kAXErrorActionUnsupported` maps to `false` from `DoAction`.
+- **One settings struct** (`sdk::accessibility_settings`). The reference answers each preference with a free function
+  (`AXAnimatedImagesEnabled`, `AXPrefersNonBlinkingTextInsertionIndicator`, `AXReduceHighlightingEffectsEnabled`,
+  `AXShowBordersEnabled`, `AXPrefersHorizontalTextLayout`, `AXPrefersActionSliderAlternative`, `AXAssistiveAccessEnabled`,
+  `AXApplicationAccessibilityEnabled`) and its own `...DidChangeNotification`. BifrOSt answers them all with one `settings`
+  call on the `accessibility_display` service and one `settings_changed` event: `Settings` holds the display options,
+  `show_borders` (the Button Shapes setting), `animated_images` (off while Reduce Motion is on: BifrOSt has no separate
+  switch), `bold_text`, `text_scale`, `display_zoom`, `live_captions`, `application_accessibility` (some technology reads or
+  drives apps) and `running` (`Technology`: screen reader, switch control, voice control, screen zoom, keyboard
+  navigation; the reference's `AXTechnology*` constants, neutral names). Not matched yet: a non-blinking caret, reduced
+  highlighting, horizontal text layout, the action-slider alternative and Assistive Access have no BifrOSt setting, so they
+  read false (`UNSUPPORTED`). `open_feature(SettingsFeature)` / `feature_supported` follow `AXOpenSettingsFeature` and
+  `AXOpenSettingsFeatureIsSupported`; `SettingsFeature` keeps the measured raw values (Personal Voice 1, call audio 2,
+  AssistiveTouch 3, AssistiveTouch devices 4, Dwell Control 5, caption styles 6). Only Dwell Control and AssistiveTouch have
+  a page; the others answer an error.
+- **Speak Items Under the Pointer.** Settings > Accessibility > Spoken Content (`a11y_speak_under_pointer`, off by
+  default). `accessibility/hover_speech.rs`: the innermost published node under the pointer in an app's main window
+  (`item_at`, found through `pointer_events::ext_content_at`, the hit test the hover events use; the reference's
+  `AXUIElementCopyElementAtPosition`) is spoken with the screen reader's words (`walk::speech`) after 600 ms, once per
+  visit (`HoverSpeech`). Decision: one fixed delay; the reference offers a delay slider. The shell's chrome and built-in
+  windows are not spoken yet (they publish no node frames).
+- **Audio graphs for apps.** `sdk::audio_graph::play(ctx, chart, series)` sends `ChartDescriptor::audio_graph` tones to the
+  `audio_graph` service (`services/audio_graph.rs`): at most 512 tones, 1 to 2000 ms, pitch 0 (rest) or 20 to 8000 Hz,
+  a minute in all, only from the app in front; one graph is queued and a newer one or `stop` replaces it. The binary
+  renders it (`shell::audio_graph::pcm`) and plays it on the sound-effects role (`AudioJob::Graph`,
+  `SoundPlayer::audio_graph`). The reference's `AXDataSeriesDescriptor`, `AXNumericDataAxisDescriptor` and `AXScaleType`
+  (linear 0, log10 1, ln 2) describe the same data; there the screen reader starts the graph, here the app does.
+- **Kit groups.** `widgets::menu` (a "Menu" list of `MenuItem` rows, "checked" value, separators skipped; before, a kit
+  menu published nothing), `segmented` (one button per segment, "selected"), `path_bar`, `player`, `candidate_list` and
+  `mini_month` (month buttons and days, "today"/"selected") open an ax group, so their parts nest like the sidebar's.
+- **Chrome presses.** The shell chrome on the AT-SPI bus can be pressed: `atspi::sync` returns chrome presses and
+  `Shell::ax_chrome_press` runs the menu row (`ax_menu_press`), opens the dock app or shows the search field
+  (`atspi::model::chrome_target`). The search field still has no live text.
 
 ### Accessibility bridge (AT-SPI2)
 
