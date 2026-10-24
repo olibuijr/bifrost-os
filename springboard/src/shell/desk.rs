@@ -375,6 +375,13 @@ pub struct Desk {
     /// the windows Show Desktop put aside: `minimized`, but not in the Dock's minimized section; Show Desktop again or
     /// Bring All to Front brings them back (N13)
     pub(super) put_aside: Vec<AppId>,
+    /// the window server's toplevels (native and Linux apps) Show Desktop minimized, in the order they come back (the
+    /// active one last, so it is in front again); Show Desktop again or Bring All to Front activates them (R3)
+    #[cfg(feature = "desktop-wayland")]
+    pub(super) foreign_aside: Vec<u32>,
+    /// the window server's toplevels to minimize this round (`take_native_minimizes`)
+    #[cfg(feature = "desktop-wayland")]
+    minimize: Vec<u32>,
     /// where each app's window was when it was last closed: a window opened again comes back there (W2-26), as an app's
     /// autosaved frame does, instead of at the window server's next cascade position
     pub(super) closed_origins:std::collections::HashMap<AppId,(i32,i32)>,
@@ -907,7 +914,8 @@ impl Desk {
     }
 
     /// Show Desktop: every shown window is put aside (minimized without a Dock slot) and remembered, so the desktop
-    /// shows; returns whether a window went. Windows put aside earlier stay aside.
+    /// shows; returns whether a window went. Windows put aside earlier stay aside. The window server's toplevels go
+    /// too (R3): each shown one is minimized and remembered; one already minimized (by the person or Hide) stays as it is.
     pub(super) fn put_windows_aside(&mut self) -> bool {
         let mut any = false;
         for w in self.wins.iter_mut().filter(|w| !w.minimized) {
@@ -917,7 +925,37 @@ impl Desk {
             }
             any = true;
         }
+        #[cfg(feature = "desktop-wayland")]
+        {
+            let mut shown: Vec<(bool, u32)> = self.foreign_shown().map(|w| (w.active, w.id)).collect();
+            // stable: the active window is put aside last, so it is activated last and comes back in front
+            shown.sort_by_key(|(active, _)| *active);
+            for (_, id) in shown {
+                self.foreign_aside.push(id);
+                self.minimize.push(id);
+                any = true;
+            }
+        }
         any
+    }
+
+    /// The window server's toplevels that are on screen: not minimized (one put aside counts as gone at once, before
+    /// the window server reports it minimized).
+    #[cfg(feature = "desktop-wayland")]
+    pub(super) fn foreign_shown(&self) -> impl Iterator<Item = &crate::bare::wayland::ForeignWindow> {
+        self.native_windows
+            .iter()
+            .chain(self.linux_apps.iter().flat_map(|a| a.windows.iter()))
+            .filter(move |w| !w.minimized && !self.foreign_aside.contains(&w.id))
+    }
+
+    /// Whether any window is on screen: a shown built-in window or a shown toplevel of the window server.
+    pub(super) fn any_shown(&self) -> bool {
+        #[cfg(feature = "desktop-wayland")]
+        if self.foreign_shown().next().is_some() {
+            return true;
+        }
+        self.wins.iter().any(|w| !w.minimized)
     }
 
     /// The windows Show Desktop put aside come back where they were in the stack; returns whether one came back. A
@@ -928,6 +966,18 @@ impl Desk {
         for w in self.wins.iter_mut().filter(|w| w.minimized && back.contains(&w.app)) {
             w.minimized = false;
             any = true;
+        }
+        // the window server's toplevels put aside come back by activation (it unminimizes and raises them); one closed
+        // since is skipped
+        #[cfg(feature = "desktop-wayland")]
+        {
+            let back = std::mem::take(&mut self.foreign_aside);
+            let still: Vec<u32> = back
+                .into_iter()
+                .filter(|id| self.native_windows.iter().chain(self.linux_apps.iter().flat_map(|a| a.windows.iter())).any(|w| w.id == *id))
+                .collect();
+            any |= !still.is_empty();
+            self.activate.extend(still);
         }
         any
     }
@@ -1611,6 +1661,11 @@ impl Shell {
     #[cfg(feature = "desktop-wayland")]
     pub fn take_native_activations(&mut self) -> Vec<u32> {
         self.desk.as_mut().map(|d|std::mem::take(&mut d.activate)).unwrap_or_default()
+    }
+    /// The window server's toplevels to minimize (Show Desktop puts them aside, R3).
+    #[cfg(feature = "desktop-wayland")]
+    pub fn take_native_minimizes(&mut self) -> Vec<u32> {
+        self.desk.as_mut().map(|d|std::mem::take(&mut d.minimize)).unwrap_or_default()
     }
     #[cfg(feature = "desktop-wayland")]
     pub fn wayland_foreign_windows(&mut self,windows:Vec<crate::bare::wayland::ForeignWindow>) {
@@ -2538,7 +2593,7 @@ impl Shell {
     /// Show Desktop (Window menu, hot corner, gesture): puts every shown window aside to show the desktop; with none
     /// shown and windows aside, it is the opposite command and brings them back (N13).
     pub(super) fn desk_show_desktop(&mut self) {
-        let any_shown = self.desk.as_ref().is_some_and(|d| d.wins.iter().any(|w| !w.minimized));
+        let any_shown = self.desk.as_ref().is_some_and(|d| d.any_shown());
         if !any_shown && self.desk.as_mut().is_some_and(|d| d.bring_back_put_aside()) {
             if let Some(d) = self.desk.as_mut() {
                 d.raise_front = true;
@@ -6061,6 +6116,73 @@ mod w4_window_tests {
         sh.desk_bring_all_to_front();
         assert!(!minimized(&sh, AppId::Settings) && !minimized(&sh, AppId::Photos));
         assert_eq!(sh.desk.as_ref().unwrap().front().map(|w| w.app), Some(AppId::Photos));
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    fn with_native(sh: &mut crate::shell::Shell, windows: &[(u32, bool)]) {
+        sh.desk.as_mut().unwrap().native_windows = windows
+            .iter()
+            .map(|&(id, active)| crate::bare::wayland::ForeignWindow { id, title: "Film".into(), app_id: format!("x.app{id}"), active, maximized: false, minimized: false })
+            .collect();
+    }
+
+    /// The window server reports the toplevels `ids` minimized (or shown again).
+    #[cfg(feature = "desktop-wayland")]
+    fn report_minimized(sh: &mut crate::shell::Shell, ids: &[u32], minimized: bool) {
+        for w in sh.desk.as_mut().unwrap().native_windows.iter_mut().filter(|w| ids.contains(&w.id)) {
+            w.minimized = minimized;
+        }
+    }
+
+    /// R3: Show Desktop puts the window server's toplevels (a native app's window) aside with the shell's windows, and
+    /// a second Show Desktop brings them back, the window that was active last so it is in front again.
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn show_desktop_puts_native_windows_aside_and_brings_them_back() {
+        let mut sh = desktop();
+        sh.desk_open(AppId::Settings, 0.0);
+        with_native(&mut sh, &[(7, true), (8, false)]);
+        sh.desk_show_desktop();
+        assert!(minimized(&sh, AppId::Settings));
+        assert_eq!(sh.take_native_minimizes(), vec![8, 7], "both native windows are minimized, the active one last");
+        report_minimized(&mut sh, &[7, 8], true);
+        sh.desk_show_desktop();
+        assert!(!minimized(&sh, AppId::Settings), "the shell's window came back");
+        assert_eq!(sh.take_native_activations(), vec![8, 7], "the native windows come back, the active one in front");
+        assert!(sh.take_native_minimizes().is_empty());
+    }
+
+    /// R3: with only a native window on screen, Show Desktop is not taken for an empty desktop: it puts the window
+    /// aside, and a native window the person minimized is left alone. A window put aside counts as gone at once, so
+    /// the toggle works before the window server reports it minimized, and going home twice minimizes it once.
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn show_desktop_with_only_a_native_window_toggles_it() {
+        let mut sh = desktop();
+        with_native(&mut sh, &[(7, true), (9, false)]);
+        report_minimized(&mut sh, &[9], true);
+        sh.desk_show_desktop();
+        assert_eq!(sh.take_native_minimizes(), vec![7], "the minimized window is left alone");
+        sh.desk_show_desktop();
+        assert_eq!(sh.take_native_activations(), vec![7], "only the window Show Desktop put aside comes back");
+        sh.desk_put_windows_aside();
+        sh.desk_put_windows_aside();
+        assert_eq!(sh.take_native_minimizes(), vec![7], "put aside once");
+    }
+
+    /// R3: after Show Desktop, Bring All to Front brings the native windows back too.
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn bring_all_to_front_brings_back_native_windows_put_aside() {
+        let mut sh = desktop();
+        sh.desk_open(AppId::Settings, 0.0);
+        with_native(&mut sh, &[(7, false)]);
+        sh.desk_show_desktop();
+        assert_eq!(sh.take_native_minimizes(), vec![7]);
+        report_minimized(&mut sh, &[7], true);
+        sh.desk_bring_all_to_front();
+        assert!(!minimized(&sh, AppId::Settings));
+        assert_eq!(sh.take_native_activations(), vec![7]);
     }
 
     /// N13: going home on the desktop (the assistive Home, a Screen Time block) only ever puts the windows aside; it

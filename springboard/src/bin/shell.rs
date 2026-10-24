@@ -1295,6 +1295,8 @@ fn run() -> std::io::Result<()> {
         }
         effects.extend(shell.tick(vt));
         #[cfg(feature = "desktop-wayland")]
+        effects.extend(shell.take_native_minimizes().into_iter().map(|id| Effect::ForeignWindowAction(id, true)));
+        #[cfg(feature = "desktop-wayland")]
         effects.extend(shell.take_native_activations().into_iter().map(Effect::ActivateForeign));
         // pictures of windows asked for this round go out before the frames are published, while the window server still has
         // a window that is being minimized or closed
