@@ -1009,6 +1009,11 @@ impl Font<'_> {
         self.render_glyphs(&[gid], st, &[])
     }
 
+    /// Renders one glyph by id at a variation instance (the default instance for a static font).
+    pub fn render_glyph_var(&self, gid: u16, st: &Style, vars: &[Var]) -> Image {
+        self.render_glyphs(&[gid], st, &self.normalized(vars))
+    }
+
     fn render_glyphs(&self, gids: &[u16], st: &Style, norm: &[f32]) -> Image {
         self.render_with(gids, st, norm, true)
     }

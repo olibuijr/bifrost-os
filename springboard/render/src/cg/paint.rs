@@ -320,6 +320,25 @@ pub enum Function {
     Exponential { domain: (f32, f32), c0: Vec<f32>, c1: Vec<f32>, n: f32 },
     /// Several functions over consecutive subdomains, each fed its input remapped by `encode`.
     Stitching { domain: (f32, f32), functions: Vec<Function>, bounds: Vec<f32>, encode: Vec<(f32, f32)> },
+    /// An app's own evaluation (`CGFunctionCreate` with an evaluate callback): `outputs` values per input, each
+    /// clamped to its `range` pair when one is given.
+    Callback { domain: (f32, f32), outputs: usize, range: Option<Vec<(f32, f32)>>, evaluate: Evaluator },
+}
+
+/// The evaluate callback of a [`Function::Callback`]. Two evaluators are equal only when they are the same callback.
+#[derive(Clone)]
+pub struct Evaluator(pub std::sync::Arc<dyn Fn(f32) -> Vec<f32> + Send + Sync>);
+
+impl std::fmt::Debug for Evaluator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Evaluator(..)")
+    }
+}
+
+impl PartialEq for Evaluator {
+    fn eq(&self, o: &Evaluator) -> bool {
+        std::sync::Arc::ptr_eq(&self.0, &o.0)
+    }
 }
 
 fn valid_domain(d: (f32, f32)) -> bool {
@@ -363,9 +382,33 @@ impl Function {
         Some(Function::Stitching { domain, functions, bounds, encode })
     }
 
+    /// A function evaluated by `evaluate` (`CGFunctionCreate`): one input over `domain`, `outputs` values. `range`,
+    /// when given, has one (min, max) pair per output and clamps what the callback returns. A callback that returns
+    /// too few values is padded with zeros and one that returns too many is cut. `None` for an invalid domain, no
+    /// outputs, or a range of the wrong length or with a min above its max.
+    pub fn callback(
+        domain: (f32, f32),
+        outputs: usize,
+        range: Option<Vec<(f32, f32)>>,
+        evaluate: impl Fn(f32) -> Vec<f32> + Send + Sync + 'static,
+    ) -> Option<Function> {
+        if !valid_domain(domain) || outputs == 0 {
+            return None;
+        }
+        if let Some(r) = &range {
+            if r.len() != outputs || r.iter().any(|(lo, hi)| !(lo.is_finite() && hi.is_finite() && lo <= hi)) {
+                return None;
+            }
+        }
+        Some(Function::Callback { domain, outputs, range, evaluate: Evaluator(std::sync::Arc::new(evaluate)) })
+    }
+
     pub fn domain(&self) -> (f32, f32) {
         match self {
-            Function::Sampled { domain, .. } | Function::Exponential { domain, .. } | Function::Stitching { domain, .. } => *domain,
+            Function::Sampled { domain, .. }
+            | Function::Exponential { domain, .. }
+            | Function::Stitching { domain, .. }
+            | Function::Callback { domain, .. } => *domain,
         }
     }
 
@@ -375,6 +418,7 @@ impl Function {
             Function::Sampled { outputs, .. } => *outputs,
             Function::Exponential { c0, .. } => c0.len(),
             Function::Stitching { functions, .. } => functions[0].outputs(),
+            Function::Callback { outputs, .. } => *outputs,
         }
     }
 
@@ -402,6 +446,19 @@ impl Function {
                 let (e0, e1) = encode[i];
                 let xe = if hi > lo { e0 + (x - lo) / (hi - lo) * (e1 - e0) } else { e0 };
                 functions[i].eval(xe)
+            }
+            Function::Callback { outputs, range, evaluate, .. } => {
+                let mut out = (evaluate.0)(x);
+                out.resize(*outputs, 0.0);
+                for (i, v) in out.iter_mut().enumerate() {
+                    if !v.is_finite() {
+                        *v = 0.0;
+                    }
+                    if let Some((lo, hi)) = range.as_ref().and_then(|r| r.get(i)) {
+                        *v = v.clamp(*lo, *hi);
+                    }
+                }
+                out
             }
         }
     }
@@ -924,6 +981,28 @@ mod tests {
         let g = Function::stitching((0.0, 1.0), vec![c.clone(), c], vec![0.5], vec![(0.0, 1.0), (1.0, 0.0)]).unwrap();
         assert!((g.eval(0.75)[0] - 0.5).abs() < 1e-6);
         assert!(Function::stitching((0.0, 1.0), vec![], vec![], vec![]).is_none());
+    }
+
+    #[test]
+    fn callback_function_evaluates_clamps_and_pads() {
+        // red rises with the input; the callback returns one value too few and an out-of-range green
+        let f = Function::callback((0.0, 2.0), 3, Some(vec![(0.0, 1.0), (0.0, 0.5), (0.0, 1.0)]), |x| vec![x / 2.0, 3.0]).unwrap();
+        assert_eq!(f.outputs(), 3);
+        assert_eq!(f.domain(), (0.0, 2.0));
+        assert_eq!(f.eval(1.0), vec![0.5, 0.5, 0.0]);
+        assert_eq!(f.eval(9.0)[0], 1.0, "the input clamps to the domain");
+        let nan = Function::callback((0.0, 1.0), 1, None, |_| vec![f32::NAN]).unwrap();
+        assert_eq!(nan.eval(0.5), vec![0.0]);
+        assert!(Function::callback((1.0, 0.0), 1, None, |x| vec![x]).is_none());
+        assert!(Function::callback((0.0, 1.0), 2, Some(vec![(0.0, 1.0)]), |x| vec![x]).is_none());
+        assert_eq!(f.clone(), f, "a copy shares the callback");
+        let g = Function::callback((0.0, 2.0), 3, None, |x| vec![x / 2.0, 3.0]).unwrap();
+        assert_ne!(f, g, "different callbacks are different functions");
+        // it works as a shading's function
+        let s = Shading::axial(&ColorSpace::Srgb, (0.0, 0.0), (10.0, 0.0), Function::callback((0.0, 1.0), 3, None, |t| vec![t, 0.0, 0.0]).unwrap(), true, true)
+            .unwrap();
+        let far = s.shade_rgba(10.0, 0.0).unwrap();
+        assert!(far[0] > 240 && far[1] < 10, "{far:?}");
     }
 
     #[test]
