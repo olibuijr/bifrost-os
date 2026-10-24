@@ -2947,8 +2947,6 @@ impl MailWindow {
         sync::spawn(self.tx.clone(), self.wake_clone(), move || sync::search(transport.as_ref(), &account, &password, &mailbox, &query, &criteria));
     }
 
-    /// Sends the message now, or queues it: Send Later (the "Send in" field) waits as long as it says, and the undo-send
-    /// delay of the settings holds every message back for a few seconds. A queued message goes out from `run_queue`.
     /// A Send that did not go out: the reason goes on the compose sheet, so it shows in the window of the message it is
     /// about rather than in the main window's footer. With no compose sheet open it goes to the footer.
     fn compose_failed(&mut self, reason: String) {
@@ -2958,6 +2956,8 @@ impl MailWindow {
         }
     }
 
+    /// Sends the message now, or queues it: Send Later (the "Send in" field) waits as long as it says, and the undo-send
+    /// delay of the settings holds every message back for a few seconds. A queued message goes out from `run_queue`.
     fn send(&mut self, compose: &Compose) {
         if let Some(Sheet::Compose(open)) = &mut self.mail.sheet {
             open.error.clear();
