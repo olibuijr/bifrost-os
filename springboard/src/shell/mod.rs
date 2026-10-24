@@ -641,6 +641,8 @@ pub struct Shell {
     /// the login window over the lock screen, the root helper behind it and the unlocked session's token
     login: Option<login::Login>,
     login_backend: Option<std::sync::Arc<dyn login::Backend>>,
+    /// a lock found no login service and said so in the journal (once per lock, see `login_open_window`)
+    login_missing_logged: bool,
     session_token: Option<String>,
     /// Screen Time: today's usage, the Time Limit cover, and per-second gates
     screentime: screentime::usage::Tracker,
@@ -1200,6 +1202,7 @@ impl Shell {
             lock_pad: None,
             login: None,
             login_backend: login::Privd::from_env().map(|p| std::sync::Arc::new(p) as std::sync::Arc<dyn login::Backend>),
+            login_missing_logged: false,
             session_token: None,
             screentime: screentime::usage::Tracker::new(deildu::data_dir().parent().map(|p| p.join("screentime")).unwrap_or_default()),
             shield: None,
@@ -3336,7 +3339,22 @@ impl Shell {
         {
             self.utility = None;
             self.utility_dirty = true;
+            // the share menu's compose sheet is the shell's own: the lock cancels it (the sender hears an empty target)
+            self.compose_done(false);
         }
+        // the shell's other layers that hold the keyboard go with the lock too (E2E N0: with one up, `hw_type` returned
+        // before the lock screen's keys and the login window got none): the character viewer, the assistant panel, the
+        // preview panel, an open menu and the sheets' own surface. An app's open or save panel and its password sheets
+        // wait under the lock instead (their app still expects an answer); the lock screen takes the keys before them.
+        self.char_viewer = None;
+        self.assistant.hide();
+        self.quick_look_hide();
+        if self.desktop_menu != Some(desktop_bar::Menu::Document) {
+            self.desktop_menu = None;
+            self.desktop_menu_row = None;
+        }
+        self.modal_layer = None;
+        self.drawn = Drawn::Nothing;
         self.screen_on = false;
         self.screen = Screen::Lock;
         self.lock_pad = None;

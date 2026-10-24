@@ -1369,6 +1369,93 @@
         assert_eq!(sh.session_token.as_deref(), Some("tok2"));
     }
 
+    /// A desktop signed in, unlocked, with a login backend that takes any password, as the E2E N0 session had.
+    #[cfg(test)]
+    fn signed_in_desktop() -> Shell {
+        let mut sh = desktop_shell();
+        sh.login_backend = Some(std::sync::Arc::new(FixedLogin(login::Reply::Ok("tok2".into()))));
+        sh.screen = Screen::Home;
+        sh.anim = None;
+        sh.session_token = Some("tok".into());
+        sh
+    }
+
+    /// E2E N0, the chord path: Ctrl+Cmd+Q with one of the shell's layers that hold the keyboard up (the character viewer,
+    /// the assistant panel, the sheets' surface) left it over the lock screen, and `hw_type` returned before the lock
+    /// screen's keys: no dot, no unlock. The lock closes them and the login window takes the typing.
+    #[test]
+    fn ctrl_cmd_q_with_a_keyboard_layer_up_still_types_into_the_login_window() {
+        let mut sh = signed_in_desktop();
+        sh.char_viewer_open();
+        sh.modal_layer = Some(capture_flow::Layer { x: 0, y: 0, image: Image::new(1, 1), input: None });
+        sh.hw_shortcut(hwkeys::Shortcut::Lock, 1000.0);
+        assert!(sh.is_locked(), "Ctrl+Cmd+Q locks");
+        assert!(sh.screen_on, "a desktop lock keeps the display on");
+        assert!(sh.char_viewer.is_none(), "the character viewer goes with the lock");
+        assert!(sh.modal_layer.is_none(), "the sheets' surface goes with the lock");
+        assert!(!sh.assistant.is_shown(), "the assistant panel goes with the lock");
+        assert!(sh.login_open(), "the login window is up at once");
+        sh.hw_type(keyboard::Out::Text("p".into()), 1010.0);
+        sh.hw_type(keyboard::Out::Text("w".into()), 1020.0);
+        assert_eq!(sh.login.as_ref().map(login::Login::len), Some(2), "typing shows dots");
+    }
+
+    /// An app's password sheet (or open or save panel, or alert) waits under the lock, as its app still expects an
+    /// answer, but the lock screen takes the keys before it: they reach the login window, never the app's field.
+    #[test]
+    fn an_apps_password_sheet_under_the_lock_leaves_the_keys_to_the_login_window() {
+        let mut sh = signed_in_desktop();
+        let sheet = wifi_page::Sheet::form(&sh.ui, sh.w, 0.0, auth_sheet::prompt_for("Notes", "unlock a note", 0));
+        sh.auth_sheet = Some(auth_sheet::AuthSheet { app: "Notes".into(), reason: "unlock a note".into(), attempt: 0, sheet });
+        sh.lock_screen();
+        sh.hw_type(keyboard::Out::Text("p".into()), 1010.0);
+        sh.hw_type(keyboard::Out::Text("w".into()), 1020.0);
+        assert_eq!(sh.login.as_ref().map(login::Login::len), Some(2), "the login window gets the typing");
+        assert!(sh.auth_sheet.is_some(), "the app's sheet is still there for after the unlock");
+    }
+
+    /// An open menu is closed by the lock, and neither the menu-key path nor Overview's keys run over the lock screen
+    /// (the binary sends keys there before `hw_type`).
+    #[test]
+    fn menus_and_overview_keys_never_run_over_the_lock_screen() {
+        let mut sh = signed_in_desktop();
+        sh.desktop_menu = Some(desktop_bar::Menu::File);
+        sh.lock_screen();
+        assert!(sh.desktop_menu.is_none(), "an open menu closes with the lock");
+        assert_eq!(sh.hw_menu_key(28, true, 1010.0), None, "Return is not a menu key on the lock screen");
+        let mods = overview::KeyMods { ctrl: false, cmd: false, shift: false };
+        assert!(!sh.hw_overview_key(overview::KEY_F3, true, mods, false, 1010.0), "F3 does not open Overview over the lock");
+        assert!(sh.login_open());
+    }
+
+    /// A locked desktop whose display went dark (idle) wakes on a key, and the key goes to the login window.
+    #[test]
+    fn a_key_wakes_a_dark_locked_desktop_into_the_login_window() {
+        let mut sh = signed_in_desktop();
+        sh.lock_screen();
+        sh.screen_on = false;
+        let fx = sh.hw_type(keyboard::Out::Text("p".into()), 1010.0);
+        assert!(sh.screen_on, "the key turns the display on");
+        assert!(fx.contains(&Effect::ScreenOn));
+        assert_eq!(sh.login.as_ref().map(login::Login::len), Some(1), "and types into the login window");
+    }
+
+    /// A lock that finds no login service says so once (`login_missing_logged`) and opens the window on a later key once
+    /// the service is there, instead of leaving the lock screen with no way in.
+    #[test]
+    fn a_lock_without_a_login_service_is_logged_and_retried_on_the_next_key() {
+        let mut sh = signed_in_desktop();
+        sh.login_backend = None;
+        sh.lock_screen();
+        assert!(!sh.login_open(), "no service, no window");
+        assert!(sh.login_missing_logged, "the failed open is logged");
+        sh.login_backend = Some(std::sync::Arc::new(FixedLogin(login::Reply::Ok("tok2".into()))));
+        sh.hw_type(keyboard::Out::Text("p".into()), 1010.0);
+        assert!(sh.login_open(), "the next key opens the window");
+        assert!(!sh.login_missing_logged);
+        assert_eq!(sh.login.as_ref().map(login::Login::len), Some(1));
+    }
+
     #[test]
     fn tablet_lock_screen_still_turns_the_screen_off() {
         let mut sh = shell();
