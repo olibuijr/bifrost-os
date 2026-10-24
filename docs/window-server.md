@@ -266,8 +266,15 @@ desktop a lone Cmd does nothing (`HwKeys::set_desktop`), so such a chord no long
 | F4 | sends `appgrid` to the shell control socket (the Apps grid opens or closes) |
 | Alt+Tab | focuses the lowest shown window, so repeated presses walk the stack |
 | Alt+F4 | closes the focused toplevel |
-| Ctrl+Super+Left / Right | tiles to a half |
-| Ctrl+Super+Up / Down | maximizes / centres at the previous size |
+| Ctrl+Super+Left / Right | sends `tile left` / `tile right` to the shell control socket: the shell tiles the window it shows as front to a half |
+| Ctrl+Super+Up / Down | sends `tile fill` / `tile center`: the shell fills its front window / centres it at the previous size |
+
+The shell, not the focus, picks the window the Ctrl+Super arrows arrange (E2E N2, 2026-10-24): the Window menu's
+Left Half, Right Half, Fill, Center and Return to Previous Size act on the same window. That is the other client's
+window the window server reports active (a native app's), else the shell's top window. A shell window is placed with
+`bifrost_window_level_v1` `tile`; another client's window with `tile_toplevel` (version 7), named by the
+wlr-foreign-toplevel handle the shell holds. The window server places the focused window itself only when the
+shell's control socket does not answer.
 | Ctrl+Super+F | full screen on / off for the focused window |
 
 ## Window frames reported to the shell (2026-10-19)

@@ -551,6 +551,15 @@ impl Shell {
         Vec::new()
     }
 }
+/// The other clients' windows the Window menu lists: those of the app in front only (the app of the window the window
+/// server reports active, once each), as the menu of a shell app lists only that app's windows. With no such window in
+/// front the list is empty and the menu lists the front shell app's windows instead.
+#[cfg(feature="desktop-wayland")]
+pub(super) fn front_app_foreign_windows<'a>(windows:impl Iterator<Item=&'a crate::bare::wayland::ForeignWindow>+Clone)->Vec<&'a crate::bare::wayland::ForeignWindow> {
+    let Some(front)=windows.clone().find(|w|w.active) else {return Vec::new()};
+    let mut seen=std::collections::HashSet::new();
+    windows.filter(|w|w.app_id==front.app_id&&seen.insert(w.id)).collect()
+}
 #[cfg(feature="desktop-wayland")]
 impl Shell {
     /// A bar label fitted into `max_px` (`Ui::fit`), from the chrome text cache.
@@ -895,7 +904,7 @@ impl Shell {
             // Window: Minimize and Zoom (also in File), Bring All to Front, then every open window by name, the front one checked.
             // Bring All to Front is on whenever there is a window, and the halves and Center are on in the window server's
             // session too: the shell asks it to place the window (`desk_tile_window`), as the green button's menu does (E2E-15)
-            Menu::Window=>{let Some(d)=self.desk.as_ref() else{return Vec::new();};let enabled=self.foreign_active().is_some()||d.front().is_some();let front=d.front().map(|w|w.app);let mut rows=vec![(if enabled{Row::action("Minimize",Action::Minimize)}else{Row::label("Minimize")}).key("cmd+m"),if enabled{Row::action("Zoom",Action::Zoom)}else{Row::label("Zoom")},self.full_screen_row(),Row::separator(),if !d.wins.is_empty(){Row::action("Bring All to Front",Action::ShowAll)}else{Row::label("Bring All to Front")},Row::action("Show Desktop",Action::Desktop)];let tile_on=self.foreign_active().is_none()&&d.front().is_some();rows.push(Row::separator());rows.extend([("Left Half",super::desk::Tile::Left,"ctrl+cmd+left"),("Right Half",super::desk::Tile::Right,"ctrl+cmd+right"),("Fill",super::desk::Tile::Fill,"ctrl+cmd+up"),("Center",super::desk::Tile::Center,"ctrl+cmd+down")].map(|(l,t,k)|if tile_on{Row::action(l,Action::Tile(t)).key(k)}else{Row::label(l).key(k)}));rows.push(if tile_on{Row::action("Return to Previous Size",Action::RestoreSize)}else{Row::label("Return to Previous Size")});rows.push(if d.wins.len()>=2{Row::action("Next Window",Action::CycleWindow).key("cmd+`")}else{Row::label("Next Window")});let front_parent=d.front().map(|w|w.app.parent());let mut open:Vec<(String,super::AppId)>=d.wins.iter().filter(|w|Some(w.app.parent())==front_parent).map(|w|(self.window_menu_name(w.app),w.app)).collect();open.sort_by_key(|(name,_)|name.to_lowercase());let foreign:Vec<&crate::bare::wayland::ForeignWindow>=d.native_windows.iter().chain(d.linux_apps.iter().flat_map(|a|a.windows.iter())).collect();if !open.is_empty()||!foreign.is_empty(){rows.push(Row::separator());}rows.extend(open.into_iter().take(12).map(|(name,app)|Row::action(format!("{} {}",if front==Some(app)&&self.foreign_active().is_none(){"✓"}else{" "},name),Action::Open(app))));rows.extend(foreign.into_iter().take(12).map(|w|Row::action(format!("{} {}",if w.active{"✓"}else{" "},self.fit_chrome(if w.title.is_empty(){w.app_id.as_str()}else{w.title.as_str()},13.,self.ui.pt(300.))),Action::Foreign(w.id))));rows},
+            Menu::Window=>{let Some(d)=self.desk.as_ref() else{return Vec::new();};let enabled=self.foreign_active().is_some()||d.front().is_some();let front=d.front().map(|w|w.app);let mut rows=vec![(if enabled{Row::action("Minimize",Action::Minimize)}else{Row::label("Minimize")}).key("cmd+m"),if enabled{Row::action("Zoom",Action::Zoom)}else{Row::label("Zoom")},self.full_screen_row(),Row::separator(),if !d.wins.is_empty(){Row::action("Bring All to Front",Action::ShowAll)}else{Row::label("Bring All to Front")},Row::action("Show Desktop",Action::Desktop)];let tile_on=self.foreign_active().is_some()||d.front().is_some();rows.push(Row::separator());rows.extend([("Left Half",super::desk::Tile::Left,"ctrl+cmd+left"),("Right Half",super::desk::Tile::Right,"ctrl+cmd+right"),("Fill",super::desk::Tile::Fill,"ctrl+cmd+up"),("Center",super::desk::Tile::Center,"ctrl+cmd+down")].map(|(l,t,k)|if tile_on{Row::action(l,Action::Tile(t)).key(k)}else{Row::label(l).key(k)}));rows.push(if tile_on{Row::action("Return to Previous Size",Action::RestoreSize)}else{Row::label("Return to Previous Size")});rows.push(if d.wins.len()>=2{Row::action("Next Window",Action::CycleWindow).key("cmd+`")}else{Row::label("Next Window")});let foreign=front_app_foreign_windows(d.native_windows.iter().chain(d.linux_apps.iter().flat_map(|a|a.windows.iter())));let front_parent=if foreign.is_empty(){d.front().map(|w|w.app.parent())}else{None};let mut open:Vec<(String,super::AppId)>=d.wins.iter().filter(|w|Some(w.app.parent())==front_parent).map(|w|(self.window_menu_name(w.app),w.app)).collect();open.sort_by_key(|(name,_)|name.to_lowercase());if !open.is_empty()||!foreign.is_empty(){rows.push(Row::separator());}rows.extend(open.into_iter().take(12).map(|(name,app)|Row::action(format!("{} {}",if front==Some(app)&&self.foreign_active().is_none(){"✓"}else{" "},name),Action::Open(app))));rows.extend(foreign.into_iter().take(12).map(|w|Row::action(format!("{} {}",if w.active{"✓"}else{" "},self.fit_chrome(if w.title.is_empty(){w.app_id.as_str()}else{w.title.as_str()},13.,self.ui.pt(300.))),Action::Foreign(w.id))));rows},
             Menu::File=>{let enabled=self.foreign_active().is_some()||self.desk.as_ref().and_then(|d|d.front()).is_some();
             // an app that keeps Cmd+W for its own Close Tab leaves the window the shifted chord (Close Window is Shift+Cmd+W then)
             let close_key=if self.app_owns_close(){"cmd+shift+w"}else{"cmd+w"};let mut rows=vec![(if enabled{Row::action("Close Window",Action::Close)}else{Row::label("Close Window")}).key(close_key),(if enabled{Row::action("Minimize Window",Action::Minimize)}else{Row::label("Minimize Window")}).key("cmd+m"),if enabled {Row::action("Maximize / Restore Window",Action::Zoom)}else{Row::label("Maximize / Restore Window")}];if self.term_front(){rows.splice(0..0,[Row::action("New Tab",Action::Term(TermKey::NewTab)).key("cmd+t"),Row::separator()]);rows[2]=Row::action("Close Tab",Action::Term(TermKey::CloseTab)).key("cmd+w");}if self.foreign_active().is_none(){rows.push(Row::separator());rows.push((if enabled{Row::action("Print\u{2026}",Action::Print)}else{Row::label("Print\u{2026}")}).key("cmd+p"));}rows},
@@ -1399,8 +1408,8 @@ impl Shell {
                     Action::QuickAction(slot,index)=>{if let Some(item)=self.quick_actions_for(slot as usize).get(index as usize).cloned(){self.record_quick_action(slot as usize,&item.kind);if let Some(Some(h))=self.ext.get_mut(slot as usize){h.send(&bifrost_proto::ToApp::QuickAction{kind:item.kind,user_info:item.user_info});}}},
                     Action::DockMenu(slot,id)=>{if let Some(Some(h))=self.ext.get_mut(slot as usize){h.send(&bifrost_proto::ToApp::ContextAction(id));}},
                     Action::Arrange(app,what)=>self.desk_arrange(app,what,t),
-                    Action::Tile(t)=>{if self.foreign_active().is_none(){self.desk_tile_front(t);}},
-                    Action::RestoreSize=>{if self.foreign_active().is_none(){self.desk_restore_front();}},
+                    Action::Tile(t)=>effects.extend(self.desk_tile_front(t)),
+                    Action::RestoreSize=>effects.extend(self.desk_restore_front()),
                     Action::CycleWindow=>{self.desk_cycle_window(false);let t=self.last_input;self.cmdtab_release(t);},
                     Action::Script(i)=>{if let Some(dir)=super::scripts_menu::folder(){if let Some(name)=super::scripts_menu::list(&dir).get(i as usize){if let Err(e)=super::scripts_menu::run(&dir,name){eprintln!("springboard: script {name}: {e}");}}}self.dirty=true;},
                     Action::InputSource(i)=>{if let Some(l)=super::kb_layouts::Layout::ALL.get(i as usize) {super::kb_layouts::set_active(*l);self.input_layout_selected(*l);self.show_input_source(*l,t);}self.dirty=true;},
@@ -3004,5 +3013,68 @@ mod window_menu_tests {
             let row = rows.iter().find(|r| r.text.trim() == want).unwrap_or_else(|| panic!("{want} is in the Window menu"));
             assert!(row.action.is_none(), "{want} has nothing to act on without a window");
         }
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    fn native(id: u32, title: &str, app_id: &str, active: bool) -> crate::bare::wayland::ForeignWindow {
+        crate::bare::wayland::ForeignWindow { id, title: title.into(), app_id: app_id.into(), active, maximized: false }
+    }
+
+    /// E2E N2 / W3-6: with a native app's window in front, the placements are enabled and act on that window (through
+    /// the window server, by its foreign toplevel), not on the shell window behind it; with the shell's window in front
+    /// they act on the shell's window and never send a placement for a native one.
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn the_placements_act_on_the_front_window_a_native_one_included() {
+        use super::Action;
+        use crate::bare::window_level_client::Placement;
+        use crate::shell::{desk::Tile, Effect};
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.screen = Screen::Home;
+        sh.anim = None;
+        sh.desk_open(AppId::Settings, 0.0);
+        sh.desk.as_mut().unwrap().native_windows = vec![native(7, "Film", "x.film", true)];
+        let rows = sh.menu_rows(Menu::Window);
+        for want in ["Left Half", "Right Half", "Fill", "Center", "Return to Previous Size"] {
+            let row = rows.iter().find(|r| r.text.trim() == want).unwrap_or_else(|| panic!("{want} is in the Window menu"));
+            assert!(row.action.is_some(), "{want} is enabled for a native window in front");
+        }
+        let before = sh.desk.as_ref().unwrap().wins.iter().find(|w| w.app == AppId::Settings).unwrap().r;
+        let fx = sh.run_menu_action(Action::Tile(Tile::Fill), 1000.0);
+        assert!(fx.contains(&Effect::ForeignWindowTile(7, Placement::Fill)), "Fill places the native window: {fx:?}");
+        let fx = sh.run_menu_action(Action::Tile(Tile::Left), 1100.0);
+        assert!(fx.contains(&Effect::ForeignWindowTile(7, Placement::Left)), "{fx:?}");
+        let fx = sh.run_menu_action(Action::RestoreSize, 1200.0);
+        assert!(fx.contains(&Effect::ForeignWindowTile(7, Placement::Previous)), "{fx:?}");
+        // Ctrl+Cmd+Right, which the window server sends as a `tile right` line, takes the same way
+        let fx = sh.hw_shortcut(crate::shell::hwkeys::Shortcut::tile(crate::bare::control::TileKey::Right), 1300.0);
+        assert!(fx.contains(&Effect::ForeignWindowTile(7, Placement::Right)), "{fx:?}");
+        assert_eq!(sh.desk.as_ref().unwrap().wins.iter().find(|w| w.app == AppId::Settings).unwrap().r, before, "the shell window behind is left alone");
+        // the shell's window in front again: no placement goes to the native window
+        sh.desk.as_mut().unwrap().native_windows[0].active = false;
+        let fx = sh.run_menu_action(Action::Tile(Tile::Left), 1400.0);
+        assert!(!fx.iter().any(|e| matches!(e, Effect::ForeignWindowTile(..))), "{fx:?}");
+    }
+
+    /// E2E N2: each app's Window menu lists only that app's windows: a native app in front lists its own windows and
+    /// neither the shell's nor another native app's; a shell app in front lists none of the native ones.
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn the_window_menu_lists_only_the_front_apps_windows() {
+        use super::Action;
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.screen = Screen::Home;
+        sh.anim = None;
+        sh.desk_open(AppId::Settings, 0.0);
+        sh.desk.as_mut().unwrap().native_windows = vec![native(7, "Film A", "x.film", true), native(8, "Film B", "x.film", false), native(9, "Other", "x.other", false)];
+        let rows = sh.menu_rows(Menu::Window);
+        let foreign = |rows: &[super::Row]| -> Vec<u32> { rows.iter().filter_map(|r| match r.action { Some(Action::Foreign(id)) => Some(id), _ => None }).collect() };
+        let shell_windows = |rows: &[super::Row]| rows.iter().filter(|r| matches!(r.action, Some(Action::Open(_)))).count();
+        assert_eq!(foreign(&rows), vec![7, 8], "the front native app's two windows only");
+        assert_eq!(shell_windows(&rows), 0, "no shell window under a native app");
+        sh.desk.as_mut().unwrap().native_windows[0].active = false;
+        let rows = sh.menu_rows(Menu::Window);
+        assert!(foreign(&rows).is_empty(), "a shell app's menu lists no native window");
+        assert!(rows.iter().any(|r| matches!(r.action, Some(Action::Open(AppId::Settings)))), "it lists its own");
     }
 }

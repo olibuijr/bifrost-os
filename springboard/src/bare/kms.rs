@@ -901,6 +901,12 @@ impl Display {
         if let Some(w) = &mut self.wayland { w.tile_window(id, placement)?; }
         Ok(())
     }
+    /// Asks the window server to place another client's window `id` (see `wayland::Display::tile_foreign`).
+    #[cfg(feature = "desktop-wayland")]
+    pub fn wayland_foreign_tile(&mut self, id: u32, placement: super::window_level_client::Placement) -> io::Result<()> {
+        if let Some(w) = &mut self.wayland { w.tile_foreign(id, placement)?; }
+        Ok(())
+    }
     #[cfg(feature = "desktop-wayland")]
     pub fn wayland_windows(&mut self, frames: Vec<super::wayland::WindowFrame>) -> io::Result<()> {
         if let Some(w) = &mut self.wayland { w.windows(frames)?; }

@@ -2764,10 +2764,46 @@ impl Shell {
     }
 
     pub(super) fn describe_ext(&self) -> String {
-        let run: Vec<&str> = self.ext.iter().flatten().filter(|h| h.running()).map(|h| h.id.as_str()).collect();
+        #[allow(unused_mut)]
+        let mut run: Vec<String> = self.ext.iter().flatten().filter(|h| h.running()).map(|h| h.id.clone()).collect();
+        // a native app the shell launched has no app host: its toplevels are the window server's, and it runs while it
+        // shows one (E2E N2: FilmCraft was missing from `apps_running` while it held the focus)
+        #[cfg(feature = "desktop-wayland")]
+        if let Some(d) = self.desk.as_ref() {
+            let installed = installed();
+            let manifests: Vec<(&str, &str, &str)> = installed.iter().map(|a| (a.manifest.id.as_str(), a.manifest.window.as_str(), a.manifest.wayland_app_id.as_str())).collect();
+            for id in native_running(&manifests, d.native_windows.iter().map(|w| w.app_id.as_str())) {
+                if !run.contains(&id) { run.push(id); }
+            }
+        }
+        let run: Vec<&str> = run.iter().map(String::as_str).collect();
         let controls: Vec<(&str, usize, u32)> = self.ext.iter().flatten().map(|h| (h.id.as_str(), h.controls.len(), h.commands.0)).collect();
-        ext_state_text(&run, &controls)
+        #[allow(unused_mut)]
+        let mut text = ext_state_text(&run, &controls);
+        // every other client's window the shell lists (native and Linux apps), so a test can see which one is active
+        #[cfg(feature = "desktop-wayland")]
+        if let Some(d) = self.desk.as_ref() {
+            text.push_str(&foreign_state_line(d.native_windows.iter().chain(d.linux_apps.iter().flat_map(|a| a.windows.iter()))));
+        }
+        text
     }
+}
+
+/// The installed native apps (`window = "native"`; `manifests` is id, window, Wayland app id) with a toplevel among
+/// `window_app_ids`, by manifest id, once each in manifest order.
+#[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+fn native_running<'a>(manifests: &[(&str, &str, &str)], window_app_ids: impl Iterator<Item = &'a str>) -> Vec<String> {
+    let shown: Vec<&str> = window_app_ids.collect();
+    manifests.iter().filter(|(_, window, app_id)| *window == "native" && !app_id.is_empty() && shown.contains(app_id)).map(|(id, ..)| id.to_string()).collect()
+}
+
+/// The `foreign_windows` line of the shell state text: each other client's window the shell lists as
+/// `app id:window id:active` (1 or 0), so a test sees which window holds the focus. Ends with a newline.
+#[cfg(feature = "desktop-wayland")]
+fn foreign_state_line<'a>(windows: impl Iterator<Item = &'a crate::bare::wayland::ForeignWindow>) -> String {
+    let mut seen = std::collections::HashSet::new();
+    let items: Vec<String> = windows.filter(|w| seen.insert(w.id)).map(|w| format!("{}:{}:{}", w.app_id, w.id, w.active as u8)).collect();
+    format!("foreign_windows={}\n", items.join(","))
 }
 
 /// The `apps_running` and `app_controls` lines of the shell state text (`controls` is app id, control count, command
@@ -3754,6 +3790,26 @@ mod ext_state_tests {
     #[test]
     fn state_text_with_no_apps_is_still_two_whole_lines() {
         assert_eq!(ext_state_text(&[], &[]), "apps_running=\napp_controls=\n");
+    }
+
+    /// E2E N2: a native app the shell launched runs while it shows a toplevel, though it has no app host.
+    #[test]
+    fn a_native_app_with_a_toplevel_is_running() {
+        use super::native_running;
+        let manifests = [("ai.film", "native", "ai.film"), ("is.notes", "sdk", ""), ("x.idle", "native", "x.idle"), ("x.blank", "native", "")];
+        assert_eq!(native_running(&manifests, ["ai.film", "ai.film", "org.linux.app"].into_iter()), vec!["ai.film".to_string()]);
+        assert!(native_running(&manifests, std::iter::empty()).is_empty(), "no toplevel, not running");
+        assert!(native_running(&manifests, [""].into_iter()).is_empty(), "an app without a Wayland id never matches");
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn the_foreign_windows_line_names_each_window_once_and_the_active_one() {
+        use crate::bare::wayland::ForeignWindow;
+        let w = |id, app_id: &str, active| ForeignWindow { id, title: "t, with a comma".into(), app_id: app_id.into(), active, maximized: false };
+        let windows = [w(7, "ai.film", true), w(9, "org.x", false), w(7, "ai.film", true)];
+        assert_eq!(super::foreign_state_line(windows.iter()), "foreign_windows=ai.film:7:1,org.x:9:0\n");
+        assert_eq!(super::foreign_state_line(std::iter::empty()), "foreign_windows=\n");
     }
 }
 

@@ -901,6 +901,11 @@ fn run() -> std::io::Result<()> {
                         effects.extend(shell.hw_shortcut(springboard::shell::hwkeys::Shortcut::LogOut, t));
                         b"ok\n".to_vec()
                     }
+                    // Ctrl+Cmd+arrows, taken by the window server: the shell arranges the window it shows as front
+                    Ok(Request::Tile(key)) => {
+                        effects.extend(shell.hw_shortcut(springboard::shell::hwkeys::Shortcut::tile(key), t));
+                        b"ok\n".to_vec()
+                    }
                     Ok(Request::Overview) => {
                         shell.overview_toggle(t);
                         b"ok\n".to_vec()
@@ -1323,6 +1328,8 @@ fn run() -> std::io::Result<()> {
                 #[cfg(feature = "desktop-wayland")]
                 #[cfg(feature="desktop-wayland")]
                 Effect::ForeignWindowMaximize(id,maximized)=>{if let Err(e)=disp.wayland_foreign_maximize(id,maximized){eprintln!("desktop maximize: {e}");}}
+                #[cfg(feature="desktop-wayland")]
+                Effect::ForeignWindowTile(id,placement)=>{if let Err(e)=disp.wayland_foreign_tile(id,placement){eprintln!("desktop window tile: {e}");}}
                 #[cfg(feature="desktop-wayland")]
                 Effect::ForeignWindowAction(id,minimize)=>{if let Err(e)=disp.wayland_foreign_action(id,minimize){eprintln!("desktop window command: {e}");}}
                 #[cfg(feature="desktop-wayland")]
