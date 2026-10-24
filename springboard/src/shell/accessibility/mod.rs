@@ -18,6 +18,7 @@ pub mod braille_out;
 pub mod dwell;
 pub mod earcons;
 pub mod guided;
+pub mod hover_speech;
 pub mod motion_cues;
 pub mod onscreen_keyboard;
 pub mod reader;
@@ -91,6 +92,8 @@ pub struct AccessibilitySettings {
     pub motion_cues: bool,
     /// Live Captions: the sound the computer plays is turned into captions on screen (`live_captions`, off by default).
     pub live_captions: bool,
+    /// Speak Items Under the Pointer: an app element the pointer rests on is spoken (`hover_speech`, off by default).
+    pub speak_under_pointer: bool,
     /// Accessibility Keyboard: the on-screen keyboard is open on purpose (`onscreen_keyboard`). It follows `Shell::keyboard_open_explicit`
     /// and `keyboard_close_explicit`, so closing the keyboard with its hide key or the Input menu switches it off. Off by default.
     pub accessibility_keyboard: bool,
@@ -111,7 +114,7 @@ pub struct AccessibilitySettings {
 }
 
 impl AccessibilitySettings {
-    pub const DEFAULT: Self = AccessibilitySettings {text_scale: 1.0, bold_text: false, zoom: 0, reduce_motion: false, increase_contrast: false, reduce_transparency: false, button_shapes: false, dim_flashing_lights: false, guided_access: false, screen_reader: false, sticky_keys: false, dwell: 0, slow: 0, mouse_keys: false, switch_control: false, voice_control: false, motion_cues: false, hold: 0, cursor_size: 0.0, shortcut: Vec::new(), speech_rate: 180, speech_pitch: 50, speech_voice: String::new(), speech_punctuation: 0, live_captions: false, switch_scan: false, accessibility_keyboard: false};
+    pub const DEFAULT: Self = AccessibilitySettings {text_scale: 1.0, bold_text: false, zoom: 0, reduce_motion: false, increase_contrast: false, reduce_transparency: false, button_shapes: false, dim_flashing_lights: false, guided_access: false, screen_reader: false, sticky_keys: false, dwell: 0, slow: 0, mouse_keys: false, switch_control: false, voice_control: false, motion_cues: false, hold: 0, cursor_size: 0.0, shortcut: Vec::new(), speech_rate: 180, speech_pitch: 50, speech_voice: String::new(), speech_punctuation: 0, live_captions: false, speak_under_pointer: false, switch_scan: false, accessibility_keyboard: false};
 
     /// Reads every key, keeping the default for a missing or malformed one.
     pub fn load(p: &Prefs) -> Self {
@@ -138,6 +141,7 @@ impl AccessibilitySettings {
             switch_control: flag("a11y_switch_control", d.switch_control),
             voice_control: flag(super::services::recognizer::VOICE_CONTROL_PREF, d.voice_control),
             live_captions: flag("a11y_live_captions", d.live_captions),
+            speak_under_pointer: flag("a11y_speak_under_pointer", d.speak_under_pointer),
             accessibility_keyboard: flag(ACCESSIBILITY_KEYBOARD_PREF, d.accessibility_keyboard),
             hold: index("a11y_hold", HOLD_MS.len()).unwrap_or(d.hold),
             cursor_size: p.get_parsed::<f32>("a11y_cursor_size").map_or(d.cursor_size, |v| v.clamp(0.0, 1.0)),
@@ -170,6 +174,7 @@ impl AccessibilitySettings {
             ("a11y_switch_control", flag(self.switch_control)),
             (super::services::recognizer::VOICE_CONTROL_PREF, flag(self.voice_control)),
             ("a11y_live_captions", flag(self.live_captions)),
+            ("a11y_speak_under_pointer", flag(self.speak_under_pointer)),
             (ACCESSIBILITY_KEYBOARD_PREF, flag(self.accessibility_keyboard)),
             ("a11y_hold", &self.hold.to_string()),
             ("a11y_cursor_size", &format!("{:.3}", self.cursor_size)),
@@ -218,6 +223,7 @@ impl AccessibilitySettings {
         DWELL_MS.store(self.dwell_ms(), std::sync::atomic::Ordering::Relaxed);
         SLOW_MS.store(self.slow_ms(), std::sync::atomic::Ordering::Relaxed);
         MOUSE_KEYS.store(self.mouse_keys, std::sync::atomic::Ordering::Relaxed);
+        SPEAK_UNDER_POINTER.store(self.speak_under_pointer, std::sync::atomic::Ordering::Relaxed);
         bifrost_render::appearance::publish(bifrost_render::appearance::Appearance {
             text_scale: self.text_scale, zoom: self.zoom_factor(), hold_ms: self.hold_ms(),
             bold: self.bold_text, reduce_motion: self.reduce_motion,
@@ -249,6 +255,14 @@ static DWELL_MS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::ne
 /// The Dwell Control delay in milliseconds, or 0 when Dwell Control is off.
 pub fn dwell_delay_ms() -> u64 {
     DWELL_MS.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Speak Items Under the Pointer as the last `publish` set it. The pointer path reads this (`hover_speech`).
+static SPEAK_UNDER_POINTER: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Whether Settings > Accessibility > Spoken Content > Speak Items Under the Pointer is on.
+pub fn speak_under_pointer() -> bool {
+    SPEAK_UNDER_POINTER.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 /// Mouse Keys as the last `publish` set it. The input loop keeps `mouse_keys::MouseKeys` in step with this.
@@ -319,6 +333,16 @@ mod tests {
         only_voice.save(&mut p);
         let back = AccessibilitySettings::load(&p);
         assert!(back.voice_control && !back.switch_control, "each switch has its own key");
+    }
+
+    #[test]
+    fn speak_under_pointer_round_trips_and_is_off_by_default() {
+        let mut p = Prefs::memory();
+        assert!(!AccessibilitySettings::load(&p).speak_under_pointer);
+        let a = AccessibilitySettings { speak_under_pointer: true, ..Default::default() };
+        a.save(&mut p);
+        assert!(AccessibilitySettings::load(&p).speak_under_pointer);
+        assert_eq!(p.get("a11y_speak_under_pointer"), Some("1"));
     }
 
     #[test]
