@@ -182,8 +182,6 @@ const MAC_PLATE_R_PT: f32 = 12.0;
 const MAC_DOCK_MARGIN_PT: f32 = 12.0;
 /// Golden Gate: the most result rows built for the scrolling list; the rest of the ranking is not shown
 const MAC_MAX_ROWS: usize = 30;
-/// How long after a wheel notch the touches the window server emulates for it (a down, a move, an up) are dropped
-const WHEEL_DRAG_MS: f64 = 250.0;
 
 const fn rgba_const(r: u8, g: u8, b: u8, a: u8) -> u32 {
     let k = a as u32;
@@ -1146,8 +1144,6 @@ pub struct QuickSearch {
     /// Golden Gate: how far the rows are scrolled up inside the card, in px, and the query the offset belongs to
     scroll: f32,
     scroll_query: String,
-    /// touches of the drag emulated for a wheel notch that are still to be dropped: (count, until ms)
-    wheel_swallow: (u8, f64),
     deildu_titles: Vec<String>,
     /// `fuzzy::fold` of each Deildu title, kept so keystrokes do not re-fold them
     deildu_folded: Vec<String>,
@@ -1272,7 +1268,6 @@ impl QuickSearch {
             max_bottom: f32::MAX,
             scroll: 0.0,
             scroll_query: String::new(),
-            wheel_swallow: (0, 0.0),
             thumbs: vec![],
             file_thumbs: super::search_thumbs::FileThumbs::default(),
             deildu_titles: vec![],
@@ -1778,16 +1773,6 @@ impl QuickSearch {
             return true;
         }
         false
-    }
-
-    /// True for each touch of the drag emulated for a wheel notch Search took already.
-    fn swallows_touch(&mut self, t: f64) -> bool {
-        if self.wheel_swallow.0 == 0 || t > self.wheel_swallow.1 {
-            self.wheel_swallow = (0, 0.0);
-            return false;
-        }
-        self.wheel_swallow.0 -= 1;
-        true
     }
 
     /// The first result: what Return opens.
@@ -2457,10 +2442,6 @@ impl Shell {
     pub(super) fn quicksearch_event(&mut self, ev: Event, t: f64) -> Option<Vec<Effect>> {
         let range = self.ui.pt(REVEAL_PT);
         let (w, h) = (self.w, self.h);
-        // the touches the window server emulates after a wheel notch must not tap the row under the pointer
-        if matches!(self.quicksearch.state, State::Shown) && matches!(ev, Event::Down(..) | Event::Move(..) | Event::Up(..)) && self.quicksearch.swallows_touch(t) {
-            return Some(vec![]);
-        }
         match (self.quicksearch.state, ev) {
             (State::Hidden, Event::Down(x, y)) => {
                 let zone = y >= self.layout.status_h as f32 && y < self.h as f32 - home_zone(&self.ui);
@@ -2534,7 +2515,7 @@ impl Shell {
         if self.quicksearch.scroll_by(&self.ui, -dy) {
             self.dirty = true;
         }
-        self.quicksearch.wheel_swallow = (3, t + WHEEL_DRAG_MS);
+        self.swallow_wheel_drag(t);
         true
     }
 

@@ -2814,6 +2814,15 @@ impl Shell {
         }
     }
 
+    /// The wheel's mark (`desk_wheel`) is spent: a shell surface took the notch and drops its whole emulated drag
+    /// (`Shell::swallow_wheel_drag`), or a press was routed already. A mark left behind made the next real press on
+    /// chrome within `WHEEL_DRAG_MS` count as the wheel's, so a title-bar drag right after a notch over Settings did nothing.
+    pub(super) fn desk_wheel_spent(&mut self) {
+        if let Some(d) = self.desk.as_mut() {
+            d.wheel_at = None;
+        }
+    }
+
     /// True (once) for the press the Wayland pointer emulates for the wheel event noted at most `WHEEL_DRAG_MS` before.
     fn desk_wheel_press(&mut self, t: f64) -> bool {
         matches!(self.desk.as_mut().and_then(|d| d.wheel_at.take()), Some(at) if t >= at && t - at <= WHEEL_DRAG_MS)
@@ -5379,6 +5388,37 @@ mod resize_grab_tests {
         let d = sh.desk.as_ref().unwrap();
         let r = d.wins[d.index_of(AppId::Photos).unwrap()].r;
         assert_eq!(r.w, p.w - 30, "a press long after the wheel still resizes");
+    }
+
+    /// A wheel notch Settings took drops its emulated drag in `Shell::event`, so the desk never sees that press: the
+    /// mark must not outlive it, or the real title-bar press that follows within 250 ms is taken for the wheel's.
+    #[test]
+    fn a_title_bar_press_right_after_a_notch_over_settings_drags_the_window() {
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.anim = None;
+        sh.screen = crate::shell::Screen::Home;
+        if sh.desk.is_none() { sh.desk = Some(Desk::new()); }
+        let m = sh.desk_metrics();
+        let d = sh.desk.as_mut().unwrap();
+        d.open(&m, AppId::Settings, (1000, 800));
+        let s = d.wins[d.index_of(AppId::Settings).unwrap()].r;
+        let (x, y) = ((s.x + s.w / 2) as f32, (s.y + m.title / 2) as f32);
+        assert!(matches!(sh.desk.as_ref().unwrap().pick(&m, x, y), Some((_, Hit::Title))), "the press is on the title bar");
+        // the notch, as bin/shell.rs routes it: the desk is told, then Settings takes it (`settings_wheel`)
+        sh.desk_wheel(1000.);
+        sh.swallow_wheel_drag(1000.);
+        let (cx, cy) = ((s.x + s.w / 2) as f32, (s.y + s.h / 2) as f32);
+        assert!(sh.event(Event::Down(cx, cy), 1000.).is_empty());
+        assert!(sh.event(Event::Move(cx, cy - 9.), 1016.).is_empty());
+        assert!(sh.event(Event::Up(cx, cy - 9.), 1032.).is_empty());
+        // a real press 100 ms later, well inside the wheel's 250 ms
+        sh.desk_event(Event::Down(x, y), 1100.);
+        sh.desk_event(Event::Move(x + 40., y + 30.), 1116.);
+        sh.desk_event(Event::Up(x + 40., y + 30.), 1132.);
+        let d = sh.desk.as_ref().unwrap();
+        let r = d.wins[d.index_of(AppId::Settings).unwrap()].r;
+        assert_eq!((r.x, r.y), (s.x + 40, s.y + 30), "the title-bar press drags the window");
+        assert_eq!((r.w, r.h), (s.w, s.h));
     }
 
     /// E2E-12: Settings never goes below the width of its sidebar layout, whether by a drag, the window server's size or
