@@ -3737,6 +3737,44 @@ mod extra_window_frame_tests {
         if let Some(v) = saved { std::env::set_var("SPRINGBOARD_WAYLAND", v) } else { std::env::remove_var("SPRINGBOARD_WAYLAND") };
     }
 
+    /// E2E F4: a cascaded window is cascaded only when it first opens; one the person moved comes back where they left
+    /// it when the desk shows it again, instead of jumping back to a cascade slot.
+    #[test]
+    fn a_moved_cascaded_window_keeps_its_position_when_shown_again() {
+        let _lock = crate::test_support::global_lock();
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.screen = Screen::Home;
+        sh.anim = None;
+        let (mine, _peer) = sys::socketpair_pair().unwrap();
+        let cfg = Configure { w: 64, h: 48, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
+        let mut host = AppHost::with_channel("fixture", mine, None, cfg);
+        let flags = bifrost_proto::window_flags::CASCADE;
+        host.handle(ToShell::WindowOpen { id: 1, title: "Viewer".into(), w: 40.0, h: 30.0, position: None, flags }, Vec::new(), &mut Pumped::default());
+        sh.ext.push(Some(host));
+        let m = sh.desk_metrics();
+        sh.desk.as_mut().unwrap().open(&m, AppId::External(0), (600, 400));
+        sh.desk_sync_extra_windows();
+        let extra = AppId::ExternalWindow(0, 1);
+        let cascades = |sh: &crate::shell::Shell| sh.ext[0].as_ref().unwrap().windows.of_app("fixture").iter().any(|w| w.id == 1 && w.cascade);
+        assert!(!cascades(&sh), "the cascade flag is cleared once the window is placed");
+        // the person drags it to the work area's top left corner
+        let a = desk::Desk::area(&m);
+        let moved = (a.x + 5, a.y + 7);
+        {
+            let d = sh.desk.as_mut().unwrap();
+            let i = d.index_of(extra).expect("the viewer is on the desk");
+            assert_ne!((d.wins[i].r.x, d.wins[i].r.y), moved, "the cascade put it somewhere else");
+            d.wins[i].r.x = moved.0;
+            d.wins[i].r.y = moved.1;
+            // hidden: the desk drops it while the app's table keeps it
+            d.close(i);
+        }
+        sh.desk_sync_extra_windows();
+        let d = sh.desk.as_ref().unwrap();
+        let i = d.index_of(extra).expect("shown again");
+        assert_eq!((d.wins[i].r.x, d.wins[i].r.y), moved, "it comes back where the person left it");
+    }
+
     /// E2E-11/12: an app that reallocates its buffers (every step of a live resize) keeps its window on the desk until it
     /// draws into them: the window is not unmapped and its frame (last pixels, last size) is still sent, so the toplevel
     /// is not destroyed under the pointer (which ended the resize) and the window behind does not take the focus.
