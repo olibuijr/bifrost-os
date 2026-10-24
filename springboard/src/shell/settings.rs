@@ -454,6 +454,9 @@ pub struct Settings {
     /// the page of each hit for the query it was found for (`hit_pages`), kept by `requery` so the sidebar's draw does
     /// not match the whole index again every frame
     hits: (String, Vec<PageId>),
+    /// the page opened (by a tap on a result, an arrow key or Return) since the query last changed: the search highlight.
+    /// A new query clears it, so the highlight starts at the first hit rather than at a pane that was already open.
+    hit_open: Option<PageId>,
     /// Users & Groups: the last error from privd, shown under the list ("" when none)
     users_note: String,
 }
@@ -681,6 +684,7 @@ impl Settings {
             search: Search::new(ui, w),
             index: None,
             hits: (String::new(), Vec::new()),
+            hit_open: None,
             users_note: String::new(),
         };
         let root = st.build(ui, PageId::Root, None);
@@ -1669,6 +1673,8 @@ impl Settings {
             }
             return vec![];
         }
+        // while Search has a query the page opened is the highlighted hit (when it is one)
+        self.hit_open = (!self.search.query().trim().is_empty()).then_some(id);
         let path = self.path_to(id);
         self.stack.truncate(usize::from(self.side_w == 0));
         for p in path {
@@ -2309,10 +2315,11 @@ impl Settings {
         settings_search::matches(self.index.as_deref().unwrap_or(&[]), query).iter().map(|e| e.page).collect()
     }
 
-    /// The hit the sidebar fills: the first one on the deepest open page that is a hit (one opened by a tap or an
-    /// arrow key), so Return opens what is highlighted.
+    /// The hit the sidebar fills: the first one on the page opened since the query changed (by a tap or an arrow key),
+    /// while it is still open, so Return opens what is highlighted. None until one is opened: Return then opens the first.
     fn highlighted_hit(&self, hits: &[PageId]) -> Option<usize> {
-        self.stack.iter().rev().find_map(|e| hits.iter().position(|p| *p == e.id))
+        let open = self.hit_open.filter(|p| self.stack.iter().any(|e| e.id == *p))?;
+        hits.iter().position(|p| *p == open)
     }
 
     /// The page whose sidebar rows are filled: the highlighted hit while Search has a query, else the open pane.
@@ -2334,6 +2341,8 @@ impl Settings {
         }
         // the hits for this query and index, for every draw of the sidebar until the query changes
         self.hits = (self.search.query().to_string(), self.match_hit_pages());
+        // a new query's highlight starts at its first hit
+        self.hit_open = None;
         // a query replaces the root list with its matches
         if self.stack.first().is_some_and(|e| e.id == PageId::Root) {
             self.rebuild_pages(ui, 0..1);
@@ -5391,12 +5400,30 @@ mod e2e_w3_tests {
         settle(&mut st, &ui);
         assert_eq!(st.page(), second, "Down opens the next hit");
         assert_eq!(st.side_selected(), second, "and the sidebar fills it");
-        st.key(&ui, Out::Enter, 0.0);
-        settle(&mut st, &ui);
-        assert_eq!(st.page(), second, "Return opens the highlighted hit, not the first");
         st.key(&ui, Out::Named("Up"), 0.0);
         settle(&mut st, &ui);
         assert_eq!(st.page(), first, "Up goes back");
+        st.key(&ui, Out::Named("Down"), 0.0);
+        settle(&mut st, &ui);
+        // Return ends the search field's editing (the keyboard goes away), so it comes last
+        st.key(&ui, Out::Enter, 0.0);
+        settle(&mut st, &ui);
+        assert_eq!(st.page(), second, "Return opens the highlighted hit, not the first");
+    }
+
+    /// A pane that was open before the query is no highlight: Return opens the first hit even when that pane is a hit.
+    #[test]
+    fn a_new_query_highlights_its_first_hit() {
+        let ui = crate::shell::tests::ui();
+        let (mut st, _) = split(&ui);
+        st.search.active = true;
+        st.key(&ui, Out::Text("display".into()), 0.0);
+        let hits = st.hit_pages();
+        let second = *hits.iter().find(|p| **p != hits[0]).expect("hits on two pages");
+        st.open_page_id(&ui, second, 0.0);
+        settle(&mut st, &ui);
+        st.key(&ui, Out::Text("s".into()), 0.0);
+        assert_eq!(st.highlighted_hit(&st.hit_pages()), None, "a new query clears the highlight");
     }
 
     /// N17: the wheel scrolls the list under the pointer itself (the shell then drops the drag emulated for it, which
@@ -5435,7 +5462,10 @@ mod e2e_w3_tests {
         let ui = crate::shell::tests::ui();
         let keep = bifrost_render::ui::sidebar_icon_size();
         bifrost_render::ui::set_sidebar_icon_size(1);
-        let (mut st, mut prefs) = split(&ui);
+        // the desktop sidebar has Appearance as a pane of its own (the tablet keeps it under Display & Brightness)
+        let desk = Info { display_mode: Some((2560, 1440, 60)), ..info() };
+        let mut st = Settings::new(&ui, &desk, &Prefs::memory(), 1200, 1920, Rc::new(vec![]));
+        let mut prefs = Prefs::memory();
         st.open_page_id(&ui, PageId::Appearance, 0.0);
         settle(&mut st, &ui);
         let (_, before) = st.sidebar_centre(&ui, "Appearance").expect("the Appearance row");
