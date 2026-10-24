@@ -19,6 +19,8 @@ const LIGHT_GAP_PT: f32 = 9.0;
 const LIGHT_X_PT: f32 = 13.0;
 /// Resize handle thickness around a window, in pt.
 const EDGE_PT: f32 = 6.0;
+/// how long after a wheel event the press the Wayland pointer emulates for it may come (ms)
+const WHEEL_DRAG_MS: f64 = 250.0;
 /// Smallest window body, in pt.
 const MIN_W_PT: f32 = 320.0;
 const MIN_H_PT: f32 = 220.0;
@@ -365,6 +367,9 @@ pub struct Desk {
     pub(super) dock_menu_target:Option<usize>,
     pub(super) dock_menu_anchor:(f32,f32),
     grab: Option<Grab>,
+    /// when the last wheel event came (ms): the press the Wayland pointer emulates right after it (`bare::wayland`)
+    /// is the wheel, never a click on a title bar, an edge, a traffic light or a Dock icon (`Shell::desk_wheel`)
+    wheel_at: Option<f64>,
     /// neighbours sliding aside while a dock icon is lifted, and the slot it hovers
     pub(super) dock_slide: std::cell::RefCell<bifrost_ui::dockdrag::Slide>,
     dock_drop: Option<usize>,
@@ -2723,6 +2728,20 @@ impl Shell {
         true
     }
 
+    /// A wheel event at `t` ms. The Wayland pointer emulates a drag (a press, a move and a release) after each one, so
+    /// lists scroll; that press must not grab window chrome: on an edge it resized the window by the notch (N1), on a
+    /// title bar it moved it, on a traffic light or a Dock icon it clicked it. Only content takes the emulated drag.
+    pub fn desk_wheel(&mut self, t: f64) {
+        if let Some(d) = self.desk.as_mut() {
+            d.wheel_at = Some(t);
+        }
+    }
+
+    /// True (once) for the press the Wayland pointer emulates for the wheel event noted at most `WHEEL_DRAG_MS` before.
+    fn desk_wheel_press(&mut self, t: f64) -> bool {
+        matches!(self.desk.as_mut().and_then(|d| d.wheel_at.take()), Some(at) if t >= at && t - at <= WHEEL_DRAG_MS)
+    }
+
     /// Touches over the desktop. `None` leaves the event to the normal path.
     pub(super) fn desk_event(&mut self, ev: Event, t: f64) -> Option<Vec<Effect>> {
         let fx = self.desk_event_inner(ev, t);
@@ -2742,8 +2761,13 @@ impl Shell {
         match ev {
             Event::Down(x, y) => {
                 self.desk.as_mut()?.grab = None;
+                let wheel = self.desk_wheel_press(t);
                 // the dock sits over the windows
                 if let Some(k) = icons.iter().position(|r| self.dock_is_visible()&&r.contains(x, y)) {
+                    // the wheel over the Dock opens nothing
+                    if wheel {
+                        return Some(vec![]);
+                    }
                     self.desk.as_mut()?.grab = Some(Grab::DockDrag{from:k,entry:list[k],rect:icons[k],x,y,at_x:x,at_y:y,moved:false});
                     self.desk.as_mut()?.dock_drop = None;
                     // an app that already has a window comes forward on the press, not after the release
@@ -2779,6 +2803,11 @@ impl Shell {
                             hit = Hit::Content;
                         }
                     }
+                }
+                // the wheel's emulated drag scrolls content only: with no grab its move and release are swallowed (N1)
+                if wheel && hit != Hit::Content {
+                    self.dirty = true;
+                    return Some(vec![]);
                 }
                 if hit == Hit::Title {
                     let double = self.desk.as_ref()?.last_title.is_some_and(|(a, t0)| a == app && t - t0 <= double_click_ms());
@@ -5227,6 +5256,38 @@ mod resize_grab_tests {
         assert_eq!((r.x, r.y, r.w, r.h), settings_before, "the window behind is not resized");
         let r = d.wins[d.index_of(AppId::Photos).unwrap()].r;
         assert_eq!((r.w, r.h), (p.w - 40, p.h - 30), "the pressed window follows the pointer");
+    }
+
+    /// N1: the drag the Wayland pointer emulates for a wheel notch over a window's edge (the bottom one on Midget; every
+    /// edge alike) leaves the window's size alone; a real press there, after the wheel, still resizes it.
+    #[test]
+    fn the_wheel_never_starts_or_drives_a_resize() {
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.anim = None;
+        sh.screen = crate::shell::Screen::Home;
+        if sh.desk.is_none() { sh.desk = Some(Desk::new()); }
+        let m = sh.desk_metrics();
+        let d = sh.desk.as_mut().unwrap();
+        d.open(&m, AppId::Photos, (900, 700));
+        let p = d.wins[d.index_of(AppId::Photos).unwrap()].r;
+        let (x, y) = ((p.x + p.w - 1) as f32, (p.y + p.h / 2) as f32);
+        assert!(matches!(sh.desk.as_ref().unwrap().pick(&m, x, y), Some((_, Hit::Edge(_)))), "the press is on the right edge");
+        for n in 0..15 {
+            let t = n as f64 * 100.;
+            sh.desk_wheel(t);
+            sh.desk_event(Event::Down(x, y), t);
+            sh.desk_event(Event::Move(x - 9., y), t + 16.);
+            sh.desk_event(Event::Up(x - 9., y), t + 32.);
+        }
+        let d = sh.desk.as_ref().unwrap();
+        let r = d.wins[d.index_of(AppId::Photos).unwrap()].r;
+        assert_eq!((r.w, r.h), (p.w, p.h), "fifteen wheel notches leave the window's size alone");
+        sh.desk_event(Event::Down(x, y), 5000.);
+        sh.desk_event(Event::Move(x - 30., y), 5016.);
+        sh.desk_event(Event::Up(x - 30., y), 5032.);
+        let d = sh.desk.as_ref().unwrap();
+        let r = d.wins[d.index_of(AppId::Photos).unwrap()].r;
+        assert_eq!(r.w, p.w - 30, "a press long after the wheel still resizes");
     }
 
     /// E2E-12: Settings never goes below the width of its sidebar layout, whether by a drag, the window server's size or

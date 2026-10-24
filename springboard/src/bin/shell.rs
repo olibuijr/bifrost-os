@@ -995,8 +995,9 @@ fn run() -> std::io::Result<()> {
                 // the wheel goes to an app that asked for it; the drag emulated for it (the next three events) is then
                 // dropped for that app (`pointer_wheel`)
                 // the Apps grid pages with the wheel (a wheel turned down is the next page: `dy` is the content's travel, so both are negated) and
-                // Overview swallows it
-                input::Event::Wheel{x,y,dx,dy,..}=>{let (x,y)=map(x,y);if shell.quicksearch_wheel(dy,t) {continue;}if shell.overview_scroll(-dx,-dy,t) {continue;}shell.pointer_wheel(x,y,dx,dy,t);continue;},
+                // Overview swallows it; the desk notes it first, so the emulated press never grabs a window edge, title bar,
+                // traffic light or Dock icon (N1)
+                input::Event::Wheel{x,y,dx,dy,..}=>{let (x,y)=map(x,y);shell.desk_wheel(t);if shell.quicksearch_wheel(dy,t) {continue;}if shell.overview_scroll(-dx,-dy,t) {continue;}shell.pointer_wheel(x,y,dx,dy,t);continue;},
                 input::Event::Context{x,y,..}=>{let (x,y)=map(x,y);shell.desktop_pointer(x,y,true,t);continue;},
                 input::Event::Switch { .. } => continue,
                 // per-finger contacts run on the gesture recognizers; the first finger also arrives as Down/Move/Up,
