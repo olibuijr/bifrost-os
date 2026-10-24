@@ -1929,6 +1929,19 @@ impl Settings {
         self.sync_forward();
     }
 
+    /// The scroll wheel over the window at window x `x` moved the content `dy` px: the sidebar or the page under it
+    /// scrolls, and nothing is pressed (a notch over a slider must not set or save it). False when no list is there to
+    /// take it (an overlay, a slide or the wallpaper grid), so the drag emulated for the wheel scrolls it as before.
+    pub fn wheel(&mut self, x: f32, dy: f32) -> bool {
+        if self.transition.is_some() || self.overlay_open() {
+            return false;
+        }
+        let list = if self.side_w > 0 && x < self.side_w as f32 { self.sidebar.as_mut() } else { self.list_mut() };
+        let Some(list) = list else { return false };
+        list.wheel(dy);
+        true
+    }
+
     /// Handles a touch; `prefs` receives every persisted change.
     pub fn touch(&mut self, ui: &Ui, prefs: &mut Prefs, ev: Event, t: f64) -> Vec<Effect> {
         let (x, y) = match ev {
@@ -5346,6 +5359,23 @@ mod e2e_w3_tests {
         st.key(&ui, Out::Named("Up"), 0.0);
         settle(&mut st, &ui);
         assert_eq!(st.page(), first, "Up goes back");
+    }
+
+    /// N17: the wheel scrolls the list under the pointer itself (the shell then drops the drag emulated for it, which
+    /// pressed and saved the slider under the pointer).
+    #[test]
+    fn the_wheel_scrolls_the_list_under_the_pointer() {
+        let ui = crate::shell::tests::ui();
+        let (mut st, _) = split(&ui);
+        st.set_size(&ui, 1200, 700);
+        assert!(st.wheel(10.0, -40.0), "the sidebar takes the wheel");
+        assert_eq!(st.sidebar_list().expect("split").offset(), 40.0);
+        st.open_page_id(&ui, PageId::Appearance, 0.0);
+        settle(&mut st, &ui);
+        let before = st.list().expect("list").offset();
+        assert!(st.wheel(st.sidebar_px() as f32 + 10.0, -40.0), "the page takes the wheel");
+        assert!(st.list().expect("list").offset() > before, "and scrolls down");
+        assert_eq!(st.sidebar_list().expect("split").offset(), 40.0, "the sidebar stays");
     }
 
     /// N4: a window resize rebuilt the sidebar from its top.

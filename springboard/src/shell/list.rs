@@ -1187,6 +1187,11 @@ impl ListPage {
         self.scroll.moved(y, t);
     }
 
+    /// The scroll wheel moved the content `dy` px (negative shows what is below); true when the offset changed.
+    pub fn wheel(&mut self, dy: f32) -> bool {
+        self.scroll.wheel(dy)
+    }
+
     /// Ends the touch; true when it was a tap rather than a drag.
     pub fn scroll_up(&mut self, y: f32, t: f64) -> bool {
         self.scroll.up(y, t)
