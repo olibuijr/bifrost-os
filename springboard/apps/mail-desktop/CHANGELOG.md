@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.17.5 — 2026-10-24
+
+- Add to Contacts saves the sender in the contacts service's new save format, where phones and emails are labeled
+  values (`{label, value}`), so the contact is saved by the system release that brings that format. Built with it.
+
 ## 0.17.4 — 2026-10-24
 
 - Message > Mark as Unread on the open message shows its unread dot at once (white on the selected row), and the

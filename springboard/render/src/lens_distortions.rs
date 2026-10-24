@@ -10,11 +10,14 @@
 //! - `CITorusLensDistortion` (center, radius 160, width 80, refraction 1.7): a glass ring of `width`
 //!   centred on the circle of `radius`. Inside the ring the picture is magnified about the ring's middle
 //!   line by up to `1 + refraction` (the ring's height profile is a half circle), and it is unchanged
-//!   at the ring's edges and outside. This replaces the whole-disc model in `distortion_filters`, which
-//!   had no width.
+//!   at the ring's edges and outside.
 //! - `CICircleSplashDistortion` (center, radius 150) as the reference documents it: the disc is
 //!   unchanged and every point outside reads the circumference along its ray, so the rim splashes
-//!   outwards. `distortion_filters::circle_splash` keeps its earlier magnifier model.
+//!   outwards.
+//!
+//! These are the canonical torus lens and circle splash: the SDK's `image_distort` and the catalogue
+//! entries in `filter_catalogue` (whose `inputWidth` and 0..5 refraction range are these) both use
+//! them. The earlier whole-disc models in `distortion_filters` were removed so there is one of each.
 //!
 //! The profiles are this model's own (the reference kernels are not measured); the parameter names,
 //! defaults and the overall shape follow the reference documentation. Backwards warps with bilinear
@@ -110,7 +113,7 @@ pub fn torus_lens(img: &Image, center: (f32, f32), radius: f32, width: f32, refr
 }
 
 /// `CICircleSplashDistortion` as documented: the disc stays, the outside reads the circumference.
-pub fn circle_splash_rim(img: &Image, center: (f32, f32), radius: f32) -> Image {
+pub fn circle_splash(img: &Image, center: (f32, f32), radius: f32) -> Image {
     light_tunnel(img, center, 0.0, radius)
 }
 
@@ -183,9 +186,9 @@ mod tests {
     }
 
     #[test]
-    fn circle_splash_rim_keeps_the_disc() {
+    fn circle_splash_keeps_the_disc() {
         let img = ramp(24);
-        let out = circle_splash_rim(&img, (12.5, 12.5), 6.0);
+        let out = circle_splash(&img, (12.5, 12.5), 6.0);
         assert_eq!(out.px[12 * 24 + 12], img.px[12 * 24 + 12]);
         assert_eq!(out.px[12 * 24 + 20], out.px[12 * 24 + 23]);
     }

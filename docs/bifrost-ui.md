@@ -3025,8 +3025,13 @@ evidence `ev_1f78cc989db83cafeda1ab3033c6d43e407a9f6ef4ead529ffeb323eb64aa9ff`. 
   MergeMetadata`) or replacing, `date_time` (TIFF DateTime and EXIF DateTimeOriginal/Digitized), `orientation`,
   `exclude_gps` and `exclude_xmp` (`kCGImageMetadataShouldExcludeGPS/XMP`; GPS also leaves the XMP packet, and a packet
   that cannot be cleaned is dropped). Decision: replacing keeps the orientation, which describes the stored pixels.
-  SDK: `image_metadata::edit` with `MetadataEdit`, and `without_location` for sharing a photo privately. Gap: TIFF is
-  refused (its metadata shares directories with the image structure) and maker notes are dropped on rewrite.
+  SDK: `image_metadata::edit` with `MetadataEdit`, and `without_location` for sharing a photo privately. Decision
+  (as the reference keeps them): an edit that changes no EXIF tag but the orientation and the dates patches those
+  values in the old block (when it already holds them), so maker notes and offset tags survive, and a new orientation also updates the XMP
+  `tiff:Orientation`; the descriptive fields of `MetadataEdit` are merged into the XMP packet (`rewrite::merge_xmp`),
+  keeping its other properties. Gap: TIFF is refused (its metadata shares directories with the image structure);
+  an edit that adds, replaces or removes EXIF, TIFF or GPS tags rebuilds the block and drops the maker notes; a
+  JPEG IPTC block is rewritten whole from the descriptive fields.
 - **Region decode.** `png::decode_region` and `cg::imageio::decode_region` read a still, non-interlaced PNG row by row
   (one row plus the rectangle in memory, past `MAX_SIDE` up to `png::MAX_STREAMED_SIDE` wide), and
   `image_tiles::StreamingPicture` serves tiles from the file bytes through the `TileCache`. Gap: other formats are

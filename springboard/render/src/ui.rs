@@ -1214,6 +1214,23 @@ pub mod system {
         }
 
         #[test]
+        fn the_find_highlight_is_premultiplied_system_yellow_at_seventy_percent() {
+            // every use fills it source-over with a premultiplied colour (`Surface::fill_rrect`, `Canvas::fill_rrect`)
+            let unpack = |c: u32| [c as u8, (c >> 8) as u8, (c >> 16) as u8];
+            for (yellow, find) in [(SYSTEM_YELLOW.dark, FIND_HIGHLIGHT.dark), (SYSTEM_YELLOW.light, FIND_HIGHLIGHT.light)] {
+                let [r, g, b] = unpack(yellow);
+                assert_eq!(find, crate::gfx::rgba(r, g, b, 180), "{find:#010x}");
+            }
+            // over an opaque pixel the result stays opaque and shows the yellow
+            let mut px = [crate::gfx::pack(255, 255, 255, 255); 4];
+            let mut s = crate::gfx::Surface { w: 2, h: 2, stride: 2, px: &mut px, y0: 0 };
+            s.fill_rrect(0.0, 0.0, 2.0, 2.0, 0.0, FIND_HIGHLIGHT.light);
+            assert_eq!(px[0] >> 24, 255);
+            assert_eq!(px[0] & 0xff, 255, "white under yellow keeps full red");
+            assert!((px[0] >> 16) & 0xff < 255, "blue drops under yellow");
+        }
+
+        #[test]
         fn the_fill_levels_step_down_and_follow_the_appearance() {
             let fills = [SYSTEM_FILL, SECONDARY_SYSTEM_FILL, TERTIARY_SYSTEM_FILL, QUATERNARY_SYSTEM_FILL, QUINARY_SYSTEM_FILL];
             assert!(fills.windows(2).all(|w| (w[0].light >> 24) > (w[1].light >> 24)));
