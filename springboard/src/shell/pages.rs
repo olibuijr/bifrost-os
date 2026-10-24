@@ -229,6 +229,8 @@ pub enum Toggle {
     MotionCues,
     /// Accessibility > Hearing > Live Captions: captions for the sound the computer plays (`a11y_live_captions`)
     LiveCaptions,
+    /// Accessibility > Spoken Content > Speak Items Under the Pointer (`a11y_speak_under_pointer`)
+    SpeakUnderPointer,
     AutoTime,
     LowPower,
     BatteryPercent,
@@ -1686,6 +1688,9 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     Group::new(vec![Item::new("Live Captions").switch(a.live_captions, Action::Toggle(Toggle::LiveCaptions))])
                         .header("HEARING")
                         .footer("Shows what is said in the sound this computer plays as captions at the bottom of the screen. It uses the on-device speech model from Keyboard > Dictation, English only, and nothing leaves the computer."),
+                    Group::new(vec![Item::new("Speak Items Under the Pointer").switch(a.speak_under_pointer, Action::Toggle(Toggle::SpeakUnderPointer))])
+                        .header("SPOKEN CONTENT")
+                        .footer("Rest the pointer on a button, row or text in an app to hear it. Press Option+Escape to hear the selected text."),
                     Group::new(vec![Item::slider(Ends::Cursor, a.cursor_size, Action::Slider(Slider::CursorSize))]).header("POINTER").footer("The pointer grows as you drag the slider."),
                     Group::new(vec![Item::new("Switch Scanning").switch(a.switch_scan, Action::Toggle(Toggle::SwitchScan))])
                         .header("SWITCH")

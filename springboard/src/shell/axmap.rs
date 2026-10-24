@@ -46,6 +46,20 @@ fn walk(map: &mut Map, spec: &dyn Fn(PageId) -> Spec, page: PageId, parent: &str
     }
 }
 
+/// Lists the custom actions an app named for its nodes (`ToShell::AxActions`) on the elements `add_app_tree` added for them
+/// under `scope`, so `ax actions` and `ax action` reach them like the shell's own window actions.
+pub(super) fn add_app_actions(map: &mut Map, scope: &str, sets: &[bifrost_ui::ax_action::AxActionSet]) {
+    for set in sets {
+        let handle = set.id.to_string();
+        let addresses: Vec<String> = map.under(scope).filter(|e| e.handle == handle).map(|e| e.address.clone()).collect();
+        for address in addresses {
+            for name in &set.names {
+                map.add_custom_action(&address, name);
+            }
+        }
+    }
+}
+
 /// The role and value a Settings row shows to assistive tech. Shared with the screen reader's cursor (`accessibility::reader`).
 pub(super) fn item_role(item: &Item) -> (&'static str, String) {
     match (&item.action, &item.accessory) {
@@ -96,7 +110,9 @@ impl Shell {
         }
         // every running app process: the elements it declared, else the ones the kit's draw helpers recorded
         for host in self.ext.iter().flatten() {
-            add_app_tree(&mut map, &format!("app/{}", host.id), &host.controls, &host.controls_tree, &mut st);
+            let scope = format!("app/{}", host.id);
+            add_app_tree(&mut map, &scope, &host.controls, &host.controls_tree, &mut st);
+            add_app_actions(&mut map, &scope, &host.ax_actions);
         }
         self.add_window_elements(&mut map);
         (map, st)
@@ -110,6 +126,29 @@ impl Shell {
         let open: Vec<AppId> = self.desk.as_ref().map(|d| d.wins.iter().map(|w| w.app).collect()).unwrap_or_default();
         let dock: Vec<(String, bool)> = super::apps::apps().iter().map(|a| (a.name.to_string(), open.contains(&a.id))).collect();
         super::atspi::model::chrome_snap(&menus, &dock)
+    }
+
+    /// A screen reader pressed shell chrome element `id` (`atspi::model::chrome_target`): runs a menu row, opens a dock app
+    /// or shows the search field, as a click would. The effects reach the shell binary with the next tick
+    /// (`Shell::ax_chrome_fx`). A stale id (the menus changed since the snapshot) does nothing.
+    #[cfg(feature = "atspi")]
+    pub(super) fn ax_chrome_press(&mut self, id: u64, t: f64) {
+        use super::atspi::model::{chrome_target, ChromePress};
+        match chrome_target(id) {
+            Some(ChromePress::MenuRow(m, r)) => {
+                if let Ok(fx) = self.ax_menu_press(m, r, t) {
+                    self.ax_chrome_fx.extend(fx);
+                }
+            }
+            Some(ChromePress::DockApp(i)) => {
+                if let Some(icon) = super::apps::apps().get(i).map(|a| a.icon) {
+                    self.desktop_open_app(icon, t);
+                }
+            }
+            Some(ChromePress::Search) => self.quicksearch_show(t),
+            None => return,
+        }
+        self.dirty = true;
     }
 
     /// The open windows as elements under `os/windows`, each carrying the title-bar actions in `WINDOW_ACTIONS`.
@@ -148,6 +187,14 @@ impl Shell {
         if !map.has_custom_action(&el.address, name) {
             let names: Vec<&str> = map.custom_actions(&el.address).collect();
             return Err(format!("{} has no action {name:?}; its actions: {}", el.address, names.join(", ")));
+        }
+        // an app element's action runs in the app: it gets the name back with its own spelling
+        if let Some(id) = el.address.strip_prefix("app/").and_then(|a| a.split('/').next()) {
+            let node = el.handle.parse::<u64>().map_err(|_| "that element has no node id")?;
+            let host = self.ext.iter_mut().flatten().find(|h| h.id == id).ok_or("that app is not running")?;
+            let own = host.ax_actions.iter().find(|s| s.id == node).and_then(|s| s.canonical(name)).ok_or("that action is gone")?.to_string();
+            host.send(&bifrost_proto::ToApp::AxSet { id: node, action: bifrost_proto::AxAction::Custom(own) });
+            return Ok((el.address, Vec::new()));
         }
         let i = window_index(&el.handle).ok_or("this element has no action the shell can run")?;
         let fx = self.window_action(i, name, t)?;
@@ -227,5 +274,26 @@ impl Shell {
             return Ok((el.address, Vec::new()));
         }
         Err(format!("{} cannot be pressed yet", el.address))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bifrost_proto::{Node, Role, UiRect};
+    use bifrost_ui::ax_action::AxActionSet;
+
+    #[test]
+    fn an_app_nodes_custom_actions_are_listed_on_its_element() {
+        let r = UiRect { x: 0., y: 0., w: 10., h: 10. };
+        let nodes = vec![Node { id: 42, role: Role::Row, label: "Invoice".into(), value: String::new(), bounds: r, enabled: true }];
+        let mut map = Map::new();
+        let mut st = AxState::default();
+        add_app_tree(&mut map, "app/mail", &nodes, &[], &mut st);
+        add_app_actions(&mut map, "app/mail", &[AxActionSet::new(42, &["Archive", "Reply"]), AxActionSet::new(7, &["Gone"])]);
+        let row = map.under("app/mail").find(|e| e.handle == "42").unwrap().address.clone();
+        assert_eq!(map.custom_actions(&row).collect::<Vec<_>>(), vec!["Archive", "Reply"]);
+        assert!(map.has_custom_action(&row, "reply"));
+        assert_eq!(map.under("app/mail").filter(|e| map.custom_actions(&e.address).next().is_some()).count(), 1);
     }
 }

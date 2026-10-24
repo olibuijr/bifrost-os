@@ -1,7 +1,7 @@
 //! Spoken Content: Speak Selection (Option+Escape) reads the selected text of the focused field aloud through the speech
 //! engine, with or without the screen reader on. The selection comes from the app's `ToShell::TextState`, the surrounding
-//! text and selection of the focused field, so only text fields can be spoken. Speak Items Under the Pointer is not built:
-//! the shell does not track pointer hover over text yet. The pure part (`selected_text`) is tested on the host; the `Shell`
+//! text and selection of the focused field, so only text fields can be spoken. Speak Items Under the Pointer lives in
+//! `hover_speech`. The pure part (`selected_text`) is tested on the host; the `Shell`
 //! method is the glue.
 
 use crate::shell::Shell;

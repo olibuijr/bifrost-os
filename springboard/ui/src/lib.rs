@@ -1138,6 +1138,7 @@ pub mod switch_scan;
 pub mod attribute_graph;
 pub mod ax_audit;
 pub mod ax_rotor;
+pub mod ax_action;
 pub mod state_report;
 pub mod precipitation;
 pub mod weather_alert;

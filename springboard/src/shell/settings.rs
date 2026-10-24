@@ -3655,6 +3655,7 @@ impl Settings {
             Toggle::SwitchControl => flip(&mut self.a11y.switch_control),
             Toggle::VoiceControl => flip(&mut self.a11y.voice_control),
             Toggle::LiveCaptions => flip(&mut self.a11y.live_captions),
+            Toggle::SpeakUnderPointer => flip(&mut self.a11y.speak_under_pointer),
             Toggle::AutoTime => {
                 let on = flip(&mut self.info.time_manual);
                 // the switch shows "automatic", the flag stores "manual"

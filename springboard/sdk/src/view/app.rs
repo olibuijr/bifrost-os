@@ -313,6 +313,8 @@ impl<S: Responder + 'static> ViewApp<S> {
             AxAction::Focus => self.window.make_first_responder(Some(id)),
             AxAction::Increment => self.window.ax_adjust(id, true, &mut self.state),
             AxAction::Decrement => self.window.ax_adjust(id, false, &mut self.state),
+            // the runtime routes named actions to `App::ax_custom_action`; a view tree has none of its own yet
+            AxAction::Custom(_) => false,
         };
         done && self.window.needs_display()
     }

@@ -726,6 +726,10 @@ pub struct Shell {
     /// the external app (slot) and its window (0 is the main window) whose content the pointer is over and that takes
     /// hover events (`pointer_events`)
     pointer_over: Option<(u8, u32)>,
+    /// the app element the pointer rests on, for Speak Items Under the Pointer (`accessibility::hover_speech`)
+    hover_speech: accessibility::hover_speech::HoverSpeech,
+    /// effects of shell chrome a screen reader pressed (`axmap::ax_chrome_press`), returned by the next `tick`
+    ax_chrome_fx: Vec<Effect>,
     /// the two touchscreen fingers of the app in front and the pinch and rotation recognizers they run (`pointer_events`)
     pinch_fingers: Vec<(i32, (f32, f32))>,
     pinch: bifrost_ui::trackpad_gesture::TwoFinger,
@@ -1263,6 +1267,8 @@ impl Shell {
             assistant,
             compose_ime: compose_window::ComposeWindow::default(),
             pointer_over: None,
+            hover_speech: Default::default(),
+            ax_chrome_fx: Vec::new(),
             pinch_fingers: Vec::new(),
             pinch: Default::default(),
             input_providers: {
@@ -4158,7 +4164,8 @@ impl Shell {
                 self.dirty = true;
             }
         }
-        let fx = self.tick_pumped(t);
+        let mut fx = self.tick_pumped(t);
+        fx.append(&mut self.ax_chrome_fx);
         self.st_mark(t);
         fx
     }
@@ -4268,6 +4275,7 @@ impl Shell {
         let reader_on = self.screen_reader_on();
         self.reader.note_mode(reader_on);
         self.switch_scan_tick(t);
+        self.hover_speech_tick(t);
         self.popup_cues.observe(self.desktop_menu.is_some() || self.power_menu.is_some());
         if self.chrome.rot_lock != self.rotation_locked() {
             self.chrome.rot_lock = self.rotation_locked();

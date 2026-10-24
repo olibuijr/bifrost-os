@@ -26,7 +26,7 @@ impl Shell {
     /// The external app whose window content is at screen point (`x`, `y`): its slot, the window (0 for the main
     /// window, else the extra window's id) and the point relative to the content, in pixels. `None` over the desktop, a
     /// title bar, an edge, another screen or a window that is not an external app's.
-    fn ext_content_at(&self, x: f32, y: f32) -> Option<(u8, u32, f32, f32)> {
+    pub(in crate::shell) fn ext_content_at(&self, x: f32, y: f32) -> Option<(u8, u32, f32, f32)> {
         if !self.desk_active() || self.is_locked() {
             return None;
         }
