@@ -102,7 +102,16 @@ impl Button {
     }
 }
 
-/// An [`Entry`] with the richer parts of a widget: live date text and buttons.
+/// What one widget size shows instead of the entry's title, text or detail (the reference view's switch on
+/// `widgetFamily`). A part left as None keeps the entry's.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Variant {
+    pub title: Option<String>,
+    pub text: Option<String>,
+    pub detail: Option<String>,
+}
+
+/// An [`Entry`] with the richer parts of a widget: live date text, buttons, a detail line and per-size variants.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Rich {
     pub entry: Entry,
@@ -110,11 +119,28 @@ pub struct Rich {
     /// the app does not run
     pub clock: Option<(ClockStyle, f64)>,
     pub buttons: Vec<Button>,
+    /// a third line under the text, shown by the Medium and Large sizes
+    pub detail: Option<String>,
+    /// what each size shows instead of the entry's own parts
+    pub variants: Vec<(Family, Variant)>,
 }
 
 impl Rich {
     pub fn new(entry: Entry) -> Self {
-        Rich { entry, clock: None, buttons: Vec::new() }
+        Rich { entry, clock: None, buttons: Vec::new(), detail: None, variants: Vec::new() }
+    }
+
+    /// Adds the detail line the Medium and Large sizes show under the text.
+    pub fn with_detail(mut self, detail: &str) -> Self {
+        self.detail = Some(detail.into());
+        self
+    }
+
+    /// Gives `family` its own title, text or detail; a later call for the same size replaces it.
+    pub fn with_variant(mut self, family: Family, variant: Variant) -> Self {
+        self.variants.retain(|(f, _)| *f != family);
+        self.variants.push((family, variant));
+        self
     }
 
     /// Shows the distance to `target` (unix seconds) as live text in `style`.
@@ -347,6 +373,21 @@ fn rich_entry_json(r: &Rich) -> Json {
     if !r.buttons.is_empty() {
         pairs.push(("actions".into(), Json::Arr(r.buttons.iter().map(button_json).collect())));
     }
+    if let Some(d) = &r.detail {
+        pairs.push(("detail".into(), Json::Str(d.clone())));
+    }
+    if !r.variants.is_empty() {
+        let sizes = r
+            .variants
+            .iter()
+            .map(|(f, v)| {
+                let parts = [("title", &v.title), ("text", &v.text), ("detail", &v.detail)];
+                let fields = parts.iter().filter_map(|(k, p)| p.as_ref().map(|t| (k.to_string(), Json::Str(t.clone())))).collect();
+                (f.key().to_string(), Json::Obj(fields))
+            })
+            .collect();
+        pairs.push(("families".into(), Json::Obj(sizes)));
+    }
     Json::Obj(pairs)
 }
 
@@ -420,6 +461,22 @@ mod tests {
         assert_eq!(actions[0].get("params").and_then(|p| p.str_field("item")).as_deref(), Some("7"));
         assert!(actions[0].get("toggle").is_none(), "a button has no toggle state");
         assert_eq!(actions[1].get("toggle"), Some(&Json::Bool(false)));
+    }
+
+    #[test]
+    fn a_rich_entry_carries_its_detail_and_one_variant_per_size() {
+        let e = Entry { date: 0.0, title: "Next".into(), text: "Standup 9:00".into() };
+        let rich = Rich::new(e)
+            .with_detail("Room 4")
+            .with_variant(Family::Small, Variant { text: Some("old".into()), ..Variant::default() })
+            .with_variant(Family::Small, Variant { text: Some("9:00".into()), ..Variant::default() })
+            .with_variant(Family::Large, Variant { title: Some("Today".into()), ..Variant::default() });
+        let j = rich_entry_json(&rich);
+        assert_eq!(j.str_field("detail").as_deref(), Some("Room 4"));
+        let sizes = j.get("families").unwrap();
+        assert_eq!(sizes.get("small").and_then(|v| v.str_field("text")).as_deref(), Some("9:00"), "the later variant replaces the first");
+        assert!(sizes.get("small").and_then(|v| v.get("title")).is_none(), "a part left out is not sent");
+        assert_eq!(sizes.get("large").and_then(|v| v.str_field("title")).as_deref(), Some("Today"));
     }
 
     #[test]

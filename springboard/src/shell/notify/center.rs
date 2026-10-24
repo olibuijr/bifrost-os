@@ -1300,7 +1300,7 @@ impl Shell {
     }
 
     fn draw_desk_center(&mut self, s: &mut Surface, t: f64) {
-        use super::super::ui::{FIELD_BG, FOCUS_INDIGO, LABEL, LABEL_2, LINK, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT, BAR_TEXT, BAR_TEXT_SHADOW, BAR_TEXT_SHADOW_ALPHA, NC_WEATHER_TINT, SYSTEM_RED};
+        use super::super::ui::{FIELD_BG, FOCUS_INDIGO, LABEL, LABEL_2, LINK, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT, BAR_TEXT, BAR_TEXT_SHADOW, BAR_TEXT_SHADOW_ALPHA, NC_WEATHER_TINT, SYSTEM_RED};
         let c = &self.notify.center;
         let p = c.progress(t).clamp(0.0, 1.0);
         if let Some((x, y, w, h)) = self.center_desk_rect().filter(|_| bifrost_render::glass::gpu()) {
@@ -1462,9 +1462,17 @@ impl Shell {
             let room = x + w - pad - buttons_room - tx;
             let head = ui.text(&ui.fit(&row.title, MAC_SUBHEAD_PT, room), MAC_SUBHEAD_PT, Weight::Regular, secondary);
             let value = ui.text(&ui.fit(&row.text, MAC_HEADLINE_PT, room), MAC_HEADLINE_PT, Weight::Semibold, label);
-            let ly = y + (h - (head.h + value.h) as f32) / 2.0;
+            // a Medium or Large widget's detail line, in footnote type under the value, when the row has room for it
+            let detail = (!row.detail.is_empty())
+                .then(|| ui.text(&ui.fit(&row.detail, MAC_FOOTNOTE_PT, room), MAC_FOOTNOTE_PT, Weight::Regular, secondary))
+                .filter(|d| (head.h + value.h + d.h) as f32 <= h - ui.pt(NC_ITEM_GAP_PT));
+            let lines_h = head.h + value.h + detail.as_ref().map_or(0, |d| d.h);
+            let ly = y + (h - lines_h as f32) / 2.0;
             s.blit(&head, tx as i32, ly as i32, 255, alpha);
             s.blit(&value, tx as i32, (ly + head.h as f32) as i32, 255, alpha);
+            if let Some(d) = &detail {
+                s.blit(d, tx as i32, (ly + (head.h + value.h) as f32) as i32, 255, alpha);
+            }
         }
         // Edit Widgets: a small glass capsule with a quiet label and a round close button beside it
         let ((ex, ey, ew, eh), close) = self.center_edit_rects();

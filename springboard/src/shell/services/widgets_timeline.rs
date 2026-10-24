@@ -12,6 +12,8 @@
 //!   Each entry may also carry `clock: {style:"relative"|"timer", target}` (live date text, `{}` in the text marks where
 //!   it goes) and `actions: [{id, label, intent, params?: {name: text}, toggle?: bool}]` (at most 3 buttons or
 //!   toggles; a tap runs the app's `[[intent]]`, a toggle also sends its new state as the parameter `on`).
+//!   An entry may add `detail` (a third line the Medium and Large sizes show) and `families: {small|medium|large:
+//!   {title?, text?, detail?}}`, what each size shows instead (the reference view's switch on `widgetFamily`).
 //! - `register {kinds:[{id, name?, description?, families?:["small","medium","large"], configurable?}]}` registers the
 //!   widget kinds the app offers; the Edit Widgets gallery lists them (with their name, description and the size chips
 //!   they support) before a first `reload`. Apps can also declare them as `[[widget]]` tables in `manifest.toml`.
@@ -65,11 +67,24 @@ pub struct Clock {
     pub target: i64,
 }
 
+/// What one size of a widget shows instead of the entry's own title, text or detail (the reference widget view reads
+/// `widgetFamily` and lays out each size on its own). A part left out keeps the entry's.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Variant {
+    pub title: Option<String>,
+    pub text: Option<String>,
+    pub detail: Option<String>,
+}
+
 /// The text a widget entry or an activity shows.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Text {
     pub title: String,
     pub text: String,
+    /// a third line under the text, shown by the Medium and Large sizes, which have room for it
+    pub detail: String,
+    /// per-size replacements for the title, text and detail (`families: {small: {...}, large: {...}}`)
+    pub variants: Vec<(Family, Variant)>,
     /// live date text: replaces `{}` in `text` (or follows it), and keeps counting while the app does not run
     pub clock: Option<Clock>,
     /// the buttons and toggles on the entry; a tap runs the app intent each one names
@@ -103,7 +118,31 @@ impl Text {
             buttons.push(button_of(b)?);
         }
         check_buttons(&buttons).map_err(button_error)?;
-        Ok(Text { clock, buttons, ..Text::of(j) })
+        let mut variants = Vec::new();
+        if let Some(Json::Obj(pairs)) = j.get("families") {
+            for (key, v) in pairs {
+                let family = Family::from_key(key).ok_or_else(|| format!("no widget size {key}"))?;
+                let part = |name: &str| v.str_field(name);
+                variants.retain(|(f, _): &(Family, Variant)| *f != family);
+                variants.push((family, Variant { title: part("title"), text: part("text"), detail: part("detail") }));
+            }
+        }
+        Ok(Text { clock, buttons, detail: j.str_field("detail").unwrap_or_default(), variants, ..Text::of(j) })
+    }
+
+    /// The entry as one size shows it: the size's variant over the entry's own parts. A Small widget has no room for
+    /// the detail line, so it shows one only when its variant names one.
+    pub fn for_family(&self, family: Family) -> Text {
+        let v = self.variants.iter().find(|(f, _)| *f == family).map(|(_, v)| v);
+        let pick = |own: &str, over: Option<&Option<String>>| over.and_then(|o| o.clone()).unwrap_or_else(|| own.to_string());
+        let own_detail = if family == Family::Small { "" } else { self.detail.as_str() };
+        Text {
+            title: pick(self.title.as_str(), v.map(|v| &v.title)),
+            text: pick(self.text.as_str(), v.map(|v| &v.text)),
+            detail: pick(own_detail, v.map(|v| &v.detail)),
+            variants: Vec::new(),
+            ..self.clone()
+        }
     }
 
     /// The text on screen at `now`: `text` with `{}` replaced by the clock's wording, or the wording after the text
@@ -183,6 +222,8 @@ pub struct RowButton {
 pub struct Row {
     pub title: String,
     pub text: String,
+    /// the third line of a Medium or Large widget (blank when there is none)
+    pub detail: String,
     /// the widget is set to Large in the Edit Widgets gallery: its row is taller
     pub large: bool,
     /// the size the person gave the widget (a live activity is Small)
@@ -769,16 +810,28 @@ impl Store {
             .into_iter()
             .map(|i| {
                 let (w, e) = shown[i];
-                let text = e.value.display(now);
+                // each size shows its own variant of the entry
+                let sized = e.value.for_family(w.family);
+                let text = sized.display(now);
                 let buttons = w.row_buttons(now);
-                let label = spoken(&e.value.title, &text, &buttons);
-                Row { title: e.value.title.clone(), text, large: w.family == Family::Large, family: w.family, buttons, label, widget: Some((w.app.clone(), w.kind.clone())) }
+                let value = if sized.detail.is_empty() { text.clone() } else { format!("{text}, {}", sized.detail) };
+                let label = spoken(&sized.title, &value, &buttons);
+                Row {
+                    title: sized.title,
+                    text,
+                    detail: sized.detail,
+                    large: w.family == Family::Large,
+                    family: w.family,
+                    buttons,
+                    label,
+                    widget: Some((w.app.clone(), w.kind.clone())),
+                }
             })
             .collect();
         for (id, _) in &self.owners {
             if let Some(c) = self.activities.content(*id, unix(now)) {
                 let label = spoken(&c.state.title, &c.state.text, &[]);
-                rows.push(Row { title: c.state.title.clone(), text: c.state.text.clone(), large: false, family: Family::Small, buttons: Vec::new(), label, widget: None });
+                rows.push(Row { title: c.state.title.clone(), text: c.state.text.clone(), detail: String::new(), large: false, family: Family::Small, buttons: Vec::new(), label, widget: None });
             }
         }
         rows
@@ -1185,6 +1238,7 @@ mod tests {
         Row {
             title: title.into(),
             text: text.into(),
+            detail: String::new(),
             large,
             family: if large { Family::Large } else { Family::Small },
             buttons: Vec::new(),
@@ -1703,6 +1757,25 @@ mod tests {
         assert!(s.listing(0).is_empty(), "a refused call registers nothing");
         assert_eq!(s.call("is.a", "register", &body(vec![obj(&[("id", s_("k"))])]), 0), Ok(Json::Num(1.0)));
         assert_eq!(s.listing(0)[0].families, vec![Family::Small, Family::Medium], "left out: small and medium");
+    }
+
+    #[test]
+    fn each_size_shows_its_own_variant_and_the_detail_needs_room() {
+        let mut s = Store::default();
+        let families = obj(&[("small", obj(&[("text", s_("9:00"))])), ("large", obj(&[("title", s_("Today")), ("detail", s_("Room 4, then lunch"))]))]);
+        let body = reload_with("next", vec![("text", s_("Standup 9:00")), ("detail", s_("Room 4")), ("families", families)]);
+        s.call("is.a", "reload", &body, 0).unwrap();
+        let r = &s.rows(0)[0];
+        assert_eq!((r.title.as_str(), r.text.as_str(), r.detail.as_str()), ("Next", "9:00", ""), "Small: its own text and no detail");
+        s.set_family("is.a", "next", Family::Large);
+        let r = &s.rows(0)[0];
+        assert_eq!((r.title.as_str(), r.text.as_str(), r.detail.as_str()), ("Today", "Standup 9:00", "Room 4, then lunch"), "Large: its variant over the entry");
+        assert_eq!(r.label, spoken("Today", "Standup 9:00, Room 4, then lunch", &[]), "the reader hears the detail too");
+        let plain = Text { detail: "Room 4".into(), ..Text::new("Next", "Standup") };
+        assert_eq!(plain.for_family(Family::Medium).detail, "Room 4", "Medium shows the entry's detail");
+        assert_eq!(plain.for_family(Family::Small).detail, "");
+        let bad = reload_with("k", vec![("families", obj(&[("huge", obj(&[]))]))]);
+        assert!(s.call("is.a", "reload", &bad, 0).is_err(), "an unknown size is refused");
     }
 
     #[test]
