@@ -3151,6 +3151,8 @@ impl Settings {
                         self.desk.sidebar_icons = k.min(super::pages::SIDEBAR_ICON_SIZES.len() - 1);
                         let _ = prefs.set(super::pages::SIDEBAR_ICON_PREF, &self.desk.sidebar_icons.to_string());
                         self.desk.apply();
+                        // the sidebar's row pitch is laid out when it is built: build it again at the new size now
+                        self.rebuild_sidebar(ui);
                         vec![]
                     }
                     Pick::Remap(slot, target) => {
@@ -5357,6 +5359,25 @@ mod e2e_w3_tests {
         assert!(before > 0.0, "the sidebar scrolls at this height");
         st.set_size(&ui, 1210, 680);
         assert_eq!(st.sidebar_list().expect("split").offset(), before);
+    }
+
+    /// N12: a new Sidebar icon size moved the sidebar rows only at the next relayout.
+    #[test]
+    fn the_sidebar_icon_size_applies_at_once() {
+        let ui = crate::shell::tests::ui();
+        let keep = bifrost_render::ui::sidebar_icon_size();
+        bifrost_render::ui::set_sidebar_icon_size(1);
+        let (mut st, mut prefs) = split(&ui);
+        st.open_page_id(&ui, PageId::Appearance, 0.0);
+        settle(&mut st, &ui);
+        let (_, before) = st.sidebar_centre(&ui, "Appearance").expect("the Appearance row");
+        let (x, y) = st.row_centre(&ui, "Sidebar icon size").expect("the size row");
+        tap(&mut st, &ui, &mut prefs, x, y);
+        st.activate(&ui, &mut prefs, Hit::Choice(2), 0.0);
+        settle(&mut st, &ui);
+        let (_, after) = st.sidebar_centre(&ui, "Appearance").expect("the Appearance row");
+        bifrost_render::ui::set_sidebar_icon_size(keep);
+        assert!(after > before, "Large rows move the row down at once: {before} -> {after}");
     }
 
     #[test]
