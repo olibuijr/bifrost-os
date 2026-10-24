@@ -2350,10 +2350,13 @@ impl Settings {
             // field keeps its query, so the results stay in the sidebar)
             let hits = self.hit_pages();
             if let Out::Named(dir @ ("Up" | "Down")) = out {
-                return match step_hit(&hits, self.highlighted_hit(&hits), dir == "Down") {
-                    Some(id) => self.open_page_id(ui, id, t),
-                    None => vec![],
-                };
+                // the sidebar keeps the results beside the page they open; the single column has them on its root only
+                if self.side_w > 0 && !hits.is_empty() {
+                    return match step_hit(&hits, self.highlighted_hit(&hits), dir == "Down") {
+                        Some(id) => self.open_page_id(ui, id, t),
+                        None => vec![],
+                    };
+                }
             }
             let target = matches!(out, Out::Enter).then(|| hits.get(self.highlighted_hit(&hits).unwrap_or(0)).copied()).flatten();
             if self.search.edit(ui, out, t) {
