@@ -345,6 +345,9 @@ pub struct Desk {
     pub(super) hidden: Vec<AppId>,
     /// the window server's toplevels (native and Linux apps) Hide minimized, so Show All can bring them back
     pub(super) hidden_foreign: Vec<u32>,
+    /// the windows Show Desktop put aside: `minimized`, but not in the Dock's minimized section; Show Desktop again or
+    /// Bring All to Front brings them back (N13)
+    pub(super) put_aside: Vec<AppId>,
     /// where each app's window was when it was last closed: a window opened again comes back there (W2-26), as an app's
     /// autosaved frame does, instead of at the window server's next cascade position
     pub(super) closed_origins:std::collections::HashMap<AppId,(i32,i32)>,
@@ -867,6 +870,37 @@ impl Desk {
         }
     }
 
+    /// Show Desktop: every shown window is put aside (minimized without a Dock slot) and remembered, so the desktop
+    /// shows; returns whether a window went. Windows put aside earlier stay aside.
+    pub(super) fn put_windows_aside(&mut self) -> bool {
+        let mut any = false;
+        for w in self.wins.iter_mut().filter(|w| !w.minimized) {
+            w.minimized = true;
+            if !self.put_aside.contains(&w.app) {
+                self.put_aside.push(w.app);
+            }
+            any = true;
+        }
+        any
+    }
+
+    /// The windows Show Desktop put aside come back where they were in the stack; returns whether one came back. A
+    /// window minimized or closed since is not brought back.
+    pub(super) fn bring_back_put_aside(&mut self) -> bool {
+        let back = std::mem::take(&mut self.put_aside);
+        let mut any = false;
+        for w in self.wins.iter_mut().filter(|w| w.minimized && back.contains(&w.app)) {
+            w.minimized = false;
+            any = true;
+        }
+        any
+    }
+
+    /// Whether the window of `app` is aside because of Show Desktop (not minimized to the Dock by the person).
+    pub(super) fn is_put_aside(&self, app: AppId) -> bool {
+        self.put_aside.contains(&app) && self.index_of(app).is_some_and(|i| self.wins[i].minimized)
+    }
+
     /// Show All: every window Hide put away is shown again, where it was in the stack.
     pub(super) fn unhide_all(&mut self) {
         self.unhide(|_| true);
@@ -1113,6 +1147,8 @@ impl Desk {
         self.collapsed.remove(&w.app);
         // a window closed while full screen from a zoom must not leave its way back for the window opened next
         self.full_from_zoom.retain(|a| *a != w.app);
+        // nor a window Show Desktop had put aside (the next window of the app is not brought back with the others)
+        self.put_aside.retain(|a| *a != w.app);
         w.app
     }
 
@@ -2077,7 +2113,7 @@ impl Shell {
         self.desk_fx_start(app, FxCall::Minimize, t);
         // its Dock thumbnail: one picture, asked for while the window server still has it on screen
         self.dock_shot(app, t);
-        if let Some(d) = self.desk.as_mut() { d.wins[i].minimized = true; d.hidden.retain(|a| *a != app); }
+        if let Some(d) = self.desk.as_mut() { d.wins[i].minimized = true; d.hidden.retain(|a| *a != app); d.put_aside.retain(|a| *a != app); }
         // the desktop it uncovers is drawn whole, not only the bar and Dock regions (W4-4)
         self.force_full_redraw();
         self.desk_refocus();
@@ -2185,7 +2221,7 @@ impl Shell {
         if std::env::var_os("SPRINGBOARD_WAYLAND").is_some() { list.push(apps().len()); }
         // sections: pinned, then recents (running, not kept), then minimized windows and the Trash
         list.sort_by_key(|&i| self.dock_section(i));
-        list.extend(desk.wins.iter().enumerate().filter(|(_, w)| self.overview.user_minimized(w) && !desk.is_hidden(w.app)).map(|(wi, _)| super::desktop_dock::DOCK_MIN_BASE - wi));
+        list.extend(desk.wins.iter().enumerate().filter(|(_, w)| self.overview.user_minimized(w) && !desk.is_hidden(w.app) && !desk.is_put_aside(w.app)).map(|(wi, _)| super::desktop_dock::DOCK_MIN_BASE - wi));
         let ui = &self.ui;
         // the Downloads stack and the Trash are last, after the last divider
         list.push(super::dock_stack::DOCK_STACK);
@@ -2329,8 +2365,12 @@ impl Shell {
     }
 
     /// Focus follows the frontmost visible window; with none, the desktop (Home) shows.
-    /// Window > Bring All to Front for the active app (the app of the front window when none is active).
+    /// Window > Bring All to Front for the active app (the app of the front window when none is active). The windows
+    /// Show Desktop put aside come back first (N13); windows minimized to the Dock stay there.
     pub(super) fn desk_bring_all_to_front(&mut self) {
+        if self.desk.as_mut().is_some_and(|d| d.bring_back_put_aside()) {
+            self.force_full_redraw();
+        }
         let parent = match self.screen {
             Screen::App(app) => Some(app.parent()),
             _ => self.desk.as_ref().and_then(|d| d.front()).map(|w| w.app.parent()),
@@ -2445,17 +2485,26 @@ impl Shell {
         }
     }
 
-    /// Hides every window and shows the desktop.
+    /// Show Desktop (Window menu, hot corner, gesture): puts every shown window aside to show the desktop; with none
+    /// shown and windows aside, it is the opposite command and brings them back (N13).
     pub(super) fn desk_show_desktop(&mut self) {
-        let t = self.last_input;
-        let shown: Vec<AppId> = self.desk.as_ref().map(|d| d.wins.iter().filter(|w| !w.minimized).map(|w| w.app).collect()).unwrap_or_default();
-        for app in shown {
-            self.dock_shot(app, t);
-        }
-        if let Some(d) = &mut self.desk {
-            for w in &mut d.wins {
-                w.minimized = true;
+        let any_shown = self.desk.as_ref().is_some_and(|d| d.wins.iter().any(|w| !w.minimized));
+        if !any_shown && self.desk.as_mut().is_some_and(|d| d.bring_back_put_aside()) {
+            if let Some(d) = self.desk.as_mut() {
+                d.raise_front = true;
             }
+            self.force_full_redraw();
+            self.desk_refocus();
+            return;
+        }
+        self.desk_put_windows_aside();
+    }
+
+    /// Puts every shown window aside and shows the desktop (`go_home` on the desktop never toggles them back). The
+    /// windows get no Dock slot: they are aside, not minimized by the person.
+    pub(super) fn desk_put_windows_aside(&mut self) {
+        if let Some(d) = &mut self.desk {
+            d.put_windows_aside();
         }
         // the whole desktop surface is drawn afresh: a partial frame clears only the bar, Dock and menu regions, so
         // anything left on the surface under the windows (a stray drag image) stayed in the middle of the bare
@@ -5769,5 +5818,70 @@ mod w4_window_tests {
         assert!(sh.desk_regions.is_none(), "no partial frame: the regions of the last one are dropped");
         assert!(matches!(sh.drawn, crate::shell::Drawn::Nothing));
         assert!(sh.desk.as_ref().unwrap().wins.iter().all(|w| w.minimized));
+    }
+
+    fn minimized(sh: &crate::shell::Shell, app: AppId) -> bool {
+        let d = sh.desk.as_ref().unwrap();
+        d.wins[d.index_of(app).unwrap()].minimized
+    }
+
+    /// N13: Show Desktop is its own opposite: a second Show Desktop brings back the windows it put aside, in their
+    /// order, and a window the person minimized stays in the Dock. The windows aside have no Dock slot.
+    #[test]
+    fn show_desktop_again_brings_the_windows_back() {
+        let mut sh = desktop();
+        sh.desk_open(AppId::Settings, 0.0);
+        sh.desk_open(AppId::Photos, 1.0);
+        sh.desk_open(AppId::Terminal, 2.0);
+        let i = sh.desk.as_ref().unwrap().index_of(AppId::Terminal).unwrap();
+        sh.desk_minimize_window(i, 3.0);
+        sh.desk_show_desktop();
+        assert!(minimized(&sh, AppId::Settings) && minimized(&sh, AppId::Photos));
+        let m = sh.desk_metrics();
+        let (list, _, _) = sh.desk_dock(&m);
+        let slots = list.iter().filter(|&&e| crate::shell::desktop_dock::dock_min_index(e).is_some()).count();
+        assert_eq!(slots, 1, "only the window the person minimized has a Dock slot");
+        sh.desk_show_desktop();
+        assert!(!minimized(&sh, AppId::Settings) && !minimized(&sh, AppId::Photos), "the windows came back");
+        assert!(minimized(&sh, AppId::Terminal), "the minimized window stays in the Dock");
+        assert_eq!(sh.desk.as_ref().unwrap().front().map(|w| w.app), Some(AppId::Photos), "the front window is in front again");
+    }
+
+    /// N13: after Show Desktop, Window > Bring All to Front brings the windows back.
+    #[test]
+    fn bring_all_to_front_brings_back_what_show_desktop_put_aside() {
+        let mut sh = desktop();
+        sh.desk_open(AppId::Settings, 0.0);
+        sh.desk_open(AppId::Photos, 1.0);
+        sh.desk_show_desktop();
+        sh.desk_bring_all_to_front();
+        assert!(!minimized(&sh, AppId::Settings) && !minimized(&sh, AppId::Photos));
+        assert_eq!(sh.desk.as_ref().unwrap().front().map(|w| w.app), Some(AppId::Photos));
+    }
+
+    /// N13: going home on the desktop (the assistive Home, a Screen Time block) only ever puts the windows aside; it
+    /// never brings them back the way a second Show Desktop does.
+    #[test]
+    fn putting_the_windows_aside_twice_keeps_them_aside() {
+        let mut sh = desktop();
+        sh.desk_open(AppId::Settings, 0.0);
+        sh.desk_put_windows_aside();
+        sh.desk_put_windows_aside();
+        assert!(minimized(&sh, AppId::Settings));
+    }
+
+    /// N8: when the Terminal's shell exits, only the Terminal's window closes; the other windows stay on the desktop.
+    #[test]
+    fn a_terminal_whose_shell_exits_closes_only_its_window() {
+        let mut sh = desktop();
+        sh.desk_open(AppId::Settings, 0.0);
+        sh.desk_open(AppId::Terminal, 1.0);
+        sh.term.clear();
+        sh.anim = None;
+        sh.tick(100.0);
+        let d = sh.desk.as_ref().unwrap();
+        assert!(d.index_of(AppId::Terminal).is_none(), "the Terminal's window closed");
+        assert!(!minimized(&sh, AppId::Settings), "Settings stays on the desktop");
+        assert_eq!(sh.screen, crate::shell::Screen::App(AppId::Settings));
     }
 }

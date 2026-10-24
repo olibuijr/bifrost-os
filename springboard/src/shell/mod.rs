@@ -3253,7 +3253,7 @@ impl Shell {
     /// Leaves the app: its frame zooms into its icon and becomes its switcher card.
     fn go_home(&mut self, t: f64) {
         if self.desk_active() {
-            return self.desk_show_desktop();
+            return self.desk_put_windows_aside();
         }
         if let Screen::App(app) = self.screen {
             let full = Rect { x: 0, y: 0, w: self.w, h: self.h };
@@ -3262,6 +3262,17 @@ impl Shell {
             self.transition = Some(frame);
             self.anim = Some((Anim::Close { from: full, rect: self.icon_rect(app) }, t));
             self.screen = Screen::Home;
+        }
+    }
+
+    /// A built-in app whose model is gone (the Terminal's last shell exited, Deildu, Photos or Files could not be made)
+    /// leaves the screen: on the desktop only its own window closes and every other window stays where it is (N8: the
+    /// Terminal's `exit` went through `go_home`, which put every window aside); the touch presentation goes home.
+    fn leave_dead_app(&mut self, app: AppId, t: f64) {
+        if self.desk_active() {
+            self.desk_close_app(app);
+        } else {
+            self.go_home(t);
         }
     }
 
@@ -4245,12 +4256,12 @@ impl Shell {
             }
         }
         if self.screen == Screen::App(AppId::Terminal) && self.term.is_none() && self.anim.is_none() {
-            self.go_home(t);
+            self.leave_dead_app(AppId::Terminal, t);
         }
         if self.screen == Screen::App(AppId::Deildu) {
             match &mut self.deildu {
                 Some(d) => self.dirty |= d.tick(&self.ui, t),
-                None if self.anim.is_none() => self.go_home(t),
+                None if self.anim.is_none() => self.leave_dead_app(AppId::Deildu, t),
                 None => {}
             }
         }
@@ -4264,7 +4275,7 @@ impl Shell {
             }
             effects.extend(p.take_effects());
         } else if self.screen == Screen::App(AppId::Photos) && self.anim.is_none() {
-            self.go_home(t);
+            self.leave_dead_app(AppId::Photos, t);
         }
         if let Some(o) = &self.shot {
             if o.done(t) {
@@ -4286,7 +4297,7 @@ impl Shell {
         if self.screen == Screen::App(AppId::Files) {
             match &mut self.files {
                 Some(f) => self.dirty |= f.tick(&self.ui, t),
-                None if self.anim.is_none() => self.go_home(t),
+                None if self.anim.is_none() => self.leave_dead_app(AppId::Files, t),
                 None => {}
             }
         }
