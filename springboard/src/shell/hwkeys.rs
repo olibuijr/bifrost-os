@@ -244,6 +244,13 @@ pub enum Shortcut {
 impl Shortcut {
     /// The Ctrl+Cmd arrow shortcut a `tile` control line stands for (the window server takes the chord and sends the line,
     /// so the shell's front window is the one arranged).
+    /// Whether the shortcut still runs while the Terminal in front has Secure Keyboard Entry on: the Terminal's own keys,
+    /// Paste, the lock, Force Quit, and Ctrl+Cmd+arrow tiling, which the window server takes before any app reads the
+    /// keys (as on Golden Gate, where Secure Input never stops window management) and relays to the shell.
+    pub fn runs_under_secure_entry(&self) -> bool {
+        matches!(self, Shortcut::Term(_) | Shortcut::Paste | Shortcut::Lock | Shortcut::ForceQuit | Shortcut::Tile(_))
+    }
+
     pub fn tile(key: crate::bare::control::TileKey) -> Self {
         use crate::bare::control::TileKey;
         Shortcut::Tile(match key {
@@ -1324,13 +1331,14 @@ impl Shell {
         }
         let in_terminal = matches!(self.screen, Screen::App(AppId::Terminal | AppId::External(_)));
         // a card alert holds the keyboard: every shortcut but Escape (which answers it) and the lock is used up, not run on
-        // the app that raised the alert or sent to the app behind it
+        // the app that raised the alert or sent to the app behind it; Ctrl+Cmd+arrow tiling too, which the window server
+        // relays here, so the window behind the alert does not move while the alert waits for its answer
         if self.card_alert_up() && !matches!(sc, Shortcut::Back | Shortcut::Lock) {
             return vec![];
         }
         // Secure Keyboard Entry: while the Terminal is in front, only its own keys run; the shell's shortcuts
         // (switcher, search, input source, Home, Back, window keys) never see them. Escape still answers a card alert.
-        if self.screen == Screen::App(AppId::Terminal) && self.terminal_ui.secure && !(matches!(sc, Shortcut::Back) && self.card_alert_up()) && !matches!(sc, Shortcut::Term(_) | Shortcut::Paste | Shortcut::Lock | Shortcut::ForceQuit) {
+        if self.screen == Screen::App(AppId::Terminal) && self.terminal_ui.secure && !(matches!(sc, Shortcut::Back) && self.card_alert_up()) && !sc.runs_under_secure_entry() {
             return vec![];
         }
         let fx = match sc {
@@ -1483,6 +1491,20 @@ impl Shell {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// E2E2: Ctrl+Cmd+arrow tiling reaches the shell from the window server and was dropped while the Terminal had
+    /// Secure Keyboard Entry on; window management still runs then, the shell's other shortcuts do not.
+    #[test]
+    fn tiling_runs_under_secure_keyboard_entry() {
+        for tile in [Tile::Left, Tile::Right, Tile::Fill, Tile::Center] {
+            assert!(Shortcut::Tile(tile).runs_under_secure_entry());
+        }
+        assert!(Shortcut::Paste.runs_under_secure_entry());
+        assert!(Shortcut::ForceQuit.runs_under_secure_entry());
+        for sc in [Shortcut::QuickSearch, Shortcut::AppSwitch, Shortcut::InputSource, Shortcut::Home, Shortcut::Back, Shortcut::Minimize, Shortcut::FullScreen] {
+            assert!(!sc.runs_under_secure_entry(), "{sc:?} waits for Secure Keyboard Entry to end");
+        }
+    }
 
     /// QA 0.10.20: Cmd+[ did nothing in Settings; it goes Back like the back control, and only Cmd+[ does.
     #[test]
