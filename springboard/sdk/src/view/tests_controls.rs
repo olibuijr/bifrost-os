@@ -401,6 +401,58 @@ fn a_stack_aligns_children_across_its_axis() {
     assert_eq!((Align::TOP, Align::BOTTOM), (Align::Leading, Align::Trailing));
 }
 
+/// A fixed-size view without text (an image), for baseline alignment.
+struct Block {
+    base: ViewBase,
+    size: (f32, f32),
+}
+impl View for Block {
+    crate::view_base!();
+    fn intrinsic(&self, _ui: &Ui) -> (f32, f32) {
+        self.size
+    }
+}
+
+fn baseline_row(ui: &Ui, align: Align) -> (Stack, f32) {
+    let mut big = Label::new("Title");
+    big.pt = bifrost_render::ui::MAC_LARGE_TITLE_PT;
+    let mut row = Stack::hstack(8.0, vec![Box::new(big), Box::new(Button::new("OK", "ok")), Box::new(Block { base: ViewBase::default(), size: (20.0, 30.0) })]).aligned(align);
+    row.layout(ui, rect(0.0, 10.0, 400.0, 120.0));
+    let first = row.children()[0].frame().y + row.children()[0].baselines(ui).unwrap().0;
+    (row, first)
+}
+
+#[test]
+fn first_baseline_alignment_lines_up_text_of_different_sizes_and_images_by_their_bottom() {
+    let ui = ui();
+    let (row, line) = baseline_row(&ui, Align::FirstBaseline);
+    let button = &row.children()[1];
+    assert!((button.frame().y + button.baselines(&ui).unwrap().0 - line).abs() < 1e-3, "button baseline {} vs {line}", button.frame().y);
+    // the view without text sits on the baseline with its bottom edge
+    assert!((row.children()[2].frame().bottom() - line).abs() < 1e-3);
+    // nothing rises above the stack's top, and the lowest guide's owner stays at the top
+    assert!(row.children().iter().all(|c| c.frame().y >= 10.0 - 1e-3));
+    assert!(row.children().iter().any(|c| (c.frame().y - 10.0).abs() < 1e-3));
+    // the stack reports the shared line as its own baselines
+    let (f, l) = row.baselines(&ui).unwrap();
+    assert!((10.0 + f - line).abs() < 1e-3 && (10.0 + l - line).abs() < 1e-3);
+}
+
+#[test]
+fn last_baseline_alignment_uses_the_last_line_and_a_vertical_stack_ignores_baselines() {
+    let ui = ui();
+    let (row, line) = baseline_row(&ui, Align::LastBaseline);
+    let button = &row.children()[1];
+    assert!((button.frame().y + button.baselines(&ui).unwrap().1 - line).abs() < 1e-3);
+    let mut col = Stack::vstack(0.0, vec![Box::new(Button::new("OK", "ok"))]).aligned(Align::FirstBaseline);
+    col.layout(&ui, rect(0.0, 0.0, 300.0, 100.0));
+    assert_eq!(col.children()[0].frame().x, 0.0);
+    // a stack with no text has no baselines
+    let mut blocks = Stack::hstack(0.0, vec![Box::new(Block { base: ViewBase::default(), size: (10.0, 10.0) })]);
+    blocks.layout(&ui, rect(0.0, 0.0, 100.0, 100.0));
+    assert_eq!(blocks.baselines(&ui), None);
+}
+
 #[test]
 fn a_stack_with_insets_and_spacing_stacks_children_in_order_and_routes_clicks() {
     let ui = ui();

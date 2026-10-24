@@ -200,6 +200,12 @@ pub trait View: 'static {
     fn compression(&self, _axis: bifrost_ui::stack::Axis) -> u16 {
         750
     }
+    /// `firstBaselineOffsetFromTop` and `lastBaselineOffsetFromBottom` (as offsets from the top): the first and last
+    /// text baselines in points below the top of the view's current frame, for `.firstTextBaseline` and
+    /// `.lastTextBaseline` alignment. `None` for a view without text; a stack then aligns it by its bottom edge.
+    fn baselines(&self, _ui: &Ui) -> Option<(f32, f32)> {
+        None
+    }
     /// `layoutSubtreeIfNeeded`: given the rectangle assigned by the parent, set the own frame and place children.
     /// The default fills `bounds` and gives every child the same rectangle.
     fn layout(&mut self, ui: &Ui, bounds: Rect) {
@@ -789,6 +795,7 @@ impl<S: Responder> Window<S> {
                     intrinsic: v.intrinsic(ui),
                     hugging: (v.hugging(Axis::Horizontal), v.hugging(Axis::Vertical)),
                     compression: (v.compression(Axis::Horizontal), v.compression(Axis::Vertical)),
+                    baselines: v.baselines(ui),
                 });
             }
         }

@@ -1,6 +1,6 @@
 //! More control views: Checkbox, Stepper, ProgressIndicator, TextField, PopUpButton and the grouped Form / Section.
 //! Same rules as `controls.rs`: named colours from render ui.rs, `MAC_*_PT` text sizes, `ui.pt()` for every length.
-use super::controls::{draw_text, focus_ring, is_activate, node};
+use super::controls::{centred_baselines, draw_text, focus_ring, is_activate, node};
 use super::{blit, TextInputInfo, View, ViewBase, ViewEvent};
 use crate::kit::clipboard;
 use crate::kit::ui::{Weight, CARD_BG, CONTROL_PRESSED, FIELD_BG, HAIRLINE_C, LABEL, LABEL_2, LABEL_3, SEPARATOR_C, TINT, TRACK_C, WHITE};
@@ -17,6 +17,8 @@ use bifrost_ui::text::{extend_unit, key_action, ClickCounter, EditCommand, KeyAc
 use bifrost_ui::{values, Command, Node, Rect, Role};
 use std::f32::consts::PI;
 
+/// The line box a text field centres in its frame: the text image's top sits half of this above the middle, in points.
+const TEXT_LINE_PT: f32 = 16.0;
 /// `NativeButton` checkbox box edge, in points.
 const CHECKBOX_PT: f32 = 14.0;
 const CHECKBOX_RADIUS_PT: f32 = 4.0;
@@ -90,6 +92,9 @@ impl View for Checkbox {
     crate::view_base!();
     fn intrinsic(&self, ui: &Ui) -> (f32, f32) {
         (CHECKBOX_PT + SPACE_S + ui.measure(&self.label, MAC_BODY_PT, Weight::Regular) / ui.pt(1.0), ROW_PT)
+    }
+    fn baselines(&self, ui: &Ui) -> Option<(f32, f32)> {
+        centred_baselines(ui, MAC_BODY_PT, self.base.frame)
     }
     fn accepts_first_responder(&self) -> bool {
         true
@@ -520,6 +525,11 @@ impl View for TextField {
     fn intrinsic(&self, _ui: &Ui) -> (f32, f32) {
         (0.0, ROW_PT)
     }
+    /// The text image's top is half of `TEXT_LINE_PT` above the field's middle (see `draw`).
+    fn baselines(&self, ui: &Ui) -> Option<(f32, f32)> {
+        let b = (self.base.frame.h - TEXT_LINE_PT) / 2.0 + ui.image_baseline(MAC_BODY_PT);
+        Some((b, b))
+    }
     fn accepts_first_responder(&self) -> bool {
         true
     }
@@ -557,7 +567,7 @@ impl View for TextField {
             b = n;
         }
         let end = b;
-        let (left, top) = (ui.pt(x + FIELD_INSET_PT), ui.pt(y + (h - 16.) / 2.));
+        let (left, top) = (ui.pt(x + FIELD_INSET_PT), ui.pt(y + (h - TEXT_LINE_PT) / 2.));
         let px = |m: &Vec<(usize, f32)>, at: usize| ui.pt(m.iter().rev().find(|(k, _)| *k <= at).map(|(_, v)| *v).unwrap_or(0.0));
         let sel = buf.selection();
         let marked = buf.marked_range();
@@ -836,6 +846,9 @@ impl View for PopUpButton {
     fn intrinsic(&self, ui: &Ui) -> (f32, f32) {
         let w = self.items.iter().map(|t| ui.measure(t, MAC_BODY_PT, Weight::Regular) / ui.pt(1.0)).fold(0.0, f32::max);
         (w + SPACE_XL + SPACE_L, MENU_ROW_PT)
+    }
+    fn baselines(&self, ui: &Ui) -> Option<(f32, f32)> {
+        centred_baselines(ui, MAC_BODY_PT, self.base.frame)
     }
     fn accepts_first_responder(&self) -> bool {
         true

@@ -37,6 +37,13 @@ pub(super) fn draw_text(s: &mut dyn Canvas, ui: &Ui, frame: Rect, text: &str, pt
     blit(s, &img, x as i32, y as i32);
 }
 
+/// The baselines of a view that draws one line of `pt` text centred in its frame (`draw_text`): first and last are
+/// the same line.
+pub(super) fn centred_baselines(ui: &Ui, pt: f32, frame: Rect) -> Option<(f32, f32)> {
+    let b = ui.centred_baseline(pt, frame.h);
+    Some((b, b))
+}
+
 pub(super) fn focus_ring(s: &mut dyn Canvas, ui: &Ui, f: Rect, radius: f32) {
     let t = ui.pt(FOCUS_RING_PT);
     s.stroke_rrect(RectF::new(ui.pt(f.x) - t, ui.pt(f.y) - t, ui.pt(f.w) + 2.0 * t, ui.pt(f.h) + 2.0 * t), ui.pt(radius) + t, t, TINT);
@@ -76,6 +83,9 @@ impl View for Label {
     fn intrinsic(&self, ui: &Ui) -> (f32, f32) {
         (ui.measure(&self.text, self.pt, self.weight) / ui.pt(1.0), self.pt + SPACE_S)
     }
+    fn baselines(&self, ui: &Ui) -> Option<(f32, f32)> {
+        centred_baselines(ui, self.pt, self.base.frame)
+    }
     fn draw(&mut self, s: &mut dyn Canvas, ui: &Ui) {
         let c = if !self.base.enabled { LABEL_3 } else if self.secondary { LABEL_2 } else { LABEL };
         draw_text(s, ui, self.base.frame, &self.text, self.pt, self.weight, c.now(), false);
@@ -114,6 +124,9 @@ impl View for Button {
     crate::view_base!();
     fn intrinsic(&self, ui: &Ui) -> (f32, f32) {
         (ui.measure(&self.title, MAC_BODY_PT, Weight::Regular) / ui.pt(1.0) + 2.0 * SPACE_L, ROW_PT)
+    }
+    fn baselines(&self, ui: &Ui) -> Option<(f32, f32)> {
+        centred_baselines(ui, MAC_BODY_PT, self.base.frame)
     }
     fn accepts_first_responder(&self) -> bool {
         true
@@ -206,6 +219,9 @@ impl View for Switch {
     crate::view_base!();
     fn intrinsic(&self, ui: &Ui) -> (f32, f32) {
         (ui.measure(&self.label, MAC_BODY_PT, Weight::Regular) / ui.pt(1.0) + SPACE_L + SWITCH_W_PT, ROW_PT)
+    }
+    fn baselines(&self, ui: &Ui) -> Option<(f32, f32)> {
+        centred_baselines(ui, MAC_BODY_PT, self.base.frame)
     }
     fn accepts_first_responder(&self) -> bool {
         true
@@ -380,6 +396,9 @@ impl View for Segmented {
         let w = self.labels.iter().map(|l| ui.measure(l, MAC_BODY_PT, Weight::Regular) / ui.pt(1.0) + 2.0 * SPACE_L).sum();
         (w, ROW_PT)
     }
+    fn baselines(&self, ui: &Ui) -> Option<(f32, f32)> {
+        centred_baselines(ui, MAC_BODY_PT, self.base.frame)
+    }
     fn accepts_first_responder(&self) -> bool {
         true
     }
@@ -427,7 +446,7 @@ impl View for Segmented {
 }
 
 /// How a stack places a child across its axis (`NativeStackView.alignment`). For a horizontal stack `Leading` is
-/// `.top` and `Trailing` is `.bottom` (`Align::TOP`, `Align::BOTTOM`). First and last baseline alignment are not done.
+/// `.top` and `Trailing` is `.bottom` (`Align::TOP`, `Align::BOTTOM`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Align {
     /// the full cross extent
@@ -435,6 +454,12 @@ pub enum Align {
     Leading,
     Center,
     Trailing,
+    /// `.firstTextBaseline` (horizontal stacks): the children's top-most text baselines line up. A child without text
+    /// (`View::baselines` is `None`) aligns its bottom edge with them, as the reference guide does. A vertical stack
+    /// treats it as `Leading`.
+    FirstBaseline,
+    /// `.lastTextBaseline` (horizontal stacks): the bottom-most text baselines line up; otherwise as `FirstBaseline`.
+    LastBaseline,
 }
 
 impl Align {
@@ -514,6 +539,7 @@ impl View for Stack {
                 .map(|(off, len)| if horizontal { Rect { x: area.x + off, y: area.y, w: len, h: area.h } } else { Rect { x: area.x, y: area.y + off, w: area.w, h: len } })
                 .collect()
         };
+        let by_baseline = horizontal && matches!(self.align, Align::FirstBaseline | Align::LastBaseline);
         for ((c, r), (w, h)) in self.children.iter_mut().zip(rects).zip(sizes) {
             let cross = if horizontal { h } else { w };
             let room = if horizontal { r.h } else { r.w };
@@ -528,6 +554,41 @@ impl View for Stack {
                 if horizontal { Rect { y: r.y + off, h: cross, ..r } } else { Rect { x: r.x + off, w: cross, ..r } }
             };
             c.layout(ui, r);
+        }
+        if by_baseline {
+            self.align_baselines(ui);
+        }
+    }
+    /// The first baseline of the top-most text and the last baseline of the bottom-most text among the children
+    /// (laid out), relative to the stack's top; `None` when no child has text.
+    fn baselines(&self, ui: &Ui) -> Option<(f32, f32)> {
+        let top = self.base.frame.y;
+        self.children
+            .iter()
+            .filter(|c| !c.base().hidden)
+            .filter_map(|c| c.baselines(ui).map(|(f, l)| (c.frame().y - top + f, c.frame().y - top + l)))
+            .fold(None, |acc, (f, l)| Some(acc.map_or((f, l), |(af, al): (f32, f32)| (af.min(f), al.max(l)))))
+    }
+}
+
+impl Stack {
+    /// The baseline guide of child `c` in window points: its first or last text baseline, or its bottom edge.
+    fn guide(&self, ui: &Ui, c: &dyn View) -> f32 {
+        let f = c.frame();
+        let last = self.align == Align::LastBaseline;
+        f.y + c.baselines(ui).map_or(f.h, |(first, l)| if last { l } else { first })
+    }
+    /// Moves the children (laid out top-aligned) down so their baseline guides meet the lowest one. The row then
+    /// starts at the stack's top: the child whose guide is lowest relative to its own top stays where it is.
+    fn align_baselines(&mut self, ui: &Ui) {
+        let guides: Vec<f32> = self.children.iter().map(|c| self.guide(ui, c.as_ref())).collect();
+        let Some(line) = guides.iter().copied().reduce(f32::max) else { return };
+        for (c, g) in self.children.iter_mut().zip(guides) {
+            let dy = line - g;
+            if dy != 0.0 {
+                super::shift_frames(c.as_mut(), 0.0, dy);
+                c.set_needs_display();
+            }
         }
     }
 }
