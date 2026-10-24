@@ -87,3 +87,36 @@ in this round; the lead runs them in the build stage.
 - Image drawing in the kit, per-codec representation classes, and template tinting.
 - Colour well and picker modes that use colour lists; eyedropper.
 - User accent colour feeding `controlAccentColor`.
+
+## Round: measured colour names, colour well, printer description, image drawing (2026-10-24)
+
+Branch `parity/appkit-graphics`. Details in `docs/bifrost-ui.md` ("NSColor semantic colours", "Table columns and shared
+panels", "Printing", "AppKit drawing and print layout").
+
+- `springboard/render/src/ui.rs` (`system`): the remaining semantic names (control, control text, disabled control
+  text, selected control and text, unemphasized selection, focus ring, insertion point, header, menu item, highlight,
+  window frame text, the quinary label, five system fills, alternating row backgrounds, control edges) with values
+  measured from the reference's light and dark appearance catalogues (named-colour tables, read by number; nothing
+  copied), plus `NAMED` / `named()` lookup by catalogue name. The accent already reached `controlAccentColor`
+  (`Pair::following_accent`, `ToApp::Appearance` bits 8 to 11); that gap was stale.
+- `springboard/ui/src/panels.rs`: picker modes with the reference raw values, the picker mask, `showsAlpha`,
+  `isContinuous`, attached colour lists and slider components (grey, RGB, CMYK, HSB).
+- `springboard/ui/src/color_well.rs`: the colour well (three styles), the shared panel protocol, the swatch popover grid
+  and `draw_well`; `sdk/src/color_list.rs` `swatch_grid` and `pick_into_well`.
+- `springboard/ui/src/printer_caps.rs`: make and model, document formats, resolutions, `language_level`,
+  `device_description`.
+- `springboard/sdk/src/image_object.rs`: `ImageObject::draw` (template tint, opacity, nine slices) and per-codec
+  representations with frame counts.
+
+REA evidence: ev_6c3ad0e07099189a330191100d5b1564f636b6064b3a70563d484aca64e11954 (colour panel modes),
+ev_707cf40ef10ba0a4f1899622a486b7b1d441668d39a5c31a9cdc6fbef9e5e470 (colour well),
+ev_718c7c2f272eff48acd3dad39768bd1d0c20bbe35ab21b643425783b55deedf1 (printer),
+ev_54eacf1088c9c1e27dce9ec56f7386ff23618c8b28b9ed08b757acb7dca16b09 (deviceDescription),
+ev_6a696e64493877091a178708ee554577c759c04ad87cb1546ee692e8f8fd131d (systemFill). Catalogue measurements: macOS 27
+26A434 `SystemAppearance.bundle` `Aqua.car` (sha256 c8f2a0a714d5e935ded1abd136e6adede0df7d6bed24aff962d484fd274cb50c)
+and `DarkAqua.car` (a158476559c537174a49cccb0ad952baaa021ed6e4f290dabb37dc5c4a6772e9), outside the repo.
+
+Still open: the existing pairs were not re-valued to the measured 26A434 values (a lead decision with a Midget
+comparison); no shell screen hosts a colour well or draws the panel pickers; eyedropper; Page Setup and accessory views
+in the shell; the print sheet does not read the printer's lists; image DPI from files, HEIC; a kit widget that takes an
+`ImageObject`; the symbol catalogue.

@@ -1015,10 +1015,182 @@ pub mod system {
     /// `windowFrameColor`: the frame around a focused window (the same pair as the title area).
     pub const WINDOW_FRAME: Pair = super::WINDOW_FRAME_FOCUSED;
     /// `findHighlightColor`: the highlight behind find-in-page matches. Translucent yellow; the values are a design
-    /// approximation to confirm on Midget.
-    pub const FIND_HIGHLIGHT: Pair = Pair::new(pack(255, 214, 10, 180), pack(255, 204, 0, 180));
+    /// approximation to confirm on Midget (the reference catalogues hold no value for it). Premultiplied, as the fills
+    /// that draw it expect (it was straight alpha, which drew too bright).
+    pub const FIND_HIGHLIGHT: Pair = Pair::new(pack(180, 151, 7, 180), pack(180, 144, 0, 180));
     /// `shadowColor`: the default colour of a drop shadow, black at one third opacity in both appearances.
     pub const SHADOW: Pair = Pair::new(pack(0, 0, 0, 85), pack(0, 0, 0, 85));
+
+    // The remaining semantic names, measured from the reference appearance catalogues (the light and the dark system
+    // appearance's named-colour tables; docs/bifrost-ui.md, "NativeColor semantic colours"). Translucent values are
+    // premultiplied, as `Surface::fill_rrect` takes them: white at alpha `a` is `pack(a, a, a, a)`. A name the dark
+    // table leaves out keeps its light value in Dark, as the reference does.
+
+    /// `controlColor`: the face of a control (opaque white in Light, white at a quarter in Dark).
+    pub const CONTROL: Pair = Pair::new(pack(63, 63, 63, 63), pack(255, 255, 255, 255));
+    /// `controlTextColor`: text on a control, black or white at 85%.
+    pub const CONTROL_TEXT: Pair = Pair::new(pack(216, 216, 216, 216), pack(0, 0, 0, 216));
+    /// `disabledControlTextColor`: text on a disabled control, at a quarter.
+    pub const DISABLED_CONTROL_TEXT: Pair = Pair::new(pack(63, 63, 63, 63), pack(0, 0, 0, 63));
+    /// `selectedControlColor`: the background of a selected control; it follows the accent like the selection plate.
+    pub const SELECTED_CONTROL: Pair = SELECTION;
+    /// `selectedControlTextColor`: text on a selected control.
+    pub const SELECTED_CONTROL_TEXT: Pair = Pair::new(pack(216, 216, 216, 216), pack(0, 0, 0, 216));
+    /// `alternateSelectedControlTextColor`: text on an emphasised (accent) selection, white in both appearances.
+    pub const ALTERNATE_SELECTED_CONTROL_TEXT: Pair = Pair::new(pack(255, 255, 255, 255), pack(255, 255, 255, 255));
+    /// `selectedTextBackgroundColor`: the plate behind selected text in the key window (follows the accent).
+    pub const SELECTED_TEXT_BACKGROUND: Pair = SELECTION;
+    /// `selectedTextColor`: selected text keeps the text colour.
+    pub const SELECTED_TEXT: Pair = super::LABEL;
+    /// `unemphasizedSelectedTextBackgroundColor`: the selection plate when the window is not key (a neutral grey).
+    pub const UNEMPHASIZED_SELECTED_TEXT_BACKGROUND: Pair = Pair::new(pack(70, 70, 70, 255), pack(220, 220, 220, 255));
+    /// `unemphasizedSelectedTextColor`: text on that plate.
+    pub const UNEMPHASIZED_SELECTED_TEXT: Pair = super::LABEL;
+    /// `keyboardFocusIndicatorColor`: the focus ring. Measured blue; the reference ring also takes the accent.
+    pub const KEYBOARD_FOCUS_INDICATOR: Pair = Pair::new(pack(18, 86, 127, 127), pack(59, 153, 252, 255));
+    /// `textInsertionPointColor`: the caret follows the accent colour.
+    pub const TEXT_INSERTION_POINT: Pair = CONTROL_ACCENT;
+    /// `headerTextColor`: table and outline header titles.
+    pub const HEADER_TEXT: Pair = Pair::new(pack(255, 255, 255, 255), pack(0, 0, 0, 216));
+    /// `selectedMenuItemTextColor`: the title of the highlighted menu item, white in both appearances.
+    pub const SELECTED_MENU_ITEM_TEXT: Pair = Pair::new(pack(255, 255, 255, 255), pack(255, 255, 255, 255));
+    /// `highlightColor`: the light edge of a raised element.
+    pub const HIGHLIGHT: Pair = Pair::new(pack(180, 180, 180, 255), pack(255, 255, 255, 255));
+    /// `windowFrameTextColor`: text in a window's title area.
+    pub const WINDOW_FRAME_TEXT: Pair = Pair::new(pack(216, 216, 216, 216), pack(0, 0, 0, 216));
+    /// `quinaryLabelColor`: the faintest label level (5%).
+    pub const QUINARY_LABEL: Pair = Pair::new(pack(12, 12, 12, 12), pack(0, 0, 0, 12));
+    /// `systemFillColor`: the fill of a thin or small shape (a slider track), black or white at 10%.
+    pub const SYSTEM_FILL: Pair = Pair::new(pack(25, 25, 25, 25), pack(0, 0, 0, 25));
+    /// `secondarySystemFillColor`: the fill of a medium shape (a switch background), 8%.
+    pub const SECONDARY_SYSTEM_FILL: Pair = Pair::new(pack(20, 20, 20, 20), pack(0, 0, 0, 20));
+    /// `tertiarySystemFillColor`: the fill of a large shape (an input field, a search bar), 5%.
+    pub const TERTIARY_SYSTEM_FILL: Pair = Pair::new(pack(12, 12, 12, 12), pack(0, 0, 0, 12));
+    /// `quaternarySystemFillColor`: the fill of a large area holding complex content, 3%.
+    pub const QUATERNARY_SYSTEM_FILL: Pair = Pair::new(pack(7, 7, 7, 7), pack(0, 0, 0, 7));
+    /// `quinarySystemFillColor`: the faintest fill, 1%.
+    pub const QUINARY_SYSTEM_FILL: Pair = Pair::new(pack(2, 2, 2, 2), pack(0, 0, 0, 2));
+    /// The second of `alternatingContentBackgroundColors` (the first is `CONTROL_BACKGROUND`): striped table rows.
+    pub const ALTERNATING_ROW: Pair = Pair::new(pack(12, 12, 12, 12), pack(244, 245, 245, 255));
+    /// `controlShadowColor`: the shadow edge of a control, black at 27% in both appearances.
+    pub const CONTROL_SHADOW: Pair = Pair::new(pack(0, 0, 0, 68), pack(0, 0, 0, 68));
+    /// `controlDarkShadowColor`: the darkest control edge, opaque black.
+    pub const CONTROL_DARK_SHADOW: Pair = Pair::new(pack(0, 0, 0, 255), pack(0, 0, 0, 255));
+    /// `controlHighlightColor`: the lit edge of a control.
+    pub const CONTROL_HIGHLIGHT: Pair = Pair::new(pack(25, 25, 25, 25), pack(255, 255, 255, 255));
+    /// `controlLightHighlightColor`: the brightest control edge (the same values as `CONTROL_HIGHLIGHT`).
+    pub const CONTROL_LIGHT_HIGHLIGHT: Pair = CONTROL_HIGHLIGHT;
+
+    /// `alternatingContentBackgroundColors`: the row colours a striped table cycles through, in order.
+    pub const ALTERNATING_CONTENT_BACKGROUNDS: [Pair; 2] = [CONTROL_BACKGROUND, ALTERNATING_ROW];
+
+    /// Every semantic colour under its catalogue name (`"labelColor"`, `"systemFillColor"`, ...), the names a
+    /// document or a colour list uses to refer to a dynamic colour instead of fixed values.
+    pub const NAMED: &[(&str, Pair)] = &[
+        ("windowBackgroundColor", WINDOW_BACKGROUND),
+        ("controlBackgroundColor", CONTROL_BACKGROUND),
+        ("underPageBackgroundColor", UNDER_PAGE_BACKGROUND),
+        ("textBackgroundColor", TEXT_BACKGROUND),
+        ("labelColor", LABEL),
+        ("secondaryLabelColor", SECONDARY_LABEL),
+        ("tertiaryLabelColor", TERTIARY_LABEL),
+        ("quaternaryLabelColor", QUATERNARY_LABEL),
+        ("quinaryLabelColor", QUINARY_LABEL),
+        ("textColor", TEXT),
+        ("placeholderTextColor", PLACEHOLDER_TEXT),
+        ("separatorColor", SEPARATOR),
+        ("gridColor", GRID),
+        ("selectedContentBackgroundColor", SELECTED_CONTENT_BACKGROUND),
+        ("unemphasizedSelectedContentBackgroundColor", UNEMPHASIZED_SELECTED_CONTENT_BACKGROUND),
+        ("selectedTextBackgroundColor", SELECTED_TEXT_BACKGROUND),
+        ("selectedTextColor", SELECTED_TEXT),
+        ("unemphasizedSelectedTextBackgroundColor", UNEMPHASIZED_SELECTED_TEXT_BACKGROUND),
+        ("unemphasizedSelectedTextColor", UNEMPHASIZED_SELECTED_TEXT),
+        ("controlAccentColor", CONTROL_ACCENT),
+        ("controlColor", CONTROL),
+        ("controlTextColor", CONTROL_TEXT),
+        ("disabledControlTextColor", DISABLED_CONTROL_TEXT),
+        ("selectedControlColor", SELECTED_CONTROL),
+        ("selectedControlTextColor", SELECTED_CONTROL_TEXT),
+        ("alternateSelectedControlTextColor", ALTERNATE_SELECTED_CONTROL_TEXT),
+        ("keyboardFocusIndicatorColor", KEYBOARD_FOCUS_INDICATOR),
+        ("textInsertionPointColor", TEXT_INSERTION_POINT),
+        ("headerTextColor", HEADER_TEXT),
+        ("selectedMenuItemTextColor", SELECTED_MENU_ITEM_TEXT),
+        ("highlightColor", HIGHLIGHT),
+        ("shadowColor", SHADOW),
+        ("windowFrameColor", WINDOW_FRAME),
+        ("windowFrameTextColor", WINDOW_FRAME_TEXT),
+        ("findHighlightColor", FIND_HIGHLIGHT),
+        ("linkColor", LINK),
+        ("systemFillColor", SYSTEM_FILL),
+        ("secondarySystemFillColor", SECONDARY_SYSTEM_FILL),
+        ("tertiarySystemFillColor", TERTIARY_SYSTEM_FILL),
+        ("quaternarySystemFillColor", QUATERNARY_SYSTEM_FILL),
+        ("quinarySystemFillColor", QUINARY_SYSTEM_FILL),
+        ("controlShadowColor", CONTROL_SHADOW),
+        ("controlDarkShadowColor", CONTROL_DARK_SHADOW),
+        ("controlHighlightColor", CONTROL_HIGHLIGHT),
+        ("controlLightHighlightColor", CONTROL_LIGHT_HIGHLIGHT),
+        ("systemRedColor", SYSTEM_RED),
+        ("systemOrangeColor", SYSTEM_ORANGE),
+        ("systemYellowColor", SYSTEM_YELLOW),
+        ("systemGreenColor", SYSTEM_GREEN),
+        ("systemMintColor", SYSTEM_MINT),
+        ("systemTealColor", SYSTEM_TEAL),
+        ("systemCyanColor", SYSTEM_CYAN),
+        ("systemBlueColor", SYSTEM_BLUE),
+        ("systemIndigoColor", SYSTEM_INDIGO),
+        ("systemPurpleColor", SYSTEM_PURPLE),
+        ("systemPinkColor", SYSTEM_PINK),
+        ("systemBrownColor", SYSTEM_BROWN),
+        ("systemGrayColor", SYSTEM_GRAY),
+    ];
+
+    /// The semantic colour with a catalogue name, as `NAMED` lists it (exact, case-sensitive match).
+    pub fn named(name: &str) -> Option<Pair> {
+        NAMED.iter().find(|(n, _)| *n == name).map(|&(_, p)| p)
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn every_catalogue_name_resolves_and_names_are_unique() {
+            for (i, (name, pair)) in NAMED.iter().enumerate() {
+                assert_eq!(named(name), Some(*pair), "{name}");
+                assert!(NAMED[..i].iter().all(|(n, _)| n != name), "{name} listed twice");
+            }
+            assert_eq!(named("labelColor"), Some(LABEL));
+            assert_eq!(named("LabelColor"), None, "names match exactly");
+            assert_eq!(named("noSuchColor"), None);
+        }
+
+        #[test]
+        fn translucent_semantic_colours_are_premultiplied() {
+            for (name, p) in NAMED {
+                for c in [p.dark, p.light] {
+                    let a = c >> 24;
+                    for shift in [0, 8, 16] {
+                        assert!((c >> shift) & 255 <= a, "{name}: channel above alpha in {c:#010x}");
+                    }
+                }
+            }
+        }
+
+        #[test]
+        fn the_fill_levels_step_down_and_follow_the_appearance() {
+            let fills = [SYSTEM_FILL, SECONDARY_SYSTEM_FILL, TERTIARY_SYSTEM_FILL, QUATERNARY_SYSTEM_FILL, QUINARY_SYSTEM_FILL];
+            assert!(fills.windows(2).all(|w| (w[0].light >> 24) > (w[1].light >> 24)));
+            for f in fills {
+                assert_eq!(f.light & 0x00ff_ffff, 0, "black in Light");
+                assert_eq!(f.dark & 0xff, f.dark >> 24, "white in Dark");
+            }
+            assert_eq!(ALTERNATING_CONTENT_BACKGROUNDS[0], CONTROL_BACKGROUND);
+            assert!(TEXT_INSERTION_POINT.follows_accent && !LINK.follows_accent);
+        }
+    }
 }
 
 // ---- Settings > Appearance preferences that every app can read ----

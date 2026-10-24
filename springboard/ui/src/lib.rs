@@ -738,6 +738,7 @@ pub mod constraint;
 pub mod phone_rules;
 pub mod table;
 pub mod panels;
+pub mod color_well;
 pub mod sheet;
 pub mod linalg;
 pub mod spatial;
