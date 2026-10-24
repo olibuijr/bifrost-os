@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.1 — 2026-10-24
+
+- Zoom Out no longer shows empty squares around the old view for about two seconds: once the shown tiles are in, the
+  tiles of the next level out load ahead, so a zoom out finds them ready (the scaled tiles of the level left still stand
+  in for any not loaded yet).
+
 ## 0.7.0 — 2026-10-23
 
 - Return moves to the first search result; zooming out keeps scaled tiles instead of black; Recents has a context menu.

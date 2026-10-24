@@ -129,6 +129,17 @@ impl MapView {
         tiles::tiles_in_view(cx, cy, self.width, self.height, self.zoom)
     }
 
+    /// The tiles the view would show zoomed out by `step` levels (Zoom Out, the "-" key), so they can load ahead: a zoom
+    /// out then finds its tiles ready instead of empty squares (E2E W4-15). Empty when that is the level already shown.
+    pub fn zoom_out_tiles(&self, step: f64) -> Vec<TileId> {
+        let zoom = tiles::clamp_zoom(self.zoom - step);
+        if tiles::tile_level(zoom).0 == tiles::tile_level(self.zoom).0 {
+            return Vec::new();
+        }
+        let (cx, cy) = tiles::lonlat_to_world(self.lat, self.lon, zoom);
+        tiles::tiles_in_view(cx, cy, self.width, self.height, zoom).into_iter().map(|(id, _, _)| id).collect()
+    }
+
     fn centre_world(&self) -> (f64, f64) {
         tiles::lonlat_to_world(self.lat, self.lon, self.zoom)
     }
@@ -179,6 +190,18 @@ mod tests {
 
     fn close(a: f64, b: f64) -> bool {
         (a - b).abs() < 1e-6
+    }
+
+    #[test]
+    fn the_tiles_of_a_zoom_out_are_the_ones_the_zoomed_out_view_shows() {
+        let mut v = MapView::new(64.1466, -21.9426, 12.0, 800.0, 600.0);
+        let ahead = v.zoom_out_tiles(1.0);
+        assert!(!ahead.is_empty() && ahead.iter().all(|t| t.z == 11));
+        v.set_zoom(11.0);
+        let shown: Vec<TileId> = v.tiles().into_iter().map(|(id, _, _)| id).collect();
+        assert_eq!(ahead, shown);
+        v.set_zoom(tiles::MIN_ZOOM);
+        assert!(v.zoom_out_tiles(1.0).is_empty(), "nothing below the lowest level");
     }
 
     #[test]
