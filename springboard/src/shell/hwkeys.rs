@@ -871,7 +871,8 @@ impl Shell {
     /// volume and brightness keys always pass.
     pub fn hw_overview_key(&mut self, code: u16, down: bool, mods: super::overview::KeyMods, alt: bool, t: f64) -> bool {
         const PASS: [u16; 14] = [29, 42, 54, 56, 97, 100, 125, 126, 114, 115, 116, 143, 224, 225];
-        if !down || !self.screen_on || alt || PASS.contains(&code) {
+        // nothing of Overview's runs over the lock screen: its keys are the login window's
+        if !down || !self.screen_on || alt || PASS.contains(&code) || self.is_locked() {
             return false;
         }
         // an alert holds the keyboard and Secure Keyboard Entry keeps the shell's keys out of the Terminal: neither is for Overview
@@ -1015,6 +1016,25 @@ impl Shell {
         false
     }
 
+    /// A key on the lock screen with a login backend: every key, Return included, belongs to the login window (only
+    /// privd's token unlocks). The window opens for this key when the shell has not drawn since the lock, and is looked
+    /// up again when an earlier open found no login service (`login_open_window` logs that and retries on every key).
+    /// `None` without a login backend (host previews): the old unlock in `hw_type` handles the key.
+    fn lock_type(&mut self, out: &Out, t: f64) -> Option<Vec<Effect>> {
+        // a Search opened over the lock screen (the Today view's field) keeps its typing; the lock closed any earlier one
+        if self.quicksearch.is_shown() || self.assistant.is_shown() {
+            return None;
+        }
+        self.login_show(t);
+        if !self.login_open() && self.login_backend.is_none() {
+            return None;
+        }
+        let fx = self.login_key(out, t);
+        self.last_input = t;
+        self.dirty = true;
+        Some(fx)
+    }
+
     pub fn hw_chord(&mut self, code: u16, mods: u32) -> bool {
         // Option+Cmd+D (KEY_D): Automatically Hide and Show for the dock
         if code == 32 && mods == (CHORD_META | CHORD_ALT) && self.dock_toggle_autohide() {
@@ -1041,8 +1061,27 @@ impl Shell {
     }
 
     pub fn hw_type(&mut self, out: Out, t: f64) -> Vec<Effect> {
+        let mut woke = vec![];
         if !self.screen_on {
-            return vec![];
+            // a locked desktop whose display went dark (idle) wakes on a key, as the reference Mac does, and the key goes to
+            // the login window; elsewhere a key with the screen off is dropped as before
+            if !(self.is_locked() && self.form() == bifrost_ui::form_factor::FormFactor::Desktop) {
+                return vec![];
+            }
+            self.screen_on = true;
+            self.screen_woke(t);
+            woke.push(Effect::ScreenOn);
+        }
+        // the lock screen owns the keyboard before any sheet, panel, viewer or alert an app or the shell left open under
+        // it (E2E N0: a layer that holds the keys returned below before the lock arm, so no key reached the login window)
+        if self.is_locked() {
+            if let Some(fx) = self.lock_type(&out, t) {
+                woke.extend(fx);
+                return woke;
+            }
+        }
+        if !woke.is_empty() {
+            return woke;
         }
         // the password sheet of an app's local authentication takes the typing before anything else
         if self.auth_showing() {
@@ -1107,10 +1146,6 @@ impl Shell {
         if self.modal_layer.is_some() {
             return vec![];
         }
-        // the login window opens on a tick; the shell may not have drawn since the lock, so open it for this key
-        if self.screen == Screen::Lock {
-            self.login_ensure(t);
-        }
         let fx = match self.screen {
             // an open Search takes the typing, over whatever screen it was opened on
             // an open assistant panel takes the typing too, as Search does
@@ -1120,11 +1155,7 @@ impl Shell {
                 self.type_out(out, t);
                 vec![]
             }
-            // with a login backend every key, Return included, belongs to the login window: only privd's token unlocks
-            Screen::Lock if self.login_open() || self.login_backend.is_some() => {
-                self.login_show(t);
-                self.login_key(&out, t)
-            }
+            // (a login backend's keys never get here: `lock_type` took them first)
             // the old unlock (no login backend: host previews): Return lifts the lock screen or asks for the passcode
             Screen::Lock if self.login_backend.is_none() && matches!(out, Out::Enter) && self.lock_pad.is_none() && self.anim.is_none() => {
                 self.begin_unlock(0.0, t);
@@ -1296,6 +1327,11 @@ impl Shell {
     }
     /// Keys while a desktop menu is open (arrows, Return); None when no menu is open or on release.
     pub fn hw_menu_key(&mut self, code: u16, down: bool, t: f64) -> Option<Vec<Effect>> {
+        // never over the lock screen: an app's open or save panel, the preview panel or a menu left under it must not
+        // swallow the keys the login window needs (`hw_type` gives them to it)
+        if self.is_locked() {
+            return None;
+        }
         // the open or save panel takes its own keys; the rest fall through to `hw_type`, which types the file name
         #[cfg(feature = "desktop-wayland")]
         if self.doc_panel.is_some() {
