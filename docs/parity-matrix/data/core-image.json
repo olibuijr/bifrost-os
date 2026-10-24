@@ -180,7 +180,7 @@
     "Photo looks approximate the reference tone curves; they are not exact.",
     "Image input limited to JPEG and PNG. No RAW (CIRAWFilter), no HEIF, no colour-managed decoding path for apps.",
     "The built-in filter catalogue lists 106 filters by name; the full reference catalogue is not covered.",
-    "Colour lookup: no SDK filter wraps the colour cube, colour map, Lab or palette models; apps cannot reach them.",
+    "Colour lookup: apps reach the colour cube, colour map, palette and Lab models through image_generate, but they are sRGB only, with no ICC profiles or rendering intents.",
     "Colour: the named chain and Photos still use the temperature gain model; apps get the white-point conversion through image_effects::temperature_and_tint. Photos uses brightness and contrast only.",
     "No PDF417 or Aztec barcode generator (the reference ships both); the five one-dimensional generators are built.",
     "No keystone correction (CIKeystoneCorrectionCombined, Horizontal, Vertical); perspective transform, scale transforms and straighten are built."
