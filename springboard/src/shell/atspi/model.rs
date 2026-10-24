@@ -339,6 +339,42 @@ pub fn chrome_snap(menus: &[(String, Vec<(String, bool)>)], dock: &[(String, boo
     AppSnap { slot: CHROME_SLOT, app_id: "shell".into(), name: "BifrOSt Shell".into(), nodes }
 }
 
+/// One widget row as the screen reader gets it: its title, its text as the value, the spoken label (title, value and
+/// an actions hint) and its buttons as `(label, toggle state, enabled)`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct WidgetSnap {
+    pub title: String,
+    pub value: String,
+    pub label: String,
+    pub buttons: Vec<(String, Option<bool>, bool)>,
+}
+
+/// The node id of the Widgets list in the shell chrome tree.
+const WIDGETS_NODE: u64 = 4;
+/// The most widget rows exported; each row's buttons take the ids just after its own.
+const MAX_WIDGET_ROWS: usize = 64;
+
+/// Adds the Notification Centre widgets to the shell chrome: a Widgets list under the application with one static
+/// text per widget (name = title, value = its text, help = the spoken label) and its buttons and toggles below it.
+pub fn add_widgets(snap: &mut AppSnap, widgets: &[WidgetSnap]) {
+    if widgets.is_empty() {
+        return;
+    }
+    let bounds = Rect { x: 0., y: 0., w: 0., h: 0. };
+    let node = |id: u64, parent: Option<u64>, role: Role, name: &str, value: &str, enabled: bool, checked: Option<bool>, help: &str| SNode {
+        id, parent, role, name: name.into(), value: value.into(), bounds, enabled, focused: false, checked, title: String::new(), help: help.into(), text: None,
+    };
+    snap.nodes.push(node(WIDGETS_NODE, None, Role::List, "Widgets", "", true, None, ""));
+    for (i, w) in widgets.iter().enumerate().take(MAX_WIDGET_ROWS) {
+        let wid = 5000 + 10 * i as u64;
+        snap.nodes.push(node(wid, Some(WIDGETS_NODE), Role::StaticText, &w.title, &w.value, true, None, &w.label));
+        for (j, (label, on, enabled)) in w.buttons.iter().enumerate().take(9) {
+            let role = if on.is_some() { Role::Toggle } else { Role::Button };
+            snap.nodes.push(node(wid + 1 + j as u64, Some(wid), role, label, "", *enabled, *on, ""));
+        }
+    }
+}
+
 /// The AT-SPI `Action` names of an element: `press`, and for a numeric one `increment` and `decrement`.
 pub fn action_names(numeric: bool) -> Vec<&'static str> {
     if numeric { vec!["press", "increment", "decrement"] } else { vec!["press"] }
@@ -466,6 +502,23 @@ mod tests {
         let notes = s.nodes.iter().find(|n| n.id == 1000).unwrap();
         assert_eq!((notes.role, notes.value.as_str()), (Role::Button, "open"));
         assert_eq!(s.nodes.iter().find(|n| n.id == 3).unwrap().role, Role::TextField);
+    }
+
+    #[test]
+    fn widgets_are_a_list_beside_the_chrome_with_their_buttons_below_them() {
+        let mut s = chrome_snap(&[], &[]);
+        add_widgets(&mut s, &[]);
+        assert!(!s.nodes.iter().any(|n| n.id == WIDGETS_NODE), "no list without widgets");
+        let w = WidgetSnap { title: "Next".into(), value: "Standup".into(), label: "Next, Standup, Actions: Done, Mute".into(), buttons: vec![("Done".into(), None, true), ("Mute".into(), Some(true), false)] };
+        add_widgets(&mut s, &[w]);
+        assert!(children(&s.nodes, None).contains(&WIDGETS_NODE));
+        assert_eq!(children(&s.nodes, Some(WIDGETS_NODE)), vec![5000]);
+        let row = s.nodes.iter().find(|n| n.id == 5000).unwrap();
+        assert_eq!((row.role, row.name.as_str(), row.value.as_str()), (Role::StaticText, "Next", "Standup"));
+        assert_eq!(row.help, "Next, Standup, Actions: Done, Mute", "the spoken label is the help text");
+        assert_eq!(children(&s.nodes, Some(5000)), vec![5001, 5002]);
+        let mute = s.nodes.iter().find(|n| n.id == 5002).unwrap();
+        assert_eq!((mute.role, mute.checked, mute.enabled), (Role::Toggle, Some(true), false), "a waiting toggle is not enabled");
     }
 
     #[test]

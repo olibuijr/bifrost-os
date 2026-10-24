@@ -1143,8 +1143,14 @@ impl Shell {
     fn run_widget_action(&mut self, i: usize, j: usize) {
         let Some((_, row)) = self.center_widget_rects().into_iter().nth(i) else { return };
         let (Some((app, kind)), Some(button)) = (row.widget.clone(), row.buttons.get(j)) else { return };
-        let id = button.id.clone();
-        let Ok(inv) = widgets_timeline::tap_action(&app, &kind, &id, self.notify.now()) else { return };
+        let _ = self.start_widget_action(app, kind, button.id.clone());
+    }
+
+    /// Runs the button `id` of `app`'s widget `kind` as a tap would: the shared path of a tap in the column and of
+    /// assistive technology pressing the button (`ax press os/widgets/...`). An error when the entry on screen has no
+    /// such button or a toggle still waits for its app.
+    pub(in crate::shell) fn start_widget_action(&mut self, app: String, kind: String, id: String) -> Result<(), String> {
+        let inv = widgets_timeline::tap_action(&app, &kind, &id, self.notify.now())?;
         std::thread::spawn(move || {
             let params: Vec<(&str, &str)> = inv.params.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
             let ok = match super::super::intents::run_with(&app, &inv.intent, &params, WIDGET_ACTION_WAIT) {
@@ -1157,6 +1163,8 @@ impl Shell {
             widgets_timeline::settle_action(&app, &kind, &id, ok);
         });
         self.notify.center.refresh_due = 0;
+        self.dirty = true;
+        Ok(())
     }
 
     /// Opens the desktop column (the menu bar clock, as on Golden Gate).
