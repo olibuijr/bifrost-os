@@ -59,10 +59,15 @@ impl Calendar {
 
     /// Empties the field and shows the grid again.
     pub(super) fn end_search(&mut self, ui: &Ui) {
+        // only a shown result list gives the scroller back at its top: with no search the scroll is the hour grid's (or
+        // the form's), which "+", a new view or a day must not move (8 AM at the top became midnight, E2E R7 / W2-18)
+        let shown = self.searching();
         self.search_box.clear();
         self.search_hits.clear();
         self.search_focused = false;
-        self.scroll.jump_top();
+        if shown {
+            self.scroll.jump_top();
+        }
         self.fit_scroll(ui);
     }
 
