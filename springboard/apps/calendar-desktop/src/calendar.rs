@@ -284,12 +284,12 @@ pub struct Calendar {
     pointer: bool,
     /// Quick Event: the line typed in the sheet while it is open (`quickentry.rs`).
     quick_line: Option<bifrost_app::controls::TextField>,
-    /// The quick-event popover on a new event, while it is open (`eventpop.rs`), and the last click on an empty slot of
-    /// the grid with its time (a second click there in time is a double-click, which opens the popover).
+    /// The quick-event popover on a new event, while it is open (`eventpop.rs`), and the empty slot of the grid the last
+    /// single click was on (a double-click there opens the popover).
     event_pop: Option<eventpop::EventPop>,
     /// The menu of calendars a Calendar pop-up button opened (the popover's or the form's), while it is open (`calmenu.rs`).
     cal_menu: Option<calmenu::CalMenu>,
-    last_slot: Option<(Date, u16, f64)>,
+    last_slot: Option<(Date, u16)>,
     /// The month the sidebar's mini month was paged to; None follows the selected day (`minimonth.rs`).
     mini_shown: Option<Date>,
     /// A press in the Day or Week grid that becomes a drag if it is held, and the drag itself (`drag.rs`).
@@ -324,14 +324,18 @@ pub struct Calendar {
     subs: Vec<subscribe::Subscription>,
     /// Title, Location, Notes.
     fields: [TextField; 3],
-    /// Event editors shown in windows of their own (`window.rs`), the event a double-click asked to open, and the last
-    /// tap on an event with its time (a second tap in time is a double-click).
+    /// Event editors shown in windows of their own (`window.rs`), the event a double-click asked to open, and the event
+    /// the last single click selected (a double-click on it opens it).
     panes: Vec<window::Pane>,
     /// Editor windows whose event was deleted from the main window (Event > Delete Event, Backspace): the app closes them
     /// (`take_closed_windows`).
     closed_windows: Vec<u32>,
     open_request: Option<u64>,
-    last_tap: Option<(u64, f64)>,
+    last_tap: Option<u64>,
+    /// The click count of the press in progress, kept by the kit's counter with the system's double-click interval and
+    /// slop (`ClickCounter`), as `NSEvent.clickCount` is: a double-click is two presses, not two releases, in time.
+    clicks: bifrost_app::controls::text::ClickCounter,
+    click_count: u8,
     /// Replies and invitations waiting for Mail (`rsvp.rs`); the app takes them with `take_outgoing`.
     outbox: Vec<rsvp::Outgoing>,
     /// A `maps:` link the editor asked to open (`places.rs`); the app opens it (`take_map_link`).
@@ -456,6 +460,8 @@ impl Calendar {
             closed_windows: Vec::new(),
             open_request: None,
             last_tap: None,
+            clicks: bifrost_app::controls::text::ClickCounter::default(),
+            click_count: 1,
             outbox: Vec::new(),
             map_link: None,
             labels: TextCache::default(),
@@ -1469,6 +1475,9 @@ impl Calendar {
         }
         match ev {
             Event::Down(..) => {
+                // the counter works in points, so its slop is the same on every screen
+                let k = ui.pt(1.0).max(f32::EPSILON);
+                self.click_count = self.clicks.press(t, x / k, y / k);
                 self.pressed = self.hit(ui, x, y);
                 self.start = Some((x, y));
                 // the event form scrolls too: a press that moves on drags it, a press that stays is a tap
@@ -1519,7 +1528,7 @@ impl Calendar {
                         // an event is selected by a tap and opened in its own window by a double-click (`window.rs`)
                         if let Target::Row(id) = target {
                             if !overlay::is_overlay(id) && self.editor.is_none() {
-                                self.tap_event(id, t);
+                                self.tap_event(id, self.click_count);
                                 return;
                             }
                         }
@@ -1527,7 +1536,7 @@ impl Calendar {
                         let slot = if self.event_pop.is_none() && self.editor.is_none() { self.slot_of(ui, target, x, y) } else { None };
                         self.activate(ui, target, t);
                         if let Some((date, minute)) = slot {
-                            if self.slot_double(date, minute, t) {
+                            if self.slot_double(date, minute, self.click_count) {
                                 self.open_event_pop(date, minute);
                             }
                         }

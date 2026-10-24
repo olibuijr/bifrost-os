@@ -21,9 +21,6 @@ use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_TITLE3_PT};
 pub const EDITOR_WIDTH: f32 = 480.0;
 pub const EDITOR_HEIGHT: f32 = 560.0;
 
-/// Two taps on the same event within this many milliseconds are a double-click.
-pub const DOUBLE_TAP_MS: f64 = 400.0;
-
 /// The title of an editor window: the event's title, or "Event" for an event with none.
 pub fn window_title(title: &str) -> String {
     let title = title.trim();
@@ -116,12 +113,13 @@ impl Calendar {
         self.panes.iter().any(|p| p.editor.as_ref().is_some_and(|d| d.event.id == id))
     }
 
-    /// Records a tap on event `id` at `t` ms. The first tap selects the event; a second tap on it within
-    /// [`DOUBLE_TAP_MS`] asks the app to open its editor in a window.
-    pub fn tap_event(&mut self, id: u64, t: f64) {
+    /// Records a click on event `id` with its click count (the kit's `ClickCounter`, which has the system's double-click
+    /// interval and slop). A single click selects the event; the second click of a double-click on it asks the app to
+    /// open its editor in a window.
+    pub fn tap_event(&mut self, id: u64, clicks: u8) {
         self.dirty = true;
-        let double = self.last_tap.is_some_and(|(last, at)| last == id && t - at <= DOUBLE_TAP_MS);
-        self.last_tap = if double { None } else { Some((id, t)) };
+        let double = clicks >= 2 && self.last_tap == Some(id);
+        self.last_tap = if double { None } else { Some(id) };
         if double {
             self.open_request = Some(id);
         } else {
@@ -257,13 +255,14 @@ mod tests {
     }
 
     #[test]
-    fn two_quick_taps_on_one_event_are_a_double_click() {
-        // the window is opened by the app; here only the tap bookkeeping is checked, through the same rule the code uses
-        let double = |last: Option<(u64, f64)>, id: u64, t: f64| last.is_some_and(|(l, at)| l == id && t - at <= DOUBLE_TAP_MS);
-        assert!(double(Some((7, 1000.0)), 7, 1300.0));
-        assert!(!double(Some((7, 1000.0)), 7, 1500.0), "too slow for a double-click");
-        assert!(!double(Some((7, 1000.0)), 8, 1100.0), "a tap on another event is a new first tap");
-        assert!(!double(None, 7, 0.0));
+    fn the_double_click_follows_the_kit_counter() {
+        // E2E R7: two clicks 100 ms apart did not open the editor; the kit's counter has the system interval and slop
+        use bifrost_app::controls::text::ClickCounter;
+        let mut clicks = ClickCounter::default();
+        assert_eq!(clicks.press(1000.0, 50.0, 50.0), 1);
+        assert_eq!(clicks.press(1100.0, 51.0, 50.0), 2, "100 ms apart and a point off is a double-click");
+        assert_eq!(clicks.press(5000.0, 50.0, 50.0), 1, "too slow for a double-click");
+        assert_eq!(clicks.press(5100.0, 90.0, 50.0), 1, "too far from the first click");
     }
 
     #[test]

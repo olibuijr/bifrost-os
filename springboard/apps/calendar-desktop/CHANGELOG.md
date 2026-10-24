@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.19.1 — 2026-10-24
+
+- The hour grid keeps its scroll when the quick-event popover opens and closes (8 AM at the top no longer jumps to midnight).
+- A double-click on an event or an empty slot uses the system double-click interval and distance, counted from the presses, so two quick clicks open the editor.
+
 ## 1.19.0 — 2026-10-23
 
 - Day view shows one day; a selected event is deleted with Backspace/Delete or Event > Delete Event, with Undo.
