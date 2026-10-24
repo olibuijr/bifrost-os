@@ -1,7 +1,8 @@
 //! Control views: thin `View`s over the bifrost-ui value models (`Slider`, `Segmented`) and the shared drawers.
 //! Sizes are named point constants, colours are the named pairs from render ui.rs, text uses `MAC_*_PT`.
+use super::button_style::{ButtonConfiguration, ButtonRole, ButtonStyle};
 use super::{blit, View, ViewBase, ViewEvent};
-use crate::kit::ui::{Weight, CAPSULE_BG, CONTROL_PRESSED, FIELD_BG, LABEL, LABEL_2, LABEL_3, SEGMENT_ON, SYSTEM_GREEN, TINT, TRACK_C, WHITE};
+use crate::kit::ui::{Weight, CONTROL_PRESSED, FIELD_BG, LABEL, LABEL_2, LABEL_3, SEGMENT_ON, SYSTEM_GREEN, TINT, TRACK_C, WHITE};
 use crate::kit::{Event, Ui};
 use bifrost_render::canvas::{Canvas, RectF};
 use crate::layout::ROW_PT;
@@ -95,17 +96,41 @@ impl View for Label {
     }
 }
 
-/// A push button that sends `action` (`NativeButton` with a nil target).
+/// A push button that sends `action` (`NativeButton` with a nil target). Its look comes from a [`ButtonStyle`]
+/// (default [`Bordered`](super::button_style::Bordered)), `buttonStyle(_:)`; its `role` tells the style its purpose.
 pub struct Button {
     base: ViewBase,
     title: String,
     action: String,
     pressed: bool,
+    style: Box<dyn ButtonStyle>,
+    role: Option<ButtonRole>,
 }
 
 impl Button {
     pub fn new(title: &str, action: &str) -> Self {
-        Button { base: ViewBase::default(), title: title.into(), action: action.into(), pressed: false }
+        Button { base: ViewBase::default(), title: title.into(), action: action.into(), pressed: false, style: Box::new(super::button_style::Bordered), role: None }
+    }
+    /// `buttonStyle(_:)`.
+    pub fn styled(mut self, style: impl ButtonStyle) -> Self {
+        self.set_style(Box::new(style));
+        self
+    }
+    pub fn set_style(&mut self, style: Box<dyn ButtonStyle>) {
+        self.style = style;
+        self.base.dirty = true;
+    }
+    /// `Button(_:role:action:)`.
+    pub fn with_role(mut self, role: ButtonRole) -> Self {
+        self.role = Some(role);
+        self
+    }
+    pub fn role(&self) -> Option<ButtonRole> {
+        self.role
+    }
+    /// What the style sees (`ButtonStyleConfiguration`).
+    pub fn configuration(&self) -> ButtonConfiguration<'_> {
+        ButtonConfiguration { label: &self.title, is_pressed: self.pressed, role: self.role, enabled: self.base.enabled, focused: self.base.focused, frame: self.base.frame }
     }
     pub fn title(&self) -> &str {
         &self.title
@@ -123,7 +148,7 @@ impl Button {
 impl View for Button {
     crate::view_base!();
     fn intrinsic(&self, ui: &Ui) -> (f32, f32) {
-        (ui.measure(&self.title, MAC_BODY_PT, Weight::Regular) / ui.pt(1.0) + 2.0 * SPACE_L, ROW_PT)
+        self.style.size(ui, &self.configuration())
     }
     fn baselines(&self, ui: &Ui) -> Option<(f32, f32)> {
         centred_baselines(ui, MAC_BODY_PT, self.base.frame)
@@ -133,10 +158,7 @@ impl View for Button {
     }
     fn draw(&mut self, s: &mut dyn Canvas, ui: &Ui) {
         let f = self.base.frame;
-        let fill = if self.pressed { CONTROL_PRESSED } else { CAPSULE_BG };
-        s.fill_rrect(RectF::new(ui.pt(f.x), ui.pt(f.y), ui.pt(f.w), ui.pt(f.h)), ui.pt(f.h / 2.0), fill.now());
-        let c = if self.base.enabled { LABEL } else { LABEL_3 };
-        draw_text(s, ui, f, &self.title, MAC_BODY_PT, Weight::Regular, c.now(), true);
+        self.style.draw(s, ui, &self.configuration());
         if self.base.focused {
             focus_ring(s, ui, f, f.h / 2.0);
         }

@@ -44,7 +44,9 @@ pub mod action;
 mod animation;
 mod app;
 mod autolayout;
+mod button_style;
 mod context;
+mod groupings;
 mod controls;
 mod forms;
 mod layer_backed;
@@ -73,6 +75,8 @@ pub use scroll::ScrollView;
 pub use layer_views::{EmitterView, GradientView, ReplicaSource, ReplicatorView, ScrollLayerView, ShapeView, TextLayerView, TiledView};
 pub use context::with_context;
 pub use controls::{Align, Button, Label, Segmented, Slider, Stack, Switch};
+pub use button_style::{Bordered, BorderedProminent, Borderless, ButtonConfiguration, ButtonRole, ButtonStyle, LinkStyle, Plain};
+pub use groupings::{ControlGroup, ControlGroupStyle, GroupBox, TabView};
 pub use overlay::{Columns, Grid, ViewThatFits, ZStack};
 pub use picker::PickerView;
 pub use local_auth_view::{kind_label, LocalAuthenticationView};
@@ -1253,6 +1257,8 @@ mod tests_layer_views;
 
 #[cfg(test)]
 mod tests_controls;
+#[cfg(test)]
+mod tests_groupings;
 #[cfg(test)]
 mod tests_overlay;
 
