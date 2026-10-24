@@ -198,6 +198,8 @@ impl Shell {
             return;
         }
         self.session.restored = true;
+        // the keys held at login went to the login window or another client: no modifier stays counted into the session
+        self.key_reset = true;
         // a login after Log Out (`utility_window::log_out` froze the layout when it wrote it down) writes the layout again
         self.session.frozen = false;
         let plan = load(&self.data_dir).plan(|key| app_of(key).is_some());

@@ -974,6 +974,11 @@ fn run() -> std::io::Result<()> {
                 Posted::Context(x, y) => shell.desktop_pointer(x, y, true, t),
             }
         }
+        // the session was restored: modifiers counted before it were pressed for the login window (E2E3 F1)
+        if shell.take_key_reset() {
+            hw_keys.reset();
+            shell.set_key_mods(hw_keys.modifier_flags());
+        }
         let orientation = shell.orientation();
         let map = |x: f32, y: f32| orientation.to_logical(x, y, w as i32, h as i32);
         for ev in &events {
@@ -1032,6 +1037,23 @@ fn run() -> std::io::Result<()> {
                     shell.ext_contact(id, phase, x, y, at, !taken);
                     for g in desk {
                         effects.extend(shell.desk_gesture(g, t));
+                    }
+                    continue;
+                }
+                // the window server's modifier state corrects a counter whose press or release never came here (E2E3 F1: a
+                // Shift released in another client left every later click a Shift-click)
+                input::Event::Modifiers { held, caps } => {
+                    let kp = springboard::shell::kb_input::get();
+                    let (held, unsure, caps) = kp.remap.modifier_sync(held, caps, slow_keys.enabled());
+                    if hw_keys.sync_modifiers(&held, &unsure, caps) {
+                        if trace {
+                            eprintln!("springboard: modifiers corrected to {:?}", hw_keys.modifier_flags());
+                        }
+                        shell.set_photos_shift(hw_keys.shift_held());
+                        shell.set_key_mods(hw_keys.modifier_flags());
+                        if !hw_keys.mods_held() {
+                            shell.cmdtab_release(t);
+                        }
                     }
                     continue;
                 }

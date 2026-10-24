@@ -314,6 +314,44 @@ impl HwKeys {
         *self = Self { text: Keyboard::new(layout), sticky, desktop, ..Self::default() };
     }
 
+    /// Brings the modifier counters in line with the window server, which knows which keys are down (E2E3 F1: a Shift
+    /// press counted here whose release went to another client, or was lost on a focus change, made every later click a
+    /// Shift-click until the screen went off). `held` are the modifier key codes it says are down, after the Settings
+    /// remap; `unsure` the codes it cannot tell about (a remapped Caps Lock, which the window server sees as a lock, not a
+    /// held key); `caps` the Caps Lock state when it is known. A counted modifier that is neither held nor unsure, and
+    /// not held by a sticky key, is released; a held one that is not counted is pressed. Returns true when anything
+    /// changed.
+    pub fn sync_modifiers(&mut self, held: &[u16], unsure: &[u16], caps: Option<bool>) -> bool {
+        let before = (self.shift, self.ctrl, self.alt, self.altgr, self.meta, self.caps);
+        for m in [Modifier::Shift, Modifier::Ctrl, Modifier::Alt, Modifier::Super] {
+            let is = |codes: &[u16]| codes.iter().any(|&c| Modifier::of_code(c) == Some(m));
+            let sticky = self.sticky_held.as_ref().is_some_and(|(_, mods)| mods.contains(&m));
+            let n = self.counter(m);
+            if is(held) {
+                if *n == 0 {
+                    *n = 1;
+                }
+            } else if !is(unsure) && !sticky {
+                *n = 0;
+            }
+        }
+        // AltGr is the right Alt key alone: it follows that code, and never outlives the Alt count
+        if held.contains(&KEY_RIGHTALT) {
+            self.altgr = self.altgr.max(1);
+        } else if !unsure.contains(&KEY_RIGHTALT) {
+            self.altgr = 0;
+        }
+        self.altgr = self.altgr.min(self.alt);
+        if let Some(on) = caps {
+            self.caps = on;
+        }
+        let changed = before != (self.shift, self.ctrl, self.alt, self.altgr, self.meta, self.caps);
+        if changed {
+            self.meta_alone = false;
+        }
+        changed
+    }
+
     /// Chooses the form factor behaviour of a lone Cmd (Super) press. On a tablet it is the Home key (the default here, so the
     /// hardware keyboard of a tablet keeps it); on the desktop it does nothing, because the Cmd key is a modifier first and a
     /// chord the front app takes (Cmd+A in a text field, Cmd+Space) must never send the windows to the Dock.
@@ -1306,6 +1344,21 @@ impl Shell {
         self.key_mods = mods;
         self.login_caps(mods.caps_lock());
     }
+    /// True once after the session was restored: the input loop then forgets every held modifier (`HwKeys::reset`); the
+    /// window server's next modifier state counts the keys still down.
+    pub fn take_key_reset(&mut self) -> bool {
+        std::mem::take(&mut self.key_reset)
+    }
+    /// The modifier keys held now, as the `key_mods=` state line names them: `shift,ctrl,alt,cmd,caps`, or `none`.
+    pub fn key_mods_describe(&self) -> String {
+        let m = self.key_mods;
+        let names: Vec<&str> = [(m.shift(), "shift"), (m.control(), "ctrl"), (m.option(), "alt"), (m.command(), "cmd"), (m.caps_lock(), "caps")]
+            .into_iter()
+            .filter(|(on, _)| *on)
+            .map(|(_, n)| n)
+            .collect();
+        if names.is_empty() { "none".to_string() } else { names.join(",") }
+    }
     /// Tells Photos whether Shift is held, so a tap on the grid extends the selection. The shell calls it on every key event.
     pub fn set_photos_shift(&mut self, held: bool) {
         if let Some(p) = self.photos.as_mut() {
@@ -2173,6 +2226,85 @@ mod tests {
         assert!(k.sticky_keys());
         k.key(KEY_A, true);
         assert!(!k.mods_held());
+        k.key(KEY_A, false);
+    }
+
+    /// Feeds the window server's modifier state as the input loop does (no remap, Slow Keys off).
+    fn server_mods(k: &mut HwKeys, held: u8, caps: Option<bool>) -> bool {
+        let (held, unsure, caps) = crate::shell::kb_input::Remap::default().modifier_sync(held, caps, false);
+        k.sync_modifiers(&held, &unsure, caps)
+    }
+
+    /// E2E3 F1: a Shift press counted while the shell had the keyboard, whose release went to another client, made every
+    /// later click a Shift-click; the focus leave (no modifier held for the shell) releases it.
+    #[test]
+    fn a_release_lost_after_focus_leave_does_not_stick() {
+        let mut k = HwKeys::default();
+        k.key(KEY_LEFTSHIFT, true);
+        k.key(KEY_LEFTMETA, true);
+        assert!(k.modifier_flags().shift() && k.modifier_flags().command());
+        // wl_keyboard leave: `Event::Modifiers { held: 0, caps: None }`; the releases go to the other client
+        assert!(server_mods(&mut k, 0, None));
+        assert_eq!(k.modifier_flags(), bifrost_proto::ModifierFlags::EMPTY, "nothing stays held after the leave");
+        assert!(!k.mods_held() && !k.shift_held());
+        // a release that still comes later does not wrap the counter
+        k.key(KEY_LEFTSHIFT, false);
+        assert!(!k.shift_held());
+        // a plain key is a plain key again
+        assert_eq!(k.chord_mods(KEY_A), None);
+    }
+
+    /// wl_keyboard enter lists the keys already down: a Shift held as the shell gets the keyboard counts, and its release
+    /// (which now reaches the shell) clears it.
+    #[test]
+    fn enter_with_shift_held_counts_shift() {
+        let mut k = HwKeys::default();
+        let held = crate::bare::input::mods_of_codes([KEY_RIGHTSHIFT, KEY_A]);
+        assert_eq!(held, crate::bare::input::MOD_SHIFT, "only the modifier among the enter keys counts");
+        assert!(server_mods(&mut k, held, None));
+        assert!(k.shift_held());
+        assert!(k.modifier_flags().shift() && !k.modifier_flags().caps_lock());
+        k.key(KEY_RIGHTSHIFT, false);
+        assert!(!k.shift_held(), "the release after the enter clears it");
+        assert!(!server_mods(&mut k, 0, None), "the same state again changes nothing");
+    }
+
+    /// wl_keyboard modifiers is the authority: it corrects a counter that disagrees, and leaves one that agrees alone.
+    #[test]
+    fn modifiers_event_corrects_a_stale_counter() {
+        use crate::bare::input::{mods_of_xkb, xkb_caps};
+        let mut k = HwKeys::default();
+        k.key(KEY_LEFTCTRL, true);
+        k.key(KEY_LEFTMETA, true);
+        // the Cmd release was lost; the window server says only Control (XKB bit 2) is down, Caps Lock off
+        assert!(server_mods(&mut k, mods_of_xkb(1 << 2), Some(xkb_caps(0))));
+        assert!(k.ctrl_held() && !k.meta_held());
+        // both Shift keys counted and one release lost: the window server says no Shift, so the counter goes to zero
+        k.key(KEY_LEFTSHIFT, true);
+        k.key(KEY_RIGHTSHIFT, true);
+        k.key(KEY_RIGHTSHIFT, false);
+        assert!(server_mods(&mut k, mods_of_xkb(1 << 2), Some(false)));
+        assert!(!k.shift_held());
+        // a missed press is counted, and the locked Caps Lock comes over
+        assert!(server_mods(&mut k, mods_of_xkb((1 << 2) | (1 << 3)), Some(xkb_caps(1 << 1))));
+        assert!(k.alt_held() && k.modifier_flags().option() && k.modifier_flags().caps_lock());
+        // AltGr (Mod5) counts as Alt for typing, not as Option
+        assert!(server_mods(&mut k, mods_of_xkb((1 << 2) | (1 << 7)), Some(true)));
+        assert!(k.alt_held() && !k.modifier_flags().option());
+        assert!(!server_mods(&mut k, mods_of_xkb((1 << 2) | (1 << 7)), Some(true)), "an agreeing state changes nothing");
+    }
+
+    /// A modifier a sticky key latched counts as held though no physical key is down: the window server's word keeps it.
+    #[test]
+    fn modifiers_event_keeps_sticky_modifiers() {
+        let mut k = HwKeys::default();
+        k.set_sticky_keys(true);
+        k.key(KEY_LEFTSHIFT, true);
+        k.key(KEY_LEFTSHIFT, false);
+        k.key(KEY_A, true);
+        let held = k.shift_held();
+        server_mods(&mut k, 0, None);
+        assert_eq!(k.shift_held(), held, "the sticky Shift lasts until the key that took it is released");
         k.key(KEY_A, false);
     }
 }
