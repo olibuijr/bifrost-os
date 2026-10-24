@@ -2517,6 +2517,54 @@
         assert!(sh.is_locked(), "back to the lock screen underneath");
     }
 
+    /// E2E N6: the full-screen alert paints the whole frame, so the frame after Stop repaints the whole desktop, not
+    /// only the regions the desktop's partial frame would clear (the desktop stayed black but for the Stop strip).
+    #[test]
+    fn the_frame_after_the_clock_alert_repaints_the_whole_desktop() {
+        let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/test-clock-alert-damage").join(std::process::id().to_string());
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("clock.ini").to_string_lossy().into_owned();
+        let mut sh = desktop_shell();
+        // a tablet with the desktop presentation keeps the full-screen alert (E2E N5)
+        sh.form = bifrost_ui::form_factor::FormFactor::Tablet;
+        sh.screen = Screen::Home;
+        sh.set_wall(1_000_000, 0, 1000.0);
+        sh.clock.load(&path, 1000.0);
+        let mut buf = vec![0u32; 1200 * 1920];
+        sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, 1100.0);
+        let orange_before = buf.contains(&clock::ORANGE);
+        assert!(sh.clock.start_timer("", 1000, 1200.0).is_some());
+        sh.tick(2300.0);
+        assert!(sh.clock_takeover());
+        sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, 2400.0);
+        assert!(buf.contains(&clock::ORANGE), "the alert is drawn");
+        assert!(sh.desk_regions.is_none() && !sh.desk_drawn && sh.drawn == Drawn::Nothing, "the frame no longer holds the desktop");
+        // Stop (the button's touch path is covered by the lock screen test above)
+        sh.clock.stop_alert(false, 2500.0);
+        assert!(sh.clock.alert().is_none());
+        let damage = sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, 2600.0);
+        assert!(damage.is_all(), "the whole desktop is repainted after Stop");
+        assert_eq!(buf.contains(&clock::ORANGE), orange_before, "nothing of the alert is left");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// E2E N5: the desktop form shows a ringing alert as a banner (when the Clock app is installed); a tablet and the
+    /// lock screen keep the full-screen alert.
+    #[test]
+    fn the_full_screen_clock_alert_is_for_the_tablet_and_the_lock_screen() {
+        let mut sh = desktop_shell();
+        sh.screen = Screen::Home;
+        assert_eq!(sh.clock_as_banner(), apphost::slot_of(clock::MANIFEST_ID).is_some(), "an unlocked desktop shows a banner");
+        sh.screen = Screen::Lock;
+        assert!(!sh.clock_as_banner(), "the lock screen keeps the full-screen alert");
+        sh.screen = Screen::Home;
+        sh.form = bifrost_ui::form_factor::FormFactor::Tablet;
+        assert!(!sh.clock_as_banner(), "a tablet keeps the full-screen alert");
+        let tablet = shell();
+        assert!(!tablet.clock_as_banner());
+    }
+
     /// Unlocked shell with Files open on a temp root holding one text file and a video.
     #[cfg(test)]
     fn files_app(tag: &str) -> (Shell, std::path::PathBuf) {

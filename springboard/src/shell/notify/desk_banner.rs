@@ -47,6 +47,8 @@ pub enum Part {
 /// A row of the banner's Options menu.
 #[derive(Clone, Debug, PartialEq)]
 pub enum MenuItem {
+    /// a ringing Clock alert's Stop (false) or Snooze (true)
+    Alarm(bool),
     /// one of the notification's category actions: its identifier and title
     Action(String, String),
     /// mutes the app (its notifications are still listed and badged)
@@ -92,7 +94,13 @@ impl Shell {
     /// The Options menu's rows: the notification's actions, then Mute and Notification Settings.
     pub(super) fn desk_banner_menu(&self) -> Vec<MenuItem> {
         let Some(id) = self.notify.banner.as_ref().map(|b| b.id) else { return Vec::new() };
-        let mut rows: Vec<MenuItem> = self.usernotif.actions(id).into_iter().map(|a| MenuItem::Action(a.id, a.title)).collect();
+        let mut rows: Vec<MenuItem> = if self.clock_banner(id) {
+            // the ringing alarm's answers, as the reference's Clock banner offers them (E2E N5)
+            let snooze = self.clock.alert().is_some_and(|a| a.snooze);
+            std::iter::once(MenuItem::Alarm(false)).chain(snooze.then_some(MenuItem::Alarm(true))).collect()
+        } else {
+            self.usernotif.actions(id).into_iter().map(|a| MenuItem::Action(a.id, a.title)).collect()
+        };
         rows.push(MenuItem::Mute);
         rows.push(MenuItem::Settings);
         rows
@@ -102,6 +110,8 @@ impl Shell {
     fn desk_banner_menu_title(&self, item: &MenuItem) -> String {
         match item {
             MenuItem::Action(_, title) => title.clone(),
+            MenuItem::Alarm(false) => "Stop".to_string(),
+            MenuItem::Alarm(true) => "Snooze".to_string(),
             MenuItem::Mute => {
                 let app = self.notify.banner_card.as_ref().map(|c| c.app);
                 match app {
@@ -212,36 +222,55 @@ impl Shell {
             Event::Move(..) => self.notify.banner_press.map(|_| vec![]),
             Event::Up(x, y) => {
                 let press = self.notify.banner_press.take()?;
-                if self.desk_banner_part(x, y, t) == Some(press) {
-                    self.desk_banner_act(press, t);
-                }
+                let fx = if self.desk_banner_part(x, y, t) == Some(press) { self.desk_banner_act(press, t) } else { vec![] };
                 self.dirty = true;
-                Some(vec![])
+                Some(fx)
             }
             _ => None,
         }
     }
 
-    /// A click landed on `part` of the front banner.
-    fn desk_banner_act(&mut self, part: Part, t: f64) {
-        let Some(id) = self.notify.banner.as_ref().map(|b| b.id) else { return };
+    /// Whether notification `id`'s banner stands for the Clock alert that rings now (E2E N5).
+    fn clock_banner(&self, id: u64) -> bool {
+        self.clock.alert().is_some() && self.clock_banners.contains(&id)
+    }
+
+    /// A click landed on `part` of the front banner. Returns the effects of answering a ringing alarm.
+    fn desk_banner_act(&mut self, part: Part, t: f64) -> Vec<Effect> {
+        let Some(id) = self.notify.banner.as_ref().map(|b| b.id) else { return vec![] };
         let app = self.notify.banner_card.as_ref().map(|c| c.app);
+        let alarm = self.clock_banner(id);
+        let mut fx = vec![];
         match part {
             Part::Card => {
                 self.desk_banner_dismiss(t);
+                // a click on a ringing alarm's banner stops it and opens the Clock
+                if alarm {
+                    fx = self.clock_banner_answer(id, false, t);
+                }
                 if let Some(app) = app {
                     self.open_from_notification(app, t);
                 }
                 // the reference clears the notification the banner showed, and only that one
                 self.clear_notification(id);
             }
-            Part::Close => self.desk_banner_dismiss(t),
+            Part::Close => {
+                self.desk_banner_dismiss(t);
+                // the X of a ringing alarm's banner stops it: an alert left ringing has nothing on screen to stop it by
+                if alarm {
+                    fx = self.clock_banner_answer(id, false, t);
+                }
+            }
             Part::Options => self.notify.banner_menu = !self.notify.banner_menu,
             Part::MenuPad => {}
             Part::Menu(i) => {
                 let item = self.desk_banner_menu().get(i).cloned();
                 self.desk_banner_dismiss(t);
                 match item {
+                    Some(MenuItem::Alarm(snooze)) => {
+                        fx = self.clock_banner_answer(id, snooze, t);
+                        self.clear_notification(id);
+                    }
                     Some(MenuItem::Action(action, _)) => {
                         self.usernotif_respond(id, &action, "", t);
                         self.clear_notification(id);
@@ -262,6 +291,7 @@ impl Shell {
                 }
             }
         }
+        fx
     }
 
     /// Puts the front banner away (its notification stays listed); the next one waiting behind comes when it is gone.
@@ -470,6 +500,35 @@ mod tests {
         tap(&mut sh, mid(rows[mute]), t + 100.0);
         assert!(sh.app_muted(AppId::Files));
         assert!(!sh.notify.banner_menu);
+    }
+
+    /// E2E N5: on the desktop a ringing Clock alert is its banner; the Options menu offers Stop (and Snooze for an
+    /// alarm that allows it), and Stop answers the alert and clears the notification.
+    #[test]
+    fn a_ringing_alert_s_banner_offers_stop_which_stops_it() {
+        let mut sh = desk();
+        let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/test-clock-banner").join(std::process::id().to_string());
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        sh.set_wall(1_000_000, 0, 1000.0);
+        sh.clock.load(&dir.join("clock.ini").to_string_lossy(), 1000.0);
+        assert!(sh.clock.start_timer("", 1000, 1000.0).is_some());
+        sh.tick(2100.0);
+        assert!(sh.clock.alert().is_some(), "the timer rings");
+        // the notification `notify_alarm` files under the installed Clock app and its banner (`clock_banner_sync`); no
+        // Clock app is installed in tests, so both are made by hand
+        let id = sh.notify_id(note(AppId::Files, "Timer"));
+        sh.clock_banners.push(id);
+        sh.start_banner(id, AppId::Files);
+        assert_eq!(sh.notify.banner().map(|b| b.id), Some(id));
+        let items = sh.desk_banner_menu();
+        assert_eq!(items, vec![MenuItem::Alarm(false), MenuItem::Mute, MenuItem::Settings], "a timer has Stop, no Snooze");
+        assert_eq!(sh.desk_banner_menu_title(&items[0]), "Stop");
+        sh.desk_banner_act(Part::Menu(0), 2200.0);
+        assert!(sh.clock.alert().is_none(), "Stop answered the alert");
+        assert!(sh.clock_banners.is_empty());
+        assert!(!sh.notify_exists(id), "and cleared its notification");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// E2E W5-5: a click on the banner opens the app and clears only the notification it showed.

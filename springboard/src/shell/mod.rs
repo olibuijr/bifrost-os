@@ -852,6 +852,9 @@ pub struct Shell {
     keyboard: Keyboard,
     /// desktop or touch tablet: decides whether the on-screen keyboard can appear (`FormFactor::allows_onscreen_keyboard`)
     form: bifrost_ui::form_factor::FormFactor,
+    /// the notifications (store ids) whose desktop banners stand for a ringing Clock alert: their Stop and Snooze
+    /// answer the alert (`notify_alarm`, `clock_banner_sync`, `desk_banner_act`; E2E N5)
+    clock_banners: Vec<u64>,
     /// a physical keyboard is attached; on a tablet it keeps the on-screen keyboard down
     hw_keyboard: bool,
     /// the user opened the on-screen keyboard on purpose (the Input menu): the one way a desktop gets it
@@ -1323,6 +1326,7 @@ impl Shell {
             music_muted: false,
             keyboard,
             form: bifrost_ui::form_factor::FormFactor::current(),
+            clock_banners: Vec::new(),
             hw_keyboard: false,
             osk_pinned: false,
             touch_contacts: touch_frames::Contacts::default(),
@@ -3505,7 +3509,7 @@ impl Shell {
         if let Some(fx) = self.modal_event(ev) {
             return fx;
         }
-        if self.clock.alert().is_some() {
+        if self.clock_takeover() {
             let ev = self.letterbox_event(ev);
             return self.clock.touch(&self.ui, ev, t);
         }
@@ -4402,6 +4406,7 @@ impl Shell {
             }
             self.notify_alarm();
         }
+        self.clock_banner_sync();
         effects.extend(self.notify_tick(t));
         effects.extend(self.low_battery_tick(t));
         self.thermal_tick(t);
@@ -4882,7 +4887,7 @@ impl Shell {
                 }
             }
         };
-        if self.clock.alert().is_none() {
+        if !self.clock_takeover() {
             self.draw_banner(s, t);
         }
         // Picture in Picture floats above the windows, inside the screen between the menu bar and the dock
@@ -4901,10 +4906,18 @@ impl Shell {
             damage.all();
             self.dnd_draw(s);
         }
-        if self.clock.alert().is_some() {
+        if self.clock_takeover() {
             damage.all();
             self.draw_letterboxed(s, |sh, s| sh.clock.draw_alert(s, &sh.ui, t));
-            home_indicator(s, &self.ui, self.w, self.h, 255);
+            if self.form.is_tablet() {
+                home_indicator(s, &self.ui, self.w, self.h, 255);
+            }
+            // the alert painted the whole frame over what the screen drew: the frame no longer holds that screen, so the
+            // next one must not be a partial repaint of it (the desktop's regions, an app's damaged rectangles, the
+            // terminal's rows). After Stop only the button's strip was repainted and the desktop stayed black (E2E N6).
+            self.desk_regions = None;
+            self.desk_drawn = false;
+            self.drawn = Drawn::Nothing;
         }
         self.hud_drawn = self.hud.visible(t);
         if self.hud_drawn {
@@ -5153,7 +5166,7 @@ impl Shell {
     }
 
     fn assistive_visible(&self) -> bool {
-        self.screen_on && !self.is_locked() && self.clock.alert().is_none() && self.assistive_touch.enabled()
+        self.screen_on && !self.is_locked() && !self.clock_takeover() && self.assistive_touch.enabled()
     }
 
     /// The performance overlay's box under the status bar, in px.
@@ -5884,6 +5897,18 @@ impl Shell {
     /// The form factor this shell runs as.
     pub fn form(&self) -> bifrost_ui::form_factor::FormFactor {
         self.form
+    }
+
+    /// A ringing Clock alert is a notification banner with Stop and Snooze on an unlocked desktop, as the reference's
+    /// Clock posts one there; a tablet, and the lock screen, keep the full-screen alert (E2E N5). The banner is filed
+    /// under the installed Clock app (`notify_alarm`): without it there is no banner, and the alert takes the screen.
+    pub(super) fn clock_as_banner(&self) -> bool {
+        self.form.is_desktop() && self.desk_active() && !self.is_locked() && apphost::slot_of(clock::MANIFEST_ID).is_some()
+    }
+
+    /// The Clock's full-screen alert is up: it takes the screen's touches and is drawn over everything.
+    pub(super) fn clock_takeover(&self) -> bool {
+        self.clock.alert().is_some() && !self.clock_as_banner()
     }
 
     /// A physical keyboard attached or removed. Attaching hides a raised on-screen keyboard and keeps it down while

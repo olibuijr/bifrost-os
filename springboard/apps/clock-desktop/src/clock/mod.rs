@@ -257,8 +257,11 @@ pub struct Clock {
     selected_alarm: Option<u32>,
     /// the alarm a context menu was opened on (by alarm id), until its answer comes back
     ctx_alarm: Option<u32>,
-    /// Timers: the picker shows for a new timer although timers run (the toolbar's or the right button's New)
+    /// Timers: the picker shows for a new timer although timers run (the toolbar's Add Timer)
     timer_new: bool,
+    /// Timers: the preset chip that set the pickers, whose name labels the timer Start starts while the pickers still
+    /// show its duration (E2E N7: a preset selects a duration, it does not start a timer)
+    timer_preset: Option<usize>,
     /// the last `tick` asked for a frame only because a countdown second passed: `draw` repaints the timer cards alone
     rows_only: bool,
     /// the card colour of the last full frame: an appearance change forces a full repaint
@@ -301,6 +304,7 @@ impl Clock {
             selected_alarm: None,
             ctx_alarm: None,
             timer_new: false,
+            timer_preset: None,
             rows_only: false,
             drawn_card: 0,
         }
@@ -468,6 +472,10 @@ impl Clock {
         if editable {
             items.push(ToolbarItem::icon(BAR_ADD, if self.tab == Tab::World { "Add City" } else { "Add Alarm" }, "plus"));
         }
+        if self.tab == Tab::Timer {
+            // another timer is set up from the toolbar; the round buttons belong to the running one (E2E N7)
+            items.push(ToolbarItem::icon(BAR_ADD, "Add Timer", "plus").enabled(self.timer_list()));
+        }
         if self.tab == Tab::Stopwatch {
             // laps exist once the watch has started; the table is empty before that
             items.push(ToolbarItem::icon(BAR_EXPORT, "Copy Laps", "square.and.arrow.up").enabled(!self.stopwatch.laps(0.0).is_empty()));
@@ -592,7 +600,8 @@ impl Clock {
                 let r = ui.pt(BUTTON_R_PT + 8.0);
                 push(610, Role::Button, "Cancel".into(), String::new(), circle(left, r), !self.timers.list.is_empty());
                 if self.timer_list() {
-                    push(611, Role::Button, "New Timer".into(), String::new(), circle(right, r), true);
+                    let newest_runs = self.timers.list.last().is_some_and(|i| i.running());
+                    push(611, Role::Button, (if newest_runs { "Pause" } else { "Resume" }).into(), String::new(), circle(right, r), true);
                     for (i, item) in self.timers.list.iter().take(TIMER_ROWS).enumerate() {
                         let row = self.timer_row(ui, i);
                         let state = if item.running() { "running" } else { "paused" };
@@ -1069,23 +1078,32 @@ impl Clock {
                     self.stopwatch.toggle(t);
                     self.persist_stopwatch(t);
                 }
-                // over the list the right button is New: it shows the picker for another timer
-                Tab::Timer if self.timer_list() => self.timer_new = true,
+                // over the list the right button pauses and resumes the newest timer, the one Cancel cancels; another
+                // timer is set up from the toolbar's Add Timer, so the picker never comes back over a running one
+                Tab::Timer if self.timer_list() => {
+                    if let Some(id) = self.timers.list.last().map(|item| item.id) {
+                        self.timers.toggle(id, t, self.wall.now_ms(t));
+                        return self.persist_timers(t);
+                    }
+                }
                 Tab::Timer => {
                     let ms = self.picked_ms();
-                    if self.timers.start("", ms, t, self.wall.now_ms(t)).is_some() {
+                    let label = self.timer_preset.map(|i| timer::PRESETS[i]).filter(|&(_, p)| p == ms).map_or("", |(name, _)| name);
+                    if self.timers.start(label, ms, t, self.wall.now_ms(t)).is_some() {
                         self.timer_new = false;
+                        self.timer_preset = None;
                         return self.persist_timers(t);
                     }
                 }
                 _ => {}
             },
             Target::Preset(i) => {
-                let (name, ms) = timer::PRESETS[i];
-                if self.timers.start(name, ms, t, self.wall.now_ms(t)).is_some() {
-                    self.timer_new = false;
-                    return self.persist_timers(t);
+                // a preset sets the pickers to its duration; Start starts it (E2E N7)
+                let (h, m, sec) = timer::split(timer::PRESETS[i].1 as f64);
+                for (p, v) in self.timer_pickers.iter_mut().zip([h, m, sec]) {
+                    p.select(v as usize);
                 }
+                self.timer_preset = Some(i);
             }
             Target::TimerRow(i) => {
                 if let Some(id) = self.timers.list.get(i).map(|item| item.id) {
@@ -1106,6 +1124,10 @@ impl Clock {
                 }
             }
             Target::Add => {
+                if self.tab == Tab::Timer {
+                    self.timer_new = true;
+                    return vec![];
+                }
                 if self.tab == Tab::World {
                     self.add_city_sheet(ui);
                     return vec![];
@@ -1561,7 +1583,8 @@ impl Clock {
             self.draw_timer_cards(s, ui, t);
             let fill = CONTROL_PRESSED.now();
             self.draw_button(s, ui, false, "Cancel", fill, LABEL.now());
-            self.draw_button(s, ui, true, "New", CARD_BG.now(), LINK);
+            let label = if self.timers.list.last().is_some_and(|i| i.running()) { "Pause" } else { "Resume" };
+            self.draw_button(s, ui, true, label, CARD_BG.now(), LINK);
             return;
         }
         let cy = ui.pt(PICKER_Y_PT);
@@ -1577,7 +1600,9 @@ impl Clock {
         }
         for (i, (name, _)) in timer::PRESETS.iter().enumerate() {
             let (px, py, pw, ph) = self.preset_rect(ui, i);
-            s.fill_rrect(px, py, pw, ph, 1.0e4, CARD_BG.now());
+            // the chip that set the pickers stays marked while they show its duration
+            let chosen = self.timer_preset == Some(i) && self.picked_ms() == timer::PRESETS[i].1;
+            s.fill_rrect(px, py, pw, ph, 1.0e4, if chosen { CONTROL_PRESSED.now() } else { CARD_BG.now() });
             self.label(s, ui, name, MAC_SUBHEAD_PT, Weight::Regular, LINK, px + pw / 2.0, py + ph / 2.0, 0.5);
         }
         // Cancel goes back to the running timers while another one is being set up
@@ -1874,11 +1899,16 @@ pub(crate) mod tests {
         // several at once: each gets its own label, the left button cancels the newest
         let left = c.button_centre(&ui, false);
         tap(&mut c, &ui, right.0, right.1, 6000.0);
-        // a timer runs: the picker hides and the right button is New, which brings the picker back
+        // a timer runs: the picker hides and the right button pauses and resumes it (E2E N7)
         assert!(c.timer_list());
         assert_eq!(c.hit(&ui, sx + sw / 2.0, cy), None, "no picker over the running timers");
         tap(&mut c, &ui, right.0, right.1, 6100.0);
-        assert!(!c.timer_list() && c.timers().list.len() == 1, "New shows the picker without starting a timer");
+        assert!(c.timer_list() && c.timers().list.len() == 1 && !c.timers().list[0].running(), "the right button pauses, it never reopens the picker");
+        tap(&mut c, &ui, right.0, right.1, 6120.0);
+        assert!(c.timer_list() && c.timers().list[0].running(), "and resumes");
+        // another timer is set up from the toolbar's Add Timer
+        c.activate(&ui, Target::Add, 0.0, 6130.0);
+        assert!(!c.timer_list() && c.timers().list.len() == 1, "Add Timer shows the picker without starting a timer");
         tap(&mut c, &ui, right.0, right.1, 6150.0);
         assert_eq!(c.timers().list.iter().map(|i| i.label.as_str()).collect::<Vec<_>>(), ["Timer", "Timer 2"]);
         assert!(c.timer_list());
@@ -1893,9 +1923,12 @@ pub(crate) mod tests {
         assert!(c.timers().list[0].running());
         tap(&mut c, &ui, rx + rw - ui.pt(20.0), ry + rh / 2.0, 6600.0);
         assert!(c.timers().list.is_empty());
-        // a preset starts at once
+        // a preset selects its duration in the pickers; Start starts it under the preset's name (E2E N7)
         let (px, py, pw, ph) = c.preset_rect(&ui, 2);
         tap(&mut c, &ui, px + pw / 2.0, py + ph / 2.0, 7000.0);
+        assert!(c.timers().list.is_empty(), "a preset does not start a timer");
+        assert_eq!(c.picked_ms(), 300_000);
+        tap(&mut c, &ui, right.0, right.1, 7100.0);
         assert_eq!((c.timers().list[0].label.as_str(), c.timers().list[0].duration_ms), ("5 min", 300_000));
     }
 
@@ -1921,7 +1954,8 @@ pub(crate) mod tests {
         // a ten-minute timer
         select_tab(&mut c, &ui, 3);
         let (px, py, pw, ph) = c.preset_rect(&ui, 3);
-        let fx = tap(&mut c, &ui, px + pw / 2.0, py + ph / 2.0, 6000.0);
+        tap(&mut c, &ui, px + pw / 2.0, py + ph / 2.0, 5900.0);
+        let fx = tap(&mut c, &ui, right.0, right.1, 6000.0);
         let end = (c.wall.now_ms(6020.0) + 600_000 + 999) / 1000;
         assert_eq!(fx, vec![Effect::WakeAt(end)], "the RTC is armed for the timer");
         // the shell restarts a minute later; its frame clock starts over
@@ -2158,12 +2192,15 @@ pub(crate) mod tests {
         let mut c = clock(&ui);
         select_tab(&mut c, &ui, 3);
         let (px, py, pw, ph) = c.preset_rect(&ui, 2);
-        tap(&mut c, &ui, px + pw / 2.0, py + ph / 2.0, 1000.0);
+        tap(&mut c, &ui, px + pw / 2.0, py + ph / 2.0, 900.0);
+        let right = c.button_centre(&ui, true);
+        tap(&mut c, &ui, right.0, right.1, 1000.0);
         assert!(c.timer_list());
         let controls = c.controls(&ui);
         assert!(controls.iter().all(|n| n.role != Role::Slider), "no picker while the timer runs");
         assert!(controls.iter().any(|n| n.label == "Timer 5 min"));
-        assert!(controls.iter().any(|n| n.label == "New Timer"));
+        assert!(controls.iter().any(|n| n.label == "Pause"), "the right button pauses the running timer");
+        assert!(controls.iter().all(|n| n.label != "New Timer"), "no New over the running timer (E2E N7)");
         let mut buf = vec![0u32; 1200 * 1920];
         assert!(c.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, &ui, 1100.0).is_none(), "a full frame first");
         assert!(c.tick(&ui, 2100.0), "the next second needs a frame");
