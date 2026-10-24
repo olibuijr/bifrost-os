@@ -11,7 +11,7 @@
 //! paths and rectangles, the transform (`q`/`Q` and `cm`), grey, RGB and CMYK colours, alpha and blend modes
 //! (`/ExtGState`), linear and radial gradients and axial and radial shadings (`sh`, or as the paint of a fill or a
 //! stroke through a clip), raster images (RGB with an `/SMask` for alpha), text in the twelve standard Latin faces
-//! (WinAnsi, with font size, character spacing, text matrix and the fill or invisible drawing mode), marked content
+//! (WinAnsi, with font size, character spacing, text matrix and every text drawing mode, `Tr` 0 to 7), marked content
 //! (`BMC`/`EMC`), link annotations to a URL or to a named destination, named destinations, an outline, the document
 //! information dictionary and an XML metadata stream. A pattern paint has no vector form here: it is drawn as an
 //! image of the pattern, clipped to the shape.
@@ -1211,37 +1211,54 @@ impl PdfContext {
         self.gs.face.width(text, self.gs.font_size) + self.gs.char_spacing * text.chars().count() as f32
     }
 
-    /// Draws `text` at the text position with the fill paint (a non-solid paint is drawn as black) and moves the
-    /// position past it. The text is real PDF text, so a reader can select and search it; the invisible mode keeps
-    /// it selectable without painting it.
+    /// Draws `text` at the text position in the text drawing mode and moves the position past it. The modes map to
+    /// the PDF text rendering modes `Tr` 0 to 7: the fill modes paint with the fill colour, the stroke modes stroke
+    /// the outlines with the stroke colour and the line style (a non-solid paint is drawn as black), and the clip
+    /// modes add the outlines to the clip. The text is real PDF text, so a reader can select and search it; the
+    /// invisible mode keeps it selectable without painting it.
+    ///
+    /// The painting is written inside `q`/`Q` like every other paint operation, so for a clip mode the same text is
+    /// written once more with `Tr 7` at the content stream's level (the text matrix then carries the transform):
+    /// that clip lasts until the next restore, as the reference platform's text clip does.
     pub fn show_text(&mut self, text: &str) {
         let adv = self.text_advance(text);
         if self.page.is_some() && !text.is_empty() {
             let face = self.gs.face;
             self.fonts[face.index()] = true;
-            let color = match &self.gs.fill {
+            let mode = self.gs.text_mode;
+            let solid = |p: &Paint| match p {
                 Paint::Solid(c) => c.clone(),
                 _ => Color::black(),
             };
-            let gs = self.ext_op(self.gs.alpha * color.alpha(), 1.0);
+            let (fill, stroke) = (solid(&self.gs.fill), solid(&self.gs.stroke));
             let hex: String = text.chars().map(|c| format!("{:02X}", winansi(c))).collect();
-            let mode = if self.gs.text_mode == TextDrawing::Invisible { 3 } else { 0 };
-            let t = self.tm;
-            let line = format!(
-                "q {gs}{}{}BT /F{} {} Tf {} Tc {mode} Tr {} {} {} {} {} {} Tm <{hex}> Tj ET Q\n",
-                cm(&self.gs.ctm),
-                color_op(&color, false),
-                face.index(),
-                n(self.gs.font_size),
-                n(self.gs.char_spacing),
-                n(t.a),
-                n(t.b),
-                n(t.c),
-                n(t.d),
-                n(t.tx),
-                n(t.ty)
-            );
-            self.emit(&line);
+            let font = format!("/F{} {} Tf {} Tc", face.index(), n(self.gs.font_size), n(self.gs.char_spacing));
+            let tm_ops = |t: Affine| format!("{} {} {} {} {} {} Tm", n(t.a), n(t.b), n(t.c), n(t.d), n(t.tx), n(t.ty));
+            if mode != TextDrawing::Clip {
+                let fill_alpha = if mode.fills() { self.gs.alpha * fill.alpha() } else { 1.0 };
+                let stroke_alpha = if mode.strokes() { self.gs.alpha * stroke.alpha() } else { 1.0 };
+                let gs = self.ext_op(fill_alpha, stroke_alpha);
+                let mut paint = String::new();
+                if mode.fills() || mode == TextDrawing::Invisible {
+                    paint.push_str(&color_op(&fill, false));
+                }
+                if mode.strokes() {
+                    paint.push_str(&color_op(&stroke, true));
+                    paint.push_str(&style_ops(&self.gs.style()));
+                }
+                let line = format!(
+                    "q {gs}{}{paint}BT {font} {} Tr {} <{hex}> Tj ET Q\n",
+                    cm(&self.gs.ctm),
+                    mode.pdf_render_mode(),
+                    tm_ops(self.tm)
+                );
+                self.emit(&line);
+            }
+            if mode.clips() {
+                // outside `q`/`Q` the content stream's transform is the identity, so the text matrix takes the CTM
+                let line = format!("BT {font} 7 Tr {} <{hex}> Tj ET\n", tm_ops(self.tm.then(self.gs.ctm)));
+                self.emit(&line);
+            }
         }
         self.tm.tx += adv * self.tm.a;
         self.tm.ty += adv * self.tm.b;
@@ -1716,6 +1733,40 @@ mod tests {
         let found = ex.pieces.iter().any(|p| matches!(p, crate::cg::pdf::extract::Piece::Line { text, .. } if text.contains("Hello")));
         assert!(found, "the text reads back");
         assert!(String::from_utf8_lossy(&pdf).contains("/BaseFont /Times-Bold"));
+    }
+
+    #[test]
+    fn every_text_drawing_mode_maps_to_its_pdf_rendering_mode() {
+        let modes = [
+            (TextDrawing::Fill, 0),
+            (TextDrawing::Stroke, 1),
+            (TextDrawing::FillStroke, 2),
+            (TextDrawing::Invisible, 3),
+            (TextDrawing::FillClip, 4),
+            (TextDrawing::StrokeClip, 5),
+            (TextDrawing::FillStrokeClip, 6),
+            (TextDrawing::Clip, 7),
+        ];
+        for (mode, tr) in modes {
+            assert_eq!(mode.pdf_render_mode(), tr);
+            let pdf = letter_page(|cx| {
+                cx.set_fill_gray(0.25, 1.0);
+                cx.set_stroke_gray(0.75, 1.0);
+                cx.set_line_width(2.0);
+                cx.set_text_drawing_mode(mode);
+                cx.translate_ctm(10.0, 0.0);
+                cx.show_text_at_point(5.0, 40.0, "Hi");
+            });
+            let text = String::from_utf8_lossy(&pdf);
+            if mode != TextDrawing::Clip {
+                assert!(text.contains(&format!(" {tr} Tr 1 0 0 1 5 40 Tm <4869> Tj ET Q")), "{mode:?}: {text}");
+            }
+            assert_eq!(text.contains("0.25 g"), mode.fills() || mode == TextDrawing::Invisible, "{mode:?}: {text}");
+            assert_eq!(text.contains("0.75 G"), mode.strokes(), "{mode:?}: {text}");
+            assert_eq!(text.contains("2 w"), mode.strokes(), "{mode:?}: the line width strokes the outlines");
+            // the clip pass sits outside q/Q, its text matrix carrying the transform, so the clip outlives the text
+            assert_eq!(text.contains("7 Tr 1 0 0 1 15 40 Tm <4869> Tj ET\n"), mode.clips(), "{mode:?}: {text}");
+        }
     }
 
     #[test]

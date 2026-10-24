@@ -120,10 +120,49 @@ pub enum PathDrawing {
     EoFillStroke,
 }
 
+/// How text is drawn (the text drawing mode): painted with the fill and or the stroke, not painted, and whether the
+/// glyph outlines are then added to the clip. The order is the PDF text rendering mode order, `Tr` 0 to 7.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TextDrawing {
     Fill,
+    Stroke,
+    FillStroke,
     Invisible,
+    FillClip,
+    StrokeClip,
+    FillStrokeClip,
+    Clip,
+}
+
+impl TextDrawing {
+    /// The PDF text rendering mode (`Tr` operand, 0 to 7).
+    pub fn pdf_render_mode(self) -> u8 {
+        match self {
+            TextDrawing::Fill => 0,
+            TextDrawing::Stroke => 1,
+            TextDrawing::FillStroke => 2,
+            TextDrawing::Invisible => 3,
+            TextDrawing::FillClip => 4,
+            TextDrawing::StrokeClip => 5,
+            TextDrawing::FillStrokeClip => 6,
+            TextDrawing::Clip => 7,
+        }
+    }
+
+    /// True when the glyphs are painted with the fill paint.
+    pub fn fills(self) -> bool {
+        matches!(self, TextDrawing::Fill | TextDrawing::FillStroke | TextDrawing::FillClip | TextDrawing::FillStrokeClip)
+    }
+
+    /// True when the glyph outlines are stroked with the stroke paint.
+    pub fn strokes(self) -> bool {
+        matches!(self, TextDrawing::Stroke | TextDrawing::FillStroke | TextDrawing::StrokeClip | TextDrawing::FillStrokeClip)
+    }
+
+    /// True when the glyph outlines are added to the clip after the text is drawn.
+    pub fn clips(self) -> bool {
+        matches!(self, TextDrawing::FillClip | TextDrawing::StrokeClip | TextDrawing::FillStrokeClip | TextDrawing::Clip)
+    }
 }
 
 /// Shadow cast by what is drawn: offset in user space, blur as a Gaussian diameter, colour with its alpha.
@@ -1456,6 +1495,9 @@ impl<'a> DrawContext<'a> {
         self.gs.char_spacing = s;
     }
 
+    /// Sets the text drawing mode. The bitmap context paints glyphs with the fill paint in the modes that fill and
+    /// draws nothing in the others: stroking glyph outlines and clipping to them are not done here yet (the PDF
+    /// context writes every mode).
     pub fn set_text_drawing_mode(&mut self, m: TextDrawing) {
         self.gs.text_mode = m;
     }
@@ -1507,7 +1549,7 @@ impl<'a> DrawContext<'a> {
     fn draw_run(&mut self, font: &Font<'_>, text: &str, size: f32, x: f32, y: f32) -> f32 {
         let adv = font.measure(text, size);
         let px = size * self.unit_scale();
-        if px < 0.5 || text.is_empty() || self.gs.text_mode == TextDrawing::Invisible {
+        if px < 0.5 || text.is_empty() || !self.gs.text_mode.fills() {
             return adv;
         }
         let img = font.render(text, &self.glyph_style(px));
@@ -1545,7 +1587,7 @@ impl<'a> DrawContext<'a> {
     pub fn show_glyphs_at_positions(&mut self, font: &Font<'_>, glyphs: &[(u16, (f32, f32))]) {
         let size = self.gs.font_size;
         let px = size * self.unit_scale();
-        if px < 0.5 || self.gs.text_mode == TextDrawing::Invisible {
+        if px < 0.5 || !self.gs.text_mode.fills() {
             return;
         }
         let st = self.glyph_style(px);
