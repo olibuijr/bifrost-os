@@ -20,6 +20,7 @@
 
 use crate::graphics_imageio;
 use bifrost_render::canvas::{Canvas, ImageRef, RectF};
+use bifrost_render::cg::imageio::{Format, ImageSource};
 use bifrost_render::gfx::Image;
 
 /// A rectangle as (x, y, width, height), y growing downwards.
@@ -56,16 +57,33 @@ pub struct ImageRep {
     pub kind: RepKind,
     /// Size in points.
     pub size: (f32, f32),
+    /// The codec a bitmap was read from (the per-codec representation: PNG, JPEG, GIF, BMP, ICO, TIFF or WebP);
+    /// `None` for a representation made in memory or a vector one.
+    pub codec: Option<Format>,
+    /// The frames of an animated bitmap (`frameCount`); 1 for a still image.
+    pub frame_count: u32,
 }
 
 impl ImageRep {
+    /// The same representation, recorded as read by `codec` with `frame_count` frames (at least 1).
+    pub fn with_codec(mut self, codec: Format, frame_count: u32) -> ImageRep {
+        self.codec = Some(codec);
+        self.frame_count = frame_count.max(1);
+        self
+    }
+
+    /// Whether the bitmap holds more than one frame (an animated GIF, PNG or WebP).
+    pub fn is_animated(&self) -> bool {
+        self.frame_count > 1
+    }
+
     /// A bitmap of `pixel_width` by `pixel_height` pixels shown at `size` points. `None` for an empty pixel grid, a
     /// non-positive or non-finite size.
     pub fn bitmap(pixel_width: u32, pixel_height: u32, size: (f32, f32)) -> Option<ImageRep> {
         if pixel_width == 0 || pixel_height == 0 || !valid_size(size) {
             return None;
         }
-        Some(ImageRep { kind: RepKind::Bitmap { pixel_width, pixel_height }, size })
+        Some(ImageRep { kind: RepKind::Bitmap { pixel_width, pixel_height }, size, codec: None, frame_count: 1 })
     }
 
 /// A bitmap shown at 72 points per inch, so one pixel is one point by default.
@@ -78,7 +96,7 @@ impl ImageRep {
         if !valid_size(size) {
             return None;
         }
-        Some(ImageRep { kind: RepKind::Vector, size })
+        Some(ImageRep { kind: RepKind::Vector, size, codec: None, frame_count: 1 })
     }
 
     /// Whether the representation scales to any size.
@@ -132,13 +150,30 @@ impl ImageObject {
         ImageObject { name: Some(name.into()), ..ImageObject::default() }
     }
 
-    /// An image with one bitmap representation read from encoded bytes (PNG, JPEG, and the other formats the codec
-    /// reads). The representation is 72 dpi. `None` when the bytes are not a supported image.
+    /// An image with the bitmap representations read from encoded bytes (PNG, JPEG, GIF, BMP, ICO, TIFF, WebP),
+    /// each recording its codec. An icon file or a multi-page TIFF gives one representation per image in it (the
+    /// sizes an icon offers); an animation (GIF, animated PNG) gives one representation with its frame count.
+    /// Representations are 72 dpi. `None` when the bytes are not a supported image.
     pub fn from_encoded(bytes: &[u8]) -> Option<ImageObject> {
         let (w, h) = graphics_imageio::pixel_size(bytes)?;
-        let rep = ImageRep::bitmap_at_72_dpi(u32::try_from(w).ok()?, u32::try_from(h).ok()?)?;
+        let codec = Format::detect(bytes)?;
+        let source = ImageSource::new(bytes.to_vec());
+        let count = source.count().max(1);
+        let rep = |w: usize, h: usize| ImageRep::bitmap_at_72_dpi(u32::try_from(w).ok()?, u32::try_from(h).ok()?);
         let mut image = ImageObject::new();
-        image.add_rep(rep);
+        match codec {
+            Format::Ico | Format::Tiff => {
+                image.add_rep(rep(w, h)?.with_codec(codec, 1));
+                for i in 1..count {
+                    if let Some(p) = source.properties_at(i) {
+                        if let Some(r) = rep(p.pixel_width, p.pixel_height) {
+                            image.add_rep(r.with_codec(codec, 1));
+                        }
+                    }
+                }
+            }
+            _ => image.add_rep(rep(w, h)?.with_codec(codec, count as u32)),
+        }
         Some(image)
     }
 
@@ -537,6 +572,26 @@ mod tests {
         assert_eq!(image.reps().len(), 1);
         assert_eq!(image.reps()[0].kind, RepKind::Bitmap { pixel_width: 3, pixel_height: 2 });
         assert_eq!(image.size(), Some((3.0, 2.0)));
+        assert_eq!((image.reps()[0].codec, image.reps()[0].frame_count), (Some(Format::Png), 1));
+        assert!(!image.reps()[0].is_animated());
+    }
+
+    #[test]
+    fn an_animated_gif_is_one_representation_with_its_frames() {
+        use bifrost_render::cg::image::CgImage;
+        use bifrost_render::cg::imageio::{ImageDestination, WriteOptions};
+        let mut dest = ImageDestination::new(Format::Gif, 3).unwrap();
+        for _ in 0..3 {
+            let img = CgImage::from_rgba8(2, 2, vec![255u8, 0, 0, 255].repeat(4)).unwrap();
+            dest.add_image(&img, Some(WriteOptions { delay_ms: Some(100), ..Default::default() }));
+        }
+        let bytes = dest.finalize().unwrap();
+        let image = ImageObject::from_encoded(&bytes).unwrap();
+        assert_eq!(image.reps().len(), 1);
+        assert_eq!(image.reps()[0].codec, Some(Format::Gif));
+        assert_eq!(image.reps()[0].frame_count, 3);
+        assert!(image.reps()[0].is_animated());
+        assert_eq!(ImageRep::vector((1.0, 1.0)).unwrap().codec, None);
     }
 
     fn solid(w: usize, h: usize, px: u32) -> Image {
