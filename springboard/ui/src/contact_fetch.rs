@@ -21,11 +21,26 @@ pub enum Key {
     Urls,
     Birthday,
     Dates,
+    /// The title before the name, such as `Dr.` (`CNContactNamePrefixKey`).
+    NamePrefix,
+    /// `CNContactNicknameKey`.
+    Nickname,
+    /// `CNContactJobTitleKey`.
+    JobTitle,
+    /// `CNContactDepartmentNameKey`.
+    Department,
+    /// Related people (`CNContactRelationsKey`): labeled names, such as a `spouse` or a `manager`.
+    Relations,
+    /// Social profiles (`CNContactSocialProfilesKey`): labeled [`Profile`]s with a service, user name and URL.
+    SocialProfiles,
+    /// Instant message addresses (`CNContactInstantMessageAddressesKey`): labeled [`Profile`]s with a service and user
+    /// name.
+    InstantMessages,
 }
 
 impl Key {
     /// Every key, in declaration order.
-    pub const ALL: [Key; 12] = [
+    pub const ALL: [Key; 19] = [
         Key::GivenName,
         Key::FamilyName,
         Key::MiddleName,
@@ -38,6 +53,13 @@ impl Key {
         Key::Urls,
         Key::Birthday,
         Key::Dates,
+        Key::NamePrefix,
+        Key::Nickname,
+        Key::JobTitle,
+        Key::Department,
+        Key::Relations,
+        Key::SocialProfiles,
+        Key::InstantMessages,
     ];
 }
 
@@ -57,6 +79,13 @@ impl Key {
             Key::Urls => "urls",
             Key::Birthday => "birthday",
             Key::Dates => "dates",
+            Key::NamePrefix => "name_prefix",
+            Key::Nickname => "nickname",
+            Key::JobTitle => "job_title",
+            Key::Department => "department",
+            Key::Relations => "relations",
+            Key::SocialProfiles => "social_profiles",
+            Key::InstantMessages => "instant_messages",
         }
     }
 
@@ -77,6 +106,42 @@ pub enum Value {
     Date(DateComponents),
     /// Labeled dates (`dates`).
     Dates(Vec<(String, DateComponents)>),
+    /// Labeled accounts on a service (`social_profiles`, `instant_messages`).
+    Profiles(Vec<Profile>),
+}
+
+/// One account of a person on a service (`CNSocialProfile`, `CNInstantMessageAddress`): the label it is filed under,
+/// the service name, the user name, and for a social profile its URL and the service's own user id. An instant message
+/// address leaves `url` and `user_identifier` empty. The identifier is stable within the contact, as for
+/// [`LabeledValue`].
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Profile {
+    pub label: String,
+    pub service: String,
+    pub username: String,
+    pub url: String,
+    pub user_identifier: String,
+    pub identifier: String,
+}
+
+impl Profile {
+    /// A profile on `service` for `username`, with no URL or user id.
+    pub fn new(label: &str, service: &str, username: &str) -> Self {
+        Profile { label: label.into(), service: service.into(), username: username.into(), ..Profile::default() }
+    }
+
+    /// A profile with no user name, URL or user id says nothing about the person.
+    pub fn is_blank(&self) -> bool {
+        [&self.username, &self.url, &self.user_identifier].iter().all(|v| v.trim().is_empty())
+    }
+
+    /// The profiles with identifiers `1`, `2`, ... in order.
+    pub fn numbered(mut items: Vec<Profile>) -> Vec<Profile> {
+        for (i, item) in items.iter_mut().enumerate() {
+            item.identifier = (i + 1).to_string();
+        }
+        items
+    }
 }
 
 /// `CNLabelHome`, `CNLabelWork`, `CNLabelOther` and the phone labels. The labels are plain names, so a label the
@@ -88,6 +153,70 @@ pub const LABEL_OTHER: &str = "other";
 pub const LABEL_PHONE_MOBILE: &str = "mobile";
 /// `CNLabelPhoneNumberMain`.
 pub const LABEL_PHONE_MAIN: &str = "main";
+/// `CNLabelPhoneNumberHomeFax`, `CNLabelPhoneNumberWorkFax`, `CNLabelPhoneNumberOtherFax`, `CNLabelPhoneNumberPager`.
+pub const LABEL_PHONE_HOME_FAX: &str = "home fax";
+pub const LABEL_PHONE_WORK_FAX: &str = "work fax";
+pub const LABEL_PHONE_OTHER_FAX: &str = "other fax";
+pub const LABEL_PHONE_PAGER: &str = "pager";
+/// `CNLabelSchool`.
+pub const LABEL_SCHOOL: &str = "school";
+/// `CNLabelURLAddressHomePage`.
+pub const LABEL_URL_HOME_PAGE: &str = "homepage";
+/// `CNLabelDateAnniversary`.
+pub const LABEL_DATE_ANNIVERSARY: &str = "anniversary";
+
+/// The relation labels (`CNLabelContactRelation*`), the common ones of the reference set. Gendered and family-specific
+/// variants beyond these are kept as typed text.
+pub const RELATION_LABELS: [&str; 12] =
+    ["father", "mother", "parent", "brother", "sister", "child", "son", "daughter", "friend", "spouse", "partner", "assistant"];
+/// `CNLabelContactRelationManager`, kept apart from the family labels above.
+pub const LABEL_RELATION_MANAGER: &str = "manager";
+
+/// Every predefined label name this model knows, in the order a label menu offers them.
+pub const PREDEFINED_LABELS: [&str; 13] = [
+    LABEL_HOME,
+    LABEL_WORK,
+    LABEL_SCHOOL,
+    LABEL_OTHER,
+    LABEL_PHONE_MOBILE,
+    LABEL_PHONE_MAIN,
+    LABEL_PHONE_HOME_FAX,
+    LABEL_PHONE_WORK_FAX,
+    LABEL_PHONE_OTHER_FAX,
+    LABEL_PHONE_PAGER,
+    LABEL_URL_HOME_PAGE,
+    LABEL_DATE_ANNIVERSARY,
+    LABEL_RELATION_MANAGER,
+];
+
+/// Whether `label` is one of the predefined names (a relation label counts), ignoring case and surrounding spaces.
+pub fn is_predefined_label(label: &str) -> bool {
+    let l = label.trim().to_lowercase();
+    PREDEFINED_LABELS.contains(&l.as_str()) || RELATION_LABELS.contains(&l.as_str())
+}
+
+/// The label as a person reads it (`CNLabeledValue.localizedString(forLabel:)`): a predefined name in title case
+/// ("home fax" reads "Home Fax", "homepage" reads "Home Page"), and a label the person typed as they typed it. An
+/// empty label reads as "Other". Only English is built: there is no string table for other languages yet.
+pub fn localized_label(label: &str) -> String {
+    let trimmed = label.trim();
+    if trimmed.is_empty() {
+        return "Other".into();
+    }
+    if !is_predefined_label(trimmed) {
+        return trimmed.to_string();
+    }
+    let lower = trimmed.to_lowercase();
+    let spaced = if lower == LABEL_URL_HOME_PAGE { "home page".to_string() } else { lower };
+    spaced
+        .split(' ')
+        .map(|w| {
+            let mut c = w.chars();
+            c.next().map(|f| f.to_uppercase().chain(c).collect::<String>()).unwrap_or_default()
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
 
 /// One entry of a multi-value property (`CNLabeledValue`): a label, a value and an identifier that is stable within
 /// the contact.
@@ -204,6 +333,7 @@ impl Record {
             Value::Labeled(items) => items.iter().all(|item| item.value.trim().is_empty()),
             Value::Date(_) => false,
             Value::Dates(items) => items.is_empty(),
+            Value::Profiles(items) => items.iter().all(Profile::is_blank),
         };
         if blank {
             self.fields.remove(&key);
@@ -315,8 +445,9 @@ mod tests {
         for key in Key::ALL {
             assert_eq!(Key::from_name(key.name()), Some(key));
         }
-        assert_eq!(Key::from_name("nickname"), None);
+        assert_eq!(Key::from_name("shoe_size"), None);
         assert_eq!(Key::GivenName.name(), "given_name");
+        assert_eq!(Key::from_name("nickname"), Some(Key::Nickname));
     }
 
     #[test]
@@ -372,5 +503,32 @@ mod tests {
         assert_eq!(bare.get(Key::MiddleName), Ok(None));
         assert_eq!(Key::from_name("name_suffix"), Some(Key::NameSuffix));
         assert_eq!(Key::from_name("middle_name"), Some(Key::MiddleName));
+    }
+
+    #[test]
+    fn work_and_social_fields_are_fetchable_and_blank_profiles_are_dropped() {
+        let mut r = Record::new(3);
+        r.set(Key::JobTitle, Value::Text("Engineer".into()));
+        r.set(Key::Relations, Value::Labeled(LabeledValue::numbered(vec![LabeledValue::new("spouse", "William")])));
+        r.set(Key::SocialProfiles, Value::Profiles(Profile::numbered(vec![Profile::new("", "mastodon", "@ada")])));
+        r.set(Key::InstantMessages, Value::Profiles(vec![Profile::new("home", "xmpp", "  ")]));
+        let p = project(&r, &Keys::new(&[Key::JobTitle, Key::SocialProfiles, Key::InstantMessages]).unwrap());
+        assert_eq!(p.text(Key::JobTitle), Ok("Engineer"));
+        assert_eq!(p.get(Key::InstantMessages), Ok(None), "a profile without a user name is blank");
+        let Ok(Some(Value::Profiles(profiles))) = p.get(Key::SocialProfiles) else { panic!("profiles") };
+        assert_eq!((profiles[0].service.as_str(), profiles[0].identifier.as_str()), ("mastodon", "1"));
+        assert_eq!(p.get(Key::Relations), Err(Error::NotFetched(Key::Relations)));
+    }
+
+    #[test]
+    fn predefined_labels_read_in_title_case_and_typed_labels_as_typed() {
+        assert_eq!(localized_label(LABEL_PHONE_HOME_FAX), "Home Fax");
+        assert_eq!(localized_label(" Mobile "), "Mobile");
+        assert_eq!(localized_label(LABEL_URL_HOME_PAGE), "Home Page");
+        assert_eq!(localized_label("spouse"), "Spouse");
+        assert_eq!(localized_label("boat"), "boat");
+        assert_eq!(localized_label(""), "Other");
+        assert!(is_predefined_label("MANAGER"));
+        assert!(!is_predefined_label("boat"));
     }
 }

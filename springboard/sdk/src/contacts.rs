@@ -109,7 +109,7 @@ fn record_json(record: &Record, with_id: bool) -> Json {
             Some(Value::List(items)) => Json::Arr(items.iter().map(|item| Json::Str(item.clone())).collect()),
             Some(Value::Labeled(items)) => Json::Arr(items.iter().map(|item| Json::Str(item.value.clone())).collect()),
             // birthday and dates are not sent by `save` (the shell does not store them from a save yet)
-            Some(Value::Date(_) | Value::Dates(_)) | None => continue,
+            Some(Value::Date(_) | Value::Dates(_) | Value::Profiles(_)) | None => continue,
         };
         fields.push((key.name().to_string(), value));
     }

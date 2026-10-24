@@ -282,7 +282,7 @@ fn value_of(record: &Record, key: Key) -> Result<String, String> {
             _ => Err(format!("{} takes one value per contact", key.name())),
         },
         // birthday and dates live in the contacts sidecar, which `save` does not write yet
-        Some(Value::Date(_) | Value::Dates(_)) => Err(format!("{} cannot be saved yet", key.name())),
+        Some(Value::Date(_) | Value::Dates(_) | Value::Profiles(_)) => Err(format!("{} cannot be saved yet", key.name())),
     }
 }
 
