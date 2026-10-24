@@ -2445,7 +2445,7 @@ impl Notes {
                     self.dirty = true;
                     return;
                 }
-                let r = md::toggle_wrap(&text, sel, marker_of(f));
+                let r = md::toggle_wrap_lines(&text, sel, marker_of(f));
                 self.editor.replace_range(ui, r.range, &r.with, t, false);
                 self.editor.select(r.select);
             }
@@ -6069,6 +6069,22 @@ mod tests {
         n.open_format_menu(&ui);
         let checked: Vec<String> = n.menu.as_ref().unwrap().items.iter().filter(|(_, _, on)| *on).map(|(l, _, _)| l.clone()).collect();
         assert_eq!(checked, vec!["Dashed List".to_string()], "the caret's paragraph style is checked");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn bold_on_a_selection_across_lines_styles_each_line() {
+        // E2E W2-2: Cmd+A, Cmd+B used to put one `**` pair around the whole note, which no line parses as bold
+        let ui = ui();
+        let dir = scratch("bold-lines");
+        let mut n = app(&ui, &dir);
+        open_with(&mut n, &ui, "# Title\nplain line\n- item");
+        let all = n.editor.text().chars().count();
+        n.editor.select(0..all);
+        n.run(&ui, Act::Do(Format::Char(Fmt::Bold)), 2000.0);
+        assert_eq!(n.editor.text(), "# **Title**\n**plain line**\n- **item**");
+        n.run(&ui, Act::Do(Format::Char(Fmt::Bold)), 2100.0);
+        assert_eq!(n.editor.text(), "# Title\nplain line\n- item", "the same command takes the marks off");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
