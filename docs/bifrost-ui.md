@@ -1741,7 +1741,7 @@ Code: `springboard/sdk/src/view/animation.rs`, curves and springs from `springbo
 - Reduce Motion (`appearance::reduce_motion`, override with `Window::set_reduce_motion`): frame changes are instant, opacity and background cross-fade over 0.12 s.
 - Units: `Window::tick`, `Timing` and `next_wake` are seconds; `ViewApp::next_wake` is milliseconds like `App`.
 
-Key-path animations (below) cover the animation objects; `Window::animate` keeps the typed frame/opacity/background diff, and a retargeted spring now carries its velocity. Gaps, decided: no `CALayer` tree, transforms, corner radius, shadow or masks (views have no layers); reading `frame` mid-flight returns the presentation value, use `target_frame` for the model value; hit testing uses the presentation frame and ignores opacity; overlays (`draw_overlay`) ignore opacity; no `CADisplayLink` (the window ticks per frame while `next_wake` is `Some`); the background cross-fades in premultiplied RGBA, not a perceptual space; colour is a plain `u32`, not a `Pair`, so a Light/Dark switch mid-animation does not re-resolve it.
+Key-path animations (below) cover the animation objects; `Window::animate` keeps the typed frame/opacity/background diff, and a retargeted spring now carries its velocity. Since then views gained a backing layer for corner radius, border, shadow, transform, mask and filters (`style_props.rs`), and frame links (`Window::add_frame_link`, `frame_clock::FrameLink`) are the display-link counterpart; the sentences on layers and `CADisplayLink` below are superseded. Gaps, decided: no `CALayer` tree, transforms, corner radius, shadow or masks (views have no layers); reading `frame` mid-flight returns the presentation value, use `target_frame` for the model value; hit testing uses the presentation frame and ignores opacity; overlays (`draw_overlay`) ignore opacity; no `CADisplayLink` (the window ticks per frame while `next_wake` is `Some`); the background cross-fades in premultiplied RGBA, not a perceptual space; colour is a plain `u32`, not a `Pair`, so a Light/Dark switch mid-animation does not re-resolve it.
 
 ### Key-path animations
 
@@ -1751,6 +1751,37 @@ Code: `springboard/ui/src/{keypath_anim,anim_value,anim_transaction}.rs` (engine
 - `Window::add_animation(view, anim, key)`, `remove_animation`, `animation_keys`, `presentation_value` and `model_value`. Animations never change the model; `AnimationDelegate` hears start and stop(finished).
 - Transactions nest: `begin_transaction`, `commit_transaction`, `flush_transactions`, `set_animation_duration`, `set_animation_timing_function`, `set_transaction_disable_actions`, `set_transaction_completion`, `set_transaction_value`. `Window::animate` and `disable_actions` open the same scopes, and `set_value_animated(view, key, value)` animates under them (a running spring on the key is retargeted with its velocity).
 - Gap: do not animate one property with both `animate` diffs and key animations.
+
+### Springs, media timing, transitions and emitter sub-cells (2026-10-24)
+
+Reference: names and constants read from the 26A434 QuartzCore BridgeSupport (`kCATransitionFade`, `MoveIn`, `Push`,
+`Reveal`, `FromRight/Left/Top/Bottom`, the fill modes and timing-function names; file sha256 `f490c322...ca96`), and
+the framework row's REA evidence `ev_7b05d4f65e159dad2ad9b422203d8d3c31411358dcb1aa5c37bd4b5f1825c75f`. The QuartzCore
+binary itself sits in the shared cache, which is not extracted on Linux, so behaviour beyond the documented API is not
+measured.
+
+- `Timing::spring_physical(mass, stiffness, damping, initial_velocity)` (`CASpringAnimation(mass:stiffness:damping:initialVelocity:)`,
+  defaults `SPRING_MASS` 1, `SPRING_STIFFNESS` 100, `SPRING_DAMPING` 10). Decision: it maps exactly onto the existing
+  damping-ratio spring (`zeta = c / (2 sqrt(k m))`, response `2 pi sqrt(m / k)`), so `Window::animate` keeps one spring
+  curve. `Timing::spring_perceptual(duration, bounce)` (`perceptualDuration`/`bounce`: damping ratio `1 - bounce`, or
+  `1 / (1 + bounce)` below zero). `Timing::settling_duration()` is what a spring track actually lasts.
+- `Timing` media timing for `Window::animate`: `.delay(secs)` (`beginTime`; the old value shows until it starts),
+  `.speed(x)`, `.repeat_count(n)` (`f32::INFINITY` until the property is set again) and `.autoreverses(true)`, played
+  through `keypath_anim::Media`. When the cycles end the view rests on the new (model) value, as the view animation
+  options do. Under Reduce Motion the single 0.12 s cross-fade replaces all of it. `timeOffset`, `repeatDuration` and
+  fill modes stay on `KeyAnimation` (`Window::add_animation`).
+- `TransitionView` (`CATransition` on a layer's content change): `transition_to(view, Transition::push(TransitionSubtype::FromRight))`,
+  `transition_to_then(.., |finished| ..)`, `set_content` (no effect), `is_transitioning`, `current_transition`. Same
+  model as the shell's Settings and Files stacks (`bifrost_ui::transition`: fade, move in, push, reveal, eases, `range`,
+  `reversed`, `parallax`). Decision: the new content is the model at once (lookups and layout reach it), and while
+  the effect runs (default 0.25 s) the transition view draws old and new content itself, clipped to its frame, and
+  the new content takes no pointer events. A second change cuts the first short (`finished` false). Reduce Motion
+  plays `Transition::reduced()`. Gap: only the four public types; the private cube, flip, ripple and page-curl types
+  are not built.
+- Emitter cells: `EmitterCell::begin_time`, `duration` (default for ever) and `emitter_cells` (`CAEmitterCell.emitterCells`):
+  every particle of a cell with sub-cells emits them at its own position on its own clock, under the emitter's birth
+  multiplier. Gap: one level of nesting (the sub-cells of a sub-cell do not emit); sub-particles do not inherit the
+  parent's velocity.
 
 ## Auto Layout (constraints)
 

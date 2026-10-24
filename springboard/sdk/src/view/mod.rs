@@ -64,8 +64,9 @@ mod sprite_widget;
 mod drag;
 mod content_unavailable;
 mod large_content;
+mod transition_view;
 pub use keyanim::ViewState;
-pub use animation::{mix_color, Prop, Timing, Transaction, DEFAULT_DURATION, REDUCED_DURATION};
+pub use animation::{mix_color, Prop, Timing, Transaction, DEFAULT_DURATION, REDUCED_DURATION, SPRING_DAMPING, SPRING_MASS, SPRING_STIFFNESS};
 pub use app::{action_for, ControllerHost, MenuEntry, ViewApp, ViewController};
 pub use forms::{Checkbox, Form, PopUpButton, ProgressIndicator, ProgressStyle, Section, Stepper, TextField};
 pub use autolayout::{anchors, solve as solve_constraints, Anchor, Anchors, Attr, Constraints, Item, Solution, Spec, ViewInfo};
@@ -90,6 +91,7 @@ pub use security_views::{
 pub use content_unavailable::ContentUnavailableView;
 pub use drag::{accepts_items, pick_operation, DragSpec, DRAG_SLOP};
 pub use large_content::LargeContentView;
+pub use transition_view::{Transition, TransitionEase, TransitionKind, TransitionSubtype, TransitionView};
 
 /// What a text-editing view tells the shell about itself while it is first responder (`NativeTextInputClient`,
 /// `NativeTextInput`): the text around the caret, the caret rectangle in window points `(x, y, w, h)` and the traits.

@@ -78,6 +78,25 @@ pub struct EmitterCell {
     /// Diameter (side of the square) at scale 1, in points.
     pub size: f32,
     pub shape: CellShape,
+    /// Seconds into the emitter's life (a sub-cell: into its parent particle's life) before the cell starts emitting.
+    pub begin_time: f32,
+    /// Seconds the cell emits for after `begin_time`; `f32::INFINITY` (the default) emits for as long as it lives.
+    pub duration: f32,
+    /// Sub-cells (`emitterCells` of a cell): every particle of this cell is an emitter of its own for these, at its
+    /// position, with its own birth clock. One level: the sub-cells of a sub-cell do not emit.
+    pub emitter_cells: Vec<EmitterCell>,
+}
+
+impl EmitterCell {
+    /// Seconds of the cell's emitting window that fall inside the `span` seconds from age `from`. A step wholly inside
+    /// the window counts as `span` itself, so no rounding sliver is lost from the birth count.
+    fn emitting(&self, from: f32, span: f32) -> f32 {
+        let (to, end) = (from + span, self.begin_time + self.duration.max(0.0));
+        if from >= self.begin_time && to <= end {
+            return span;
+        }
+        (to.min(end) - from.max(self.begin_time)).max(0.0)
+    }
 }
 
 impl Default for EmitterCell {
@@ -97,6 +116,9 @@ impl Default for EmitterCell {
             color_speed: [0.0; 4],
             size: 8.0,
             shape: CellShape::Circle,
+            begin_time: 0.0,
+            duration: f32::INFINITY,
+            emitter_cells: Vec::new(),
         }
     }
 }
@@ -114,6 +136,16 @@ pub struct EmitterParticle {
     pub cell: usize,
     /// Birth order across the emitter.
     pub seq: u64,
+    /// The sub-cell of `cell` the particle was born from (`None` for a particle of a top-level cell).
+    pub sub: Option<usize>,
+    /// A top-level particle's birth accumulators for its cell's sub-cells.
+    pub accum: Vec<f32>,
+}
+
+/// The cell a particle was born from.
+fn cell_of<'a>(cells: &'a [EmitterCell], p: &EmitterParticle) -> &'a EmitterCell {
+    let c = &cells[p.cell];
+    p.sub.and_then(|j| c.emitter_cells.get(j)).unwrap_or(c)
 }
 
 #[derive(Clone, Debug)]
@@ -134,6 +166,8 @@ pub struct EmitterContent {
     accum: Vec<f32>,
     state: u32,
     seq: u64,
+    /// Seconds simulated so far (the clock of the cells' `begin_time` and `duration`).
+    age: f32,
 }
 
 impl EmitterContent {
@@ -155,6 +189,7 @@ impl EmitterContent {
             accum,
             state: seed,
             seq: 0,
+            age: 0.0,
         }
     }
 
@@ -168,12 +203,21 @@ impl EmitterContent {
         self.unit() - 0.5
     }
 
+    /// Seconds simulated since the content was made.
+    pub fn age(&self) -> f32 {
+        self.age
+    }
+
     /// Advances the simulation by `dt` seconds (a negative `dt` counts as zero).
     pub fn step(&mut self, dt: f32) {
         let dt = dt.max(0.0);
         let cells = &self.cells;
+        let rate = self.birth_rate;
+        // sub-particles to be born at a parent's position: (cell, sub-cell, position)
+        let mut born: Vec<(usize, usize, (f32, f32))> = Vec::new();
         for p in self.particles.iter_mut() {
-            let c = &cells[p.cell];
+            let c = cell_of(cells, p);
+            let from = p.age;
             p.age += dt;
             p.vel.0 += c.acceleration.0 * dt;
             p.vel.1 += c.acceleration.1 * dt;
@@ -184,21 +228,41 @@ impl EmitterContent {
             for k in 0..4 {
                 p.color[k] = (p.color[k] + c.color_speed[k] * dt).clamp(0.0, 1.0);
             }
+            if p.sub.is_none() && !c.emitter_cells.is_empty() {
+                let span = if p.age <= p.life { dt } else { (p.life - from).max(0.0) };
+                p.accum.resize(c.emitter_cells.len(), 0.0);
+                for (j, sc) in c.emitter_cells.iter().enumerate() {
+                    if !sc.enabled {
+                        continue;
+                    }
+                    p.accum[j] += sc.base.birth_rate * rate * sc.emitting(from, span);
+                    let n = p.accum[j].floor();
+                    p.accum[j] -= n;
+                    for _ in 0..(n as usize) {
+                        born.push((p.cell, j, p.pos));
+                    }
+                }
+            }
         }
         self.particles.retain(|p| p.age < p.life);
         if self.accum.len() != self.cells.len() {
             self.accum.resize(self.cells.len(), 0.0);
         }
+        let from = self.age;
+        self.age += dt;
         for i in 0..self.cells.len() {
             if !self.cells[i].enabled {
                 continue;
             }
-            self.accum[i] += self.cells[i].base.birth_rate * self.birth_rate * dt;
+            self.accum[i] += self.cells[i].base.birth_rate * self.birth_rate * self.cells[i].emitting(from, dt);
             let n = self.accum[i].floor();
             self.accum[i] -= n;
             for _ in 0..(n as usize) {
-                self.spawn(i);
+                self.spawn(i, None, None);
             }
+        }
+        for (i, j, pos) in born {
+            self.spawn(i, Some(j), Some(pos));
         }
     }
 
@@ -270,9 +334,21 @@ impl EmitterContent {
         }
     }
 
-    fn spawn(&mut self, i: usize) {
-        let cell = self.cells[i].clone();
-        let pos = self.start_point();
+    /// Births one particle of cell `i` (of its sub-cell `sub`), at `at` or at a point of the emitter shape.
+    fn spawn(&mut self, i: usize, sub: Option<usize>, at: Option<(f32, f32)>) {
+        let top = &self.cells[i];
+        let Some(cell) = (match sub {
+            None => Some(top),
+            Some(j) => top.emitter_cells.get(j),
+        }) else {
+            return;
+        };
+        let accum = if sub.is_none() { vec![0.0; cell.emitter_cells.len()] } else { Vec::new() };
+        let cell = EmitterCell { emitter_cells: Vec::new(), ..cell.clone() };
+        let pos = match at {
+            Some(p) => p,
+            None => self.start_point(),
+        };
         let life = ((cell.base.lifetime + self.centred() * cell.base.lifetime_range) * self.lifetime).max(0.0);
         let speed = (cell.base.velocity + self.centred() * cell.base.velocity_range) * self.velocity;
         let dir = cell.base.emission_longitude + self.centred() * cell.base.emission_range;
@@ -283,7 +359,7 @@ impl EmitterContent {
             color[k] = (color[k] + self.centred() * cell.color_range[k]).clamp(0.0, 1.0);
         }
         self.seq += 1;
-        self.particles.push(EmitterParticle { pos, vel: (speed * dir.cos(), speed * dir.sin()), age: 0.0, life, scale, spin, angle: 0.0, color, cell: i, seq: self.seq });
+        self.particles.push(EmitterParticle { pos, vel: (speed * dir.cos(), speed * dir.sin()), age: 0.0, life, scale, spin, angle: 0.0, color, cell: i, seq: self.seq, sub, accum });
     }
 
     /// The particles in drawing order.
@@ -303,7 +379,7 @@ impl EmitterContent {
         let mut img = Image::new(w, h);
         let additive = self.order == RenderOrder::Additive;
         for p in self.ordered() {
-            let cell = &self.cells[p.cell];
+            let cell = cell_of(&self.cells, p);
             let half = cell.size * p.scale * scale / 2.0;
             draw_particle(&mut img, (p.pos.0 * scale, p.pos.1 * scale), half, p.angle, p.color, &cell.shape, additive);
         }
@@ -479,7 +555,7 @@ mod tests {
         let mut e = EmitterContent::new(vec![EmitterCell { size: 8.0, shape: CellShape::Square, ..Default::default() }], 1);
         e.order = order;
         for (i, c) in colors.iter().enumerate() {
-            e.particles.push(EmitterParticle { pos: (8.0, 8.0), vel: (0.0, 0.0), age: 0.0, life: 9.0, scale: 1.0, spin: 0.0, angle: 0.0, color: *c, cell: 0, seq: i as u64 + 1 });
+            e.particles.push(EmitterParticle { pos: (8.0, 8.0), vel: (0.0, 0.0), age: 0.0, life: 9.0, scale: 1.0, spin: 0.0, angle: 0.0, color: *c, cell: 0, seq: i as u64 + 1, sub: None, accum: Vec::new() });
         }
         e
     }
@@ -531,4 +607,65 @@ mod tests {
         e.warm_up(1.0, 0.1);
         assert_eq!(e.particles.len(), 10);
     }
+
+    #[test]
+    fn a_cell_emits_only_inside_its_begin_time_and_duration() {
+        let mut c = cell(10.0);
+        c.begin_time = 1.0;
+        c.duration = 0.5;
+        let mut e = EmitterContent::new(vec![c], 2);
+        e.step(1.0);
+        assert!(e.particles.is_empty(), "not begun yet");
+        e.step(1.0);
+        assert_eq!(e.particles.len(), 5, "half a second of a ten per second cell");
+        e.step(0.5);
+        assert_eq!(e.particles.len(), 5, "over");
+        assert!((e.age() - 2.5).abs() < 1e-6);
+        assert!(EmitterCell::default().duration.is_infinite());
+    }
+
+    #[test]
+    fn sub_cells_are_emitted_from_each_parent_particle() {
+        let mut spark = cell(4.0);
+        spark.name = "spark".into();
+        spark.color = [1.0, 0.5, 0.0, 1.0];
+        let mut rocket = cell(1.0);
+        rocket.base.lifetime = 10.0;
+        rocket.base.velocity = 10.0;
+        rocket.emitter_cells = vec![spark];
+        let mut e = EmitterContent::new(vec![rocket], 5);
+        e.step(1.0);
+        assert_eq!(e.particles.len(), 1, "one rocket, no sparks before it has lived");
+        e.step(1.0);
+        let rockets: Vec<_> = e.particles.iter().filter(|p| p.sub.is_none()).collect();
+        let sparks: Vec<_> = e.particles.iter().filter(|p| p.sub == Some(0)).collect();
+        assert_eq!(rockets.len(), 2);
+        assert_eq!(sparks.len(), 4, "the first rocket lived one second at four sparks per second");
+        let first = rockets.iter().min_by_key(|p| p.seq).unwrap();
+        assert!(sparks.iter().all(|s| s.pos == first.pos && s.color == [1.0, 0.5, 0.0, 1.0]), "born where the rocket is, with the spark's look");
+        assert!(sparks.iter().all(|s| s.accum.is_empty()), "sparks emit nothing themselves");
+        let img = e.render(32, 32, 1.0);
+        assert_eq!((img.w, img.h), (32, 32));
+    }
+
+    #[test]
+    fn a_sub_cell_follows_its_parents_clock() {
+        let mut late = cell(10.0);
+        late.begin_time = 0.5;
+        let mut parent = cell(1.0);
+        parent.base.lifetime = 5.0;
+        parent.emitter_cells = vec![late];
+        let mut e = EmitterContent::new(vec![parent], 9);
+        let subs = |e: &EmitterContent| e.particles.iter().filter(|p| p.sub.is_some()).count();
+        e.step(1.0);
+        e.step(0.25);
+        assert_eq!(subs(&e), 0, "the parent is a quarter second old and the sub-cell begins at half a second");
+        e.step(0.5);
+        assert_eq!(subs(&e), 2, "a quarter second of the window at ten per second (2.5, the half carries over)");
+        assert_eq!(e.particles.iter().filter(|p| p.sub.is_none()).count(), 1);
+        e.birth_rate = 0.0;
+        e.step(0.5);
+        assert_eq!(subs(&e), 2, "the emitter's birth multiplier also covers sub-cells");
+    }
+
 }
