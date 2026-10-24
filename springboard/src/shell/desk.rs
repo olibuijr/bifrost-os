@@ -938,7 +938,8 @@ impl Desk {
         {
             let mut shown: Vec<(bool, u32)> = self.foreign_shown().map(|w| (w.active, w.id)).collect();
             if !shown.is_empty() {
-                self.foreign_aside_front = self.foreign_shown().find(|w| w.active).map(|w| w.app_id.clone());
+                let front = self.foreign_shown().find(|w| w.active).map(|w| w.app_id.clone());
+                self.foreign_aside_front = front;
             }
             // stable: the active window is put aside last, so it is activated last and comes back in front
             shown.sort_by_key(|(active, _)| *active);
