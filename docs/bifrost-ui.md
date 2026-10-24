@@ -6621,3 +6621,36 @@ Rows advanced to `partial`; none is `parity` until the lab verify run. Apple's b
 - **CoreSuggestionsUI: durable dismissals (`ui/src/found_in.rs`)**: `Dismissed::to_text` and `from_text` (bounded to 500, oldest
   first), `forget_app`, and `Pager::for_message` (extract, drop dismissed, page) for any message view. Not matched: the
   Messages app does not call it yet, and Search has no suggestion section.
+
+## Core Image, parity round 2026-10-24: composite operators, geometry, barcodes, lens distortions, white balance
+
+Written, not built or run; the rows in `docs/parity-matrix/data/core-image.json` stay `partial` until the lead runs the tests and
+checks them on Midget. Images are `gfx::Image` (premultiplied, red in the low byte). Behaviour reference: the reference OS 27 barcode
+plug-in, read with REA (evidence `ev_cd797970` procedure list, `ev_6bb789c8` Code 128 attributes, `ev_76cca25e` Code 128 output,
+`ev_c86e9cb3` EAN-13 output), plus the developer documentation for the other filters' names and defaults. No reference code, tables
+or strings are copied; the barcode tables come from the public symbology standards.
+
+| Apple | BifrOSt |
+|---|---|
+| `CISourceInCompositing`, `CISourceOutCompositing`, `CISourceAtopCompositing`, `CIMultiplyCompositing` | `image_filter::composite(source, background, Operator::...)`; model `render/src/composite_ops.rs` |
+| `CILinearBurnBlendMode`, `CILinearDodgeBlendMode`, `CILinearLightBlendMode`, `CIPinLightBlendMode`, `CIVividLightBlendMode`, `CIDivideBlendMode`, `CISubtractBlendMode` | `image_filter::blend_extra(fg, bg, ExtraBlend::...)`; the W3C general formula with the published `B(cb, cs)` of each mode |
+| `CIBlendWithMask`, `CIBlendWithRedMask`, `CIBlendWithBlueMask`, `CIBlendWithAlphaMask` | `image_filter::blend_with_mask(image, background, mask, MaskChannel::...)`; the grey mask reads green, as the reference documents |
+| `CIPerspectiveTransform`, `CIPerspectiveTransformWithExtent` | `image_render::perspective_transform(img, corners)` returns `Placed { image, x, y }` over the quad's bounding box; `perspective_transform_with_extent`; model `render/src/geometry_filters.rs` |
+| `CILanczosScaleTransform`, `CIBicubicScaleTransform` | `image_render::lanczos_scale_transform(img, scale, aspect_ratio)`, `bicubic_scale_transform(.., b, c)` (defaults b 0, c 0.75); the kernel widens when an axis shrinks; colour is clamped under alpha |
+| `CIStraightenFilter` | `image_render::straighten(img, angle)`: turn about the centre and zoom by `cos + max(w/h, h/w) * sin` so no corner shows through |
+| `CICode128BarcodeGenerator`, `CIEAN13BarcodeGenerator`, `CICode39BarcodeGenerator`, `CICodabarBarcodeGenerator`, `CIInterleaved2of5BarcodeGenerator` | `image_generate::barcode(Symbology::..., message, quiet_space, height)`, `barcode_styled`; model `render/src/barcode_generate.rs`. Measured: quiet space clamped 0..100 and rounded (7 when unset, attribute default 10), height clamped 1..500 and rounded (default 32), one pixel per module |
+| `CIHoleDistortion`, `CILightTunnel`, `CITorusLensDistortion` (with `inputWidth`), `CICircleSplashDistortion` | new SDK module `image_distort` (`hole`, `light_tunnel`, `torus_lens`, `circle_splash`, plus `twirl`, `vortex`, `pinch`, `bump`, `glass`, which apps could not reach before); model `render/src/lens_distortions.rs` |
+| `CITemperatureAndTint` (`inputNeutral`, `inputTargetNeutral`) | `image_effects::temperature_and_tint(img, neutral, target)`, `WhiteBalance`; model `render/src/white_balance.rs`: Planckian locus fit (Kim et al.), tint as a uv offset of tint/3000, Bradford adaptation in linear sRGB |
+| `CIFilter.filterNames(inCategory:)` | the catalogue lists 106 filters, with a new `CICategoryGeometryAdjustment` group |
+
+Decisions: barcode quiet space is on the left and right only; wide elements of Code 39, Codabar and Interleaved 2 of 5 are three
+modules; Code 128 uses set C for digit runs of four or more and takes ASCII only (no FNC4); a Codabar message without start and stop
+letters is framed with `A`. The torus lens ring is a half-circle profile magnifying by up to `1 + refraction` at its middle line;
+the hole reads the source at `sqrt(d^2 - r^2)`; the light tunnel streams the rim outwards turned by `rotation * (d - r) / r`. These
+profiles are this system's models of the documented shapes, not measured kernels (the reference filter kernels live in the shared
+system cache, which is not unpacked on Linux yet). `colorfx::temperature_tint` (the named chain's gain model) is kept for the Photos
+slider; apps that want the reference behaviour use `temperature_and_tint`.
+
+Remaining gaps: PDF417 and Aztec generators (the reference ships both; their encoders are large and left for a later round);
+everything is CPU only; the composite and blend formulas work on stored sRGB codes, not the reference's linear working space; no
+shell compositor operator is selectable.
