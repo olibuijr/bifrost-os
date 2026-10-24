@@ -461,7 +461,7 @@ impl Overview {
         let g = self.geo(sh);
         let Some(d) = sh.desk.as_ref() else { return };
         let cur = self.spaces.current;
-        // a window the person minimized (or hid, or put aside with Show Desktop) is in the Dock, not in Overview (N16)
+        // a window the person minimized (or hid) is in the Dock, not in Overview (N16); opening Overview ended Show Desktop
         let wins: Vec<&super::desk::Win> = d.wins.iter().filter(|w| self.spaces.of.get(&w.app).copied().unwrap_or(cur) == cur && !self.user_minimized(w)).collect();
         // the desk's windows, then the windows of other clients (they belong to every desktop)
         let mut entries: Vec<(TileKey, String, FRect, (f32, f32))> = wins
@@ -561,6 +561,9 @@ impl Overview {
         let Some(d) = sh.desk.as_mut() else { return };
         self.spaces.sync(&d.wins);
         self.foreign_before = foreign;
+        // entering Overview ends Show Desktop, as Mission Control does on Golden Gate: the windows put aside are shown
+        // as tiles and are back on the desktop when Overview closes
+        d.bring_back_put_aside();
         self.front_before = d.front().map(|w| w.app);
         self.saved = d.wins.iter().map(|w| (w.app, w.minimized)).collect();
         for w in d.wins.iter_mut() {
@@ -2052,6 +2055,21 @@ mod tests {
         sh.overview_toggle(1000.0);
         let tiles: Vec<AppId> = sh.overview.tile_rects().into_iter().map(|(a, _)| a).collect();
         assert_eq!(tiles, vec![AppId::Settings, AppId::Terminal]);
+    }
+
+    /// Overview right after Show Desktop shows the windows put aside (Mission Control ends Show Desktop), while a
+    /// window the person minimized stays in the Dock.
+    #[test]
+    fn overview_after_show_desktop_shows_the_windows_put_aside() {
+        let mut sh = desk_with(3, 1920, 1080, 1.0);
+        let d = sh.desk.as_mut().unwrap();
+        let i = d.index_of(AppId::AppStore).unwrap();
+        d.wins[i].minimized = true;
+        assert!(d.put_windows_aside());
+        sh.overview_toggle(1000.0);
+        let tiles: Vec<AppId> = sh.overview.tile_rects().into_iter().map(|(a, _)| a).collect();
+        assert_eq!(tiles, vec![AppId::Settings, AppId::Terminal]);
+        assert!(sh.desk.as_ref().unwrap().put_aside.is_empty(), "Show Desktop has ended");
     }
 
     #[cfg(feature = "desktop-wayland")]
