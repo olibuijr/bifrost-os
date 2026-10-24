@@ -18,6 +18,7 @@ pub const CATEGORY_GENERATOR: &str = "CICategoryGenerator";
 pub const CATEGORY_GRADIENT: &str = "CICategoryGradient";
 pub const CATEGORY_TRANSITION: &str = "CICategoryTransition";
 pub const CATEGORY_REDUCTION: &str = "CICategoryReduction";
+pub const CATEGORY_GEOMETRY: &str = "CICategoryGeometryAdjustment";
 
 /// One input attribute: its reference key, default and range.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -45,6 +46,13 @@ const ANGLE: Attribute = a("inputAngle", 0.0, -PI, PI);
 /// The bias added to a convolution sum, in 0..=1 of the channel range (reference default 0).
 const BIAS: Attribute = a("inputBias", 0.0, -1.0, 1.0);
 const TIME: Attribute = a("inputTime", 0.0, 0.0, 1.0);
+/// The one-dimensional barcode inputs, measured from the reference generators (REA ev_6bb789c8,
+/// ev_76cca25e): quiet space 0..=100 modules with the attribute default 10, bar height 1..=500 pixels
+/// with the default 32.
+const QUIET_SPACE: Attribute = a("inputQuietSpace", 10.0, 0.0, 100.0);
+const BARCODE_HEIGHT: Attribute = a("inputBarcodeHeight", 32.0, 1.0, 500.0);
+const SCALE: Attribute = a("inputScale", 1.0, 0.0, 100.0);
+const ASPECT: Attribute = a("inputAspectRatio", 1.0, 0.0, 100.0);
 
 static FILTERS: &[FilterInfo] = &[
     FilterInfo { name: "CITwirlDistortion", category: CATEGORY_DISTORTION, attributes: &[RADIUS, a("inputAngle", PI, -12.566, 12.566)] },
@@ -79,6 +87,7 @@ static FILTERS: &[FilterInfo] = &[
     FilterInfo { name: "CIGammaAdjust", category: CATEGORY_COLOR_ADJUSTMENT, attributes: &[a("inputPower", 1.0, 0.1, 3.0)] },
     FilterInfo { name: "CIVibrance", category: CATEGORY_COLOR_ADJUSTMENT, attributes: &[a("inputAmount", 0.0, -1.0, 1.0)] },
     FilterInfo { name: "CIWhitePointAdjust", category: CATEGORY_COLOR_ADJUSTMENT, attributes: &[] },
+    FilterInfo { name: "CITemperatureAndTint", category: CATEGORY_COLOR_ADJUSTMENT, attributes: &[] },
     FilterInfo { name: "CISepiaTone", category: CATEGORY_COLOR_EFFECT, attributes: &[a("inputIntensity", 1.0, 0.0, 1.0)] },
     FilterInfo { name: "CIColorMonochrome", category: CATEGORY_COLOR_EFFECT, attributes: &[a("inputIntensity", 1.0, 0.0, 1.0)] },
     FilterInfo { name: "CIColorPosterize", category: CATEGORY_COLOR_EFFECT, attributes: &[a("inputLevels", 6.0, 2.0, 30.0)] },
@@ -123,6 +132,35 @@ static FILTERS: &[FilterInfo] = &[
     FilterInfo { name: "CIConvolutionRGB7X7", category: CATEGORY_STYLIZE, attributes: &[BIAS] },
     FilterInfo { name: "CIConvolutionRGB9Horizontal", category: CATEGORY_STYLIZE, attributes: &[BIAS] },
     FilterInfo { name: "CIConvolutionRGB9Vertical", category: CATEGORY_STYLIZE, attributes: &[BIAS] },
+    FilterInfo { name: "CISourceInCompositing", category: CATEGORY_COMPOSITE, attributes: &[] },
+    FilterInfo { name: "CISourceOutCompositing", category: CATEGORY_COMPOSITE, attributes: &[] },
+    FilterInfo { name: "CISourceAtopCompositing", category: CATEGORY_COMPOSITE, attributes: &[] },
+    FilterInfo { name: "CIMultiplyCompositing", category: CATEGORY_COMPOSITE, attributes: &[] },
+    FilterInfo { name: "CILinearBurnBlendMode", category: CATEGORY_COMPOSITE, attributes: &[] },
+    FilterInfo { name: "CILinearDodgeBlendMode", category: CATEGORY_COMPOSITE, attributes: &[] },
+    FilterInfo { name: "CILinearLightBlendMode", category: CATEGORY_COMPOSITE, attributes: &[] },
+    FilterInfo { name: "CIPinLightBlendMode", category: CATEGORY_COMPOSITE, attributes: &[] },
+    FilterInfo { name: "CIVividLightBlendMode", category: CATEGORY_COMPOSITE, attributes: &[] },
+    FilterInfo { name: "CIDivideBlendMode", category: CATEGORY_COMPOSITE, attributes: &[] },
+    FilterInfo { name: "CISubtractBlendMode", category: CATEGORY_COMPOSITE, attributes: &[] },
+    FilterInfo { name: "CIBlendWithMask", category: CATEGORY_STYLIZE, attributes: &[] },
+    FilterInfo { name: "CIBlendWithRedMask", category: CATEGORY_STYLIZE, attributes: &[] },
+    FilterInfo { name: "CIBlendWithBlueMask", category: CATEGORY_STYLIZE, attributes: &[] },
+    FilterInfo { name: "CIBlendWithAlphaMask", category: CATEGORY_STYLIZE, attributes: &[] },
+    FilterInfo { name: "CIPerspectiveTransform", category: CATEGORY_GEOMETRY, attributes: &[] },
+    FilterInfo { name: "CIPerspectiveTransformWithExtent", category: CATEGORY_GEOMETRY, attributes: &[] },
+    FilterInfo { name: "CILanczosScaleTransform", category: CATEGORY_GEOMETRY, attributes: &[SCALE, ASPECT] },
+    FilterInfo { name: "CIBicubicScaleTransform", category: CATEGORY_GEOMETRY, attributes: &[SCALE, ASPECT, a("inputB", 0.0, 0.0, 1.0), a("inputC", 0.75, 0.0, 1.0)] },
+    FilterInfo { name: "CIStraightenFilter", category: CATEGORY_GEOMETRY, attributes: &[ANGLE] },
+    FilterInfo { name: "CICode128BarcodeGenerator", category: CATEGORY_GENERATOR, attributes: &[QUIET_SPACE, BARCODE_HEIGHT] },
+    FilterInfo { name: "CIEAN13BarcodeGenerator", category: CATEGORY_GENERATOR, attributes: &[QUIET_SPACE, BARCODE_HEIGHT] },
+    FilterInfo { name: "CICode39BarcodeGenerator", category: CATEGORY_GENERATOR, attributes: &[QUIET_SPACE, BARCODE_HEIGHT] },
+    FilterInfo { name: "CICodabarBarcodeGenerator", category: CATEGORY_GENERATOR, attributes: &[QUIET_SPACE, BARCODE_HEIGHT] },
+    FilterInfo { name: "CIInterleaved2of5BarcodeGenerator", category: CATEGORY_GENERATOR, attributes: &[QUIET_SPACE, BARCODE_HEIGHT] },
+    FilterInfo { name: "CIHoleDistortion", category: CATEGORY_DISTORTION, attributes: &[a("inputRadius", 150.0, 0.01, 1000.0)] },
+    FilterInfo { name: "CILightTunnel", category: CATEGORY_DISTORTION, attributes: &[a("inputRotation", 0.0, -PI, PI), a("inputRadius", 100.0, 0.0, 500.0)] },
+    FilterInfo { name: "CITorusLensDistortion", category: CATEGORY_DISTORTION, attributes: &[a("inputRadius", 160.0, 0.0, 500.0), a("inputWidth", 80.0, 0.0, 200.0), a("inputRefraction", 1.7, 0.0, 5.0)] },
+    FilterInfo { name: "CICircleSplashDistortion", category: CATEGORY_DISTORTION, attributes: &[a("inputRadius", 150.0, 0.0, 1000.0)] },
 ];
 
 /// Every catalogued filter name, in catalogue order.
@@ -162,7 +200,20 @@ mod tests {
     #[test]
     fn category_listing_filters_by_category() {
         let d = filter_names(Some(CATEGORY_DISTORTION));
-        assert_eq!(d, ["CITwirlDistortion", "CIVortexDistortion", "CIPinchDistortion", "CIBumpDistortion", "CIGlassDistortion"]);
+        assert_eq!(
+            d,
+            [
+                "CITwirlDistortion",
+                "CIVortexDistortion",
+                "CIPinchDistortion",
+                "CIBumpDistortion",
+                "CIGlassDistortion",
+                "CIHoleDistortion",
+                "CILightTunnel",
+                "CITorusLensDistortion",
+                "CICircleSplashDistortion"
+            ]
+        );
         assert_eq!(filter_names(None).len(), all_filter_names().len());
         assert!(filter_names(Some("CICategoryNothing")).is_empty());
     }
@@ -214,6 +265,21 @@ mod tests {
         assert_eq!(default_value("CIKMeans", "inputCount"), Some(8.0));
         assert_eq!(default_value("CIAreaHistogram", "inputCount"), Some(64.0));
         assert_eq!(default_value("CIConvolution3X3", "inputBias"), Some(0.0));
+    }
+
+    #[test]
+    fn composite_geometry_barcode_and_lens_entries_are_listed() {
+        assert_eq!(
+            filter_names(Some(CATEGORY_GEOMETRY)),
+            ["CIPerspectiveTransform", "CIPerspectiveTransformWithExtent", "CILanczosScaleTransform", "CIBicubicScaleTransform", "CIStraightenFilter"]
+        );
+        assert_eq!(filter_names(Some(CATEGORY_COMPOSITE)).len(), 3 + 11);
+        assert!(filter_names(Some(CATEGORY_STYLIZE)).contains(&"CIBlendWithMask"));
+        assert!(filter_names(Some(CATEGORY_GENERATOR)).contains(&"CIInterleaved2of5BarcodeGenerator"));
+        assert_eq!(default_value("CICode128BarcodeGenerator", "inputQuietSpace"), Some(10.0));
+        assert_eq!(default_value("CIEAN13BarcodeGenerator", "inputBarcodeHeight"), Some(32.0));
+        assert_eq!(default_value("CIBicubicScaleTransform", "inputC"), Some(0.75));
+        assert_eq!(default_value("CITorusLensDistortion", "inputWidth"), Some(80.0));
     }
 
     #[test]
