@@ -31,12 +31,14 @@ mod glue {
 
     /// Publishes the running apps' semantic trees to the accessibility bus and forwards screen-reader requests to the
     /// apps as `ToApp::AxSet`. Throttled to four times a second; the bus connection is made on a helper thread so a slow
-    /// `org.a11y.Bus` never stalls the shell, and a missing bus turns the bridge off for the session.
-    pub fn sync(ext: &mut [Option<AppHost>], t_ms: f64, chrome: Option<AppSnap>) {
+    /// `org.a11y.Bus` never stalls the shell, and a missing bus turns the bridge off for the session. Returns the ids of
+    /// the shell chrome elements (`CHROME_SLOT`) a screen reader pressed, for the shell to act on (`Shell::ax_chrome_press`).
+    pub fn sync(ext: &mut [Option<AppHost>], t_ms: f64, chrome: Option<AppSnap>) -> Vec<u64> {
         STATE.with(|s| {
+            let mut chrome_presses = Vec::new();
             let (state, last) = &mut *s.borrow_mut();
             if t_ms - *last < 250.0 {
-                return;
+                return chrome_presses;
             }
             *last = t_ms;
             match state {
@@ -75,6 +77,12 @@ mod glue {
                         }
                     }
                     for r in bridge.drain() {
+                        if r.slot == super::model::CHROME_SLOT {
+                            if r.action == bifrost_proto::AxAction::Press {
+                                chrome_presses.push(r.id);
+                            }
+                            continue;
+                        }
                         if let Some(Some(h)) = ext.get_mut(r.slot as usize) {
                             h.send(&ToApp::AxSet { id: r.id, action: r.action });
                         }
@@ -82,7 +90,8 @@ mod glue {
                 }
                 State::Off => {}
             }
-        });
+            chrome_presses
+        })
     }
 }
 

@@ -128,6 +128,29 @@ impl Shell {
         super::atspi::model::chrome_snap(&menus, &dock)
     }
 
+    /// A screen reader pressed shell chrome element `id` (`atspi::model::chrome_target`): runs a menu row, opens a dock app
+    /// or shows the search field, as a click would. The effects reach the shell binary with the next tick
+    /// (`Shell::ax_chrome_fx`). A stale id (the menus changed since the snapshot) does nothing.
+    #[cfg(feature = "atspi")]
+    pub(super) fn ax_chrome_press(&mut self, id: u64, t: f64) {
+        use super::atspi::model::{chrome_target, ChromePress};
+        match chrome_target(id) {
+            Some(ChromePress::MenuRow(m, r)) => {
+                if let Ok(fx) = self.ax_menu_press(m, r, t) {
+                    self.ax_chrome_fx.extend(fx);
+                }
+            }
+            Some(ChromePress::DockApp(i)) => {
+                if let Some(icon) = super::apps::apps().get(i).map(|a| a.icon) {
+                    self.desktop_open_app(icon, t);
+                }
+            }
+            Some(ChromePress::Search) => self.quicksearch_show(t),
+            None => return,
+        }
+        self.dirty = true;
+    }
+
     /// The open windows as elements under `os/windows`, each carrying the title-bar actions in `WINDOW_ACTIONS`.
     fn add_window_elements(&self, map: &mut Map) {
         let Some(desk) = self.desk.as_ref() else { return };

@@ -728,6 +728,8 @@ pub struct Shell {
     pointer_over: Option<(u8, u32)>,
     /// the app element the pointer rests on, for Speak Items Under the Pointer (`accessibility::hover_speech`)
     hover_speech: accessibility::hover_speech::HoverSpeech,
+    /// effects of shell chrome a screen reader pressed (`axmap::ax_chrome_press`), returned by the next `tick`
+    ax_chrome_fx: Vec<Effect>,
     /// the two touchscreen fingers of the app in front and the pinch and rotation recognizers they run (`pointer_events`)
     pinch_fingers: Vec<(i32, (f32, f32))>,
     pinch: bifrost_ui::trackpad_gesture::TwoFinger,
@@ -1266,6 +1268,7 @@ impl Shell {
             compose_ime: compose_window::ComposeWindow::default(),
             pointer_over: None,
             hover_speech: Default::default(),
+            ax_chrome_fx: Vec::new(),
             pinch_fingers: Vec::new(),
             pinch: Default::default(),
             input_providers: {
@@ -4161,7 +4164,8 @@ impl Shell {
                 self.dirty = true;
             }
         }
-        let fx = self.tick_pumped(t);
+        let mut fx = self.tick_pumped(t);
+        fx.append(&mut self.ax_chrome_fx);
         self.st_mark(t);
         fx
     }

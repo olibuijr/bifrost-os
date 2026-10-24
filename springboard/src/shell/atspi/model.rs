@@ -342,6 +342,26 @@ pub fn chrome_snap(menus: &[(String, Vec<(String, bool)>)], dock: &[(String, boo
     AppSnap { slot: CHROME_SLOT, app_id: "shell".into(), name: "BifrOSt Shell".into(), nodes }
 }
 
+/// What a press on a shell chrome element (`chrome_snap`) does: choose row `.1` of menu `.0`, open the `.0`-th dock app,
+/// or open the search field.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ChromePress {
+    MenuRow(usize, usize),
+    DockApp(usize),
+    Search,
+}
+
+/// The press target of chrome element `id`, from the positional ids `chrome_snap` gives out. The bar, a menu title and
+/// the dock are containers and press nothing.
+pub fn chrome_target(id: u64) -> Option<ChromePress> {
+    match id {
+        3 => Some(ChromePress::Search),
+        1000.. => Some(ChromePress::DockApp((id - 1000) as usize)),
+        100..=999 if id % 100 != 0 => Some(ChromePress::MenuRow((id / 100 - 1) as usize, (id % 100 - 1) as usize)),
+        _ => None,
+    }
+}
+
 /// The AT-SPI `Action` names of an element: `press`, and for a numeric one `increment` and `decrement`.
 pub fn action_names(numeric: bool) -> Vec<&'static str> {
     if numeric { vec!["press", "increment", "decrement"] } else { vec!["press"] }
@@ -498,6 +518,21 @@ mod tests {
         let notes = s.nodes.iter().find(|n| n.id == 1000).unwrap();
         assert_eq!((notes.role, notes.value.as_str()), (Role::Button, "open"));
         assert_eq!(s.nodes.iter().find(|n| n.id == 3).unwrap().role, Role::TextField);
+    }
+
+    #[test]
+    fn every_pressable_chrome_element_names_its_target() {
+        let menus = vec![("File".to_string(), vec![("New".to_string(), true), ("Close".to_string(), true)]), ("Edit".to_string(), vec![("Copy".to_string(), true)])];
+        let dock = vec![("Notes".to_string(), false), ("Files".to_string(), true)];
+        let s = chrome_snap(&menus, &dock);
+        let find = |name: &str| s.nodes.iter().find(|n| n.name == name).unwrap().id;
+        assert_eq!(chrome_target(find("Close")), Some(ChromePress::MenuRow(0, 1)));
+        assert_eq!(chrome_target(find("Copy")), Some(ChromePress::MenuRow(1, 0)));
+        assert_eq!(chrome_target(find("Files")), Some(ChromePress::DockApp(1)));
+        assert_eq!(chrome_target(find("Search")), Some(ChromePress::Search));
+        for container in ["Menu Bar", "File", "Dock"] {
+            assert_eq!(chrome_target(find(container)), None, "{container} presses nothing");
+        }
     }
 
     #[test]

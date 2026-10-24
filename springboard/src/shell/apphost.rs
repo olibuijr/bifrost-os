@@ -2723,7 +2723,9 @@ impl Shell {
         #[cfg(feature = "atspi")]
         {
             let chrome = super::atspi::due(t).then(|| self.ax_chrome_snap());
-            super::atspi::sync(&mut self.ext, t, chrome);
+            for id in super::atspi::sync(&mut self.ext, t, chrome) {
+                self.ax_chrome_press(id, t);
+            }
         }
     }
 
