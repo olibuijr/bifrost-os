@@ -339,7 +339,8 @@ impl View for TabView {
         fill_card(s, ui, self.card());
         let labels: Vec<&str> = self.labels.iter().map(String::as_str).collect();
         let bar = self.bar(ui);
-        crate::widgets::segmented(s, ui, bar, &labels, self.selected_index().unwrap_or(0), self.base.enabled);
+        // the tab row is published once, by `ax_node`: the drawn control records nothing
+        crate::widgets::segmented_unrecorded(s, ui, bar, &labels, self.selected_index().unwrap_or(0), self.base.enabled);
         if self.base.focused {
             focus_ring(s, ui, bar, bar.h / 2.0);
         }

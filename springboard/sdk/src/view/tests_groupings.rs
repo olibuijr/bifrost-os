@@ -188,6 +188,19 @@ fn a_tab_view_shows_only_the_selected_tab_and_drops_repeated_ids() {
 }
 
 #[test]
+fn a_tab_view_publishes_its_tab_row_once() {
+    let (mut w, id) = one(tabs(), (400.0, 200.0));
+    bifrost_ui::ax::begin_frame();
+    draws(&mut w, 400, 200);
+    let drawn = bifrost_ui::ax::take_frame();
+    let _ = bifrost_ui::ax::take_links();
+    assert!(!drawn.iter().any(|n| n.role == Role::SegmentedControl), "drawing the tab row records no second control");
+    let all = crate::runtime::merge_controls(w.ax_nodes(), &drawn);
+    let rows: Vec<u64> = all.iter().filter(|n| n.role == Role::SegmentedControl).map(|n| n.id).collect();
+    assert_eq!(rows, vec![id], "the tab view's own element is the one tab row");
+}
+
+#[test]
 fn clicking_a_tab_or_arrow_keys_select_it_and_send_the_action() {
     let ui = ui();
     let (mut w, id) = one(tabs(), (400.0, 200.0));

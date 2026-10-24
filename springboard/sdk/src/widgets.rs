@@ -1278,6 +1278,21 @@ pub fn segmented(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, labels: &[&str], sel
         bifrost_ui::ax::record(bifrost_ui::Role::Button, label, if i == selected { "selected" } else { "" }, *r, enabled);
     }
     bifrost_ui::ax::end_group();
+    draw_segments(s, ui, &segs, all, labels, selected, enabled);
+    segs
+}
+
+/// [`segmented`] without recording accessibility elements, for a view that publishes the control itself through its
+/// `ax_node` (`view::TabView`), so the control is not listed twice.
+pub(crate) fn segmented_unrecorded(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, labels: &[&str], selected: usize, enabled: bool) -> Vec<Rect> {
+    let segs = bifrost_ui::sheet::segments(bounds, labels.len());
+    let (Some(first), Some(last)) = (segs.first(), segs.last()) else { return segs };
+    let all = Rect { x: first.x, y: first.y, w: last.right() - first.x, h: first.h };
+    draw_segments(s, ui, &segs, all, labels, selected, enabled);
+    segs
+}
+
+fn draw_segments(s: &mut dyn Canvas, ui: &Ui, segs: &[Rect], all: Rect, labels: &[&str], selected: usize, enabled: bool) {
     s.fill_rrect(RectF::new(ui.pt(all.x), ui.pt(all.y), ui.pt(all.w), ui.pt(all.h)), ui.pt(7.), CAPSULE_BG.now());
     s.stroke_rrect(RectF::new(ui.pt(all.x), ui.pt(all.y), ui.pt(all.w), ui.pt(all.h)), ui.pt(7.), ui.pt(1.0).max(1.0), CAPSULE_EDGE.now());
     for (i, (r, label)) in segs.iter().zip(labels).enumerate() {
@@ -1290,7 +1305,6 @@ pub fn segmented(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, labels: &[&str], sel
         let img = ui.text(&ui.fit(label, MAC_BODY_PT, ui.pt(r.w - 8.)), MAC_BODY_PT, Weight::Regular, color);
         blit(s, &img, (ui.pt(r.x + r.w / 2.0) as i32) - img.w as i32 / 2, (ui.pt(r.y) + (ui.pt(r.h) - img.h as f32) / 2.0) as i32);
     }
-    segs
 }
 
 /// A stepper (`NativeStepper`): a 13 x 22 plate with an up and a down chevron. `pressed` darkens one half.
