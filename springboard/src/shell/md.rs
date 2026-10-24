@@ -172,6 +172,22 @@ pub fn spans(line: &str, start: usize) -> Vec<Span> {
     out
 }
 
+/// The run of `style` whose text holds the char boundary `c` of `line` (inline content from `start`, as `spans` reads
+/// it), at either end of the text included: the text's char range and its marker's length. `None` when `c` is not in
+/// such a run.
+pub fn emphasis_at(line: &str, start: usize, c: usize, style: Style) -> Option<(Range<usize>, usize)> {
+    let all = spans(line, start);
+    let k = all.iter().position(|s| s.style == style && !s.marker && s.range.start <= c && c <= s.range.end)?;
+    let marker = k.checked_sub(1).and_then(|m| all.get(m)).filter(|m| m.marker)?;
+    Some((all[k].range.clone(), marker.range.len()))
+}
+
+/// One line's text with its emphasis markers taken out (`**b**` reads `b`), for titles and previews.
+pub fn strip_inline(line: &str) -> String {
+    let chars: Vec<char> = line.chars().collect();
+    spans(line, 0).into_iter().filter(|s| !s.marker).flat_map(|s| chars[s.range].to_vec()).collect()
+}
+
 /// What Enter does at the end of a list line.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Continue {
@@ -486,7 +502,7 @@ pub fn to_plain(text: &str) -> String {
         .map(|line| {
             let info = classify(line);
             let content: String = line.chars().skip(info.prefix).collect();
-            let body: String = spans(&content, 0).into_iter().filter(|s| !s.marker).flat_map(|s| content.chars().skip(s.range.start).take(s.range.len()).collect::<Vec<_>>()).collect();
+            let body = strip_inline(&content);
             match info.block {
                 Block::Check(done) => format!("{} {body}", if done { "[x]" } else { "[ ]" }),
                 Block::Bullet => format!("\u{2022} {body}"),
@@ -646,6 +662,20 @@ mod tests {
         // a part that is already bold stays as it is while the rest gets the style
         let mixed = toggle_wrap_lines("**a**\nb", 0..7, "**");
         assert_eq!(mixed.with, "**a**\n**b**");
+    }
+
+    #[test]
+    fn emphasis_at_finds_the_styled_run_under_the_caret_and_strip_inline_drops_markers() {
+        // "a **bold** c": the bold text is chars 4..8 with a 2-char marker
+        assert_eq!(emphasis_at("a **bold** c", 0, 8, Style::Bold), Some((4..8, 2)), "at its end");
+        assert_eq!(emphasis_at("a **bold** c", 0, 6, Style::Bold), Some((4..8, 2)), "inside");
+        assert_eq!(emphasis_at("a **bold** c", 0, 2, Style::Bold), None, "before the markers");
+        assert_eq!(emphasis_at("a **bold** c", 0, 10, Style::Bold), None, "after them");
+        assert_eq!(emphasis_at("a **bold** c", 0, 6, Style::Italic), None, "another style");
+        assert_eq!(emphasis_at("x *i* y", 0, 3, Style::Italic), Some((3..4, 1)));
+        assert_eq!(strip_inline("**E2E bold test** plain"), "E2E bold test plain");
+        assert_eq!(strip_inline("a ~~b~~ `c` ==d=="), "a b c d");
+        assert_eq!(strip_inline("i++ and 2 * 3"), "i++ and 2 * 3", "unpaired marks stay");
     }
 
     #[test]
