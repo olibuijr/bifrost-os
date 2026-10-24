@@ -94,7 +94,8 @@ fn paint_formula(s: &mut Surface, ui: &Ui, lay: &Layout, x: f32, baseline: f32, 
 /// A run of chars (line-relative) drawn in one weight and colour. `kind` 1
 /// is a bullet marker and 2 a checkbox, both drawn as shapes; 3, 4 and 5 are
 /// struck-through, underlined and highlighted text, and 6 the bar of a quote.
-/// 7 draws nothing here: a formula is drawn over its source, and the "# " title marker of the first line is hidden.
+/// 7 draws nothing here: a formula is drawn over its source, and the "# " title marker of the first line and the
+/// emphasis markers (`**`, `*`, `~~`, `++`, `==`, backticks) are hidden, so the note reads as rich text.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Seg {
     a: usize,
@@ -219,6 +220,9 @@ pub struct TextArea {
     /// an input method's composition in progress (`setMarkedText:`): the char range of the marked text, and the text it
     /// took the place of (the selection when the composition began), which comes back when it is dropped
     marked: Option<(Range<usize>, String)>,
+    /// Markdown mode: the char ranges of the hidden emphasis markers. They take no width, and the caret steps, the
+    /// deletes and the clicks pass over them as the reference's rich text has no such characters (`layout` keeps it)
+    concealed: Vec<Range<usize>>,
 }
 
 /// What a finger down on the text is doing.
@@ -296,7 +300,7 @@ impl TextArea {
     /// Wraps at `w` px; the first paragraph is set at `title_pt` bold, the
     /// rest at `body_pt` regular. `tint` colours the caret and selection.
     pub fn new(ui: &Ui, w: f32, body_pt: f32, title_pt: f32, color: u32, tint: u32) -> Self {
-        let mut ta = TextArea { text: String::new(), caret: 0, anchor: None, w, body_pt, title_pt, color, tint, lines: vec![], history: UndoManager::new(UNDO_DEPTH), typing: None, focused: false, blink_from: 0.0, markdown: false, images: HashMap::new(), highlights: vec![], current_hl: None, touch: None, last_tap: None, detect_links: false, links: vec![], hidden: vec![], pointer: false, clicks: Default::default(), drag: None, marked: None };
+        let mut ta = TextArea { text: String::new(), caret: 0, anchor: None, w, body_pt, title_pt, color, tint, lines: vec![], history: UndoManager::new(UNDO_DEPTH), typing: None, focused: false, blink_from: 0.0, markdown: false, images: HashMap::new(), highlights: vec![], current_hl: None, touch: None, last_tap: None, detect_links: false, links: vec![], hidden: vec![], pointer: false, clicks: Default::default(), drag: None, marked: None, concealed: vec![] };
         ta.layout(ui);
         ta
     }
@@ -487,6 +491,10 @@ impl TextArea {
                 if sp.marker || done {
                     st.1 = SECONDARY;
                 }
+                // the emphasis markers are not shown: the text carries the style (a formula's dollars stay as source)
+                if sp.marker && sp.style != Style::Math {
+                    st.2 = 7;
+                }
             }
         }
         v
@@ -504,6 +512,7 @@ impl TextArea {
         let mut cache: HashMap<(String, u32, u8), (Option<Image>, Vec<Option<Image>>)> =
             self.lines.drain(..).filter(|l| l.img.is_some() || l.simgs.iter().any(Option::is_some)).map(|mut l| (l.key(), (l.img.take(), std::mem::take(&mut l.simgs)))).collect();
         let mut lines = vec![];
+        let mut concealed: Vec<Range<usize>> = vec![];
         let (mut y, mut start) = (0.0, 0);
         let paragraphs: Vec<&str> = self.text.split('\n').collect();
         let last = paragraphs.len() - 1;
@@ -549,6 +558,15 @@ impl TextArea {
                 self.line_h(ui, pt)
             };
             let mut styles = if self.markdown { self.char_styles(para, chars.len(), block, prefix, indent, weight) } else { vec![] };
+            // the hidden emphasis markers, before the formulas and the title marker take kind 7 too
+            if display.is_none() {
+                for (i, st) in styles.iter().enumerate().filter(|(_, st)| st.2 == 7) {
+                    match concealed.last_mut() {
+                        Some(r) if r.end == start + i => r.end += 1,
+                        _ => concealed.push(start + i..start + i + 1),
+                    }
+                }
+            }
             let mut para_maths: Vec<(usize, usize, Layout)> = vec![];
             if self.markdown && display.is_none() {
                 for sp in md::spans(para, prefix) {
@@ -582,8 +600,11 @@ impl TextArea {
             } else {
                 advances(ui, para, pt, weight)
             };
-            for d in adv.iter_mut().take(hide) {
-                *d = 0.0;
+            // hidden chars (the title marker, emphasis markers, a formula's source) take no width
+            for (d, st) in adv.iter_mut().zip(&styles) {
+                if st.2 == 7 {
+                    *d = 0.0;
+                }
             }
             // a formula takes its width on its first char; the rest of its source takes none
             for (a, b, lay) in &para_maths {
@@ -622,6 +643,71 @@ impl TextArea {
             start += chars.len() + 1;
         }
         self.lines = lines;
+        self.concealed = concealed;
+    }
+
+    /// True when char `c` is a hidden emphasis marker.
+    fn concealed_at(&self, c: usize) -> bool {
+        self.concealed.iter().any(|r| r.contains(&c))
+    }
+
+    /// The boundary `c` taken back over the hidden markers before it: the first of the boundaries that sit at the same
+    /// place on screen, where a click puts the caret. Typing there takes the style of the char before it.
+    fn settle(&self, mut c: usize) -> usize {
+        while c > 0 && self.concealed_at(c - 1) {
+            c -= 1;
+        }
+        c
+    }
+
+    /// The Left arrow from boundary `c`: one visible char back, over hidden markers.
+    fn step_left(&self, c: usize) -> usize {
+        let c = self.settle(c);
+        if c == 0 {
+            return 0;
+        }
+        self.settle(super::edit::prev_boundary(&self.text, c))
+    }
+
+    /// The Right arrow from boundary `c`: past the next visible char, with the hidden markers in front of it.
+    fn step_right(&self, c: usize) -> usize {
+        let n = self.len();
+        let mut to = super::edit::next_boundary(&self.text, c);
+        while to < n && to > 0 && self.concealed_at(to - 1) {
+            to = super::edit::next_boundary(&self.text, to);
+        }
+        to
+    }
+
+    /// A delete of the visible chars `r`: when they are all the text between a pair of hidden markers the pair goes too,
+    /// so no empty `****` is left to show.
+    fn with_empty_pair(&self, r: Range<usize>) -> Range<usize> {
+        let chars: Vec<char> = self.text.chars().collect();
+        let (mut a, mut b) = (r.start, r.end);
+        while a > 0 && b < chars.len() && self.concealed_at(a - 1) && self.concealed_at(b) && chars[a - 1] == chars[b] {
+            a -= 1;
+            b += 1;
+        }
+        a..b
+    }
+
+    /// Backspace with nothing selected: the visible char before the caret (hidden markers are passed over).
+    fn back_range(&self) -> Option<Range<usize>> {
+        let b = self.settle(self.caret);
+        (b > 0).then(|| self.with_empty_pair(super::edit::prev_boundary(&self.text, b)..b))
+    }
+
+    /// Forward Delete with nothing selected: the visible char after the caret.
+    fn forward_range(&self) -> Range<usize> {
+        let n = self.len();
+        let mut a = self.caret.min(n);
+        while a < n && self.concealed_at(a) {
+            a += 1;
+        }
+        if a >= n {
+            return self.caret..self.caret;
+        }
+        self.with_empty_pair(a..super::edit::next_boundary(&self.text, a))
     }
 
     /// The line holding the boundary before char `c`.
@@ -913,8 +999,8 @@ impl TextArea {
         let to = match cmd {
             MoveLeft if !extend && sel.is_some() => sel.as_ref().map_or(head, |r| r.start),
             MoveRight if !extend && sel.is_some() => sel.as_ref().map_or(head, |r| r.end),
-            MoveLeft => super::edit::prev_boundary(&self.text, head),
-            MoveRight => super::edit::next_boundary(&self.text, head),
+            MoveLeft => self.step_left(head),
+            MoveRight => self.step_right(head),
             MoveUp | MoveDown | MovePageUp | MovePageDown => {
                 let down = matches!(cmd, MoveDown | MovePageDown);
                 let steps = if matches!(cmd, MovePageUp | MovePageDown) { kit::PAGE_LINES } else { 1 };
@@ -949,7 +1035,7 @@ impl TextArea {
             Redo => return Some(self.redo(ui, t)),
             DeleteBackward => return Some(self.edit(ui, &Out::Backspace, t)),
             DeleteForward => {
-                let range = head..super::edit::next_boundary(&self.text, head);
+                let range = self.forward_range();
                 return Some(delete(self, range));
             }
             DeleteWordBackward => {
@@ -1247,19 +1333,21 @@ impl TextArea {
             Out::Backspace => {
                 let range = match self.selection() {
                     Some(r) => r,
-                    None if self.caret > 0 => super::edit::prev_boundary(&self.text, self.caret)..self.caret,
-                    None => return false,
+                    None => match self.back_range() {
+                        Some(r) => r,
+                        None => return false,
+                    },
                 };
                 self.replace_range(ui, range, "", t, true);
                 true
             }
             Out::Named("Left" | "ShiftLeft") => {
-                self.caret = self.selection().map_or_else(|| super::edit::prev_boundary(&self.text, self.caret), |r| r.start);
+                self.caret = self.selection().map_or_else(|| self.step_left(self.caret), |r| r.start);
                 self.anchor = None;
                 false
             }
             Out::Named("Right" | "ShiftRight") => {
-                self.caret = self.selection().map_or_else(|| super::edit::next_boundary(&self.text, self.caret), |r| r.end);
+                self.caret = self.selection().map_or_else(|| self.step_right(self.caret), |r| r.end);
                 self.anchor = None;
                 false
             }
@@ -1939,11 +2027,44 @@ mod tests {
         assert!(ta.lines[1].h > ta.lines[2].h, "headings are taller than body");
         let plain = {
             let mut p = area(&ui, 500.0);
-            p.set_text(&ui, "T\n**bold** text");
+            p.set_text(&ui, "T\nbold text");
             p.lines[1].adv.iter().sum::<f32>()
         };
-        assert!(ta.lines[3].adv.iter().sum::<f32>() > plain, "bold chars are wider");
+        assert!(ta.lines[3].adv.iter().sum::<f32>() > plain, "bold chars are wider (the markers take no room)");
         assert!(ta.lines[3].segs.len() >= 3, "marker, bold and plain runs");
+    }
+
+    #[test]
+    fn emphasis_markers_are_hidden_and_the_caret_passes_over_them() {
+        // E2E W2-2: Cmd+B shows bold text, not `**` around it
+        let ui = ui();
+        let mut ta = md_area(&ui, "T\na **b** c");
+        let l = &ta.lines[1];
+        assert!(l.adv[2..4].iter().chain(&l.adv[5..7]).all(|a| *a == 0.0), "the markers take no width");
+        assert!(l.segs.iter().filter(|g| g.kind == 7).count() == 2, "and are not drawn");
+        assert_eq!(ta.concealed, vec![4..6, 7..9]);
+        // a click at the start of the bold word puts the caret before the markers, so typing there is plain
+        let x = ta.lines[1].x_at(6);
+        assert_eq!(ta.position_at(x, ta.lines[1].y + 2.0), 4);
+        // the arrows step one visible char at a time
+        ta.set_caret(4);
+        ta.key_combo(&ui, combo(bifrost_ui::keys::Key::Right, false, false, false), 0.0);
+        assert_eq!(ta.caret(), 7, "past `**b`: typing goes on in bold");
+        ta.key_combo(&ui, combo(bifrost_ui::keys::Key::Right, false, false, false), 0.0);
+        assert_eq!(ta.caret(), 10, "past `** `");
+        ta.key_combo(&ui, combo(bifrost_ui::keys::Key::Left, false, false, false), 0.0);
+        assert_eq!(ta.caret(), 7, "back after the b");
+        ta.key_combo(&ui, combo(bifrost_ui::keys::Key::Left, false, false, false), 0.0);
+        assert_eq!(ta.caret(), 4, "back before the markers");
+        // deleting the only char between the markers takes the pair too
+        ta.set_caret(9);
+        assert!(ta.edit(&ui, &Out::Backspace, 1.0));
+        assert_eq!(ta.text(), "T\na  c");
+        assert!(ta.concealed.is_empty());
+        // plain mode hides nothing
+        let mut plain = area(&ui, 500.0);
+        plain.set_text(&ui, "T\na **b** c");
+        assert!(plain.concealed.is_empty() && plain.lines[1].adv.iter().all(|a| *a > 0.0));
     }
 
     #[test]

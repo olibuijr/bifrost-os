@@ -95,7 +95,7 @@ impl NotesApp {
             current.insert(note.id.clone(), note.modified);
             if self.indexed.get(&note.id) != Some(&note.modified) {
                 let body = system::index_body(&note.text);
-                let mut set = CSSearchableItemAttributeSet::new(note.title()).content_description(&body);
+                let mut set = CSSearchableItemAttributeSet::new(&note.plain_title()).content_description(&body);
                 if !folder.is_empty() {
                     set = set.keywords(&[folder]);
                 }

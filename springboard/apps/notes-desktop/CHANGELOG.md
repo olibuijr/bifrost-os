@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.24.2 — 2026-10-24
+
+- Bold, italic, strike-through, underline, highlight and code read as rich text: the editor no longer shows their Markdown markers, the caret, clicks, Backspace and Delete pass over them, and the note list's titles and previews leave them out. The note file keeps its Markdown.
+- Cmd+B (and the other text styles) with the caret in text that already has the style turns it off for the typing that follows, instead of adding another pair of markers.
+- Note > Delete Note and Cmd+Backspace on a note in Recently Deleted delete it permanently instead of failing with "Note exists in destination".
+
 ## 1.24.1 — 2026-10-24
 
 - Bold, Italic and the other text styles on a selection that spans several lines style each line on its own, after its heading or list marker, so the whole selection turns bold instead of showing the markers as text; the same command takes the style off again.

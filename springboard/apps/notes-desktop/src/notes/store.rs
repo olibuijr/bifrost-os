@@ -4,6 +4,7 @@
 //! labels and the debounced autosave timer.
 
 use springboard::shell::clock::tz::civil;
+use springboard::shell::md;
 use std::collections::HashSet;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -28,6 +29,15 @@ impl Note {
         if bare.is_empty() { line } else { bare }
     }
 
+    /// The title as the list, the window and the menus show it: emphasis markers taken out (`**Plan**` is `Plan`),
+    /// as the editor hides them.
+    pub fn plain_title(&self) -> String {
+        let title = self.title();
+        let plain = md::strip_inline(title);
+        let plain = plain.trim();
+        if plain.is_empty() { title.to_string() } else { plain.to_string() }
+    }
+
     /// The first non-blank line after the title.
     pub fn snippet(&self) -> &str {
         self.text.lines().map(str::trim).filter(|l| !l.is_empty()).nth(1).unwrap_or("No additional text")
@@ -46,7 +56,7 @@ impl Note {
     /// Row snippet: checklist progress when the note has a checklist.
     pub fn row_snippet(&self) -> String {
         match self.checklist() {
-            (_, 0) => self.snippet().to_string(),
+            (_, 0) => md::strip_inline(self.snippet()),
             (d, t) => format!("{d} of {t} done"),
         }
     }
@@ -124,7 +134,7 @@ pub fn sort_ordered(notes: &mut [Note], key: SortKey, oldest_first: bool, pinned
         let order = match key {
             SortKey::DateEdited => b.modified.cmp(&a.modified),
             SortKey::DateCreated => created(b).cmp(&created(a)),
-            SortKey::Title => a.title().to_lowercase().cmp(&b.title().to_lowercase()),
+            SortKey::Title => a.plain_title().to_lowercase().cmp(&b.plain_title().to_lowercase()),
         };
         let order = if oldest_first && key != SortKey::Title { order.reverse() } else { order };
         pinned.contains(&b.id).cmp(&pinned.contains(&a.id)).then(order).then_with(|| b.id.cmp(&a.id))
@@ -205,8 +215,8 @@ pub fn score(note: &Note, query: &str) -> u32 {
     if hits == 0 {
         return 0;
     }
-    let title = note.title();
-    let in_title = find_all(title, query);
+    let title = note.plain_title();
+    let in_title = find_all(&title, query);
     let mut s = 1 + hits.min(10);
     if !in_title.is_empty() {
         s += 50;
@@ -317,7 +327,7 @@ pub fn export_md(dir: &Path, note: &Note) -> io::Result<PathBuf> {
 /// Writes `bytes` as `<title>.<ext>` under `<dir>/.export` and returns the
 /// file. The name is the note's sanitised title.
 pub fn export_file(dir: &Path, note: &Note, ext: &str, bytes: &[u8]) -> io::Result<PathBuf> {
-    let name: String = note.title().chars().filter(|c| !c.is_control() && !"/\\:*?\"<>|".contains(*c)).take(40).collect();
+    let name: String = note.plain_title().chars().filter(|c| !c.is_control() && !"/\\:*?\"<>|".contains(*c)).take(40).collect();
     let name = name.trim().trim_start_matches(['.', '#', ' ']).trim().to_string();
     let name = if name.is_empty() { "Note".to_string() } else { name };
     let out = dir.join(".export");
@@ -529,6 +539,12 @@ mod tests {
         assert_eq!(note("5", "#hashtag", 0).title(), "hashtag");
         assert_eq!(note("6", "###", 0).title(), "###", "a bare marker stays");
         assert_eq!(note("7", "# ", 0).title(), "New Note", "a title marker alone is a new note");
+        // E2E W2-2: a bold title reads without its markers in the list, and so does the preview
+        let bold = note("8", "# **E2E bold test**
+**plain** line", 0);
+        assert_eq!(bold.plain_title(), "E2E bold test");
+        assert_eq!(bold.row_snippet(), "plain line");
+        assert_eq!(note("9", "Shopping", 0).plain_title(), "Shopping");
     }
 
     #[test]

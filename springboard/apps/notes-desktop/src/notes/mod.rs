@@ -231,6 +231,19 @@ fn marker_of(f: Fmt) -> &'static str {
     }
 }
 
+/// The inline style a character format button gives the text (`None` for the paragraph styles).
+fn style_of(f: Fmt) -> Option<md::Style> {
+    match f {
+        Fmt::Bold => Some(md::Style::Bold),
+        Fmt::Italic => Some(md::Style::Italic),
+        Fmt::Code => Some(md::Style::Code),
+        Fmt::Strike => Some(md::Style::Strike),
+        Fmt::Underline => Some(md::Style::Underline),
+        Fmt::Highlight => Some(md::Style::Highlight),
+        Fmt::Bullet | Fmt::Number | Fmt::Check => None,
+    }
+}
+
 /// Which notes the list shows.
 #[derive(Clone, Debug, PartialEq)]
 pub enum View {
@@ -1116,10 +1129,10 @@ impl Notes {
                 // Recently Deleted rows say when the note goes for good
                 let snippet = if self.loc_of(&n.id) == folders::TRASH { store::trash_caption(n.modified, now) } else { n.row_snippet() };
                 Row {
-                    title: ui.text(&ui.fit(n.title(), MAC_BODY_PT, text_w), MAC_BODY_PT, Weight::Bold, LABEL.now()),
+                    title: ui.text(&ui.fit(&n.plain_title(), MAC_BODY_PT, text_w), MAC_BODY_PT, Weight::Bold, LABEL.now()),
                     date,
                     snippet: ui.text(&ui.fit(&snippet, MAC_SUBHEAD_PT, snippet_w), MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now()),
-                    title_text: ui.fit(n.title(), MAC_BODY_PT, text_w),
+                    title_text: ui.fit(&n.plain_title(), MAC_BODY_PT, text_w),
                     date_text: store::list_date(n.modified, now, self.wall.offset),
                     snippet_text: ui.fit(&snippet, MAC_SUBHEAD_PT, snippet_w),
                 }
@@ -1257,7 +1270,7 @@ impl Notes {
 
     /// The title of a note, for the title of its window.
     pub fn note_title(&self, id: &str) -> Option<String> {
-        self.notes.iter().find(|n| n.id == id).map(|n| n.title().to_string())
+        self.notes.iter().find(|n| n.id == id).map(Note::plain_title)
     }
 
     /// Draws one of the note windows (`note_windows::draw`); `key` says it has the keys (its caret shows). The main
@@ -1959,7 +1972,7 @@ impl Notes {
     pub fn recent_notes(&self) -> Vec<(String, String)> {
         let mut live: Vec<&Note> = self.notes.iter().filter(|n| self.loc_of(&n.id) != folders::TRASH).collect();
         live.sort_by(|a, b| b.modified.cmp(&a.modified).then_with(|| a.id.cmp(&b.id)));
-        live.into_iter().take(RECENT_MENU).map(|n| (n.id.clone(), n.title().to_string())).collect()
+        live.into_iter().take(RECENT_MENU).map(|n| (n.id.clone(), n.plain_title())).collect()
     }
 
     /// Opens the note that `query` names: its id, else the newest note with that title (any case), else the
@@ -1973,13 +1986,13 @@ impl Notes {
             self.notes
                 .iter()
                 .enumerate()
-                .filter(|(_, n)| self.loc_of(&n.id) != folders::TRASH && keep(&n.title().to_lowercase()))
+                .filter(|(_, n)| self.loc_of(&n.id) != folders::TRASH && keep(&n.plain_title().to_lowercase()))
                 .max_by_key(|(_, n)| n.modified)
                 .map(|(i, _)| i)
         };
         let by_id = self.notes.iter().position(|n| n.id == query.trim() && self.loc_of(&n.id) != folders::TRASH);
         let i = by_id.or_else(|| newest(&|title| title == q)).or_else(|| newest(&|title| title.contains(&q)))?;
-        let title = self.notes[i].title().to_string();
+        let title = self.notes[i].plain_title();
         self.open_note(ui, i, false, t);
         Some(title)
     }
@@ -2429,6 +2442,9 @@ impl Notes {
         let sel = self.editor.selection().unwrap_or(self.editor.caret()..self.editor.caret());
         match f {
             Fmt::Bold | Fmt::Italic | Fmt::Code | Fmt::Strike | Fmt::Underline | Fmt::Highlight => {
+                if sel.is_empty() && self.end_style_at_caret(ui, f, sel.start, t) {
+                    return;
+                }
                 if sel.is_empty() {
                     // nothing selected: the style waits for the next typing (a typing attribute), so no markers
                     // appear in the note until there is text for them to hold
@@ -2460,6 +2476,31 @@ impl Notes {
             }
         }
         self.changed(ui, t);
+    }
+
+    /// Cmd+B (or another character style) at a caret inside text that already has the style: the typing that follows
+    /// is without it, as the reference's typing attributes turn off. At the end of the styled run the caret steps out
+    /// past the closing marker, at its start before the opening one, and inside it the run is split at the caret
+    /// (one undo step). False when the caret is not in such a run.
+    fn end_style_at_caret(&mut self, ui: &Ui, f: Fmt, caret: usize, t: f64) -> bool {
+        let Some(style) = style_of(f) else { return false };
+        let para = self.editor.paragraph_of(caret);
+        let line: String = self.editor.text().chars().skip(para.start).take(para.len()).collect();
+        let c = caret - para.start;
+        let Some((inner, ml)) = md::emphasis_at(&line, md::classify(&line).prefix, c, style) else { return false };
+        self.pending.clear();
+        self.dirty = true;
+        if c == inner.end {
+            self.editor.set_caret(caret + ml);
+        } else if c == inner.start {
+            self.editor.set_caret(caret - ml);
+        } else {
+            let m = marker_of(f);
+            self.editor.replace_range(ui, caret..caret, &format!("{m}{m}"), t, false);
+            self.editor.set_caret(caret + ml);
+            self.changed(ui, t);
+        }
+        true
     }
 
     /// Typed `s` at the caret with styles pending (Cmd+B with nothing selected): the text goes in wrapped in their
@@ -2872,14 +2913,14 @@ impl Notes {
             Act::ShareText => {
                 if let Screen::Editor(i) = self.screen {
                     let note = &self.notes[i];
-                    self.share_req = Some(springboard::shell::share::Item::Text { title: note.title().to_string(), body: md::to_plain(&note.text) });
+                    self.share_req = Some(springboard::shell::share::Item::Text { title: note.plain_title(), body: md::to_plain(&note.text) });
                 }
             }
             Act::SharePdf => {
                 if let Screen::Editor(i) = self.screen {
                     self.save(t, true);
                     let note = &self.notes[i];
-                    let bytes = pdf::render(note.title(), &md::to_plain(&note.text));
+                    let bytes = pdf::render(&note.plain_title(), &md::to_plain(&note.text));
                     match store::export_file(&self.dir, note, "pdf", &bytes) {
                         Ok(path) => self.share_req = Some(springboard::shell::share::Item::File(path)),
                         Err(error) => self.notice = Some(format!("Unable to export note: {error}")),
@@ -2890,7 +2931,7 @@ impl Notes {
                 if let Screen::Editor(i) = self.screen {
                     self.save(t, true);
                     let note = &self.notes[i];
-                    let page = html::render(note.title(), &note.text);
+                    let page = html::render(&note.plain_title(), &note.text);
                     match store::export_file(&self.dir, note, "html", page.as_bytes()) {
                         Ok(path) => self.share_req = Some(springboard::shell::share::Item::File(path)),
                         Err(error) => self.notice = Some(format!("Unable to export note: {error}")),
@@ -2902,6 +2943,12 @@ impl Notes {
             Act::ClearChecked => self.clear_checked(ui, t),
             Act::DeleteNote => {
                 if let Screen::Editor(i) = self.screen {
+                    // a note already in Recently Deleted goes for good, as a swipe there does (`delete_row`): trashing
+                    // it again would move it onto itself
+                    if self.loc_of(&self.notes[i].id) == folders::TRASH {
+                        self.run(ui, Act::EraseNote, t);
+                        return;
+                    }
                     self.save(t, true);
                     if self.trash_note(i, t) {
                         self.close_note(ui, t);
@@ -3722,7 +3769,7 @@ impl Notes {
             }
             Target::EditorShare => {
                 if let Screen::Editor(i) = self.screen {
-                    self.share_req = Some(springboard::shell::share::Item::Text { title: self.notes[i].title().to_string(), body: self.notes[i].text.clone() });
+                    self.share_req = Some(springboard::shell::share::Item::Text { title: self.notes[i].plain_title(), body: self.notes[i].text.clone() });
                 }
             }
             Target::Title => self.open_list_menu(ui),
@@ -4181,7 +4228,7 @@ impl Notes {
                 text_top = ry + thumb_h + pad;
             }
             let inner = w - 2.0 * pad;
-            let title_text = ui.fit(note.title(), MAC_BODY_PT, inner);
+            let title_text = ui.fit(&note.plain_title(), MAC_BODY_PT, inner);
             let title = self.labels.get(ui, &title_text, MAC_BODY_PT, Weight::Bold, LABEL.now()).clone();
             content.blit(&title, (x + pad) as i32, text_top as i32, 255, 255);
             let date_text = self.rows[self.shown[i]].date_text.clone();
@@ -5673,6 +5720,26 @@ mod tests {
     }
 
     #[test]
+    fn delete_note_inside_recently_deleted_erases_it() {
+        // E2E R4: Note > Delete Note (Cmd+Backspace) on a note in Recently Deleted moved it onto itself and failed
+        // with "Note exists in destination"; it now goes for good, as Delete Permanently does
+        let ui = ui();
+        let dir = scratch("trash-delete-note");
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut n = seeded(&ui, &dir);
+        n.delete_row(&ui, 0, 100.0);
+        assert!(dir.join(folders::TRASH).join("1.md").exists());
+        n.run(&ui, Act::View(View::Trash), 200.0);
+        n.open_note(&ui, n.shown[0], false, 300.0);
+        assert!(n.chord(&ui, 14, bifrost_app::proto::CHORD_META, 400.0), "Cmd+Backspace");
+        assert_eq!(n.notice, None, "no error notice");
+        assert_eq!(n.editing(), None, "the note closed");
+        assert!(n.listed().is_empty());
+        assert!(!dir.join(folders::TRASH).join("1.md").exists(), "erased from disk");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn sort_options_and_pinned_section_persist() {
         let ui = ui();
         let dir = scratch("sort");
@@ -6069,6 +6136,28 @@ mod tests {
         n.open_format_menu(&ui);
         let checked: Vec<String> = n.menu.as_ref().unwrap().items.iter().filter(|(_, _, on)| *on).map(|(l, _, _)| l.clone()).collect();
         assert_eq!(checked, vec!["Dashed List".to_string()], "the caret's paragraph style is checked");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn cmd_b_at_a_caret_in_bold_text_ends_the_bold() {
+        // E2E W2-2: Cmd+B after bold text, then typing, gave `** plain****`; the typing is now plain
+        let ui = ui();
+        let dir = scratch("bold-caret");
+        let mut n = app(&ui, &dir);
+        open_with(&mut n, &ui, "T\n**bold**");
+        n.editor.set_caret(8);
+        n.run(&ui, Act::Do(Format::Char(Fmt::Bold)), 2000.0);
+        assert!(n.pending_styles().is_empty(), "no bold waits for the typing");
+        assert_eq!(n.editor.caret(), 10, "the caret stepped out past the closing marker");
+        type_text(&mut n, &ui, " plain", 2100.0);
+        assert_eq!(n.editor.text(), "T\n**bold** plain");
+        // inside the bold text the run is split at the caret
+        n.editor.set_caret(6);
+        n.run(&ui, Act::Do(Format::Char(Fmt::Bold)), 2200.0);
+        assert_eq!(n.editor.text(), "T\n**bo****ld** plain");
+        type_text(&mut n, &ui, "x", 2300.0);
+        assert_eq!(n.editor.text(), "T\n**bo**x**ld** plain", "the typing between the runs is plain");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
