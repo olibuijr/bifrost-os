@@ -3853,7 +3853,7 @@ mod ext_state_tests {
     #[test]
     fn the_foreign_windows_line_names_each_window_once_and_the_active_one() {
         use crate::bare::wayland::ForeignWindow;
-        let w = |id, app_id: &str, active| ForeignWindow { id, title: "t, with a comma".into(), app_id: app_id.into(), active, maximized: false };
+        let w = |id, app_id: &str, active| ForeignWindow { id, title: "t, with a comma".into(), app_id: app_id.into(), active, maximized: false, minimized: false };
         let windows = [w(7, "ai.film", true), w(9, "org.x", false), w(7, "ai.film", true)];
         assert_eq!(super::foreign_state_line(windows.iter()), "foreign_windows=ai.film:7:1,org.x:9:0\n");
         assert_eq!(super::foreign_state_line(std::iter::empty()), "foreign_windows=\n");

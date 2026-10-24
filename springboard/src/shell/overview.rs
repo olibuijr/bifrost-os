@@ -1972,7 +1972,7 @@ mod tests {
         sh.shots.set_available(true);
         sh.desk.as_mut().unwrap().native_windows = foreign
             .iter()
-            .map(|(id, title)| crate::bare::wayland::ForeignWindow { id: *id, title: (*title).into(), app_id: format!("x.app{id}"), active: false, maximized: false })
+            .map(|(id, title)| crate::bare::wayland::ForeignWindow { id: *id, title: (*title).into(), app_id: format!("x.app{id}"), active: false, maximized: false, minimized: false })
             .collect();
         sh
     }
@@ -2008,7 +2008,7 @@ mod tests {
     #[test]
     fn a_window_listed_twice_has_one_tile() {
         let mut sh = desk_with_foreign(1, &[(7, "Files")]);
-        sh.desk.as_mut().unwrap().linux_apps.push(crate::shell::desk::LinuxDockApp::for_test("x.app7", vec![crate::bare::wayland::ForeignWindow { id: 7, title: "Files".into(), app_id: "x.app7".into(), active: false, maximized: false }]));
+        sh.desk.as_mut().unwrap().linux_apps.push(crate::shell::desk::LinuxDockApp::for_test("x.app7", vec![crate::bare::wayland::ForeignWindow { id: 7, title: "Files".into(), app_id: "x.app7".into(), active: false, maximized: false, minimized: false }]));
         sh.overview_toggle(1000.0);
         assert_eq!(foreign_tiles(&sh).len(), 1);
     }

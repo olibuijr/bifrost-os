@@ -494,7 +494,7 @@
     fn window_menu_lists_native_linux_windows_and_activates_them() {
         use desktop_bar::Menu;
         let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
-        sh.desk.as_mut().unwrap().native_windows=vec![crate::bare::wayland::ForeignWindow{id:7,title:"Notes".into(),app_id:"x.plain".into(),active:true,maximized:false},crate::bare::wayland::ForeignWindow{id:8,title:String::new(),app_id:"x.plain".into(),active:false,maximized:false},crate::bare::wayland::ForeignWindow{id:9,title:"Elsewhere".into(),app_id:"x.other".into(),active:false,maximized:false}];
+        sh.desk.as_mut().unwrap().native_windows=vec![crate::bare::wayland::ForeignWindow{id:7,title:"Notes".into(),app_id:"x.plain".into(),active:true,maximized:false,minimized:false},crate::bare::wayland::ForeignWindow{id:8,title:String::new(),app_id:"x.plain".into(),active:false,maximized:false,minimized:false},crate::bare::wayland::ForeignWindow{id:9,title:"Elsewhere".into(),app_id:"x.other".into(),active:false,maximized:false,minimized:false}];
         let rows=sh.menu_row_texts(Menu::Window);
         assert!(rows.contains(&"\u{2713} Notes".to_string())&&rows.contains(&"  x.plain".to_string()),"{rows:?}");
         assert!(!rows.iter().any(|t|t.ends_with("Elsewhere")),"another app's window is not in this app's Window menu: {rows:?}");
@@ -534,7 +534,7 @@
         use desktop_bar::Menu;
         let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
         let title="A very long document title ".repeat(20);
-        sh.desk.as_mut().unwrap().native_windows=vec![crate::bare::wayland::ForeignWindow{id:9,title:title.clone(),app_id:"x.long".into(),active:true,maximized:false}];
+        sh.desk.as_mut().unwrap().native_windows=vec![crate::bare::wayland::ForeignWindow{id:9,title:title.clone(),app_id:"x.long".into(),active:true,maximized:false,minimized:false}];
         let rows=sh.menu_row_texts(Menu::Window);
         let row=rows.last().unwrap();
         assert!(row.chars().count()<title.chars().count()/2,"cut: {row}");

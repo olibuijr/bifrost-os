@@ -16,7 +16,8 @@ use wayland_protocols::ext::session_lock::v1::client::{ext_session_lock_manager_
 use wayland_protocols_wlr::foreign_toplevel::v1::client::{zwlr_foreign_toplevel_manager_v1 as foreign_manager, zwlr_foreign_toplevel_handle_v1 as foreign_handle};
 use wayland_protocols::ext::background_effect::v1::client::{ext_background_effect_manager_v1 as bg_manager, ext_background_effect_surface_v1 as bg_surface};
 #[derive(Clone, PartialEq, Eq)]
-pub struct ForeignWindow { pub id:u32, pub title:String, pub app_id:String, pub active:bool,pub maximized:bool }
+/// `minimized`: the window server reports the toplevel minimized (Show Desktop leaves such a window where it is).
+pub struct ForeignWindow { pub id:u32, pub title:String, pub app_id:String, pub active:bool,pub maximized:bool,pub minimized:bool }
 struct Foreign { handle:foreign_handle::ZwlrForeignToplevelHandleV1, info:ForeignWindow }
 struct Lock { obj:lock::ExtSessionLockV1, surface:wl_surface::WlSurface, role:lock_surface::ExtSessionLockSurfaceV1, configured:bool, locked:bool }
 
@@ -1712,7 +1713,7 @@ impl Dispatch<foreign_manager::ZwlrForeignToplevelManagerV1, ()> for State {
     fn event(s:&mut Self,_:&foreign_manager::ZwlrForeignToplevelManagerV1,e:foreign_manager::Event,_:&(),_:&Connection,_:&QueueHandle<Self>) {
         if let foreign_manager::Event::Toplevel { toplevel }=e {
             let id=toplevel.id().protocol_id();
-            s.foreign.push(Foreign {handle:toplevel,info:ForeignWindow {id,title:String::new(),app_id:String::new(),active:false,maximized:false}});
+            s.foreign.push(Foreign {handle:toplevel,info:ForeignWindow {id,title:String::new(),app_id:String::new(),active:false,maximized:false,minimized:false}});
         }
     }
     wayland_client::event_created_child!(State, foreign_manager::ZwlrForeignToplevelManagerV1, [0 => (foreign_handle::ZwlrForeignToplevelHandleV1, ())]);
@@ -1725,7 +1726,7 @@ impl Dispatch<foreign_handle::ZwlrForeignToplevelHandleV1, ()> for State {
         if let Some(w)=s.foreign.iter_mut().find(|w|w.handle==*obj) { match e {
             foreign_handle::Event::Title {title} => w.info.title=title,
             foreign_handle::Event::AppId {app_id} => w.info.app_id=app_id,
-            foreign_handle::Event::State {state} => {w.info.active=state.chunks_exact(4).any(|v|u32::from_ne_bytes(v.try_into().unwrap())==2);w.info.maximized=state.chunks_exact(4).any(|v|u32::from_ne_bytes(v.try_into().unwrap())==0);},
+            foreign_handle::Event::State {state} => {w.info.active=state.chunks_exact(4).any(|v|u32::from_ne_bytes(v.try_into().unwrap())==2);w.info.maximized=state.chunks_exact(4).any(|v|u32::from_ne_bytes(v.try_into().unwrap())==0);w.info.minimized=state.chunks_exact(4).any(|v|u32::from_ne_bytes(v.try_into().unwrap())==1);},
             foreign_handle::Event::Done => s.foreign_dirty=true,
             _ => {}
         }}

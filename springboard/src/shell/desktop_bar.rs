@@ -3017,7 +3017,7 @@ mod window_menu_tests {
 
     #[cfg(feature = "desktop-wayland")]
     fn native(id: u32, title: &str, app_id: &str, active: bool) -> crate::bare::wayland::ForeignWindow {
-        crate::bare::wayland::ForeignWindow { id, title: title.into(), app_id: app_id.into(), active, maximized: false }
+        crate::bare::wayland::ForeignWindow { id, title: title.into(), app_id: app_id.into(), active, maximized: false, minimized: false }
     }
 
     /// E2E N2 / W3-6: with a native app's window in front, the placements are enabled and act on that window (through
