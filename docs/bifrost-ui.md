@@ -3653,7 +3653,7 @@ restart, no writes, no contact picker for apps. See `docs/parity/sdk-app-service
 Errors: `contacts::ContactsError` is the typed failure of a contacts call (`NotGranted`, `ReadOnly`, `Restricted`,
 `NothingPicked`, `AlreadyDecided`, or `Other` with the shell's message). `decode_error(&reply)` returns it for a failed
 reply, and `ContactsError::from(contact_access::Error)` maps the access model's errors. The variants are matched by
-name; Apple's `CNErrorCode` raw values are not mapped yet because they are not verified against the reference.
+name; since 2026-10-24 `ContactsError::code()` also gives the reference `CNErrorCode` raw value (see below).
 
 ### Contacts: vCard import and export, and containers (2026-10-19, wave 15)
 
@@ -3679,6 +3679,44 @@ and moving one is an `updated` event in the change log. Gaps: the groups are not
 and no account sync fills an `account` container yet, so only the local container is non-empty by default.
 
 System search finds a contact by name, phone, email and company (notes and address stay out of Search by design).
+
+### Contacts: the full record through save, labels, error codes and formatters (2026-10-24, parity/contacts)
+
+The gaps above about one value per field and fields that were read but dropped are closed on the SDK and shell side:
+
+- Record (`bifrost_ui::contact_fetch`). New keys `NamePrefix`, `Nickname`, `JobTitle`, `Department`, `Relations`
+  (labeled names), `SocialProfiles` and `InstantMessages` (`Value::Profiles` of `Profile { label, service, username, url,
+  user_identifier, identifier }`, the shape of `CNSocialProfile` and `CNInstantMessageAddress`). Decision: one `Profile` type
+  serves both; an instant message address leaves `url` and `user_identifier` empty.
+- Save (`CNSaveRequest` with multi-values). `contacts::save` now sends labeled values as `{label, value}`, the birthday and
+  dates as date components and profiles as objects, the same shapes `fetch` returns. The shell (`apply_save_with` in
+  `services/contacts.rs`) keeps the first phone and email in the contacts file, with their label row, and puts the rest, URLs,
+  relations, the birthday, dates and the new fields in the sidecar `contacts-extra.tsv` (`contactextras.rs`, new row kinds
+  `prefix`, `nickname`, `job_title`, `department`, `relation`, `social`, `im`; an older shell skips them). An update changes
+  only the fields it names, `null` clears one, a delete drops the contact's extras, and a value over 320 characters is refused
+  rather than cut. The address still takes one value.
+- vCard. `contactcard.rs` writes and reads the name prefix, nickname, job title, department, relations, social profiles and
+  instant message addresses, so they survive an export and import.
+- Labels (`CNLabeledValue`). `PREDEFINED_LABELS` adds fax, pager, school, home page, anniversary and manager, and
+  `RELATION_LABELS` the common relation labels; `localized_label` (`localizedString(forLabel:)`) shows a predefined name in
+  title case and a typed label as typed. The reference table has about 280 labels (REA
+  `ev_5db2f92a8b7c70ee5832fa07ff7230f52ad6d631e4d4f02c6ff6d0ac80b2a191`), most of them kinship variants; those stay typed text.
+  Gap: English only, no string table for other languages.
+- Errors (`CNErrorCode`). `contacts::error_code` holds the reference raw codes (read from the reference bridge metadata,
+  `Contacts.arm64e.bridgesupport`, sha256 `3fd20890940bd3f117b384a20b5df21c073c67fc786546db1f7edd4cbf1ef87d`) and
+  `ContactsError::code()` maps each variant: access failures 100, read-only grant 101, unknown record 200, bad identifier 205,
+  validation 300 and 302, change token expired 603, malformed vCard 700, file failures 2. New variants `RecordNotFound`,
+  `VCardMalformed`, `ChangeHistoryExpired`.
+- Formatters (`CNPostalAddressFormatter`, `CNContactFormatter`). `contact_address::Style::for_country` and
+  `lines_for_country` lay an address out by its ISO country code: postal code first (most of Europe), the postal code on its
+  own line (GB, IE), largest part first (CN, JP, KR, TW, HK), city first otherwise. The reference address string table carries
+  only field names (REA `ev_67f72dcfbaa4518b5ab71d1ca7eecf31cdffc410d9b377987f557f9262825649`), so the layouts follow the
+  public postal conventions. `contact_display::name_order_for_language` (family first for ja, zh, ko, hu, vi, mn),
+  `DisplayNameOrder` (raw values 0, 1, 2) and `full_name` (Han, kana and Hangul names join without a space), plus the
+  `SortOrder` raw values (0 to 3). The SDK re-exports them in `contacts::display`.
+
+Remaining gaps: the Contacts app still edits one phone, one email and one address; the address is one stored line (no
+structured parts in the store); labels are English only; every fetch reads the whole store file.
 
 ## InputMethodKit: composing input methods (`springboard/src/shell/input_methods`)
 
