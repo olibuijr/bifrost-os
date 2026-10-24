@@ -362,7 +362,10 @@ impl Ctx {
     /// Opens a window of the app's own (`AppWindows::open`) and asks the shell to show it. The id is the app's; the shell
     /// draws the window under it.
     pub fn open_window(&self, spec: crate::app_windows::WindowSpec) -> Result<crate::app_windows::WindowId, crate::app_windows::WindowError> {
-        let flags = if spec.title_double_click { crate::proto::window_flags::TITLE_DOUBLE_CLICK } else { 0 };
+        let mut flags = if spec.title_double_click { crate::proto::window_flags::TITLE_DOUBLE_CLICK } else { 0 };
+        if spec.cascade {
+            flags |= crate::proto::window_flags::CASCADE;
+        }
         let position = spec.position;
         let id = self.windows.borrow_mut().open(spec.clone())?;
         self.send(ToShell::WindowOpen { id: id.0, title: spec.title, w: spec.width, h: spec.height, position, flags });

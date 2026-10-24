@@ -5321,8 +5321,22 @@ opt-in; `clamp_to_screen` keeps a grab strip of the title bar on screen. A colla
 app keeps its size, and edge grabs are ignored. Tests: proto `window_placement_*`, `app_window_table`
 `placement_tests`, `desk` `a_window_collapses_*`, `app_windows` `a_window_moves_collapses_*`.
 
+Cascading (Apple parity, `NSWindow cascadeTopLeftFromPoint:` / `setFrameTopLeftPoint:`, decided 2026-10-24 for Mail's
+viewer windows, E2E F4). `WindowSpec::cascaded()` sets `window_flags::CASCADE` (2) on `WindowOpen`; a `position` from
+`WindowSpec::at` wins over it. The shell (`desk::cascade_origin`) places a cascaded window from the app's newest other
+extra window one title bar down and right, as each new document window cascades in AppKit. The first one cascades from
+the main window instead: beside its trailing edge when the work area has room, otherwise over its trailing side one
+title bar down, so the main window's leading columns (sidebar, list) stay in view. AppKit itself cascades the first
+window from the point the app passes (often the main window's top left, which would cover the list); we choose the
+trailing side because the app cannot pass a point here: the main window's shell position is not reported to the app.
+The placed window's toplevel asks the window server to map at that origin (`placed`), so it holds on Wayland too. Not
+matched yet: AppKit's wrap back to the top left when a cascade reaches the bottom of the screen (ours clamps to the
+work area). Tests: `desk` `a_cascaded_window_leaves_the_main_windows_leading_side_in_view`, `app_windows`
+`a_cascaded_window_sends_the_cascade_flag`, `apphost` `a_window_takes_a_position_*`, mail `viewer`
+`the_viewer_window_opens_at_the_viewer_size`.
+
 SDK (`Ctx`): `open_window`, `close_window`, `set_window_title`, `resize_window`, `move_window`, `set_window_collapsed` change the app's
-registry and send the message; `WindowSpec::at(x, y)` and `WindowSpec::with_title_double_click()` ask for placement and the opt-in.
+registry and send the message; `WindowSpec::at(x, y)`, `WindowSpec::cascaded()` and `WindowSpec::with_title_double_click()` ask for placement and the opt-in.
 The hooks `App::window_moved` and `App::window_title_double_click` default to no-ops;
 `windows()` reads it. The run loop routes `WindowClosed`, `WindowConfigure` and `WindowTouch` through
 `app_windows::deliver_window`: a closed window gets no touch, a closed window's close is applied once, and the app's

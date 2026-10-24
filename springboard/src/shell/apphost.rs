@@ -1437,6 +1437,8 @@ impl AppHost {
                         self.windows.request_position(&self.id, id, x, y);
                     }
                     self.windows.set_title_double_click(&self.id, id, flags & bifrost_proto::window_flags::TITLE_DOUBLE_CLICK != 0);
+                    // a position the app asked for wins over the cascade
+                    self.windows.set_cascade(&self.id, id, position.is_none() && flags & bifrost_proto::window_flags::CASCADE != 0);
                     self.replay_early(id, out);
                 }
                 out.chrome();
@@ -3475,6 +3477,13 @@ mod window_table_tests {
         host.handle(ToShell::WindowOpen { id: 5, title: "Plain".into(), w: 10.0, h: 10.0, position: None, flags: 0 }, Vec::new(), &mut out);
         assert!(!host.window_title_double_clicked(5), "an app that did not opt in gets no message");
         assert!(sent(&peer).is_empty());
+        let cascade = bifrost_proto::window_flags::CASCADE;
+        host.handle(ToShell::WindowOpen { id: 6, title: "Viewer".into(), w: 10.0, h: 10.0, position: None, flags: cascade }, Vec::new(), &mut out);
+        host.handle(ToShell::WindowOpen { id: 7, title: "Placed".into(), w: 10.0, h: 10.0, position: Some((1.0, 2.0)), flags: cascade }, Vec::new(), &mut out);
+        let cascades = |id: u32| host.windows.of_app("fixture").iter().any(|w| w.id == id && w.cascade);
+        assert!(cascades(6), "a window opened with the flag and no position cascades");
+        assert!(!cascades(7), "a requested position wins over the cascade");
+        assert!(!cascades(5), "a plain window does not cascade");
     }
 
     #[test]

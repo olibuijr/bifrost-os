@@ -546,6 +546,10 @@ impl WindowLevel {
 pub mod window_flags {
     /// The app wants `ToApp::WindowTitleDoubleClick` instead of the shell's zoom when the title bar is double-clicked.
     pub const TITLE_DOUBLE_CLICK: u32 = 1;
+    /// A window opened without a position is cascaded from the app's other windows, as AppKit's
+    /// `cascadeTopLeftFromPoint:` places a new document window: the first one beside (or over the trailing side of) the
+    /// main window, each later one a title bar's height down and right of the one opened before it.
+    pub const CASCADE: u32 = 2;
 }
 
 /// Shell -> app.

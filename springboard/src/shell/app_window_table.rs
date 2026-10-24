@@ -30,6 +30,8 @@ pub struct ExtraWindow {
     pub collapsed: bool,
     /// The app wants `ToApp::WindowTitleDoubleClick` instead of the shell's zoom (`window_flags::TITLE_DOUBLE_CLICK`).
     pub title_double_click: bool,
+    /// The app asked for no position and for the window to cascade from its other windows (`window_flags::CASCADE`).
+    pub cascade: bool,
 }
 
 /// The part of a title bar, in points, that stays reachable on screen: a window keeps this much of its width inside
@@ -99,6 +101,7 @@ impl WindowTable {
             pending: None,
             collapsed: false,
             title_double_click: false,
+            cascade: false,
         };
         let at = self.windows.iter().position(|x| x.app == app).unwrap_or(self.windows.len());
         self.windows.insert(at, window);
@@ -224,6 +227,18 @@ impl WindowTable {
         match self.index_of(app, id) {
             Some(index) => {
                 self.windows[index].title_double_click = on;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Whether window `id` cascades from the app's other windows when the desk first places it. False when the window is
+    /// not open.
+    pub fn set_cascade(&mut self, app: &str, id: u32, on: bool) -> bool {
+        match self.index_of(app, id) {
+            Some(index) => {
+                self.windows[index].cascade = on;
                 true
             }
             None => false,

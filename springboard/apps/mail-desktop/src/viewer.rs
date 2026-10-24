@@ -39,9 +39,11 @@ impl Snapshot {
         }
     }
 
-    /// The window spec the app opens the viewer with.
+    /// The window spec the app opens the viewer with. Viewers cascade from the main window, beside it or over its
+    /// reading side, so the message list the person double-clicked in stays in view, and each later viewer cascades from
+    /// the one before it.
     pub fn spec(&self) -> WindowSpec {
-        WindowSpec::new(&self.title(), VIEWER_W, VIEWER_H)
+        WindowSpec::new(&self.title(), VIEWER_W, VIEWER_H).cascaded()
     }
 }
 
@@ -170,6 +172,7 @@ mod tests {
         let spec = Snapshot { subject: "Lunch".into(), ..Snapshot::default() }.spec();
         assert_eq!(spec.title, "Lunch");
         assert_eq!((spec.width, spec.height), (VIEWER_W, VIEWER_H));
+        assert!(spec.cascade && spec.position.is_none(), "a viewer cascades from the main window instead of covering its list");
     }
 
     #[test]
