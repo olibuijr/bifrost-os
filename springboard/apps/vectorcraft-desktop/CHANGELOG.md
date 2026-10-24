@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.16.0
+
+- Upstream vectorcraft v0.16.0.
+  > [!NOTE]
+  > **FreeBSD aarch64 is dropped from this release.** We had to cut releases, and we cannot build this target within the 5-hour CI limit for any of the Craft apps, so we are dropping it for now. This is a known blocker, flagged for a future fix in storytold/craft-common-actions#39. FreeBSD x86_64 and every other platform are included.
+  ## What's Changed
+  * Honor Preferences › Performance › Real-time Drawing and Editing during tool drags by @nrq6993-a11y in https://github.com/storytold/vectorcraft/pull/2942
+  * Effects: stacked geometry effects keep to an anchor and line budget (#3578) by @odgrim in https://github.com/storytold/vectorcraft/pull/3695
+
 ## 0.15.0
 
 - Upstream vectorcraft v0.15.0.
