@@ -1,6 +1,7 @@
 //! The media player service (`is.olibuijr.mediaplayer` on the audio server): decodes and plays music and records voice memos as a client of bifrost-audiod. Music, Podcasts,
 //! Voice Memos and the shell talk to it over `BIFROST_SERVICE_SOCK` (frames from
-//! `bifrost_proto::svc::audio`), so closing or updating an app never cuts the sound.
+//! `bifrost_proto::svc::audio`). Playback belongs to the app whose connection set the queue: it stops when that app
+//! quits or its connection drops, while the shell's controls (media keys, Now Playing) only steer it.
 
 use bifrost_proto::svc::audio::{Cmd, Evt, Live, Repeat as WireRepeat, Snapshot, Track as WireTrack};
 use bifrost_proto::svc;
@@ -67,6 +68,10 @@ struct Core {
     starting: Option<u32>,
     kept: Option<Kept>,
     muted: bool,
+    /// The connection whose `PlayQueue` set the queue now playing. Playback belongs to that app: when its connection
+    /// ends (it quit, crashed or was killed) the queue is cleared, so nothing it started, a radio stream above all,
+    /// keeps playing or streaming without it. Play, pause and skip from others (the shell's media keys) do not move it.
+    playback_owner: Option<u32>,
     clients: Vec<Client>,
     /// The output route the shell reported last (headphones, reason), told to every subscriber and to new ones.
     route: Option<(bool, u8)>,
@@ -224,6 +229,38 @@ fn due(frames: &[(u64, Vec<u8>)], since: u64) -> impl Iterator<Item = &Vec<u8>> 
 }
 
 impl Core {
+    fn new(player: AudioPlayer) -> Core {
+        Core {
+            player,
+            recorder: None,
+            starting: None,
+            kept: None,
+            muted: true,
+            playback_owner: None,
+            clients: Vec::new(),
+            route: None,
+            outbox: Vec::new(),
+            seq: 0,
+            dirty: false,
+        }
+    }
+
+    /// Connection `conn` ended: it is no longer a subscriber, and playback it owns ends with it (the queue cleared, a
+    /// live station's connection closed). The remaining subscribers hear the stopped state.
+    fn client_gone(&mut self, conn: u32) {
+        self.clients.retain(|c| c.id != conn);
+        if self.playback_owner != Some(conn) {
+            return;
+        }
+        self.playback_owner = None;
+        self.player.clear();
+        eprintln!("audio.player: connection {conn} owned playback and closed; playback stopped");
+        let evt = self.state();
+        self.send_all(&evt);
+        self.dirty = true;
+        WAKE.notify_all();
+    }
+
     fn state(&self) -> Evt {
         Evt::State(snapshot(self.player.snapshot(), self.muted))
     }
@@ -426,8 +463,13 @@ fn serve(core: Arc<Mutex<Core>>, stream: UnixStream, conn: u32) {
             _ => {}
         }
         let subscribe = cmd == Cmd::Subscribe;
+        let starts_queue = matches!(cmd, Cmd::PlayQueue { .. });
         let mut c = lock(&core);
         let reply = c.apply(cmd);
+        if starts_queue {
+            // the app that set the queue owns the playback until another sets one or it goes away
+            c.playback_owner = Some(conn);
+        }
         let first = subscribe && !subscribed;
         if first {
             subscribed = true;
@@ -460,7 +502,8 @@ fn serve(core: Arc<Mutex<Core>>, stream: UnixStream, conn: u32) {
     // the connection that started a recording owns it: if it drops (the app crashed or was killed) the take is saved
     // and the microphone closed
     stop_recording(&core, Some(conn), false);
-    lock(&core).clients.retain(|c| c.id != conn);
+    // and the playback it started stops: an app that quits must not leave its music or radio stream running
+    lock(&core).client_gone(conn);
 }
 
 /// Wakes the state ticker: a subscriber arrived, a command ran or the engine signalled a change.
@@ -532,18 +575,7 @@ fn main() -> std::io::Result<()> {
     let sock = std::env::var("BIFROST_SERVICE_SOCK").unwrap_or_else(|_| "/var/lib/springboard/run/is.olibuijr.audio.sock".into());
     let player = AudioPlayer::open_device()?;
     let fd = player.fd();
-    let core = Arc::new(Mutex::new(Core {
-        player,
-        recorder: None,
-        starting: None,
-        kept: None,
-        muted: true,
-        clients: Vec::new(),
-        route: None,
-        outbox: Vec::new(),
-        seq: 0,
-        dirty: false,
-    }));
+    let core = Arc::new(Mutex::new(Core::new(player)));
     // socket activation: bifrostd binds the socket and starts this process on the first connection
     let listener = svc::listen(std::path::Path::new(&sock))?;
     eprintln!("audio.player: {CLIENT} {VERSION} listening on {sock}");
@@ -730,6 +762,42 @@ mod tests {
         assert_eq!(due(&frames, 0).count(), 3);
         assert_eq!(due(&frames, 2).cloned().collect::<Vec<_>>(), vec![vec![3u8]]);
         assert_eq!(due(&frames, 3).count(), 0);
+    }
+
+    fn core() -> Core {
+        Core::new(AudioPlayer::new(Box::new(springboard::media::audio_out::NullOut::new())).unwrap())
+    }
+
+    fn queue_cmd() -> Cmd {
+        let tracks = vec![WireTrack { id: 1, path: "/nonexistent/a.mp3".into(), url: None }, WireTrack { id: 2, path: "/nonexistent/b.mp3".into(), url: None }];
+        Cmd::PlayQueue { tracks, start: 0, shuffle: false, seed: 1 }
+    }
+
+    #[test]
+    fn playback_ends_when_the_connection_that_started_it_closes() {
+        let mut c = core();
+        c.apply(queue_cmd());
+        c.playback_owner = Some(7);
+        assert_eq!(c.player.snapshot().queue_len, 2);
+        // another connection (the shell) going away leaves the owner's playback alone
+        c.client_gone(3);
+        assert_eq!(c.player.snapshot().queue_len, 2, "only the owner's exit ends playback");
+        assert_eq!(c.playback_owner, Some(7));
+        c.client_gone(7);
+        let s = c.player.snapshot();
+        assert_eq!((s.queue_len, s.playing, s.track.is_none()), (0, false, true), "{s:?}");
+        assert_eq!(c.playback_owner, None);
+        c.player.stop();
+    }
+
+    #[test]
+    fn a_closing_connection_is_dropped_from_the_subscribers() {
+        let mut c = core();
+        let (a, _b) = UnixStream::pair().unwrap();
+        c.clients.push(Client { id: 4, out: Arc::new(Mutex::new(a)), since: 0 });
+        c.client_gone(4);
+        assert!(c.clients.is_empty());
+        c.player.stop();
     }
 
     #[test]

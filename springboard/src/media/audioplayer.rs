@@ -232,6 +232,21 @@ impl AudioPlayer {
         s.wake.notify_all();
     }
 
+    /// Ends playback: the queue is emptied and the song closed, a live station's network connection with it. The
+    /// service calls this when the app that started the queue quits or its connection drops, so nothing it started
+    /// keeps playing (or streaming) without it.
+    pub fn clear(&mut self) {
+        let mut s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
+        let repeat = s.queue.repeat();
+        s.queue = Queue::new(Vec::new(), 0);
+        s.queue.set_repeat(repeat);
+        s.playing = false;
+        s.error = None;
+        // a new generation: a stream still connecting gives up, and the open song (its ring and pump) is dropped
+        Self::restart(&mut s, 0.0);
+        s.wake.notify_all();
+    }
+
     /// Has the thread reopen the queue's current song at `at_ms`; the
     /// snapshot shows the new song at once.
     fn restart(s: &mut Shared, at_ms: f64) {
@@ -1196,6 +1211,31 @@ mod tests {
             }
         });
         (port, opened, closed)
+    }
+
+    #[test]
+    fn clearing_ends_playback_and_closes_the_stations_connection() {
+        use std::sync::atomic::Ordering;
+        let (port, opened, closed) = watched_station();
+        let mut p = radio_player(vec![("c.test", port)]);
+        p.play_queue(vec![station(1, "c.test")], 0, false, 1);
+        let s = wait(&mut p, 5000, |s| s.live.as_ref().is_some_and(|l| l.phase == Phase::Live));
+        assert!(s.playing, "{s:?}");
+        assert_eq!(opened.load(Ordering::SeqCst), 1);
+        p.clear();
+        let start = Instant::now();
+        while closed.load(Ordering::SeqCst) == 0 && start.elapsed() < Duration::from_secs(3) {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(closed.load(Ordering::SeqCst), 1, "the station's connection closes when playback is cleared");
+        let s = p.snapshot();
+        assert!(!s.playing && s.track.is_none() && s.queue_len == 0 && s.live.is_none(), "{s:?}");
+        // nothing is left to resume, so play does not reconnect
+        p.play();
+        std::thread::sleep(Duration::from_millis(300));
+        assert_eq!(opened.load(Ordering::SeqCst), 1, "a cleared player does not reopen the station");
+        assert!(!p.snapshot().playing);
+        p.stop();
     }
 
     #[test]
