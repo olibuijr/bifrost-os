@@ -18,7 +18,7 @@ pub mod webp;
 use super::image::{CgImage, DataConsumer, DataProvider, ImageColorSpace};
 use crate::gfx::Image;
 pub use exif::{ColorModel, Dict, PropValue, Properties};
-pub use rewrite::{copy_image_source, CopyError, CopyOptions, MetadataSet};
+pub use rewrite::{copy_image_source, merge_xmp, CopyError, CopyOptions, MetadataSet};
 use std::cell::OnceCell;
 
 /// Pictures wider or taller than this are refused rather than decoded.

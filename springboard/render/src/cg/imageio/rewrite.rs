@@ -5,9 +5,13 @@
 //! structure and is refused, as are the formats without metadata (GIF, BMP, ICO).
 //!
 //! What is kept: every tag of IFD0, the EXIF and the GPS directories (unknown tags by number), the EXIF IFD1
-//! preview, and every other segment or chunk. What is dropped when the EXIF block is rebuilt: maker notes and
-//! the pointers to directories this reader does not follow (interoperability, sub-IFDs), whose offsets would no
-//! longer be right.
+//! preview, and every other segment or chunk. An edit that only sets the orientation and the capture date (or
+//! changes nothing in EXIF) patches those values in the old block, so the block stays byte for byte otherwise,
+//! maker notes and offset tags included, as the reference keeps them. Only when the EXIF block has to be rebuilt
+//! (tags added, replaced or removed, GPS removal, a value the old block lacks or stores another way) are maker
+//! notes and the pointers to directories this reader does not follow (interoperability, sub-IFDs) dropped, since
+//! their offsets would no longer be right. The XMP packet is kept as it is unless the edit replaces it, removes it
+//! or takes its GPS properties out; a new orientation is also written into its `tiff:Orientation` when it has one.
 
 use super::encode::{chunk, XMP_APP1_HEADER};
 use super::exif::{self, Dict, PropValue, Properties};
@@ -137,7 +141,17 @@ pub fn copy_image_source(data: &[u8], o: &CopyOptions) -> Result<Vec<u8>, CopyEr
         xmp_changed |= xmp.is_some();
         xmp = None;
     }
-    let block = exif::build_block_with_thumbnail(&tiff, &ex, &gps, preview.as_deref());
+    if let (Some(v), Some(x)) = (o.orientation, xmp.as_mut()) {
+        set_xmp_orientation(x, v);
+    }
+    // Nothing but the orientation and the dates changes in EXIF: patch them in the old block, which keeps maker
+    // notes and offset tags. A value the block lacks, or stores another way, rebuilds it instead.
+    let exif_untouched = !o.exclude_gps && o.metadata.as_ref().is_none_or(|m| o.merge && m.tiff.is_empty() && m.exif.is_empty() && m.gps.is_empty());
+    let patched = old_block.filter(|_| exif_untouched).and_then(|b| patch_in_place(b, o.orientation, o.date_time.as_deref()));
+    let block = match patched {
+        Some(b) => Some(b),
+        None => exif::build_block_with_thumbnail(&tiff, &ex, &gps, preview.as_deref()),
+    };
     match format {
         Format::Jpeg => rewrite_jpeg(data, block.as_deref(), xmp.as_deref(), resources.as_deref(), !xmp_changed),
         Format::Png => rewrite_png(data, block.as_deref(), xmp.as_deref()),
@@ -148,11 +162,33 @@ pub fn copy_image_source(data: &[u8], o: &CopyOptions) -> Result<Vec<u8>, CopyEr
 /// Removes the `exif:GPS*` elements and attributes of an XMP packet. `None` when the packet is not UTF-8 or a GPS
 /// property is left that the scan could not take out: the caller then drops the packet rather than keep a location.
 pub fn strip_xmp_gps(packet: &[u8]) -> Option<Vec<u8>> {
+    strip_xmp_properties(packet, &|name: &str| name.starts_with("exif:GPS")).filter(|s| !s.windows(8).any(|w| w == b"exif:GPS"))
+}
+
+fn is_name_char(c: char) -> bool {
+    c.is_ascii_alphanumeric() || matches!(c, ':' | '_' | '-' | '.')
+}
+
+/// The XML name that starts at byte `at` of `s` (empty when none does).
+fn name_at(s: &str, at: usize) -> &str {
+    let rest = &s[at..];
+    &rest[..rest.find(|c: char| !is_name_char(c)).unwrap_or(rest.len())]
+}
+
+/// Removes the XMP properties whose qualified name (`dc:title`, `exif:GPSLatitude`, ...) `remove` accepts, written
+/// as elements (with everything inside them) or as attributes of an `rdf:Description`. Every other property, the
+/// namespace declarations and the packet wrapper stay as they were. `None` when the packet is not UTF-8, a matching
+/// element is not closed, or a matching name is left that the scan could not take out.
+pub fn strip_xmp_properties(packet: &[u8], remove: &dyn Fn(&str) -> bool) -> Option<Vec<u8>> {
     let mut s = std::str::from_utf8(packet).ok()?.to_string();
-    while let Some(start) = s.find("<exif:GPS") {
-        let after = &s[start + 1..];
-        let name_len = after.find(|c: char| c.is_whitespace() || c == '>' || c == '/').unwrap_or(after.len());
-        let name = after[..name_len].to_string();
+    let mut from = 0;
+    while let Some(p) = s[from..].find('<') {
+        let start = from + p;
+        let name = name_at(&s, start + 1).to_string();
+        if name.is_empty() || !remove(&name) {
+            from = start + 1;
+            continue;
+        }
         let gt = start + s[start..].find('>')?;
         let end = if s[..gt].ends_with('/') {
             gt + 1
@@ -161,26 +197,153 @@ pub fn strip_xmp_gps(packet: &[u8]) -> Option<Vec<u8>> {
             gt + s[gt..].find(&close)? + close.len()
         };
         s.replace_range(start..end, "");
+        from = start;
     }
     let mut from = 0;
-    while let Some(p) = s[from..].find("exif:GPS") {
-        let at = from + p;
-        let before = s[..at].chars().last();
-        let rest = &s[at..];
-        let attr = rest.find('=').filter(|&e| rest[..e].chars().all(|c| c.is_ascii_alphanumeric() || c == ':' || c == '_'));
-        let quote = attr.and_then(|e| rest[e + 1..].chars().next()).filter(|q| *q == '"' || *q == '\'');
-        match (before.filter(|c| c.is_whitespace()), attr, quote) {
-            (Some(ws), Some(e), Some(q)) => {
-                let value_start = at + e + 2;
+    while let Some(p) = s[from..].find(char::is_whitespace) {
+        let ws = from + p;
+        let at = ws + s[ws..].chars().next().map_or(1, char::len_utf8);
+        let name = name_at(&s, at).to_string();
+        let after = at + name.len();
+        let quote = s[after..].strip_prefix('=').and_then(|r| r.chars().next()).filter(|q| *q == '"' || *q == '\'');
+        match quote {
+            Some(q) if !name.is_empty() && remove(&name) => {
+                let value_start = after + 2;
                 let value_end = value_start + s[value_start..].find(q)?;
-                let ws_start = at - ws.len_utf8();
-                s.replace_range(ws_start..value_end + 1, "");
-                from = ws_start;
+                s.replace_range(ws..value_end + 1, "");
+                from = ws;
             }
-            _ => from = at + 1,
+            _ => from = at,
         }
     }
-    (!s.contains("exif:GPS")).then(|| s.into_bytes())
+    let left = s.split(|c: char| !is_name_char(c)).any(|token| remove(token));
+    (!left).then(|| s.into_bytes())
+}
+
+/// The `<rdf:Description ...>` blocks of `packet`, whole, in order.
+fn description_blocks(packet: &str) -> Vec<&str> {
+    let mut out = Vec::new();
+    let mut from = 0;
+    while let Some(p) = packet[from..].find("<rdf:Description") {
+        let start = from + p;
+        let Some(gt) = packet[start..].find('>').map(|g| start + g) else { break };
+        let end = if packet[..gt].ends_with('/') {
+            gt + 1
+        } else {
+            match packet[gt..].find("</rdf:Description>") {
+                Some(e) => gt + e + "</rdf:Description>".len(),
+                None => break,
+            }
+        };
+        out.push(&packet[start..end]);
+        from = end;
+    }
+    out
+}
+
+/// Merges the properties of the packet `new` into the packet `old`: the properties named in `names` are taken out
+/// of `old` and the `rdf:Description` blocks of `new` are added beside the old ones (the same subject may be
+/// described by several blocks), so every other property of `old` (camera, editing history, location,
+/// orientation) is kept, as the reference merge keeps them. An empty `new` only removes `names`. `None` when the
+/// packets cannot be edited this way (not UTF-8, no `</rdf:RDF>`, a property the scan cannot take out); the caller
+/// then writes `new` in place of `old`.
+pub fn merge_xmp(old: &[u8], names: &[&str], new: &[u8]) -> Option<Vec<u8>> {
+    let stripped = String::from_utf8(strip_xmp_properties(old, &|n: &str| names.iter().any(|m| *m == n))?).ok()?;
+    let new = std::str::from_utf8(new).ok()?;
+    let close = stripped.rfind("</rdf:RDF>")?;
+    let blocks = description_blocks(new);
+    if !new.trim().is_empty() && blocks.is_empty() {
+        return None;
+    }
+    let mut out = String::with_capacity(stripped.len() + new.len());
+    out.push_str(&stripped[..close]);
+    for b in blocks {
+        out.push_str(b);
+        out.push('\n');
+    }
+    out.push_str(&stripped[close..]);
+    Some(out.into_bytes())
+}
+
+/// Sets the value of every `tiff:Orientation` attribute or element of an XMP packet to `v` (1..=8).
+fn set_xmp_orientation(packet: &mut Vec<u8>, v: u8) {
+    let Ok(text) = std::str::from_utf8(packet) else { return };
+    let mut s = text.to_string();
+    let digit = char::from(b'0' + v.min(9)).to_string();
+    for (open, close) in [("tiff:Orientation=\"", "\""), ("tiff:Orientation='", "'"), ("<tiff:Orientation>", "</tiff:Orientation>")] {
+        let mut from = 0;
+        while let Some(p) = s[from..].find(open) {
+            let value_start = from + p + open.len();
+            let Some(e) = s[value_start..].find(close) else { break };
+            s.replace_range(value_start..value_start + e, &digit);
+            from = value_start + digit.len();
+        }
+    }
+    *packet = s.into_bytes();
+}
+
+/// The TIFF structure of an EXIF block, read for an in-place patch.
+struct TiffBytes<'a> {
+    d: &'a [u8],
+    le: bool,
+}
+
+impl TiffBytes<'_> {
+    fn u16_at(&self, p: usize) -> Option<u16> {
+        let b: [u8; 2] = self.d.get(p..p.checked_add(2)?)?.try_into().ok()?;
+        Some(if self.le { u16::from_le_bytes(b) } else { u16::from_be_bytes(b) })
+    }
+
+    fn u32_at(&self, p: usize) -> Option<u32> {
+        let b: [u8; 4] = self.d.get(p..p.checked_add(4)?)?.try_into().ok()?;
+        Some(if self.le { u32::from_le_bytes(b) } else { u32::from_be_bytes(b) })
+    }
+
+    /// The byte offset of the 12-byte entry for `tag` in the directory at `ifd`.
+    fn entry(&self, ifd: usize, tag: u16) -> Option<usize> {
+        let n = self.u16_at(ifd)? as usize;
+        (0..n).map(|i| ifd + 2 + 12 * i).find(|&e| self.u16_at(e) == Some(tag))
+    }
+}
+
+/// The EXIF block with IFD0's orientation and the three capture dates (TIFF DateTime, EXIF DateTimeOriginal and
+/// DateTimeDigitized) set in place: every other byte is the old block's, so maker notes and offset tags stay valid.
+/// With neither given it is the old block unchanged. `None` when a value to set has no entry of the expected type
+/// and size (a single SHORT orientation, a 20-byte ASCII date), so the caller rebuilds the block instead.
+fn patch_in_place(block: &[u8], orientation: Option<u8>, date: Option<&str>) -> Option<Vec<u8>> {
+    let le = match block.get(..4)? {
+        b"II*\0" => true,
+        b"MM\0*" => false,
+        _ => return None,
+    };
+    let t = TiffBytes { d: block, le };
+    let ifd0 = t.u32_at(4)? as usize;
+    let mut out = block.to_vec();
+    if let Some(v) = orientation {
+        let e = t.entry(ifd0, 0x0112)?;
+        if t.u16_at(e + 2)? != 3 || t.u32_at(e + 4)? != 1 {
+            return None;
+        }
+        let value = if le { u16::from(v).to_le_bytes() } else { u16::from(v).to_be_bytes() };
+        out.get_mut(e + 8..e + 10)?.copy_from_slice(&value);
+    }
+    if let Some(d) = date {
+        if d.len() != 19 {
+            return None;
+        }
+        let exif_ifd = t.u32_at(t.entry(ifd0, 0x8769)? + 8)? as usize;
+        for (ifd, tag) in [(ifd0, 0x0132), (exif_ifd, 0x9003), (exif_ifd, 0x9004)] {
+            let e = t.entry(ifd, tag)?;
+            if t.u16_at(e + 2)? != 2 || t.u32_at(e + 4)? != 20 {
+                return None;
+            }
+            let at = t.u32_at(e + 8)? as usize;
+            let slot = out.get_mut(at..at.checked_add(20)?)?;
+            slot[..19].copy_from_slice(d.as_bytes());
+            slot[19] = 0;
+        }
+    }
+    Some(out)
 }
 
 fn push_segment(out: &mut Vec<u8>, marker: u8, parts: &[&[u8]]) -> Result<(), CopyError> {
@@ -425,6 +588,64 @@ mod tests {
         let mut cut = located(Format::Png);
         cut.truncate(cut.len() - 6);
         assert_eq!(copy_image_source(&cut, &CopyOptions::default()), Err(CopyError::Malformed));
+    }
+
+    /// A little-endian EXIF block: IFD0 with an orientation of 1 and the EXIF pointer, an EXIF directory with an
+    /// 8-byte maker note at offset 56.
+    fn block_with_maker_note() -> Vec<u8> {
+        let mut b = b"II*\0\x08\0\0\0".to_vec();
+        b.extend([2, 0]);
+        b.extend([0x12, 0x01, 3, 0, 1, 0, 0, 0, 1, 0, 0, 0]);
+        b.extend([0x69, 0x87, 4, 0, 1, 0, 0, 0, 38, 0, 0, 0]);
+        b.extend([0, 0, 0, 0]);
+        b.extend([1, 0]);
+        b.extend([0x7C, 0x92, 7, 0, 8, 0, 0, 0, 56, 0, 0, 0]);
+        b.extend([0, 0, 0, 0]);
+        b.extend(b"ACME\x01\x02\x03\x04");
+        assert_eq!(b.len(), 64);
+        b
+    }
+
+    #[test]
+    fn an_orientation_edit_keeps_the_maker_note_and_the_rest_of_the_block() {
+        let block = block_with_maker_note();
+        let plain = {
+            let mut d = ImageDestination::new(Format::Jpeg, 1).unwrap();
+            d.add_image(&picture(), None);
+            d.finalize().unwrap()
+        };
+        let mut original = plain[..2].to_vec();
+        push_segment(&mut original, 0xE1, &[b"Exif\0\0".as_slice(), block.as_slice()]).unwrap();
+        original.extend(&plain[2..]);
+        let out = copy_image_source(&original, &CopyOptions { orientation: Some(6), ..Default::default() }).unwrap();
+        let s = ImageSource::new(out);
+        let mut want = block.clone();
+        want[18] = 6;
+        assert_eq!(s.exif_block(), Some(want.as_slice()), "only the orientation value changed");
+        assert_eq!(s.properties_at(0).unwrap().orientation, 6);
+        // a new tag rebuilds the block, and the maker note, whose offsets would move, goes
+        let mut tiff = Dict::new();
+        tiff.insert("Make".into(), PropValue::Text("Acme".into()));
+        let set = MetadataSet { tiff, ..Default::default() };
+        let rebuilt = copy_image_source(&original, &CopyOptions { metadata: Some(set), merge: true, ..Default::default() }).unwrap();
+        let rebuilt = ImageSource::new(rebuilt);
+        assert!(!rebuilt.exif_block().unwrap().windows(4).any(|w| w == b"ACME"));
+        assert_eq!(rebuilt.properties_at(0).unwrap().orientation, 1);
+    }
+
+    #[test]
+    fn merging_a_packet_replaces_the_named_properties_and_keeps_the_rest() {
+        let old = "<x:xmpmeta><rdf:RDF><rdf:Description rdf:about=\"\" xmlns:dc=\"d\" xmlns:tiff=\"t\" tiff:Orientation=\"3\" dc:format=\"image/jpeg\"><dc:title><rdf:Alt><rdf:li>Old</rdf:li></rdf:Alt></dc:title><dc:rights>Me</dc:rights></rdf:Description></rdf:RDF></x:xmpmeta>";
+        let new = "<rdf:RDF><rdf:Description rdf:about=\"\" xmlns:dc=\"d\"><dc:title>New</dc:title></rdf:Description></rdf:RDF>";
+        let merged = String::from_utf8(merge_xmp(old.as_bytes(), &["dc:title", "dc:rights"], new.as_bytes()).unwrap()).unwrap();
+        assert!(!merged.contains("Old") && !merged.contains("dc:rights") && merged.contains("<dc:title>New</dc:title>"), "{merged}");
+        assert!(merged.contains("tiff:Orientation=\"3\"") && merged.contains("dc:format=\"image/jpeg\"") && merged.ends_with("</rdf:RDF></x:xmpmeta>"), "{merged}");
+        let removed = String::from_utf8(merge_xmp(old.as_bytes(), &["dc:title"], b"").unwrap()).unwrap();
+        assert!(!removed.contains("dc:title") && removed.contains("<dc:rights>Me</dc:rights>"), "{removed}");
+        assert_eq!(merge_xmp(old.as_bytes(), &["dc:title"], b"not a packet"), None, "a new packet without a description is not merged");
+        let mut packet = old.as_bytes().to_vec();
+        set_xmp_orientation(&mut packet, 6);
+        assert!(String::from_utf8(packet).unwrap().contains("tiff:Orientation=\"6\""));
     }
 
     #[test]

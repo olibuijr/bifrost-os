@@ -216,18 +216,24 @@ pub struct MetadataEdit {
     pub remove_location: bool,
     /// Remove the XMP packet.
     pub remove_xmp: bool,
-    /// New descriptive fields, written as the XMP packet (and IPTC in a JPEG) in place of the old ones. An empty
-    /// `Descriptive` removes them.
+    /// New descriptive fields, in place of the old ones as a set: in the XMP packet they replace the title, caption,
+    /// keywords, creators, copyright and rating, and every other property is kept; a JPEG's IPTC block is written
+    /// anew from them. An empty `Descriptive` removes them.
     pub descriptive: Option<Descriptive>,
 }
+
+/// The XMP properties [`Descriptive`] writes, which an edit of the descriptive fields replaces.
+const DESCRIPTIVE_PROPERTIES: &[&str] = &["dc:title", "dc:description", "dc:subject", "dc:creator", "dc:rights", "xmp:Rating"];
 
 pub use bifrost_render::cg::imageio::CopyError;
 
 /// Writes `bytes` again with the metadata changed by `change`, copying the compressed pixels byte for byte, so a JPEG
-/// loses no quality. JPEG, PNG and WebP can be edited; other formats give `CopyError::Unsupported`. Every tag the
-/// edit does not touch is kept (camera maker notes excepted).
+/// loses no quality. JPEG, PNG and WebP can be edited; other formats give `CopyError::Unsupported`. Every tag and XMP
+/// property the edit does not touch is kept. An edit of only the orientation, the capture date, the descriptive
+/// fields or the XMP removal patches the EXIF block in place, so camera maker notes survive it; a new location or
+/// removing it rebuilds the block, which drops the maker notes (their offsets would no longer be right).
 pub fn edit(bytes: &[u8], change: &MetadataEdit) -> Result<Vec<u8>, CopyError> {
-    use bifrost_render::cg::imageio::{copy_image_source, CopyOptions, MetadataSet};
+    use bifrost_render::cg::imageio::{copy_image_source, merge_xmp, CopyOptions, MetadataSet};
     let mut set = MetadataSet::default();
     if let Some(loc) = change.location {
         let (lat_ref, lon_ref) = (if loc.latitude < 0.0 { "S" } else { "N" }, if loc.longitude < 0.0 { "W" } else { "E" });
@@ -237,11 +243,16 @@ pub fn edit(bytes: &[u8], change: &MetadataEdit) -> Result<Vec<u8>, CopyError> {
         set.gps.insert("Longitude".into(), PropValue::Floats(decimal_to_dms(loc.longitude).to_vec()));
     }
     if let Some(d) = &change.descriptive {
-        set.xmp = Some(d.xmp_packet().map(String::into_bytes).unwrap_or_default());
+        let new = d.xmp_packet().map(String::into_bytes).unwrap_or_default();
+        let old = Source::new(bytes.to_vec()).properties_at(0).and_then(|p| p.xmp);
+        // merged into the file's packet so its other properties stay; a packet that cannot be merged is replaced
+        let merged = old.as_deref().and_then(|o| merge_xmp(o, DESCRIPTIVE_PROPERTIES, &new));
+        set.xmp = Some(merged.unwrap_or(new));
         set.image_resources = Some(d.image_resources().unwrap_or_default());
     }
     let options = CopyOptions {
-        metadata: Some(set),
+        // nothing new for EXIF: the copy keeps the file's EXIF block and patches it in place
+        metadata: (set != MetadataSet::default()).then_some(set),
         merge: true,
         exclude_gps: change.remove_location,
         exclude_xmp: change.remove_xmp,
@@ -501,6 +512,22 @@ mod tests {
         let gif = graphics_imageio::encode(Format::Gif, 2, 1, &[255, 0, 0, 255, 0, 0, 255, 255]).unwrap();
         assert_eq!(without_location(&gif), Err(CopyError::Unsupported(Format::Gif)));
         assert_eq!(edit(&located_jpeg(), &MetadataEdit { orientation: Some(0), ..MetadataEdit::default() }), Err(CopyError::BadOptions));
+    }
+
+    #[test]
+    fn a_new_caption_keeps_the_other_xmp_properties() {
+        let packet = "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:Description rdf:about=\"\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\" xmp:CreatorTool=\"Camera 2\"><dc:title><rdf:Alt><rdf:li xml:lang=\"x-default\">Old</rdf:li></rdf:Alt></dc:title></rdf:Description></rdf:RDF></x:xmpmeta>";
+        let mut dest = bifrost_render::cg::imageio::ImageDestination::new(Format::Jpeg, 1).unwrap();
+        let img = bifrost_render::cg::image::CgImage::from_rgba8(2, 1, vec![255, 0, 0, 255, 0, 0, 255, 255]).unwrap();
+        dest.add_image(&img, Some(bifrost_render::cg::imageio::WriteOptions { xmp: Some(packet.as_bytes().to_vec()), ..Default::default() }));
+        let original = dest.finalize().unwrap();
+        let change = MetadataEdit { descriptive: Some(Descriptive { caption: Some("Pier".into()), ..Descriptive::default() }), ..MetadataEdit::default() };
+        let out = edit(&original, &change).unwrap();
+        let info = read(&out).unwrap();
+        assert_eq!(info.descriptive.caption.as_deref(), Some("Pier"));
+        assert_eq!(info.descriptive.title, None, "the descriptive fields are replaced as a set");
+        let xmp = String::from_utf8(Source::new(out).properties_at(0).unwrap().xmp.unwrap()).unwrap();
+        assert!(xmp.contains("xmp:CreatorTool=\"Camera 2\""), "other properties stay: {xmp}");
     }
 
     #[test]
