@@ -472,6 +472,10 @@ pub struct WriteOptions {
     pub comment: Option<String>,
     pub icc: Option<Vec<u8>>,
     pub gamma: Option<f64>,
+    /// An XMP packet (UTF-8 XML). JPEG, PNG and WebP carry it; the other formats leave it out.
+    pub xmp: Option<Vec<u8>>,
+    /// Image resource blocks for a JPEG APP13 segment (header included); they carry the IPTC datasets. JPEG only.
+    pub image_resources: Option<Vec<u8>>,
 }
 
 /// Collects images and metadata, then writes one file.
@@ -548,6 +552,8 @@ impl ImageDestination {
         m.comment = o.comment.clone().or_else(|| d.comment.clone());
         m.icc = o.icc.clone().or_else(|| d.icc.clone());
         m.gamma = o.gamma.or(d.gamma);
+        m.xmp = o.xmp.clone().or_else(|| d.xmp.clone());
+        m.image_resources = o.image_resources.clone().or_else(|| d.image_resources.clone());
         for (dst, src) in [(&mut m.exif, &d.exif), (&mut m.tiff, &d.tiff), (&mut m.gps, &d.gps)] {
             for (k, v) in src {
                 dst.entry(k.clone()).or_insert_with(|| v.clone());
@@ -589,6 +595,7 @@ impl ImageDestination {
                     icc: fo.icc.clone().map(|p| ("ICC".to_string(), p)),
                     gamma: fo.gamma,
                     level: None,
+                    xmp: fo.xmp.clone(),
                 };
                 // Several pictures of one size make an animated PNG (the first is also what other readers show).
                 let same: Vec<encode::ApngFrame> = items.iter().filter(|i| i.1 == *w && i.2 == *h).map(|i| encode::ApngFrame { rgba: &i.0, delay_ms: i.3.delay_ms.unwrap_or(100) }).collect();
@@ -605,6 +612,8 @@ impl ImageDestination {
                     exif: Self::exif_block(fo),
                     icc: fo.icc.clone(),
                     comment: fo.comment.clone(),
+                    xmp: fo.xmp.clone(),
+                    image_resources: fo.image_resources.clone(),
                 };
                 encode::encode_jpeg(*w, *h, first_px, &o)
             }
@@ -642,7 +651,7 @@ impl ImageDestination {
                 (!v.is_empty()).then(|| bmp::ico_encode(&v))
             }
             // Lossless and still: the quality setting does not apply, and only the first picture is written.
-            Format::Webp => webp::encode(*w, *h, first_px, Self::exif_block(fo).as_deref(), fo.icc.as_deref(), None),
+            Format::Webp => webp::encode(*w, *h, first_px, Self::exif_block(fo).as_deref(), fo.icc.as_deref(), fo.xmp.as_deref()),
         }
     }
 
@@ -792,6 +801,21 @@ pub mod tests {
             assert_eq!(p.exif["DateTimeOriginal"].as_str(), Some("2026:10:13 12:00:00"), "{f:?}");
             assert_eq!(p.gps["LatitudeRef"].as_str(), Some("N"), "{f:?}");
             assert!((p.dpi_width.unwrap() - 150.0).abs() < 0.5, "{f:?}");
+        }
+    }
+
+    #[test]
+    fn xmp_and_image_resources_survive_a_round_trip() {
+        let xmp = b"<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"></x:xmpmeta>".to_vec();
+        let resources = b"Photoshop 3.0\08BIM\x04\x04\0\0\0\0\0\0".to_vec();
+        for f in [Format::Jpeg, Format::Png, Format::Webp] {
+            let mut d = ImageDestination::new(f, 1).unwrap();
+            d.set_properties(WriteOptions { xmp: Some(xmp.clone()), image_resources: Some(resources.clone()), ..Default::default() });
+            d.add_image(&sample_image(3, 2), None);
+            let p = ImageSource::new(d.finalize().unwrap()).properties_at(0).unwrap();
+            assert_eq!(p.xmp.as_deref(), Some(xmp.as_slice()), "{f:?}");
+            let expected = (f == Format::Jpeg).then_some(resources.as_slice());
+            assert_eq!(p.image_resources.as_deref(), expected, "{f:?}: only JPEG has an APP13 segment");
         }
     }
 

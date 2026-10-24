@@ -45,6 +45,8 @@ pub struct PngOptions {
     pub gamma: Option<f64>,
     /// zlib level 0..=10; default 6.
     pub level: Option<u8>,
+    /// An XMP packet, written as the `iTXt` chunk `XML:com.adobe.xmp` (uncompressed, as the XMP specification asks).
+    pub xmp: Option<Vec<u8>>,
 }
 
 fn paeth(a: i32, b: i32, c: i32) -> i32 {
@@ -124,6 +126,12 @@ fn png_preamble(w: usize, h: usize, depth: u8, ctype: u8, extra: Option<(&[u8; 4
     }
     if let Some(e) = &o.exif {
         chunk(&mut out, b"eXIf", e);
+    }
+    if let Some(x) = o.xmp.as_ref().filter(|x| !x.is_empty()) {
+        // keyword, NUL, compression flag 0, method 0, empty language tag and translated keyword, then the packet
+        let mut d = b"XML:com.adobe.xmp\0\0\0\0\0".to_vec();
+        d.extend(x);
+        chunk(&mut out, b"iTXt", &d);
     }
     for (k, v) in &o.text {
         let key: Vec<u8> = k.chars().filter(|&c| (c as u32) < 256 && c != '\0').take(79).map(|c| c as u8).collect();
@@ -249,13 +257,20 @@ pub struct JpegOptions {
     pub exif: Option<Vec<u8>>,
     pub icc: Option<Vec<u8>>,
     pub comment: Option<String>,
+    /// An XMP packet, written as an APP1 segment after the EXIF one (left out when it does not fit one segment).
+    pub xmp: Option<Vec<u8>>,
+    /// An APP13 payload (image resource blocks with their header, which carry the IPTC datasets).
+    pub image_resources: Option<Vec<u8>>,
 }
 
 impl Default for JpegOptions {
     fn default() -> Self {
-        JpegOptions { quality: 80, subsample: true, dpi: None, exif: None, icc: None, comment: None }
+        JpegOptions { quality: 80, subsample: true, dpi: None, exif: None, icc: None, comment: None, xmp: None, image_resources: None }
     }
 }
+
+/// The prefix of an APP1 segment that holds an XMP packet.
+pub const XMP_APP1_HEADER: &[u8] = b"http://ns.adobe.com/xap/1.0/\0";
 
 const ZIGZAG: [usize; 64] = [
     0, 1, 8, 16, 9, 2, 3, 10, 17, 24, 32, 25, 18, 11, 4, 5, 12, 19, 26, 33, 40, 48, 41, 34, 27, 20, 13, 6, 7, 14, 21, 28, 35, 42, 49, 56, 57, 50, 43, 36, 29, 22, 15, 23, 30, 37, 44,
@@ -518,6 +533,14 @@ pub fn encode_jpeg(w: usize, h: usize, rgba: &[u8], o: &JpegOptions) -> Option<V
             segment(&mut out, 0xE1, &b);
         }
     }
+    if let Some(x) = o.xmp.as_ref().filter(|x| !x.is_empty() && x.len() + XMP_APP1_HEADER.len() < 65_000) {
+        let mut b = XMP_APP1_HEADER.to_vec();
+        b.extend(x);
+        segment(&mut out, 0xE1, &b);
+    }
+    if let Some(r) = o.image_resources.as_ref().filter(|r| !r.is_empty() && r.len() < 65_000) {
+        segment(&mut out, 0xED, r);
+    }
     if let Some(icc) = &o.icc {
         let chunks: Vec<&[u8]> = icc.chunks(60_000).collect();
         for (i, c) in chunks.iter().enumerate() {
@@ -634,10 +657,12 @@ mod tests {
             icc: Some(("test".into(), vec![1, 2, 3, 4])),
             gamma: Some(0.45455),
             level: None,
+            xmp: Some(b"<x:xmpmeta>png</x:xmpmeta>".to_vec()),
         };
         let bytes = encode_png(3, 3, &gradient(3, 3), &o).unwrap();
         let p = png::probe(&bytes).unwrap();
         assert_eq!(p.png["Title"].as_str(), Some("Fjord"));
+        assert_eq!(p.xmp.as_deref(), Some(b"<x:xmpmeta>png</x:xmpmeta>".as_slice()), "the XMP packet has its own iTXt chunk");
         assert_eq!(p.png["Note"].as_str(), Some("sn\u{f3}r \u{2603}"));
         assert!((p.dpi_width.unwrap() - 144.0).abs() < 0.1);
         assert_eq!(p.orientation, 8);
@@ -662,7 +687,7 @@ mod tests {
     fn jpeg_round_trips_approximately() {
         let src = gradient(37, 21);
         for sub in [true, false] {
-            let o = JpegOptions { quality: 92, subsample: sub, dpi: Some((96.0, 96.0)), exif: None, icc: None, comment: Some("hi".into()) };
+            let o = JpegOptions { quality: 92, subsample: sub, dpi: Some((96.0, 96.0)), exif: None, icc: None, comment: Some("hi".into()), ..Default::default() };
             let bytes = encode_jpeg(37, 21, &src, &o).unwrap();
             let p = jpeg::probe(&bytes).unwrap();
             assert_eq!((p.pixel_width, p.pixel_height), (37, 21));

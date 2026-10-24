@@ -15,7 +15,7 @@
 //! let jpeg = writer.finish().unwrap();
 //! ```
 
-use crate::image_metadata::{decimal_to_dms, Format, GpsTime, Location};
+use crate::image_metadata::{decimal_to_dms, Descriptive, Format, GpsTime, Location};
 use bifrost_render::cg::image::CgImage;
 use bifrost_render::cg::imageio::exif::{Dict, PropValue};
 use bifrost_render::cg::imageio::{ImageDestination, WriteOptions};
@@ -43,6 +43,7 @@ pub struct PictureWriter {
     gps_time: Option<GpsTime>,
     speed_kmh: Option<f64>,
     direction_deg: Option<f64>,
+    descriptive: Descriptive,
     frames: Vec<(CgImage, u32)>,
 }
 
@@ -70,6 +71,7 @@ impl PictureWriter {
             gps_time: None,
             speed_kmh: None,
             direction_deg: None,
+            descriptive: Descriptive::default(),
             frames: Vec::new(),
         }
     }
@@ -178,6 +180,50 @@ impl PictureWriter {
         self
     }
 
+    /// The title (XMP `dc:title`, IPTC object name). Empty text is ignored.
+    pub fn title(mut self, title: impl Into<String>) -> Self {
+        self.descriptive.title = non_empty(title.into());
+        self
+    }
+
+    /// The caption (XMP `dc:description`, IPTC caption). Empty text is ignored.
+    pub fn caption(mut self, caption: impl Into<String>) -> Self {
+        self.descriptive.caption = non_empty(caption.into());
+        self
+    }
+
+    /// The keywords (XMP `dc:subject`, IPTC keywords), in order. Empty and repeated keywords are dropped.
+    pub fn keywords<S: Into<String>>(mut self, keywords: impl IntoIterator<Item = S>) -> Self {
+        self.descriptive.keywords.clear();
+        for k in keywords {
+            let k = k.into().trim().to_string();
+            if !k.is_empty() && !self.descriptive.keywords.contains(&k) {
+                self.descriptive.keywords.push(k);
+            }
+        }
+        self
+    }
+
+    /// The creator (XMP `dc:creator`, IPTC by-line). Empty text is ignored.
+    pub fn creator(mut self, name: impl Into<String>) -> Self {
+        self.descriptive.creators = non_empty(name.into()).into_iter().collect();
+        self
+    }
+
+    /// The copyright notice (XMP `dc:rights`, IPTC copyright). Empty text is ignored.
+    pub fn copyright(mut self, notice: impl Into<String>) -> Self {
+        self.descriptive.copyright = non_empty(notice.into());
+        self
+    }
+
+    /// The star rating (XMP `xmp:Rating`): 0 to 5, or -1 for rejected. Other values are ignored.
+    pub fn rating(mut self, stars: i8) -> Self {
+        if (-1..=5).contains(&stars) {
+            self.descriptive.rating = Some(stars);
+        }
+        self
+    }
+
     /// How many times an animation repeats; 0 repeats forever.
     pub fn loop_count(mut self, loop_count: u32) -> Self {
         self.loop_count = loop_count;
@@ -262,7 +308,10 @@ impl PictureWriter {
                 tiff.insert(key.into(), PropValue::Text(text.clone()));
             }
         }
-        WriteOptions { quality: self.quality, orientation: self.orientation, tiff, exif, gps, delay_ms: Some(delay_ms), ..Default::default() }
+        // The descriptive fields go in an XMP packet (JPEG, PNG, WebP) and, for JPEG, also as IPTC datasets.
+        let xmp = self.descriptive.xmp_packet().map(String::into_bytes);
+        let image_resources = self.descriptive.image_resources();
+        WriteOptions { quality: self.quality, orientation: self.orientation, tiff, exif, gps, delay_ms: Some(delay_ms), xmp, image_resources, ..Default::default() }
     }
 }
 
@@ -408,5 +457,47 @@ mod tests {
         assert!(animation.is_animated());
         assert_eq!(animation.frames.iter().map(|f| f.delay_ms).collect::<Vec<_>>(), vec![80, 220]);
         assert_eq!(animation.loop_count, Some(3));
+    }
+
+    #[test]
+    fn title_caption_keywords_creator_copyright_and_rating_are_written_and_read_back() {
+        for format in [Format::Jpeg, Format::Png, Format::Webp] {
+            let mut writer = PictureWriter::new(format)
+                .title("Harbour at dawn")
+                .caption("Boats & nets <low tide>")
+                .keywords(["sea", "boats", "sea", " "])
+                .creator("Ann Example")
+                .copyright("2026 Ann Example")
+                .rating(4);
+            assert!(writer.add_frame(2, 1, two_pixels(), 0));
+            let d = image_metadata::read(&writer.finish().unwrap()).unwrap().descriptive;
+            assert_eq!(d.title.as_deref(), Some("Harbour at dawn"), "{format:?}");
+            assert_eq!(d.caption.as_deref(), Some("Boats & nets <low tide>"), "{format:?}");
+            assert_eq!(d.keywords, vec!["sea".to_string(), "boats".to_string()], "{format:?}: repeats and blanks dropped");
+            assert_eq!(d.creators, vec!["Ann Example".to_string()], "{format:?}");
+            assert_eq!(d.copyright.as_deref(), Some("2026 Ann Example"), "{format:?}");
+            assert_eq!(d.rating, Some(4), "{format:?}");
+        }
+    }
+
+    #[test]
+    fn a_jpeg_also_carries_the_fields_as_iptc_for_readers_that_look_only_there() {
+        let mut writer = PictureWriter::new(Format::Jpeg).caption("Low tide").keywords(["sea", "rocks"]).rating(9);
+        assert!(writer.add_frame(2, 1, two_pixels(), 0));
+        let bytes = writer.finish().unwrap();
+        let props = bifrost_render::cg::imageio::ImageSource::new(bytes).properties_at(0).unwrap();
+        let only_iptc = Descriptive::read(None, props.image_resources.as_deref());
+        assert_eq!(only_iptc.caption.as_deref(), Some("Low tide"));
+        assert_eq!(only_iptc.keywords, vec!["sea".to_string(), "rocks".to_string()]);
+        assert_eq!(only_iptc.rating, None, "a rating out of range is ignored, and IPTC has none");
+    }
+
+    #[test]
+    fn a_picture_without_descriptive_fields_has_no_packet() {
+        let mut writer = PictureWriter::new(Format::Png).title("");
+        assert!(writer.add_frame(2, 1, two_pixels(), 0));
+        let bytes = writer.finish().unwrap();
+        assert!(image_metadata::read(&bytes).unwrap().descriptive.is_empty());
+        assert!(bifrost_render::cg::imageio::ImageSource::new(bytes).properties_at(0).unwrap().xmp.is_none());
     }
 }

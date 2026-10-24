@@ -1,5 +1,5 @@
-//! JPEG reading: the segment headers give size, components, density, EXIF (APP1), ICC profile (APP2) and comments
-//! without decoding; baseline and progressive pixels are decoded by `zune-jpeg`.
+//! JPEG reading: the segment headers give size, components, density, EXIF and XMP (APP1), ICC profile (APP2), image
+//! resources with IPTC (APP13) and comments without decoding; baseline and progressive pixels are decoded by `zune-jpeg`.
 
 use super::exif::{ColorModel, Dict, PropValue, Properties};
 use super::{Decoded, Frame, MAX_SIDE};
@@ -15,6 +15,8 @@ pub fn probe(data: &[u8]) -> Option<Properties> {
     let mut jfif = Dict::new();
     let mut icc: Vec<(u8, Vec<u8>)> = Vec::new();
     let mut exif: Option<Vec<u8>> = None;
+    let mut xmp: Option<Vec<u8>> = None;
+    let mut resources: Option<Vec<u8>> = None;
     let mut dpi: Option<(f64, f64)> = None;
     let mut progressive = false;
     while p + 4 <= data.len() {
@@ -67,6 +69,8 @@ pub fn probe(data: &[u8]) -> Option<Properties> {
                 }
             }
             0xE1 if seg.starts_with(b"Exif\0\0") => exif = Some(seg[6..].to_vec()),
+            0xE1 if seg.starts_with(super::encode::XMP_APP1_HEADER) => xmp = Some(seg[super::encode::XMP_APP1_HEADER.len()..].to_vec()),
+            0xED if seg.starts_with(b"Photoshop 3.0\0") => resources = Some(seg.to_vec()),
             0xE2 if seg.starts_with(b"ICC_PROFILE\0") && seg.len() > 14 => icc.push((seg[12], seg[14..].to_vec())),
             0xFE => {
                 jfif.insert("Comment".into(), PropValue::Text(String::from_utf8_lossy(seg).into_owned()));
@@ -85,6 +89,8 @@ pub fn probe(data: &[u8]) -> Option<Properties> {
     if let Some(e) = exif {
         props.absorb_exif(&e);
     }
+    props.xmp = xmp;
+    props.image_resources = resources;
     if !icc.is_empty() {
         icc.sort_by_key(|c| c.0);
         props.icc_profile = Some(icc.into_iter().flat_map(|c| c.1).collect());

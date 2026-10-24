@@ -246,6 +246,49 @@ pub fn xmp_value(packet: &str, name: &str) -> Option<String> {
 /// outside the declared namespaces are dropped. `dc:title`, `dc:description` and `dc:rights`
 /// are written as language alternatives, as XMP requires.
 pub fn xmp_packet(props: &[(&str, &str)]) -> String {
+    xmp_packet_with_lists(props, &[])
+}
+
+/// Every value of `name`: the items of an `rdf:Bag`, `rdf:Seq` or `rdf:Alt` element in order (empty
+/// items left out), or the one simple value. Used for `dc:subject` (keywords) and `dc:creator`.
+pub fn xmp_values(packet: &str, name: &str) -> Vec<String> {
+    let Some(inner) = element_inner(packet, name) else {
+        return xmp_value(packet, name).filter(|v| !v.is_empty()).into_iter().collect();
+    };
+    let mut out = Vec::new();
+    let mut rest = inner;
+    while let Some(p) = rest.find("<rdf:li") {
+        let t = &rest[p..];
+        let Some(gt) = t.find('>') else { break };
+        let body = &t[gt + 1..];
+        let end = body.find("</rdf:li>").unwrap_or(body.len());
+        let v = unescape_xml(body[..end].trim());
+        if !v.is_empty() {
+            out.push(v);
+        }
+        rest = &body[end..];
+    }
+    if out.is_empty() && !inner.contains("<rdf:") {
+        let v = unescape_xml(inner.trim());
+        if !v.is_empty() {
+            out.push(v);
+        }
+    }
+    out
+}
+
+/// The APP13 payload that carries `fields`: the image-editor header and one 8BIM resource
+/// (`RESOURCE_IPTC`) holding the IPTC datasets. The inverse of [`iptc_from_app13`].
+pub fn app13_payload(fields: &[IptcField]) -> Vec<u8> {
+    let mut out = PHOTOSHOP_HEADER.to_vec();
+    write_resource(&mut out, RESOURCE_IPTC, "", &write_iptc(fields));
+    out
+}
+
+/// Like [`xmp_packet`], plus list properties: `dc:creator` is written as an ordered `rdf:Seq`,
+/// every other list (such as `dc:subject`, the keywords) as an unordered `rdf:Bag`. Empty lists
+/// and lists outside the declared namespaces are left out.
+pub fn xmp_packet_with_lists(props: &[(&str, &str)], lists: &[(&str, &[String])]) -> String {
     let mut s = String::new();
     s.push_str("<?xpacket begin=\"\u{feff}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n");
     s.push_str("<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n");
@@ -273,6 +316,18 @@ pub fn xmp_packet(props: &[(&str, &str)]) -> String {
         } else {
             s.push_str(&format!("<{n}>{v}</{n}>\n", n = name, v = v));
         }
+    }
+    for (name, items) in lists {
+        let prefix = name.split_once(':').map(|p| p.0);
+        if items.is_empty() || !prefix.is_some_and(|p| NAMESPACES.iter().any(|(n, _)| *n == p)) {
+            continue;
+        }
+        let kind = if *name == "dc:creator" { "rdf:Seq" } else { "rdf:Bag" };
+        s.push_str(&format!("<{name}><{kind}>"));
+        for item in items.iter() {
+            s.push_str(&format!("<rdf:li>{}</rdf:li>", escape_xml(item)));
+        }
+        s.push_str(&format!("</{kind}></{name}>\n"));
     }
     s.push_str("</rdf:Description>\n</rdf:RDF>\n</x:xmpmeta>\n<?xpacket end=\"w\"?>\n");
     s
@@ -320,6 +375,11 @@ fn attr_value<'a>(packet: &'a str, name: &str) -> Option<&'a str> {
 
 /// The text of the first element `<name>...</name>`.
 fn element_text(packet: &str, name: &str) -> Option<String> {
+    element_inner(packet, name).map(first_item)
+}
+
+/// What is between the tags of the first element `<name ...>...</name>`.
+fn element_inner<'a>(packet: &'a str, name: &str) -> Option<&'a str> {
     let open = format!("<{}", name);
     let close = format!("</{}>", name);
     let mut from = 0usize;
@@ -331,7 +391,7 @@ fn element_text(packet: &str, name: &str) -> Option<String> {
         ) {
             let gt = after + packet[after..].find('>')?;
             let end = gt + 1 + packet[gt + 1..].find(&close)?;
-            return Some(first_item(&packet[gt + 1..end]));
+            return Some(&packet[gt + 1..end]);
         }
         from = after;
     }
@@ -504,5 +564,44 @@ mod tests {
         assert_eq!(xmp_value(&packet, "dc:description"), Some("Ben & <Jerry>".to_string()));
         assert_eq!(xmp_value(&packet, "xmp:Rating"), Some("3".to_string()));
         assert_eq!(xmp_value(&packet, "bogus:x"), None);
+    }
+
+    #[test]
+    fn xmp_lists_are_written_as_bags_and_sequences_and_read_back_in_order() {
+        let keywords = vec!["fjord".to_string(), "R&D".to_string()];
+        let creators = vec!["Ann".to_string(), "Bo".to_string()];
+        let empty: Vec<String> = Vec::new();
+        let packet = xmp_packet_with_lists(
+            &[("dc:title", "Harbour")],
+            &[
+                ("dc:subject", keywords.as_slice()),
+                ("dc:creator", creators.as_slice()),
+                ("dc:empty", empty.as_slice()),
+                ("bogus:list", keywords.as_slice()),
+            ],
+        );
+        assert!(packet.contains("<dc:subject><rdf:Bag><rdf:li>fjord</rdf:li><rdf:li>R&amp;D</rdf:li></rdf:Bag></dc:subject>"));
+        assert!(packet.contains("<dc:creator><rdf:Seq>"));
+        assert!(!packet.contains("dc:empty") && !packet.contains("bogus:list"));
+        assert_eq!(xmp_values(&packet, "dc:subject"), keywords);
+        assert_eq!(xmp_values(&packet, "dc:creator"), creators);
+        assert_eq!(xmp_values(&packet, "dc:title"), vec!["Harbour".to_string()], "a language alternative gives its item");
+        assert!(xmp_values(&packet, "dc:rights").is_empty());
+        let simple = "<x:xmpmeta><rdf:Description xmp:Label=\"Red\"><dc:format>image/png</dc:format></rdf:Description></x:xmpmeta>";
+        assert_eq!(xmp_values(simple, "xmp:Label"), vec!["Red".to_string()]);
+        assert_eq!(xmp_values(simple, "dc:format"), vec!["image/png".to_string()]);
+    }
+
+    #[test]
+    fn an_app13_payload_round_trips_its_iptc_fields() {
+        let mut fields = Vec::new();
+        set_application_text(&mut fields, DS_CAPTION, "Low tide");
+        add_application_text(&mut fields, DS_KEYWORDS, "sea");
+        add_application_text(&mut fields, DS_KEYWORDS, "rocks");
+        let payload = app13_payload(&fields);
+        assert!(payload.starts_with(PHOTOSHOP_HEADER));
+        let back = iptc_from_app13(&payload);
+        assert_eq!(application_value(&back, DS_CAPTION), Some("Low tide".to_string()));
+        assert_eq!(application_values(&back, DS_KEYWORDS), vec!["sea".to_string(), "rocks".to_string()]);
     }
 }

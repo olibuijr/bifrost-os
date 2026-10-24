@@ -113,6 +113,9 @@ pub fn probe(data: &[u8]) -> Option<Properties> {
                         let mut parts = rest.splitn(3, |&c| c == 0);
                         let (_, _, text) = (parts.next(), parts.next(), parts.next().unwrap_or(&[]));
                         let text = if flag == 1 { inflate(text).unwrap_or_default() } else { text.to_vec() };
+                        if key == "XML:com.adobe.xmp" {
+                            p.xmp = Some(text.clone());
+                        }
                         png.insert(key, PropValue::Text(String::from_utf8_lossy(&text).into_owned()));
                     }
                 }

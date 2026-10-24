@@ -7,7 +7,12 @@
 //! ```
 //!
 //! Location values are decimal degrees: north and east are positive, south and west are negative.
+//!
+//! The descriptive metadata (title, caption, keywords, creator, copyright, rating) comes from the XMP packet when the
+//! file has one, and otherwise from the IPTC datasets of a JPEG's APP13 segment, the order the reference reader
+//! uses when it syncs the two. [`Descriptive`] holds them; [`PictureInfo::descriptive`] is read with the rest.
 
+use bifrost_core::imgmeta;
 use bifrost_render::cg::imageio::exif::{Dict, PropValue};
 use bifrost_render::cg::imageio::{orient_image, ImageSource as Source};
 use bifrost_render::gfx::Image;
@@ -57,6 +62,90 @@ pub struct PictureInfo {
     pub gps_speed_kmh: Option<f64>,
     /// The direction the camera pointed in degrees clockwise from north, 0 up to 360.
     pub gps_direction_deg: Option<f64>,
+    /// Title, caption, keywords, creator, copyright and rating from the XMP packet or the IPTC datasets.
+    pub descriptive: Descriptive,
+}
+
+/// The descriptive metadata of a picture: what a photo library shows and searches.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Descriptive {
+    /// XMP `dc:title`, else IPTC object name (2:05).
+    pub title: Option<String>,
+    /// XMP `dc:description`, else IPTC caption (2:120).
+    pub caption: Option<String>,
+    /// XMP `dc:subject` items, else the IPTC keywords (2:25), in file order.
+    pub keywords: Vec<String>,
+    /// XMP `dc:creator` items, else the IPTC by-line (2:80).
+    pub creators: Vec<String>,
+    /// XMP `dc:rights`, else IPTC copyright notice (2:116).
+    pub copyright: Option<String>,
+    /// XMP `xmp:Rating`: -1 (rejected) or 0 to 5 stars. Other values are dropped.
+    pub rating: Option<i8>,
+}
+
+impl Descriptive {
+    /// Whether nothing is set.
+    pub fn is_empty(&self) -> bool {
+        *self == Descriptive::default()
+    }
+
+    /// Reads the fields from an XMP packet (UTF-8) and an APP13 payload, the XMP value winning for each field.
+    pub fn read(xmp: Option<&[u8]>, image_resources: Option<&[u8]>) -> Descriptive {
+        let packet = xmp.and_then(|x| std::str::from_utf8(x).ok());
+        let iptc = image_resources.map(imgmeta::iptc_from_app13).unwrap_or_default();
+        let one = |name: &str, dataset: u8| {
+            packet.and_then(|p| imgmeta::xmp_value(p, name)).map(|v| v.trim().to_string()).filter(|v| !v.is_empty()).or_else(|| imgmeta::application_value(&iptc, dataset).map(|v| v.trim().to_string()).filter(|v| !v.is_empty()))
+        };
+        let many = |name: &str, dataset: u8| {
+            let from_xmp = packet.map(|p| imgmeta::xmp_values(p, name)).unwrap_or_default();
+            if from_xmp.is_empty() {
+                imgmeta::application_values(&iptc, dataset).into_iter().map(|v| v.trim().to_string()).filter(|v| !v.is_empty()).collect()
+            } else {
+                from_xmp
+            }
+        };
+        let rating = packet.and_then(|p| imgmeta::xmp_value(p, "xmp:Rating")).and_then(|r| r.trim().parse::<f64>().ok()).filter(|r| (-1.0..=5.0).contains(r)).map(|r| r.round() as i8);
+        Descriptive {
+            title: one("dc:title", imgmeta::DS_OBJECT_NAME),
+            caption: one("dc:description", imgmeta::DS_CAPTION),
+            keywords: many("dc:subject", imgmeta::DS_KEYWORDS),
+            creators: many("dc:creator", imgmeta::DS_BYLINE),
+            copyright: one("dc:rights", imgmeta::DS_COPYRIGHT),
+            rating,
+        }
+    }
+
+    /// The XMP packet that holds the fields, or `None` when nothing is set.
+    pub fn xmp_packet(&self) -> Option<String> {
+        if self.is_empty() {
+            return None;
+        }
+        let rating = self.rating.map(|r| r.to_string());
+        let mut props: Vec<(&str, &str)> = Vec::new();
+        for (name, value) in [("dc:title", &self.title), ("dc:description", &self.caption), ("dc:rights", &self.copyright), ("xmp:Rating", &rating)] {
+            if let Some(v) = value {
+                props.push((name, v.as_str()));
+            }
+        }
+        Some(imgmeta::xmp_packet_with_lists(&props, &[("dc:subject", self.keywords.as_slice()), ("dc:creator", self.creators.as_slice())]))
+    }
+
+    /// The APP13 payload with the same fields as IPTC datasets (title, caption, keywords, by-line, copyright), for
+    /// readers that look only there. `None` when none of those fields is set (the rating has no IPTC dataset).
+    pub fn image_resources(&self) -> Option<Vec<u8>> {
+        let mut fields = Vec::new();
+        for (dataset, value) in [(imgmeta::DS_OBJECT_NAME, &self.title), (imgmeta::DS_CAPTION, &self.caption), (imgmeta::DS_COPYRIGHT, &self.copyright)] {
+            if let Some(v) = value {
+                imgmeta::add_application_text(&mut fields, dataset, v);
+            }
+        }
+        for (dataset, list) in [(imgmeta::DS_KEYWORDS, &self.keywords), (imgmeta::DS_BYLINE, &self.creators)] {
+            for v in list {
+                imgmeta::add_application_text(&mut fields, dataset, v);
+            }
+        }
+        (!fields.is_empty()).then(|| imgmeta::app13_payload(&fields))
+    }
 }
 
 /// The UTC time of a GPS fix, as the GPS block stores it: a date (when present) and a time of day.
@@ -110,6 +199,7 @@ pub fn read(bytes: &[u8]) -> Option<PictureInfo> {
         gps_time: gps_time(&p.gps),
         gps_speed_kmh: gps_speed_kmh(&p.gps),
         gps_direction_deg: gps_direction(&p.gps),
+        descriptive: Descriptive::read(p.xmp.as_deref(), p.image_resources.as_deref()),
     })
 }
 
