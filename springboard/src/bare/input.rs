@@ -18,6 +18,11 @@ pub enum Event {
     Wheel{x:f32,y:f32,dx:f32,dy:f32,t:f64},
     Context{x:f32,y:f32,t:f64},
     Key { code: u16, down: bool },
+    /// The window server's word on which modifier keys are down (`wl_keyboard` enter, leave and modifiers), as the
+    /// physical key codes before any remap: bit 0 Shift, 1 Ctrl, 2 Alt, 3 the right Alt (AltGr), 4 Meta (`MOD_*`).
+    /// `caps` is the Caps Lock state, None when this event does not know it (a focus leave). The shell corrects its
+    /// own modifier counters with it, so a release that went to another client never leaves a modifier stuck.
+    Modifiers { held: u8, caps: Option<bool> },
     /// A switch (jack insert and the like): the code and whether it is on.
     Switch { code: u16, on: bool },
     /// One finger of a multi-touch screen: the contact's id (unique among the fingers down), its phase and its
@@ -42,6 +47,44 @@ pub const KEY_VOLUMEUP: u16 = 115;
 pub const KEY_POWER: u16 = 116;
 pub const KEY_WAKEUP: u16 = 143;
 pub use crate::media::route::{SW_HEADPHONE_INSERT, SW_MICROPHONE_INSERT};
+
+/// `Event::Modifiers` bits: which modifier keys are down.
+pub const MOD_SHIFT: u8 = 1;
+pub const MOD_CTRL: u8 = 2;
+pub const MOD_ALT: u8 = 4;
+/// The right Alt key, AltGr on a layout with a third level
+pub const MOD_ALTGR: u8 = 8;
+pub const MOD_META: u8 = 16;
+
+/// The `Event::Modifiers` bits of the modifier keys among `codes` (evdev key codes, the pressed keys of `wl_keyboard`'s
+/// enter); other keys are ignored.
+pub fn mods_of_codes(codes: impl IntoIterator<Item = u16>) -> u8 {
+    codes.into_iter().fold(0, |m, code| {
+        m | match code {
+            42 | 54 => MOD_SHIFT,
+            29 | 97 => MOD_CTRL,
+            56 => MOD_ALT,
+            100 => MOD_ALTGR,
+            125 | 126 => MOD_META,
+            _ => 0,
+        }
+    })
+}
+
+/// The `Event::Modifiers` bits of an XKB modifier mask (`wl_keyboard`'s modifiers: depressed and latched together), with
+/// the standard PC keymap's indices: Shift 0, Lock 1, Control 2, Mod1 (Alt) 3, Mod4 (Super) 6, Mod5 (ISO Level 3, AltGr) 7.
+/// Lock is a lock, not a held key: Caps Lock comes from the locked mask (`xkb_caps`).
+pub fn mods_of_xkb(mask: u32) -> u8 {
+    [(1 << 0, MOD_SHIFT), (1 << 2, MOD_CTRL), (1 << 3, MOD_ALT), (1 << 6, MOD_META), (1 << 7, MOD_ALTGR)]
+        .into_iter()
+        .filter(|(bit, _)| mask & bit != 0)
+        .fold(0, |m, (_, b)| m | b)
+}
+
+/// Caps Lock is on in an XKB locked-modifier mask.
+pub fn xkb_caps(locked: u32) -> bool {
+    locked & (1 << 1) != 0
+}
 
 const EV_SYN: u16 = 0;
 const EV_KEY: u16 = 1;

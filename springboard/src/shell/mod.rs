@@ -866,6 +866,9 @@ pub struct Shell {
     /// the modifier keys the hardware keyboard holds now (`HwKeys::modifier_flags`), set on every key event; each press
     /// forwarded to an external app carries them (`ToApp::Touch::mods`, `NSEvent.modifierFlags`)
     key_mods: bifrost_proto::ModifierFlags,
+    /// the held modifier keys are to be forgotten (the session was restored: the presses before it went elsewhere), taken by
+    /// the input loop with `take_key_reset`
+    key_reset: bool,
     /// the focused text field of a Wayland client (the window server's input method), and the requests the keyboard
     /// made for it since the last `take_input_method_out`
     im: textinput::ImField,
@@ -1337,6 +1340,7 @@ impl Shell {
             osk_pinned: false,
             touch_contacts: touch_frames::Contacts::default(),
             key_mods: bifrost_proto::ModifierFlags::EMPTY,
+            key_reset: false,
             im: Default::default(),
             im_out: Vec::new(),
             haptics: false,
@@ -2621,8 +2625,9 @@ impl Shell {
         let desktop=if let Some(d)=&self.desk {let m=self.desktop_metrics.clone();format!("{desktop}dock_position={:?}\ndock_size={}\ndock_autohide={}\ndock_visible={}\ndock_pinned={}\nmenu={:?}\ncpu_usage={:.1}\nmemory_usage={:.1}\n",d.dock_preferences.position,d.dock_preferences.size,d.dock_preferences.autohide,self.dock_is_visible(),d.dock_preferences.pinned.join(","),self.desktop_menu,m.cpu,m.memory_percent())}else{desktop};
         let store = self.store.as_ref().map(store::AppStore::describe).unwrap_or_default();
         format!(
-            "screen={screen}\nscreen_on={}\nanimating={}\npage={}\ntoday={}\ncc={}\ncards={}\nvolume={:.3}\nhud={}\nquicksearch={}\n{}\n{}{}{deildu}{photos}{files}{calculator}{camera}{browser}{desktop}{store}",
+            "screen={screen}\nscreen_on={}\nkey_mods={}\nanimating={}\npage={}\ntoday={}\ncc={}\ncards={}\nvolume={:.3}\nhud={}\nquicksearch={}\n{}\n{}{}{deildu}{photos}{files}{calculator}{camera}{browser}{desktop}{store}",
             self.screen_on,
+            self.key_mods_describe(),
             self.anim.is_some() || self.turning() || self.pager.animating() || self.cc.animating() || self.switcher.animating(),
             self.pager.page(),
             self.pager.leading() || self.lock_pager.leading(),

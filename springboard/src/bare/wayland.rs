@@ -1295,7 +1295,11 @@ impl Dispatch<wl_touch::WlTouch, ()> for State {
 impl Dispatch<wl_keyboard::WlKeyboard, ()> for State {
     fn event(s: &mut Self, _: &wl_keyboard::WlKeyboard, e: wl_keyboard::Event, _: &(), _: &Connection, qh: &QueueHandle<Self>) {
         match e {
-            wl_keyboard::Event::Enter {surface,..}=>{
+            wl_keyboard::Event::Enter {surface,keys,..}=>{
+                // the keys already down as the shell gets the keyboard: a modifier held across the focus change counts
+                // (the modifiers event that follows also carries the Caps Lock state)
+                let held=super::input::mods_of_codes(keys.chunks_exact(4).map(|b|u32::from_ne_bytes([b[0],b[1],b[2],b[3]]) as u16));
+                s.inputs.push(Event::Modifiers {held,caps:None});
                 if let Some(id)=s.windows.iter().find(|(_,w)|w.surface==surface).map(|(&id,_)|id) {
                     let fresh=s.windows.get_mut(&id).is_some_and(|w|std::mem::take(&mut w.fresh));
                     if follows_keyboard_enter(fresh,id,s.focused) {
@@ -1312,7 +1316,12 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for State {
                 if down {s.keys.insert(key as u16);} else {s.keys.remove(&(key as u16));}
                 s.inputs.push(Event::Key {code:key as u16,down});
             },
-            wl_keyboard::Event::Leave {..}=>{for code in s.keys.drain(){s.inputs.push(Event::Key {code,down:false});}},
+            // the keyboard went to another client: its releases no longer reach the shell, so nothing counts as held (E2E3 F1)
+            wl_keyboard::Event::Leave {..}=>{for code in s.keys.drain(){s.inputs.push(Event::Key {code,down:false});} s.inputs.push(Event::Modifiers {held:0,caps:None});},
+            // the window server's modifier state is the authority: it corrects a counter whose press or release the shell missed
+            wl_keyboard::Event::Modifiers {mods_depressed,mods_latched,mods_locked,..}=>{
+                s.inputs.push(Event::Modifiers {held:super::input::mods_of_xkb(mods_depressed|mods_latched),caps:Some(super::input::xkb_caps(mods_locked))});
+            },
             _=>{}
         }
     }
