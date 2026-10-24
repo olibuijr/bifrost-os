@@ -70,6 +70,8 @@ pub fn reload(ctx: &Ctx, kind: &str, entries: &[Entry], policy: ReloadPolicy) ->
 pub use crate::controls::widget_date::Style as ClockStyle;
 /// The sizes a widget kind can take.
 pub use crate::controls::widget_kind::Family;
+/// The system colours a widget can fill its tile with (the reference `containerBackground` given a colour).
+pub use crate::controls::widget_render::ContainerTint;
 
 /// A button or toggle on a widget entry. A tap runs the app's own `[[intent]]` `intent` with `params` over the app's
 /// control socket (the app must be running). A toggle (`toggle` is `Some(shown state)`) also passes its new state as
@@ -123,11 +125,19 @@ pub struct Rich {
     pub detail: Option<String>,
     /// what each size shows instead of the entry's own parts
     pub variants: Vec<(Family, Variant)>,
+    /// the system colour the widget's tile is filled with; None keeps the glass tile
+    pub background: Option<ContainerTint>,
 }
 
 impl Rich {
     pub fn new(entry: Entry) -> Self {
-        Rich { entry, clock: None, buttons: Vec::new(), detail: None, variants: Vec::new() }
+        Rich { entry, clock: None, buttons: Vec::new(), detail: None, variants: Vec::new(), background: None }
+    }
+
+    /// Fills the widget's tile with a system colour; its text turns white (dark on yellow and mint).
+    pub fn with_background(mut self, tint: ContainerTint) -> Self {
+        self.background = Some(tint);
+        self
     }
 
     /// Adds the detail line the Medium and Large sizes show under the text.
@@ -376,6 +386,9 @@ fn rich_entry_json(r: &Rich) -> Json {
     if let Some(d) = &r.detail {
         pairs.push(("detail".into(), Json::Str(d.clone())));
     }
+    if let Some(t) = r.background {
+        pairs.push(("background".into(), Json::Str(t.key().into())));
+    }
     if !r.variants.is_empty() {
         let sizes = r
             .variants
@@ -477,6 +490,9 @@ mod tests {
         assert_eq!(sizes.get("small").and_then(|v| v.str_field("text")).as_deref(), Some("9:00"), "the later variant replaces the first");
         assert!(sizes.get("small").and_then(|v| v.get("title")).is_none(), "a part left out is not sent");
         assert_eq!(sizes.get("large").and_then(|v| v.str_field("title")).as_deref(), Some("Today"));
+        assert!(j.get("background").is_none(), "no background unless asked");
+        let tinted = rich_entry_json(&rich.with_background(ContainerTint::Teal));
+        assert_eq!(tinted.str_field("background").as_deref(), Some("teal"));
     }
 
     #[test]

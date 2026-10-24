@@ -516,6 +516,27 @@ const NC_FOCUS_PT: f32 = 26.0;
 /// room kept free above the dock
 const NC_BOTTOM_PT: f32 = 90.0;
 
+/// The system colour a widget's container background names, for the appearance in effect.
+fn container_colour(tint: bifrost_ui::widget_render::ContainerTint) -> u32 {
+    use super::super::ui::system::{SYSTEM_BLUE, SYSTEM_BROWN, SYSTEM_CYAN, SYSTEM_GRAY, SYSTEM_GREEN, SYSTEM_INDIGO, SYSTEM_MINT, SYSTEM_ORANGE, SYSTEM_PINK, SYSTEM_PURPLE, SYSTEM_TEAL, SYSTEM_YELLOW};
+    use bifrost_ui::widget_render::ContainerTint as T;
+    match tint {
+        T::Orange => SYSTEM_ORANGE,
+        T::Yellow => SYSTEM_YELLOW,
+        T::Green => SYSTEM_GREEN,
+        T::Mint => SYSTEM_MINT,
+        T::Teal => SYSTEM_TEAL,
+        T::Cyan => SYSTEM_CYAN,
+        T::Blue => SYSTEM_BLUE,
+        T::Indigo => SYSTEM_INDIGO,
+        T::Purple => SYSTEM_PURPLE,
+        T::Pink => SYSTEM_PINK,
+        T::Brown => SYSTEM_BROWN,
+        T::Gray => SYSTEM_GRAY,
+    }
+    .now()
+}
+
 #[derive(Clone, Copy, PartialEq)]
 enum DeskHit {
     /// the title's X (Clear All while the title row is hovered): clears every notification
@@ -1300,7 +1321,7 @@ impl Shell {
     }
 
     fn draw_desk_center(&mut self, s: &mut Surface, t: f64) {
-        use super::super::ui::{FIELD_BG, FOCUS_INDIGO, LABEL, LABEL_2, LINK, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT, BAR_TEXT, BAR_TEXT_SHADOW, BAR_TEXT_SHADOW_ALPHA, NC_WEATHER_TINT, SYSTEM_RED};
+        use super::super::ui::{FIELD_BG, FOCUS_INDIGO, LABEL, LABEL_2, LINK, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT, BAR_TEXT, BAR_TEXT_SHADOW, BAR_TEXT_SHADOW_ALPHA, NC_WEATHER_TINT, NC_WIDGET_DARK_INK, SYSTEM_RED};
         let c = &self.notify.center;
         let p = c.progress(t).clamp(0.0, 1.0);
         if let Some((x, y, w, h)) = self.center_desk_rect().filter(|_| bifrost_render::glass::gpu()) {
@@ -1437,6 +1458,17 @@ impl Shell {
             let x = x + slide;
             let r = ui.pt(NC_CARD_R_PT);
             desk_card::tile(s, ShellSurface::NotificationPanel, (x, y, w, h), r, alpha);
+            // a widget's container background fills the tile with its system colour; its text turns white (dark on the
+            // light colours) like the Weather card's
+            if let Some(tint) = row.background {
+                s.fill_rrect(x, y, w, h, r, crate::gfx::scale(container_colour(tint), alpha));
+            }
+            let (ink, head_ink) = match row.background {
+                Some(tint) if tint.wants_light_text() => (WHITE, WHITE),
+                Some(_) => (NC_WIDGET_DARK_INK, NC_WIDGET_DARK_INK),
+                None => (label, secondary),
+            };
+            let head_alpha = if row.background.is_some() { alpha * 200 / 255 } else { alpha };
             // the entry's buttons: a capsule plate with a link-coloured label; a toggle that is on has a link plate
             // with a white label, and one waiting for its app is drawn lighter
             for (button, (bx, by, bw, bh)) in row.buttons.iter().zip(rects.iter().copied()) {
@@ -1460,18 +1492,18 @@ impl Shell {
                 tx += icon_d + ui.pt(NC_ICON_GAP_PT);
             }
             let room = x + w - pad - buttons_room - tx;
-            let head = ui.text(&ui.fit(&row.title, MAC_SUBHEAD_PT, room), MAC_SUBHEAD_PT, Weight::Regular, secondary);
-            let value = ui.text(&ui.fit(&row.text, MAC_HEADLINE_PT, room), MAC_HEADLINE_PT, Weight::Semibold, label);
+            let head = ui.text(&ui.fit(&row.title, MAC_SUBHEAD_PT, room), MAC_SUBHEAD_PT, Weight::Regular, head_ink);
+            let value = ui.text(&ui.fit(&row.text, MAC_HEADLINE_PT, room), MAC_HEADLINE_PT, Weight::Semibold, ink);
             // a Medium or Large widget's detail line, in footnote type under the value, when the row has room for it
             let detail = (!row.detail.is_empty())
-                .then(|| ui.text(&ui.fit(&row.detail, MAC_FOOTNOTE_PT, room), MAC_FOOTNOTE_PT, Weight::Regular, secondary))
+                .then(|| ui.text(&ui.fit(&row.detail, MAC_FOOTNOTE_PT, room), MAC_FOOTNOTE_PT, Weight::Regular, head_ink))
                 .filter(|d| (head.h + value.h + d.h) as f32 <= h - ui.pt(NC_ITEM_GAP_PT));
             let lines_h = head.h + value.h + detail.as_ref().map_or(0, |d| d.h);
             let ly = y + (h - lines_h as f32) / 2.0;
-            s.blit(&head, tx as i32, ly as i32, 255, alpha);
+            s.blit(&head, tx as i32, ly as i32, 255, head_alpha);
             s.blit(&value, tx as i32, (ly + head.h as f32) as i32, 255, alpha);
             if let Some(d) = &detail {
-                s.blit(d, tx as i32, (ly + (head.h + value.h) as f32) as i32, 255, alpha);
+                s.blit(d, tx as i32, (ly + (head.h + value.h) as f32) as i32, 255, head_alpha);
             }
         }
         // Edit Widgets: a small glass capsule with a quiet label and a round close button beside it

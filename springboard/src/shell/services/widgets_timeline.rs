@@ -13,7 +13,8 @@
 //!   it goes) and `actions: [{id, label, intent, params?: {name: text}, toggle?: bool}]` (at most 3 buttons or
 //!   toggles; a tap runs the app's `[[intent]]`, a toggle also sends its new state as the parameter `on`).
 //!   An entry may add `detail` (a third line the Medium and Large sizes show) and `families: {small|medium|large:
-//!   {title?, text?, detail?}}`, what each size shows instead (the reference view's switch on `widgetFamily`).
+//!   {title?, text?, detail?}}`, what each size shows instead (the reference view's switch on `widgetFamily`), and
+//!   `background` (a system colour name, the reference `containerBackground` with a colour) that fills its tile.
 //! - `register {kinds:[{id, name?, description?, families?:["small","medium","large"], configurable?}]}` registers the
 //!   widget kinds the app offers; the Edit Widgets gallery lists them (with their name, description and the size chips
 //!   they support) before a first `reload`. Apps can also declare them as `[[widget]]` tables in `manifest.toml`.
@@ -48,8 +49,13 @@ use bifrost_ui::widget_action::{check_buttons, ButtonError, ButtonSpec, Invocati
 use bifrost_ui::widget_ax::WidgetAccessibility;
 use bifrost_ui::widget_date::{self, Style as DateStyle};
 use bifrost_ui::widget_kind::{Family, WidgetKind};
+use bifrost_ui::widget_render::{self, ContainerTint, RenderingMode};
 use bifrost_core::json::Json;
 use std::sync::Mutex;
+
+/// The mode the shell draws widgets in. There is no tinted widget look yet, so every widget is in full colour and
+/// keeps its container background (`widget_render::resolve_mode` with no tinted look).
+const RENDERING_MODE: RenderingMode = RenderingMode::FullColor;
 
 /// The longest kind id an app may register.
 const MAX_KIND: usize = 64;
@@ -85,6 +91,8 @@ pub struct Text {
     pub detail: String,
     /// per-size replacements for the title, text and detail (`families: {small: {...}, large: {...}}`)
     pub variants: Vec<(Family, Variant)>,
+    /// the colour the widget fills its tile with (`background`, a system colour name); None keeps the glass tile
+    pub background: Option<ContainerTint>,
     /// live date text: replaces `{}` in `text` (or follows it), and keeps counting while the app does not run
     pub clock: Option<Clock>,
     /// the buttons and toggles on the entry; a tap runs the app intent each one names
@@ -127,7 +135,11 @@ impl Text {
                 variants.push((family, Variant { title: part("title"), text: part("text"), detail: part("detail") }));
             }
         }
-        Ok(Text { clock, buttons, detail: j.str_field("detail").unwrap_or_default(), variants, ..Text::of(j) })
+        let background = match j.str_field("background") {
+            Some(key) => Some(ContainerTint::from_key(&key).ok_or_else(|| format!("no widget background {key:?}: a system colour name such as blue"))?),
+            None => None,
+        };
+        Ok(Text { clock, buttons, detail: j.str_field("detail").unwrap_or_default(), variants, background, ..Text::of(j) })
     }
 
     /// The entry as one size shows it: the size's variant over the entry's own parts. A Small widget has no room for
@@ -224,6 +236,8 @@ pub struct Row {
     pub text: String,
     /// the third line of a Medium or Large widget (blank when there is none)
     pub detail: String,
+    /// the colour the row's tile is filled with, when the shell draws the widget in full colour
+    pub background: Option<ContainerTint>,
     /// the widget is set to Large in the Edit Widgets gallery: its row is taller
     pub large: bool,
     /// the size the person gave the widget (a live activity is Small)
@@ -820,6 +834,7 @@ impl Store {
                     title: sized.title,
                     text,
                     detail: sized.detail,
+                    background: sized.background.filter(|_| widget_render::shows_container_background(RENDERING_MODE)),
                     large: w.family == Family::Large,
                     family: w.family,
                     buttons,
@@ -831,7 +846,7 @@ impl Store {
         for (id, _) in &self.owners {
             if let Some(c) = self.activities.content(*id, unix(now)) {
                 let label = spoken(&c.state.title, &c.state.text, &[]);
-                rows.push(Row { title: c.state.title.clone(), text: c.state.text.clone(), detail: String::new(), large: false, family: Family::Small, buttons: Vec::new(), label, widget: None });
+                rows.push(Row { title: c.state.title.clone(), text: c.state.text.clone(), detail: String::new(), background: None, large: false, family: Family::Small, buttons: Vec::new(), label, widget: None });
             }
         }
         rows
@@ -1239,6 +1254,7 @@ mod tests {
             title: title.into(),
             text: text.into(),
             detail: String::new(),
+            background: None,
             large,
             family: if large { Family::Large } else { Family::Small },
             buttons: Vec::new(),
@@ -1776,6 +1792,16 @@ mod tests {
         assert_eq!(plain.for_family(Family::Small).detail, "");
         let bad = reload_with("k", vec![("families", obj(&[("huge", obj(&[]))]))]);
         assert!(s.call("is.a", "reload", &bad, 0).is_err(), "an unknown size is refused");
+    }
+
+    #[test]
+    fn an_entry_fills_its_tile_with_a_named_system_colour() {
+        let mut s = Store::default();
+        s.call("is.a", "reload", &reload_with("k", vec![("background", s_("Indigo"))]), 0).unwrap();
+        assert_eq!(s.rows(0)[0].background, Some(ContainerTint::Indigo));
+        s.call("is.a", "reload", &reload_with("k", vec![]), 0).unwrap();
+        assert_eq!(s.rows(0)[0].background, None, "without one the tile stays glass");
+        assert!(s.call("is.a", "reload", &reload_with("k", vec![("background", s_("#ff0000"))]), 0).is_err(), "only named colours");
     }
 
     #[test]
