@@ -519,27 +519,40 @@ impl WmState {
         if self.locked {
             return self.lock_surface.as_ref().map(|l| (l.wl_surface().clone(), (0.0, 0.0).into()));
         }
-        let output = self.output()?;
-        let layers = layer_map_for_output(&output);
-        let layer_hit = |l: &smithay::wayland::shell::wlr_layer::Layer| {
-            layers.layer_under(*l, pos).and_then(|layer| {
-                let geo = layers.layer_geometry(layer)?;
-                layer
-                    .surface_under(pos - geo.loc.to_f64(), WindowSurfaceType::ALL)
-                    .map(|(s, p)| (s, (p + geo.loc).to_f64()))
-            })
-        };
         use smithay::wayland::shell::wlr_layer::Layer;
-        layer_hit(&Layer::Overlay)
-            .or_else(|| layer_hit(&Layer::Top))
+        self.layer_surface_under(Layer::Overlay, pos)
+            .or_else(|| self.layer_surface_under(Layer::Top, pos))
             .or_else(|| self.input_popup_under(pos))
             .or_else(|| {
                 self.space.element_under(pos).and_then(|(window, loc)| {
                     window.surface_under(pos - loc.to_f64(), WindowSurfaceType::ALL).map(|(s, p)| (s, (p + loc).to_f64()))
                 })
             })
-            .or_else(|| layer_hit(&Layer::Bottom))
-            .or_else(|| layer_hit(&Layer::Background))
+            .or_else(|| self.layer_surface_under(Layer::Bottom, pos))
+            .or_else(|| self.layer_surface_under(Layer::Background, pos))
+    }
+
+    /// The surface of a layer surface on `layer` that takes the pointer at `pos`, the topmost first, and its origin.
+    /// Each surface's input region decides, not its size: a surface exported with room for its shadow (a menu), or one
+    /// that takes no input at all (a sweep, a caption), lets the point through to the surfaces below it on the same
+    /// layer. Picking the topmost surface by its bounds alone (smithay's `layer_under`) ended the search at such a
+    /// surface, and the press fell through to the window under it (E2E R1).
+    pub fn layer_surface_under(&self, layer: smithay::wayland::shell::wlr_layer::Layer, pos: Point<f64, Logical>) -> Option<(WlSurface, Point<f64, Logical>)> {
+        let output = self.output()?;
+        let layers = layer_map_for_output(&output);
+        let found = layers.layers_on(layer).rev().find_map(|l| {
+            let geo = layers.layer_geometry(l)?;
+            l.surface_under(pos - geo.loc.to_f64(), WindowSurfaceType::ALL).map(|(s, p)| (s, (p + geo.loc).to_f64()))
+        });
+        found
+    }
+
+    /// Whether a layer surface above the windows (the Overlay or Top layer: the shell's menus, menu bar, Dock and
+    /// panels) takes the pointer at `pos`. A press there belongs to that surface, so it must not raise or focus the
+    /// window beneath it: an app's pop-up menu that reaches past its window raised the window under that part (E2E R1).
+    pub fn layer_above_windows_at(&self, pos: Point<f64, Logical>) -> bool {
+        use smithay::wayland::shell::wlr_layer::Layer;
+        !self.locked && (self.layer_surface_under(Layer::Overlay, pos).is_some() || self.layer_surface_under(Layer::Top, pos).is_some())
     }
 }
 
