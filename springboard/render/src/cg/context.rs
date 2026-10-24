@@ -6,6 +6,7 @@
 //! The current path lives in device space (points are transformed when they are added), as the transform may
 //! change while a path is being built.
 use super::color::Color;
+use super::face::CgFont;
 use super::paint::{LinearGradient, Paint, Pattern, RadialGradient, Shading, Tiling};
 use super::path::{Affine, Path, Rect as PathRect};
 use super::raster::{self, Coverage, FillRule, StrokeStyle};
@@ -155,6 +156,8 @@ struct GState {
     font_size: f32,
     char_spacing: f32,
     text_mode: TextDrawing,
+    /// the face `show_font_*` draws with (`setFont`)
+    font: Option<CgFont>,
 }
 
 impl GState {
@@ -180,6 +183,7 @@ impl GState {
             font_size: 12.0,
             char_spacing: 0.0,
             text_mode: TextDrawing::Fill,
+            font: None,
         }
     }
 }
@@ -1570,6 +1574,39 @@ impl<'a> DrawContext<'a> {
     pub fn show_glyphs(&mut self, font: &Font<'_>, gids: &[u16]) {
         self.show_glyphs_with_advances(font, gids, None);
     }
+
+    /// Sets the face the state draws glyphs and text with (`setFont`); it is part of the saved state.
+    pub fn set_font(&mut self, font: CgFont) {
+        self.gs.font = Some(font);
+    }
+
+    /// The face of the state, if one was set.
+    pub fn font(&self) -> Option<&CgFont> {
+        self.gs.font.as_ref()
+    }
+
+    /// Draws each glyph of the state's face with its pen origin at the given user-space position
+    /// (`showGlyphsAtPositions`). Nothing is drawn without a face.
+    pub fn show_font_glyphs_at_positions(&mut self, glyphs: &[(u16, (f32, f32))]) {
+        let Some(face) = self.gs.font.clone() else { return };
+        let Some(font) = face.font() else { return };
+        self.show_glyphs_at_positions(&font, glyphs);
+    }
+
+    /// Draws consecutive glyphs of the state's face from the text position, advancing by `advances` or the face's own
+    /// advances, and moves the text position past them.
+    pub fn show_font_glyphs(&mut self, gids: &[u16], advances: Option<&[f32]>) {
+        let Some(face) = self.gs.font.clone() else { return };
+        let Some(font) = face.font() else { return };
+        self.show_glyphs_with_advances(&font, gids, advances);
+    }
+
+    /// Draws `text` in the state's face at the text position and moves the position past it.
+    pub fn show_font_text(&mut self, text: &str) {
+        let Some(face) = self.gs.font.clone() else { return };
+        let Some(font) = face.font() else { return };
+        self.show_text(&font, text);
+    }
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -2069,4 +2106,43 @@ mod tests {
         let (a, b) = (px(&bm, 0, 0), px(&bm, 7, 0));
         assert!((a & 0xff) > 200 && (b >> 16 & 0xff) > 200, "{a:08x} {b:08x}");
     }
+
+    #[test]
+    fn the_state_font_draws_glyphs_and_is_part_of_the_saved_state() {
+        let data = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/SFUI.ttf")).expect("assets/SFUI.ttf");
+        let face = CgFont::from_data(data).unwrap();
+        let ink = |bm: &Bitmap| bm.pixels().iter().filter(|p| *p >> 24 != 0).count();
+        let mut bm = Bitmap::new(80, 40);
+        {
+            let mut cx = bm.context();
+            cx.set_font_size(20.0);
+            cx.set_text_position(4.0, 28.0);
+            cx.show_font_text("Hi");
+        }
+        assert_eq!(ink(&bm), 0, "nothing is drawn without a face");
+        {
+            let mut cx = bm.context();
+            cx.save_gstate();
+            cx.set_font(face.clone());
+            assert!(cx.font().is_some());
+            cx.set_font_size(20.0);
+            cx.set_fill_color(red());
+            cx.set_text_position(4.0, 28.0);
+            cx.show_font_text("Hi");
+            assert!(cx.text_position().0 > 4.0, "the position moved past the text");
+            cx.restore_gstate();
+            assert!(cx.font().is_none(), "restoring the state drops the face");
+        }
+        assert!(ink(&bm) > 0);
+        let g = face.glyph_for_char('H');
+        let mut bm2 = Bitmap::new(80, 40);
+        {
+            let mut cx = bm2.context();
+            cx.set_font(face);
+            cx.set_font_size(20.0);
+            cx.show_font_glyphs_at_positions(&[(g, (10.0, 28.0))]);
+        }
+        assert!(ink(&bm2) > 0);
+    }
 }
+
