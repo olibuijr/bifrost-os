@@ -1327,3 +1327,96 @@ fn escape_drops_the_details_edits_and_a_new_reminder_keeps_the_full_form() {
     app.activate(&ui, Target::Cancel, 40.0);
     cleanup(&path);
 }
+
+#[test]
+fn cmd_backspace_never_deletes_a_selected_reminder_that_another_list_hides() {
+    use bifrost_proto::CHORD_META;
+    let (mut app, ui, path) = app("hidden-selection");
+    add(&mut app, &ui, "E2E rem", 0.0);
+    let id = id_of(&app, "E2E rem");
+    app.selected = Some(id);
+    assert_eq!(app.selected_item(), Some(id), "on screen in All");
+    app.activate(&ui, Target::NewList, 10.0);
+    app.key(&ui, Out::Text("E2E list".into()), 11.0);
+    app.key(&ui, Out::Enter, 12.0);
+    let list = app.data.lists.last().unwrap().id;
+    // the view changes without the selection being cleared: the selection is not on screen, so nothing is deleted
+    app.view = View::List(list);
+    app.rebuild(&ui);
+    assert_eq!(app.selected_item(), None);
+    assert!(!app.chord(&ui, 14, CHORD_META, 20.0), "nothing on screen is selected");
+    assert!(!app.delete_selected(&ui, 21.0));
+    assert_eq!(titles(&app), ["E2E rem"]);
+    // opening a list from the sidebar drops the selection made in another list
+    app.activate(&ui, Target::Smart(Smart::All), 30.0);
+    app.selected = Some(id);
+    app.activate(&ui, Target::List(list), 31.0);
+    assert_eq!(app.selected, None);
+    // Recently Deleted hides the list: Down and Cmd+Backspace never reach the reminder under it
+    app.activate(&ui, Target::Smart(Smart::All), 40.0);
+    app.selected = Some(id);
+    app.activate(&ui, Target::Deleted, 41.0);
+    app.key(&ui, Out::Named("Down"), 42.0);
+    assert!(!app.chord(&ui, 14, CHORD_META, 43.0));
+    assert_eq!(titles(&app), ["E2E rem"]);
+    cleanup(&path);
+}
+
+#[test]
+fn recently_deleted_deletes_permanently_and_deletes_all_after_asking() {
+    use bifrost_proto::CHORD_META;
+    let (mut app, ui, path) = app("purge");
+    for (i, title) in ["One", "Two", "Three"].iter().enumerate() {
+        add(&mut app, &ui, title, i as f64 * 10.0);
+    }
+    for (i, title) in ["One", "Two", "Three"].iter().enumerate() {
+        app.selected = Some(id_of(&app, title));
+        assert!(app.delete_selected(&ui, 40.0 + i as f64));
+    }
+    assert_eq!(app.kept_count, 3);
+    app.activate(&ui, Target::Deleted, 50.0);
+    let kept: Vec<u64> = app.deleted.as_ref().unwrap().iter().map(|r| r.id).collect();
+    assert_eq!(app.kept_selected(), None, "the page opens with nothing selected");
+    assert!(!app.chord(&ui, 14, CHORD_META, 51.0), "nothing selected, nothing asked");
+
+    // a click on the row selects it (the Restore link at its trailing edge restores); Cmd+Backspace asks first
+    let (x, y, w, h) = app.deleted_row_rect(&ui, 0);
+    assert_eq!(app.hit(&ui, x + w / 4.0, y + h / 2.0), Some(Target::KeptRow(kept[0])));
+    assert_eq!(app.hit(&ui, x + w - ui.pt(SPACE_S), y + h / 2.0), Some(Target::Restore(kept[0])));
+    app.activate(&ui, Target::KeptRow(kept[0]), 52.0);
+    assert!(app.chord(&ui, 14, CHORD_META, 53.0));
+    assert_eq!(app.purge_ask, Some(Purge::One(kept[0])));
+    assert!(app.clear_sheet().is_some(), "the alert is up");
+    app.key(&ui, Out::Enter, 54.0);
+    assert!(app.purge_ask.is_some(), "Return does not answer a destructive button");
+    assert!(app.escape(&ui, 55.0) && app.purge_ask.is_none(), "Escape keeps it");
+    assert_eq!(app.kept_count, 3);
+    assert!(app.chord(&ui, 14, CHORD_META, 56.0));
+    app.activate(&ui, Target::PurgeConfirm, 57.0);
+    assert_eq!(app.kept_count, 2);
+    let left: Vec<u64> = app.deleted.as_ref().unwrap().iter().map(|r| r.id).collect();
+    assert_eq!(left, kept[1..].to_vec());
+    assert_eq!(app.kept_selected(), None);
+
+    // the right click selects the row and offers Restore, Delete Permanently and Delete All
+    let (x, y, w, h) = app.deleted_row_rect(&ui, 0);
+    let menu = app.context_menu_at(&ui, x + app.x0 + w / 4.0, y + h / 2.0).expect("the kept row's menu");
+    let rows: Vec<String> = menu.iter().filter(|i| !i.is_separator()).map(|i| i.label.clone()).collect();
+    assert_eq!(rows, ["Restore", "Delete Permanently...", "Delete All..."]);
+    assert_eq!(app.kept_selected(), Some(kept[1]));
+    assert!(app.context_action(&ui, purge::CTX_PURGE, 60.0));
+    app.activate(&ui, Target::PurgeConfirm, 61.0);
+    assert_eq!(app.kept_count, 1);
+
+    // the toolbar's "..." shows the same menu; Delete All empties the page
+    app.activate(&ui, Target::ListMenu(0.0, 0.0), 70.0);
+    let (_, _, items) = app.take_menu_request().expect("the page's menu");
+    assert!(items.iter().any(|i| i.id == purge::CTX_PURGE_ALL && i.enabled));
+    assert!(app.context_action(&ui, purge::CTX_PURGE_ALL, 71.0));
+    assert_eq!(app.purge_ask, Some(Purge::All));
+    app.activate(&ui, Target::PurgeConfirm, 72.0);
+    assert_eq!(app.kept_count, 0);
+    assert!(app.deleted.as_ref().unwrap().is_empty());
+    assert!(archive::kept(&archive::path_beside(&path)).unwrap().is_empty(), "gone from the store for good");
+    cleanup(&path);
+}

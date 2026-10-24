@@ -13,6 +13,8 @@ mod chrome;
 mod completed;
 #[path = "details.rs"]
 mod details;
+#[path = "purge.rs"]
+mod purge;
 
 use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_L, SPACE_M, SPACE_S, SPACE_XL};
 use springboard::layout::in_rect as within;
@@ -33,6 +35,7 @@ use model::{Data, Group, ListDef, ListGroup, Options, Reminder, Row, Smart, Sort
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use store::local_day;
+use purge::Purge;
 
 
 const LONG_PRESS_MS: f64 = 400.0;
@@ -84,6 +87,8 @@ enum Target {
     Deleted,
     /// Restores one kept reminder (by its id) from the Recently Deleted page.
     Restore(u64),
+    /// Selects one kept reminder (by its id) on the Recently Deleted page (`purge.rs`).
+    KeptRow(u64),
     List(u64),
     ListInfo(u64),
     /// The toolbar's "..." button: the open list's menu, shown at window pixel (x, y).
@@ -162,6 +167,8 @@ enum Target {
     ClearAsk,
     ClearConfirm,
     ClearCancel,
+    /// The purge alert's delete button (`purge.rs`); its Cancel is `ClearCancel`.
+    PurgeConfirm,
 }
 
 struct Editor {
@@ -342,6 +349,11 @@ pub struct Reminders {
     deleted: Option<Vec<Reminder>>,
     /// How many reminders the recently deleted store holds (the sidebar count).
     kept_count: usize,
+    /// The kept reminder selected on the Recently Deleted page, and the purge alert while it is up (`purge.rs`).
+    kept_selected: Option<u64>,
+    purge_ask: Option<Purge>,
+    /// The menu the shell shows is the Recently Deleted menu (`purge.rs`), not a list's.
+    menu_kept: bool,
     screen: Screen,
     view: View,
     opts: Options,
@@ -484,6 +496,9 @@ impl Reminders {
         let mut app = Self {
             kept_count,
             deleted: None,
+            kept_selected: None,
+            purge_ask: None,
+            menu_kept: false,
             w,
             x0: 0.0,
             full_w: w,
@@ -577,18 +592,39 @@ impl Reminders {
         self.screen == Screen::Items
     }
 
-    /// The arrow-selected reminder, if it still exists.
+    /// The arrow-selected reminder, if it still exists and is a row of the list on screen. A selection left over from
+    /// another list, or hidden under the Recently Deleted page, is not one: the commands on the selection (Delete
+    /// Reminder above all) never act on a reminder the user cannot see (E2E R2).
     pub fn selected_item(&self) -> Option<u64> {
-        self.selected.filter(|id| self.data.items.iter().any(|r| r.id == *id))
+        if self.deleted.is_some() {
+            return None;
+        }
+        self.selected.filter(|id| self.row_shown(*id))
+    }
+
+    /// Whether reminder `id` is a row of the list on screen.
+    fn row_shown(&self, id: u64) -> bool {
+        self.rows.iter().any(|row| matches!(row, Row::Item { idx, .. } if self.data.items.get(*idx).is_some_and(|r| r.id == id)))
     }
 
     /// Selects the reminder `id` on the items screen (a Core Search result opened it); false when there is no such one.
+    /// When the list on screen does not show it, its own list opens.
     pub fn show_item(&mut self, id: u64) -> bool {
-        if !self.data.items.iter().any(|r| r.id == id) {
+        let Some(list) = self.data.items.iter().find(|r| r.id == id).map(|r| r.list) else {
             return false;
-        }
+        };
         self.screen = Screen::Items;
+        if self.deleted.is_some() || !self.row_shown(id) {
+            self.view = View::List(list);
+            self.deleted = None;
+            self.searching = false;
+            self.swipe = None;
+            self.scroll.jump_top();
+            self.refresh_rows();
+            self.labels.clear();
+        }
         self.selected = Some(id);
+        self.dirty = true;
         true
     }
 
@@ -612,8 +648,12 @@ impl Reminders {
         true
     }
 
-    /// File > Delete Reminder (Cmd+Backspace): the selected reminder, as the chord deletes it.
+    /// File > Delete Reminder (Cmd+Backspace): the selected reminder, as the chord deletes it. On the Recently Deleted
+    /// page it asks before the selected kept reminder goes for good (`purge.rs`).
     pub fn delete_selected(&mut self, ui: &Ui, t: f64) -> bool {
+        if self.deleted.is_some() {
+            return self.purge_selected();
+        }
         let Some(id) = self.selected_item() else { return false };
         if self.delete_item(id, t) {
             self.rebuild(ui);
@@ -1401,8 +1441,8 @@ impl Reminders {
     // ---- hit testing ----------------------------------------------------
 
     fn hit(&self, ui: &Ui, x: f32, y: f32) -> Option<Target> {
-        // the Clear alert blocks the window; the Details popover is transient: a press outside it closes it
-        if self.clear_ask {
+        // the Clear and purge alerts block the window; the Details popover is transient: a press outside it closes it
+        if self.asking() {
             return self.ask_target(ui, x + self.x0, y);
         }
         if let Some(g) = self.details_geometry(ui) {
@@ -1444,10 +1484,13 @@ impl Reminders {
                 if top_bar {
                     return None;
                 }
+                // a kept row's Restore link restores it; the rest of the row selects it
                 if let Some(kept) = &self.deleted {
                     for (i, reminder) in kept.iter().enumerate() {
-                        if within(x, y, self.deleted_row_rect(ui, i)) {
-                            return Some(Target::Restore(reminder.id));
+                        let rect = self.deleted_row_rect(ui, i);
+                        if within(x, y, rect) {
+                            let link = x >= rect.0 + rect.2 - ui.pt(purge::RESTORE_W);
+                            return Some(if link { Target::Restore(reminder.id) } else { Target::KeptRow(reminder.id) });
                         }
                     }
                     return None;
@@ -1640,6 +1683,8 @@ impl Reminders {
     /// Recently Deleted: shows the reminders kept in the archive store.
     fn open_deleted(&mut self, ui: &Ui) {
         self.deleted = Some(archive::kept(&archive::path_beside(&self.path)).unwrap_or_default());
+        self.kept_selected = None;
+        self.selected = None;
         self.screen = Screen::Items;
         self.searching = false;
         self.swipe = None;
@@ -1681,6 +1726,10 @@ impl Reminders {
     }
 
     fn open_view(&mut self, ui: &Ui, view: View) {
+        // a selection belongs to the list it was made in (E2E R2)
+        if self.view != view || self.deleted.is_some() {
+            self.selected = None;
+        }
         self.view = view;
         self.deleted = None;
         self.screen = Screen::Items;
@@ -1957,6 +2006,18 @@ impl Reminders {
         if self.screen != Screen::Items {
             return;
         }
+        // on Recently Deleted the arrows move through the kept reminders, never the list hidden under the page
+        if let Some(kept) = &self.deleted {
+            let ids: Vec<u64> = kept.iter().map(|r| r.id).collect();
+            let at = self.kept_selected.and_then(|id| ids.iter().position(|&i| i == id));
+            match out {
+                Out::Named("Down") => self.kept_selected = ids.get(at.map_or(0, |i| (i + 1).min(ids.len().saturating_sub(1)))).copied(),
+                Out::Named("Up") => self.kept_selected = ids.get(at.map_or(0, |i| i.saturating_sub(1))).copied(),
+                _ => {}
+            }
+            self.dirty = true;
+            return;
+        }
         let ids: Vec<u64> = self
             .rows
             .iter()
@@ -2225,16 +2286,20 @@ impl Reminders {
     /// the list, Return saves the open editor, Z undoes the last delete. False when unused here.
     pub fn chord(&mut self, ui: &Ui, key: u32, mods: u32, t: f64) -> bool {
         use bifrost_proto::{CHORD_ALT, CHORD_CTRL, CHORD_META, CHORD_SHIFT};
-        if mods & (CHORD_CTRL | CHORD_META) == 0 || mods & CHORD_ALT != 0 || self.clear_ask {
+        if mods & (CHORD_CTRL | CHORD_META) == 0 || mods & CHORD_ALT != 0 || self.asking() {
             return false;
         }
         let shift = mods & CHORD_SHIFT != 0;
         if key == 14 {
-            // Cmd+Backspace deletes the arrow-selected reminder
+            // Cmd+Backspace deletes the arrow-selected reminder on screen; on Recently Deleted it asks before the
+            // selected kept reminder goes for good
             if self.screen != Screen::Items {
                 return false;
             }
-            let Some(id) = self.selected.filter(|id| self.data.items.iter().any(|r| r.id == *id)) else { return false };
+            if self.deleted.is_some() {
+                return self.purge_selected();
+            }
+            let Some(id) = self.selected_item() else { return false };
             if self.delete_item(id, t) {
                 self.rebuild(ui);
             }
@@ -2254,8 +2319,8 @@ impl Reminders {
 
     /// Escape: leaves a focused field first, then cancels the open editor.
     pub fn escape(&mut self, ui: &Ui, t: f64) -> bool {
-        // Escape is the Clear alert's Cancel
-        if self.clear_ask {
+        // Escape is the Clear and purge alerts' Cancel
+        if self.asking() {
             self.activate(ui, Target::ClearCancel, t);
             return true;
         }
@@ -2328,12 +2393,21 @@ impl Reminders {
         }
         self.layout_columns(ui);
         let view = match self.hit(ui, x - self.x0, y)? {
+            // a kept reminder on Recently Deleted: the right click selects it, then its menu shows
+            Target::KeptRow(id) | Target::Restore(id) => {
+                self.kept_selected = Some(id);
+                self.menu_view = None;
+                self.menu_kept = true;
+                self.dirty = true;
+                return Some(self.kept_menu());
+            }
             Target::List(id) | Target::ListInfo(id) => View::List(id),
             Target::Custom(id) | Target::SmartInfo(id) => View::Custom(id),
             _ => return None,
         };
         let items = self.list_menu(view)?;
         self.menu_view = Some(view);
+        self.menu_kept = false;
         Some(items)
     }
 
@@ -2344,6 +2418,11 @@ impl Reminders {
 
     /// Runs the row `id` chosen from a list's menu. True when something changed.
     pub fn context_action(&mut self, ui: &Ui, id: u32, t: f64) -> bool {
+        if std::mem::take(&mut self.menu_kept) {
+            let changed = self.deleted.is_some() && self.kept_action(ui, id);
+            self.dirty = true;
+            return changed;
+        }
         let Some(view) = self.menu_view.take() else { return false };
         if self.has_draft() && id != CTX_LIST_INFO {
             return false;
@@ -2405,6 +2484,8 @@ impl Reminders {
             Target::Smart(s) => self.open_view(ui, View::Smart(s)),
             Target::Deleted => self.open_deleted(ui),
             Target::Restore(id) => self.restore_deleted(ui, id),
+            Target::KeptRow(id) => self.kept_selected = Some(id),
+            Target::PurgeConfirm => self.purge_confirmed(ui),
             Target::List(id) => self.open_view(ui, View::List(id)),
             Target::Tag(key) => self.open_view(ui, View::Tag(key)),
             Target::Custom(id) => self.open_view(ui, View::Custom(id)),
@@ -2447,9 +2528,15 @@ impl Reminders {
                 }
             }
             Target::ListInfo(id) => self.open_list_editor(ui, Some(id), t),
+            Target::ListMenu(x, y) if self.deleted.is_some() => {
+                self.menu_view = None;
+                self.menu_kept = true;
+                self.menu_request = Some((x, y, self.kept_menu()));
+            }
             Target::ListMenu(x, y) => {
                 if let Some(items) = self.list_menu(self.view) {
                     self.menu_view = Some(self.view);
+                    self.menu_kept = false;
                     self.menu_request = Some((x, y, items));
                 }
             }
@@ -2484,7 +2571,10 @@ impl Reminders {
                 self.clear_ask = false;
                 self.clear_completed(ui, t);
             }
-            Target::ClearCancel => self.clear_ask = false,
+            Target::ClearCancel => {
+                self.clear_ask = false;
+                self.purge_ask = None;
+            }
             Target::Row(row) => {
                 if let Some(id) = self.item_id(row) {
                     self.open_editor(ui, Some(id), t);
@@ -2730,9 +2820,10 @@ impl Reminders {
     // ---- input ----------------------------------------------------------
 
     pub fn key(&mut self, ui: &Ui, out: Out, t: f64) {
-        // Return is the Clear alert's default button; other keys wait for the alert
-        if self.clear_ask {
-            if matches!(out, Out::Enter) {
+        // Return is the Clear alert's default button; other keys wait for the alert. The purge alert's delete button
+        // is destructive, so Return does not answer it.
+        if self.asking() {
+            if matches!(out, Out::Enter) && self.clear_ask {
                 self.activate(ui, Target::ClearConfirm, t);
             }
             return;
@@ -2791,6 +2882,7 @@ impl Reminders {
                 | Target::ClearAsk
                 | Target::ClearConfirm
                 | Target::ClearCancel
+                | Target::PurgeConfirm
         )
     }
     fn swipe_to(&mut self, ui: &Ui, x: f32) {

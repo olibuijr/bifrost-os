@@ -139,12 +139,12 @@ impl Reminders {
     }
 
     fn list_view(&self) -> bool {
-        matches!(self.view, View::List(_)) && !self.searching
+        matches!(self.view, View::List(_)) && !self.searching && self.deleted.is_none()
     }
 
     /// Whether a custom smart list is on screen (its form is reached from the toolbar's Show List Info).
     fn smart_view(&self) -> bool {
-        matches!(self.view, View::Custom(_)) && !self.searching
+        matches!(self.view, View::Custom(_)) && !self.searching && self.deleted.is_none()
     }
 
     fn search_open(&self) -> bool {
@@ -189,7 +189,7 @@ impl Reminders {
         items.push(ToolbarItem::flexible_space());
         items.push(ToolbarItem::icon(B_EXPORT, "Export List", "square.and.arrow.up").in_group(1).enabled(self.file_export && self.list_view()));
         items.push(ToolbarItem::icon(B_OPTIONS, "View Options", "arrow.up.arrow.down").in_group(1).selected(self.options_open));
-        items.push(ToolbarItem::icon(B_INFO, "Show List Info", "ellipsis").in_group(1).enabled(self.list_view() || self.smart_view()));
+        items.push(ToolbarItem::icon(B_INFO, "Show List Info", "ellipsis").in_group(1).enabled(self.list_view() || self.smart_view() || self.deleted.is_some()));
         items.push(ToolbarItem::icon(B_ADD, "New Reminder", "plus").in_group(1));
         // the search field is always in the toolbar (Golden Gate: a visible search field, not a collapsed button)
         let search_w = ((end - start) * 0.35).clamp(SEARCH_MIN_PT, SEARCH_MAX_PT);
@@ -237,6 +237,11 @@ impl Reminders {
             B_EXPORT => Target::OptExport,
             B_OPTIONS => Target::Options,
             // "..." opens the list's menu under the button (Show List Info is one of its rows), E2E W2-21
+            // on Recently Deleted it is the page's menu: Delete Permanently and Delete All (`purge.rs`)
+            B_INFO if self.deleted.is_some() => {
+                let (bx, by, _, bh) = self.bar_px(ui, B_INFO)?;
+                Target::ListMenu(bx, by + bh)
+            }
             B_INFO => match self.view {
                 View::List(_) | View::Custom(_) => {
                     let (bx, by, _, bh) = self.bar_px(ui, B_INFO)?;

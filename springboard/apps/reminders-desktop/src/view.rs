@@ -248,8 +248,12 @@ impl Reminders {
             if y + h > bottom {
                 break;
             }
+            // the selected kept reminder (Delete Permanently acts on it, `purge.rs`)
+            if self.kept_selected == Some(reminder.id) {
+                s.fill_rrect(x, y, w, h, 0.0, bifrost_app::kit::ui::SELECTION_INACTIVE.now());
+            }
             s.fill_rrect(x, y + h - 1.0, w, 1.0, 0.0, SEPARATOR_C.now());
-            let title = ui.fit(&clean(&reminder.title), MAC_BODY_PT, w - ui.pt(SPACE_HUGE * 2.0));
+            let title = ui.fit(&clean(&reminder.title), MAC_BODY_PT, w - ui.pt(super::purge::RESTORE_W));
             self.text(s, ui, &title, MAC_BODY_PT, Weight::Regular, LABEL.now(), x + ui.pt(SPACE_XS), y + ui.pt(SPACE_L));
             self.right(s, ui, "Restore", MAC_BODY_PT, Weight::Semibold, LINK, x + w - ui.pt(SPACE_XS), y + ui.pt(SPACE_L));
         }

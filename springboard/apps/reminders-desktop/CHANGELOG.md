@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20.1 — 2026-10-24
+
+- Delete Reminder and Cmd+Backspace act only on a selected reminder that is on screen. A selection made in another list, or one hidden under Recently Deleted, is no longer deleted; opening another list clears the selection.
+- Recently Deleted: a click selects a kept reminder (its Restore link still restores). Delete Permanently comes from the row's context menu, the toolbar's "..." menu and Cmd+Backspace, and Delete All from both menus; each asks first, and the pictures of a purged reminder go with it.
+
 ## 1.20.0 — 2026-10-23
 
 - Add List creates a list even while a reminder's details are open; one click selects; Return commits; Delete List asks first.

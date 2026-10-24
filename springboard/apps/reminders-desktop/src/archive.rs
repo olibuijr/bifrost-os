@@ -1,6 +1,7 @@
 //! Recently deleted reminders, kept in a persistent store beside the reminders file. A deletion keeps the reminder (and
 //! its subtasks) here, so it survives a restart and can be taken back out. The store holds each reminder as its own
-//! `R` line (see `store::Codec`), in the order they were deleted.
+//! `R` line (see `store::Codec`), in the order they were deleted. Delete Permanently (`take` without putting the reminder
+//! back) and Delete All (`purge_all`) empty it for good.
 
 use crate::model::Reminder;
 use bifrost_app::controls::managed_context::ManagedContext;
@@ -46,6 +47,16 @@ pub fn take(path: &Path, id: u64) -> io::Result<Option<Reminder>> {
     Ok(Some(reminder))
 }
 
+/// Delete All: empties the store and returns the reminders it held, so their pictures can go too.
+pub fn purge_all(path: &Path) -> io::Result<Vec<Reminder>> {
+    let gone = kept(path)?;
+    if gone.is_empty() {
+        return Ok(gone);
+    }
+    persistent_store::write(path, &ManagedContext::<Reminder>::new())?;
+    Ok(gone)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -83,6 +94,18 @@ mod tests {
         assert_eq!(back.title, "Restore me");
         assert_eq!(kept(&path).unwrap().iter().map(|r| r.id).collect::<Vec<_>>(), vec![3]);
         assert_eq!(take(&path, 5).unwrap(), None, "already taken");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn delete_all_empties_the_store_and_returns_what_it_held() {
+        let dir = scratch("purge");
+        let path = dir.join(FILE);
+        keep(&path, &[Reminder::new(3, "One"), Reminder::new(5, "Two")]).unwrap();
+        let gone = purge_all(&path).unwrap();
+        assert_eq!(gone.iter().map(|r| r.id).collect::<Vec<_>>(), vec![3, 5]);
+        assert!(kept(&path).unwrap().is_empty());
+        assert!(purge_all(&path).unwrap().is_empty(), "an empty store stays empty");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
