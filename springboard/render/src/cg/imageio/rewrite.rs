@@ -307,7 +307,7 @@ fn rewrite_webp(data: &[u8], props: &Properties, block: Option<&[u8]>, xmp: Opti
     }
     for (ty, d) in &chunks {
         if !matches!(ty, b"VP8X" | b"EXIF" | b"XMP ") {
-            put(ty, d);
+            put(ty, *d);
         }
     }
     if let Some(b) = block {
