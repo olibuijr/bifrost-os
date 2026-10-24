@@ -33,6 +33,12 @@ impl<'a> Chunks<'a> {
     }
 }
 
+/// The TIFF-structured block of the `EXIF` chunk (an `Exif\0\0` prefix some writers add is skipped).
+pub fn exif_chunk(data: &[u8]) -> Option<&[u8]> {
+    let e = chunks(data)?.get(b"EXIF")?;
+    Some(e.strip_prefix(b"Exif\0\0").unwrap_or(e))
+}
+
 fn u24(d: &[u8], o: usize) -> Option<usize> {
     let b = d.get(o..o + 3)?;
     Some(b[0] as usize | (b[1] as usize) << 8 | (b[2] as usize) << 16)

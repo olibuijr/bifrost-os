@@ -304,6 +304,31 @@ pub fn converts(profile: &[u8]) -> bool {
     display_target().is_some_and(|t| picture_table(profile, t).is_some())
 }
 
+/// Converts straight 8-bit RGBA pixels tagged with the RGB profile `profile` to sRGB in place (perceptual intent, black
+/// point compensation): what a writer does when it optimises a picture for sharing, so that the file needs no
+/// profile. The table is cached like the display tables. `false`, with the pixels untouched, when the profile is not
+/// an RGB profile or cannot be read.
+pub fn rgba8_to_srgb(rgba: &mut [u8], profile: &[u8]) -> bool {
+    if profile.get(16..20) != Some(b"RGB ".as_slice()) {
+        return false;
+    }
+    let key = cache_key(&[profile], "srgb+perceptual+bpc");
+    let Some(table) = cached(key, || {
+        let src = Model::from_icc(profile).ok()?;
+        let dst = Model::from_icc(&Builtin::Srgb.bytes()).ok()?;
+        Lut3d::build(&Conversion::new(src, dst, RenderingIntent::Perceptual, true), Lut3d::GRID)
+    }) else {
+        return false;
+    };
+    for p in rgba.as_chunks_mut::<4>().0.iter_mut() {
+        let out = table.sample([p[0], p[1], p[2]].map(|c| c as f64 / 255.0));
+        for k in 0..3 {
+            p[k] = (out[k] * 255.0).round() as u8;
+        }
+    }
+    true
+}
+
 /// Converts the frames of a decoded file, in place, from the profile each frame carries to the display profile. The
 /// frame's 16-bit copy, when present, is converted too.
 pub fn to_display(d: &mut Decoded) {
@@ -352,6 +377,21 @@ mod tests {
                 assert!((out[k] - c[k]).abs() < 3e-3, "{c:?} -> {mid:?} -> {out:?}");
             }
         }
+    }
+
+    #[test]
+    fn pictures_are_brought_to_srgb_for_sharing() {
+        let to_p3 = Conversion::new(model(Builtin::Srgb), model(Builtin::DisplayP3), RenderingIntent::Perceptual, true);
+        let c = to_p3.apply([0.8, 0.3, 0.1]).unwrap();
+        let mut px: Vec<u8> = c.iter().map(|v| (v * 255.0).round() as u8).chain([200]).collect();
+        assert!(rgba8_to_srgb(&mut px, &Builtin::DisplayP3.bytes()));
+        for (got, want) in px[..3].iter().zip([0.8, 0.3, 0.1]) {
+            assert!((*got as f64 - want * 255.0).abs() <= 3.0, "{px:?}");
+        }
+        assert_eq!(px[3], 200, "alpha is kept");
+        let mut grey = vec![1, 2, 3, 4];
+        assert!(!rgba8_to_srgb(&mut grey, &Builtin::Gray22.bytes()), "a grey profile is not converted");
+        assert_eq!(grey, vec![1, 2, 3, 4]);
     }
 
     #[test]

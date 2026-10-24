@@ -24,6 +24,38 @@ fn chunks(data: &[u8]) -> Vec<([u8; 4], &[u8])> {
     out
 }
 
+/// The body of the `eXIf` chunk (a TIFF-structured block).
+pub fn exif_chunk(data: &[u8]) -> Option<&[u8]> {
+    if data.get(..8)? != SIGNATURE {
+        return None;
+    }
+    chunks(data).into_iter().find(|c| &c.0 == b"eXIf").map(|c| c.1)
+}
+
+/// Every chunk as `(type, offset of its length field, offset just past its CRC)`, up to and including IEND. `None`
+/// for data that is not a PNG or whose chunks run past the end, so a writer that copies chunks never cuts one.
+pub fn chunk_spans(data: &[u8]) -> Option<Vec<([u8; 4], usize, usize)>> {
+    if data.get(..8)? != SIGNATURE {
+        return None;
+    }
+    let mut out = Vec::new();
+    let mut p = 8;
+    while p + 12 <= data.len() {
+        let len = u32::from_be_bytes([data[p], data[p + 1], data[p + 2], data[p + 3]]) as usize;
+        let ty = [data[p + 4], data[p + 5], data[p + 6], data[p + 7]];
+        let end = p.checked_add(12)?.checked_add(len)?;
+        if end > data.len() {
+            return None;
+        }
+        out.push((ty, p, end));
+        if &ty == b"IEND" {
+            return Some(out);
+        }
+        p = end;
+    }
+    None
+}
+
 fn latin1(b: &[u8]) -> String {
     b.iter().map(|&c| c as char).collect()
 }

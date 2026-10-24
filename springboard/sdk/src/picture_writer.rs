@@ -44,6 +44,10 @@ pub struct PictureWriter {
     speed_kmh: Option<f64>,
     direction_deg: Option<f64>,
     descriptive: Descriptive,
+    max_side: Option<usize>,
+    background: Option<[u8; 3]>,
+    embed_thumbnail: bool,
+    for_sharing: bool,
     frames: Vec<(CgImage, u32)>,
 }
 
@@ -72,6 +76,10 @@ impl PictureWriter {
             speed_kmh: None,
             direction_deg: None,
             descriptive: Descriptive::default(),
+            max_side: None,
+            background: None,
+            embed_thumbnail: false,
+            for_sharing: false,
             frames: Vec::new(),
         }
     }
@@ -224,6 +232,35 @@ impl PictureWriter {
         self
     }
 
+    /// Scales every frame down so that neither side is longer than `pixels` (aspect kept, never enlarged). Zero is
+    /// ignored.
+    pub fn max_side(mut self, pixels: usize) -> Self {
+        if pixels > 0 {
+            self.max_side = Some(pixels);
+        }
+        self
+    }
+
+    /// The colour transparent pixels are laid over in a format without alpha (JPEG); white when not set.
+    pub fn background(mut self, red: u8, green: u8, blue: u8) -> Self {
+        self.background = Some([red, green, blue]);
+        self
+    }
+
+    /// Embeds a small JPEG preview (at most 160 pixels a side) in a JPEG's EXIF block, which viewers and
+    /// [`crate::image_source::ImageSource::fast_thumbnail`] show without decoding the whole picture.
+    pub fn embed_thumbnail(mut self, on: bool) -> Self {
+        self.embed_thumbnail = on;
+        self
+    }
+
+    /// Converts frames that carry a colour profile to sRGB and writes no profile, so the picture looks the same in any
+    /// viewer.
+    pub fn optimize_for_sharing(mut self, on: bool) -> Self {
+        self.for_sharing = on;
+        self
+    }
+
     /// How many times an animation repeats; 0 repeats forever.
     pub fn loop_count(mut self, loop_count: u32) -> Self {
         self.loop_count = loop_count;
@@ -251,6 +288,10 @@ impl PictureWriter {
     pub fn finish(self) -> Option<Vec<u8>> {
         let mut dest = ImageDestination::new(self.format, self.frames.len())?;
         dest.loop_count = self.loop_count;
+        dest.max_pixel_size = self.max_side;
+        dest.background_color = self.background;
+        dest.embed_thumbnail = self.embed_thumbnail;
+        dest.optimize_color_for_sharing = self.for_sharing;
         for (image, delay_ms) in &self.frames {
             dest.add_image(image, Some(self.options(*delay_ms)));
         }
@@ -490,6 +531,19 @@ mod tests {
         assert_eq!(only_iptc.caption.as_deref(), Some("Low tide"));
         assert_eq!(only_iptc.keywords, vec!["sea".to_string(), "rocks".to_string()]);
         assert_eq!(only_iptc.rating, None, "a rating out of range is ignored, and IPTC has none");
+    }
+
+    #[test]
+    fn a_shared_jpeg_is_scaled_flattened_and_carries_a_preview() {
+        let mut writer = PictureWriter::new(Format::Jpeg).max_side(200).background(0, 0, 0).embed_thumbnail(true).optimize_for_sharing(true);
+        assert!(writer.add_frame(800, 400, vec![255, 255, 255, 0].repeat(800 * 400), 0));
+        let bytes = writer.finish().unwrap();
+        let src = crate::image_source::ImageSource::new(&bytes).unwrap();
+        assert_eq!(src.size(), (200, 100));
+        let preview = src.embedded_thumbnail().expect("a preview is embedded");
+        assert_eq!((preview.w, preview.h), (160, 80));
+        let px = src.decode().unwrap().px[0];
+        assert!((px & 0xff) < 30, "transparent white laid over black is black: {px:#010x}");
     }
 
     #[test]

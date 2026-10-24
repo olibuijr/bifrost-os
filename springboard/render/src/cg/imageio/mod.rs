@@ -205,7 +205,10 @@ fn decode_all(format: Format, d: &[u8]) -> Option<Decoded> {
 pub struct ThumbnailOptions {
     /// The longest side of the result; None keeps the full size.
     pub max_pixel_size: Option<usize>,
+    /// Make the thumbnail from the full image even when the file embeds one (the embedded one is ignored).
     pub create_from_image_always: bool,
+    /// Make the thumbnail from the full image when the file embeds none. With this and `create_from_image_always`
+    /// both false, only an embedded thumbnail is returned.
     pub create_from_image_if_absent: bool,
     /// Rotate and flip the result by the image orientation.
     pub transform: bool,
@@ -405,15 +408,53 @@ impl ImageSource {
         Some(img)
     }
 
-    /// A reduced copy of image `index`. `None` when the options allow no thumbnail or the image does not decode.
-    pub fn thumbnail_at(&self, index: usize, o: &ThumbnailOptions) -> Option<CgImage> {
-        if !o.create_from_image_always && !o.create_from_image_if_absent {
+    /// The TIFF-structured metadata block of the file (JPEG APP1, PNG `eXIf`, WebP `EXIF`, or a TIFF file itself).
+    pub fn exif_block(&self) -> Option<&[u8]> {
+        match self.format()? {
+            Format::Jpeg => jpeg::exif_block(&self.data),
+            Format::Png => png::exif_chunk(&self.data),
+            Format::Webp => webp::exif_chunk(&self.data),
+            Format::Tiff => Some(&self.data),
+            _ => None,
+        }
+    }
+
+    /// The JPEG thumbnail the file embeds for image `index` (the EXIF IFD1 preview of the primary image), as
+    /// stored: not rotated by the orientation. `None` when there is none.
+    pub fn embedded_thumbnail(&self, index: usize) -> Option<&[u8]> {
+        if index != self.primary_image_index() {
             return None;
         }
-        let mut img = self.image_premultiplied(index)?;
-        if let Some(f) = o.subsample_factor.filter(|f| matches!(f, 2 | 4 | 8)) {
-            img = crate::imgdec::box_down(&img, f);
+        exif::thumbnail_of_block(self.exif_block()?)
+    }
+
+    /// The embedded thumbnail of image `index` decoded to premultiplied pixels.
+    pub fn embedded_thumbnail_image(&self, index: usize) -> Option<Image> {
+        let f = jpeg::decode(self.embedded_thumbnail(index)?)?.frames.into_iter().next()?;
+        let mut img = Image::new(f.w, f.h);
+        for (o, p) in img.px.iter_mut().zip(f.rgba8.as_chunks::<4>().0.iter()) {
+            *o = crate::gfx::rgba(p[0], p[1], p[2], p[3]);
         }
+        Some(img)
+    }
+
+    /// A reduced copy of image `index`. An embedded thumbnail is used unless `create_from_image_always` is set; the
+    /// full image is decoded when that flag is set, or when there is no embedded one and `create_from_image_if_absent`
+    /// is set. `None` when the options allow neither or the image does not decode. The subsample factor applies to
+    /// the full-image decode only.
+    pub fn thumbnail_at(&self, index: usize, o: &ThumbnailOptions) -> Option<CgImage> {
+        let embedded = if o.create_from_image_always { None } else { self.embedded_thumbnail_image(index) };
+        let mut img = match embedded {
+            Some(t) => t,
+            None if o.create_from_image_always || o.create_from_image_if_absent => {
+                let full = self.image_premultiplied(index)?;
+                match o.subsample_factor.filter(|f| matches!(f, 2 | 4 | 8)) {
+                    Some(f) => crate::imgdec::box_down(&full, f),
+                    None => full,
+                }
+            }
+            None => return None,
+        };
         if let Some(m) = o.max_pixel_size.filter(|&m| m > 0) {
             img = crate::imgdec::contain(&img, m, m);
         }
@@ -487,6 +528,46 @@ pub struct ImageDestination {
     pub loop_count: u32,
     pub tiff_compression: tiff::Compression,
     pub subsample: bool,
+    /// Scale every image down so that neither side is longer than this (the aspect is kept; never enlarged).
+    pub max_pixel_size: Option<usize>,
+    /// The colour (straight RGB) that transparent pixels are composited over when the format has no alpha (JPEG).
+    /// White when unset.
+    pub background_color: Option<[u8; 3]>,
+    /// Write a small JPEG preview into the EXIF block (IFD1) of a JPEG, at most `EMBEDDED_THUMBNAIL_SIDE` a side.
+    pub embed_thumbnail: bool,
+    /// Convert pixels that carry an RGB profile (the image's own, or the `icc` option) to sRGB and write no profile,
+    /// so the picture looks the same wherever it is opened.
+    pub optimize_color_for_sharing: bool,
+}
+
+/// The longest side of the preview `ImageDestination::embed_thumbnail` writes (a 4:3 photo gets 160 x 120).
+pub const EMBEDDED_THUMBNAIL_SIDE: usize = 160;
+
+/// Straight RGBA scaled down to fit `max` x `max` (unchanged when it already fits or `max` is 0).
+fn fit_rgba(rgba: Vec<u8>, w: usize, h: usize, max: usize) -> (Vec<u8>, usize, usize) {
+    if max == 0 || (w <= max && h <= max) {
+        return (rgba, w, h);
+    }
+    let mut img = Image::new(w, h);
+    for (o, p) in img.px.iter_mut().zip(rgba.as_chunks::<4>().0.iter()) {
+        *o = crate::gfx::rgba(p[0], p[1], p[2], p[3]);
+    }
+    let small = crate::imgdec::contain(&img, max, max);
+    let px = small.px.iter().flat_map(|&p| crate::pixel_layout::unpremultiply(p)).collect();
+    (px, small.w, small.h)
+}
+
+/// Composites straight RGBA over an opaque colour.
+fn flatten(rgba: &[u8], bg: [u8; 3]) -> Vec<u8> {
+    rgba.as_chunks::<4>()
+        .0
+        .iter()
+        .flat_map(|p| {
+            let a = p[3] as u32;
+            let mix = |c: u8, b: u8| ((c as u32 * a + b as u32 * (255 - a) + 127) / 255) as u8;
+            [mix(p[0], bg[0]), mix(p[1], bg[1]), mix(p[2], bg[2]), 255]
+        })
+        .collect()
 }
 
 impl ImageDestination {
@@ -500,6 +581,10 @@ impl ImageDestination {
             loop_count: 0,
             tiff_compression: tiff::Compression::Deflate,
             subsample: true,
+            max_pixel_size: None,
+            background_color: None,
+            embed_thumbnail: false,
+            optimize_color_for_sharing: false,
         })
     }
 
@@ -565,8 +650,8 @@ impl ImageDestination {
         m
     }
 
-    /// The TIFF-structured metadata block for one image's options.
-    fn exif_block(o: &WriteOptions) -> Option<Vec<u8>> {
+    /// The TIFF-structured metadata block for one image's options, with `thumbnail` (a JPEG) in IFD1 when given.
+    fn exif_block(o: &WriteOptions, thumbnail: Option<&[u8]>) -> Option<Vec<u8>> {
         let mut tiff = o.tiff.clone();
         if let Some(or) = o.orientation.filter(|&v| (2..=8).contains(&v)) {
             tiff.insert("Orientation".into(), PropValue::Int(or as i64));
@@ -576,7 +661,29 @@ impl ImageDestination {
             tiff.insert("YResolution".into(), PropValue::Float(y));
             tiff.insert("ResolutionUnit".into(), PropValue::Int(2));
         }
-        exif::build_block(&tiff, &o.exif, &o.gps)
+        exif::build_block_with_thumbnail(&tiff, &o.exif, &o.gps, thumbnail)
+    }
+
+    /// One added image as straight RGBA with its merged options, after the destination-wide settings: converted to
+    /// sRGB when optimising for sharing, then scaled to `max_pixel_size`.
+    fn prepared(&self, img: &CgImage, o: &WriteOptions) -> (Vec<u8>, usize, usize, WriteOptions) {
+        let mut m = self.merged(o);
+        let mut px = img.to_rgba8();
+        if self.optimize_color_for_sharing {
+            let profile: Option<Vec<u8>> = m.icc.clone().or_else(|| match img.color_space() {
+                Some(ImageColorSpace::Icc { profile, .. }) => Some(profile.to_vec()),
+                Some(ImageColorSpace::DisplayP3) => Some(crate::icc_builtin::Builtin::DisplayP3.bytes()),
+                _ => None,
+            });
+            match profile {
+                // Converted pixels need no profile; one that cannot be converted is kept so the colours stay right.
+                Some(p) if crate::icc_transform::rgba8_to_srgb(&mut px, &p) => m.icc = None,
+                Some(p) => m.icc = Some(p),
+                None => m.icc = None,
+            }
+        }
+        let (px, w, h) = fit_rgba(px, img.width(), img.height(), self.max_pixel_size.unwrap_or(0));
+        (px, w, h, m)
     }
 
     /// Writes the file. `None` when no image was added or an image cannot be encoded.
@@ -584,14 +691,14 @@ impl ImageDestination {
         if self.images.is_empty() {
             return None;
         }
-        let items: Vec<(Vec<u8>, usize, usize, WriteOptions)> = self.images.iter().map(|(i, o)| (i.to_rgba8(), i.width(), i.height(), self.merged(o))).collect();
+        let items: Vec<(Vec<u8>, usize, usize, WriteOptions)> = self.images.iter().map(|(i, o)| self.prepared(i, o)).collect();
         let (first_px, w, h, fo) = &items[0];
         match self.format {
             Format::Png => {
                 let o = encode::PngOptions {
                     text: fo.text.clone(),
                     dpi: fo.dpi,
-                    exif: Self::exif_block(&WriteOptions { dpi: None, ..fo.clone() }),
+                    exif: Self::exif_block(&WriteOptions { dpi: None, ..fo.clone() }, None),
                     icc: fo.icc.clone().map(|p| ("ICC".to_string(), p)),
                     gamma: fo.gamma,
                     level: None,
@@ -605,17 +712,25 @@ impl ImageDestination {
                 encode::encode_png(*w, *h, first_px, &o)
             }
             Format::Jpeg => {
+                // JPEG has no alpha: transparent pixels are laid over the background colour (white by default).
+                let flat = flatten(first_px, self.background_color.unwrap_or([255, 255, 255]));
+                let thumbnail = if self.embed_thumbnail {
+                    let (small, tw, th) = fit_rgba(flat.clone(), *w, *h, EMBEDDED_THUMBNAIL_SIDE);
+                    encode::encode_jpeg(tw, th, &small, &encode::JpegOptions { quality: 75, ..Default::default() })
+                } else {
+                    None
+                };
                 let o = encode::JpegOptions {
                     quality: (fo.quality.unwrap_or(0.8).clamp(0.0, 1.0) * 100.0).round().max(1.0) as u8,
                     subsample: self.subsample,
                     dpi: fo.dpi,
-                    exif: Self::exif_block(fo),
+                    exif: Self::exif_block(fo, thumbnail.as_deref()),
                     icc: fo.icc.clone(),
                     comment: fo.comment.clone(),
                     xmp: fo.xmp.clone(),
                     image_resources: fo.image_resources.clone(),
                 };
-                encode::encode_jpeg(*w, *h, first_px, &o)
+                encode::encode_jpeg(*w, *h, &flat, &o)
             }
             Format::Gif => {
                 let frames: Vec<gif::GifFrame> = items.iter().filter(|i| i.1 == *w && i.2 == *h).map(|i| gif::GifFrame { rgba: &i.0, delay_ms: i.3.delay_ms.unwrap_or(100) }).collect();
@@ -651,7 +766,7 @@ impl ImageDestination {
                 (!v.is_empty()).then(|| bmp::ico_encode(&v))
             }
             // Lossless and still: the quality setting does not apply, and only the first picture is written.
-            Format::Webp => webp::encode(*w, *h, first_px, Self::exif_block(fo).as_deref(), fo.icc.as_deref(), fo.xmp.as_deref()),
+            Format::Webp => webp::encode(*w, *h, first_px, Self::exif_block(fo, None).as_deref(), fo.icc.as_deref(), fo.xmp.as_deref()),
         }
     }
 
@@ -802,6 +917,67 @@ pub mod tests {
             assert_eq!(p.gps["LatitudeRef"].as_str(), Some("N"), "{f:?}");
             assert!((p.dpi_width.unwrap() - 150.0).abs() < 0.5, "{f:?}");
         }
+    }
+
+    #[test]
+    fn an_embedded_thumbnail_is_written_and_used_unless_the_full_image_is_asked_for() {
+        let mut d = ImageDestination::new(Format::Jpeg, 1).unwrap();
+        d.embed_thumbnail = true;
+        d.add_image(&sample_image(400, 300), Some(WriteOptions { orientation: Some(6), ..Default::default() }));
+        let s = ImageSource::new(d.finalize().unwrap());
+        assert_eq!(s.properties_at(0).unwrap().orientation, 6, "IFD0 still carries the metadata");
+        let thumb = s.embedded_thumbnail_image(0).expect("IFD1 has the preview");
+        assert_eq!((thumb.w, thumb.h), (160, 120));
+        assert!(s.embedded_thumbnail(1).is_none());
+        let only_embedded = ThumbnailOptions { create_from_image_always: false, create_from_image_if_absent: false, transform: false, ..Default::default() };
+        let t = s.thumbnail_at(0, &only_embedded).unwrap();
+        assert_eq!((t.width(), t.height()), (160, 120));
+        let upright = s.thumbnail_at(0, &ThumbnailOptions { create_from_image_always: false, ..Default::default() }).unwrap();
+        assert_eq!((upright.width(), upright.height()), (120, 160), "the preview turns with the orientation");
+        let full = s.thumbnail_at(0, &ThumbnailOptions { transform: false, ..Default::default() }).unwrap();
+        assert_eq!((full.width(), full.height()), (400, 300), "always: the full image, not the preview");
+        let mut plain = ImageDestination::new(Format::Jpeg, 1).unwrap();
+        plain.add_image(&sample_image(40, 30), None);
+        let p = ImageSource::new(plain.finalize().unwrap());
+        assert!(p.embedded_thumbnail(0).is_none());
+        assert!(p.thumbnail_at(0, &only_embedded).is_none(), "no preview and no permission to make one");
+        assert!(p.thumbnail_at(0, &ThumbnailOptions { create_from_image_always: false, ..Default::default() }).is_some(), "if absent: made from the image");
+    }
+
+    #[test]
+    fn the_destination_scales_to_the_largest_side_and_flattens_over_the_background() {
+        let mut d = ImageDestination::new(Format::Png, 1).unwrap();
+        d.max_pixel_size = Some(100);
+        d.add_image(&sample_image(400, 300), None);
+        assert_eq!(ImageSource::new(d.finalize().unwrap()).pixel_size(), Some((100, 75)));
+        let mut small = ImageDestination::new(Format::Png, 1).unwrap();
+        small.max_pixel_size = Some(100);
+        small.add_image(&sample_image(40, 30), None);
+        assert_eq!(ImageSource::new(small.finalize().unwrap()).pixel_size(), Some((40, 30)), "never enlarged");
+        let clear = CgImage::from_rgba8(8, 8, vec![0; 8 * 8 * 4]).unwrap();
+        let mut j = ImageDestination::new(Format::Jpeg, 1).unwrap();
+        j.background_color = Some([200, 30, 30]);
+        j.add_image(&clear, Some(WriteOptions { quality: Some(1.0), ..Default::default() }));
+        let px = ImageSource::new(j.finalize().unwrap()).image_at(0).unwrap().to_rgba8();
+        assert!(px[0] > 180 && px[1] < 60 && px[2] < 60, "transparent pixels take the background: {:?}", &px[..4]);
+    }
+
+    #[test]
+    fn optimising_for_sharing_converts_to_srgb_and_drops_the_profile() {
+        let p3 = crate::icc_builtin::Builtin::DisplayP3.bytes();
+        let img = CgImage::from_rgba8(2, 1, vec![255, 0, 0, 255, 0, 255, 0, 255]).unwrap();
+        let mut d = ImageDestination::new(Format::Png, 1).unwrap();
+        d.optimize_color_for_sharing = true;
+        d.add_image(&img, Some(WriteOptions { icc: Some(p3.clone()), ..Default::default() }));
+        let bytes = d.finalize().unwrap();
+        assert_eq!(png::probe(&bytes).unwrap().icc_profile, None);
+        let mut kept = ImageDestination::new(Format::Png, 1).unwrap();
+        kept.add_image(&img, Some(WriteOptions { icc: Some(p3.clone()), ..Default::default() }));
+        assert_eq!(png::probe(&kept.finalize().unwrap()).unwrap().icc_profile, Some(p3), "without the option the profile is kept");
+        let shared = png::decode(&bytes).unwrap().frames[0].rgba8.clone();
+        assert!(shared[0] >= 250 && shared[1] < 60 && shared[2] < 60, "P3 red is beyond sRGB and clips to sRGB red: {:?}", &shared[..4]);
+        assert!(shared[4] < 60 && shared[5] >= 250 && shared[6] < 60, "P3 green clips to sRGB green: {:?}", &shared[4..8]);
+        assert_eq!((shared[3], shared[7]), (255, 255));
     }
 
     #[test]

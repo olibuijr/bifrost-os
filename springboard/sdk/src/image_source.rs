@@ -109,6 +109,23 @@ impl<'a> ImageSource<'a> {
         self.thumbnail_size(max_w, max_h)?;
         Ok(imgdec::contain(&self.decode_upright()?, max_w, max_h))
     }
+
+    /// The small preview a camera or writer embedded in the file (the JPEG of the EXIF IFD1), upright. Decoding it
+    /// costs a fraction of the full picture. `None` when the file embeds none.
+    pub fn embedded_thumbnail(&self) -> Option<Image> {
+        let src = CodecSource::new(self.bytes.to_vec());
+        Some(orient_image(&src.embedded_thumbnail_image(0)?, self.orientation))
+    }
+
+    /// Like [`ImageSource::thumbnail`], but uses the embedded preview when it is at least as large as the thumbnail
+    /// would be, so a grid of camera photos fills without decoding each one in full. Falls back to the full decode.
+    pub fn fast_thumbnail(&self, max_w: usize, max_h: usize) -> Result<Image, SourceError> {
+        let (tw, th) = self.thumbnail_size(max_w, max_h)?;
+        if let Some(preview) = self.embedded_thumbnail().filter(|p| p.w >= tw && p.h >= th) {
+            return Ok(imgdec::contain(&preview, max_w, max_h));
+        }
+        self.thumbnail(max_w, max_h)
+    }
 }
 
 /// Reads a picture file so that it can be given to [`ImageSource::new`]. A file larger than `max_bytes` is refused from
@@ -256,6 +273,30 @@ mod tests {
         let high = representation(&img, FileType::Jpeg, &RepProperties { compression_factor: Some(1.0) }).unwrap();
         assert_eq!(ImageSource::new(&high).unwrap().size(), (4, 4));
         assert!(high.len() > low.len());
+    }
+
+    fn jpeg_with_preview(w: usize, h: usize) -> Vec<u8> {
+        use bifrost_render::cg::image::CgImage;
+        use bifrost_render::cg::imageio::{ImageDestination, WriteOptions};
+        let px: Vec<u8> = (0..w * h).flat_map(|i| [(i % 251) as u8, 90, 160, 255]).collect();
+        let mut d = ImageDestination::new(Format::Jpeg, 1).unwrap();
+        d.embed_thumbnail = true;
+        d.add_image(&CgImage::from_rgba8(w, h, px).unwrap(), Some(WriteOptions { orientation: Some(6), ..Default::default() }));
+        d.finalize().unwrap()
+    }
+
+    #[test]
+    fn the_embedded_preview_is_upright_and_serves_small_thumbnails() {
+        let bytes = jpeg_with_preview(320, 240);
+        let src = ImageSource::new(&bytes).unwrap();
+        let preview = src.embedded_thumbnail().expect("the writer embedded a preview");
+        assert_eq!((preview.w, preview.h), (120, 160), "160 x 120 stored, turned a quarter by orientation 6");
+        let small = src.fast_thumbnail(64, 64).unwrap();
+        assert_eq!((small.w, small.h), (48, 64));
+        let big = src.fast_thumbnail(300, 300).unwrap();
+        assert_eq!((big.w, big.h), (225, 300), "larger than the preview: decoded in full");
+        let plain = representation(&checker(), FileType::Jpeg, &RepProperties::default()).unwrap();
+        assert!(ImageSource::new(&plain).unwrap().embedded_thumbnail().is_none());
     }
 
     #[test]

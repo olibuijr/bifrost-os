@@ -98,6 +98,64 @@ pub fn probe(data: &[u8]) -> Option<Properties> {
     Some(props)
 }
 
+/// One marker segment before the first scan: its marker and the byte range from its 0xFF to just past its body.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Segment {
+    pub marker: u8,
+    pub start: usize,
+    pub end: usize,
+}
+
+impl Segment {
+    /// The bytes after the length field (empty for the markers that have no length).
+    pub fn body<'a>(&self, data: &'a [u8]) -> &'a [u8] {
+        data.get(self.start + 4..self.end).unwrap_or(&[])
+    }
+}
+
+/// The segments between SOI and the first scan (SOS) and the offset where that scan starts. Stricter than [`probe`]:
+/// any byte that is not a marker where one belongs, or a segment that runs past the data, gives `None`, so a writer
+/// that copies the scan data verbatim never cuts a file in the wrong place.
+pub fn header_segments(data: &[u8]) -> Option<(Vec<Segment>, usize)> {
+    if data.get(..2)? != [0xFF, 0xD8] {
+        return None;
+    }
+    let mut p = 2;
+    let mut v = Vec::new();
+    while p + 2 <= data.len() {
+        if data[p] != 0xFF {
+            return None;
+        }
+        let m = data[p + 1];
+        if m == 0xFF {
+            p += 1; // fill byte
+            continue;
+        }
+        if m == 0xDA || m == 0xD9 {
+            return Some((v, p));
+        }
+        if (0xD0..=0xD7).contains(&m) || m == 0x01 {
+            v.push(Segment { marker: m, start: p, end: p + 2 });
+            p += 2;
+            continue;
+        }
+        let len = u16::from_be_bytes([*data.get(p + 2)?, *data.get(p + 3)?]) as usize;
+        let end = p + 2 + len;
+        if len < 2 || end > data.len() {
+            return None;
+        }
+        v.push(Segment { marker: m, start: p, end });
+        p = end;
+    }
+    None
+}
+
+/// The TIFF-structured block of the APP1 `Exif` segment, without its prefix.
+pub fn exif_block(data: &[u8]) -> Option<&[u8]> {
+    let (segs, _) = header_segments(data)?;
+    segs.iter().filter(|s| s.marker == 0xE1).map(|s| s.body(data)).find(|b| b.starts_with(b"Exif\0\0")).map(|b| &b[6..])
+}
+
 pub fn decode(data: &[u8]) -> Option<Decoded> {
     use zune_core::colorspace::ColorSpace;
     use zune_core::options::DecoderOptions;
