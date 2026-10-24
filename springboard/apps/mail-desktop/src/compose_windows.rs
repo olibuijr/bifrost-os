@@ -71,6 +71,28 @@ impl Composes {
         self.slots.iter_mut().find(|slot| slot.id == id)
     }
 
+    /// Makes `id` the active compose window, `w` x `h` pixels: the main window's hit-testing and the sheet's layout take
+    /// that window's size, and the sheet fills it.
+    fn hold(&mut self, mail: &mut MailWindow, id: WindowId, w: f32, h: f32) {
+        self.active = Some(id);
+        if w >= 1.0 && h >= 1.0 {
+            mail.set_size(w as u32, h as u32);
+        }
+        mail.in_compose_window = true;
+    }
+
+    /// No compose window is active any more: the main window gets its own size back, so its clicks land on its own
+    /// panes again (a sidebar click must not be hit-tested against a compose window's narrow layout, E2E N9). Every
+    /// way the active window ends (deactivated, sent, saved, discarded, closed, another sheet taking the slot) comes here.
+    fn release(&mut self, mail: &mut MailWindow) {
+        self.active = None;
+        let (w, h) = self.main_size;
+        if w > 0 && h > 0 {
+            mail.set_size(w, h);
+        }
+        mail.in_compose_window = false;
+    }
+
     /// Copies the sheet's compose into the active window's slot. Called before the sheet is replaced.
     fn keep_active(&mut self, mail: &MailWindow) {
         if let (Some(id), Some(Sheet::Compose(compose) | Sheet::Question(compose))) = (self.active, &mail.mail.sheet) {
@@ -100,11 +122,9 @@ impl Composes {
         }
         self.keep_active(mail);
         let Some(slot) = self.slots.iter().find(|slot| slot.id == id) else { return false };
+        let (w, h) = (slot.w, slot.h);
         mail.mail.sheet = Some(Sheet::Compose(slot.compose.clone()));
-        if slot.w >= 1.0 && slot.h >= 1.0 {
-            mail.set_size(slot.w as u32, slot.h as u32);
-        }
-        self.active = Some(id);
+        self.hold(mail, id, w, h);
         true
     }
 
@@ -121,9 +141,7 @@ impl Composes {
         if matches!(mail.mail.sheet, Some(Sheet::Compose(_))) {
             mail.mail.sheet = None;
         }
-        self.active = None;
-        let (w, h) = self.main_size;
-        mail.set_size(w, h);
+        self.release(mail);
         true
     }
 
@@ -142,14 +160,13 @@ impl Composes {
                         // click in the new window must land on the field drawn under it, not on the main window's layout
                         let (w, h) = (ctx.ui.pt(COMPOSE_W), ctx.ui.pt(COMPOSE_H));
                         self.slots.push(Slot { id, compose, w, h, opened, saved: String::new(), saved_at: 0.0 });
-                        mail.set_size(w as u32, h as u32);
-                        self.active = Some(id);
+                        self.hold(mail, id, w, h);
                         changed_windows = true;
                     }
                     Err(e) => {
                         // the draft stays in the sheet slot, as it did before compose windows
                         mail.mail.status = e.to_string();
-                        self.active = None;
+                        self.release(mail);
                     }
                 }
             }
@@ -171,12 +188,12 @@ impl Composes {
                     } else {
                         self.slots.retain(|slot| slot.id != id);
                         let _ = ctx.close_window(id);
-                        self.active = None;
+                        self.release(mail);
                         changed_windows = true;
                     }
                 }
                 // another sheet took the slot; the compose waits in its window
-                Some(_) => self.active = None,
+                Some(_) => self.release(mail),
             }
         }
         mail.mail.sheet_done = false;
@@ -217,7 +234,7 @@ impl Composes {
         let slot = self.slots.remove(index);
         let was_active = self.active == Some(id);
         if was_active {
-            self.active = None;
+            self.release(mail);
         }
         // the active compose is the sheet's; its text is the one to keep
         let compose = match mail.mail.sheet.clone() {
@@ -238,8 +255,7 @@ impl Composes {
             Ok(new_id) => {
                 let (w, h) = (ctx.ui.pt(COMPOSE_W), ctx.ui.pt(COMPOSE_H));
                 self.slots.push(Slot { id: new_id, compose: compose.clone(), w, h, opened: slot.opened, saved: slot.saved, saved_at: slot.saved_at });
-                self.active = Some(new_id);
-                mail.set_size(w as u32, h as u32);
+                self.hold(mail, new_id, w, h);
                 mail.mail.sheet = Some(Sheet::Question(compose));
             }
             Err(e) => {
@@ -261,7 +277,7 @@ impl Composes {
         }
         let Some(slot) = self.slot_mut(id) else { return false };
         let (w, h) = (slot.w, slot.h);
-        crate::draw::scroll_message(ui, &mut slot.compose, w, h, dy)
+        crate::draw::scroll_message(ui, &mut slot.compose, w, h, true, dy)
     }
 
     /// The compose a window holds, for drawing it while it is not active.

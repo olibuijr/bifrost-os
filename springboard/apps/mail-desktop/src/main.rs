@@ -577,7 +577,7 @@ mod tests {
         let mail = app.window.as_ref().unwrap();
         let sheet = mail.mail.sheet.clone().expect("the compose is in the sheet slot");
         let at = sheet.form().fields.iter().position(|f| f.label == label).expect("the field");
-        let r = sheet_layout(ui, w, h, &sheet, choice_count(&mail.mail)).fields[at];
+        let r = sheet_layout(ui, w, h, &sheet, choice_count(&mail.mail), true).fields[at];
         (r[0] + r[2] / 2.0, r[1] + r[3] / 2.0)
     }
 
@@ -777,6 +777,58 @@ mod tests {
         // Escape closes the message, asking first because it has text
         app.window_event(&ctx, id, Input::Key(KeyInput::Code(1)));
         assert!(matches!(app.window.as_ref().unwrap().mail.sheet, Some(Sheet::Question(_))), "Save This Message, Don't Save, Cancel");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// E2E N9: a compose window that closes (here an empty message's Escape) gives the main window its own size back, so
+    /// a click in the sidebar picks a mailbox instead of landing on a list row of the compose window's narrow layout.
+    #[test]
+    fn a_closed_compose_window_gives_the_main_window_its_own_clicks_back() {
+        let dir = std::env::temp_dir().join(format!("bifrost-mail-compose-closed-{}", std::process::id()));
+        let ctx = ctx(&dir);
+        let mut app = app_with_inbox(&ctx);
+        app.with_window(&ctx, |mail| {
+            mail.mail.open_compose(None);
+            true
+        });
+        let id = app.composes.active.expect("a compose window");
+        app.window_event(&ctx, id, Input::Key(KeyInput::Code(1)));
+        assert!(app.composes.slots.is_empty(), "an empty message closes without asking");
+        assert_eq!(app.composes.active, None);
+        let mail = app.window.as_ref().unwrap();
+        assert_eq!((mail.w, mail.h), (800, 600), "the main window's size is back");
+        assert!(!mail.in_compose_window);
+        let side = bifrost_mail::draw::columns(&ctx.ui, 800.0, mail.mail.show_sidebar)[0];
+        assert!(side > 0.0, "the sidebar is shown");
+        let hits: Vec<Hit> = (0..600).step_by(4).map(|y| mail.hit(&ctx.ui, side / 2.0, y as f32)).collect();
+        assert!(hits.iter().any(|h| matches!(h, Hit::Side(_))), "the sidebar takes its clicks");
+        assert!(!hits.iter().any(|h| matches!(h, Hit::Message(_))), "no sidebar click lands on a message");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// E2E N15: why a Send did not go out shows on the compose sheet, in the compose window, not in the main window's
+    /// list footer; the message stays in its window to be fixed.
+    #[test]
+    fn a_send_that_fails_says_why_in_the_compose_window() {
+        let dir = std::env::temp_dir().join(format!("bifrost-mail-compose-error-{}", std::process::id()));
+        let ctx = ctx(&dir);
+        let mut app = app_with_account(&ctx);
+        app.with_window(&ctx, |mail| {
+            mail.mail.open_compose(None);
+            true
+        });
+        let id = app.composes.active.expect("a compose window");
+        app.window_event(&ctx, id, Input::Key(KeyInput::Text("e2e@".into())));
+        app.window_input(&ctx, id, WindowInput::MenuAction(bifrost_mail::window::MENU_SEND));
+        assert_eq!(app.composes.active, Some(id), "the message stays in its window");
+        let mail = app.window.as_ref().unwrap();
+        let Some(Sheet::Compose(compose)) = &mail.mail.sheet else { panic!("the compose is still open") };
+        assert!(compose.error.contains("e2e@"), "the compose says why: {:?}", compose.error);
+        assert!(mail.mail.status.is_empty(), "the main window's footer stays quiet: {:?}", mail.mail.status);
+        // an edit clears it
+        app.window_event(&ctx, id, Input::Key(KeyInput::Text("x.is".into())));
+        let Some(Sheet::Compose(compose)) = &app.window.as_ref().unwrap().mail.sheet else { panic!("the compose is still open") };
+        assert!(compose.error.is_empty());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

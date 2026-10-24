@@ -312,6 +312,9 @@ pub struct MailWindow {
     /// An immediate send is on its way from the compose window it was sent from: that window stays the active one until
     /// the answer comes back.
     pub sending: bool,
+    /// The sheet slot belongs to a compose window (`compose_windows`): its message fills that window, and `w` x `h` is
+    /// that window's size, not the main window's.
+    pub in_compose_window: bool,
     /// The Previous, Next and Done buttons of the find bar where they were drawn last frame.
     pub find_hits: Option<[Rect; 3]>,
     /// Where the open message's text starts in the reader's scrolled content, the height of a line, and the height of the
@@ -662,6 +665,7 @@ impl MailWindow {
             found_rects: Vec::new(),
             remote_memo: None,
             sending: false,
+            in_compose_window: false,
             find_hits: None,
             reader_metrics: (0.0, 0.0, 0.0),
             press: None,
@@ -925,7 +929,7 @@ impl MailWindow {
             let region = self.region(ui, x, y);
             self.scroller(region).is_some_and(|scroll| scroll.wheel(dy))
         } else if let Some(Sheet::Compose(compose)) = &mut self.mail.sheet {
-            crate::draw::scroll_message(ui, compose, w, h, dy)
+            crate::draw::scroll_message(ui, compose, w, h, self.in_compose_window, dy)
         } else {
             false
         };
@@ -1899,7 +1903,7 @@ impl MailWindow {
                 }
                 self.mail.status = "Sent".into();
             }
-            Err(e) if id == 0 => self.mail.status = format!("The message was not sent: {e}"),
+            Err(e) if id == 0 => self.compose_failed(format!("The message was not sent: {e}")),
             Err(e) => {
                 if let Some(compose) = self.drafts.remove(&id).filter(|_| self.mail.sheet_is_free_for_compose()) {
                     self.mail.sheet = Some(Sheet::Compose(compose));
@@ -2945,22 +2949,34 @@ impl MailWindow {
 
     /// Sends the message now, or queues it: Send Later (the "Send in" field) waits as long as it says, and the undo-send
     /// delay of the settings holds every message back for a few seconds. A queued message goes out from `run_queue`.
+    /// A Send that did not go out: the reason goes on the compose sheet, so it shows in the window of the message it is
+    /// about rather than in the main window's footer. With no compose sheet open it goes to the footer.
+    fn compose_failed(&mut self, reason: String) {
+        match &mut self.mail.sheet {
+            Some(Sheet::Compose(compose)) => compose.error = reason,
+            _ => self.mail.status = reason,
+        }
+    }
+
     fn send(&mut self, compose: &Compose) {
+        if let Some(Sheet::Compose(open)) = &mut self.mail.sheet {
+            open.error.clear();
+        }
         let draft = match self.mail.draft_from(compose) {
             Ok(draft) => draft,
             Err(e) => {
-                self.mail.status = e;
+                self.compose_failed(e);
                 return;
             }
         };
         let Some(account) = self.mail.current().cloned() else {
-            self.mail.status = "Add an account first".into();
+            self.compose_failed("Add an account first".into());
             return;
         };
         let wait = match self.send_delay(compose) {
             Ok(wait) => wait,
             Err(e) => {
-                self.mail.status = e;
+                self.compose_failed(e);
                 return;
             }
         };
@@ -2971,7 +2987,7 @@ impl MailWindow {
         let text = match draft.render(&id, unix) {
             Ok(text) => text,
             Err(e) => {
-                self.mail.status = e;
+                self.compose_failed(e);
                 return;
             }
         };
@@ -2997,7 +3013,7 @@ impl MailWindow {
             return;
         }
         let Some(password) = self.mail.password(&account).map(str::to_string) else {
-            self.mail.status = format!("No password is saved for {}", account.name);
+            self.compose_failed(format!("No password is saved for {}", account.name));
             return;
         };
         self.mail.status = "Sending".into();
