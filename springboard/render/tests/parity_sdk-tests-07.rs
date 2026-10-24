@@ -7,14 +7,14 @@ use bifrost_render::filter_catalogue::{
 };
 
 #[test]
-fn headless_catalogue_holds_the_105_built_filters_with_unique_reference_names() {
+fn headless_catalogue_holds_the_106_built_filters_with_unique_reference_names() {
     let names = all_filter_names();
-    assert_eq!(names.len(), 105);
+    assert_eq!(names.len(), 106);
     assert!(names.iter().all(|n| n.starts_with("CI")));
     let mut sorted = names.clone();
     sorted.sort();
     sorted.dedup();
-    assert_eq!(sorted.len(), 105, "every name is listed once");
+    assert_eq!(sorted.len(), 106, "every name is listed once");
 }
 
 #[test]
@@ -41,7 +41,7 @@ fn headless_category_listing_filters_by_category_in_catalogue_order() {
         ]
     );
     assert_eq!(filter_names(Some(CATEGORY_BLUR)), ["CIGaussianBlur", "CIBoxBlur", "CIMotionBlur", "CIZoomBlur", "CIDiscBlur"]);
-    assert_eq!(filter_names(None).len(), 105);
+    assert_eq!(filter_names(None).len(), 106);
     assert!(filter_names(Some("CICategoryNothing")).is_empty());
 }
 

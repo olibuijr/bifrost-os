@@ -82,6 +82,7 @@ pub mod blur_filters;
 pub mod effect_chain;
 pub mod composite_filters;
 pub mod composite_ops;
+pub mod white_balance;
 pub mod render_destination;
 pub mod perspective;
 pub mod geometry_filters;

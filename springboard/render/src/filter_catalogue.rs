@@ -87,6 +87,7 @@ static FILTERS: &[FilterInfo] = &[
     FilterInfo { name: "CIGammaAdjust", category: CATEGORY_COLOR_ADJUSTMENT, attributes: &[a("inputPower", 1.0, 0.1, 3.0)] },
     FilterInfo { name: "CIVibrance", category: CATEGORY_COLOR_ADJUSTMENT, attributes: &[a("inputAmount", 0.0, -1.0, 1.0)] },
     FilterInfo { name: "CIWhitePointAdjust", category: CATEGORY_COLOR_ADJUSTMENT, attributes: &[] },
+    FilterInfo { name: "CITemperatureAndTint", category: CATEGORY_COLOR_ADJUSTMENT, attributes: &[] },
     FilterInfo { name: "CISepiaTone", category: CATEGORY_COLOR_EFFECT, attributes: &[a("inputIntensity", 1.0, 0.0, 1.0)] },
     FilterInfo { name: "CIColorMonochrome", category: CATEGORY_COLOR_EFFECT, attributes: &[a("inputIntensity", 1.0, 0.0, 1.0)] },
     FilterInfo { name: "CIColorPosterize", category: CATEGORY_COLOR_EFFECT, attributes: &[a("inputLevels", 6.0, 2.0, 30.0)] },
