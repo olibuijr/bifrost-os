@@ -679,16 +679,31 @@ impl TextArea {
         to
     }
 
-    /// A delete of the visible chars `r`: when they are all the text between a pair of hidden markers the pair goes too,
-    /// so no empty `****` is left to show.
+    /// A delete of the visible chars `r`: when they are all the text of one styled run (`md::spans`), its pair of hidden
+    /// markers goes too, so no empty `****` is left to show. Equal markers of two runs on either side (the space in
+    /// `**a** **b**`) are not a pair, and stay.
     fn with_empty_pair(&self, r: Range<usize>) -> Range<usize> {
-        let chars: Vec<char> = self.text.chars().collect();
-        let (mut a, mut b) = (r.start, r.end);
-        while a > 0 && b < chars.len() && self.concealed_at(a - 1) && self.concealed_at(b) && chars[a - 1] == chars[b] {
-            a -= 1;
-            b += 1;
+        if !self.markdown || r.is_empty() {
+            return r;
         }
-        a..b
+        let para = self.paragraph_of(r.start);
+        if r.end > para.end {
+            return r;
+        }
+        let line: String = self.text.chars().skip(para.start).take(para.len()).collect();
+        // the inline content starts after the block marker, except on the first paragraph (the title), as `layout` reads it
+        let prefix = if para.start == 0 { 0 } else { md::classify(&line).prefix };
+        let all = md::spans(&line, prefix);
+        let inner = r.start - para.start..r.end - para.start;
+        let Some(k) = all.iter().position(|sp| !sp.marker && sp.style != Style::Plain && sp.style != Style::Math && sp.range == inner) else { return r };
+        match (k.checked_sub(1).and_then(|m| all.get(m)), all.get(k + 1)) {
+            (Some(open), Some(close))
+                if open.marker && close.marker && open.style == all[k].style && close.style == all[k].style && self.concealed_at(para.start + open.range.start) =>
+            {
+                para.start + open.range.start..para.start + close.range.end
+            }
+            _ => r,
+        }
     }
 
     /// Backspace with nothing selected: the visible char before the caret (hidden markers are passed over).
@@ -2062,6 +2077,37 @@ mod tests {
         assert_eq!(ta.text(), "T\na  c");
         assert!(ta.concealed.is_empty());
         // plain mode hides nothing
+        let mut plain = area(&ui, 500.0);
+        plain.set_text(&ui, "T\na **b** c");
+        assert!(plain.concealed.is_empty() && plain.lines[1].adv.iter().all(|a| *a > 0.0));
+    }
+
+    #[test]
+    fn deleting_between_two_runs_keeps_their_markers() {
+        // the space between two runs is not the text of an empty pair: only it goes
+        let ui = ui();
+        let mut ta = md_area(&ui, "T\n**a** *b*");
+        // "**a**" is chars 2..7 and the space 7..8; Backspace after the space, then Delete before it
+        ta.set_caret(8);
+        assert!(ta.edit(&ui, &Out::Backspace, 1.0));
+        assert_eq!(ta.text(), "T\n**a***b*", "the space alone goes");
+        let mut ta = md_area(&ui, "T\n**a** **b**");
+        ta.set_caret(7);
+        let _ = ta.key_combo(&ui, combo(bifrost_ui::keys::Key::ForwardDelete, false, false, false), 2.0);
+        assert_eq!(ta.text(), "T\n**a****b**", "the runs are not merged");
+        // the only char of a run still takes its markers with it, on the title line too
+        let mut ta = md_area(&ui, "**t**\nx *i* y");
+        ta.set_caret(10);
+        assert!(ta.edit(&ui, &Out::Backspace, 3.0));
+        assert_eq!(ta.text(), "**t**\nx  y");
+        ta.set_caret(4);
+        assert!(ta.edit(&ui, &Out::Backspace, 4.0));
+        assert_eq!(ta.text(), "\nx  y");
+    }
+
+    #[test]
+    fn plain_mode_has_no_hidden_markers() {
+        let ui = ui();
         let mut plain = area(&ui, 500.0);
         plain.set_text(&ui, "T\na **b** c");
         assert!(plain.concealed.is_empty() && plain.lines[1].adv.iter().all(|a| *a > 0.0));

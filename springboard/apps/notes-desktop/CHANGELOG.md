@@ -4,7 +4,8 @@
 
 - Bold, italic, strike-through, underline, highlight and code read as rich text: the editor no longer shows their Markdown markers, the caret, clicks, Backspace and Delete pass over them, and the note list's titles and previews leave them out. The note file keeps its Markdown.
 - Cmd+B (and the other text styles) with the caret in text that already has the style turns it off for the typing that follows, instead of adding another pair of markers.
-- Note > Delete Note and Cmd+Backspace on a note in Recently Deleted delete it permanently instead of failing with "Note exists in destination".
+- Note > Delete Note and Cmd+Backspace on a note in Recently Deleted delete it permanently instead of failing with "Note exists in destination", after an alert asks first ("This note will be deleted immediately. You can't undo this action."); Delete Permanently shows the same alert.
+- Cmd+B inside bold text splits the run only once you type, so no empty marker pair stays in the note when you move on. Deleting the space between two styled runs no longer removes their markers or merges them.
 
 ## 1.24.1 — 2026-10-24
 
