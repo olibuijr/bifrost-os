@@ -5,6 +5,7 @@ use super::{AppId, Effect, Shell};
 use super::pages::{Action, PageId};
 use super::accessibility::actions::{window_index, WINDOW_ACTIONS};
 use super::accessibility::tree::{self, add_app_tree, AxState};
+use super::services::widgets_timeline::{self, Row};
 use bifrost_ui::ax::{Element, Map};
 use std::collections::HashSet;
 
@@ -58,6 +59,55 @@ pub(super) fn add_app_actions(map: &mut Map, scope: &str, sets: &[bifrost_ui::ax
             }
         }
     }
+}
+
+/// `os/widgets`: one element per widget row and live activity in the Notification Centre column, named by its title with
+/// its text (and detail) as the value, and one child per button or toggle that `ax press` runs like a tap (the
+/// reference widget accessibility: each widget is an element, its controls are its children).
+pub fn add_widget_elements(map: &mut Map, rows: &[Row]) {
+    for row in rows {
+        let value = if row.detail.is_empty() { row.text.clone() } else { format!("{}, {}", row.text, row.detail) };
+        let widget = map.add("os/widgets", "widget", &row.title, &value, true, None, "");
+        let Some((app, kind)) = &row.widget else { continue };
+        for b in &row.buttons {
+            let (role, state) = match b.on {
+                Some(on) => ("toggle", if on { "on" } else { "off" }),
+                None => ("button", ""),
+            };
+            map.add(&widget, role, &b.label, state, !b.pending, None, &format!("widget:{app}|{kind}|{}", b.id));
+        }
+    }
+}
+
+/// The app, kind and action a widget button's handle names: `app|kind|action`. The app id and the action id are
+/// checked ids without `|`, so the kind is everything between them.
+fn widget_handle(h: &str) -> Option<(String, String, String)> {
+    let (app, rest) = h.split_once('|')?;
+    let (kind, action) = rest.rsplit_once('|')?;
+    (!app.is_empty() && !kind.is_empty() && !action.is_empty()).then(|| (app.to_string(), kind.to_string(), action.to_string()))
+}
+
+/// The app, kind and action of button `button` of widget row `row`, the indices `atspi::model::add_widgets` numbers them by
+/// (the same `rows` in the same order). A live activity row has no app to run an action in: `None`, as for a stale index.
+#[cfg(any(feature = "atspi", test))]
+fn widget_button(rows: &[Row], row: usize, button: usize) -> Option<(String, String, String)> {
+    let r = rows.get(row)?;
+    let (app, kind) = r.widget.as_ref()?;
+    let b = r.buttons.get(button)?;
+    (!b.pending).then(|| (app.clone(), kind.clone(), b.id.clone()))
+}
+
+/// The widget rows as the AT-SPI model takes them.
+#[cfg(feature = "atspi")]
+fn widget_snaps(rows: &[Row]) -> Vec<super::atspi::model::WidgetSnap> {
+    rows.iter()
+        .map(|r| super::atspi::model::WidgetSnap {
+            title: r.title.clone(),
+            value: if r.detail.is_empty() { r.text.clone() } else { format!("{}, {}", r.text, r.detail) },
+            label: r.label.clone(),
+            buttons: r.buttons.iter().map(|b| (b.label.clone(), b.on, !b.pending)).collect(),
+        })
+        .collect()
 }
 
 /// The role and value a Settings row shows to assistive tech. Shared with the screen reader's cursor (`accessibility::reader`).
@@ -115,6 +165,7 @@ impl Shell {
             add_app_actions(&mut map, &scope, &host.ax_actions);
         }
         self.add_window_elements(&mut map);
+        add_widget_elements(&mut map, &widgets_timeline::rows(self.notify.now()));
         (map, st)
     }
 
@@ -125,7 +176,13 @@ impl Shell {
             self.ax_menus().into_iter().map(|(_, name, rows)| (name.to_string(), rows.into_iter().map(|(_, text, enabled)| (text, enabled)).collect())).collect();
         let open: Vec<AppId> = self.desk.as_ref().map(|d| d.wins.iter().map(|w| w.app).collect()).unwrap_or_default();
         let dock: Vec<(String, bool)> = super::apps::apps().iter().map(|a| (a.name.to_string(), open.contains(&a.id))).collect();
-        super::atspi::model::chrome_snap(&menus, &dock)
+        let mut snap = super::atspi::model::chrome_snap(&menus, &dock);
+        // the widgets in the Notification Centre column, while it is open: the screen reader reads what is on screen
+        if !self.notify.center.is_hidden() {
+            let rows = widgets_timeline::rows(self.notify.now());
+            super::atspi::model::add_widgets(&mut snap, &widget_snaps(&rows));
+        }
+        snap
     }
 
     /// A screen reader pressed shell chrome element `id` (`atspi::model::chrome_target`): runs a menu row, opens a dock app
@@ -146,6 +203,12 @@ impl Shell {
                 }
             }
             Some(ChromePress::Search) => self.quicksearch_show(t),
+            Some(ChromePress::Widget(row, button)) => {
+                let Some((app, kind, action)) = widget_button(&widgets_timeline::rows(self.notify.now()), row, button) else { return };
+                if let Err(e) = self.start_widget_action(app, kind, action) {
+                    eprintln!("accessibility: widget press: {e}");
+                }
+            }
             None => return,
         }
         self.dirty = true;
@@ -248,6 +311,10 @@ impl Shell {
             self.dirty = true;
             return Ok((el.address, fx));
         }
+        if let Some((app, kind, action)) = el.handle.strip_prefix("widget:").and_then(widget_handle) {
+            self.start_widget_action(app, kind, action)?;
+            return Ok((el.address, Vec::new()));
+        }
         if let Some(icon) = el.handle.strip_prefix("open:") {
             if !self.desktop_open_app(icon, t) {
                 return Err(format!("{} could not be opened", el.address));
@@ -280,8 +347,10 @@ impl Shell {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::services::widgets_timeline::RowButton;
     use bifrost_proto::{Node, Role, UiRect};
     use bifrost_ui::ax_action::AxActionSet;
+    use bifrost_ui::widget_kind::Family;
 
     #[test]
     fn an_app_nodes_custom_actions_are_listed_on_its_element() {
@@ -295,5 +364,55 @@ mod tests {
         assert_eq!(map.custom_actions(&row).collect::<Vec<_>>(), vec!["Archive", "Reply"]);
         assert!(map.has_custom_action(&row, "reply"));
         assert_eq!(map.under("app/mail").filter(|e| map.custom_actions(&e.address).next().is_some()).count(), 1);
+    }
+
+    fn row(title: &str, buttons: Vec<RowButton>) -> Row {
+        Row {
+            title: title.into(),
+            text: "Standup".into(),
+            detail: "Room 4".into(),
+            background: None,
+            large: false,
+            family: Family::Medium,
+            buttons,
+            label: String::new(),
+            widget: Some(("is.a".into(), "next|day".into())),
+        }
+    }
+
+    #[test]
+    fn a_widget_is_an_element_with_its_buttons_below_it() {
+        let mut map = Map::new();
+        let done = RowButton { id: "done".into(), label: "Done".into(), on: None, pending: false };
+        let mute = RowButton { id: "mute".into(), label: "Mute".into(), on: Some(true), pending: true };
+        add_widget_elements(&mut map, &[row("Next", vec![done, mute])]);
+        let w = resolve_one(&map, "os/widgets/next").unwrap();
+        assert_eq!((w.role.as_str(), w.value.as_str()), ("widget", "Standup, Room 4"), "the detail follows the text");
+        let b = resolve_one(&map, "os/widgets/next/done").unwrap();
+        assert_eq!(b.role, "button");
+        assert_eq!(widget_handle(b.handle.strip_prefix("widget:").unwrap()), Some(("is.a".into(), "next|day".into(), "done".into())), "a kind may hold the separator");
+        let t = resolve_one(&map, "os/widgets/next/mute").unwrap();
+        assert_eq!((t.role.as_str(), t.value.as_str(), t.enabled), ("toggle", "on", false), "a toggle waiting for its app is disabled");
+    }
+
+    #[test]
+    fn a_widget_handle_needs_all_three_parts() {
+        assert_eq!(widget_handle("is.a|k"), None);
+        assert_eq!(widget_handle("|k|a"), None);
+        assert_eq!(widget_handle("is.a|k|"), None);
+    }
+
+    #[test]
+    fn a_screen_reader_press_on_a_widget_button_names_that_widgets_action() {
+        let done = RowButton { id: "done".into(), label: "Done".into(), on: None, pending: false };
+        let snooze = RowButton { id: "snooze".into(), label: "Snooze".into(), on: None, pending: true };
+        let mut live = row("Timer", vec![RowButton { id: "stop".into(), label: "Stop".into(), on: None, pending: false }]);
+        live.widget = None;
+        let rows = [row("Next", vec![done, snooze]), live];
+        assert_eq!(widget_button(&rows, 0, 0), Some(("is.a".into(), "next|day".into(), "done".into())));
+        assert_eq!(widget_button(&rows, 0, 1), None, "a button waiting for its app is not pressed again");
+        assert_eq!(widget_button(&rows, 1, 0), None, "a live activity has no widget action");
+        assert_eq!(widget_button(&rows, 0, 2), None);
+        assert_eq!(widget_button(&rows, 5, 0), None);
     }
 }

@@ -23,6 +23,9 @@ pub const EVENT_RELOAD: &str = "reload";
 /// The event the shell sends to an app that observes a widget (see [`observe`]) when the person adds, removes or
 /// resizes it. Its body is `{"kind": "...", "on_screen": bool, "large": bool}`.
 pub const EVENT_VISIBILITY: &str = "visibility";
+/// The event the shell sends when the person opens the app from one of its widgets. Its body is
+/// `{"kind": "...", "family": "small"|"medium"|"large"}`; a widget link arrives as `Open` just before it.
+pub const EVENT_OPENED: &str = "opened";
 
 /// One dated entry of a widget timeline: shown from `date` until the next entry's date.
 #[derive(Clone, Debug, PartialEq)]
@@ -39,6 +42,9 @@ pub enum Event {
     Reload { kind: String },
     /// The person changed an observed widget: it is `on_screen` (in the column with an entry for now) and `large` or not.
     Visibility { kind: String, on_screen: bool, large: bool },
+    /// The person opened the app from its widget `kind`, shown at `family` (the reference widget kind and family keys
+    /// of the activity that opens the app).
+    Opened { kind: String, family: Family },
 }
 
 /// Decodes a service event: `Some` for this service's events the SDK knows, `None` for any other.
@@ -56,6 +62,7 @@ pub fn parse_event(service: &str, event: &str, body: &Json) -> Option<Event> {
             };
             Some(Event::Visibility { kind, on_screen: flag("on_screen")?, large: flag("large")? })
         }
+        EVENT_OPENED => Some(Event::Opened { kind, family: body.get("family").and_then(Json::as_str).and_then(Family::from_key)? }),
         _ => None,
     }
 }
@@ -70,6 +77,8 @@ pub fn reload(ctx: &Ctx, kind: &str, entries: &[Entry], policy: ReloadPolicy) ->
 pub use crate::controls::widget_date::Style as ClockStyle;
 /// The sizes a widget kind can take.
 pub use crate::controls::widget_kind::Family;
+/// The system colours a widget can fill its tile with (the reference `containerBackground` given a colour).
+pub use crate::controls::widget_render::ContainerTint;
 
 /// A button or toggle on a widget entry. A tap runs the app's own `[[intent]]` `intent` with `params` over the app's
 /// control socket (the app must be running). A toggle (`toggle` is `Some(shown state)`) also passes its new state as
@@ -102,7 +111,16 @@ impl Button {
     }
 }
 
-/// An [`Entry`] with the richer parts of a widget: live date text and buttons.
+/// What one widget size shows instead of the entry's title, text or detail (the reference view's switch on
+/// `widgetFamily`). A part left as None keeps the entry's.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Variant {
+    pub title: Option<String>,
+    pub text: Option<String>,
+    pub detail: Option<String>,
+}
+
+/// An [`Entry`] with the richer parts of a widget: live date text, buttons, a detail line and per-size variants.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Rich {
     pub entry: Entry,
@@ -110,11 +128,36 @@ pub struct Rich {
     /// the app does not run
     pub clock: Option<(ClockStyle, f64)>,
     pub buttons: Vec<Button>,
+    /// a third line under the text, shown by the Medium and Large sizes
+    pub detail: Option<String>,
+    /// what each size shows instead of the entry's own parts
+    pub variants: Vec<(Family, Variant)>,
+    /// the system colour the widget's tile is filled with; None keeps the glass tile
+    pub background: Option<ContainerTint>,
 }
 
 impl Rich {
     pub fn new(entry: Entry) -> Self {
-        Rich { entry, clock: None, buttons: Vec::new() }
+        Rich { entry, clock: None, buttons: Vec::new(), detail: None, variants: Vec::new(), background: None }
+    }
+
+    /// Fills the widget's tile with a system colour; its text turns white (dark on yellow and mint).
+    pub fn with_background(mut self, tint: ContainerTint) -> Self {
+        self.background = Some(tint);
+        self
+    }
+
+    /// Adds the detail line the Medium and Large sizes show under the text.
+    pub fn with_detail(mut self, detail: &str) -> Self {
+        self.detail = Some(detail.into());
+        self
+    }
+
+    /// Gives `family` its own title, text or detail; a later call for the same size replaces it.
+    pub fn with_variant(mut self, family: Family, variant: Variant) -> Self {
+        self.variants.retain(|(f, _)| *f != family);
+        self.variants.push((family, variant));
+        self
     }
 
     /// Shows the distance to `target` (unix seconds) as live text in `style`.
@@ -167,6 +210,51 @@ pub fn register(ctx: &Ctx, kinds: &[Kind]) -> u32 {
 /// the widget opens.
 pub fn reload_rich(ctx: &Ctx, kind: &str, entries: &[Rich], policy: ReloadPolicy, link: Option<&str>) -> u32 {
     service::call(ctx, SERVICE, "reload", &rich_reload_body(kind, entries, policy, link))
+}
+
+/// Asks the shell for a new timeline for each of this app's widgets of `kind` in the column (the reference
+/// `WidgetCenter` `reloadTimelines(ofKind:)`): the shell answers with one [`Event::Reload`] per widget on its next
+/// tick, however often the app asked before then. The reply is how many widgets will be asked.
+pub fn reload_timelines(ctx: &Ctx, kind: &str) -> u32 {
+    service::call(ctx, SERVICE, "reload_timelines", &obj(&[("kind", Json::Str(kind.into()))]))
+}
+
+/// [`reload_timelines`] for every kind this app offers (the reference `reloadAllTimelines()`).
+pub fn reload_all_timelines(ctx: &Ctx) -> u32 {
+    service::call(ctx, SERVICE, "reload_all_timelines", &Json::Null)
+}
+
+/// Asks which of this app's widgets the person has in the column (the reference `getCurrentConfigurations`). The reply
+/// is `[{kind, family, configuration: {key: value}}]`; read it with [`parse_configurations`].
+pub fn current_configurations(ctx: &Ctx) -> u32 {
+    service::call(ctx, SERVICE, "current_configurations", &Json::Null)
+}
+
+/// One widget the person has placed (the reference `WidgetInfo`): its kind, its size and its option values, a choice
+/// by its name.
+#[derive(Clone, Debug, PartialEq)]
+pub struct WidgetInfo {
+    pub kind: String,
+    pub family: Family,
+    pub configuration: Vec<(String, Json)>,
+}
+
+/// Decodes the reply to [`current_configurations`]. Rows without a kind or with an unknown size are skipped.
+pub fn parse_configurations(reply: &Json) -> Vec<WidgetInfo> {
+    reply
+        .as_array()
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|r| {
+            let kind = r.str_field("kind")?;
+            let family = r.get("family").and_then(Json::as_str).and_then(Family::from_key)?;
+            let configuration = match r.get("configuration") {
+                Some(Json::Obj(pairs)) => pairs.clone(),
+                _ => Vec::new(),
+            };
+            Some(WidgetInfo { kind, family, configuration })
+        })
+        .collect()
 }
 
 /// Drops the timeline `kind`.
@@ -302,6 +390,24 @@ fn rich_entry_json(r: &Rich) -> Json {
     if !r.buttons.is_empty() {
         pairs.push(("actions".into(), Json::Arr(r.buttons.iter().map(button_json).collect())));
     }
+    if let Some(d) = &r.detail {
+        pairs.push(("detail".into(), Json::Str(d.clone())));
+    }
+    if let Some(t) = r.background {
+        pairs.push(("background".into(), Json::Str(t.key().into())));
+    }
+    if !r.variants.is_empty() {
+        let sizes = r
+            .variants
+            .iter()
+            .map(|(f, v)| {
+                let parts = [("title", &v.title), ("text", &v.text), ("detail", &v.detail)];
+                let fields = parts.iter().filter_map(|(k, p)| p.as_ref().map(|t| (k.to_string(), Json::Str(t.clone())))).collect();
+                (f.key().to_string(), Json::Obj(fields))
+            })
+            .collect();
+        pairs.push(("families".into(), Json::Obj(sizes)));
+    }
     Json::Obj(pairs)
 }
 
@@ -378,6 +484,25 @@ mod tests {
     }
 
     #[test]
+    fn a_rich_entry_carries_its_detail_and_one_variant_per_size() {
+        let e = Entry { date: 0.0, title: "Next".into(), text: "Standup 9:00".into() };
+        let rich = Rich::new(e)
+            .with_detail("Room 4")
+            .with_variant(Family::Small, Variant { text: Some("old".into()), ..Variant::default() })
+            .with_variant(Family::Small, Variant { text: Some("9:00".into()), ..Variant::default() })
+            .with_variant(Family::Large, Variant { title: Some("Today".into()), ..Variant::default() });
+        let j = rich_entry_json(&rich);
+        assert_eq!(j.str_field("detail").as_deref(), Some("Room 4"));
+        let sizes = j.get("families").unwrap();
+        assert_eq!(sizes.get("small").and_then(|v| v.str_field("text")).as_deref(), Some("9:00"), "the later variant replaces the first");
+        assert!(sizes.get("small").and_then(|v| v.get("title")).is_none(), "a part left out is not sent");
+        assert_eq!(sizes.get("large").and_then(|v| v.str_field("title")).as_deref(), Some("Today"));
+        assert!(j.get("background").is_none(), "no background unless asked");
+        let tinted = rich_entry_json(&rich.with_background(ContainerTint::Teal));
+        assert_eq!(tinted.str_field("background").as_deref(), Some("teal"));
+    }
+
+    #[test]
     fn a_rich_entry_without_extras_encodes_like_a_plain_one_and_has_no_link() {
         let e = Entry { date: 1.0, title: "t".into(), text: "x".into() };
         let body = rich_reload_body("k", &[Rich::new(e.clone())], ReloadPolicy::Never, None);
@@ -401,6 +526,20 @@ mod tests {
         assert_eq!(sizes, vec!["small".to_string(), "large".to_string()]);
         let default_sizes: Vec<&str> = list[1].get("families").and_then(Json::array).unwrap().iter().filter_map(Json::as_str).collect();
         assert_eq!(default_sizes, vec!["small", "medium"]);
+    }
+
+    #[test]
+    fn the_current_configurations_reply_decodes_into_widget_infos() {
+        let reply = Json::Arr(vec![
+            obj(&[("kind", Json::Str("next".into())), ("family", Json::Str("medium".into())), ("configuration", obj(&[("city", Json::Str("Oslo".into()))]))]),
+            obj(&[("kind", Json::Str("bad".into())), ("family", Json::Str("huge".into()))]),
+            obj(&[("family", Json::Str("small".into()))]),
+        ]);
+        let infos = parse_configurations(&reply);
+        assert_eq!(infos.len(), 1, "an unknown size or a missing kind is skipped");
+        assert_eq!((infos[0].kind.as_str(), infos[0].family), ("next", Family::Medium));
+        assert_eq!(infos[0].configuration, vec![("city".to_string(), Json::Str("Oslo".into()))]);
+        assert!(parse_configurations(&Json::Null).is_empty());
     }
 
     #[test]
@@ -432,6 +571,13 @@ mod tests {
         let partial = obj(&[("kind", Json::Str("next".into()))]);
         assert_eq!(parse_event(SERVICE, EVENT_VISIBILITY, &partial), None);
         assert_eq!(parse_event("dock", EVENT_VISIBILITY, &body), None);
+    }
+
+    #[test]
+    fn the_opened_event_names_the_widget_and_its_size() {
+        let body = obj(&[("kind", Json::Str("next".into())), ("family", Json::Str("medium".into()))]);
+        assert_eq!(parse_event(SERVICE, EVENT_OPENED, &body), Some(Event::Opened { kind: "next".into(), family: Family::Medium }));
+        assert_eq!(parse_event(SERVICE, EVENT_OPENED, &obj(&[("kind", Json::Str("next".into()))])), None, "it names a size");
     }
 
     #[test]
