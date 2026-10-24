@@ -149,6 +149,14 @@ pub fn compositor_places_windows() -> bool {
     cfg!(feature = "desktop-wayland") && std::env::var_os("SPRINGBOARD_WAYLAND").is_some()
 }
 
+/// Waits for (reaps) the started apps whose process has exited and forgets them. A quit app nobody waited for stays a
+/// zombie, and a zombie still counts in its cgroup's `pids.current`, so the CPU and RAM menus listed quit apps as
+/// running (E2E N14, W5-13). Running children are kept.
+#[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+fn reap_exited(children: &mut std::collections::HashMap<String, std::process::Child>) {
+    children.retain(|_, c| matches!(c.try_wait(), Ok(None)));
+}
+
 /// The rectangle of `tile` inside the work area `a`; Centre keeps two thirds of each side.
 /// How far a window moves up to clear the on-screen keyboard whose top edge is `kb_top`: its bottom edge stops
 /// at the keyboard, and its top never goes above the menu bar. Zero when it already clears the keyboard.
@@ -799,6 +807,12 @@ impl Desk {
     #[cfg(not(feature = "desktop-wayland"))]
     pub(super) fn native_running_ids(&self) -> Vec<String> {
         Vec::new()
+    }
+
+    /// Waits for the native apps that have quit (see `reap_exited`).
+    #[cfg(feature = "desktop-wayland")]
+    pub(super) fn reap_native_children(&mut self) {
+        reap_exited(&mut self.native_children);
     }
 
     pub(super) fn grab_idle(&self)->bool{self.grab.is_none()}
@@ -1569,6 +1583,9 @@ impl Shell {
             }
         }
         for app in &mut desk.linux_apps { app.windows=windows.iter().filter(|w|w.app_id==app.app_id).cloned().collect(); }
+        // a window list change is often an app quitting: wait for the native apps that have exited
+        #[cfg(feature = "desktop-wayland")]
+        desk.reap_native_children();
         #[cfg(feature = "desktop-wayland")]
         self.desk_save_native();
         self.dirty=true;
@@ -3887,6 +3904,20 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn quit_children_are_reaped_and_running_ones_kept() {
+        let mut children = std::collections::HashMap::new();
+        children.insert("quit".to_string(), std::process::Command::new("true").spawn().unwrap());
+        children.insert("running".to_string(), std::process::Command::new("sleep").arg("30").spawn().unwrap());
+        // `true` exits at once; give it time to become a zombie
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        reap_exited(&mut children);
+        assert_eq!(children.keys().collect::<Vec<_>>(), vec!["running"], "the zombie is waited for and dropped");
+        let mut running = children.remove("running").unwrap();
+        let _ = running.kill();
+        let _ = running.wait();
+    }
 
     #[test]
     fn a_full_size_app_drags_from_its_empty_toolbar_band_but_not_its_controls_or_lights() {

@@ -3971,6 +3971,13 @@ impl Shell {
         let key = |m: &desktop_metrics::Snapshot| if menu { m.shown() } else { m.bar_key() };
         let before = key(&self.desktop_metrics);
         let bar_before = self.bar_layout();
+        // the menus list app groups with a process in them: wait for quit native apps first, or their zombies count
+        #[cfg(feature = "desktop-wayland")]
+        if menu {
+            if let Some(desk) = self.desk.as_mut() {
+                desk.reap_native_children();
+            }
+        }
         self.metrics_sampler.sample(&mut self.desktop_metrics, menu);
         if key(&self.desktop_metrics) != before {
             // redraw only when the shown text changed, and then only the bar if nothing else asks for a frame
