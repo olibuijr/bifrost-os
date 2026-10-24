@@ -22,8 +22,10 @@
 pub use crate::controls::contact_access::{Choice, Error, Status};
 pub use crate::controls::contact_book::{format_postal_address, PostalAddress};
 pub use crate::controls::contact_fetch::{
-    DateComponents, Key, LabeledValue, Record, Value, LABEL_HOME, LABEL_OTHER, LABEL_PHONE_MAIN, LABEL_PHONE_MOBILE,
-    LABEL_WORK,
+    is_predefined_label, localized_label, DateComponents, Key, LabeledValue, Profile, Record, Value, LABEL_DATE_ANNIVERSARY,
+    LABEL_HOME, LABEL_OTHER, LABEL_PHONE_HOME_FAX, LABEL_PHONE_MAIN, LABEL_PHONE_MOBILE, LABEL_PHONE_OTHER_FAX,
+    LABEL_PHONE_PAGER, LABEL_PHONE_WORK_FAX, LABEL_RELATION_MANAGER, LABEL_SCHOOL, LABEL_URL_HOME_PAGE, LABEL_WORK,
+    PREDEFINED_LABELS, RELATION_LABELS,
 };
 use crate::controls::contact_access::Access;
 use crate::runtime::Ctx;
@@ -68,8 +70,10 @@ pub fn decode_picked(reply: &Json) -> BTreeSet<u64> {
 }
 
 /// The changes a `save` call makes, applied as one: every add, update and delete happens, or none does. Only full access
-/// writes. Each record uses the fields `fetch` reads (`given_name`, `family_name`, `organization`, `phones`, `emails`,
-/// `address`, `note`); a list takes one value, because the book keeps one phone, one email and one address per contact.
+/// writes. Each record uses the fields `fetch` reads, in the same values: labeled phones, emails, URLs and relations
+/// (as many as the contact has), the birthday and dates, the name prefix, nickname, job title and department, and
+/// social profiles and instant message addresses. The address takes one value. An update changes only the fields its
+/// record holds.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct SaveRequest {
     /// New contacts. The shell gives each one its id, and the reply lists them in this order.
@@ -107,12 +111,43 @@ fn record_json(record: &Record, with_id: bool) -> Json {
         let value = match record.get(key) {
             Some(Value::Text(text)) => Json::Str(text.clone()),
             Some(Value::List(items)) => Json::Arr(items.iter().map(|item| Json::Str(item.clone())).collect()),
-            Some(Value::Labeled(items)) => Json::Arr(items.iter().map(|item| Json::Str(item.value.clone())).collect()),
-            // birthday and dates are not sent by `save` (the shell does not store them from a save yet)
-            Some(Value::Date(_) | Value::Dates(_) | Value::Profiles(_)) | None => continue,
+            Some(Value::Labeled(items)) => Json::Arr(
+                items
+                    .iter()
+                    .map(|item| Json::Obj(vec![("label".into(), Json::Str(item.label.clone())), ("value".into(), Json::Str(item.value.clone()))]))
+                    .collect(),
+            ),
+            Some(Value::Date(d)) => date_json(*d, Vec::new()),
+            Some(Value::Dates(items)) => {
+                Json::Arr(items.iter().map(|(label, d)| date_json(*d, vec![("label".into(), Json::Str(label.clone()))])).collect())
+            }
+            Some(Value::Profiles(items)) => Json::Arr(
+                items
+                    .iter()
+                    .map(|p| {
+                        Json::Obj(
+                            [("label", &p.label), ("service", &p.service), ("username", &p.username), ("url", &p.url), ("user_identifier", &p.user_identifier)]
+                                .into_iter()
+                                .map(|(k, v)| (k.to_string(), Json::Str(v.clone())))
+                                .collect(),
+                        )
+                    })
+                    .collect(),
+            ),
+            None => continue,
         };
         fields.push((key.name().to_string(), value));
     }
+    Json::Obj(fields)
+}
+
+/// A date as `{year?, month, day}` after the `fields` given.
+fn date_json(d: DateComponents, mut fields: Vec<(String, Json)>) -> Json {
+    if let Some(y) = d.year {
+        fields.push(("year".into(), Json::Num(y as f64)));
+    }
+    fields.push(("month".into(), Json::Num(d.month as f64)));
+    fields.push(("day".into(), Json::Num(d.day as f64)));
     Json::Obj(fields)
 }
 
@@ -151,7 +186,8 @@ fn decode_record(v: &Json) -> Option<Record> {
     let mut record = Record::new(v.get("id")?.as_u64()?);
     for key in Key::ALL {
         let value = match (key, v.get(key.name())) {
-            (Key::Phones | Key::Emails | Key::Urls, Some(Json::Arr(items))) => Some(Value::Labeled(decode_labeled(items))),
+            (Key::Phones | Key::Emails | Key::Urls | Key::Relations, Some(Json::Arr(items))) => Some(Value::Labeled(decode_labeled(items))),
+            (Key::SocialProfiles | Key::InstantMessages, Some(Json::Arr(items))) => Some(Value::Profiles(decode_profiles(items))),
             (Key::Birthday, Some(date)) => decode_date(date).map(Value::Date),
             (Key::Dates, Some(Json::Arr(items))) => Some(Value::Dates(
                 items.iter().filter_map(|d| Some((d.get("label")?.as_str()?.to_string(), decode_date(d)?))).collect(),
@@ -186,6 +222,29 @@ fn decode_labeled(items: &[Json]) -> Vec<LabeledValue> {
         .collect::<Vec<_>>();
     let missing = entries.iter().any(|e| e.identifier.is_empty());
     if missing { LabeledValue::numbered(entries) } else { entries }
+}
+
+/// Profiles from `{label, service, username, url?, user_identifier?, identifier?}` objects; other entries are skipped.
+/// Identifiers the reply lacks are numbered by position.
+fn decode_profiles(items: &[Json]) -> Vec<Profile> {
+    let text = |item: &Json, name: &str| item.get(name).and_then(Json::as_str).unwrap_or("").to_string();
+    let entries: Vec<Profile> = items
+        .iter()
+        .filter(|item| matches!(item, Json::Obj(_)))
+        .map(|item| Profile {
+            label: text(item, "label"),
+            service: text(item, "service"),
+            username: text(item, "username"),
+            url: text(item, "url"),
+            user_identifier: text(item, "user_identifier"),
+            identifier: text(item, "identifier"),
+        })
+        .collect();
+    if entries.iter().any(|p| p.identifier.is_empty()) {
+        Profile::numbered(entries)
+    } else {
+        entries
+    }
 }
 
 fn decode_date(v: &Json) -> Option<DateComponents> {
@@ -235,7 +294,7 @@ impl ContactsError {
             "Contacts file too large" => ContactsError::FileTooLarge,
             "Unknown contacts format" => ContactsError::UnknownFormat,
             other if other.starts_with("a contact needs a name") => ContactsError::InvalidContact(other.to_string()),
-            other if other.ends_with("is a list") || other.ends_with("cannot be saved yet") || other.contains("takes one value per contact") || other.ends_with("is text or a list of text") || other.starts_with("a contact is an object") => {
+            other if other.ends_with("is a list") || other.ends_with("cannot be saved yet") || other.ends_with("is not a contacts file field") || other.contains(" is longer than ") || other.ends_with("is not in the shape fetch returns") || other.ends_with("is text") || other.contains("takes one value per contact") || other.ends_with("is text or a list of text") || other.starts_with("a contact is an object") => {
                 ContactsError::InvalidContact(other.to_string())
             }
             other => ContactsError::Other(other.to_string()),
@@ -1129,5 +1188,54 @@ mod tests {
     fn a_bad_birthday_is_left_out() {
         let row = obj(vec![("id", Json::Num(1.0)), ("birthday", obj(vec![("month", Json::Num(13.0)), ("day", Json::Num(1.0))]))]);
         assert_eq!(decode_contacts(&reply(vec![row])).unwrap()[0].get(Key::Birthday), None);
+    }
+
+    #[test]
+    fn a_save_request_sends_labeled_values_dates_and_profiles_in_the_fetch_shapes() {
+        let mut ada = Record::new(0);
+        ada.set(Key::GivenName, Value::Text("Ada".into()));
+        ada.set(Key::Phones, Value::Labeled(vec![LabeledValue::new("work", "1"), LabeledValue::new("home", "2")]));
+        ada.set(Key::Birthday, Value::Date(DateComponents::new(None, 12, 10).unwrap()));
+        ada.set(Key::SocialProfiles, Value::Profiles(vec![Profile::new("", "mastodon", "@ada")]));
+        let json = SaveRequest { add: vec![ada], ..Default::default() }.to_json();
+        let add = &json.get("add").and_then(Json::as_array).unwrap()[0];
+        let phones = add.get("phones").and_then(Json::as_array).unwrap();
+        assert_eq!(phones.len(), 2);
+        assert_eq!(phones[1].get("label").and_then(Json::as_str), Some("home"));
+        assert_eq!(add.get("birthday").and_then(|b| b.get("year")), None);
+        assert_eq!(add.get("birthday").and_then(|b| b.get("month")).and_then(Json::as_u64), Some(12));
+        let social = &add.get("social_profiles").and_then(Json::as_array).unwrap()[0];
+        assert_eq!(social.get("service").and_then(Json::as_str), Some("mastodon"));
+        // what the request sends decodes back to the same values
+        let mut sent = add.clone();
+        if let Json::Obj(fields) = &mut sent {
+            fields.push(("id".into(), Json::Num(9.0)));
+        }
+        let back = decode_contacts(&reply(vec![sent])).unwrap();
+        assert_eq!(back[0].get(Key::Birthday), Some(&Value::Date(DateComponents::new(None, 12, 10).unwrap())));
+        let Some(Value::Profiles(profiles)) = back[0].get(Key::SocialProfiles) else { panic!("profiles") };
+        assert_eq!((profiles[0].username.as_str(), profiles[0].identifier.as_str()), ("@ada", "1"));
+    }
+
+    #[test]
+    fn relations_and_instant_messages_decode_as_labeled_values_and_profiles() {
+        let row = Json::Obj(vec![
+            ("id".into(), Json::Num(1.0)),
+            ("relations".into(), Json::Arr(vec![Json::Obj(vec![("label".into(), Json::Str("spouse".into())), ("value".into(), Json::Str("William".into()))])])),
+            ("instant_messages".into(), Json::Arr(vec![Json::Obj(vec![("service".into(), Json::Str("xmpp".into())), ("username".into(), Json::Str("ada@chat.example".into()))])])),
+            ("nickname".into(), Json::Str("Countess".into())),
+        ]);
+        let people = decode_contacts(&reply(vec![row])).unwrap();
+        let Some(Value::Labeled(relations)) = people[0].get(Key::Relations) else { panic!("relations") };
+        assert_eq!((relations[0].label.as_str(), relations[0].value.as_str()), ("spouse", "William"));
+        assert!(matches!(people[0].get(Key::InstantMessages), Some(Value::Profiles(p)) if p[0].service == "xmpp"));
+        assert_eq!(people[0].get(Key::Nickname), Some(&Value::Text("Countess".into())));
+        assert_eq!(localized_label(LABEL_PHONE_PAGER), "Pager");
+    }
+
+    #[test]
+    fn the_shell_messages_for_sidecar_fields_map_to_an_invalid_contact() {
+        assert!(matches!(ContactsError::from_message("nickname is longer than 320 characters"), ContactsError::InvalidContact(_)));
+        assert!(matches!(ContactsError::from_message("birthday is not in the shape fetch returns"), ContactsError::InvalidContact(_)));
     }
 }
