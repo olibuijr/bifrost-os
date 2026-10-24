@@ -14,7 +14,7 @@ use springboard::shell::calendar::Date;
 use springboard::shell::contactextras::{self, Book, Extras};
 use springboard::shell::contactstore::{self, Contact, LABELS, MAX_NAME, MAX_NOTES};
 use springboard::shell::services::contacts::{
-    access_of, answer, answer_prompt, answer_with, apply_save, change_by_user, reads, record_of, record_with,
+    access_of, answer, answer_prompt, answer_with, apply_save, apply_save_with, change_by_user, reads, record_of, record_with,
 };
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -322,6 +322,7 @@ fn the_sidecar_is_written_beside_the_contacts_file_and_loads_back() {
             urls: vec![LabeledValue::new("work", "https://x.is/a")],
             birthday: DateComponents::new(None, 12, 10),
             dates: vec![("anniversary".into(), DateComponents::new(Some(2001), 5, 6).unwrap())],
+            ..Default::default()
         },
     );
     contactextras::save(&sidecar, &book).unwrap();
@@ -349,7 +350,7 @@ fn a_bad_sidecar_value_leaves_its_field_empty_and_keeps_the_contact() {
     let book = contactextras::parse("springboard-contact-extras-v1\n2\tbirthday\t\t--02-30x\n2\tphone\tmobile\t+354 1\n");
     assert_eq!(book[&2].birthday, None);
     assert_eq!(book[&2].phones.len(), 1);
-    let unknown = contactextras::parse("springboard-contact-extras-v1\n5\tnickname\t\tAda\n");
+    let unknown = contactextras::parse("springboard-contact-extras-v1\n5\tshoe_size\t\t42\n");
     assert_eq!(unknown[&5], Extras::default(), "an unknown kind adds nothing");
 }
 
@@ -549,11 +550,15 @@ fn a_save_applies_all_its_changes_or_none_of_them() {
 }
 
 #[test]
-fn a_save_refuses_a_field_that_takes_one_value_given_two() {
+fn a_save_keeps_the_first_phone_in_the_file_and_the_rest_in_the_sidecar_but_refuses_two_addresses() {
     let id = "is.example.sdk-tests-03.two";
     answer_prompt(id, Choice::All).unwrap();
     let params = obj(vec![("add", Json::Arr(vec![obj(vec![("given_name", text("Ada")), ("phones", texts(&["1", "2"]))])]))]);
-    assert_eq!(apply_save(id, &params, &[]).err(), Some("phones takes one value per contact".to_string()));
+    let (_, next, extras) = apply_save_with(id, &params, &[], &Book::new()).unwrap();
+    assert_eq!(next[0].phone, "1");
+    assert_eq!(extras[&next[0].id].phones, vec![LabeledValue::new("", "2")]);
+    let two = obj(vec![("add", Json::Arr(vec![obj(vec![("given_name", text("Ada")), ("address", texts(&["a", "b"]))])]))]);
+    assert_eq!(apply_save(id, &two, &[]).err(), Some("address takes one value per contact".to_string()));
 }
 
 #[test]
@@ -561,8 +566,8 @@ fn an_empty_save_and_an_unknown_field_are_refused() {
     let id = "is.example.sdk-tests-03.empty";
     answer_prompt(id, Choice::All).unwrap();
     assert_eq!(apply_save(id, &obj(vec![]), &[]).err(), Some("save needs add, update or delete".to_string()));
-    let bad = obj(vec![("add", Json::Arr(vec![obj(vec![("nickname", text("Ada"))])]))]);
-    assert_eq!(apply_save(id, &bad, &[]).err(), Some("no contact field nickname".to_string()));
+    let bad = obj(vec![("add", Json::Arr(vec![obj(vec![("shoe_size", text("42"))])]))]);
+    assert_eq!(apply_save(id, &bad, &[]).err(), Some("no contact field shoe_size".to_string()));
 }
 
 #[test]

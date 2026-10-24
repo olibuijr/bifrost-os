@@ -276,6 +276,7 @@ mod tests {
             urls: vec![LabeledValue::new("other", "https://ada.is")],
             birthday: DateComponents::new(Some(1815), 12, 10),
             dates: vec![("anniversary".into(), DateComponents::new(Some(1835), 7, 8).unwrap())],
+            ..Default::default()
         }
     }
 
