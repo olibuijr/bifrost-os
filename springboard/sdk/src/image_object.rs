@@ -19,6 +19,8 @@
 //! here; apps decode with `graphics_imageio::decode` when they draw.
 
 use crate::graphics_imageio;
+use bifrost_render::canvas::{Canvas, ImageRef, RectF};
+use bifrost_render::gfx::Image;
 
 /// A rectangle as (x, y, width, height), y growing downwards.
 pub type Rect = (f32, f32, f32, f32);
@@ -253,6 +255,66 @@ impl ImageObject {
     }
 }
 
+impl ImageObject {
+    /// Draws `pixels` (the decoded pixels of this image's chosen representation, see [`best_rep`](Self::best_rep))
+    /// into `dst` (device pixels) on a canvas, the way the image object draws itself in a view:
+    ///
+    /// - a template image is a coverage mask filled with `tint` (pass the context's colour, `LABEL.now()` for
+    ///   ordinary content or the accent for a selected control), so it follows Light, Dark and the accent;
+    /// - any other image draws as itself at `alpha` (0..1); `tint` is ignored;
+    /// - with cap insets and a `dst` at least as large as them, nine slices keep the corners at their size and
+    ///   stretch the edges and centre ([`resizable_slices`](Self::resizable_slices)); `scale` is device pixels per
+    ///   point, and the insets are read in the image's own pixels per point.
+    ///
+    /// Without a point size the image is drawn whole. Nothing is drawn for an empty pixel grid or an empty `dst`.
+    pub fn draw(&self, c: &mut dyn Canvas, pixels: &Image, dst: RectF, scale: f32, tint: u32, alpha: f32) {
+        if pixels.w == 0 || pixels.h == 0 || !(dst.w > 0.0 && dst.h > 0.0) {
+            return;
+        }
+        let scale = if scale.is_finite() && scale > 0.0 { scale } else { 1.0 };
+        let has_caps = self.cap_insets != CapInsets::default();
+        let slices = if has_caps { self.resizable_slices((dst.w / scale, dst.h / scale)) } else { None };
+        let Some(slices) = slices else {
+            self.draw_piece(c, pixels, dst, tint, alpha);
+            return;
+        };
+        // image pixels per point, from the pixel grid over the point size
+        let (sw, sh) = self.size().unwrap_or((pixels.w as f32, pixels.h as f32));
+        let (kx, ky) = (pixels.w as f32 / sw, pixels.h as f32 / sh);
+        for s in slices {
+            let (sx, sy, sw, sh) = s.src;
+            let (x0, y0) = ((sx * kx).round() as usize, (sy * ky).round() as usize);
+            let (x1, y1) = (((sx + sw) * kx).round() as usize, ((sy + sh) * ky).round() as usize);
+            let (x1, y1) = (x1.min(pixels.w), y1.min(pixels.h));
+            let (dx, dy, dw, dh) = s.dst;
+            if x1 <= x0 || y1 <= y0 || dw <= 0.0 || dh <= 0.0 {
+                continue;
+            }
+            let piece = pixels.crop(x0, y0, x1 - x0, y1 - y0);
+            let to = RectF::new(dst.x + dx * scale, dst.y + dy * scale, dw * scale, dh * scale);
+            self.draw_piece(c, &piece, to, tint, alpha);
+        }
+    }
+
+    fn draw_piece(&self, c: &mut dyn Canvas, img: &Image, dst: RectF, tint: u32, alpha: f32) {
+        if self.template {
+            // a tinted draw takes its coverage from the mask, so the opacity scales the mask
+            let a = (alpha.clamp(0.0, 1.0) * 255.0).round() as u32;
+            let faded;
+            let mask = if a >= 255 {
+                img
+            } else {
+                faded = Image { w: img.w, h: img.h, px: img.px.iter().map(|&p| bifrost_render::gfx::scale(p, a)).collect() };
+                &faded
+            };
+            c.image_tinted(ImageRef { id: crate::widgets::image_id(mask), image: mask }, dst, tint);
+        } else {
+            let r = ImageRef { id: crate::widgets::image_id(img), image: img };
+            c.image(r, dst, alpha.clamp(0.0, 1.0));
+        }
+    }
+}
+
 /// The named images an app registers. Lookup by name is served here. A name is registered once.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ImageCatalog {
@@ -475,6 +537,62 @@ mod tests {
         assert_eq!(image.reps().len(), 1);
         assert_eq!(image.reps()[0].kind, RepKind::Bitmap { pixel_width: 3, pixel_height: 2 });
         assert_eq!(image.size(), Some((3.0, 2.0)));
+    }
+
+    fn solid(w: usize, h: usize, px: u32) -> Image {
+        Image { w, h, px: vec![px; w * h] }
+    }
+
+    fn draw_into(obj: &ImageObject, img: &Image, w: usize, h: usize, tint: u32, alpha: f32) -> Vec<u32> {
+        let mut px = vec![0u32; w * h];
+        {
+            let mut s = bifrost_render::gfx::Surface { w, h, stride: w, px: &mut px, y0: 0 };
+            obj.draw(&mut s, img, RectF::new(0.0, 0.0, w as f32, h as f32), 1.0, tint, alpha);
+        }
+        px
+    }
+
+    const RED: u32 = 0xff00_00ff;
+    const BLUE: u32 = 0xffff_0000;
+    const WHITE: u32 = 0xffff_ffff;
+
+    #[test]
+    fn a_template_draws_as_a_mask_in_the_tint_and_other_images_as_themselves() {
+        let mut obj = ImageObject::new();
+        obj.add_rep(bitmap(2, 2));
+        obj.set_template(true);
+        let out = draw_into(&obj, &solid(2, 2, WHITE), 4, 4, RED, 1.0);
+        assert_eq!(out[5], RED, "the white mask takes the tint");
+        obj.set_template(false);
+        let out = draw_into(&obj, &solid(2, 2, BLUE), 4, 4, RED, 1.0);
+        assert_eq!(out[5], BLUE, "a plain image ignores the tint");
+        assert!(draw_into(&obj, &Image::new(0, 0), 4, 4, RED, 1.0).iter().all(|&p| p == 0));
+    }
+
+    #[test]
+    fn a_faded_template_covers_less() {
+        let mut obj = ImageObject::new();
+        obj.add_rep(bitmap(2, 2));
+        obj.set_template(true);
+        let out = draw_into(&obj, &solid(2, 2, WHITE), 2, 2, RED, 0.5);
+        let a = out[0] >> 24;
+        assert!(a > 100 && a < 160, "about half coverage, got {a}");
+    }
+
+    #[test]
+    fn cap_insets_keep_the_corners_and_stretch_the_centre() {
+        // a 3 x 3 image: red corners, blue everywhere else
+        let mut img = solid(3, 3, BLUE);
+        for i in [0, 2, 6, 8] {
+            img.px[i] = RED;
+        }
+        let mut obj = ImageObject::new();
+        obj.add_rep(bitmap(3, 3));
+        assert!(obj.set_cap_insets(CapInsets { top: 1.0, left: 1.0, bottom: 1.0, right: 1.0 }));
+        let out = draw_into(&obj, &img, 9, 9, WHITE, 1.0);
+        assert_eq!((out[0], out[8], out[80]), (RED, RED, RED), "corners stay one pixel");
+        assert_eq!(out[1], BLUE, "the top edge stretches, the corner does not");
+        assert_eq!(out[4 * 9 + 4], BLUE);
     }
 
     #[test]
