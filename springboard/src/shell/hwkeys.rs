@@ -297,6 +297,10 @@ pub struct HwKeys {
     sticky: StickyKeys,
     /// The non-modifier key that holds sticky modifiers, and those modifiers; they count as held until it is released
     sticky_held: Option<(u16, Vec<Modifier>)>,
+    /// Modifier codes (after the Settings remap) whose press a session event tap or Switch Control consumed or replaced,
+    /// still physically down: the window server reports them held, but they were never counted here, so
+    /// `sync_modifiers` treats them as unsure until their release instead of pressing them over the tap
+    tapped: Vec<u16>,
 }
 
 impl HwKeys {
@@ -323,6 +327,12 @@ impl HwKeys {
     /// changed.
     pub fn sync_modifiers(&mut self, held: &[u16], unsure: &[u16], caps: Option<bool>) -> bool {
         let before = (self.shift, self.ctrl, self.alt, self.altgr, self.meta, self.caps);
+        // a modifier a tap took is down for the window server but was never counted here: it is unsure until released.
+        // The mask cannot tell the left key of a pair from the right one, so a held code of the same class is unsure too
+        let tapped_class = |c: u16| self.tapped.iter().any(|&t| Modifier::of_code(t) == Modifier::of_code(c));
+        let (held, held_tapped): (Vec<u16>, Vec<u16>) = held.iter().copied().partition(|&c| !tapped_class(c));
+        let unsure: Vec<u16> = unsure.iter().copied().chain(held_tapped).chain(self.tapped.iter().copied()).collect();
+        let (held, unsure) = (held.as_slice(), unsure.as_slice());
         for m in [Modifier::Shift, Modifier::Ctrl, Modifier::Alt, Modifier::Super] {
             let is = |codes: &[u16]| codes.iter().any(|&c| Modifier::of_code(c) == Some(m));
             let sticky = self.sticky_held.as_ref().is_some_and(|(_, mods)| mods.contains(&m));
@@ -335,10 +345,14 @@ impl HwKeys {
                 *n = 0;
             }
         }
-        // AltGr is the right Alt key alone: it follows that code, and never outlives the Alt count
+        // AltGr is the right Alt key alone: it follows that code, and never outlives the Alt count. The window server's
+        // keymap may differ from the shell's typing layout and map right Alt as plain Alt (Mod1), so its mask cannot tell
+        // AltGr from Alt: while any Alt-class modifier is held (or unsure), right Alt is unsure and AltGr is kept; it is
+        // cleared only when the window server reports no Alt at all
+        let alt_class = |codes: &[u16]| codes.iter().any(|&c| Modifier::of_code(c) == Some(Modifier::Alt));
         if held.contains(&KEY_RIGHTALT) {
             self.altgr = self.altgr.max(1);
-        } else if !unsure.contains(&KEY_RIGHTALT) {
+        } else if !alt_class(held) && !alt_class(unsure) {
             self.altgr = 0;
         }
         self.altgr = self.altgr.min(self.alt);
@@ -350,6 +364,18 @@ impl HwKeys {
             self.meta_alone = false;
         }
         changed
+    }
+
+    /// Notes a key that a session event tap or Switch Control saw before `key`: `code` as the Settings remap sends it,
+    /// `taken` when its press was consumed or replaced (so `key` never counted it). A taken modifier press stays unsure
+    /// for `sync_modifiers` until its release, so the window server's mask, which still reports the key down, does not
+    /// press it over the tap. Every release clears the code, whatever the tap did with it.
+    pub fn note_tap(&mut self, code: u16, down: bool, taken: bool) {
+        if !down {
+            self.tapped.retain(|&c| c != code);
+        } else if taken && Modifier::of_code(code).is_some() && !self.tapped.contains(&code) {
+            self.tapped.push(code);
+        }
     }
 
     /// Chooses the form factor behaviour of a lone Cmd (Super) press. On a tablet it is the Home key (the default here, so the
@@ -2306,6 +2332,61 @@ mod tests {
         server_mods(&mut k, 0, None);
         assert_eq!(k.shift_held(), held, "the sticky Shift lasts until the key that took it is released");
         k.key(KEY_A, false);
+    }
+    /// The window server's keymap may map right Alt as plain Alt (Mod1) while the shell's typing layout uses it as AltGr:
+    /// its modifiers event must not clear AltGr while any Alt-class modifier is down, only once no Alt is reported.
+    #[test]
+    fn modifiers_event_keeps_altgr_when_the_server_sees_plain_alt() {
+        use crate::bare::input::mods_of_xkb;
+        let mut k = HwKeys::default();
+        k.key(KEY_RIGHTALT, true);
+        assert!(k.alt_held() && !k.modifier_flags().option(), "right Alt is AltGr, not Option");
+        // the window server reports Mod1 (Alt_R), not Mod5
+        assert!(!server_mods(&mut k, mods_of_xkb(1 << 3), Some(false)), "AltGr survives a plain Alt report");
+        assert!(k.alt_held() && !k.modifier_flags().option());
+        assert!(!server_mods(&mut k, mods_of_xkb(1 << 3), Some(false)), "and every one after it");
+        assert!(!k.modifier_flags().option());
+        // no Alt-class modifier at all: the lost release is corrected
+        assert!(server_mods(&mut k, 0, Some(false)));
+        assert!(!k.alt_held() && !k.modifier_flags().option());
+        // a left Alt reported as Mod1 is still Option
+        k.key(KEY_LEFTALT, true);
+        assert!(!server_mods(&mut k, mods_of_xkb(1 << 3), Some(false)));
+        assert!(k.modifier_flags().option());
+    }
+
+    /// A modifier press a session event tap (or Switch Control) consumed or replaced was never counted: the window server
+    /// still reports the key down, but the sync must not press it over the tap until the key is released.
+    #[test]
+    fn modifiers_event_respects_a_modifier_a_tap_consumed() {
+        use crate::bare::input::{MOD_META, MOD_SHIFT};
+        let mut k = HwKeys::default();
+        // a tap drops the left Shift press: `key` never sees it
+        k.note_tap(KEY_LEFTSHIFT, true, true);
+        assert!(!server_mods(&mut k, MOD_SHIFT, Some(false)), "the consumed Shift is not pressed by the sync");
+        assert!(!k.shift_held() && !k.modifier_flags().shift());
+        // its release clears the note; the release itself is consumed too
+        k.note_tap(KEY_LEFTSHIFT, false, true);
+        assert!(!server_mods(&mut k, 0, Some(false)));
+        // the next real Shift press counts and the sync agrees with it
+        k.note_tap(KEY_LEFTSHIFT, true, false);
+        k.key(KEY_LEFTSHIFT, true);
+        assert!(!server_mods(&mut k, MOD_SHIFT, Some(false)));
+        assert!(k.shift_held());
+        k.note_tap(KEY_LEFTSHIFT, false, false);
+        k.key(KEY_LEFTSHIFT, false);
+        // a tap replaced the right Cmd press with another key: Cmd is not counted, though the window server sees it down
+        k.note_tap(KEY_RIGHTMETA, true, true);
+        assert!(!server_mods(&mut k, MOD_META, Some(false)));
+        assert!(!k.meta_held());
+        // a missed press of a key no tap touched is still counted
+        assert!(server_mods(&mut k, MOD_META | MOD_SHIFT, Some(false)));
+        assert!(k.shift_held() && !k.meta_held());
+        // a plain key is no modifier to remember
+        k.note_tap(KEY_A, true, true);
+        k.note_tap(KEY_RIGHTMETA, false, true);
+        assert!(server_mods(&mut k, MOD_META | MOD_SHIFT, Some(false)), "after the release the window server is believed again");
+        assert!(k.meta_held());
     }
 }
 

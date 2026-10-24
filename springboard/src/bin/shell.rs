@@ -1060,7 +1060,11 @@ fn run() -> std::io::Result<()> {
                 input::Event::Key { code: input::KEY_WAKEUP, down: true } => Event::Wake,
                 input::Event::Key { code, down } => {
                     // Switch Control: while it is on, the switch keys step the panel and are used up here; any other key goes on
+                    // a modifier press used up or replaced here is never counted: `note_tap` keeps the window server's
+                    // modifier sync from pressing it over the tap until its release
+                    let sent = springboard::shell::kb_input::get().remap.apply(code);
                     if let Some(fx) = shell.switch_control_key(code, down, t) {
+                        hw_keys.note_tap(sent, down, true);
                         if down {
                             hw_keys.cancel_lone_meta();
                         }
@@ -1068,12 +1072,15 @@ fn run() -> std::io::Result<()> {
                         continue;
                     }
                     // session event taps see the key first and may drop or replace it
-                    let Some(code) = shell.tap_key(code, down) else {
+                    let Some(tapped) = shell.tap_key(code, down) else {
+                        hw_keys.note_tap(sent, down, true);
                         if down {
                             hw_keys.cancel_lone_meta();
                         }
                         continue;
                     };
+                    hw_keys.note_tap(sent, down, tapped != code);
+                    let code = tapped;
                     // Settings > Keyboard: modifier keys remapped, the repeat timing, and the shortcuts switched off
                     let kp = springboard::shell::kb_input::get();
                     // Settings > Accessibility > Sticky Keys: the key path follows the saved switch
