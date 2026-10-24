@@ -1,4 +1,4 @@
-//! Animated pictures for apps: the frames of an animated GIF or animated PNG (or another multi-image file) with their display times and
+//! Animated pictures for apps: the frames of an animated GIF, PNG or WebP (or another multi-image file) with their display times and
 //! loop count, as renderer pixels. A still picture reads as a one-frame animation with no delay.
 //!
 //! ```ignore

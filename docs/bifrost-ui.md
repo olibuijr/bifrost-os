@@ -2808,7 +2808,7 @@ Code: `springboard/src/shell/preview_info.rs` (pure helpers), drawn by `springbo
 - **Animated pictures.** A GIF or animated PNG (up to 16 MB, 300 frames, 32 million pixels in all) opens as `Body::Animation`: `preview_info::load_animation` decodes the frames and `PictureAnim::tick` picks the frame from the clock (`frame_index`: delays of 10 ms or less show for 100 ms, the loop count is honoured, the last frame stays after the last pass). A still picture keeps waiting for the thumbnails service.
 - **Picture information.** Under a picture the caption shows one line read from the first 256 KB of the file (`picture_info_for`): size in pixels, format, file size, frame count for an animation, camera (the make is not repeated when the model already starts with it), capture date, and the exposure as `1/250 s  f/2.8  ISO 200  35 mm`. Parts the file does not have are left out. The location is deliberately not shown.
 - **Preview panel model follows the shell.** `bifrost_app::peek::PreviewPanel::apply_event` and `handle_service_event` apply the shell's `closed` and `index` events to the model (so Space after the user closed the panel opens it again instead of sending a close), and an optional `PreviewPanelDelegate` hears `panel_did_change_item` and `panel_did_close`. Apple's key-event and source-frame delegate callbacks are not matched: the shell handles the panel's keys itself and the card opens at its own place.
-- **Gaps.** No scrolling in a long listing (the card shows what fits), no WebP animation (the WebP codec decodes the first frame), no Markup button for apps, and no extension host for out-of-process HTML or PDF replies.
+- **Gaps.** No scrolling in a long listing (the card shows what fits), WebP animation not checked in the panel (the codec decodes every WebP frame since 2026-10-24), no Markup button for apps, and no extension host for out-of-process HTML or PDF replies.
 
 ## Image I/O (`CGImageSource`, `CGImageDestination`, `bifrost_render::cg::imageio`, SDK `image_source`, `image_metadata`, `image_animation`, `picture_writer`)
 
@@ -2818,7 +2818,51 @@ Decoders and encoders are in `springboard/render/src/cg/imageio` (one module per
 - **More metadata.** The EXIF and GPS tables name `LensMake`, `OffsetTimeOriginal`, GPS `Speed` and `SpeedRef`, `Track` and `TrackRef`, `ImgDirection` and `ImgDirectionRef`. `image_metadata::PictureInfo` adds `lens_make`, `exposure_bias`, `gps_time` (`GpsTime`: UTC time of day with the date stamp when present), `gps_speed_kmh` (converted from km/h, mph or knots) and `gps_direction_deg`.
 - **More metadata written.** `PictureWriter` writes `exposure` (shutter time, f-number, ISO, focal length), `exposure_bias`, `lens` (make and model), `gps_time`, `speed_kmh` and `direction`; bad values are ignored. They round-trip through JPEG, PNG and TIFF.
 - **Tiles from a picture.** `render::image_tiles::TiledPicture` decodes a picture once and serves tiles through the LRU `TileCache` (`region`, `tile`, `crop_tile`); a viewer holds at most `capacity` tiles in drawable form.
-- **Gaps.** The decoders still decode a whole picture before scaling (no DCT-scaled JPEG decode, so the tile cache bounds memory held for drawing, not the decode), no APNG region-only frames are kept (frames are composited to the full canvas), no HDR gain maps, XMP or IPTC, and the picture's own drag payload does not carry image data yet.
+- **Gaps (wave 15).** Closed or narrowed by the 2026-10-24 round below; what is still open is listed there.
+
+Parity round 2026-10-24 (branch `parity/image-io`). Behaviour reference: the option keys and functions of the macOS 27
+(26A434) ImageIO BridgeSupport (sha256 `837ce01d...`, read for names only), the developer documentation, and REA
+evidence `ev_1f78cc989db83cafeda1ab3033c6d43e407a9f6ef4ead529ffeb323eb64aa9ff`. No reference code or data is copied.
+
+- **WebP everywhere.** Lossy (VP8, with an `ALPH` plane) and animated WebP decode through the `image-webp` crate
+  (MIT or Apache-2.0, pure Rust): animation frames are composited onto the canvas with their delays and the `ANIM`
+  loop count, and `ImageSource::count`, `image_animation` and `delay_ms_at` see them. Still lossless files keep our
+  own VP8L decoder. `webp::encode` writes lossless WebP with EXIF, ICC and XMP, so `Format::can_write` is true for
+  every format and `ImageDestination`, `graphics_imageio::encode` and `PictureWriter` write WebP. The WebP properties
+  carry `LoopCount` and the canvas size (reference keys `kCGImagePropertyWebPLoopCount`, `CanvasPixelWidth/Height`).
+  Decision: the reference cannot be matched on lossy or animated WebP writing yet; WebP is written lossless and still.
+- **XMP and IPTC.** `Properties::xmp` (JPEG APP1, PNG `iTXt` `XML:com.adobe.xmp`, WebP `XMP `) and
+  `Properties::image_resources` (JPEG APP13) are read; `WriteOptions::xmp` / `image_resources` write them back.
+  `image_metadata::Descriptive` (title, caption, keywords, creators, copyright, rating) reads XMP first and IPTC second,
+  matching how the reference syncs `CGImageMetadata` with the IPTC dictionary, and `PictureWriter::title`, `caption`,
+  `keywords`, `creator`, `copyright` and `rating` write XMP plus IPTC in a JPEG. `core::imgmeta` gains `xmp_values`
+  (`rdf:Bag`/`Seq` items), `xmp_packet_with_lists` and `app13_payload`. Gap: no general `CGImageMetadata` tag tree
+  (paths, qualifiers, structures); TIFF files neither read nor write XMP or IPTC.
+- **Embedded thumbnails.** `ThumbnailOptions` follows `kCGImageSourceCreateThumbnailFromImageAlways` and `...IfAbsent`:
+  the EXIF IFD1 preview is used unless the full image is asked for, the full image is decoded when allowed and no
+  preview exists, and with both off only the preview is returned (`ImageSource::embedded_thumbnail`,
+  `exif::thumbnail_of_block`). `ImageDestination::embed_thumbnail` (`kCGImageDestinationEmbedThumbnail`) writes a
+  160-pixel JPEG preview into a JPEG (`exif::build_block_with_thumbnail`). SDK: `image_source::ImageSource::
+  embedded_thumbnail` and `fast_thumbnail` (uses the preview when it covers the box), `PictureWriter::embed_thumbnail`.
+- **Destination options.** `ImageDestination::max_pixel_size` (`kCGImageDestinationImageMaxPixelSize`),
+  `background_color` (`kCGImageDestinationBackgroundColor`; JPEG alpha is laid over it, white by default) and
+  `optimize_color_for_sharing` (`kCGImageDestinationOptimizeColorForSharing`: `icc_transform::rgba8_to_srgb` converts
+  profiled pixels to sRGB and no profile is written; a profile that cannot be converted is kept). SDK:
+  `PictureWriter::max_side`, `background`, `optimize_for_sharing`.
+- **Lossless metadata edits.** `cg::imageio::copy_image_source` (`CGImageDestinationCopyImageSource`) rewrites JPEG,
+  PNG and WebP metadata and copies the compressed pixels byte for byte: `MetadataSet` merged (`kCGImageDestination
+  MergeMetadata`) or replacing, `date_time` (TIFF DateTime and EXIF DateTimeOriginal/Digitized), `orientation`,
+  `exclude_gps` and `exclude_xmp` (`kCGImageMetadataShouldExcludeGPS/XMP`; GPS also leaves the XMP packet, and a packet
+  that cannot be cleaned is dropped). Decision: replacing keeps the orientation, which describes the stored pixels.
+  SDK: `image_metadata::edit` with `MetadataEdit`, and `without_location` for sharing a photo privately. Gap: TIFF is
+  refused (its metadata shares directories with the image structure) and maker notes are dropped on rewrite.
+- **Region decode.** `png::decode_region` and `cg::imageio::decode_region` read a still, non-interlaced PNG row by row
+  (one row plus the rectangle in memory, past `MAX_SIDE` up to `png::MAX_STREAMED_SIDE` wide), and
+  `image_tiles::StreamingPicture` serves tiles from the file bytes through the `TileCache`. Gap: other formats are
+  decoded whole for each tile; no DCT-scaled JPEG decode.
+- **Still open.** HEIC, TGA and RAW are not decoded; no HDR gain maps (`kCGImageDestinationEncode*`,
+  `kCGImageSourceDecodeToHDR/SDR`); drag payloads do not carry image data; APNG and WebP frames are composited to the
+  full canvas; nothing above is verified on the test PC yet.
 
 ## Speech recognition requests and tasks (`SFSpeechRecognizer`, `SFSpeechRecognitionRequest`, `SFSpeechRecognitionTask`)
 
@@ -5243,7 +5287,7 @@ Code: `springboard/sdk/src/graphics_context.rs` (`GraphicsContext`, `Path`, scan
 | `CGLayer` | `GraphicsContext::new_layer_context(w, h)` and `draw_layer_at(&layer, dx, dy)`; `draw_layer` for a group |
 | `CGColorSpace`, `CGColor`, `CGColorConversionInfo` | `graphics_color`: `ColorSpace` (device, sRGB, Display P3, Lab, indexed, ICC via `space_from_profile`), `Color` (`srgb`, `from_rgba8`, `converted`, `to_rgba8`), `ColorConversionInfo`, `RenderingIntent` |
 | `CGPDFDocument`, `CGPDFPage`, `CGPDFContext` (write side) | `graphics_pdf`: `Document::open`, `page_count`, `page_size`, `render`; `PdfWriter` with `add_page`, `fill_rect`, `stroke_line`, `draw_rgb_image`, `finish`. No text drawing or annotation editing yet |
-| `CGImageSourceCreateWithData`, `CGImageDestination`, `CGImageSourceCopyTypeIdentifiers` | `graphics_imageio`: `detect`, `pixel_size`, `decode`, `encode(format, w, h, rgba)`, `encode_jpeg`, `can_write`. WebP is read only |
+| `CGImageSourceCreateWithData`, `CGImageDestination`, `CGImageSourceCopyTypeIdentifiers` | `graphics_imageio`: `detect`, `pixel_size`, `decode`, `encode(format, w, h, rgba)`, `encode_jpeg`, `can_write`. Every format is written; WebP lossless and still |
 
 Decisions and gaps: a stroke measures its width and dash with the CTM at stroke time, using the uniform scale
 `sqrt(|det|)`, so a non-uniform CTM gives an average width. Gradients are not shadowed. Gradient colours interpolate in
