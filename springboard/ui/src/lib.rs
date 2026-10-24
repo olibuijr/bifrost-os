@@ -591,6 +591,8 @@ mod tests {
 
 /// Shared list scroll physics.
 pub mod scroll;
+/// Scroll position as app state (`ScrollPosition`): edges, points and view identities, with user-scroll tracking.
+pub mod scroll_position;
 pub mod geometry;
 pub mod drawable_setup;
 pub mod sprite_batch;

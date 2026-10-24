@@ -479,6 +479,27 @@ impl Ui {
         self.font.measure_var(text, self.pt(pt), &vars(pt, weight))
     }
 
+    /// Where the baseline of one line of `pt` text sits, in points below the top of a box `h` points tall, when the
+    /// line is centred vertically in the box as the controls draw it (the rendered line is ascent plus descent tall,
+    /// so the baseline is half the box plus half the difference of ascent and descent). Follows Dynamic Type.
+    pub fn centred_baseline(&self, pt: f32, h: f32) -> f32 {
+        if !(self.s > 0.0) {
+            return h / 2.0;
+        }
+        let m = self.font.line_metrics(self.pt(self.scaled(pt)));
+        h / 2.0 + (m.ascent - m.descent) / 2.0 / self.s
+    }
+
+    /// Distance in points from the top of an image that [`Ui::text`] rendered at `pt` to the line's baseline (the
+    /// renderer's 2 px edge pad plus the ascent), for a view that blits text at a fixed top instead of centring it.
+    pub fn image_baseline(&self, pt: f32) -> f32 {
+        if !(self.s > 0.0) {
+            return pt;
+        }
+        let m = self.font.line_metrics(self.pt(self.scaled(pt)));
+        (2.0 + m.ascent) / self.s
+    }
+
     pub fn fit(&self, text: &str, pt: f32, max_px: f32) -> String {
         let (pt, weight) = (self.scaled(pt), self.weight(Weight::Regular));
         self.font.fit_var(text, self.pt(pt), max_px, &vars(pt, weight))
@@ -810,6 +831,16 @@ mod tests {
 
     fn ui() -> Ui {
         crate::tests::ui()
+    }
+
+    #[test]
+    fn the_centred_baseline_sits_below_the_middle_and_moves_with_the_box() {
+        let ui = ui();
+        let b = ui.centred_baseline(13.0, 22.0);
+        assert!(b > 11.0 && b < 22.0, "{b}");
+        // a taller box moves the baseline by half the growth; a larger size moves it further below the middle
+        assert!((ui.centred_baseline(13.0, 42.0) - b - 10.0).abs() < 1e-3);
+        assert!(ui.centred_baseline(26.0, 22.0) > b);
     }
 
     #[test]

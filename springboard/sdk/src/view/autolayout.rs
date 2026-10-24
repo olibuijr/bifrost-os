@@ -31,6 +31,11 @@ pub enum Anchor {
     Height,
     CenterX,
     CenterY,
+    /// `firstBaselineAnchor`: the view's top-most text baseline (`View::baselines`); the bottom edge for an item
+    /// without text (a guide, the window or a view with no baselines).
+    FirstBaseline,
+    /// `lastBaselineAnchor`: the bottom-most text baseline; otherwise as `FirstBaseline`.
+    LastBaseline,
 }
 
 /// What an anchor belongs to.
@@ -74,7 +79,7 @@ macro_rules! anchor_fns {
         impl Anchors { $(pub fn $name(self) -> Attr { Attr { item: self.0, anchor: Anchor::$a } })* }
     };
 }
-anchor_fns!(leading => Leading, trailing => Trailing, top => Top, bottom => Bottom, width => Width, height => Height, center_x => CenterX, center_y => CenterY);
+anchor_fns!(leading => Leading, trailing => Trailing, top => Top, bottom => Bottom, width => Width, height => Height, center_x => CenterX, center_y => CenterY, first_baseline => FirstBaseline, last_baseline => LastBaseline);
 
 /// An `NativeLayoutConstraint`: `first rel multiplier * second + constant` at `priority`; without `second` it is
 /// `first rel constant` (a size or an absolute position).
@@ -238,6 +243,10 @@ pub struct ViewInfo {
     /// `View::hugging` and `View::compression` as `(horizontal, vertical)`.
     pub hugging: (u16, u16),
     pub compression: (u16, u16),
+    /// `View::baselines` at the current frame (first, last; points below its top), `None` for a view without text.
+    /// The solver keeps each baseline's distance from the frame's vertical centre, which is exact for the controls,
+    /// whose single line of text is centred in their frame.
+    pub baselines: Option<(f32, f32)>,
 }
 
 /// The result of one solve.
@@ -314,10 +323,22 @@ pub fn solve(cs: &Constraints, bounds: Rect, top_inset: f32, margin: f32, views:
             }
         }
     }
+    // baseline distance below the frame's centre, per view: (first, last)
+    let from_centre: BTreeMap<u64, (f32, f32)> =
+        views.iter().filter_map(|v| v.baselines.map(|(f, l)| (v.id, (f - v.frame.h / 2.0, l - v.frame.h / 2.0)))).collect();
     let attr = |frames: &BTreeMap<Item, Frame>, a: Attr| -> Option<Expr> {
         let f = frames.get(&a.item)?;
         let (x, y, w, h) = (Expr::var(f.x), Expr::var(f.y), Expr::var(f.w), Expr::var(f.h));
+        let baseline = |last: bool| {
+            let known = if let Item::View(id) = a.item { from_centre.get(&id) } else { None };
+            match known {
+                Some(&(first, l)) => Expr::var(f.y) + Expr::var(f.h) * 0.5 + Expr::constant((if last { l } else { first }) as f64),
+                None => Expr::var(f.y) + Expr::var(f.h),
+            }
+        };
         Some(match a.anchor {
+            Anchor::FirstBaseline => baseline(false),
+            Anchor::LastBaseline => baseline(true),
             Anchor::Leading => x,
             Anchor::Trailing => x + w,
             Anchor::Top => y,
@@ -364,7 +385,7 @@ mod tests {
     const WIN: Rect = Rect { x: 0.0, y: 0.0, w: 400.0, h: 300.0 };
 
     fn info(id: u64, intrinsic: (f32, f32)) -> ViewInfo {
-        ViewInfo { id, frame: Rect::default(), intrinsic, hugging: (250, 250), compression: (750, 750) }
+        ViewInfo { id, frame: Rect::default(), intrinsic, hugging: (250, 250), compression: (750, 750), baselines: None }
     }
     fn near(a: f32, b: f32) -> bool {
         (a - b).abs() < 0.01
@@ -470,6 +491,41 @@ mod tests {
         cs.add(Spec::eq(anchors(1).leading(), anchors(99).trailing()));
         assert_eq!(solve(&cs, WIN, 0.0, 0.0, &[info(1, (0.0, 0.0))]).broken, vec![0]);
         assert_eq!(cs.view_ids(), vec![1, 99]);
+    }
+
+    #[test]
+    fn baseline_anchors_line_up_text_of_different_heights() {
+        // a 20 pt label (baseline 14 below its top) and a 40 pt field (baseline 24): first baselines equal
+        let mut cs = Constraints::new();
+        cs.add(Spec::fixed(anchors(1).top(), Rel::Eq, 50.0));
+        cs.add(Spec::fixed(anchors(1).height(), Rel::Eq, 20.0));
+        cs.add(Spec::fixed(anchors(2).height(), Rel::Eq, 40.0));
+        cs.add(Spec::eq(anchors(2).first_baseline(), anchors(1).first_baseline()));
+        let mut label = info(1, (0.0, 0.0));
+        label.frame.h = 20.0;
+        label.baselines = Some((14.0, 14.0));
+        let mut field = info(2, (0.0, 0.0));
+        field.frame.h = 40.0;
+        field.baselines = Some((24.0, 24.0));
+        let sol = solve(&cs, WIN, 0.0, 0.0, &[label, field]);
+        let (a, b) = (sol.frames[&1], sol.frames[&2]);
+        assert!(near(a.y + 14.0, b.y + 24.0), "{a:?} {b:?}");
+        assert!(sol.broken.is_empty());
+    }
+
+    #[test]
+    fn a_view_without_text_offers_its_bottom_as_its_baseline() {
+        let mut cs = Constraints::new();
+        cs.add(Spec::fixed(anchors(1).top(), Rel::Eq, 10.0));
+        cs.add(Spec::fixed(anchors(1).height(), Rel::Eq, 30.0));
+        cs.add(Spec::fixed(anchors(2).height(), Rel::Eq, 20.0));
+        cs.add(Spec::eq(anchors(2).last_baseline(), anchors(1).last_baseline()));
+        let mut text = info(2, (0.0, 0.0));
+        text.frame.h = 20.0;
+        text.baselines = Some((15.0, 15.0));
+        let sol = solve(&cs, WIN, 0.0, 0.0, &[info(1, (0.0, 0.0)), text]);
+        // the image's baseline is its bottom (40); the text's baseline meets it
+        assert!(near(sol.frames[&2].y + 15.0, 40.0), "{:?}", sol.frames);
     }
 
     #[test]

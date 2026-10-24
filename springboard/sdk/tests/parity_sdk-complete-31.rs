@@ -177,7 +177,7 @@ fn a_truncated_or_padded_authenticator_data_is_refused() {
 // ---- layout: priorities and layout guides of Auto Layout (bifrost_app::view autolayout) ----
 
 fn view(id: u64) -> ViewInfo {
-    ViewInfo { id, frame: Rect::default(), intrinsic: (0.0, 0.0), hugging: (250, 250), compression: (750, 750) }
+    ViewInfo { id, frame: Rect::default(), intrinsic: (0.0, 0.0), hugging: (250, 250), compression: (750, 750), baselines: None }
 }
 
 fn near(a: f32, b: f32) -> bool {
