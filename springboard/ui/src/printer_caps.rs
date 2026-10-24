@@ -129,6 +129,55 @@ pub struct PrinterCapabilities {
     /// The largest `media-*-margin-supported` value of each edge, so the area inside is printable on every paper.
     /// All zero when the printer reports none.
     pub hardware_margins: [i32; 4],
+    /// Printer `type`: the make and model (`printer-make-and-model`), empty when the printer does not say.
+    pub make_and_model: String,
+    /// The document formats the queue accepts (`document-format-supported`, MIME types).
+    pub formats: Vec<String>,
+    /// The resolutions the printer offers, in dots per inch (`printer-resolution-supported`; dots per centimetre are
+    /// converted).
+    pub resolutions: Vec<(i32, i32)>,
+    /// The resolution a job gets by default (`printer-resolution-default`, else the finest offered, else 300 dpi).
+    pub default_resolution: (i32, i32),
+}
+
+/// The colour space a device renders in (`deviceDescription`'s colour space name).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeviceColorSpace {
+    /// Calibrated RGB: the printer prints colour.
+    Rgb,
+    /// Calibrated white: the printer prints grey only.
+    Gray,
+}
+
+/// Printer `deviceDescription`: what the device is and how it renders. `is_printer` is always set for a printer (the
+/// one key the reference guarantees); the rest come from the capabilities.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DeviceDescription {
+    pub is_printer: bool,
+    pub is_screen: bool,
+    /// Dots per inch, horizontal and vertical.
+    pub resolution: (f64, f64),
+    /// The default paper in points.
+    pub size: (f64, f64),
+    pub color_space: DeviceColorSpace,
+    pub bits_per_sample: u32,
+}
+
+/// The dots per inch an IPP resolution value (`x`, `y`, units: 3 per inch, 4 per centimetre) stands for.
+fn resolution(v: &crate::ipp::Value) -> Option<(i32, i32)> {
+    let crate::ipp::Value::Other { tag, bytes } = v else { return None };
+    if *tag != crate::ipp::tag::RESOLUTION || bytes.len() != 9 {
+        return None;
+    }
+    let x = i32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+    let y = i32::from_be_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]);
+    let per_inch = |d: i32| match bytes[8] {
+        3 => Some(d),
+        4 => Some((d as f64 * 2.54).round() as i32),
+        _ => None,
+    };
+    let (x, y) = (per_inch(x)?, per_inch(y)?);
+    (x > 0 && y > 0).then_some((x, y))
 }
 
 fn hundredths_to_points(v: i32) -> f64 {
@@ -191,7 +240,55 @@ impl PrinterCapabilities {
             edge("media-right-margin-supported"),
             edge("media-top-margin-supported"),
         ];
-        PrinterCapabilities { papers, default_paper, duplex, color_modes, status, hardware_margins }
+        let make_and_model = g.text("printer-make-and-model").unwrap_or("").to_string();
+        let formats = values(g, "document-format-supported").map(str::to_string).collect();
+        let mut resolutions: Vec<(i32, i32)> = Vec::new();
+        for r in g.attribute("printer-resolution-supported").into_iter().flat_map(|a| a.values.iter().filter_map(resolution)) {
+            if !resolutions.contains(&r) {
+                resolutions.push(r);
+            }
+        }
+        let default_resolution = g
+            .value("printer-resolution-default")
+            .and_then(resolution)
+            .or_else(|| resolutions.iter().copied().max_by_key(|&(x, y)| x as i64 * y as i64))
+            .unwrap_or((300, 300));
+        PrinterCapabilities {
+            papers,
+            default_paper,
+            duplex,
+            color_modes,
+            status,
+            hardware_margins,
+            make_and_model,
+            formats,
+            resolutions,
+            default_resolution,
+        }
+    }
+
+    /// Printer `languageLevel`: the PostScript level the queue takes. A queue that accepts PostScript documents takes
+    /// level 3 (the print system's filters read level 3); one that does not reports 0, as a non-PostScript printer does.
+    pub fn language_level(&self) -> i32 {
+        if self.formats.iter().any(|f| f.eq_ignore_ascii_case("application/postscript")) {
+            3
+        } else {
+            0
+        }
+    }
+
+    /// Printer `deviceDescription`: a printer (never a screen) at its default resolution, the default paper's size,
+    /// RGB when it prints colour and grey otherwise, 8 bits per sample.
+    pub fn device_description(&self) -> DeviceDescription {
+        let (x, y) = self.default_resolution;
+        DeviceDescription {
+            is_printer: true,
+            is_screen: false,
+            resolution: (x as f64, y as f64),
+            size: (hundredths_to_points(self.default_paper.width), hundredths_to_points(self.default_paper.height)),
+            color_space: if self.supports_color() { DeviceColorSpace::Rgb } else { DeviceColorSpace::Gray },
+            bits_per_sample: 8,
+        }
     }
 
     /// Printer `pageSize(forPaper:)`: finds a paper by PWG name or PPD name.
@@ -308,6 +405,49 @@ mod tests {
         assert!((x - 18.0).abs() < 0.01 && y == 0.0);
         assert!((iw - (w - 36.0)).abs() < 0.01 && (ih - (h - 36.0)).abs() < 0.01);
         assert!(c.imageable_rect("Tabloid").is_none());
+    }
+
+    fn res(x: i32, y: i32, units: u8) -> Value {
+        let mut bytes = x.to_be_bytes().to_vec();
+        bytes.extend_from_slice(&y.to_be_bytes());
+        bytes.push(units);
+        Value::Other { tag: crate::ipp::tag::RESOLUTION, bytes }
+    }
+
+    #[test]
+    fn the_device_description_reads_resolution_colour_and_paper() {
+        let mut g = canned();
+        g.attributes.push(Attribute { name: "printer-make-and-model".into(), values: vec![Value::text("Lab Laser 4000")] });
+        g.attributes.push(Attribute { name: "printer-resolution-supported".into(), values: vec![res(300, 300, 3), res(600, 600, 3), res(118, 118, 4), res(1, 2, 9)] });
+        let c = PrinterCapabilities::from_group(&g);
+        assert_eq!(c.make_and_model, "Lab Laser 4000");
+        assert_eq!(c.resolutions, vec![(300, 300), (600, 600)], "118 dots per cm is 300 dpi, kept once; unknown units are dropped");
+        assert_eq!(c.default_resolution, (600, 600), "no default: the finest");
+        let d = c.device_description();
+        assert!(d.is_printer && !d.is_screen);
+        assert_eq!(d.resolution, (600.0, 600.0));
+        assert_eq!(d.color_space, DeviceColorSpace::Rgb);
+        assert!((d.size.0 - 595.28).abs() < 0.01, "the default paper is A4");
+        g.attributes.push(Attribute { name: "printer-resolution-default".into(), values: vec![res(300, 300, 3)] });
+        g.attributes.retain(|a| a.name != "print-color-mode-supported");
+        g.attributes.push(multi("print-color-mode-supported", &["monochrome"]));
+        let c = PrinterCapabilities::from_group(&g);
+        assert_eq!(c.default_resolution, (300, 300));
+        assert_eq!(c.device_description().color_space, DeviceColorSpace::Gray);
+    }
+
+    #[test]
+    fn the_language_level_follows_postscript_support() {
+        let mut g = canned();
+        assert_eq!(PrinterCapabilities::from_group(&g).language_level(), 0);
+        assert_eq!(PrinterCapabilities::from_group(&g).default_resolution, (300, 300), "no resolutions: 300 dpi");
+        g.attributes.push(Attribute {
+            name: "document-format-supported".into(),
+            values: vec![Value::mime("application/pdf"), Value::mime("application/postscript")],
+        });
+        let c = PrinterCapabilities::from_group(&g);
+        assert_eq!(c.formats, vec!["application/pdf".to_string(), "application/postscript".to_string()]);
+        assert_eq!(c.language_level(), 3);
     }
 
     #[test]
