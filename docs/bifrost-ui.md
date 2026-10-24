@@ -503,12 +503,14 @@ On macOS an app follows Light/Dark without opting in. Third-party Linux apps fol
 - `org.freedesktop.portal.Settings`, namespace `org.freedesktop.appearance`: `color-scheme` (u: 0 no preference, 1 dark, 2 light)
   and `accent-color` ((ddd), 0..1). Apps (GTK 4/libadwaita, Qt 6.5+, Firefox, Chromium, Electron) read it and subscribe to
   `SettingChanged`. This is served by `bifrost-portal` (see "Native apps follow the appearance"), so the channel exists.
-- Env hints for toolkits that do not use the portal at launch: `GTK_THEME=Adwaita:dark` (or `:light`), `QT_QPA_PLATFORMTHEME`
-  and `QT_STYLE_OVERRIDE`, `COLOR_SCHEME_PREFERENCE`-style variables for some apps. These are read once at start.
-- Gaps: the launcher does not yet set these env hints per scheme, so GTK3 and older Qt apps stay on their default until
-  restarted with them; `contrast` ignores Increase Contrast; `xdg-desktop-portal` frontends (file chooser, screenshot)
-  are not implemented; a `gsettings`/dconf `color-scheme` mirror for GTK apps that ignore the portal is not written.
-  Not implemented in this change.
+- Toolkits that do not read the portal by default: Qt picks its generic theme for an unknown desktop
+  (`XDG_CURRENT_DESKTOP=BifrOSt`), which ignores `color-scheme`, so the launchers set `QT_QPA_PLATFORMTHEME=gnome`
+  (Qt's built-in GNOME theme follows the portal live). GTK 3 reads only `gtk-application-prefer-dark-theme` from
+  `~/.config/gtk-3.0/settings.ini` outside a sandbox: `bifrost-portal` keeps that key in step (other lines kept),
+  read when a GTK 3 app starts. No `GTK_THEME` is set (it cannot follow later switches).
+- Gaps: running GTK 3 apps switch only after a restart; `xdg-desktop-portal` frontends (file chooser, screenshot)
+  are not implemented; a `gsettings`/dconf `color-scheme` mirror is not written (plain GTK 4 apps without libadwaita
+  that read only GSettings stay on their default).
 
 ## System fonts (`NSFont.systemFont`, `monospacedSystemFont`; Settings > Fonts)
 
@@ -1284,17 +1286,27 @@ interface, served by our own `bifrost-portal` (no xdg-desktop-portal or GNOME st
 - The shell (`Shell::appearance_tick`) writes `$XDG_RUNTIME_DIR/bifrost-appearance` (runtime dir from
   `/run/bifrost/user/session.json`) atomically, only when the effective scheme (Auto resolved) or accent changes,
   and once at startup; chowned to the account when the shell runs as root. Format: `color-scheme=1|2`
-  (1 dark, 2 light) and `accent=R G B` (0..1). Code: `springboard/src/appearance_portal.rs`.
+  (1 dark, 2 light), `accent=R G B` (0..1, the accent for the effective scheme) and `contrast=0|1` (Increase
+  Contrast). With Auto, the shell plans a wake-up at the next 07:00 or 19:00 (`auto_flip_in_secs`), so the flip
+  reaches the file on time even when nothing else is awake. Code: `springboard/src/appearance_portal.rs`.
 - `bifrost-portal` (`springboard/src/bin/portal.rs`) owns `org.freedesktop.portal.Desktop` at
   `/org/freedesktop/portal/desktop`, Settings version 2: `ReadAll`, `Read` (deprecated, double variant),
   `ReadOne`, and `SettingChanged`. Namespace `org.freedesktop.appearance`: `color-scheme` (u), `accent-color`
-  ((ddd)), `contrast` (u, always 0). Other keys return `org.freedesktop.portal.Error.NotFound`. It polls the
-  file every 500 ms. D-Bus activated by `/usr/share/dbus-1/services/org.freedesktop.portal.Desktop.service`.
+  ((ddd)), `contrast` (u, 1 with Increase Contrast). Other keys return `org.freedesktop.portal.Error.NotFound`. It
+  watches the file with inotify (a 500 ms poll only without inotify) and emits `SettingChanged` for each key that
+  changed (`State::changes`). D-Bus activated by `/usr/share/dbus-1/services/org.freedesktop.portal.Desktop.service`.
+  There is no `xdg-desktop-portal` frontend, so no `portals.conf`: apps call `org.freedesktop.portal.Desktop` directly.
 - Session bus: `packaging/arch/wayland/session` starts `dbus-daemon --session` as the account at
   `$XDG_RUNTIME_DIR/bus` (exported as `DBUS_SESSION_BUS_ADDRESS`, so `session.json` and `bifrost-apps` carry it);
   the session script starts `bifrost-portal`. The native-app sandbox (`bare/app_policy.rs`) binds that socket and sets
   the variable. Launch-time env such as `GTK_THEME` cannot follow later switches, so the portal is the only live path.
-- Not yet matched: `contrast` does not follow Increase Contrast, and Auto switches reach apps up to 500 ms late.
+- Parity note (`NSApp.effectiveAppearance`): third-party apps get the effective appearance, the accent and
+  Increase Contrast through the freedesktop Settings portal, live; GTK 3 through its settings.ini at start, Qt
+  through its GNOME theme. Read it with
+  `dbus-send --session --print-reply --dest=org.freedesktop.portal.Desktop /org/freedesktop/portal/desktop
+  org.freedesktop.portal.Settings.ReadOne string:org.freedesktop.appearance string:color-scheme`.
+- Not yet matched: apps that read only GSettings/dconf, and toolkits that read the scheme only at start (GTK 3,
+  `GTK_THEME` users), do not follow a switch while running.
 
 ## Window vibrancy (`NSVisualEffectView`: material, blendingMode, state)
 

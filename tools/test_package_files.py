@@ -34,8 +34,13 @@ class NoRetiredCompositor(unittest.TestCase):
 
     def test_session_env_carries_toolkit_defaults(self):
         text = read(ARCH, "wayland", "session-env")
-        for key in ("XDG_CURRENT_DESKTOP", "MOZ_ENABLE_WAYLAND", "QT_QPA_PLATFORM", "GDK_BACKEND", "XCURSOR_THEME", "XCURSOR_SIZE"):
+        for key in ("XDG_CURRENT_DESKTOP", "MOZ_ENABLE_WAYLAND", "QT_QPA_PLATFORM", "QT_QPA_PLATFORMTHEME", "GDK_BACKEND", "XCURSOR_THEME", "XCURSOR_SIZE"):
             self.assertIn("'%s':" % key, text)
+
+    def test_launchers_pass_the_qt_theme(self):
+        # Qt follows the Settings portal's color-scheme only with its GNOME theme
+        self.assertIn("'QT_QPA_PLATFORMTHEME': 'gnome'", read(ARCH, "wayland", "session-env"))
+        self.assertIn("'QT_QPA_PLATFORMTHEME'", read(ARCH, "wayland", "apps"))
 
 
 class RepositoryKey(unittest.TestCase):
