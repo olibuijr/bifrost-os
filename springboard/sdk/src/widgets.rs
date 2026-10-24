@@ -794,6 +794,8 @@ pub fn path_bar(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, items: &[(&str, &str)
     let pt = MAC_CALLOUT_PT;
     let widths: Vec<f32> = items.iter().map(|(l, _)| ui.measure(l, pt, Weight::Regular) / ui.pt(1.0)).collect();
     let segs = pathbar::layout(&widths, bounds, PATH_GLYPH_PT + SPACE_XS, PATH_CHEVRON_PT);
+    // the segments are the path bar's children in the accessibility tree
+    bifrost_ui::ax::begin_group(bifrost_ui::Role::List, "Path", bounds);
     for (k, seg) in segs.iter().enumerate() {
         let (label, symbol) = items[seg.index];
         let r = seg.rect;
@@ -809,6 +811,7 @@ pub fn path_bar(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, items: &[(&str, &str)
             glyph(s, ui, "chevron.right", Rect { x: r.right() + (PATH_CHEVRON_PT - c) / 2.0, y: r.y + (r.h - c) / 2.0, w: c, h: c }, LABEL_3.now());
         }
     }
+    bifrost_ui::ax::end_group();
     segs
 }
 
@@ -925,12 +928,15 @@ pub fn candidate_list(s: &mut dyn Canvas, ui: &Ui, anchor: Rect, items: &[String
     let (row, pad) = (CANDIDATE_ROW_PT, CANDIDATE_PAD_PT);
     let bounds = Rect { x: anchor.x, y: anchor.bottom() + CANDIDATE_GAP_PT, w: CANDIDATE_WIDTH_PT, h: pad * 2.0 + row * items.len() as f32 };
     material(s, ui, bounds, 8.0, Material::Popover);
+    bifrost_ui::ax::begin_group(bifrost_ui::Role::List, "Candidates", bounds);
     for (i, item) in items.iter().enumerate() {
+        bifrost_ui::ax::record(bifrost_ui::Role::Row, item, "", Rect { x: bounds.x + pad, y: bounds.y + pad + row * i as f32, w: bounds.w - 2.0 * pad, h: row }, true);
         let img = ui.text(&format!("{}   {}", i + 1, item), MAC_BODY_PT, Weight::Regular, WHITE);
         let x = ui.pt(bounds.x + pad * 2.0);
         let y = ui.pt(bounds.y + pad + row * i as f32) + (ui.pt(row) - img.h as f32) / 2.0;
         image_tinted_at(s, &img, x as i32, y as i32, LABEL.now());
     }
+    bifrost_ui::ax::end_group();
 }
 
 /// An open menu on the Popover material at `origin` (points). The highlighted row is the accent colour with white
@@ -944,8 +950,13 @@ pub fn menu(s: &mut dyn Canvas, ui: &Ui, origin: (f32, f32), width: f32, menu: &
     let lead = if swatched { MENU_SWATCH_PT + MENU_SWATCH_GAP_PT } else { 0.0 };
     material(s, ui, bounds, 8.0, Material::Popover);
     s.stroke_rrect(RectF::new(ui.pt(bounds.x), ui.pt(bounds.y), ui.pt(width), ui.pt(total)), ui.pt(8.), ui.pt(1.0).max(1.0), HAIRLINE_C.now());
+    // the rows are the menu's children in the accessibility tree; a separator is not an element
+    bifrost_ui::ax::begin_group(bifrost_ui::Role::List, "Menu", bounds);
     for (i, (item, &(top, h))) in menu.items.iter().zip(&rows).enumerate() {
         let y = origin.1 + top;
+        if !item.separator {
+            bifrost_ui::ax::record(bifrost_ui::Role::MenuItem, &item.title, if item.checked { "checked" } else { "" }, Rect { x: origin.0, y, w: width, h }, item.enabled);
+        }
         if item.separator {
             s.fill_rect(RectF::new((ui.pt(origin.0 + MENU_INSET_PT * 2.) as usize) as f32, (ui.pt(y + h / 2.) as usize) as f32, (ui.pt(width - MENU_INSET_PT * 4.) as usize) as f32, (ui.pt(1.0).max(1.0) as usize) as f32), SEPARATOR_C.now());
             continue;
@@ -973,6 +984,7 @@ pub fn menu(s: &mut dyn Canvas, ui: &Ui, origin: (f32, f32), width: f32, menu: &
             blit(s, &t, (ui.pt(origin.0 + width - MENU_INSET_PT - 10.) - t.w as f32) as i32, center(&t));
         }
     }
+    bifrost_ui::ax::end_group();
     bounds
 }
 
@@ -1042,6 +1054,8 @@ impl PlayerLayout {
 pub fn player(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, p: &Player, pressed: Option<Rect>) -> PlayerLayout {
     let l = PlayerLayout::new(bounds, p);
     let c = l.capsule;
+    // the transport buttons are the player's children in the accessibility tree; its value is what is playing
+    bifrost_ui::ax::begin_group(bifrost_ui::Role::List, "Player", c);
     capsule(s, ui, c);
     outline_if_borders(s, ui, c, c.h / 2.0);
     let a = l.artwork;
@@ -1073,6 +1087,7 @@ pub fn player(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, p: &Player, pressed: Op
         button(s, fr, f, "Forward");
     }
     button(s, l.play, if p.playing { "pause.fill" } else { "play.fill" }, if p.playing { "Pause" } else { "Play" });
+    bifrost_ui::ax::end_group();
     l
 }
 
@@ -1258,7 +1273,11 @@ pub fn segmented(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, labels: &[&str], sel
     let segs = bifrost_ui::sheet::segments(bounds, labels.len());
     let (Some(first), Some(last)) = (segs.first(), segs.last()) else { return segs };
     let all = Rect { x: first.x, y: first.y, w: last.right() - first.x, h: first.h };
-    bifrost_ui::ax::record(bifrost_ui::Role::SegmentedControl, labels.get(selected).copied().unwrap_or(""), "", all, enabled);
+    bifrost_ui::ax::begin_group(bifrost_ui::Role::SegmentedControl, labels.get(selected).copied().unwrap_or(""), all);
+    for (i, (r, label)) in segs.iter().zip(labels).enumerate() {
+        bifrost_ui::ax::record(bifrost_ui::Role::Button, label, if i == selected { "selected" } else { "" }, *r, enabled);
+    }
+    bifrost_ui::ax::end_group();
     s.fill_rrect(RectF::new(ui.pt(all.x), ui.pt(all.y), ui.pt(all.w), ui.pt(all.h)), ui.pt(7.), CAPSULE_BG.now());
     s.stroke_rrect(RectF::new(ui.pt(all.x), ui.pt(all.y), ui.pt(all.w), ui.pt(all.h)), ui.pt(7.), ui.pt(1.0).max(1.0), CAPSULE_EDGE.now());
     for (i, (r, label)) in segs.iter().zip(labels).enumerate() {
@@ -1304,6 +1323,7 @@ pub fn stepper(s: &mut dyn Canvas, ui: &Ui, origin: (f32, f32), pressed: Option<
 #[allow(clippy::too_many_arguments)]
 pub fn mini_month(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, year: i32, month: u32, first_weekday: u32, month_title: &str, today: Option<u32>, selected: Option<u32>, marked: &[u32]) -> bifrost_ui::calendar::MiniMonth {
     let l = bifrost_ui::calendar::MiniMonth::new(bounds, year, month, first_weekday);
+    bifrost_ui::ax::begin_group(bifrost_ui::Role::List, month_title, bounds);
     let mid = |r: &Rect, img: &crate::kit::Image| ((ui.pt(r.x + r.w / 2.0) as i32) - img.w as i32 / 2, (ui.pt(r.y + r.h / 2.0) as i32) - img.h as i32 / 2);
     let t = ui.text(&ui.fit(month_title, MAC_CALLOUT_PT, ui.pt(l.title.w)), MAC_CALLOUT_PT, Weight::Semibold, LABEL.now());
     blit(s, &t, ui.pt(l.title.x + SPACE_XS) as i32, (ui.pt(l.title.y + l.title.h / 2.0) as i32) - t.h as i32 / 2);
@@ -1322,6 +1342,13 @@ pub fn mini_month(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, year: i32, month: u
         let side = r.w.min(r.h) - 4.0;
         let plate = Rect { x: r.x + (r.w - side) / 2.0, y: r.y + (r.h - side) / 2.0, w: side, h: side };
         let is_today = today == Some(*d);
+        let state = match (is_today, selected == Some(*d)) {
+            (true, true) => "today, selected",
+            (true, false) => "today",
+            (false, true) => "selected",
+            _ => "",
+        };
+        bifrost_ui::ax::record(bifrost_ui::Role::Button, &d.to_string(), state, *r, true);
         if is_today {
             s.fill_rrect(RectF::new(ui.pt(plate.x), ui.pt(plate.y), ui.pt(side), ui.pt(side)), ui.pt(side / 2.0), bifrost_render::ui::DESTRUCTIVE);
         } else if selected == Some(*d) {
@@ -1340,6 +1367,7 @@ pub fn mini_month(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, year: i32, month: u
         let (x, y) = mid(r, &img);
         blit(s, &img, x, y);
     }
+    bifrost_ui::ax::end_group();
     l
 }
 
@@ -1506,6 +1534,38 @@ mod tests {
         let tint_a = Material::Sidebar.tint() >> 24;
         assert!(px.iter().all(|p| p >> 24 == tint_a), "text blends into the material instead of covering it");
         assert!(px.iter().any(|p| (p & 255) > (Material::Sidebar.tint() & 255) + 40), "the labels are drawn");
+    }
+
+    #[test]
+    fn a_menu_publishes_its_rows_as_children_and_skips_separators() {
+        use bifrost_ui::menu::{Menu, MenuItem};
+        let ui = test_ui();
+        let (w, h) = (200usize, 120usize);
+        let mut px = vec![0u32; w * h];
+        let m = Menu::new(vec![MenuItem::new(1, "Copy"), MenuItem::separator(), MenuItem::new(2, "Paste").enabled(false).checked(true)]);
+        bifrost_ui::ax::begin_frame();
+        menu(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, &ui, (0.0, 0.0), 180.0, &m);
+        let links = bifrost_ui::ax::take_links();
+        let nodes = bifrost_ui::ax::take_frame();
+        let list = nodes.iter().find(|n| n.role == bifrost_ui::Role::List && n.label == "Menu").expect("the menu is an element").id;
+        let rows: Vec<&bifrost_ui::Node> = nodes.iter().filter(|n| bifrost_ui::ax::parent_of(&links, n.id) == Some(list)).collect();
+        assert_eq!(rows.iter().map(|n| n.label.as_str()).collect::<Vec<_>>(), vec!["Copy", "Paste"]);
+        assert!(rows.iter().all(|n| n.role == bifrost_ui::Role::MenuItem));
+        assert!(!rows[1].enabled && rows[1].value == "checked");
+    }
+
+    #[test]
+    fn a_segmented_control_holds_one_button_per_segment() {
+        let ui = test_ui();
+        let (w, h) = (300usize, 40usize);
+        let mut px = vec![0u32; w * h];
+        bifrost_ui::ax::begin_frame();
+        segmented(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, &ui, Rect { x: 0.0, y: 0.0, w: 240.0, h: 24.0 }, &["Day", "Week", "Month"], 1, true);
+        let links = bifrost_ui::ax::take_links();
+        let nodes = bifrost_ui::ax::take_frame();
+        let group = nodes.iter().find(|n| n.role == bifrost_ui::Role::SegmentedControl).expect("the control").id;
+        let kids: Vec<(&str, &str)> = nodes.iter().filter(|n| bifrost_ui::ax::parent_of(&links, n.id) == Some(group)).map(|n| (n.label.as_str(), n.value.as_str())).collect();
+        assert_eq!(kids, vec![("Day", ""), ("Week", "selected"), ("Month", "")]);
     }
 
     fn test_ui() -> Ui {
