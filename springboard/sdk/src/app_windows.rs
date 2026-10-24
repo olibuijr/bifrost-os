@@ -44,11 +44,23 @@ pub struct WindowSpec {
     pub position: Option<(f32, f32)>,
     /// The app wants `App::window_title_double_click` when the person double-clicks the title bar (the shell zooms otherwise).
     pub title_double_click: bool,
+    /// With no `position`, the shell cascades the window from the app's other windows (`window_flags::CASCADE`) instead
+    /// of placing it at the desk's next cascade slot.
+    pub cascade: bool,
 }
 
 impl WindowSpec {
     pub fn new(title: &str, width: f32, height: f32) -> Self {
-        Self { title: title.to_string(), width, height, position: None, title_double_click: false }
+        Self { title: title.to_string(), width, height, position: None, title_double_click: false, cascade: false }
+    }
+
+    /// Asks the shell to cascade the window from the app's own windows, as AppKit's `cascadeTopLeftFromPoint:` does
+    /// for a document window: the first one opens beside the main window (or over its trailing side when there is no
+    /// room), each later one a title bar's height down and right of the window opened before it. A position given with
+    /// [`WindowSpec::at`] wins.
+    pub fn cascaded(mut self) -> Self {
+        self.cascade = true;
+        self
     }
 
     /// Asks for the window at (x, y) points relative to the visible desktop area (a restored position).
@@ -822,6 +834,16 @@ mod tests {
         assert_eq!(deliver_window(&mut app, &ctx, &ToApp::WindowTitleDoubleClick { window: plain.0 }, 0.0), Some(false));
         assert_eq!(app.log, vec!["moved 1 30 60".to_string(), "double 1".to_string()]);
         assert_eq!(ctx.move_window(WindowId::MAIN, 1.0, 1.0), Err(WindowError::MainWindow));
+    }
+
+    #[test]
+    fn a_cascaded_window_sends_the_cascade_flag() {
+        let ctx = crate::runtime::test_ctx();
+        ctx.open_window(WindowSpec::new("Viewer", 560.0, 640.0).cascaded()).unwrap();
+        assert_eq!(
+            ctx.take_sent(),
+            vec![ToShell::WindowOpen { id: 1, title: "Viewer".into(), w: 560.0, h: 640.0, position: None, flags: crate::proto::window_flags::CASCADE }]
+        );
     }
 
     #[test]

@@ -178,6 +178,23 @@ pub fn origin_hint(placed: &std::collections::HashSet<AppId>, app: AppId, x: i32
     placed.contains(&app).then_some((x, y))
 }
 
+/// The top-left corner (px) of a window of `size` cascaded from `from`, another window of the same app
+/// (`window_flags::CASCADE`, AppKit's `cascadeTopLeftFromPoint:`), kept inside the work area `a`. From the main window
+/// (`from_main`) it goes beside the main window's trailing edge when it fits there, and otherwise over the main window's
+/// trailing side one `step` down, so the leading columns (a sidebar, a message list) stay in view. From another
+/// cascaded window it goes one `step` down and right, as each new document window does.
+pub fn cascade_origin(a: Rect, from: Rect, from_main: bool, size: (i32, i32), step: i32) -> (i32, i32) {
+    let (w, h) = size;
+    let (x, y) = if !from_main {
+        (from.x + step, from.y + step)
+    } else if from.x + from.w + w <= a.x + a.w {
+        (from.x + from.w, from.y)
+    } else {
+        (from.x + from.w - w, from.y + step)
+    };
+    (x.clamp(a.x, (a.x + a.w - w).max(a.x)), y.clamp(a.y, (a.y + a.h - h).max(a.y)))
+}
+
 /// Moves `r` to the position (`x`, `y`) the window server reports for its toplevel; the size is left alone (the
 /// configure decides it). True when the position changed, so the frame the presenter holds must be sent again.
 #[cfg(feature = "desktop-wayland")]
@@ -2642,7 +2659,7 @@ impl Shell {
                 .collect();
             let (open, close) = h.windows.desk_changes(&h.id, &shown);
             if !open.is_empty() || !close.is_empty() {
-                let sizes: Vec<(u32, f32, f32)> = h.windows.of_app(&h.id).iter().map(|x| (x.id, x.w, x.h)).collect();
+                let sizes: Vec<(u32, f32, f32, bool)> = h.windows.of_app(&h.id).iter().map(|x| (x.id, x.w, x.h, x.cascade)).collect();
                 plan.push((slot as u8, open, close, sizes));
             }
         }
@@ -2662,10 +2679,28 @@ impl Shell {
             for id in open {
                 let Ok(id16) = u16::try_from(id) else { continue };
                 // the table's size is in points; the desk window is outer px (body plus title bar)
-                let (w, h) = sizes.iter().find(|s| s.0 == id).map_or((480.0, 560.0), |s| (s.1, s.2));
-                let size = extra_window_px(AppId::ExternalWindow(slot, id16), (w, h), k, &m);
+                let (w, h, cascade) = sizes.iter().find(|s| s.0 == id).map_or((480.0, 560.0, false), |s| (s.1, s.2, s.3));
+                let app = AppId::ExternalWindow(slot, id16);
+                let size = extra_window_px(app, (w, h), k, &m);
                 if let Some(d) = self.desk.as_mut() {
-                    let i = d.open(&m, AppId::ExternalWindow(slot, id16), size);
+                    let i = d.open(&m, app, size);
+                    if cascade {
+                        // from the app's newest other extra window, else from its main window (AppKit's cascade)
+                        let newest = d.wins.iter().filter_map(|o| match o.app {
+                            AppId::ExternalWindow(s, other) if s == slot && other != id16 => Some((other, o.r)),
+                            _ => None,
+                        }).max_by_key(|o| o.0).map(|o| (o.1, false));
+                        let from = newest.or_else(|| d.index_of(AppId::External(slot)).map(|j| (d.wins[j].r, true)));
+                        if let Some((from, from_main)) = from {
+                            let r = d.wins[i].r;
+                            let (x, y) = cascade_origin(Desk::area(&m), from, from_main, (r.w, r.h), m.title);
+                            d.wins[i].r.x = x;
+                            d.wins[i].r.y = y;
+                            d.wins[i].restore = d.wins[i].r;
+                            // the new toplevel asks the window server to map it there, not at the server's own cascade
+                            d.placed.insert(app);
+                        }
+                    }
                     self.desk_layout(i);
                 }
             }
@@ -4417,6 +4452,25 @@ mod tests {
             assert!(w.r.x >= a.x && w.r.y >= a.y && w.r.x + w.r.w <= a.x + a.w && w.r.y + w.r.h <= a.y + a.h, "{:?}", w.r);
         }
         assert_ne!(d.wins[0].r, d.wins[1].r);
+    }
+
+    /// F4: a viewer opens beside the main window, or over its trailing side, never over the leading list column; each
+    /// later viewer cascades down and right of the one before it, and every one stays inside the work area.
+    #[test]
+    fn a_cascaded_window_leaves_the_main_windows_leading_side_in_view() {
+        let a = Rect { x: 0, y: 28, w: 1920, h: 952 };
+        let step = 30;
+        let narrow = Rect { x: 100, y: 100, w: 800, h: 600 };
+        assert_eq!(cascade_origin(a, narrow, true, (560, 640), step), (900, 100), "beside the main window when it fits");
+        let wide = Rect { x: 200, y: 80, w: 1500, h: 800 };
+        let (x, y) = cascade_origin(a, wide, true, (560, 640), step);
+        assert_eq!((x, y), (200 + 1500 - 560, 80 + step), "over the trailing side, one title bar down");
+        assert!(x > wide.x + wide.w / 2, "the leading half (sidebar and list) stays in view");
+        let first = Rect { x, y, w: 560, h: 640 };
+        assert_eq!(cascade_origin(a, first, false, (560, 640), step), (x + step, y + step), "the next one cascades from the first");
+        let corner = Rect { x: 1800, y: 900, w: 560, h: 640 };
+        let (cx, cy) = cascade_origin(a, corner, false, (560, 640), step);
+        assert!(cx + 560 <= a.x + a.w && cy + 640 <= a.y + a.h, "kept inside the work area: {cx},{cy}");
     }
 
     #[test]
