@@ -63,7 +63,7 @@ mod drag;
 mod content_unavailable;
 mod large_content;
 pub use keyanim::ViewState;
-pub use animation::{mix_color, Prop, Timing, Transaction, DEFAULT_DURATION, REDUCED_DURATION};
+pub use animation::{mix_color, Prop, Timing, Transaction, DEFAULT_DURATION, REDUCED_DURATION, SPRING_DAMPING, SPRING_MASS, SPRING_STIFFNESS};
 pub use app::{action_for, ControllerHost, MenuEntry, ViewApp, ViewController};
 pub use forms::{Checkbox, Form, PopUpButton, ProgressIndicator, ProgressStyle, Section, Stepper, TextField};
 pub use autolayout::{anchors, solve as solve_constraints, Anchor, Anchors, Attr, Constraints, Item, Solution, Spec, ViewInfo};

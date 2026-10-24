@@ -8,6 +8,7 @@
 //! [`Window::next_wake`] says when the next frame is due (`None` when idle). Gaps are in docs/bifrost-ui.md.
 use super::*;
 use bifrost_ui::anim::{Animation, Curve};
+use bifrost_ui::keypath_anim::{Media, Phase};
 use std::collections::HashMap;
 
 /// `CATransaction.animationDuration` default.
@@ -34,7 +35,9 @@ impl Prop {
     }
 }
 
-/// Duration and curve of a transaction (`CATransaction.animationDuration` + `animationTimingFunction`, or a spring).
+/// Duration and curve of a transaction (`CATransaction.animationDuration` + `animationTimingFunction`, or a spring),
+/// plus the media timing of `CAMediaTiming` (`beginTime` as a delay, `speed`, `repeatCount`, `autoreverses`), which
+/// is what the view animation options for a delay, repeating and reversing set.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Timing {
     pub duration: f32,
@@ -42,13 +45,37 @@ pub struct Timing {
     /// Springs only: the speed the spring starts at, as a fraction of the distance per second, positive towards the
     /// target. Zero starts from rest, as `CASpringAnimation.initialVelocity` does by default.
     pub initial_velocity: f32,
+    /// Seconds after the first tick before the change starts to move; until then the view shows the old value.
+    pub delay: f32,
+    /// Local time runs this many times faster than the window clock (1 is normal, 0 stands still).
+    pub speed: f32,
+    /// Cycles to play; 0 means one; `f32::INFINITY` repeats until the property is set again; a fraction plays part of
+    /// the last cycle.
+    pub repeat_count: f32,
+    /// Each cycle plays forwards and then backwards, so it lasts twice the duration.
+    pub autoreverses: bool,
 }
+
+/// `CASpringAnimation.mass` default.
+pub const SPRING_MASS: f32 = 1.0;
+/// `CASpringAnimation.stiffness` default.
+pub const SPRING_STIFFNESS: f32 = 100.0;
+/// `CASpringAnimation.damping` default.
+pub const SPRING_DAMPING: f32 = 10.0;
 
 impl Timing {
     /// 0.25 s ease-in-out, like an implicit `CATransaction`.
-    pub const DEFAULT: Timing = Timing { duration: DEFAULT_DURATION, curve: Curve::EaseInOut, initial_velocity: 0.0 };
+    pub const DEFAULT: Timing = Timing {
+        duration: DEFAULT_DURATION,
+        curve: Curve::EaseInOut,
+        initial_velocity: 0.0,
+        delay: 0.0,
+        speed: 1.0,
+        repeat_count: 0.0,
+        autoreverses: false,
+    };
     pub fn new(duration: f32, curve: Curve) -> Timing {
-        Timing { duration, curve, initial_velocity: 0.0 }
+        Timing { duration, curve, ..Timing::DEFAULT }
     }
     /// `CASpringAnimation`: lasts as long as the spring takes to settle, and starts from rest.
     pub fn spring(damping_ratio: f32, response: f32) -> Timing {
@@ -56,7 +83,66 @@ impl Timing {
     }
     /// `CASpringAnimation` with an `initialVelocity`: the spring starts already moving, as a fling or a drag leaves it.
     pub fn spring_with_velocity(damping_ratio: f32, response: f32, initial_velocity: f32) -> Timing {
-        Timing { duration: -1.0, curve: Curve::Spring { damping_ratio, response }, initial_velocity }
+        Timing { duration: -1.0, curve: Curve::Spring { damping_ratio, response }, initial_velocity, ..Timing::DEFAULT }
+    }
+    /// `CASpringAnimation(mass:stiffness:damping:initialVelocity:)`: the physical spring `m x'' = -k x - c x'`. It is
+    /// the same motion as a damping ratio `c / (2 sqrt(k m))` and a response (undamped period) `2 pi sqrt(m / k)`, so
+    /// mass slows the spring and widens its swing exactly as it does in the physical form. Non-positive or non-finite
+    /// values fall back to the defaults ([`SPRING_MASS`], [`SPRING_STIFFNESS`]; damping may be zero).
+    pub fn spring_physical(mass: f32, stiffness: f32, damping: f32, initial_velocity: f32) -> Timing {
+        let pos = |v: f32, d: f32| if v.is_finite() && v > 0.0 { v } else { d };
+        let m = pos(mass, SPRING_MASS);
+        let k = pos(stiffness, SPRING_STIFFNESS);
+        let c = if damping.is_finite() && damping >= 0.0 { damping } else { SPRING_DAMPING };
+        let damping_ratio = c / (2.0 * (k * m).sqrt());
+        let response = std::f32::consts::TAU * (m / k).sqrt();
+        let v0 = if initial_velocity.is_finite() { initial_velocity } else { 0.0 };
+        Timing::spring_with_velocity(damping_ratio, response, v0)
+    }
+    /// `CASpringAnimation(perceptualDuration:bounce:)`: `duration` is the response; `bounce` 0 is critically damped,
+    /// towards 1 bouncier (damping ratio `1 - bounce`), below 0 slower to settle (damping ratio `1 / (1 + bounce)`).
+    pub fn spring_perceptual(duration: f32, bounce: f32) -> Timing {
+        let b = if bounce.is_finite() { bounce.clamp(-0.99, 0.99) } else { 0.0 };
+        let damping_ratio = if b >= 0.0 { 1.0 - b } else { 1.0 / (1.0 + b) };
+        Timing::spring(damping_ratio, if duration.is_finite() && duration > 0.0 { duration } else { 0.5 })
+    }
+    /// `CASpringAnimation.settlingDuration`: seconds one cycle of a spring lasts; the duration itself for a curve.
+    pub fn settling_duration(&self) -> f32 {
+        match self.curve {
+            Curve::Spring { damping_ratio, response } if self.duration < 0.0 => Animation::spring(0.0, 1.0, 0.0, damping_ratio, response).duration,
+            _ => self.duration.max(0.0),
+        }
+    }
+    /// Delays the start by `secs` (`beginTime` relative to now, the view animation `delay`).
+    pub fn delay(mut self, secs: f32) -> Timing {
+        self.delay = if secs.is_finite() { secs.max(0.0) } else { 0.0 };
+        self
+    }
+    /// Plays at `speed` times the window clock (`CAMediaTiming.speed`).
+    pub fn speed(mut self, speed: f32) -> Timing {
+        self.speed = if speed.is_finite() { speed.max(0.0) } else { 1.0 };
+        self
+    }
+    /// Plays `count` cycles (`repeatCount`; `f32::INFINITY` for ever).
+    pub fn repeat_count(mut self, count: f32) -> Timing {
+        self.repeat_count = if count.is_nan() { 0.0 } else { count.max(0.0) };
+        self
+    }
+    /// Plays each cycle forwards then backwards (`autoreverses`).
+    pub fn autoreverses(mut self, on: bool) -> Timing {
+        self.autoreverses = on;
+        self
+    }
+    /// The media timing of this transaction, or `None` when it is plain (start now, normal speed, one cycle).
+    fn media(&self) -> Option<Media> {
+        let plain = self.delay == 0.0 && self.speed == 1.0 && self.repeat_count == 0.0 && !self.autoreverses;
+        (!plain).then(|| Media {
+            begin_time: self.delay as f64,
+            speed: self.speed,
+            repeat_count: self.repeat_count,
+            autoreverses: self.autoreverses,
+            ..Media::default()
+        })
     }
     fn animation(self, from: f32, to: f32) -> Animation {
         match self.curve {
@@ -69,7 +155,7 @@ impl Timing {
         }
     }
     fn instant(self) -> bool {
-        self.duration == 0.0 && !matches!(self.curve, Curve::Spring { .. })
+        self.duration == 0.0 && self.delay == 0.0 && !matches!(self.curve, Curve::Spring { .. })
     }
 }
 
@@ -155,6 +241,21 @@ struct Track {
     colors: Option<(u32, u32, Option<u32>)>,
     shown_color: Option<u32>,
     group: u64,
+    /// delay, speed, repeat and autoreverse; `None` plays `anim` once from the first tick
+    media: Option<Media>,
+}
+
+impl Track {
+    /// The clock to read `anim` at for window time `t`, and whether the track has ended.
+    fn local(&self, t: f64) -> (f64, bool) {
+        let Some(m) = self.media else { return (t, self.anim.is_done(t)) };
+        let d = self.anim.duration as f64;
+        match m.phase(t - self.anim.start, d) {
+            Phase::Before => (self.anim.start, false),
+            Phase::Active { progress, .. } => (self.anim.start + progress as f64 * d, false),
+            Phase::After { .. } => (self.anim.start + d, true),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -317,6 +418,7 @@ impl<S: Responder> Window<S> {
             if reduced {
                 t = Timing::new(REDUCED_DURATION, Curve::Linear);
             }
+            let media = t.media();
             let track = if p == Prop::Background {
                 let c = |o: Option<u32>| o.unwrap_or(0);
                 Track {
@@ -328,6 +430,7 @@ impl<S: Responder> Window<S> {
                     colors: Some((c(b.background), c(a.background), a.background)),
                     shown_color: b.background,
                     group,
+                    media,
                 }
             } else {
                 let mut anim = t.animation(b.get(p), a.get(p));
@@ -336,7 +439,7 @@ impl<S: Responder> Window<S> {
                 if matches!(anim.curve, Curve::Spring { .. }) && distance.abs() > 1e-6 && t.initial_velocity == 0.0 {
                     anim.velocity = carried / distance;
                 }
-                Track { id, prop: p, anim, started: false, shown: b.get(p), colors: None, shown_color: None, group }
+                Track { id, prop: p, anim, started: false, shown: b.get(p), colors: None, shown_color: None, group, media }
             };
             // the view keeps showing the old value until the first tick starts the clock
             walk_mut(self.root.as_mut(), &mut |v| {
@@ -460,14 +563,14 @@ impl<S: Responder> Window<S> {
                     tr.started = true;
                     tr.anim.start = t;
                 }
-                let fin = tr.anim.is_done(t);
+                let (at, fin) = tr.local(t);
                 if tr.prop == Prop::Background {
                     let (a, b, end) = tr.colors.unwrap_or((0, 0, None));
-                    let c = if fin { end } else { Some(mix_color(a, b, tr.anim.value(t))) };
+                    let c = if fin { end } else { Some(mix_color(a, b, tr.anim.value(at))) };
                     base.background = c;
                     tr.shown_color = c;
                 } else {
-                    let val = if fin { tr.anim.to } else { tr.anim.value(t) };
+                    let val = if fin { tr.anim.to } else { tr.anim.value(at) };
                     p.set(tr.prop, val);
                     base.frame = p.frame;
                     base.opacity = p.opacity;
@@ -871,4 +974,118 @@ mod tests {
         w.tick(2.0);
         assert_eq!(n.get(), 1, "the completion runs once");
     }
+
+    #[test]
+    fn a_physical_spring_matches_its_damping_ratio_and_response() {
+        // the defaults: omega = 10 rad/s, zeta = 10 / (2 * 10) = 0.5
+        let t = Timing::spring_physical(SPRING_MASS, SPRING_STIFFNESS, SPRING_DAMPING, 0.0);
+        let Curve::Spring { damping_ratio, response } = t.curve else { panic!("a spring") };
+        assert!((damping_ratio - 0.5).abs() < 1e-5);
+        assert!((response - std::f32::consts::TAU / 10.0).abs() < 1e-5);
+        assert!(t.duration < 0.0, "lasts until it settles");
+        // four times the mass halves the frequency and halves the damping ratio
+        let heavy = Timing::spring_physical(4.0, 100.0, 10.0, 0.0);
+        let Curve::Spring { damping_ratio: z4, response: r4 } = heavy.curve else { panic!("a spring") };
+        assert!((r4 - 2.0 * response).abs() < 1e-4 && (z4 - 0.25).abs() < 1e-5);
+        assert!(heavy.settling_duration() > t.settling_duration(), "a heavier, less damped spring settles later");
+        // nonsense falls back to the defaults
+        assert_eq!(Timing::spring_physical(0.0, -1.0, f32::NAN, f32::INFINITY), t);
+    }
+
+    #[test]
+    fn a_heavier_spring_lags_behind_a_light_one() {
+        let (mut light, a) = win();
+        let (mut heavy, b) = win();
+        light.animate(Timing::spring_physical(1.0, 100.0, 20.0, 0.0), |w| w.view_mut::<Container>(a).unwrap().set_frame(rect(100.0, 0.0, 100.0, 50.0)));
+        heavy.animate(Timing::spring_physical(5.0, 100.0, 20.0, 0.0), |w| w.view_mut::<Container>(b).unwrap().set_frame(rect(100.0, 0.0, 100.0, 50.0)));
+        light.tick(0.0);
+        heavy.tick(0.0);
+        light.tick(0.1);
+        heavy.tick(0.1);
+        assert!(frame(&heavy, b).x < frame(&light, a).x);
+        light.tick(120.0);
+        heavy.tick(120.0);
+        assert_eq!((frame(&light, a).x, frame(&heavy, b).x), (100.0, 100.0));
+    }
+
+    #[test]
+    fn perceptual_springs_map_bounce_to_damping() {
+        let ratio = |t: Timing| match t.curve {
+            Curve::Spring { damping_ratio, response } => (damping_ratio, response),
+            _ => panic!("a spring"),
+        };
+        assert_eq!(ratio(Timing::spring_perceptual(0.5, 0.0)), (1.0, 0.5));
+        let (z, _) = ratio(Timing::spring_perceptual(0.5, 0.3));
+        assert!((z - 0.7).abs() < 1e-6);
+        let (z, _) = ratio(Timing::spring_perceptual(0.5, -0.5));
+        assert!((z - 2.0).abs() < 1e-6);
+        assert_eq!(Timing::new(0.4, Curve::Linear).settling_duration(), 0.4);
+    }
+
+    #[test]
+    fn a_delay_holds_the_old_value_then_plays() {
+        let (mut w, id) = win();
+        w.animate(lin(1.0).delay(0.5), |w| w.view_mut::<Container>(id).unwrap().set_frame(rect(100.0, 0.0, 100.0, 50.0)));
+        w.tick(0.0);
+        w.tick(0.4);
+        assert_eq!(frame(&w, id).x, 0.0, "still waiting");
+        w.tick(1.0);
+        assert!((frame(&w, id).x - 50.0).abs() < 1e-3);
+        w.tick(1.5);
+        assert_eq!(frame(&w, id).x, 100.0);
+        assert!(!w.is_animating(None));
+    }
+
+    #[test]
+    fn autoreverse_and_repeat_play_back_and_forth_then_rest_on_the_new_value() {
+        let (mut w, id) = win();
+        w.animate(lin(1.0).autoreverses(true).repeat_count(2.0), |w| w.view_mut::<Container>(id).unwrap().set_frame(rect(100.0, 0.0, 100.0, 50.0)));
+        w.tick(0.0);
+        w.tick(0.5);
+        assert!((frame(&w, id).x - 50.0).abs() < 1e-3);
+        w.tick(1.5);
+        assert!((frame(&w, id).x - 50.0).abs() < 1e-3, "on the way back");
+        w.tick(1.9);
+        assert!((frame(&w, id).x - 10.0).abs() < 1e-3);
+        w.tick(2.5);
+        assert!((frame(&w, id).x - 50.0).abs() < 1e-3, "the second cycle");
+        assert!(w.is_animating(Some(id)));
+        w.tick(4.0);
+        assert_eq!(frame(&w, id).x, 100.0, "the model value once the cycles are over");
+        assert!(!w.is_animating(None));
+    }
+
+    #[test]
+    fn speed_scales_the_clock_and_an_endless_repeat_runs_until_replaced() {
+        let (mut w, id) = win();
+        w.animate(lin(1.0).speed(2.0), |w| w.view_mut::<Container>(id).unwrap().set_frame(rect(100.0, 0.0, 100.0, 50.0)));
+        w.tick(0.0);
+        w.tick(0.25);
+        assert!((frame(&w, id).x - 50.0).abs() < 1e-3);
+        w.tick(0.5);
+        assert_eq!(frame(&w, id).x, 100.0);
+        w.animate(lin(1.0).repeat_count(f32::INFINITY), |w| w.view_mut::<Container>(id).unwrap().set_frame(rect(0.0, 0.0, 100.0, 50.0)));
+        w.tick(1.0);
+        w.tick(100.25);
+        assert!((frame(&w, id).x - 75.0).abs() < 1e-2, "{}", frame(&w, id).x);
+        assert!(w.is_animating(Some(id)));
+        w.disable_actions(|w| w.view_mut::<Container>(id).unwrap().set_frame(rect(5.0, 0.0, 100.0, 50.0)));
+        w.tick(100.5);
+        assert_eq!(frame(&w, id).x, 5.0);
+        assert!(!w.is_animating(None));
+    }
+
+    #[test]
+    fn plain_timing_has_no_media_and_reduce_motion_drops_it() {
+        assert!(Timing::DEFAULT.media().is_none());
+        assert!(lin(1.0).delay(0.1).media().is_some());
+        assert_eq!(lin(1.0).speed(f32::NAN).speed, 1.0);
+        let (mut w, id) = win();
+        w.set_reduce_motion(Some(true));
+        w.animate(lin(1.0).repeat_count(f32::INFINITY), |w| w.view_mut::<Container>(id).unwrap().base_mut().opacity = 0.0);
+        w.tick(0.0);
+        w.tick(1.0);
+        assert!(!w.is_animating(None), "under Reduce Motion the cross-fade plays once");
+    }
+
 }
