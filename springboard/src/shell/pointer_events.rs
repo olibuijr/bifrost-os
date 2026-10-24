@@ -72,6 +72,9 @@ impl Shell {
         if self.desktop_menu_wheel(x, y, dy) {
             return true;
         }
+        if self.settings_wheel(x, y, dy, t) {
+            return true;
+        }
         let Some((slot, window, lx, ly)) = self.ext_content_at(x, y) else { return false };
         let event = PointerEvent::Wheel { x: lx, y: ly, dx, dy, precise: false, phase: Phase::None, momentum: Phase::None };
         if !self.send_pointer(slot, window, event) {
@@ -80,6 +83,25 @@ impl Shell {
         if let Some(Some(host)) = self.ext.get_mut(slot as usize) {
             host.swallow_wheel_drag(t);
         }
+        true
+    }
+
+    /// The wheel over the Settings window's content scrolls the list under it (`Settings::wheel`), and the drag emulated
+    /// for it is dropped: as a press it would set the slider under the pointer and save it (N17).
+    fn settings_wheel(&mut self, x: f32, y: f32, dy: f32, t: f64) -> bool {
+        if !self.desk_active() || self.is_locked() {
+            return false;
+        }
+        let Some(desk) = self.desk.as_ref() else { return false };
+        let m = self.desk_metrics();
+        let Some((i, Hit::Content)) = desk.pick(&m, x, y) else { return false };
+        let Some(win) = desk.wins.get(i).filter(|w| w.app == AppId::Settings) else { return false };
+        let body = win.body(&m);
+        if !self.settings.as_mut().is_some_and(|st| st.wheel(x - body.x as f32, dy)) {
+            return false;
+        }
+        self.swallow_wheel_drag(t);
+        self.dirty = true;
         true
     }
 

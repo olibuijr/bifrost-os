@@ -466,6 +466,16 @@ fn slide(push: bool) -> Transition {
     if push { e } else { e.reversed() }
 }
 
+/// The page an arrow key moves the search highlight to: the next (or previous) hit on another page than the highlighted
+/// one, since every hit of a page is filled together. Down from no highlight is the first hit, Up the last.
+fn step_hit(hits: &[PageId], at: Option<usize>, down: bool) -> Option<PageId> {
+    let Some(at) = at else {
+        return if down { hits.first() } else { hits.last() }.copied();
+    };
+    let cur = hits[at];
+    if down { hits[at + 1..].iter().find(|p| **p != cur) } else { hits[..at].iter().rev().find(|p| **p != cur) }.copied()
+}
+
 impl Settings {
     /// Lays the app out for a pane of `w` x `h` px (Split View, Slide Over).
     pub fn set_size(&mut self, ui: &Ui, w: i32, h: i32) {
@@ -499,7 +509,11 @@ impl Settings {
                 let entry = self.build(ui, PageId::General, None);
                 self.stack.push(entry);
             }
-            self.sidebar = Some(self.build_sidebar(ui));
+            // a resize keeps where the sidebar was scrolled to (clamped to the new height)
+            let offset = self.sidebar.as_ref().map_or(0.0, ListPage::offset);
+            let mut sb = self.build_sidebar(ui);
+            sb.jump_to(offset);
+            self.sidebar = Some(sb);
         } else {
             // the split view's default detail page (General, opened by itself) is not a page the
             // user navigated to: the single column starts at the root list again
@@ -553,7 +567,7 @@ impl Settings {
             root = results;
         }
         let mut page = ListPage::in_pane(ui, root, self.side_w, self.h, None, pane);
-        page.select(self.stack.first().map_or(PageId::Root, |e| e.id));
+        page.select(self.side_selected());
         page
     }
 
@@ -1915,6 +1929,19 @@ impl Settings {
         self.sync_forward();
     }
 
+    /// The scroll wheel over the window at window x `x` moved the content `dy` px: the sidebar or the page under it
+    /// scrolls, and nothing is pressed (a notch over a slider must not set or save it). False when no list is there to
+    /// take it (an overlay, a slide or the wallpaper grid), so the drag emulated for the wheel scrolls it as before.
+    pub fn wheel(&mut self, x: f32, dy: f32) -> bool {
+        if self.transition.is_some() || self.overlay_open() {
+            return false;
+        }
+        let list = if self.side_w > 0 && x < self.side_w as f32 { self.sidebar.as_mut() } else { self.list_mut() };
+        let Some(list) = list else { return false };
+        list.wheel(dy);
+        true
+    }
+
     /// Handles a touch; `prefs` receives every persisted change.
     pub fn touch(&mut self, ui: &Ui, prefs: &mut Prefs, ev: Event, t: f64) -> Vec<Effect> {
         let (x, y) = match ev {
@@ -2256,6 +2283,30 @@ impl Settings {
         Some(settings_search::results(self.index.as_deref().unwrap_or(&[]), query))
     }
 
+    /// The page of each search hit, in the order the results list them (empty without a query).
+    fn hit_pages(&self) -> Vec<PageId> {
+        let query = self.search.query();
+        if query.trim().is_empty() {
+            return Vec::new();
+        }
+        settings_search::matches(self.index.as_deref().unwrap_or(&[]), query).iter().map(|e| e.page).collect()
+    }
+
+    /// The hit the sidebar fills: the first one on the deepest open page that is a hit (one opened by a tap or an
+    /// arrow key), so Return opens what is highlighted.
+    fn highlighted_hit(&self, hits: &[PageId]) -> Option<usize> {
+        self.stack.iter().rev().find_map(|e| hits.iter().position(|p| *p == e.id))
+    }
+
+    /// The page whose sidebar rows are filled: the highlighted hit while Search has a query, else the open pane.
+    fn side_selected(&self) -> PageId {
+        let hits = self.hit_pages();
+        match self.highlighted_hit(&hits) {
+            Some(i) => hits[i],
+            None => self.stack.first().map_or(PageId::Root, |e| e.id),
+        }
+    }
+
     /// Rebuilds the root page for a changed search query, from the top.
     fn requery(&mut self, ui: &Ui) {
         // the index is built when a query starts (so it shows the rows as they are now) and dropped when it ends
@@ -2295,12 +2346,23 @@ impl Settings {
             return vec![];
         }
         if self.sheet.is_none() && self.search.active && (self.stack.len() == 1 || self.side_w > 0) {
-            // Return opens the first match (the field keeps its query, so the results stay in the sidebar)
-            let first = matches!(out, Out::Enter).then(|| settings_search::first_hit(self.index.as_deref().unwrap_or(&[]), self.search.query())).flatten();
+            // Up and Down step through the hits, opening each; Return opens the highlighted hit, else the first (the
+            // field keeps its query, so the results stay in the sidebar)
+            let hits = self.hit_pages();
+            if let Out::Named(dir @ ("Up" | "Down")) = out {
+                // the sidebar keeps the results beside the page they open; the single column has them on its root only
+                if self.side_w > 0 && !hits.is_empty() {
+                    return match step_hit(&hits, self.highlighted_hit(&hits), dir == "Down") {
+                        Some(id) => self.open_page_id(ui, id, t),
+                        None => vec![],
+                    };
+                }
+            }
+            let target = matches!(out, Out::Enter).then(|| hits.get(self.highlighted_hit(&hits).unwrap_or(0)).copied()).flatten();
             if self.search.edit(ui, out, t) {
                 self.requery(ui);
             }
-            if let Some(id) = first {
+            if let Some(id) = target {
                 return self.open_page_id(ui, id, t);
             }
             return vec![];
@@ -3105,6 +3167,8 @@ impl Settings {
                         self.desk.sidebar_icons = k.min(super::pages::SIDEBAR_ICON_SIZES.len() - 1);
                         let _ = prefs.set(super::pages::SIDEBAR_ICON_PREF, &self.desk.sidebar_icons.to_string());
                         self.desk.apply();
+                        // the sidebar's row pitch is laid out when it is built: build it again at the new size now
+                        self.rebuild_sidebar(ui);
                         vec![]
                     }
                     Pick::Remap(slot, target) => {
@@ -3985,14 +4049,14 @@ impl Settings {
         if self.side_w == 0 {
             return self.draw_pane(s, ui, t);
         }
-        let selected = self.stack.first().map_or(PageId::Root, |e| e.id);
+        let selected = self.side_selected();
         let (side_w, h) = (self.side_w as usize, self.h as usize);
         // the sidebar rarely changes while the pane slides or scrolls: draw it once and reuse it
         if let Some(sb) = &mut self.sidebar {
             sb.select(selected);
             use std::hash::{Hash, Hasher};
             let mut k = std::collections::hash_map::DefaultHasher::new();
-            (format!("{selected:?}{:?}", self.side_pressed), sb.gen(), sb.draw_offset().to_bits(), side_w, h, bifrost_render::appearance::scheme().to_bits(), vibrant()).hash(&mut k);
+            (format!("{selected:?}{:?}", self.side_pressed), sb.gen(), sb.draw_offset().to_bits(), side_w, h, bifrost_render::appearance::scheme().to_bits(), vibrant(), bifrost_render::ui::scroll_bars_mode()).hash(&mut k);
             let key = k.finish();
             let fresh = !sb.animating(t) && self.side_cache.as_ref().is_some_and(|(k, i)| *k == key && (i.w, i.h) == (side_w, h));
             if !fresh {
@@ -5274,6 +5338,90 @@ mod e2e_w3_tests {
         super::super::pages::set_test_form(FormFactor::Tablet);
         tap(&mut st, &ui, &mut prefs, middle, mid);
         assert_eq!(st.options().dnd, before, "a finger flips it from anywhere on the row");
+    }
+
+    /// N3: Return opened the first match even when another hit was highlighted (opened by Down or a tap).
+    #[test]
+    fn return_in_search_opens_the_highlighted_hit() {
+        let ui = crate::shell::tests::ui();
+        let (mut st, _) = split(&ui);
+        st.search.active = true;
+        st.key(&ui, Out::Text("display".into()), 0.0);
+        let hits = st.hit_pages();
+        let first = *hits.first().expect("a match");
+        let second = *hits.iter().find(|p| **p != first).expect("hits on two pages");
+        st.open_page_id(&ui, first, 0.0);
+        settle(&mut st, &ui);
+        st.key(&ui, Out::Named("Down"), 0.0);
+        settle(&mut st, &ui);
+        assert_eq!(st.page(), second, "Down opens the next hit");
+        assert_eq!(st.side_selected(), second, "and the sidebar fills it");
+        st.key(&ui, Out::Enter, 0.0);
+        settle(&mut st, &ui);
+        assert_eq!(st.page(), second, "Return opens the highlighted hit, not the first");
+        st.key(&ui, Out::Named("Up"), 0.0);
+        settle(&mut st, &ui);
+        assert_eq!(st.page(), first, "Up goes back");
+    }
+
+    /// N17: the wheel scrolls the list under the pointer itself (the shell then drops the drag emulated for it, which
+    /// pressed and saved the slider under the pointer).
+    #[test]
+    fn the_wheel_scrolls_the_list_under_the_pointer() {
+        let ui = crate::shell::tests::ui();
+        let (mut st, _) = split(&ui);
+        st.set_size(&ui, 1200, 700);
+        assert!(st.wheel(10.0, -40.0), "the sidebar takes the wheel");
+        assert_eq!(st.sidebar_list().expect("split").offset(), 40.0);
+        st.open_page_id(&ui, PageId::Appearance, 0.0);
+        settle(&mut st, &ui);
+        let before = st.list().expect("list").offset();
+        assert!(st.wheel(st.sidebar_px() as f32 + 10.0, -40.0), "the page takes the wheel");
+        assert!(st.list().expect("list").offset() > before, "and scrolls down");
+        assert_eq!(st.sidebar_list().expect("split").offset(), 40.0, "the sidebar stays");
+    }
+
+    /// N4: a window resize rebuilt the sidebar from its top.
+    #[test]
+    fn a_resize_keeps_the_sidebar_scroll() {
+        let ui = crate::shell::tests::ui();
+        let (mut st, _) = split(&ui);
+        st.set_size(&ui, 1200, 700);
+        st.sidebar.as_mut().expect("split").jump_to(150.0);
+        let before = st.sidebar_list().expect("split").offset();
+        assert!(before > 0.0, "the sidebar scrolls at this height");
+        st.set_size(&ui, 1210, 680);
+        assert_eq!(st.sidebar_list().expect("split").offset(), before);
+    }
+
+    /// N12: a new Sidebar icon size moved the sidebar rows only at the next relayout.
+    #[test]
+    fn the_sidebar_icon_size_applies_at_once() {
+        let ui = crate::shell::tests::ui();
+        let keep = bifrost_render::ui::sidebar_icon_size();
+        bifrost_render::ui::set_sidebar_icon_size(1);
+        let (mut st, mut prefs) = split(&ui);
+        st.open_page_id(&ui, PageId::Appearance, 0.0);
+        settle(&mut st, &ui);
+        let (_, before) = st.sidebar_centre(&ui, "Appearance").expect("the Appearance row");
+        let (x, y) = st.row_centre(&ui, "Sidebar icon size").expect("the size row");
+        tap(&mut st, &ui, &mut prefs, x, y);
+        st.activate(&ui, &mut prefs, Hit::Choice(2), 0.0);
+        settle(&mut st, &ui);
+        let (_, after) = st.sidebar_centre(&ui, "Appearance").expect("the Appearance row");
+        bifrost_render::ui::set_sidebar_icon_size(keep);
+        assert!(after > before, "Large rows move the row down at once: {before} -> {after}");
+    }
+
+    #[test]
+    fn arrow_keys_step_over_the_hits_of_the_highlighted_page() {
+        let hits = [PageId::Display, PageId::Display, PageId::NightShift, PageId::About];
+        assert_eq!(step_hit(&hits, None, true), Some(PageId::Display));
+        assert_eq!(step_hit(&hits, None, false), Some(PageId::About));
+        assert_eq!(step_hit(&hits, Some(0), true), Some(PageId::NightShift));
+        assert_eq!(step_hit(&hits, Some(2), false), Some(PageId::Display));
+        assert_eq!(step_hit(&hits, Some(3), true), None);
+        assert_eq!(step_hit(&hits, Some(0), false), None);
     }
 
     /// W3-11: Return in the search field did nothing; it opens the first match.

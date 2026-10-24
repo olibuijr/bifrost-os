@@ -1187,6 +1187,11 @@ impl ListPage {
         self.scroll.moved(y, t);
     }
 
+    /// The scroll wheel moved the content `dy` px (negative shows what is below); true when the offset changed.
+    pub fn wheel(&mut self, dy: f32) -> bool {
+        self.scroll.wheel(dy)
+    }
+
     /// Ends the touch; true when it was a tap rather than a drag.
     pub fn scroll_up(&mut self, y: f32, t: f64) -> bool {
         self.scroll.up(y, t)
@@ -1209,8 +1214,10 @@ impl ListPage {
 
     /// Whether a frame at `t` is the previous one shifted by the scroll offset `off` px alone:
     /// no switch mid-flip, and (large-title pages) the title and search capsule scrolled away.
+    /// An Always scroll knob moves against the content, so a shifted frame would carry it along.
     pub fn scroll_only(&self, ui: &Ui, t: f64, off: i32) -> bool {
-        !self.flipped.iter().any(|&f| t - f < SWITCH_MS) && (!self.spec.large || off as f32 >= ui.pt(LARGE_TITLE_PT) + 1.0)
+        !bifrost_render::ui::scroll_bars_always()
+            && !self.flipped.iter().any(|&f| t - f < SWITCH_MS) && (!self.spec.large || off as f32 >= ui.pt(LARGE_TITLE_PT) + 1.0)
     }
 
     pub fn offset(&self) -> f32 {
@@ -1300,6 +1307,7 @@ impl ListPage {
         if let Some(sb) = &self.sidebar {
             self.draw_card(s, ui, sb, dy);
         }
+        self.draw_scroller(s, ui);
         self.draw_popup(s, ui, pressed);
         if let (Some(title), None) = (&self.title_large, &self.sidebar) {
             // fades out as it slides under the bar, while the inline title fades in
@@ -1314,6 +1322,18 @@ impl ListPage {
             blur_strip(s, self.nav_bottom(ui) as usize, ui.pt(10.0) as usize);
         }
         self.nav.draw(s, ui, self.w, alpha, if self.spec.large || self.header.as_ref().is_some_and(|h| !h.compact) { alpha } else { 1.0 });
+    }
+
+    /// Settings > Appearance > Show scroll bars: Always keeps the overlay knob drawn at the trailing edge while the list
+    /// rests (a list that fits has none).
+    fn draw_scroller(&self, s: &mut Surface, ui: &Ui) {
+        use crate::deildu::scroll::{indicator, INDICATOR_INSET_PT, INDICATOR_MIN_PT, INDICATOR_W_PT};
+        if !bifrost_render::ui::scroll_bars_always() {
+            return;
+        }
+        let Some((y, len)) = indicator(self.h as f32, self.scroll.max(), self.scroll.offset(), ui.pt(INDICATOR_MIN_PT)) else { return };
+        let (w, x) = (ui.pt(INDICATOR_W_PT), self.w as f32 - ui.pt(INDICATOR_INSET_PT + INDICATOR_W_PT));
+        s.fill_rrect(x, y, w, len, w / 2.0, LABEL_2.now());
     }
 
     /// The open pop-up menu: a translucent rounded card, a checkmark on the chosen item and the highlighted item filled.

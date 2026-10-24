@@ -884,6 +884,9 @@ pub struct Shell {
     desk_overlay_was: bool,
     /// a system gesture (`tablet_gestures`) took the touch in progress: its moves and its lift are not the app's
     touch_taken: bool,
+    /// the touches left of the drag emulated for a wheel notch a shell surface took (Settings, Overview), and until when
+    /// they can arrive (`swallow_wheel_drag`)
+    wheel_drag: (u8, f64),
     /// the scale of the tablet desktop's pinch so far, for the step of each new one (`desk_pinch`)
     pinch_last: Option<f32>,
     /// touch on the terminal grid: scroll, tap, long-press selection, menu
@@ -1340,6 +1343,7 @@ impl Shell {
             desk_hold: None,
             desk_overlay_was: false,
             touch_taken: false,
+            wheel_drag: (0, 0.0),
             pinch_last: None,
             term_touch: termtouch::TermTouch::default(),
             last_input: 0.0,
@@ -3411,6 +3415,10 @@ impl Shell {
     }
 
     pub fn event(&mut self, ev: Event, t: f64) -> Vec<Effect> {
+        // the drag emulated for a wheel notch a shell surface took already is not a press (it would tap or set a slider)
+        if matches!(ev, Event::Down(..) | Event::Move(..) | Event::Up(..)) && self.swallows_wheel_drag(t) {
+            return vec![];
+        }
         // the touch a system gesture took belongs to that gesture: its first finger's moves and lift do nothing here
         if self.touch_taken {
             match ev {
@@ -3437,6 +3445,21 @@ impl Shell {
         }
         self.st_mark(t);
         fx
+    }
+
+    /// A shell surface took the wheel event at `t`: the Down, Move and Up the pointer emulates for it are dropped.
+    pub(super) fn swallow_wheel_drag(&mut self, t: f64) {
+        self.wheel_drag = (3, t + apphost::WHEEL_DRAG_MS);
+    }
+
+    /// True for each touch of the drag emulated for a wheel notch a shell surface took already.
+    fn swallows_wheel_drag(&mut self, t: f64) -> bool {
+        if self.wheel_drag.0 == 0 || t > self.wheel_drag.1 {
+            self.wheel_drag = (0, 0.0);
+            return false;
+        }
+        self.wheel_drag.0 -= 1;
+        true
     }
 
     /// Remembers how far down the pointer is, from a press, a drag or a plain move, for the menu bar that a full-screen

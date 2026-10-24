@@ -593,7 +593,7 @@ const STALL_MS: f64 = 5000.0;
 const PB_WRITE_GRACE_MS: f64 = 1500.0;
 
 /// How long after a wheel event the drag emulated for it can still arrive, in ms.
-const WHEEL_DRAG_MS: f64 = 250.0;
+pub(super) const WHEEL_DRAG_MS: f64 = 250.0;
 
 pub struct AppHost {
     pub id: String,

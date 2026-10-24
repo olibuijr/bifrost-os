@@ -1468,8 +1468,17 @@ impl Shell {
 
     /// Wheel or two-finger scroll while the Apps grid is open pages through it (`dx`, `dy` positive: the next page, so the
     /// wheel turned down or a swipe to the left); while Overview is open the wheel is swallowed (nothing under the
-    /// veil scrolls). True when it was taken.
+    /// veil scrolls). True when it was taken; the drag emulated for a taken wheel notch is then dropped, since as a
+    /// press it would tap the tile, desktop or close control under the pointer (N17).
     pub fn overview_scroll(&mut self, dx: f32, dy: f32, t: f64) -> bool {
+        let taken = self.overview_scroll_inner(dx, dy, t);
+        if taken {
+            self.swallow_wheel_drag(t);
+        }
+        taken
+    }
+
+    fn overview_scroll_inner(&mut self, dx: f32, dy: f32, t: f64) -> bool {
         if !self.desk_active() || self.is_locked() {
             return false;
         }
@@ -1846,6 +1855,27 @@ mod tests {
         sh.overview_toggle(3000.0);
         assert!(sh.overview.open);
         assert!(sh.overview_scroll(0.0, 100.0, 3100.0), "nothing under the veil scrolls");
+    }
+
+    /// N17: the drag the pointer emulates for a wheel notch tapped what was under it (a desktop's close control saved
+    /// the desktop count); Overview takes the notch, so its Down, Move and Up are dropped.
+    #[test]
+    fn the_drag_emulated_for_a_wheel_notch_taps_nothing_in_overview() {
+        let mut sh = desk_with(2, 1920, 1080, 1.0);
+        sh.overview_toggle(1000.0);
+        settle(&mut sh);
+        let g = sh.overview.geo(&sh);
+        let (ex, ey) = (2.0, g.area.y + g.area.h - 2.0);
+        assert!(matches!(sh.overview.target_at(&g, ex, ey), Target::Back), "a click here would close it");
+        assert!(sh.overview_scroll(0.0, 30.0, 2000.0));
+        for ev in [Event::Down(ex, ey), Event::Move(ex, ey + 30.0), Event::Up(ex, ey + 30.0)] {
+            assert!(sh.event(ev, 2000.0).is_empty());
+        }
+        assert!(sh.overview.open && sh.overview.closing.is_none(), "the notch's drag did not click");
+        // a real click afterwards still works
+        sh.event(Event::Down(ex, ey), 2100.0);
+        sh.event(Event::Up(ex, ey), 2110.0);
+        assert!(sh.overview.closing.is_some() || !sh.overview.open);
     }
 
     #[test]
