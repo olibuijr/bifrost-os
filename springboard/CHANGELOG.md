@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.10.27 — 2026-10-24
+
+Fixes from the second 0.10.25 end-to-end pass on Midget.
+
+- Playback started by an app (Music radio, Podcasts) stops, and its network stream closes, when that app quits or its connection ends.
+- An app's pop-up menu takes clicks over its whole area, including the part that extends past the app's window; a click there no longer falls through to the window behind.
+- Show Desktop also puts other apps' windows aside and brings them back; Bring All to Front brings back the active app's windows.
+- Clock alerts on the desktop banner have Stop and Repeat (timers) or Stop and Snooze (alarms).
+- The Drift wallpaper no longer re-blurs the whole wallpaper twice a second.
+- Shared text editing hides markdown style markers, so bold and italic show as styled text (with Notes 1.24.2).
+- Ships with Notes 1.24.2 (bold without visible markers, confirmed deletion in Recently Deleted), Reminders 1.20.1 (Cmd+Backspace deletes only a visible reminder; Delete Permanently and Delete All in Recently Deleted), Calendar 1.19.1 (the hour grid keeps its scroll; the system double-click interval), Mail 0.17.4 (Mark as Unread shows the dot at once) and Maps 0.7.1 (zooming out shows scaled tiles instead of black).
+
 - Quitting Music (or any app that started playback) stops it: the audio service gives playback to the connection that set the queue, and when that app quits, crashes or is killed the queue is cleared and a radio station's network connection closes, instead of the station playing on with no app.
 
 ## 0.10.26 — 2026-10-24
