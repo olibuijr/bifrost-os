@@ -5,8 +5,10 @@
 //! The file reader hands out [`doc::Doc`] and [`page::Page`]s; [`extract::Extractor`] turns a page into text lines
 //! and images, and [`draw`] rasterises it through `cg::context`. [`writer`] goes the other way: it writes pages with
 //! standard-font text and raster images, which the print pipeline sends to a queue or saves as PDF.
+//! [`context::PdfContext`] is a drawing context whose pages are written as PDF vector content.
 
 pub mod color;
+pub mod context;
 pub mod crypt;
 pub mod doc;
 pub mod draw;
