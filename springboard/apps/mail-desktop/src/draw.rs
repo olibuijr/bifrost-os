@@ -928,8 +928,11 @@ impl MailWindow {
             let selected = self.mail.is_selected(r.uid);
             if selected {
                 s.fill_rrect(x0 + inset, y + inset / 2.0, width - 2.0 * inset, row - inset, ui.pt(RADIUS_PT), colors::SYSTEM_BLUE.now());
-            } else if !r.flags.contains(Flag::Seen) {
-                s.fill_rrect(x0 + pad, y + row * 0.3 - dot / 2.0, dot, dot, dot / 2.0, colors::SYSTEM_BLUE.now());
+            }
+            // the unread dot shows on the selected row too (white on the plate), so Mark as Unread is seen at once
+            if !r.flags.contains(Flag::Seen) {
+                let tint = if selected { WHITE } else { colors::SYSTEM_BLUE.now() };
+                s.fill_rrect(x0 + pad, y + row * 0.3 - dot / 2.0, dot, dot, dot / 2.0, tint);
             }
             if self.mail.threaded && line.head && line.thread > 1 {
                 let tint = if selected { WHITE } else { LABEL_2.now() };

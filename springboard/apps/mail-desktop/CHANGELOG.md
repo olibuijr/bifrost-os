@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.17.4 — 2026-10-24
+
+- Message > Mark as Unread on the open message shows its unread dot at once (white on the selected row), and the
+  message stays unread while it is open; it is read again only once another message is shown and it is opened again.
+  The dot was hidden on the selected row and showing the message again marked it read.
+
 ## 0.17.3 — 2026-10-24
 
 - Switching mailboxes shows the mailbox's last listing at once, with the message it had selected, and the new listing

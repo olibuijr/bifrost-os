@@ -929,6 +929,10 @@ pub struct Mail {
     /// The listing brought back the message selected when the mailbox was left: the window opens it (and fetches its
     /// text) and takes this.
     pub reopen: Option<u32>,
+    /// The message the reader last marked as read when it was shown. Showing it again (a selection change around it, a
+    /// listing that keeps it open) does not mark it again, so Message > Mark as Unread on the open message holds until
+    /// another message is shown and it is opened again.
+    marked_seen: Option<u32>,
     /// The last rows of each mailbox not shown, by (account id, mailbox): a mailbox listed before shows them at once
     /// when it is shown again and its listing replaces them in place (only a mailbox never listed shows Loading).
     /// Kept for this run only.
@@ -988,6 +992,7 @@ impl Mail {
             remembered: HashMap::new(),
             restore: None,
             reopen: None,
+            marked_seen: None,
             listings: HashMap::new(),
         }
     }
@@ -1079,6 +1084,7 @@ impl Mail {
         let key = (account, name.to_string());
         let remembered = self.remembered.get(&key).copied();
         self.reopen = None;
+        self.marked_seen = None;
         self.mailbox = name.to_string();
         self.rows = self.listings.remove(&key).unwrap_or_default();
         // the remembered message comes back now when the kept rows have it, else with the first listing
@@ -1174,7 +1180,10 @@ impl Mail {
     /// Shows a message in the reader without changing which others are selected. True when its text is not loaded yet.
     fn show(&mut self, uid: u32) -> bool {
         self.open = Some(uid);
-        self.mark_seen_locally(uid);
+        if self.marked_seen != Some(uid) {
+            self.marked_seen = Some(uid);
+            self.mark_seen_locally(uid);
+        }
         !self.bodies.contains_key(&uid)
     }
 
@@ -2636,6 +2645,23 @@ mod tests {
         assert!(!mail.open_message(3));
         mail.body_arrived("other", INBOX, 4, "not shown".into());
         assert!(!mail.bodies.contains_key(&4));
+    }
+
+    #[test]
+    fn mark_as_unread_on_the_open_message_holds_until_it_is_opened_again() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.apply_listing("work", INBOX, vec![], vec![listed(3, "x"), listed(4, "y")]);
+        mail.open_message(3);
+        mail.set_flag_locally(3, Flag::Seen, false);
+        // showing it again (a plain click on it, Select All around it) does not mark it read again
+        mail.open_message(3);
+        mail.select_all_messages();
+        assert!(!mail.flags_of(3).unwrap().contains(Flag::Seen), "it stays unread while it is open");
+        // another message, then back: it is read again
+        mail.open_message(4);
+        assert!(mail.flags_of(4).unwrap().contains(Flag::Seen));
+        mail.open_message(3);
+        assert!(mail.flags_of(3).unwrap().contains(Flag::Seen));
     }
 
     #[test]
