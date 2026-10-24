@@ -3286,7 +3286,10 @@ impl Shell {
         vec![]
     }
 
-    /// menu > Lock Screen, also the control verb `lock`.
+    /// Every lock a person asks for: the System menu's and the menu-extra Lock Screen rows, Ctrl+Cmd+Q, the Lock
+    /// Screen hot corner, AssistiveTouch's Lock and the control verb `lock`. They must not call `sleep_screen` directly:
+    /// on a desktop that turned the display off and dropped every key (`hw_type` ignores input while `screen_on` is
+    /// false), so a lock after login could not be unlocked (E2E N0).
     /// On a desktop the display stays on and the login window is up at once (as the reference Mac); on a tablet the
     /// lock turns the screen off, as the power button of a phone does.
     pub fn lock_screen(&mut self) -> Vec<Effect> {
@@ -5248,7 +5251,7 @@ impl Shell {
             Action::AppSwitcher => self.open_app_switcher(t),
             Action::ControlCenter => self.open_control_center(t),
             Action::NotificationCenter => self.open_notification_center(t),
-            Action::Lock => return self.sleep_screen(),
+            Action::Lock => return self.lock_screen(),
             Action::Screenshot => self.take_screenshot(t),
             Action::Rotate => {
                 self.dirty = true;

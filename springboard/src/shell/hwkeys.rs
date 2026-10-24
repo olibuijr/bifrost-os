@@ -1108,11 +1108,13 @@ impl Shell {
                 self.type_out(out, t);
                 vec![]
             }
+            // with a login backend every key, Return included, belongs to the login window: only privd's token unlocks
             Screen::Lock if self.login_open() || self.login_backend.is_some() => {
                 self.login_show(t);
                 self.login_key(&out, t)
             }
-            Screen::Lock if matches!(out, Out::Enter) && self.lock_pad.is_none() && self.anim.is_none() => {
+            // the old unlock (no login backend: host previews): Return lifts the lock screen or asks for the passcode
+            Screen::Lock if self.login_backend.is_none() && matches!(out, Out::Enter) && self.lock_pad.is_none() && self.anim.is_none() => {
                 self.begin_unlock(0.0, t);
                 vec![]
             }

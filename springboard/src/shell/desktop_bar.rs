@@ -1435,7 +1435,7 @@ impl Shell {
                     Action::Scan=>desktop_network::send(desktop_network::Request::Wifi(super::WifiAction::Scan)),
                     Action::Select(ssid)=>desktop_network::send(desktop_network::Request::Wifi(super::WifiAction::Select(ssid))),
                     Action::Power(profile)=>desktop_network::send(desktop_network::Request::Power(profile)),
-                    Action::Lock=>effects.extend(self.sleep_screen()),
+                    Action::Lock=>effects.extend(self.lock_screen()),
                     Action::Sleep=>{effects.extend(self.sleep_screen());effects.push(super::Effect::SleepSystem)}
                     Action::Halt(power)=>effects.push(Effect::Power(power)),
                     Action::Media(command)=>{super::services::now_playing::send(command);},
