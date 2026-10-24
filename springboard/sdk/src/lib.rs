@@ -76,6 +76,7 @@ pub mod cursor_service;
 pub mod text_services;
 pub mod accessibility_display;
 pub mod accessibility_settings;
+pub mod audio_graph;
 pub mod accessibility_rotor;
 pub mod accessibility_audit;
 pub mod av_capture_session;

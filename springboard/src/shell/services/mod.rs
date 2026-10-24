@@ -76,6 +76,7 @@ pub mod cursor_service;
 pub mod system;
 pub mod widgets_timeline;
 pub mod accessibility_display;
+pub mod audio_graph;
 pub mod text_services;
 pub mod focus_filter;
 pub mod notify_bus;
@@ -213,6 +214,7 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(screens::Displays::default()),
         Box::new(cursor_service::CursorService),
         Box::new(accessibility_display::AccessibilityDisplay::default()),
+        Box::new(audio_graph::AudioGraph),
         Box::new(universal_access_control::UniversalAccessControl),
         Box::new(voice_banking::VoiceBanking),
         Box::new(text_services::TextServices),

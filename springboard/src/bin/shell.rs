@@ -1335,6 +1335,10 @@ fn run() -> std::io::Result<()> {
         for index in shell.take_popup_earcons() {
             let _ = audio_tx.send(AudioJob::Sound(Sound::Earcon(index)));
         }
+        // the audio graph the app in front asked for (`services::audio_graph`) plays on the sound-effects role
+        if let Some(tones) = springboard::shell::services::audio_graph::take() {
+            let _ = audio_tx.send(AudioJob::Graph(springboard::shell::audio_graph::pcm(&tones, 1.0)));
+        }
         for fx in effects {
             match fx {
                 Effect::Brightness(f) => {
@@ -2051,6 +2055,8 @@ fn wifi_settled(wifi: &springboard::net::wifi::Wifi) -> bool {
 enum AudioJob {
     Volume(springboard::media::volume::Volume),
     Sound(Sound),
+    /// an app's audio graph, rendered (`shell::audio_graph::pcm`, mono i16)
+    Graph(Vec<i16>),
 }
 
 /// A sound the shell plays on the sound-effects role: a key click, or the alert tone at this index into
@@ -2085,6 +2091,7 @@ fn spawn_audio_worker() -> std::sync::mpsc::Sender<AudioJob> {
         let mut player: Option<SoundPlayer> = None;
         while let Ok(first) = rx.recv() {
             let (mut volume, mut alert, mut click, mut cue, mut earcon, mut ui) = (None, None, None, None, None, None);
+            let mut graph: Option<Vec<i16>> = None;
             let mut next = Some(first);
             while let Some(job) = next {
                 match job {
@@ -2094,12 +2101,27 @@ fn spawn_audio_worker() -> std::sync::mpsc::Sender<AudioJob> {
                     AudioJob::Sound(Sound::Cue(c)) => cue = Some(c),
                     AudioJob::Sound(Sound::Earcon(i)) => earcon = Some(i),
                     AudioJob::Sound(Sound::Ui(i)) => ui = Some(i),
+                    AudioJob::Graph(pcm) => graph = Some(pcm),
                 }
                 next = rx.try_recv().ok();
             }
             // newest level wins: a slider drag while the server is slow collapses to one write
             if let Some(v) = volume {
                 apply_volume(v, &mut dev, &mut at);
+            }
+            // the newest audio graph plays first; a graph that is still waiting is replaced, never queued behind
+            if let Some(pcm) = graph.take() {
+                if player.is_none() {
+                    player = SoundPlayer::on_sound_effects().map_err(|e| eprintln!("springboard: sound: {e}")).ok();
+                }
+                if let Some(p) = player.as_mut() {
+                    if let Err(e) = p.audio_graph(&pcm, 1.0) {
+                        eprintln!("springboard: audio graph: {e}");
+                        if !springboard::media::system_sound::keeps_player(&e) {
+                            player = None;
+                        }
+                    }
+                }
             }
             let Some(sound) = alert
                 .map(Sound::Alert)
