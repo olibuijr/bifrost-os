@@ -12,7 +12,7 @@ use super::path::{Affine, Path, Rect as PathRect};
 use super::raster::{self, Coverage, FillRule, StrokeStyle};
 pub use super::raster::{LineCap, LineJoin};
 use crate::blend::{blend_channel, Mode};
-use crate::font::{Font, Style};
+use crate::font::{Font, Style, Var};
 use crate::gfx::{over, scale, Image, Surface};
 use std::sync::Arc;
 
@@ -1546,31 +1546,36 @@ impl<'a> DrawContext<'a> {
     }
 
     /// Draws `text` with its pen origin at (x, y) in the current space; returns the advance in the same units.
-    fn draw_run(&mut self, font: &Font<'_>, text: &str, size: f32, x: f32, y: f32) -> f32 {
-        let adv = font.measure(text, size);
+    fn draw_run(&mut self, font: &Font<'_>, text: &str, size: f32, x: f32, y: f32, vars: &[Var]) -> f32 {
+        let adv = font.measure_var(text, size, vars);
         let px = size * self.unit_scale();
         if px < 0.5 || text.is_empty() || !self.gs.text_mode.fills() {
             return adv;
         }
-        let img = font.render(text, &self.glyph_style(px));
+        let img = font.render_var(text, &self.glyph_style(px), vars);
         self.blit_text_image(&img, font, px, x, y);
         adv
     }
 
     /// Draws `text` at the text position in the text matrix's space and moves the position past it.
     pub fn show_text(&mut self, font: &Font<'_>, text: &str) {
+        self.show_text_var(font, text, &[]);
+    }
+
+    /// [`DrawContext::show_text`] at a variation instance of `font` (axis tag and user value pairs).
+    pub fn show_text_var(&mut self, font: &Font<'_>, text: &str, vars: &[Var]) {
         let size = self.gs.font_size;
         let spacing = self.gs.char_spacing;
         let saved = self.gs.ctm;
         self.gs.ctm = self.tm.then(saved);
         let mut adv = 0.0;
         if spacing == 0.0 {
-            adv = self.draw_run(font, text, size, 0.0, 0.0);
+            adv = self.draw_run(font, text, size, 0.0, 0.0, vars);
         } else {
             for ch in text.chars() {
                 let mut buf = [0u8; 4];
                 let s: &str = ch.encode_utf8(&mut buf);
-                adv += self.draw_run(font, s, size, adv, 0.0) + spacing;
+                adv += self.draw_run(font, s, size, adv, 0.0, vars) + spacing;
             }
         }
         self.gs.ctm = saved;
@@ -1585,6 +1590,11 @@ impl<'a> DrawContext<'a> {
 
     /// Draws each glyph with its pen origin at the given user-space position.
     pub fn show_glyphs_at_positions(&mut self, font: &Font<'_>, glyphs: &[(u16, (f32, f32))]) {
+        self.show_glyphs_at_positions_var(font, glyphs, &[]);
+    }
+
+    /// [`DrawContext::show_glyphs_at_positions`] at a variation instance of `font`.
+    pub fn show_glyphs_at_positions_var(&mut self, font: &Font<'_>, glyphs: &[(u16, (f32, f32))], vars: &[Var]) {
         let size = self.gs.font_size;
         let px = size * self.unit_scale();
         if px < 0.5 || !self.gs.text_mode.fills() {
@@ -1592,7 +1602,7 @@ impl<'a> DrawContext<'a> {
         }
         let st = self.glyph_style(px);
         for &(gid, (x, y)) in glyphs {
-            let img = font.render_glyph(gid, &st);
+            let img = font.render_glyph_var(gid, &st, vars);
             self.blit_text_image(&img, font, px, x, y);
         }
     }
@@ -1600,15 +1610,21 @@ impl<'a> DrawContext<'a> {
     /// Draws consecutive glyphs from the text position, advancing by `advances` (user units) or, when `None`, by the
     /// font's own advance widths.
     pub fn show_glyphs_with_advances(&mut self, font: &Font<'_>, gids: &[u16], advances: Option<&[f32]>) {
+        self.show_glyphs_with_advances_var(font, gids, advances, &[]);
+    }
+
+    /// [`DrawContext::show_glyphs_with_advances`] at a variation instance of `font`: the glyphs and their own
+    /// advances follow the instance.
+    pub fn show_glyphs_with_advances_var(&mut self, font: &Font<'_>, gids: &[u16], advances: Option<&[f32]>, vars: &[Var]) {
         let size = self.gs.font_size;
         let mut pos = Vec::with_capacity(gids.len());
         let mut pen = 0.0f32;
         for (i, &g) in gids.iter().enumerate() {
             let (x, y) = self.tm.apply(pen, 0.0);
             pos.push((g, (x, y)));
-            pen += advances.and_then(|a| a.get(i).copied()).unwrap_or_else(|| font.advance(g) * size / font.upem) + self.gs.char_spacing;
+            pen += advances.and_then(|a| a.get(i).copied()).unwrap_or_else(|| font.advance_var(g, vars) * size / font.upem) + self.gs.char_spacing;
         }
-        self.show_glyphs_at_positions(font, &pos);
+        self.show_glyphs_at_positions_var(font, &pos, vars);
         self.tm.tx += pen * self.tm.a;
         self.tm.ty += pen * self.tm.b;
     }
@@ -1628,11 +1644,12 @@ impl<'a> DrawContext<'a> {
     }
 
     /// Draws each glyph of the state's face with its pen origin at the given user-space position
-    /// (`showGlyphsAtPositions`). Nothing is drawn without a face.
+    /// (`showGlyphsAtPositions`). Nothing is drawn without a face. The face's variations (`with_variations`) are
+    /// applied, so a copy with other variations draws that instance.
     pub fn show_font_glyphs_at_positions(&mut self, glyphs: &[(u16, (f32, f32))]) {
         let Some(face) = self.gs.font.clone() else { return };
         let Some(font) = face.font() else { return };
-        self.show_glyphs_at_positions(&font, glyphs);
+        self.show_glyphs_at_positions_var(&font, glyphs, face.variations());
     }
 
     /// Draws consecutive glyphs of the state's face from the text position, advancing by `advances` or the face's own
@@ -1640,14 +1657,14 @@ impl<'a> DrawContext<'a> {
     pub fn show_font_glyphs(&mut self, gids: &[u16], advances: Option<&[f32]>) {
         let Some(face) = self.gs.font.clone() else { return };
         let Some(font) = face.font() else { return };
-        self.show_glyphs_with_advances(&font, gids, advances);
+        self.show_glyphs_with_advances_var(&font, gids, advances, face.variations());
     }
 
     /// Draws `text` in the state's face at the text position and moves the position past it.
     pub fn show_font_text(&mut self, text: &str) {
         let Some(face) = self.gs.font.clone() else { return };
         let Some(font) = face.font() else { return };
-        self.show_text(&font, text);
+        self.show_text_var(&font, text, face.variations());
     }
 }
 
@@ -2185,6 +2202,32 @@ mod tests {
             cx.show_font_glyphs_at_positions(&[(g, (10.0, 28.0))]);
         }
         assert!(ink(&bm2) > 0);
+    }
+
+    #[test]
+    fn the_state_font_draws_with_its_variations() {
+        let data = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/SFUI.ttf")).expect("assets/SFUI.ttf");
+        let face = CgFont::from_data(data).unwrap();
+        // a static face has nothing to vary; the variable UI face has a weight axis
+        let Some(axis) = face.variation_axes().into_iter().find(|a| &a.tag == b"wght") else { return };
+        let draw = |f: &CgFont| {
+            let mut bm = Bitmap::new(120, 40);
+            let end = {
+                let mut cx = bm.context();
+                cx.set_font(f.clone());
+                cx.set_font_size(24.0);
+                cx.set_text_position(4.0, 30.0);
+                cx.show_font_text("Hm");
+                cx.text_position().0
+            };
+            (bm.pixels().iter().map(|p| (*p >> 24) as u64).sum::<u64>(), end)
+        };
+        let light = face.with_variations(&[(axis.tag, axis.min)]).unwrap();
+        let heavy = face.with_variations(&[(axis.tag, axis.max)]).unwrap();
+        let ((light_ink, light_end), (heavy_ink, heavy_end)) = (draw(&light), draw(&heavy));
+        assert!(heavy_ink > light_ink, "the heavier instance lays down more ink: {light_ink} {heavy_ink}");
+        assert!(heavy_end >= light_end, "and its advances are not narrower: {light_end} {heavy_end}");
+        assert_ne!(draw(&face).0, 0);
     }
 }
 
