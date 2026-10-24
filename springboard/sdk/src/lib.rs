@@ -513,6 +513,7 @@ pub mod gpu_mesh;
 pub mod gpu_view;
 pub mod gpu_sprites;
 pub mod image_effects;
+pub mod image_distort;
 pub mod image_generate;
 pub mod image_detect;
 pub mod image_stylize;
