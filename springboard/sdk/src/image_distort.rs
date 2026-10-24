@@ -57,7 +57,7 @@ pub fn torus_lens(img: &Image, center: (f32, f32), radius: f32, width: f32, refr
 
 /// Keeps the disc of `radius` and splashes its circumference outwards (default radius 150).
 pub fn circle_splash(img: &Image, center: (f32, f32), radius: f32) -> Image {
-    l::circle_splash_rim(img, center, radius)
+    l::circle_splash(img, center, radius)
 }
 
 #[cfg(test)]

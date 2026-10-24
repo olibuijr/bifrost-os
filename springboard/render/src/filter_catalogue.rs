@@ -159,6 +159,8 @@ static FILTERS: &[FilterInfo] = &[
     FilterInfo { name: "CIInterleaved2of5BarcodeGenerator", category: CATEGORY_GENERATOR, attributes: &[QUIET_SPACE, BARCODE_HEIGHT] },
     FilterInfo { name: "CIHoleDistortion", category: CATEGORY_DISTORTION, attributes: &[a("inputRadius", 150.0, 0.01, 1000.0)] },
     FilterInfo { name: "CILightTunnel", category: CATEGORY_DISTORTION, attributes: &[a("inputRotation", 0.0, -PI, PI), a("inputRadius", 100.0, 0.0, 500.0)] },
+    // the torus lens and circle splash are `lens_distortions::{torus_lens, circle_splash}`, the models
+    // `image_distort` gives apps (ring width, refraction 0..5); there is no second implementation
     FilterInfo { name: "CITorusLensDistortion", category: CATEGORY_DISTORTION, attributes: &[a("inputRadius", 160.0, 0.0, 500.0), a("inputWidth", 80.0, 0.0, 200.0), a("inputRefraction", 1.7, 0.0, 5.0)] },
     FilterInfo { name: "CICircleSplashDistortion", category: CATEGORY_DISTORTION, attributes: &[a("inputRadius", 150.0, 0.0, 1000.0)] },
 ];

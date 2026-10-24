@@ -6,10 +6,10 @@ use bifrost_render::colorfx::Rgb;
 use bifrost_render::colorlab::{delta_e, Lab};
 use bifrost_render::colormap::{ColorMap, Palette};
 use bifrost_render::comic_filter;
-use bifrost_render::distortion_filters;
 use bifrost_render::generators;
 use bifrost_render::gfx::Image;
 use bifrost_render::gradient::Ramp;
+use bifrost_render::lens_distortions;
 use bifrost_render::spot_light;
 use bifrost_render::stylize_filters;
 
@@ -94,35 +94,36 @@ fn generator_radial_gradient_is_the_start_colour_at_the_centre() {
     assert_eq!(img.px[0], 0xff00_ff00, "a corner beyond the radius takes the end colour");
 }
 
-// Distortion (bifrost_render::distortion_filters): circle splash and torus lens.
+// Distortion (bifrost_render::lens_distortions, the models image_distort gives apps): circle splash and torus lens.
 
 #[test]
-fn circle_splash_magnifies_the_centre_and_leaves_the_rim_alone() {
+fn circle_splash_keeps_the_disc_and_splashes_the_rim_outwards() {
     let img = numbered_9x9();
-    let out = distortion_filters::circle_splash(&img, (4.5, 4.5), 4.0);
-    assert_eq!(out.px[4 * 9 + 6], img.px[4 * 9 + 5], "a pixel at distance 2 samples distance 1");
-    assert_eq!(out.px[4 * 9], img.px[4 * 9], "a pixel beyond the radius is untouched");
+    let out = lens_distortions::circle_splash(&img, (4.5, 4.5), 2.0);
+    assert_eq!(out.px[4 * 9 + 5], img.px[4 * 9 + 5], "a pixel inside the disc is untouched");
+    assert_eq!(out.px[4 * 9 + 7], out.px[4 * 9 + 8], "points outside on one ray read the same rim colour");
 }
 
 #[test]
 fn circle_splash_with_no_radius_is_the_identity() {
     let img = numbered_9x9();
-    assert_eq!(distortion_filters::circle_splash(&img, (4.5, 4.5), 0.0).px, img.px);
+    assert_eq!(lens_distortions::circle_splash(&img, (4.5, 4.5), 0.0).px, img.px);
 }
 
 #[test]
 fn torus_lens_with_no_refraction_is_the_identity() {
     let img = numbered_9x9();
-    assert_eq!(distortion_filters::torus_lens(&img, (4.5, 4.5), 4.0, 0.0).px, img.px);
-    assert_eq!(distortion_filters::torus_lens(&img, (4.5, 4.5), 4.0, f32::NAN).px, img.px);
+    assert_eq!(lens_distortions::torus_lens(&img, (4.5, 4.5), 2.0, 4.0, 0.0).px, img.px);
+    assert_eq!(lens_distortions::torus_lens(&img, (4.5, 4.5), 2.0, 4.0, f32::NAN).px, img.px);
 }
 
 #[test]
-fn torus_lens_pulls_the_picture_inwards_by_the_refraction() {
+fn torus_lens_bends_the_ring_and_leaves_the_outside_alone() {
     let img = numbered_9x9();
-    let out = distortion_filters::torus_lens(&img, (4.5, 4.5), 4.0, 1.0);
-    assert_eq!(out.px[4 * 9 + 6], img.px[4 * 9 + 7], "distance 2 samples distance 3, which is pixel 7");
-    assert_eq!(out.px[4 * 9], img.px[4 * 9], "the rim at and beyond the radius stays fixed");
+    let out = lens_distortions::torus_lens(&img, (4.5, 4.5), 2.0, 4.0, 5.0);
+    assert_ne!(out.px[4 * 9 + 7], img.px[4 * 9 + 7], "distance 3 lies inside the ring and is refracted");
+    assert_eq!(out.px[4 * 9 + 8], img.px[4 * 9 + 8], "distance 4 is at the ring's outer edge and stays");
+    assert_eq!(out.px[4 * 9 + 4], img.px[4 * 9 + 4], "the centre stays");
 }
 
 // Spot light (bifrost_render::spot_light).
