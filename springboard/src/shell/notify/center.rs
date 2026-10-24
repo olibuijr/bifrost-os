@@ -516,6 +516,27 @@ const NC_FOCUS_PT: f32 = 26.0;
 /// room kept free above the dock
 const NC_BOTTOM_PT: f32 = 90.0;
 
+/// The system colour a widget's container background names, for the appearance in effect.
+fn container_colour(tint: bifrost_ui::widget_render::ContainerTint) -> u32 {
+    use super::super::ui::system::{SYSTEM_BLUE, SYSTEM_BROWN, SYSTEM_CYAN, SYSTEM_GRAY, SYSTEM_GREEN, SYSTEM_INDIGO, SYSTEM_MINT, SYSTEM_ORANGE, SYSTEM_PINK, SYSTEM_PURPLE, SYSTEM_TEAL, SYSTEM_YELLOW};
+    use bifrost_ui::widget_render::ContainerTint as T;
+    match tint {
+        T::Orange => SYSTEM_ORANGE,
+        T::Yellow => SYSTEM_YELLOW,
+        T::Green => SYSTEM_GREEN,
+        T::Mint => SYSTEM_MINT,
+        T::Teal => SYSTEM_TEAL,
+        T::Cyan => SYSTEM_CYAN,
+        T::Blue => SYSTEM_BLUE,
+        T::Indigo => SYSTEM_INDIGO,
+        T::Purple => SYSTEM_PURPLE,
+        T::Pink => SYSTEM_PINK,
+        T::Brown => SYSTEM_BROWN,
+        T::Gray => SYSTEM_GRAY,
+    }
+    .now()
+}
+
 #[derive(Clone, Copy, PartialEq)]
 enum DeskHit {
     /// the title's X (Clear All while the title row is hovered): clears every notification
@@ -1101,17 +1122,24 @@ impl Shell {
         None
     }
 
-    /// Opens the app of a widget row. A widget with a link opens the app at it: the app gets `Open` with the link.
+    /// Opens the app of a widget row. A widget with a link opens the app at it: the app gets `Open` with the link. An
+    /// app also hears which widget it was opened from: the `widgets_timeline` event `opened {kind, family}` (the
+    /// reference passes the widget's kind and family with the activity that opens the app).
     fn open_widget(&mut self, i: usize, t: f64) {
         let Some((_, row)) = self.center_widget_rects().into_iter().nth(i) else { return };
+        let family = row.family;
         let Some((app, kind)) = row.widget else { return };
         let link = widgets_timeline::link(&app, &kind).map(|l| l.to_url());
         let def = apps::apps().iter().find(|a| a.icon == app.as_str()).map(|a| a.id).or_else(|| apphost::slot_of(&app).map(|slot| AppId::External(slot as u8)));
         let Some(def) = def else { return };
         self.notify.center.hide();
         self.desk_open_or_start(def, t);
-        if let (AppId::External(slot), Some(url)) = (def, link) {
-            self.ext_send(slot as usize, &bifrost_proto::ToApp::Open { url });
+        if let AppId::External(slot) = def {
+            if let Some(url) = link {
+                self.ext_send(slot as usize, &bifrost_proto::ToApp::Open { url });
+            }
+            let body = widgets_timeline::opened_body(&kind, family);
+            self.ext_send(slot as usize, &bifrost_proto::ToApp::ServiceEvent { service: "widgets_timeline".into(), event: "opened".into(), body: body.encode() });
         }
         self.dirty = true;
     }
@@ -1122,8 +1150,14 @@ impl Shell {
     fn run_widget_action(&mut self, i: usize, j: usize) {
         let Some((_, row)) = self.center_widget_rects().into_iter().nth(i) else { return };
         let (Some((app, kind)), Some(button)) = (row.widget.clone(), row.buttons.get(j)) else { return };
-        let id = button.id.clone();
-        let Ok(inv) = widgets_timeline::tap_action(&app, &kind, &id, self.notify.now()) else { return };
+        let _ = self.start_widget_action(app, kind, button.id.clone());
+    }
+
+    /// Runs the button `id` of `app`'s widget `kind` as a tap would: the shared path of a tap in the column and of
+    /// assistive technology pressing the button (`ax press os/widgets/...`). An error when the entry on screen has no
+    /// such button or a toggle still waits for its app.
+    pub(in crate::shell) fn start_widget_action(&mut self, app: String, kind: String, id: String) -> Result<(), String> {
+        let inv = widgets_timeline::tap_action(&app, &kind, &id, self.notify.now())?;
         std::thread::spawn(move || {
             let params: Vec<(&str, &str)> = inv.params.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
             let ok = match super::super::intents::run_with(&app, &inv.intent, &params, WIDGET_ACTION_WAIT) {
@@ -1136,6 +1170,8 @@ impl Shell {
             widgets_timeline::settle_action(&app, &kind, &id, ok);
         });
         self.notify.center.refresh_due = 0;
+        self.dirty = true;
+        Ok(())
     }
 
     /// Opens the desktop column (the menu bar clock, as on Golden Gate).
@@ -1300,7 +1336,7 @@ impl Shell {
     }
 
     fn draw_desk_center(&mut self, s: &mut Surface, t: f64) {
-        use super::super::ui::{FIELD_BG, FOCUS_INDIGO, LABEL, LABEL_2, LINK, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT, BAR_TEXT, BAR_TEXT_SHADOW, BAR_TEXT_SHADOW_ALPHA, NC_WEATHER_TINT, SYSTEM_RED};
+        use super::super::ui::{FIELD_BG, FOCUS_INDIGO, LABEL, LABEL_2, LINK, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT, BAR_TEXT, BAR_TEXT_SHADOW, BAR_TEXT_SHADOW_ALPHA, NC_WEATHER_TINT, NC_WIDGET_DARK_INK, SYSTEM_RED};
         let c = &self.notify.center;
         let p = c.progress(t).clamp(0.0, 1.0);
         if let Some((x, y, w, h)) = self.center_desk_rect().filter(|_| bifrost_render::glass::gpu()) {
@@ -1437,6 +1473,17 @@ impl Shell {
             let x = x + slide;
             let r = ui.pt(NC_CARD_R_PT);
             desk_card::tile(s, ShellSurface::NotificationPanel, (x, y, w, h), r, alpha);
+            // a widget's container background fills the tile with its system colour; its text turns white (dark on the
+            // light colours) like the Weather card's
+            if let Some(tint) = row.background {
+                s.fill_rrect(x, y, w, h, r, crate::gfx::scale(container_colour(tint), alpha));
+            }
+            let (ink, head_ink) = match row.background {
+                Some(tint) if tint.wants_light_text() => (WHITE, WHITE),
+                Some(_) => (NC_WIDGET_DARK_INK, NC_WIDGET_DARK_INK),
+                None => (label, secondary),
+            };
+            let head_alpha = if row.background.is_some() { alpha * 200 / 255 } else { alpha };
             // the entry's buttons: a capsule plate with a link-coloured label; a toggle that is on has a link plate
             // with a white label, and one waiting for its app is drawn lighter
             for (button, (bx, by, bw, bh)) in row.buttons.iter().zip(rects.iter().copied()) {
@@ -1460,11 +1507,19 @@ impl Shell {
                 tx += icon_d + ui.pt(NC_ICON_GAP_PT);
             }
             let room = x + w - pad - buttons_room - tx;
-            let head = ui.text(&ui.fit(&row.title, MAC_SUBHEAD_PT, room), MAC_SUBHEAD_PT, Weight::Regular, secondary);
-            let value = ui.text(&ui.fit(&row.text, MAC_HEADLINE_PT, room), MAC_HEADLINE_PT, Weight::Semibold, label);
-            let ly = y + (h - (head.h + value.h) as f32) / 2.0;
-            s.blit(&head, tx as i32, ly as i32, 255, alpha);
+            let head = ui.text(&ui.fit(&row.title, MAC_SUBHEAD_PT, room), MAC_SUBHEAD_PT, Weight::Regular, head_ink);
+            let value = ui.text(&ui.fit(&row.text, MAC_HEADLINE_PT, room), MAC_HEADLINE_PT, Weight::Semibold, ink);
+            // a Medium or Large widget's detail line, in footnote type under the value, when the row has room for it
+            let detail = (!row.detail.is_empty())
+                .then(|| ui.text(&ui.fit(&row.detail, MAC_FOOTNOTE_PT, room), MAC_FOOTNOTE_PT, Weight::Regular, head_ink))
+                .filter(|d| (head.h + value.h + d.h) as f32 <= h - ui.pt(NC_ITEM_GAP_PT));
+            let lines_h = head.h + value.h + detail.as_ref().map_or(0, |d| d.h);
+            let ly = y + (h - lines_h as f32) / 2.0;
+            s.blit(&head, tx as i32, ly as i32, 255, head_alpha);
             s.blit(&value, tx as i32, (ly + head.h as f32) as i32, 255, alpha);
+            if let Some(d) = &detail {
+                s.blit(d, tx as i32, (ly + (head.h + value.h) as f32) as i32, 255, head_alpha);
+            }
         }
         // Edit Widgets: a small glass capsule with a quiet label and a round close button beside it
         let ((ex, ey, ew, eh), close) = self.center_edit_rects();

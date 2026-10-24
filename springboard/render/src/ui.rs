@@ -34,6 +34,9 @@ pub const BAR_TEXT_SHADOW_ALPHA: u32 = 90;
 /// The Weather card in the Notification Center column: a blue plate laid over the glass (the same in Light and Dark,
 /// white text on it).
 pub const NC_WEATHER_TINT: u32 = pack(52, 108, 190, 225);
+/// Text on a widget whose container background is a light system colour (yellow, mint): near-black in both
+/// appearances, as the colour under it does not change with the appearance enough to carry white text.
+pub const NC_WIDGET_DARK_INK: u32 = pack(0, 0, 0, 230);
 /// Notification Center tiles (cards, Calendar, widget rows) and the desktop notification banners: lighter than a
 /// menu's tint so the desktop shows through the blur, light translucent tiles in Light as in the reference
 /// (27-Golden-Gate-Notification-Center.png). Straight alpha, as `glass::tint` takes it.

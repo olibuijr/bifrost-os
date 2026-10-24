@@ -6222,19 +6222,52 @@ the shell asks the app for a new timeline when the reload date passes. Each entr
 - A reload may carry `link` (`bifrost-app://app/path`, SDK `reload_rich`'s last argument): a tap on the row opens the
   app at it.
 
-Each row carries a spoken label (`Row::label`: the title, the text as the value and an "Actions:" hint naming the
-buttons, built with `ui::widget_ax`), returned as `label` by the `widgets` call.
+- `detail` (SDK `Rich::with_detail`): a third line under the value in footnote type. The Medium and Large sizes show
+  it when the row has room; Small does not.
+- `families: {small | medium | large: {title?, text?, detail?}}` (SDK `Variant`, `Rich::with_variant`): what each size
+  shows instead of the entry's own parts, the counterpart of a reference widget view that reads `widgetFamily` and
+  lays out each size on its own (`Text::for_family`). A part left out keeps the entry's; an unknown size is refused.
+- `background` (SDK `Rich::with_background`, `ContainerTint`): a system colour name (orange, yellow, green, mint, teal,
+  cyan, blue, indigo, purple, pink, brown, gray) that fills the row's tile, the reference `containerBackground` given
+  a colour. The shell resolves it to the named `system::*` colour for the appearance in effect and writes white text
+  on it (`NC_WIDGET_DARK_INK` on yellow and mint). Decision: red is left out, because red is kept for destructive
+  actions and the calendar's today. `ui::widget_render::shows_container_background` drops the background in the
+  accented and vibrant modes as the reference does; the shell has no tinted widget look yet, so it always draws in
+  full colour (`RENDERING_MODE`).
 
-**Tests.** `ui` widget_kind, widget_action, widget_column and widget_date; the service's `widgets_timeline::tests`
-(registration, sizes, clocks, buttons, toggles, validation); the SDK's `widgets_timeline::tests` (the JSON the calls
+**WidgetCenter (2026-10-24).** An app asks for new timelines with `reload_timelines {kind}` or `reload_all_timelines {}`
+(SDK `reload_timelines`, `reload_all_timelines`; the reference `reloadTimelines(ofKind:)` and `reloadAllTimelines()`):
+each of its widgets of that kind that the person has in the column gets one `reload` event on the next tick, however
+often it asked in between, and the request does not use up the dated reload. A widget taken off in Edit Widgets is not
+asked, as the reference asks only configured widgets. `current_configurations {}` (SDK `current_configurations`,
+`WidgetInfo`, `parse_configurations`; the reference `getCurrentConfigurations`) lists the placed widgets with their kind,
+size and option values. There is no reload budget: the reference limits background reloads per day; BifrOSt coalesces
+requests per tick instead.
+
+**Opened from a widget.** A click on a widget row sends the app `Open` with the widget's link (if any) and then the
+service event `opened {kind, family}` (SDK `Event::Opened`), the counterpart of the widget kind and family keys the
+reference attaches to the activity that opens the app.
+
+Each row carries a spoken label (`Row::label`: the title, the text and detail as the value and an "Actions:" hint
+naming the buttons, built with `ui::widget_ax`), returned as `label` by the `widgets` call. The element map has one
+`os/widgets/<title>` element per row (role `widget`) with a child per button or toggle; `ax press` on a child runs it
+like a tap (`Shell::start_widget_action`). While the column is open the AT-SPI bridge exports a Widgets list beside the
+menu bar and dock: one static text per widget (name, value, and the spoken label as its help text) and its buttons and
+toggles (`atspi::model::add_widgets`).
+
+**Tests.** `ui` widget_kind, widget_action, widget_column, widget_date and widget_render; the service's
+`widgets_timeline::tests` (registration, sizes, clocks, buttons, toggles, validation, reload requests, current
+configurations, size variants, backgrounds, the opened event); `shell::axmap::tests` and `atspi::model::tests`
+(widget elements); the SDK's `widgets_timeline::tests` (the JSON the calls
 send).
 
 **Apple gaps, recorded.** Apple runs a widget in its own extension process and starts it on demand; BifrOSt apps answer
 reload events themselves, and a button needs the app to be running (a tap on a button of an app that is not running
 fails, and a toggle goes back). There is no declarative widget view: an entry is a title, a value, live date text and
-buttons, and the shell draws the row. Accented and vibrant rendering modes (`ui::widget_render`), location and network
-grants (`ui::widget_access`), the AT-SPI export of the spoken label, push-driven reloads (no APNs) and the home-screen
-grid for third-party kinds are not built. `ui::widget_column::layout` (Block, Controller, DisplayMode) is still not
+buttons, a detail line, per-size variants and a background colour, and the shell draws the row. A tinted widget look
+(the accented and vibrant modes of `ui::widget_render` drawn by the shell), location and network grants
+(`ui::widget_access`), push-driven reloads (no APNs) and the home-screen grid for third-party kinds are not built. The
+shell's own built-in tiles (home screen, Today) are still pixel images without accessibility elements. `ui::widget_column::layout` (Block, Controller, DisplayMode) is still not
 called by the shell. The earlier note that the Control Center panel does not draw app controls is out of date: the
 panel draws one tile per control the user added and has an Edit Controls list (`shell/control_center.rs`).
 
