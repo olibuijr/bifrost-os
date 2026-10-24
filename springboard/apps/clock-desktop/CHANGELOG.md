@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.1 — 2026-10-24
+
+- A timer preset sets the duration pickers; Start starts the timer.
+- While a timer runs the right button pauses and resumes it; Add Timer in the toolbar sets up another one, so the
+  picker no longer comes back over the running timer.
+
 ## 1.6.0 — 2026-10-23
 
 - Alarm cards with the time, label and switch; delete with right-click or Delete.
