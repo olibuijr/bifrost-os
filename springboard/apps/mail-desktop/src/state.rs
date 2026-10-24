@@ -367,6 +367,9 @@ pub struct Compose {
     /// How many lines the message field is scrolled up from its end (the scroll wheel, `draw::scroll_message`); 0
     /// shows the end of the message, where the caret is. Typing scrolls back to the end.
     pub scroll_back: usize,
+    /// Why the last Send did not go out (an address that is not valid, no password saved, the server's answer). The
+    /// compose sheet shows it over its buttons, in the window of the message it is about; an edit clears it.
+    pub error: String,
 }
 
 impl Compose {
@@ -386,6 +389,7 @@ impl Compose {
             proofread: None,
             draft_id: String::new(),
             scroll_back: 0,
+            error: String::new(),
         };
         compose.styles = vec![Style::default(); compose.message().chars().count()];
         compose
@@ -400,6 +404,7 @@ impl Compose {
     /// style being typed in, text taken away takes its styles with it. Any edit clears the spelling marks, which no longer
     /// fit the text.
     pub fn edit(&mut self, change: impl FnOnce(&mut Form)) {
+        self.error.clear();
         let in_message = self.form.fields.get(self.form.focus).is_some_and(|f| f.label == "Message");
         if !in_message {
             change(&mut self.form);

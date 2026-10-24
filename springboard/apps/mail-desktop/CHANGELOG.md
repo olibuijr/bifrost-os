@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.17.2 — 2026-10-24
+
+- Clicks in the main window land where they are aimed again after a compose window closes (sent, saved, discarded or
+  closed): the main window took back its own size only on some of those paths, so a sidebar click could select a
+  message of the list.
+- Why a message was not sent (an address that is not valid, no password, the server's answer) shows in its compose
+  window, over the buttons, instead of in the main window's footer; an edit clears it.
+- The compose form fills its window, and the message field grows with the window.
+
 ## 0.17.1 — 2026-10-23
 
 - Rebuilt with the shared text-rendering fix so invisible formatting characters in message viewers no longer appear as missing-glyph boxes.
