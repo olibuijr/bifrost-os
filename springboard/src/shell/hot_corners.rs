@@ -151,7 +151,7 @@ impl Shell {
                 self.desk_show_desktop();
                 vec![]
             }
-            CornerAction::LockScreen => self.sleep_screen(),
+            CornerAction::LockScreen => self.lock_screen(),
             CornerAction::Search => {
                 self.open_quicksearch_hw(t);
                 vec![]

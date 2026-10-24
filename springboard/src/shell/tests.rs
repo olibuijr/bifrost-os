@@ -1335,6 +1335,38 @@
         assert!(l.is_empty() && l.msg == login::Msg::Wrong, "the field is cleared and says so");
     }
 
+    /// E2E N0: a lock after a login from the System menu's Lock Screen row (also the Lock Screen hot corner and
+    /// AssistiveTouch's Lock) went through `sleep_screen`, which on a desktop turned the display off: every key was
+    /// dropped, so no dot appeared and the session could not be unlocked. It now keeps the display on, opens the login
+    /// window and signs in again.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn a_desktop_lock_after_login_from_the_menu_can_be_unlocked() {
+        use desktop_bar::Action;
+        let mut sh = desktop_shell();
+        sh.login_backend = Some(std::sync::Arc::new(FixedLogin(login::Reply::Ok("tok2".into()))));
+        sh.screen = Screen::Home;
+        sh.anim = None;
+        sh.session_token = Some("tok".into());
+        let fx = sh.run_menu_action(Action::Lock, 1000.0);
+        assert!(sh.is_locked(), "the menu row locks");
+        assert!(sh.screen_on, "a desktop lock keeps the display on");
+        assert!(!fx.contains(&Effect::ScreenOff), "and never turns it off");
+        assert!(sh.session_token.is_none(), "the old token is dropped");
+        assert!(sh.login_open(), "the login window is up at once");
+        sh.hw_type(keyboard::Out::Text("p".into()), 1010.0);
+        sh.hw_type(keyboard::Out::Text("w".into()), 1020.0);
+        assert_eq!(sh.login.as_ref().map(login::Login::len), Some(2), "typing shows dots");
+        sh.hw_type(keyboard::Out::Enter, 1030.0);
+        for k in 0..200 {
+            sh.tick(1040.0 + k as f64 * 20.0);
+            if !sh.is_locked() { break; }
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        assert!(!sh.is_locked(), "the right password unlocks the second lock");
+        assert_eq!(sh.session_token.as_deref(), Some("tok2"));
+    }
+
     #[test]
     fn tablet_lock_screen_still_turns_the_screen_off() {
         let mut sh = shell();
