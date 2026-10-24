@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.10.26 — 2026-10-24
+
+- Modifier keys stay in step with the keyboard: the shell follows the window server's modifier state when keyboard focus enters or leaves it and on every modifier change, so a Shift or Cmd release that went to another window can no longer leave the key held (which turned every click in Mail into a range selection). Right Alt keeps working as AltGr on layouts where the window server reports it as Alt, and modifiers taken by event taps or Switch Control stay taken. The state report gains a `key_mods=` line.
+- Apps can ask for a window cascaded from their other windows (`WindowSpec::cascaded`, after AppKit's `cascadeTopLeftFromPoint:`). The shell places such a window once; a window the person moved keeps its place when it is shown again.
+- Ships with Mail 0.17.3: switching mailboxes shows the last listing at once and refreshes it in place, and message viewer windows open cascaded beside the main window instead of over its list.
+
 ## 0.10.25 — 2026-10-24
 
 Fixes from the 0.10.24 end-to-end pass on Midget.
