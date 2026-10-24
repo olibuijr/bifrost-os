@@ -162,15 +162,13 @@ pub fn wallpaper_rect(tw: usize, th: usize, x: i32, y: i32, (sw, sh): (usize, us
     [(sw as f32 - w) / 2.0, (sh as f32 - h) / 2.0, w, h]
 }
 
-/// A live wallpaper (an animated look) re-blurs its glass material at most this often; the sharp picture under the
-/// desktop is still replaced with every frame. The looks move slowly, so the material lagging by up to this long is
-/// not visible, and the full blur pyramid is not rebuilt four times a second.
-pub const LIVE_BLUR_EVERY_MS: u128 = 2_000;
-
-/// True when a new wallpaper frame may keep the blur already made: a live frame of the same size whose blur is younger
-/// than `LIVE_BLUR_EVERY_MS`. A new still, a new size or an old blur rebuilds the pyramid.
-pub fn keeps_blur(live: bool, same_size: bool, blur_age_ms: Option<u128>) -> bool {
-    live && same_size && blur_age_ms.is_some_and(|ms| ms < LIVE_BLUR_EVERY_MS)
+/// True when a new wallpaper frame may keep the blur already made: a frame of the animated look `live` (its id) whose
+/// blur was built from a frame of that same look (`blurred`) at the same size. The blur is built once per look and
+/// size; the sharp picture under the desktop is still replaced with every frame. The looks move slowly and the glass
+/// material is a heavy blur, so it does not follow the motion, and the full pyramid (a full-screen texture and its
+/// chain) is never rebuilt per frame. A new still, a new look or a new size rebuilds it.
+pub fn keeps_blur(live: Option<u8>, blurred: Option<u8>, same_size: bool) -> bool {
+    live.is_some() && live == blurred && same_size
 }
 
 /// Night Shift fades in and out over this long (ms), not in one step.
@@ -211,8 +209,8 @@ pub struct Presenter {
     /// the wallpaper texture and the screen rect it covers (`wallpaper_rect`), never sized from the texture alone
     wallpaper: Option<(Tex, [f32; 4])>,
     blur: Vec<Tex>,
-    /// when the blur pyramid was last built (a live look keeps it for `LIVE_BLUR_EVERY_MS`)
-    blurred_at: Option<std::time::Instant>,
+    /// the animated look the blur pyramid was built from (None: a still); its later frames keep it (`keeps_blur`)
+    blurred_live: Option<u8>,
     /// Night Shift: the white point every presented surface is multiplied by in the final pass (1.0 = off)
     night: [f32; 3],
     /// glass rects were owed: the next present draws even with empty content damage
@@ -414,7 +412,7 @@ impl Presenter {
             surfaces: HashMap::new(),
             wallpaper: None,
             blur: Vec::new(),
-            blurred_at: None,
+            blurred_live: None,
             night: [1.0; 3],
             flush: false,
             wallpaper_key: (0, 0, 0, 0, (0, 0)),
@@ -610,9 +608,9 @@ impl Presenter {
 
     /// Uploads the wallpaper (once per change) and blurs it on the GPU. It is drawn covering `screen` (`wallpaper_rect`),
     /// whatever the texture's size; (`x`, `y`) only place it when no screen size is known. `live` marks a frame of an
-    /// animated look: its blur is rebuilt at most every `LIVE_BLUR_EVERY_MS` (`keeps_blur`), the sharp picture every frame.
+    /// animated look (its id): its blur is built once per look and size (`keeps_blur`), the sharp picture every frame.
     /// Returns false when the rebuild did not land: nothing is kept, the key is not stored, and the next call tries again.
-    pub fn set_wallpaper(&mut self, wp: View, x: i32, y: i32, screen: (usize, usize), live: bool) -> bool {
+    pub fn set_wallpaper(&mut self, wp: View, x: i32, y: i32, screen: (usize, usize), live: Option<u8>) -> bool {
         self.current();
         let key = (wp.px.as_ptr() as usize, wp.px.len(), x, WALLPAPER_GEN.load(std::sync::atomic::Ordering::Relaxed), screen);
         if key == self.wallpaper_key && self.wallpaper.is_some() {
@@ -620,7 +618,7 @@ impl Presenter {
         }
         let rect = wallpaper_rect(wp.w, wp.h, x, y, screen);
         let same_size = self.wallpaper.as_ref().is_some_and(|(t, _)| (t.w, t.h) == (wp.w, wp.h)) && self.blur.len() == LEVELS - 1;
-        if keeps_blur(live, same_size, self.blurred_at.map(|at| at.elapsed().as_millis())) && wp.px.len() >= wp.w * wp.h {
+        if keeps_blur(live, self.blurred_live, same_size) && wp.px.len() >= wp.w * wp.h {
             // the sharp picture is replaced in place (no new texture), the blur pyramid stays
             let gl = self.gl;
             let tex = self.wallpaper.as_ref().map_or(0, |(t, _)| t.tex);
@@ -706,14 +704,14 @@ impl Presenter {
                 self.free(b);
             }
             self.wallpaper = None;
-            self.blurred_at = None;
+            self.blurred_live = None;
             self.wallpaper_key = (0, 0, 0, 0, (0, 0));
             bifrost_core::log::shell_logger("presenter").error(format!("wallpaper blur failed ({}x{}, {made} of {} levels made): retrying on the next frame", wp.w, wp.h, LEVELS - 1));
             return false;
         }
         self.wallpaper_key = key;
         self.wallpaper = Some((t, rect));
-        self.blurred_at = Some(std::time::Instant::now());
+        self.blurred_live = live;
         for s in self.surfaces.values_mut() {
             for d in &mut s.owed {
                 d.all();
@@ -1262,12 +1260,12 @@ mod frame_feed_tests {
     }
 
     #[test]
-    fn a_live_frame_keeps_a_young_blur_and_a_still_never_does() {
-        assert!(keeps_blur(true, true, Some(250)));
-        assert!(!keeps_blur(true, true, Some(LIVE_BLUR_EVERY_MS)), "an old blur is rebuilt");
-        assert!(!keeps_blur(true, false, Some(10)), "a new size rebuilds");
-        assert!(!keeps_blur(true, true, None), "no blur yet");
-        assert!(!keeps_blur(false, true, Some(10)), "a new still always rebuilds");
+    fn a_live_frame_keeps_its_looks_blur_and_a_still_never_does() {
+        assert!(keeps_blur(Some(1), Some(1), true), "later frames of the same look keep the blur, however old");
+        assert!(!keeps_blur(Some(1), Some(1), false), "a new size rebuilds");
+        assert!(!keeps_blur(Some(2), Some(1), true), "a new look rebuilds");
+        assert!(!keeps_blur(Some(1), None, true), "a blur from a still (or none yet) is rebuilt");
+        assert!(!keeps_blur(None, None, true), "a new still always rebuilds");
     }
 
     #[test]
