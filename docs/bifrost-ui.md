@@ -6292,11 +6292,32 @@ Corrections found while reading the code (the parity rows said otherwise): `Draw
 (`show_glyphs`, `show_glyphs_at_positions`, `show_text_at_point`), `ui::geometry::Vector` already exists, and
 `ui/src/print.rs` already paginates text (`text_pages`) and writes a `PrintOperation` to PDF.
 
-Gaps that remain: Boolean results are polygons, not curves; no `DrawContext` that writes PDF pages (the SDK writer has its
-own page calls); `Function` has no callback form; PDF selection has no per-glyph rectangles because the extractor keeps
+Gaps that remain: Boolean results are polygons, not curves; PDF selection has no per-glyph rectangles because the extractor keeps
 only a line's baseline and size; quartz filters do not rewrite a PDF read from elsewhere and the print sheet offers none;
 no lookup-table profile authoring; the PDF writer embeds no ICC profile; display and window services still need a live
 check on Midget.
+
+## Core Graphics: PDF page context, font faces, function callbacks, WebP writing (2026-10-24, `parity/core-graphics`)
+
+Host-tested only (unit tests next to the code, not yet run on Midget), so the rows stay `partial`. The API names were
+measured from the 26A434 reference: the CoreGraphics bridgesupport (sha256
+`3fdc9622cc0a9d1416a6122eea42491d1766430626999af9c8d877d594a1e4f5`; REA cannot open XML, so it was read as text) lists
+the `CGPDFContext*`, `kCGPDFContext*` box and information keys, `CGFont*` and `CGFunctionCreate`; the page-box drawing
+entry of the PDF service was located with REA (evidence `ev_d9feb589d45491d4c6bab88adb3c6711f1e8cf946b031de178d486253a0a69d1`).
+No reference code, strings or data were copied.
+
+| Apple | BifrOSt |
+|---|---|
+| `CGPDFContextCreate`, `BeginPage` (media, crop, bleed, trim, art boxes), `EndPage`, `Close` | `cg::pdf::context::PdfContext` (`new(media, PdfInfo)`, `begin_page(Option<PageBoxes>)`, `end_page`, `close`), re-exported as `bifrost_app::graphics_pdf::PdfContext`. US Letter is the default page, every page starts with a fresh state in PDF default user space (origin bottom left, y up), and drawing outside a page is ignored, as on the reference. Open saves and marked content are closed at the end of a page. |
+| Drawing into a PDF context | The `DrawContext` calls a PDF can hold: save and restore, the CTM, line width, caps, joins, miter limit, dash, flatness, grey, RGB and CMYK fill and stroke colours, alpha and blend modes (`/ExtGState`; the Porter-Duff and additive modes have no PDF blend mode and are written as Normal), paths with curves, `fill_path`, `eo_fill_path`, `stroke_path`, `draw_path`, rect and ellipse helpers, line segments, `clip`, `eo_clip`, `clip_to_rect`, `clip_to_path`, `draw_linear_gradient`, `draw_radial_gradient`, `draw_shading` and gradient or shading fill and stroke paints (vector `sh` shadings; the colour function is sampled into sRGB), and `draw_image` (RGB with an `/SMask` for alpha). A pattern paint is written as an image of the pattern clipped to the shape (about two pixels per point). |
+| Text in a PDF context | `set_font(StandardFace)` (the twelve standard Latin faces), `set_font_size`, `set_character_spacing`, `set_text_matrix`, `set_text_drawing_mode` (fill or invisible), `show_text`, `show_text_at_point`, `text_advance`. The text is real PDF text in WinAnsi, so it can be selected and searched. Not matched: embedding a TrueType or OpenType face, so other faces and scripts cannot be written yet. |
+| `CGPDFContextSetURLForRect`, `SetDestinationForRect`, `AddDestinationAtPoint`, `SetOutline`, `AddDocumentMetadata`, `kCGPDFContextTitle`, `Author`, `Subject`, `Keywords`, `Creator` | `set_url_for_rect`, `set_destination_for_rect`, `add_destination_at_point` (catalog `/Dests`), `set_outline(Vec<PdfOutlineItem>)` (nested), `add_document_metadata` (XML stream), `PdfInfo`. |
+| `CGPDFContextBeginTag`, `BeginMarkedContentSequence` | `begin_marked_content(tag)` and `end_marked_content` write `BMC`/`EMC`. Not matched: there is no structure tree, so tags carry no logical structure. |
+| Not built | Encryption and passwords (`kCGPDFContextOwnerPassword`, `UserPassword`, `AllowsPrinting`, `AllowsCopying`, `EncryptionKeyLength`, `AccessPermissions`), `kCGPDFContextCreateLinearizedPDF`, `kCGPDFContextCreatePDFA`, output intents, `SetIDTree`, `SetParentTree`, `SetPageTagStructureTree`, object references, and shadows (the PDF imaging model has none). |
+| `CGFont` (`CreateWithDataProvider`, `CreateWithFontName`, `Get*`, `Copy*`, `CreateCopyWithVariations`) | `cg::face::CgFont`: `from_data`, `from_name(&FontManager, name)`, `postscript_name`, `full_name`, `units_per_em`, `ascent`, `descent`, `leading`, `cap_height`, `x_height`, `italic_angle`, `font_bbox`, `number_of_glyphs`, `glyph_advances`, `glyph_bboxes` (font units), `glyph_with_name`, `glyph_name`, `table_tags`, `table`, `variation_axes`, `variations`, `with_variations` (values clamp to the axis, unknown tags are dropped). Not matched: `GetStemV` (no stem width in the TrueType tables we read), PostScript subsets and encodings (nothing prints PostScript). |
+| `CGContextSetFont`, `ShowGlyphsAtPositions` | `DrawContext::set_font(CgFont)` (saved with the state), `font`, `show_font_glyphs_at_positions`, `show_font_glyphs`, `show_font_text`. Not matched: a face's variations are not applied when the context draws it. |
+| `CGFunctionCreate` with an evaluate callback | `cg::paint::Function::callback(domain, outputs, range, evaluate)`: the closure is called per input (clamped to the domain), its output padded or cut to the declared count, non-finite values zeroed and each value clamped to its range. Two callback functions are equal only when they share the callback. |
+| `CGImageDestination` for WebP | Comes from `parity/image-io`, not from this branch (its own lossless encoder was dropped in the merge): `cg::imageio::webp::encode(w, h, rgba, exif, icc, xmp)` writes a lossless still WebP through the `image-webp` crate (MIT or Apache-2.0), opaque pictures without alpha, and an EXIF block, ICC profile or XMP packet in an extended (VP8X) file. `Format::can_write` is true for every format, so `ImageDestination`, `graphics_imageio::encode` and `PictureWriter` write WebP. Not matched: lossy WebP and animated WebP writing. |
 
 ## SDK modules added 2026-10-17 (parity waves 1 to 8)
 
