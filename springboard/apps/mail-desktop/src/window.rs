@@ -740,6 +740,8 @@ impl MailWindow {
             self.next_poll = t + POLL_MS;
             self.poll();
         }
+        // a mailbox shown from its kept rows selects its message again without waiting for the listing
+        self.take_reopen(&ctx.ui);
         self.run_queue(ctx);
         self.ensure_address_book(ctx);
         self.read_open_message(ctx);
@@ -1020,6 +1022,17 @@ impl MailWindow {
         self.scroll_list_to(ui, index);
         self.dirty = true;
         true
+    }
+
+    /// Back in a mailbox: the message it had selected is selected and opened again, from its kept rows at once or from
+    /// the first listing.
+    fn take_reopen(&mut self, ui: &Ui) {
+        let Some(uid) = self.mail.reopen.take() else { return };
+        self.open_message(uid);
+        if let Some(index) = self.mail.visible_lines().iter().position(|l| l.row.uid == uid) {
+            self.scroll_list_to(ui, index);
+        }
+        self.dirty = true;
     }
 
     /// Scrolls the message list just far enough that line `index` is in view.
@@ -1793,13 +1806,7 @@ impl MailWindow {
                     self.note(format!("{}: {mailbox} read, {count} message{}", self.account_name(&account), if count == 1 { "" } else { "s" }));
                     self.mail.drafts_mailbox = listing.drafts.clone();
                     let notices = self.mail.apply_listing_of(&account, &mailbox, listing.uid_validity, listing.mailboxes, listing.messages);
-                    // back in a mailbox: the message it had selected is selected and opened again
-                    if let Some(uid) = self.mail.reopen.take() {
-                        self.open_message(uid);
-                        if let Some(index) = self.mail.visible_lines().iter().position(|l| l.row.uid == uid) {
-                            self.scroll_list_to(&ctx.ui, index);
-                        }
-                    }
+                    self.take_reopen(&ctx.ui);
                     // a message a rule moves or reads raises no notification
                     let quiet = self.apply_rules_to_arrivals();
                     for notice in notices {

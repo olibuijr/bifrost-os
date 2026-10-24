@@ -929,6 +929,10 @@ pub struct Mail {
     /// The listing brought back the message selected when the mailbox was left: the window opens it (and fetches its
     /// text) and takes this.
     pub reopen: Option<u32>,
+    /// The last rows of each mailbox not shown, by (account id, mailbox): a mailbox listed before shows them at once
+    /// when it is shown again and its listing replaces them in place (only a mailbox never listed shows Loading).
+    /// Kept for this run only.
+    listings: HashMap<(String, String), Vec<Row>>,
 }
 
 impl Mail {
@@ -984,6 +988,7 @@ impl Mail {
             remembered: HashMap::new(),
             restore: None,
             reopen: None,
+            listings: HashMap::new(),
         }
     }
 
@@ -1031,13 +1036,24 @@ impl Mail {
         if index >= self.accounts.len() {
             return;
         }
-        // the old account's selection is kept under its own id before the account changes
+        // the old account's selection and rows are kept under its own id before the account changes
         self.remember_selection();
+        self.stash_rows();
         self.open = None;
         self.clear_selection();
         self.account = index;
         self.mailboxes = vec![INBOX.to_string()];
-        self.show_mailbox(INBOX);
+        self.enter_mailbox(INBOX);
+    }
+
+    /// Keeps the rows of the shown mailbox, for showing them at once when it is shown again. An empty list is not
+    /// kept: it looks the same as a mailbox never listed.
+    fn stash_rows(&mut self) {
+        let Some(account) = self.current().map(|a| a.id.clone()) else { return };
+        let rows = std::mem::take(&mut self.rows);
+        if !rows.is_empty() {
+            self.listings.insert((account, self.mailbox.clone()), rows);
+        }
     }
 
     /// Keeps the selected message of the shown mailbox, for coming back to it.
@@ -1048,15 +1064,29 @@ impl Mail {
         }
     }
 
-    /// Shows mailbox `name` of the shown account. The selection of the mailbox left is remembered, and the one this
-    /// mailbox had comes back once its listing arrives (as macOS Mail keeps a selection per mailbox).
+    /// Shows mailbox `name` of the shown account. The selection and rows of the mailbox left are kept. A mailbox listed
+    /// before shows its last rows at once, with the message it had selected, and the listing asked for next refreshes
+    /// them in place (as macOS Mail keeps a list and a selection per mailbox).
     pub fn show_mailbox(&mut self, name: &str) {
         self.remember_selection();
+        self.stash_rows();
+        self.enter_mailbox(name);
+    }
+
+    /// Shows mailbox `name` of the shown account from what is kept of it, without keeping anything of the one left.
+    fn enter_mailbox(&mut self, name: &str) {
         let account = self.current().map(|a| a.id.clone()).unwrap_or_default();
-        self.restore = self.remembered.get(&(account, name.to_string())).copied();
+        let key = (account, name.to_string());
+        let remembered = self.remembered.get(&key).copied();
         self.reopen = None;
         self.mailbox = name.to_string();
-        self.rows.clear();
+        self.rows = self.listings.remove(&key).unwrap_or_default();
+        // the remembered message comes back now when the kept rows have it, else with the first listing
+        self.restore = None;
+        match remembered {
+            Some(uid) if self.rows.iter().any(|r| r.uid == uid) => self.reopen = Some(uid),
+            other => self.restore = other,
+        }
         self.bodies.clear();
         self.attachments.clear();
         self.found = None;
@@ -1112,6 +1142,9 @@ impl Mail {
                     self.reopen = Some(uid);
                 }
             }
+        } else if let Some(account) = self.accounts.iter().find(|a| a.id == account_id) {
+            // a mailbox not shown keeps its listing for when it is shown
+            self.listings.insert((account.id.clone(), mailbox.to_string()), newest_first(messages));
         }
         notices
     }
@@ -2197,7 +2230,14 @@ impl Mail {
     /// signature, the other addresses and the favourites. Another account becomes the shown one.
     pub fn forget_account(&mut self, id: &str) {
         let Some(index) = self.accounts.iter().position(|a| a.id == id) else { return };
+        // what is shown is kept under its own account first: the indices shift and another account is shown next
+        self.remember_selection();
+        self.stash_rows();
+        self.open = None;
+        self.clear_selection();
         self.accounts.remove(index);
+        self.listings.retain(|(account, _), _| account != id);
+        self.remembered.retain(|(account, _), _| account != id);
         self.passwords.remove(id);
         self.baseline.remove(id);
         self.validity.remove(id);
@@ -2787,24 +2827,56 @@ mod tests {
         mail.apply_listing("work", "Drafts", vec![], vec![listed(7, "d")]);
         assert_eq!(mail.reopen, None, "Drafts had no selection");
         mail.show_mailbox(INBOX);
-        assert_eq!(mail.reopen, None, "nothing until the listing is here");
-        mail.apply_listing("work", INBOX, vec![], vec![listed(1, "a"), listed(2, "b")]);
-        assert_eq!(mail.reopen, Some(2), "the inbox selects its message again");
-        // another account's inbox is another mailbox
+        assert_eq!(mail.reopen, Some(2), "the inbox's kept rows select its message again at once");
         mail.reopen = None;
+        mail.apply_listing("work", INBOX, vec![], vec![listed(1, "a"), listed(2, "b")]);
+        assert_eq!(mail.reopen, None, "the listing does not select it a second time");
+        // another account's inbox is another mailbox
         mail.open_message(1);
         mail.show_account(1);
+        assert_eq!(mail.reopen, None);
         mail.apply_listing("home", INBOX, vec![], vec![listed(1, "a")]);
         assert_eq!(mail.reopen, None);
         mail.show_account(0);
-        mail.apply_listing("work", INBOX, vec![], vec![listed(1, "a"), listed(2, "b")]);
         assert_eq!(mail.reopen, Some(1));
-        // a message that is gone is not selected
+        // a message that is gone is not selected: the inbox is listed without it while Drafts is shown
         mail.reopen = None;
         mail.show_mailbox("Drafts");
+        mail.apply_listing("work", INBOX, vec![], vec![listed(2, "b")]);
         mail.show_mailbox(INBOX);
+        assert_eq!(mail.reopen, None);
         mail.apply_listing("work", INBOX, vec![], vec![listed(2, "b")]);
         assert_eq!(mail.reopen, None);
+    }
+
+    #[test]
+    fn a_mailbox_listed_before_shows_its_rows_at_once() {
+        let uids = |mail: &Mail| mail.rows.iter().map(|r| r.uid).collect::<Vec<_>>();
+        let mut mail = Mail::new(vec![account("work"), account("home")]);
+        mail.apply_listing("work", INBOX, vec![], vec![listed(1, "a"), listed(2, "b")]);
+        mail.show_mailbox("Sent");
+        assert!(mail.rows.is_empty(), "a mailbox never listed starts empty (Loading)");
+        mail.apply_listing("work", "Sent", vec![], vec![listed(5, "s")]);
+        // the inbox is listed in the background while Sent is shown: the newer listing is kept
+        mail.apply_listing("work", INBOX, vec![], vec![listed(1, "a"), listed(2, "b"), listed(3, "c")]);
+        assert_eq!(uids(&mail), vec![5], "a listing of another mailbox leaves the shown rows alone");
+        mail.show_mailbox(INBOX);
+        assert_eq!(uids(&mail), vec![3, 2, 1], "the inbox shows its last listing without waiting");
+        mail.apply_listing("work", INBOX, vec![], vec![listed(2, "b"), listed(3, "c")]);
+        assert_eq!(uids(&mail), vec![3, 2], "the next listing refreshes it in place");
+        mail.show_mailbox("Sent");
+        assert_eq!(uids(&mail), vec![5]);
+        // each account keeps its own rows, and a forgotten account's are dropped
+        mail.show_account(1);
+        assert!(mail.rows.is_empty(), "the other account's inbox was never listed");
+        mail.apply_listing("home", INBOX, vec![], vec![listed(9, "h")]);
+        mail.show_account(0);
+        assert_eq!(uids(&mail), vec![3, 2]);
+        mail.show_account(1);
+        assert_eq!(uids(&mail), vec![9]);
+        mail.forget_account("work");
+        assert_eq!(uids(&mail), vec![9], "the account left shows its own inbox");
+        assert!(mail.listings.keys().all(|(account, _)| account == "home"));
     }
 
     #[test]
