@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.13.0
+
+- Upstream pdfcraft v0.13.0.
+  > [!NOTE]
+  > **FreeBSD aarch64 is dropped from this release.** We had to cut releases, and we cannot build this target within the 5-hour CI limit for any of the Craft apps, so we are dropping it for now. This is a known blocker, flagged for a future fix in storytold/craft-common-actions#39. FreeBSD x86_64 and every other platform are included.
+  ## What's Changed
+  * M14: recover existing macOS PDF associations after open and save by @skylartaylor in https://github.com/storytold/pdfcraft/pull/3558
+  **Full Changelog**: https://github.com/storytold/pdfcraft/compare/v0.12.0...v0.13.0
+
 ## 0.12.0
 
 - Upstream pdfcraft v0.12.0.
