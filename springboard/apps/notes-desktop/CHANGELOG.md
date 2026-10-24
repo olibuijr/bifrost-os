@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.24.1 — 2026-10-24
+
+- Bold, Italic and the other text styles on a selection that spans several lines style each line on its own, after its heading or list marker, so the whole selection turns bold instead of showing the markers as text; the same command takes the style off again.
+
 ## 1.24.0 — 2026-10-23
 
 - Text selection with the mouse (drag, double and triple click, Shift-click) and the standard editing keys; Cut, Copy, Paste and Select All work and are enabled in the Edit menu.

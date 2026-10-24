@@ -320,6 +320,106 @@ pub fn toggle_wrap(text: &str, sel: Range<usize>, marker: &str) -> Replace {
     Replace { range: a..b, with: format!("{marker}{inner}{marker}"), select: a + ml..b + ml }
 }
 
+/// Where `marker` already wraps `chars[s..e]`: the outer range (markers included) and the inner text's range. Each
+/// marker may sit just outside the range or be its own first or last chars (a selection that runs across a line end
+/// takes in the closing marker of that line). A lone `*` never matches half of `**`.
+fn wrapped_by(chars: &[char], s: usize, e: usize, m: &[char]) -> Option<(Range<usize>, Range<usize>)> {
+    let ml = m.len();
+    let at = |i: usize| i + ml <= chars.len() && chars[i..i + ml] == *m;
+    let star = ml == 1 && m[0] == '*';
+    // for `*`: no star just before `l` or at `r`, so the marker at `l` is not one half of `**`
+    let lone = |l: usize, r: usize| !star || ((l == 0 || chars[l - 1] != '*') && chars.get(r) != Some(&'*'));
+    let left = if s >= ml && at(s - ml) && lone(s - ml, s) {
+        (s - ml, s)
+    } else if at(s) && lone(s, s + ml) {
+        (s, s + ml)
+    } else {
+        return None;
+    };
+    let right = if at(e) && lone(e, e + ml) {
+        (e, e + ml)
+    } else if e >= ml && at(e - ml) && lone(e - ml, e) {
+        (e - ml, e)
+    } else {
+        return None;
+    };
+    (left.1 <= right.0 && left.0 < right.0).then(|| (left.0..right.1, left.1..right.0))
+}
+
+/// Cmd+B (and the other inline styles) on a selection: Markdown emphasis lives inside one line, so a selection that
+/// covers several lines is styled line by line. Each line's part of the selection, without its block marker (`# `,
+/// `- [ ] `, ...) and without the spaces at its ends, is wrapped in `marker`; blank parts are left alone. When every
+/// part is already wrapped the markers come off instead. `select` covers the styled text from the first part to the
+/// last, so pressing the key again toggles back. Within one line this is `toggle_wrap` with the block marker kept
+/// outside the emphasis.
+pub fn toggle_wrap_lines(text: &str, sel: Range<usize>, marker: &str) -> Replace {
+    let chars: Vec<char> = text.chars().collect();
+    let m: Vec<char> = marker.chars().collect();
+    let ml = m.len();
+    let (a, b) = (sel.start.min(chars.len()), sel.end.min(chars.len()));
+    let (a, b) = (a.min(b), a.max(b));
+    if a == b {
+        return toggle_wrap(text, a..b, marker);
+    }
+    // the lines the selection touches, and each line's styled part
+    let first = chars[..a].iter().rposition(|c| *c == '\n').map_or(0, |i| i + 1);
+    let last = chars[b..].iter().position(|c| *c == '\n').map_or(chars.len(), |i| b + i);
+    let mut parts = vec![];
+    let mut ls = first;
+    while ls <= last {
+        let le = chars[ls..last].iter().position(|c| *c == '\n').map_or(last, |i| ls + i);
+        let line: String = chars[ls..le].iter().collect();
+        let mut s = a.max(ls + classify(&line).prefix.min(le - ls));
+        let mut e = b.min(le);
+        while s < e && chars[s].is_whitespace() {
+            s += 1;
+        }
+        while e > s && chars[e - 1].is_whitespace() {
+            e -= 1;
+        }
+        if s < e {
+            parts.push((s, e));
+        }
+        ls = le + 1;
+    }
+    if parts.is_empty() {
+        return Replace { range: a..b, with: chars[a..b].iter().collect(), select: a..b };
+    }
+    let found: Vec<_> = parts.iter().map(|&(s, e)| wrapped_by(&chars, s, e, &m)).collect();
+    let unwrap = found.iter().all(Option::is_some);
+    // rebuild the touched lines, mapping the first part's start and the last part's end into the new text
+    let mut with = String::new();
+    let (mut at, mut len) = (first, 0usize);
+    let (mut sel_a, mut sel_b) = (first, first);
+    for (k, &(s, e)) in parts.iter().enumerate() {
+        // a part that is already styled is left as it is when the others get the style
+        let wrap = !unwrap && found[k].is_none();
+        let (outer, inner) = match &found[k] {
+            Some(f) if unwrap => f.clone(),
+            _ => (s..e, s..e),
+        };
+        let keep: String = chars[at..outer.start].iter().collect();
+        len += keep.chars().count();
+        with.push_str(&keep);
+        if k == 0 {
+            sel_a = first + len + if wrap { ml } else { 0 };
+        }
+        let body: String = chars[inner.clone()].iter().collect();
+        if wrap {
+            len += inner.len() + 2 * ml;
+            with.push_str(&format!("{marker}{body}{marker}"));
+            sel_b = first + len - ml;
+        } else {
+            len += inner.len();
+            with.push_str(&body);
+            sel_b = first + len;
+        }
+        at = outer.end;
+    }
+    with.extend(chars[at..last].iter());
+    Replace { range: first..last, with, select: sel_a..sel_b }
+}
+
 /// A web address as it goes into a link: a missing scheme becomes `https://`, spaces and brackets are escaped. `None`
 /// when nothing is left after the scheme.
 fn link_target(raw: &str) -> Option<String> {
@@ -523,6 +623,42 @@ mod tests {
         assert_eq!(r.with, "i");
         let r = toggle_wrap("**b**", 2..3, "*");
         assert_eq!(r.with, "*b*", "italic does not unwrap half of a bold pair");
+    }
+
+    #[test]
+    fn wrapping_a_multi_line_selection_styles_each_line_inside_its_block_marker() {
+        // Cmd+A, Cmd+B (E2E W2-2): every line becomes bold on its own, the title keeps its "# " outside the markers
+        let text = "# Title\n\nbody text\n- item ";
+        let r = toggle_wrap_lines(text, 0..text.chars().count(), "**");
+        assert_eq!(r.range, 0..text.chars().count());
+        assert_eq!(r.with, "# **Title**\n\n**body text**\n- **item** ");
+        let chars: Vec<char> = r.with.chars().collect();
+        assert_eq!(chars[r.select.clone()].iter().collect::<String>(), "Title**\n\n**body text**\n- **item");
+        for line in r.with.lines().filter(|l| !l.trim().is_empty()) {
+            let content: String = line.chars().skip(classify(line).prefix).collect();
+            assert!(spans(&content, 0).iter().any(|s| s.style == Style::Bold && !s.marker), "{line} is bold");
+        }
+        assert_eq!(classify(r.with.lines().next().unwrap()).block, Block::Title, "the title is still a title");
+        // pressing it again with that selection takes the markers off
+        let back = toggle_wrap_lines(&r.with, r.select.clone(), "**");
+        assert_eq!(back.with, text);
+        // a part that is already bold stays as it is while the rest gets the style
+        let mixed = toggle_wrap_lines("**a**\nb", 0..7, "**");
+        assert_eq!(mixed.with, "**a**\n**b**");
+    }
+
+    #[test]
+    fn wrapping_within_one_line_matches_toggle_wrap() {
+        let r = toggle_wrap_lines("a word b", 2..6, "**");
+        assert_eq!((r.range, r.with.as_str(), r.select), (0..8, "a **word** b", 4..8));
+        let r = toggle_wrap_lines("a **word** b", 4..8, "**");
+        assert_eq!((r.with.as_str(), r.select), ("a word b", 2..6));
+        let r = toggle_wrap_lines("## Heading", 0..10, "*");
+        assert_eq!(r.with, "## *Heading*", "the heading marker stays outside");
+        let r = toggle_wrap_lines("x **b** y", 4..5, "*");
+        assert_eq!(r.with, "x ***b*** y", "italic does not unwrap half of a bold pair");
+        let r = toggle_wrap_lines("a\n\nb", 1..3, "**");
+        assert_eq!(r.with, "a\n\nb", "a selection of blank lines changes nothing");
     }
 
     #[test]
