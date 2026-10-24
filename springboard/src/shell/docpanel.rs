@@ -2283,10 +2283,13 @@ pub(crate) mod tests {
         fs::remove_dir_all(&d).unwrap();
     }
 
-    /// A desktop shell with an app on a test channel in slot 0 and a broker over a scratch home.
+    /// A signed-in desktop shell with an app on a test channel in slot 0 and a broker over a scratch home. The test shell
+    /// starts at the lock screen, which owns the keyboard (E2E N0: `hw_menu_key` and `hw_type` give a locked screen's
+    /// keys to the login window), so the person using the app is signed in first.
     fn shell_with_app(tag: &str) -> (PathBuf, super::super::Shell, bifrost_proto::sys::Channel) {
         let (d, o) = scratch(tag);
         let mut sh = super::super::tests::desktop_shell();
+        sh.screen = super::super::Screen::Home;
         let (mine, peer) = bifrost_proto::sys::socketpair_pair().unwrap();
         let cfg = sh.ext_cfg();
         sh.ext = vec![Some(super::super::apphost::AppHost::with_channel("is.example.editor", mine, None, cfg))];
@@ -2346,8 +2349,6 @@ pub(crate) mod tests {
     fn the_wheel_over_the_panel_never_clicks_and_never_reaches_the_window_under_it() {
         ALLOW.with(|a| a.set(true));
         let (d, mut sh, peer) = shell_with_app("e2e-wheel");
-        // the unlocked desktop: a locked shell takes no clicks on the desktop bar's popups at all
-        sh.screen = super::super::Screen::Home;
         ask(&peer, &mut sh, ToShell::DocOpen { request: 3, mode: DocMode::Read, title: String::new(), filters: vec![] });
         let (left, top, w, _) = sh.doc_panel_rect().expect("the panel is up");
         let p = sh.doc_panel.as_ref().unwrap();
