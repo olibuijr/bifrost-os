@@ -4,7 +4,7 @@
     Copyright 2026 BifrOSt. Private protocol of the BifrOSt window server (docs/bifrost-ui.md, "Window level").
   </copyright>
 
-  <interface name="bifrost_window_level_manager_v1" version="6">
+  <interface name="bifrost_window_level_manager_v1" version="7">
     <description summary="stacking level of a toplevel">
       Lets the shell put a toplevel on the floating level. A floating window stays above the normal windows of the
       desktop and is raised only within its own band; menus, panels and the menu bar are not affected. The level
@@ -25,6 +25,10 @@
       applies it to everything it shows, the shell's surfaces and every app's alike, in one place: the CRTC's gamma
       ramp when the display has one (no GPU work), else a final multiply pass in its compositor. It reports which with
       `white_point_mode`; while that is not `none` the shell does not tint its own surfaces.
+
+      Since version 7 the shell can place the window of another client too (`tile_toplevel`), named by the
+      wlr-foreign-toplevel handle it holds: the Window menu's arrange commands act on the window the shell shows as
+      front, which may be a native app's toplevel, and never on whichever window the window server's focus is on.
     </description>
 
     <request name="destroy" type="destructor"/>
@@ -81,6 +85,16 @@
         (the shell) may set it; the request of any other client is ignored.
       </description>
       <arg name="factor" type="uint"/>
+    </request>
+
+    <request name="tile_toplevel" since="7">
+      <description summary="place the toplevel of a foreign toplevel handle">
+        Places the toplevel `toplevel` names as `placement` says, as `tile` does for the client's own surfaces: the
+        toplevel may belong to any client. Only the privileged client (the shell) may place another client's window;
+        the request of any other client is ignored, as is a handle whose toplevel has gone or is full screen.
+      </description>
+      <arg name="toplevel" type="object" interface="zwlr_foreign_toplevel_handle_v1"/>
+      <arg name="placement" type="uint" summary="a placement value"/>
     </request>
 
     <event name="frame" since="2">

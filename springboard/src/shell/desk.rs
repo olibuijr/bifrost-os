@@ -1849,11 +1849,18 @@ impl Shell {
         self.desk.as_ref().and_then(|d| d.front().and_then(|w| d.index_of(w.app)))
     }
 
-    /// Tiles the front desktop window on `tile` (Window menu and Ctrl+Cmd arrow keys).
+    /// Tiles the front window on `tile` (Window menu and Ctrl+Cmd arrow keys). The front window is the one the menu bar
+    /// stands for: another client's window the window server reports active (a native app's), else the shell's top
+    /// window. A native window is placed by the window server through its foreign toplevel handle (the effect), never by
+    /// whichever window the window server's focus is on (E2E N2).
     #[cfg(feature = "desktop-wayland")]
-    pub(super) fn desk_tile_front(&mut self, tile: Tile) {
-        let Some(i) = self.desk_front_index() else { return };
+    pub(super) fn desk_tile_front(&mut self, tile: Tile) -> Vec<Effect> {
+        if let Some(id) = self.foreign_front_window() {
+            return vec![Effect::ForeignWindowTile(id, placement_of(tile))];
+        }
+        let Some(i) = self.desk_front_index() else { return Vec::new() };
         self.desk_tile_window(i, tile);
+        Vec::new()
     }
 
     /// Tiles window `i` on `tile`. In the Wayland session the window server places windows, so the shell asks it
@@ -1904,11 +1911,15 @@ impl Shell {
         self.dirty = true;
     }
 
-    /// Returns the front desktop window to the size it had before its last tiling or zoom.
+    /// Returns the front window (as `desk_tile_front` picks it) to the size it had before its last tiling or zoom.
     #[cfg(feature = "desktop-wayland")]
-    pub(super) fn desk_restore_front(&mut self) {
-        let Some(i) = self.desk_front_index() else { return };
+    pub(super) fn desk_restore_front(&mut self) -> Vec<Effect> {
+        if let Some(id) = self.foreign_front_window() {
+            return vec![Effect::ForeignWindowTile(id, crate::bare::window_level_client::Placement::Previous)];
+        }
+        let Some(i) = self.desk_front_index() else { return Vec::new() };
         self.desk_restore_window(i);
+        Vec::new()
     }
 
     /// Returns window `i` to the size it had before its last tiling or zoom (the window server does it in the Wayland

@@ -242,6 +242,18 @@ pub enum Shortcut {
 }
 
 impl Shortcut {
+    /// The Ctrl+Cmd arrow shortcut a `tile` control line stands for (the window server takes the chord and sends the line,
+    /// so the shell's front window is the one arranged).
+    pub fn tile(key: crate::bare::control::TileKey) -> Self {
+        use crate::bare::control::TileKey;
+        Shortcut::Tile(match key {
+            TileKey::Left => Tile::Left,
+            TileKey::Right => Tile::Right,
+            TileKey::Fill => Tile::Fill,
+            TileKey::Center => Tile::Center,
+        })
+    }
+
     /// The key a text control receives for an editing shortcut.
     pub fn out(self) -> Option<Out> {
         Some(Out::Named(match self {
@@ -1371,10 +1383,7 @@ impl Shell {
             },
             #[cfg(feature = "desktop-wayland")]
             #[cfg(feature = "desktop-wayland")]
-            Shortcut::Tile(tile) if self.desk_active() && !self.is_locked() => {
-                self.desk_tile_front(tile);
-                vec![]
-            }
+            Shortcut::Tile(tile) if self.desk_active() && !self.is_locked() => self.desk_tile_front(tile),
             #[cfg(feature = "desktop-wayland")]
             // every app's windows cycle, an installed app's extra windows (Mail's compose) included (W2-25): the
             // terminal guard kept Cmd+` from every installed app; only the built-in Terminal keeps it

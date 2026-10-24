@@ -16,11 +16,13 @@
 pub mod protocol {
     use wayland_client;
     use wayland_client::protocol::*;
+    use wayland_protocols_wlr::foreign_toplevel::v1::client::*;
 
     pub mod __interfaces {
         use wayland_client::protocol::__interfaces::*;
         // The interface statics name `wayland_backend::protocol::*`; wayland-client re-exports that as `backend`.
         use wayland_client::backend as wayland_backend;
+        use wayland_protocols_wlr::foreign_toplevel::v1::client::__interfaces::*;
         wayland_scanner::generate_interfaces!("wm/protocol/bifrost-window-level-v1.xml");
     }
     use self::__interfaces::*;
@@ -32,8 +34,11 @@ pub mod protocol {
 /// toplevels (the shell keeps its window rectangles from it); 3 adds `tile`, the shell's request to place one; 4 adds
 /// `set_origin`, where a toplevel maps again after the shell destroyed it while the window was hidden; 5 adds
 /// `set_white_point` and `white_point_mode`, Night Shift applied by the window server to the whole output; 6 adds
-/// `set_zoom`, Screen Zoom of the whole output.
-pub const VERSION: u32 = 6;
+/// `set_zoom`, Screen Zoom of the whole output; 7 adds `tile_toplevel`, the shell's request to place another client's
+/// window (a native app's), named by its foreign toplevel handle.
+pub const VERSION: u32 = 7;
+/// The version that introduced `tile_toplevel`; a manager bound at an older version is never sent one.
+pub const TILE_TOPLEVEL_SINCE: u32 = 7;
 /// The version that introduced `tile`; a manager bound at an older version is never sent one.
 pub const TILE_SINCE: u32 = 3;
 /// The version that introduced `set_origin`; a manager bound at an older version is never sent one.
@@ -121,6 +126,14 @@ mod tests {
         let xml = include_str!("../../wm/protocol/bifrost-window-level-v1.xml");
         assert!(xml.contains(&format!("<request name=\"set_zoom\" since=\"{ZOOM_SINCE}\">")));
         assert!(ZOOM_SINCE <= VERSION);
+    }
+
+    #[test]
+    fn the_shell_asks_for_the_foreign_tile_request_the_protocol_declares() {
+        let xml = include_str!("../../wm/protocol/bifrost-window-level-v1.xml");
+        assert!(xml.contains(&format!("<request name=\"tile_toplevel\" since=\"{TILE_TOPLEVEL_SINCE}\">")));
+        assert!(xml.contains("<arg name=\"toplevel\" type=\"object\" interface=\"zwlr_foreign_toplevel_handle_v1\"/>"));
+        assert!(TILE_SINCE <= TILE_TOPLEVEL_SINCE && TILE_TOPLEVEL_SINCE <= VERSION);
     }
 
     #[test]

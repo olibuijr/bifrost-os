@@ -798,6 +798,15 @@ fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_
         }
         transient(self.conn.flush())
     }
+    /// Asks the window server to place another client's window `id` (a foreign toplevel this shell listed;
+    /// `bifrost_window_level_v1` version 7 `tile_toplevel`): the Window menu and the Ctrl+Cmd arrows on a native app's
+    /// window. Without the request the window stays where it is.
+    pub fn tile_foreign(&mut self,id:u32,placement:super::window_level_client::Placement)->io::Result<()> {
+        if let (Some(mgr),Some(w))=(self.state.level_mgr.as_ref(),self.state.foreign.iter().find(|w|w.info.id==id)) {
+            if mgr.version()>=super::window_level_client::TILE_TOPLEVEL_SINCE { mgr.tile_toplevel(&w.handle,super::window_level_client::placement_wire(placement)); }
+        }
+        transient(self.conn.flush())
+    }
     pub fn foreign_maximize(&mut self,id:u32,maximized:bool)->io::Result<()> {if let Some(w)=self.state.foreign.iter().find(|w|w.info.id==id) {if maximized {w.handle.set_maximized();}else{w.handle.unset_maximized();}}transient(self.conn.flush())}
     pub fn inputs(&mut self, out: &mut Vec<Event>) {
         self.trim_idle();

@@ -1419,6 +1419,10 @@ Float on Top, the floating CPU window of Activity Monitor). Ours, end to end:
   `white_point_mode` event; `docs/gpu-first.md`, "Night Shift on the whole output"). Apple's Night Shift is a display
   property (CoreBrightness), not a per-window one, so the window server owns it: it tints every app's window, the
   pointer included, on the CRTC gamma ramp or a final GLES pass, and the shell stops tinting its own surfaces.
+  Version 7 adds `tile_toplevel(zwlr_foreign_toplevel_handle_v1, placement)`, privileged only: the shell places another
+  client's window (a native app's) by its foreign toplevel handle, so the Window menu's arrange commands and the
+  Ctrl+Cmd arrows (which the window server forwards as `tile left|right|fill|center` control lines) act on the
+  window the menu bar stands for, as in Golden Gate (E2E N2). The Window menu lists only the front app's windows.
 - Window model: `springboard/wm/src/wm.rs` `Level` (`Normal`, `Floating`). The stack is sorted by level: a floating
   window is above every normal window, a raised or re-levelled window goes to the top of its own band, and raising a
   normal window does not pass a floating one. Hit testing uses the same order. The key window is the one last raised

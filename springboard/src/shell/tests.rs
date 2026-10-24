@@ -487,15 +487,17 @@
         assert!(sh.menu_row_texts(Menu::Edit)[2].is_empty(),"Edit: Undo, Redo | Cut ...");
     }
 
-    /// Native Linux windows are listed in the Window menu (the front one checked); choosing one activates it.
+    /// The front native Linux app's windows are listed in the Window menu (the front one checked, an untitled one by its
+    /// app id); another app's windows are not (E2E N2); choosing one activates it.
     #[cfg(feature="desktop-wayland")]
     #[test]
     fn window_menu_lists_native_linux_windows_and_activates_them() {
         use desktop_bar::Menu;
         let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
-        sh.desk.as_mut().unwrap().native_windows=vec![crate::bare::wayland::ForeignWindow{id:7,title:"Notes".into(),app_id:"x.notes".into(),active:true,maximized:false},crate::bare::wayland::ForeignWindow{id:8,title:String::new(),app_id:"x.plain".into(),active:false,maximized:false}];
+        sh.desk.as_mut().unwrap().native_windows=vec![crate::bare::wayland::ForeignWindow{id:7,title:"Notes".into(),app_id:"x.plain".into(),active:true,maximized:false},crate::bare::wayland::ForeignWindow{id:8,title:String::new(),app_id:"x.plain".into(),active:false,maximized:false},crate::bare::wayland::ForeignWindow{id:9,title:"Elsewhere".into(),app_id:"x.other".into(),active:false,maximized:false}];
         let rows=sh.menu_row_texts(Menu::Window);
         assert!(rows.contains(&"\u{2713} Notes".to_string())&&rows.contains(&"  x.plain".to_string()),"{rows:?}");
+        assert!(!rows.iter().any(|t|t.ends_with("Elsewhere")),"another app's window is not in this app's Window menu: {rows:?}");
         sh.desktop_menu=Some(Menu::Window);
         let i=rows.iter().position(|t|t.ends_with("x.plain")).unwrap();sh.desktop_menu_row=Some((Menu::Window,i));
         let fx=sh.desktop_menu_key(28,1.).unwrap();
@@ -532,7 +534,7 @@
         use desktop_bar::Menu;
         let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
         let title="A very long document title ".repeat(20);
-        sh.desk.as_mut().unwrap().native_windows=vec![crate::bare::wayland::ForeignWindow{id:9,title:title.clone(),app_id:"x.long".into(),active:false,maximized:false}];
+        sh.desk.as_mut().unwrap().native_windows=vec![crate::bare::wayland::ForeignWindow{id:9,title:title.clone(),app_id:"x.long".into(),active:true,maximized:false}];
         let rows=sh.menu_row_texts(Menu::Window);
         let row=rows.last().unwrap();
         assert!(row.chars().count()<title.chars().count()/2,"cut: {row}");

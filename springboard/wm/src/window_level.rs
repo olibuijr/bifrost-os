@@ -12,6 +12,10 @@
 //!
 //! Version 6 adds Screen Zoom (`set_zoom`, `zoom.rs`): the shell sends the factor and the window server magnifies the
 //! whole output around the pointer, every client's windows included.
+//!
+//! Version 7 adds `tile_toplevel`: the shell places another client's window, named by the wlr-foreign-toplevel handle
+//! it holds, so the Window menu and the Ctrl+Cmd arrow keys act on the window the shell shows as front (a native app's
+//! toplevel included) and not on whichever window the focus happens to be on.
 
 #[allow(
     dead_code,
@@ -25,10 +29,12 @@
     clippy::all
 )]
 pub mod protocol {
+    use smithay::reexports::wayland_protocols_wlr::foreign_toplevel::v1::server::*;
     use wayland_server;
     use wayland_server::protocol::*;
 
     pub mod __interfaces {
+        use smithay::reexports::wayland_protocols_wlr::foreign_toplevel::v1::server::__interfaces::*;
         use wayland_server::protocol::__interfaces::*;
         wayland_scanner::generate_interfaces!("protocol/bifrost-window-level-v1.xml");
     }
@@ -55,8 +61,8 @@ use crate::{
 };
 
 /// The protocol version the global offers: 2 adds the `frame` event, 3 the `tile` request, 4 `set_origin`, 5
-/// `set_white_point` and `white_point_mode`, 6 `set_zoom`.
-pub const VERSION: u32 = 6;
+/// `set_white_point` and `white_point_mode`, 6 `set_zoom`, 7 `tile_toplevel`.
+pub const VERSION: u32 = 7;
 /// The version that introduced `frame`; a manager bound at an older version is never sent one.
 pub const FRAME_SINCE: u32 = 2;
 /// The version that introduced `tile`.
@@ -67,6 +73,8 @@ pub const ORIGIN_SINCE: u32 = 4;
 pub const WHITE_POINT_SINCE: u32 = 5;
 /// The version that introduced `set_zoom`.
 pub const ZOOM_SINCE: u32 = 6;
+/// The version that introduced `tile_toplevel`.
+pub const TILE_TOPLEVEL_SINCE: u32 = 7;
 
 /// Most managers one client may keep bound: each one is a reporter that `report_frames` walks, so a client that binds in
 /// a loop would otherwise make every frame report cost more. The shell binds once.
@@ -264,6 +272,19 @@ impl Dispatch<BifrostWindowLevelManagerV1, ()> for WmState {
                 }
                 state.place_surface(&surface, placement);
             }
+            bifrost_window_level_manager_v1::Request::TileToplevel { toplevel, placement } => {
+                let Some(placement) = crate::tiling::placement_from_wire(placement) else {
+                    manager.post_error(bifrost_window_level_manager_v1::Error::InvalidPlacement, "unknown window placement");
+                    return;
+                };
+                // another client's window: the shell only (`Tile` is privileged)
+                if !request_allowed(privileged, LevelRequest::Tile) {
+                    return;
+                }
+                if let Some(id) = toplevel.data::<WindowId>().copied() {
+                    state.place_window(id, placement);
+                }
+            }
             bifrost_window_level_manager_v1::Request::SetWhitePoint { red, green, blue } => {
                 if !request_allowed(privileged, LevelRequest::WhitePoint) {
                     return;
@@ -326,7 +347,9 @@ mod tests {
         assert!(xml.contains(&format!("<request name=\"set_white_point\" since=\"{WHITE_POINT_SINCE}\">")));
         assert!(xml.contains(&format!("<event name=\"white_point_mode\" since=\"{WHITE_POINT_SINCE}\">")));
         assert!(xml.contains(&format!("<request name=\"set_zoom\" since=\"{ZOOM_SINCE}\">")));
-        assert!(FRAME_SINCE <= TILE_SINCE && TILE_SINCE <= ORIGIN_SINCE && ORIGIN_SINCE <= WHITE_POINT_SINCE && WHITE_POINT_SINCE <= ZOOM_SINCE && ZOOM_SINCE <= VERSION);
+        assert!(xml.contains(&format!("<request name=\"tile_toplevel\" since=\"{TILE_TOPLEVEL_SINCE}\">")));
+        assert!(xml.contains("<arg name=\"toplevel\" type=\"object\" interface=\"zwlr_foreign_toplevel_handle_v1\"/>"));
+        assert!(FRAME_SINCE <= TILE_SINCE && TILE_SINCE <= ORIGIN_SINCE && ORIGIN_SINCE <= WHITE_POINT_SINCE && WHITE_POINT_SINCE <= ZOOM_SINCE && ZOOM_SINCE <= TILE_TOPLEVEL_SINCE && TILE_TOPLEVEL_SINCE <= VERSION);
     }
 
     #[test]

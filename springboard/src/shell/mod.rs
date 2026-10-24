@@ -481,6 +481,10 @@ pub enum Effect {
     ForeignWindowAction(u32,bool),
     #[cfg(feature="desktop-wayland")]
     ForeignWindowMaximize(u32,bool),
+    /// place another client's window (a native app's, by its foreign toplevel id): the Window menu's arrange commands
+    /// and the Ctrl+Cmd arrows when that window is front
+    #[cfg(feature="desktop-wayland")]
+    ForeignWindowTile(u32,crate::bare::window_level_client::Placement),
     #[cfg(feature="desktop-wayland")]
     DesktopShortcut(u16),
 }
