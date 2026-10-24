@@ -163,6 +163,35 @@ pub fn decode(bytes: &[u8]) -> Option<Image> {
     ImageSource::new(bytes.to_vec()).image_premultiplied(0).or_else(|| crate::svg::decode_image(bytes, MAX_SIDE))
 }
 
+/// The rectangle `x`, `y`, `w`, `h` of the first image as premultiplied pixels. A still, non-interlaced PNG is read
+/// row by row without holding the whole picture (and may be larger than `MAX_SIDE`); other files are decoded whole
+/// and cut. `None` when the rectangle is empty or reaches outside the picture.
+pub fn decode_region(bytes: &[u8], x: usize, y: usize, w: usize, h: usize) -> Option<Image> {
+    let streamed = (Format::detect(bytes) == Some(Format::Png) && png::frame_count(bytes) <= 1).then(|| png::decode_region(bytes, x, y, w, h)).flatten();
+    if let Some(rgba8) = streamed {
+        // The same colour conversion a whole decode gets: an embedded profile is brought to the display.
+        let props = png::probe(bytes).into_iter().collect();
+        let mut d = Decoded { frames: vec![Frame { w, h, rgba8, rgba16: None, delay_ms: 0 }], props, loop_count: None };
+        crate::icc_transform::to_display(&mut d);
+        let rgba = &d.frames[0].rgba8;
+        let mut img = Image::new(w, h);
+        for (o, p) in img.px.iter_mut().zip(rgba.as_chunks::<4>().0.iter()) {
+            *o = crate::gfx::rgba(p[0], p[1], p[2], p[3]);
+        }
+        return Some(img);
+    }
+    let whole = decode(bytes)?;
+    if w == 0 || h == 0 || x.checked_add(w)? > whole.w || y.checked_add(h)? > whole.h {
+        return None;
+    }
+    let mut out = Image::new(w, h);
+    for row in 0..h {
+        let from = (y + row) * whole.w + x;
+        out.px[row * w..(row + 1) * w].copy_from_slice(&whole.px[from..from + w]);
+    }
+    Some(out)
+}
+
 /// How far a source got (what a progressive loader asks while data arrives).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Status {

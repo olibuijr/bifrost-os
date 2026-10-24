@@ -160,6 +160,50 @@ pub fn probe(data: &[u8]) -> Option<Properties> {
     Some(p)
 }
 
+/// Rows wider than this are not streamed by [`decode_region`] (one row is held while the rows are read).
+pub const MAX_STREAMED_SIDE: usize = 65_536;
+
+/// The straight RGBA pixels of the rectangle `x`, `y`, `w`, `h` of the (first) image, read row by row: only one row
+/// and the rectangle are held, so a picture larger than `MAX_SIDE` can still be shown a tile at a time. The rows
+/// above the rectangle are inflated and dropped; the rows below are not read. 16-bit samples are narrowed to 8 bits.
+/// `None` for an interlaced picture (its passes interleave the rows), a row wider than `MAX_STREAMED_SIDE`, or a
+/// rectangle outside the picture or larger than `MAX_SIDE` squared pixels.
+pub fn decode_region(data: &[u8], x: usize, y: usize, w: usize, h: usize) -> Option<Vec<u8>> {
+    use ::png::{BitDepth, Transformations};
+    if w == 0 || h == 0 || w.checked_mul(h)? > MAX_SIDE * MAX_SIDE {
+        return None;
+    }
+    let mut d = ::png::Decoder::new(Cursor::new(data));
+    d.set_transformations(Transformations::EXPAND | Transformations::STRIP_16);
+    let mut r = d.read_info().ok()?;
+    let info = r.info();
+    let (iw, ih) = (info.width as usize, info.height as usize);
+    if info.interlaced || iw > MAX_STREAMED_SIDE || x.checked_add(w)? > iw || y.checked_add(h)? > ih {
+        return None;
+    }
+    let (ct, bd) = r.output_color_type();
+    let n = ct.samples();
+    if bd != BitDepth::Eight || !(1..=4).contains(&n) {
+        return None;
+    }
+    let mut out = Vec::with_capacity(w * h * 4);
+    for index in 0..y + h {
+        let row = r.next_row().ok()??;
+        if index < y {
+            continue;
+        }
+        for p in row.data().get(x * n..(x + w) * n)?.chunks_exact(n) {
+            out.extend(match n {
+                1 => [p[0], p[0], p[0], 255],
+                2 => [p[0], p[0], p[0], p[1]],
+                3 => [p[0], p[1], p[2], 255],
+                _ => [p[0], p[1], p[2], p[3]],
+            });
+        }
+    }
+    Some(out)
+}
+
 /// An animated PNG is decoded only when its composited frames hold at most this many pixels in all; a larger one
 /// shows its first image.
 pub const MAX_ANIMATION_PIXELS: usize = 96 << 20;
