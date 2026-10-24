@@ -10,7 +10,7 @@ try:
     session = json.loads((runtime / 'session.json').read_text())
 except (OSError, ValueError):
     sys.exit('The Wayland session is not ready')
-allowed = {'XDG_RUNTIME_DIR','WAYLAND_DISPLAY','DISPLAY','XAUTHORITY','DBUS_SESSION_BUS_ADDRESS','XDG_CURRENT_DESKTOP','XDG_SESSION_TYPE','MOZ_ENABLE_WAYLAND','QT_QPA_PLATFORM','GDK_BACKEND','XCURSOR_THEME','XCURSOR_SIZE'}
+allowed = {'XDG_RUNTIME_DIR','WAYLAND_DISPLAY','DISPLAY','XAUTHORITY','DBUS_SESSION_BUS_ADDRESS','XDG_CURRENT_DESKTOP','XDG_SESSION_TYPE','MOZ_ENABLE_WAYLAND','QT_QPA_PLATFORM','QT_QPA_PLATFORMTHEME','GDK_BACKEND','XCURSOR_THEME','XCURSOR_SIZE'}
 env = [f'{k}={v}' for k,v in session.items() if k in allowed and isinstance(v,str)]
 if sys.argv[1:] == ["--screenshot"]:
     cmd = ["grim","-"]

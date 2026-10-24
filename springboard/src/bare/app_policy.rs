@@ -498,6 +498,8 @@ pub fn command(
         if native && bus.exists() {
             c.arg("--bind-try").arg(&bus).arg(&bus);
             c.env("DBUS_SESSION_BUS_ADDRESS", format!("unix:path={}", bus.display()));
+            // Qt's generic theme ignores the portal; its GNOME theme follows color-scheme live
+            c.env("QT_QPA_PLATFORMTHEME", "gnome");
         }
         c.env("XDG_RUNTIME_DIR", runtime)
             .env("WAYLAND_DISPLAY", display)

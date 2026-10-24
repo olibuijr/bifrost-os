@@ -556,6 +556,30 @@ enum Drawn {
 
 /// Whether a release at `up` completes a press that went down on the same button of a sheet: `hit` maps a point to the
 /// button under it. A release with no press on a button answers nothing.
+/// Seconds from local time `local_unix` (Unix seconds plus the zone offset) to Auto's next flip, 07:00 or 19:00
+/// local; always at least 1, so a wake-up at the boundary itself plans the next one.
+fn auto_flip_in_secs(local_unix: i64) -> i64 {
+    const DAY: i64 = 86_400;
+    let now = local_unix.rem_euclid(DAY);
+    [7 * 3600, 19 * 3600, DAY + 7 * 3600].into_iter().find(|b| *b > now).unwrap_or(DAY + 7 * 3600) - now
+}
+
+#[cfg(test)]
+mod auto_flip_tests {
+    use super::auto_flip_in_secs;
+
+    #[test]
+    fn next_flip_is_seven_or_nineteen_local() {
+        assert_eq!(auto_flip_in_secs(6 * 3600 + 59 * 60), 60);
+        assert_eq!(auto_flip_in_secs(7 * 3600), 12 * 3600);
+        assert_eq!(auto_flip_in_secs(18 * 3600 + 3599), 1);
+        assert_eq!(auto_flip_in_secs(23 * 3600), 8 * 3600);
+        // a later day, and a time before the epoch, land on the same local clock
+        assert_eq!(auto_flip_in_secs(20_000 * 86_400 + 12 * 3600), 7 * 3600);
+        assert_eq!(auto_flip_in_secs(-3600), 8 * 3600);
+    }
+}
+
 fn press_lands<T: PartialEq>(press: Option<(f32, f32)>, up: (f32, f32), hit: impl Fn(f32, f32) -> Option<T>) -> bool {
     press.is_some_and(|(px, py)| matches!((hit(px, py), hit(up.0, up.1)), (Some(a), Some(b)) if a == b))
 }
@@ -2367,6 +2391,11 @@ impl Shell {
         due.add(self.clock.next_wake(t, self.screen_on));
         if let Some((_, _, t0, false)) = self.desk_hold { due.add(Some(t0 + DESK_HOLD_MS)); }
         if bifrost_render::appearance::fading() { due.add(Some(t)); }
+        // Auto flips at 07:00 and 19:00 even with nothing else awake, so the shell and the apps' portal follow on time
+        if bifrost_render::appearance::Mode::parse(self.prefs.get(settings::APPEARANCE_PREF).unwrap_or("dark")) == bifrost_render::appearance::Mode::Auto {
+            let (unix, offset) = self.wall_now(t);
+            due.add(Some(t + auto_flip_in_secs(unix + offset as i64) as f64 * 1000.0));
+        }
         if self.bell.pending() { due.add(Some(t)); }
         if let Some(end) = self.bell.flash_end(t) { due.add(Some(end.min(t + 33.0))); }
         if let Some(when)=self.desk.as_ref().and_then(|d|d.dock_hide_at){due.add(Some(when));}
@@ -4013,8 +4042,9 @@ impl Shell {
         {
             let light = bifrost_render::appearance::target_is_light();
             let (dark_c, light_c) = accent.colours();
-            // The effective scheme and accent for native apps' portal (bifrost-portal); written on change only.
-            crate::appearance_portal::publish(crate::appearance_portal::State::new(light, if light { light_c } else { dark_c }), || {
+            // The effective scheme, accent and Increase Contrast for native apps' portal (bifrost-portal); written on change only.
+            let contrast = bifrost_render::appearance::increase_contrast();
+            crate::appearance_portal::publish(crate::appearance_portal::State::new(light, if light { light_c } else { dark_c }, contrast), || {
                 if !crate::appearance_portal::is_root() { return None; }
                 crate::bare::app_policy::Account::installed().ok().map(|a| (a.uid, a.gid))
             });
