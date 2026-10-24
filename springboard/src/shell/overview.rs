@@ -461,7 +461,8 @@ impl Overview {
         let g = self.geo(sh);
         let Some(d) = sh.desk.as_ref() else { return };
         let cur = self.spaces.current;
-        let wins: Vec<&super::desk::Win> = d.wins.iter().filter(|w| self.spaces.of.get(&w.app).copied().unwrap_or(cur) == cur).collect();
+        // a window the person minimized (or hid, or put aside with Show Desktop) is in the Dock, not in Overview (N16)
+        let wins: Vec<&super::desk::Win> = d.wins.iter().filter(|w| self.spaces.of.get(&w.app).copied().unwrap_or(cur) == cur && !self.user_minimized(w)).collect();
         // the desk's windows, then the windows of other clients (they belong to every desktop)
         let mut entries: Vec<(TileKey, String, FRect, (f32, f32))> = wins
             .iter()
@@ -589,7 +590,23 @@ impl Overview {
         }
         self.layout(sh);
         self.request_shots(sh, t, 0.0);
+        self.request_missing_pictures(sh, t);
         sh.dirty = true;
+    }
+
+    /// A built-in window with no retained frame (a window in front covered it, so its cache was dropped) is asked of the
+    /// window server, which still holds the pixels it last presented; asked once, while the window is still mapped, so
+    /// its tile shows the window instead of the app icon (N16).
+    fn request_missing_pictures(&self, sh: &mut Shell, t: f64) {
+        for tile in &self.tiles {
+            let TileKey::App(app) = tile.key else { continue };
+            if self.sources.contains_key(&tile.key) {
+                continue;
+            }
+            if let Some(id) = super::desk::win_id(app) {
+                sh.shots.request_now(Source::Surface(id), window_shots::bound_for_tile(tile.to.w, tile.to.h), t);
+            }
+        }
     }
 
     /// Asks the window server for a fresh picture of every window of another client that has a tile, at most one request
@@ -1063,6 +1080,13 @@ impl Overview {
                 return;
             }
         };
+        // the window server's picture of a window that had no retained frame, taken since Overview opened, becomes its source
+        if !self.sources.contains_key(&key) {
+            let shot = super::desk::win_id(app).and_then(|id| sh.shots.shot(Source::Surface(id))).filter(|p| p.at >= self.start && p.image.w > 0 && p.image.h > 0);
+            if let Some(p) = shot {
+                self.sources.insert(key, p.image.clone());
+            }
+        }
         match self.thumb(key, iw, ih) {
             Some(img) => s.blit(img, r.x.round() as i32, r.y.round() as i32, 255, alpha),
             None => {
@@ -1961,12 +1985,43 @@ mod tests {
     fn opening_asks_for_each_windows_picture_at_the_tile_size() {
         let mut sh = desk_with_foreign(1, &[(7, "Files")]);
         sh.overview_toggle(1000.0);
-        let reqs = sh.take_capture_requests();
+        let all = sh.take_capture_requests();
+        let reqs: Vec<_> = all.iter().filter(|r| matches!(r.source, Source::Foreign(_))).collect();
         assert_eq!(reqs.len(), 1);
         assert_eq!(reqs[0].source, Source::Foreign(7));
         let tile = foreign_tiles(&sh)[0].1;
         assert_eq!(reqs[0].max, window_shots::bound_for_tile(tile.w, tile.h));
         assert_eq!(reqs[0].since, 0, "nothing held yet");
+        // N16: the desk window, which has no retained frame here, is asked of the window server once
+        let id = super::super::desk::win_id(AppId::Settings).unwrap();
+        assert_eq!(all.iter().filter(|r| r.source == Source::Surface(id)).count(), 1);
+    }
+
+    /// N16: a desk window with no retained frame gets the window server's picture as its tile, not the app icon.
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn a_desk_window_without_a_retained_frame_shows_the_window_servers_picture() {
+        let mut sh = desk_with_foreign(1, &[]);
+        sh.overview_toggle(1000.0);
+        let id = super::super::desk::win_id(AppId::Settings).unwrap();
+        let req = sh.take_capture_requests().into_iter().find(|r| r.source == Source::Surface(id)).expect("the window is asked for");
+        sh.window_capture_results(vec![(req.token, window_shots::Outcome::Ready { image: Image { w: 120, h: 80, px: vec![0xff12_3456; 120 * 80] }, serial: 1 })], 1050.0);
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let mut px = vec![0u32; w * h];
+        sh.draw_overview(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 1e9 / 2.0);
+        assert!(sh.overview.sources.contains_key(&TileKey::App(AppId::Settings)), "the picture is the tile's source");
+    }
+
+    /// N16: a minimized window is in the Dock, not a tile in Overview.
+    #[test]
+    fn a_minimized_window_has_no_tile() {
+        let mut sh = desk_with(3, 1920, 1080, 1.0);
+        let d = sh.desk.as_mut().unwrap();
+        let i = d.index_of(AppId::AppStore).unwrap();
+        d.wins[i].minimized = true;
+        sh.overview_toggle(1000.0);
+        let tiles: Vec<AppId> = sh.overview.tile_rects().into_iter().map(|(a, _)| a).collect();
+        assert_eq!(tiles, vec![AppId::Settings, AppId::Terminal]);
     }
 
     #[cfg(feature = "desktop-wayland")]
