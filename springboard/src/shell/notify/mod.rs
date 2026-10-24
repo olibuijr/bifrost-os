@@ -986,11 +986,11 @@ impl Shell {
         self.dirty = true;
     }
 
-    /// Answers the ringing Clock alert from its desktop banner `id`: Stop, or Snooze when `snooze`. The next queued alert
-    /// (if any) keeps its own banner. Returns the RTC effects of the change.
-    pub(super) fn clock_banner_answer(&mut self, id: u64, snooze: bool, t: f64) -> Vec<Effect> {
+    /// Answers the ringing Clock alert from its desktop banner `id`: Stop, Snooze (an alarm) or Repeat (a timer). The
+    /// next queued alert (if any) keeps its own banner. Returns the RTC effects of the change.
+    pub(super) fn clock_banner_answer(&mut self, id: u64, answer: super::clock::Answer, t: f64) -> Vec<Effect> {
         self.clock_banners.retain(|&b| b != id);
-        let fx = self.clock.stop_alert(snooze, t);
+        let fx = self.clock.answer_alert(answer, t);
         if self.clock.alert().is_none() {
             self.clock_banners.clear();
         }

@@ -123,6 +123,27 @@ pub struct Alert {
     pub silent: bool,
     /// the repeat set ("Weekdays"), shown under the title; empty for a one-shot
     pub repeat: String,
+    /// a timer's full duration, so Repeat can run it again (the finished timer has left the list); 0 for an alarm
+    pub duration_ms: i64,
+}
+
+/// An answer to the ringing alert from outside its own screen: the desktop banner's buttons (E2E N5, R6), as the
+/// reference's Clock banner offers Stop and Repeat for a timer, Stop and Snooze for an alarm.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Answer {
+    Stop,
+    Snooze,
+    Repeat,
+}
+
+impl Answer {
+    pub fn title(self) -> &'static str {
+        match self {
+            Answer::Stop => "Stop",
+            Answer::Snooze => "Snooze",
+            Answer::Repeat => "Repeat",
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -319,6 +340,27 @@ impl Clock {
         self.close_alert(snooze, t)
     }
 
+    /// The answers the alert on screen offers: Stop and Repeat for a timer, Stop (and Snooze when the alarm allows
+    /// it) for an alarm; none while nothing rings.
+    pub fn answers(&self) -> Vec<Answer> {
+        let Some(a) = self.alert.as_ref() else { return Vec::new() };
+        let second = if a.is_timer { (a.duration_ms > 0).then_some(Answer::Repeat) } else { a.snooze.then_some(Answer::Snooze) };
+        std::iter::once(Answer::Stop).chain(second).collect()
+    }
+
+    /// Answers the alert on screen with `answer`: Stop, Snooze (an alarm that allows it), or Repeat (a timer: it runs
+    /// again for its full duration under its label, written beside the app's timers). Returns the RTC effects.
+    pub fn answer_alert(&mut self, answer: Answer, t: f64) -> Vec<Effect> {
+        let again = self.alert.as_ref().filter(|a| answer == Answer::Repeat && a.is_timer && a.duration_ms > 0).map(|a| (a.title.clone(), a.duration_ms));
+        let mut fx = self.stop_alert(answer == Answer::Snooze, t);
+        if let Some((label, ms)) = again {
+            if self.start_timer(&label, ms, t).is_some() {
+                fx.push(self.wake_effect(t));
+            }
+        }
+        fx
+    }
+
     // ----- geometry -----
 
     fn snooze_button(&self, ui: &Ui) -> (f32, f32, f32, f32) {
@@ -391,7 +433,7 @@ impl Clock {
         };
         let finished = self.timers.poll(t);
         for item in &finished {
-            self.push_alert(Alert { title: item.label.clone(), time: hhmm.clone(), is_timer: true, alarm_id: None, sound: alarm::SOUNDS[0].into(), vibrate: true, ramp: false, snooze: false, silent: self.muted, repeat: String::new() });
+            self.push_alert(Alert { title: item.label.clone(), time: hhmm.clone(), is_timer: true, alarm_id: None, sound: alarm::SOUNDS[0].into(), vibrate: true, ramp: false, snooze: false, silent: self.muted, repeat: String::new(), duration_ms: item.duration_ms });
         }
         if !finished.is_empty() {
             effects.push(Effect::Alarm);
@@ -401,7 +443,7 @@ impl Clock {
         let offset = offset_fn(self.zone, self.wall.offset);
         let fired = self.alarms.fire(wall_now, &offset);
         for a in &fired {
-            self.push_alert(Alert { title: if a.label.trim().is_empty() { "Alarm".into() } else { a.label.clone() }, time: a.time_text(), is_timer: false, alarm_id: Some(a.id), sound: a.sound.clone(), vibrate: a.vibrate, ramp: a.ramp, snooze: a.snooze, silent: self.muted, repeat: if a.repeat == 0 { String::new() } else { a.repeat_text() } });
+            self.push_alert(Alert { title: if a.label.trim().is_empty() { "Alarm".into() } else { a.label.clone() }, time: a.time_text(), is_timer: false, alarm_id: Some(a.id), sound: a.sound.clone(), vibrate: a.vibrate, ramp: a.ramp, snooze: a.snooze, silent: self.muted, repeat: if a.repeat == 0 { String::new() } else { a.repeat_text() }, duration_ms: 0 });
         }
         if !fired.is_empty() {
             effects.push(Effect::Alarm);
@@ -672,5 +714,33 @@ mod tests {
         assert!(tap(&mut c, &ui, 10.0, 10.0, 0.0).is_empty());
         assert!(c.alert().is_none());
         assert!(c.next_wake(0.0, true).is_none(), "nothing pending without files or alerts");
+    }
+
+    /// E2E R6: a finished timer offers Stop and Repeat; Repeat runs it again for its full duration under its label.
+    #[test]
+    fn repeat_runs_a_finished_timer_again() {
+        let ui = ui();
+        let path = scratch("repeat");
+        let mut c = clock(&ui);
+        c.load(&path, 1000.0);
+        assert!(c.start_timer("Tea", 5000, 1000.0).is_some());
+        c.tick(&ui, 6000.0);
+        assert_eq!(c.alert().map(|a| (a.title.as_str(), a.duration_ms)), Some(("Tea", 5000)));
+        assert_eq!(c.answers(), vec![Answer::Stop, Answer::Repeat]);
+        assert!(c.timers().list.is_empty(), "the finished timer left the list");
+        let fx = c.answer_alert(Answer::Repeat, 6100.0);
+        assert!(c.alert().is_none(), "Repeat answers the alert");
+        assert!(fx.iter().any(|e| matches!(e, Effect::WakeAt(at) if *at > 0)), "and arms the RTC for the new run");
+        let list = &c.timers().list;
+        assert_eq!(list.len(), 1);
+        assert_eq!((list[0].label.as_str(), list[0].duration_ms, list[0].running()), ("Tea", 5000, true));
+        assert_eq!(c.timers().next_due(), Some(11_100.0));
+        // an alarm offers Snooze, not Repeat, and Repeat on it only stops it
+        let alarm = Alert { title: "Alarm".into(), time: "07:00".into(), is_timer: false, alarm_id: None, sound: String::new(), vibrate: false, ramp: false, snooze: true, silent: false, repeat: String::new(), duration_ms: 0 };
+        c.push_alert(alarm);
+        assert_eq!(c.answers(), vec![Answer::Stop, Answer::Snooze]);
+        c.answer_alert(Answer::Repeat, 7000.0);
+        assert!(c.alert().is_none());
+        assert_eq!(c.timers().list.len(), 1, "no timer from an alarm");
     }
 }

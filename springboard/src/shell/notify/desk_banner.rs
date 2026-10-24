@@ -3,11 +3,14 @@
 //! scheme's material (light in Light, dark in Dark). Hovering it keeps it up and shows a circled close X at its top
 //! left corner and an Options chevron at its right edge; the chevron opens a small menu of the notification's actions,
 //! Mute and Notification Settings. A click on the card opens the app and clears that one notification; the X only puts
-//! the banner away (the notification stays in Notification Center). A banner that arrives while another is up takes
+//! the banner away (the notification stays in Notification Center). A ringing Clock alert's banner carries its answers
+//! as buttons in a column at its right edge, always shown (Stop and Repeat for a timer, Stop and Snooze for an alarm),
+//! where other banners have the chevron. A banner that arrives while another is up takes
 //! the front and the earlier one waits behind it, its edge showing under the card, and comes back when the front one
 //! leaves. The tablet keeps its centred banner (`super::banner_rect`).
 
-use super::super::ui::{Weight, LABEL, MAC_BODY_PT, MENU_HIGHLIGHT, MENU_HIGHLIGHT_TEXT};
+use super::super::clock::Answer;
+use super::super::ui::{Weight, LABEL, MAC_BODY_PT, MENU_HIGHLIGHT, MENU_HIGHLIGHT_TEXT, SEPARATOR_C};
 use super::super::{AppId, Effect, Event, Shell};
 use super::center::{NC_CARD_PT, NC_CARD_R_PT, NC_RIGHT_PT, NC_STACK_PT, NC_TOP_GAP_PT};
 use super::desk_card::{self, within, CardText, R4, CONTROL_PT, PAD_PT};
@@ -25,6 +28,8 @@ const MENU_ROW_PT: f32 = 24.0;
 const MENU_PAD_PT: f32 = 5.0;
 const MENU_GAP_PT: f32 = 6.0;
 const MENU_R_PT: f32 = 10.0;
+/// The width of the answer buttons' column at the right edge of a ringing Clock alert's banner.
+const ANSWER_W_PT: f32 = 76.0;
 /// The chrome overlay surface of the banner (above every window; the flyout ids start at 17 and count up).
 #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
 pub const BANNER_CHROME_ID: u32 = 40;
@@ -38,6 +43,8 @@ pub enum Part {
     Close,
     /// the chevron at the right edge (shown while hovered): opens the Options menu
     Options,
+    /// answer button `n` of a ringing Clock alert's banner (always shown, top to bottom)
+    Answer(usize),
     /// row `n` of the open Options menu
     Menu(usize),
     /// the Options menu outside its rows
@@ -47,8 +54,8 @@ pub enum Part {
 /// A row of the banner's Options menu.
 #[derive(Clone, Debug, PartialEq)]
 pub enum MenuItem {
-    /// a ringing Clock alert's Stop (false) or Snooze (true)
-    Alarm(bool),
+    /// a ringing Clock alert's answer: Stop, Snooze or Repeat
+    Alarm(Answer),
     /// one of the notification's category actions: its identifier and title
     Action(String, String),
     /// mutes the app (its notifications are still listed and badged)
@@ -91,13 +98,32 @@ impl Shell {
         (x + w - self.ui.pt(PAD_PT) - c, y + (h - c) / 2.0, c, c)
     }
 
+    /// The front banner's answer buttons: the ringing Clock alert's answers when the banner stands for it (Stop and
+    /// Repeat for a timer, Stop and Snooze for an alarm, as the reference's Clock banner offers them; E2E N5, R6),
+    /// else none.
+    fn desk_banner_answers(&self) -> Vec<Answer> {
+        match self.notify.banner.as_ref() {
+            Some(b) if self.clock_banner(b.id) => self.clock.answers(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// The answer buttons' column at the card's right edge, one row per answer, top to bottom.
+    fn desk_banner_answer_rects(&self, (x, y, w, h): R4) -> Vec<R4> {
+        let n = self.desk_banner_answers().len();
+        if n == 0 {
+            return Vec::new();
+        }
+        let cw = self.ui.pt(ANSWER_W_PT).min(w / 3.0);
+        let row = h / n as f32;
+        (0..n).map(|i| (x + w - cw, y + i as f32 * row, cw, row)).collect()
+    }
+
     /// The Options menu's rows: the notification's actions, then Mute and Notification Settings.
     pub(super) fn desk_banner_menu(&self) -> Vec<MenuItem> {
         let Some(id) = self.notify.banner.as_ref().map(|b| b.id) else { return Vec::new() };
         let mut rows: Vec<MenuItem> = if self.clock_banner(id) {
-            // the ringing alarm's answers, as the reference's Clock banner offers them (E2E N5)
-            let snooze = self.clock.alert().is_some_and(|a| a.snooze);
-            std::iter::once(MenuItem::Alarm(false)).chain(snooze.then_some(MenuItem::Alarm(true))).collect()
+            self.desk_banner_answers().into_iter().map(MenuItem::Alarm).collect()
         } else {
             self.usernotif.actions(id).into_iter().map(|a| MenuItem::Action(a.id, a.title)).collect()
         };
@@ -110,8 +136,7 @@ impl Shell {
     fn desk_banner_menu_title(&self, item: &MenuItem) -> String {
         match item {
             MenuItem::Action(_, title) => title.clone(),
-            MenuItem::Alarm(false) => "Stop".to_string(),
-            MenuItem::Alarm(true) => "Snooze".to_string(),
+            MenuItem::Alarm(answer) => answer.title().to_string(),
             MenuItem::Mute => {
                 let app = self.notify.banner_card.as_ref().map(|c| c.app);
                 match app {
@@ -177,13 +202,19 @@ impl Shell {
                 return Some(Part::MenuPad);
             }
         }
+        let answers = self.desk_banner_answer_rects(card);
         if self.notify.banner_hover.is_some() {
             if within(self.desk_banner_close(card), x, y) {
                 return Some(Part::Close);
             }
-            if within(self.desk_banner_chevron(card), x, y) {
+            // a ringing alert's buttons stand where the chevron would
+            if answers.is_empty() && within(self.desk_banner_chevron(card), x, y) {
                 return Some(Part::Options);
             }
+        }
+        // the answer buttons show without a hover: a click that comes straight there still answers the alert
+        if let Some(i) = answers.iter().position(|r| within(*r, x, y)) {
+            return Some(Part::Answer(i));
         }
         within(card, x, y).then_some(Part::Card)
     }
@@ -246,7 +277,7 @@ impl Shell {
                 self.desk_banner_dismiss(t);
                 // a click on a ringing alarm's banner stops it and opens the Clock
                 if alarm {
-                    fx = self.clock_banner_answer(id, false, t);
+                    fx = self.clock_banner_answer(id, Answer::Stop, t);
                 }
                 if let Some(app) = app {
                     self.open_from_notification(app, t);
@@ -258,17 +289,25 @@ impl Shell {
                 self.desk_banner_dismiss(t);
                 // the X of a ringing alarm's banner stops it: an alert left ringing has nothing on screen to stop it by
                 if alarm {
-                    fx = self.clock_banner_answer(id, false, t);
+                    fx = self.clock_banner_answer(id, Answer::Stop, t);
                 }
             }
             Part::Options => self.notify.banner_menu = !self.notify.banner_menu,
+            Part::Answer(i) => {
+                let answer = self.desk_banner_answers().get(i).copied();
+                self.desk_banner_dismiss(t);
+                if let Some(answer) = answer {
+                    fx = self.clock_banner_answer(id, answer, t);
+                    self.clear_notification(id);
+                }
+            }
             Part::MenuPad => {}
             Part::Menu(i) => {
                 let item = self.desk_banner_menu().get(i).cloned();
                 self.desk_banner_dismiss(t);
                 match item {
-                    Some(MenuItem::Alarm(snooze)) => {
-                        fx = self.clock_banner_answer(id, snooze, t);
+                    Some(MenuItem::Alarm(answer)) => {
+                        fx = self.clock_banner_answer(id, answer, t);
                         self.clear_notification(id);
                     }
                     Some(MenuItem::Action(action, _)) => {
@@ -394,10 +433,27 @@ impl Shell {
         let age = super::store::age_text(n.time, self.notify.now());
         let icon = self.notify.center.icons.iter().find(|(a, _)| *a == n.app).and_then(|(_, i)| i.as_ref());
         let text = CardText { head: &name, age: (!hovered).then_some(age.as_str()), title: &title, body: &body };
-        desk_card::draw_text(s, ui, card, icon, &text, ui.pt(CONTROL_PT), 255);
+        let answers = self.desk_banner_answers();
+        let answer_rects = self.desk_banner_answer_rects(card);
+        let trailing = answer_rects.first().map_or(ui.pt(CONTROL_PT), |r| r.2 - ui.pt(PAD_PT) + ui.pt(8.0));
+        desk_card::draw_text(s, ui, card, icon, &text, trailing, 255);
+        if let Some(first) = answer_rects.first() {
+            // the buttons' column: a hairline on its left and between its rows, a centred title in each
+            let hair = ui.pt(0.5).max(1.0);
+            s.fill_rrect(first.0, card.1, hair, card.3, 0.0, SEPARATOR_C.now());
+            for (i, (answer, r)) in answers.iter().zip(&answer_rects).enumerate() {
+                if i > 0 {
+                    s.fill_rrect(r.0, r.1, r.2, hair, 0.0, SEPARATOR_C.now());
+                }
+                let label = ui.text(&ui.fit(answer.title(), MAC_BODY_PT, r.2 - ui.pt(8.0)), MAC_BODY_PT, Weight::Regular, LABEL.now());
+                s.blit(&label, (r.0 + (r.2 - label.w as f32) / 2.0) as i32, (r.1 + (r.3 - label.h as f32) / 2.0) as i32, 255, 255);
+            }
+        }
         if hovered {
             desk_card::close_disc(s, ui, self.desk_banner_close(card), 255);
-            desk_card::chevron_disc(s, ui, self.desk_banner_chevron(card), 255);
+            if answer_rects.is_empty() {
+                desk_card::chevron_disc(s, ui, self.desk_banner_chevron(card), 255);
+            }
         }
         if self.notify.banner_menu {
             let (menu, rows) = self.desk_banner_menu_rects(card);
@@ -522,12 +578,51 @@ mod tests {
         sh.start_banner(id, AppId::Files);
         assert_eq!(sh.notify.banner().map(|b| b.id), Some(id));
         let items = sh.desk_banner_menu();
-        assert_eq!(items, vec![MenuItem::Alarm(false), MenuItem::Mute, MenuItem::Settings], "a timer has Stop, no Snooze");
+        assert_eq!(items, vec![MenuItem::Alarm(Answer::Stop), MenuItem::Alarm(Answer::Repeat), MenuItem::Mute, MenuItem::Settings], "a timer has Stop and Repeat, no Snooze");
         assert_eq!(sh.desk_banner_menu_title(&items[0]), "Stop");
+        assert_eq!(sh.desk_banner_menu_title(&items[1]), "Repeat");
         sh.desk_banner_act(Part::Menu(0), 2200.0);
         assert!(sh.clock.alert().is_none(), "Stop answered the alert");
         assert!(sh.clock_banners.is_empty());
         assert!(!sh.notify_exists(id), "and cleared its notification");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// E2E R6: a ringing timer's banner shows Stop and Repeat as buttons without a hover (no chevron that would only
+    /// put it away); Repeat answers the alert, clears its notification and runs the timer again.
+    #[test]
+    fn a_ringing_timer_s_banner_buttons_stop_and_repeat_it() {
+        let mut sh = desk();
+        let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/test-clock-banner-repeat").join(std::process::id().to_string());
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        sh.set_wall(1_000_000, 0, 1000.0);
+        sh.clock.load(&dir.join("clock.ini").to_string_lossy(), 1000.0);
+        assert!(sh.clock.start_timer("Tea", 1000, 1000.0).is_some());
+        sh.tick(2100.0);
+        assert!(sh.clock.alert().is_some(), "the timer rings");
+        let id = sh.notify_id(note(AppId::Files, "Tea"));
+        sh.clock_banners.push(id);
+        sh.start_banner(id, AppId::Files);
+        let t = 2100.0 + super::super::banner::SLIDE_MS;
+        let card = sh.desk_banner_rect(t).expect("the banner shows");
+        let buttons = sh.desk_banner_answer_rects(card);
+        assert_eq!(sh.desk_banner_answers(), vec![Answer::Stop, Answer::Repeat]);
+        assert_eq!(buttons.len(), 2);
+        assert!(buttons.iter().all(|b| b.0 + b.2 <= card.0 + card.2 + 0.5 && b.0 > card.0 + card.2 / 2.0), "a column at the right edge");
+        // no hover first: the click lands on Repeat, not on a hidden chevron or the card
+        assert_eq!(sh.notify.banner_hover, None);
+        let repeat = mid(buttons[1]);
+        assert_eq!(sh.desk_banner_part(repeat.0, repeat.1, t), Some(Part::Answer(1)));
+        sh.notify_hover(repeat.0, repeat.1, t);
+        let chevron = mid(sh.desk_banner_chevron(card));
+        assert!(matches!(sh.desk_banner_part(chevron.0, chevron.1, t), Some(Part::Answer(_))), "no chevron over the buttons");
+        sh.desk_banner_act(Part::Answer(1), t + 10.0);
+        assert!(sh.clock.alert().is_none(), "Repeat answered the alert");
+        assert!(!sh.notify_exists(id), "and cleared its notification");
+        let timers = &sh.clock.timers().list;
+        assert_eq!(timers.len(), 1, "the timer runs again");
+        assert_eq!((timers[0].label.as_str(), timers[0].duration_ms, timers[0].running()), ("Tea", 1000, true));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
