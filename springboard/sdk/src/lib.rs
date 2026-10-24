@@ -764,6 +764,14 @@ pub trait App {
     fn ax_text(&self, _ctx: &Ctx) -> Vec<bifrost_ui::ax::AxText> {Vec::new()}
     /// `accessibilityTitle` and `accessibilityHelp` of elements (`Node::label` is `accessibilityLabel`). Sent only when they change.
     fn ax_meta(&self, _ctx: &Ctx) -> Vec<bifrost_ui::ax::AxMeta> {Vec::new()}
+    /// The named custom actions of the nodes `controls` returns (`accessibilityCustomActions`: "Archive", "Reply"), in the
+    /// order the user should hear them. The runtime adds the ones recorded while drawing (`bifrost_ui::ax_action::record`)
+    /// and sends the union only when it changes. A screen reader lists them after press; choosing one calls
+    /// [`App::ax_custom_action`].
+    fn ax_custom_actions(&self, _ctx: &Ctx) -> Vec<bifrost_ui::ax_action::AxActionSet> {Vec::new()}
+    /// An assistive technology chose the custom action `name` of node `id` (one the app listed, with the app's own
+    /// spelling). True when a frame is needed. The default does nothing.
+    fn ax_custom_action(&mut self, _ctx: &Ctx, _id: u64, _name: &str) -> bool {false}
     /// Guided access started or ended, or the user changed one of the app's restrictions.
     /// True when the app needs a new frame. The default ignores it.
     fn guided_access(&mut self, _ctx: &Ctx, _change: guided_access::GuidedAccessChange) -> bool {

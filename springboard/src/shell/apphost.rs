@@ -664,6 +664,8 @@ pub struct AppHost {
     pub ax_notes: Vec<(u64, bifrost_ui::ax::AxNotification)>,
     /// The app's custom rotors (`ToShell::AxRotors`), cleaned with `bifrost_ui::ax_rotor::clean`; empty when it declares none.
     pub custom_rotors: Vec<bifrost_ui::ax::AxCustomRotor>,
+    /// The named custom actions of the app's elements (`ToShell::AxActions`), cleaned with `bifrost_ui::ax_action::clean`.
+    pub ax_actions: Vec<bifrost_ui::ax_action::AxActionSet>,
     /// Guided Access requests (`ToShell::GuidedAccessRequest`: start with restrictions, or end), oldest first, taken by the shell each tick.
     pub guided_requests: Vec<(bool, Vec<bifrost_proto::GuidedRestriction>)>,
     last_notification: Option<f64>,
@@ -824,6 +826,7 @@ impl AppHost {
             announce_banner: Vec::new(),
             ax_notes: Vec::new(),
             custom_rotors: Vec::new(),
+            ax_actions: Vec::new(),
             guided_requests: Vec::new(),
             last_notification: None,
             last_open_url: None,
@@ -1387,6 +1390,7 @@ impl AppHost {
                 self.announcements.push((text, priority));
             }
             ToShell::AxRotors(list) => self.custom_rotors = bifrost_ui::ax_rotor::clean(list),
+            ToShell::AxActions(list) => self.ax_actions = bifrost_ui::ax_action::clean(list),
             ToShell::GuidedAccessRequest { on, restrictions } => {
                 if self.guided_requests.len() >= 4 {
                     self.guided_requests.remove(0);
@@ -3661,6 +3665,19 @@ mod window_table_tests {
             sent(&peer),
             vec![ToApp::WindowInput { window: 3, input: WindowInput::Pointer(wheel) }, ToApp::Pointer(wheel)]
         );
+    }
+
+    /// The custom actions an app names for its elements are kept cleaned, and a new list replaces the old one.
+    #[test]
+    fn custom_actions_are_kept_cleaned_and_replaced_by_the_next_list() {
+        use bifrost_ui::ax_action::AxActionSet;
+        let (channel, _peer) = sys::socketpair_pair().unwrap();
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
+        let mut out = Pumped::default();
+        host.handle(ToShell::AxActions(vec![AxActionSet::new(4, &["Archive", "archive", " "]), AxActionSet::new(5, &[])]), Vec::new(), &mut out);
+        assert_eq!(host.ax_actions, vec![AxActionSet::new(4, &["Archive"])]);
+        host.handle(ToShell::AxActions(Vec::new()), Vec::new(), &mut out);
+        assert!(host.ax_actions.is_empty());
     }
 }
 

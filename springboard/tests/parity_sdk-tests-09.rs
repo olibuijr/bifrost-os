@@ -45,6 +45,7 @@ fn snode(id: u64, role: Role, enabled: bool, checked: Option<bool>) -> SNode {
         title: String::new(),
         help: String::new(),
         text: None,
+        actions: Vec::new(),
     }
 }
 

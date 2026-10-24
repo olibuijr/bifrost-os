@@ -411,6 +411,7 @@ pub fn begin_frame() {
     FRAME.with(|f| f.borrow_mut().clear());
     LINKS.with(|l| l.borrow_mut().clear());
     GROUPS.with(|g| g.borrow_mut().clear());
+    crate::ax_action::clear();
 }
 
 /// Publishes one drawn element. `bounds` are window-local points. The id is stable across frames: a hash of the role and label,

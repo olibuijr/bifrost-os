@@ -7,7 +7,7 @@ pub mod bridge;
 #[cfg(feature = "atspi")]
 mod glue {
     use super::bridge::Bridge;
-    use super::model::{build_ax, AppSnap};
+    use super::model::{build_ax, with_actions, AppSnap};
     use crate::shell::apphost::{installed, AppHost};
     use bifrost_proto::ToApp;
     use std::cell::RefCell;
@@ -60,7 +60,7 @@ mod glue {
                         .filter_map(|(slot, h)| {
                             let h = h.as_ref().filter(|h| h.running())?;
                             let name = names.get(slot).map(|a| a.manifest.name.clone()).filter(|n| !n.is_empty()).unwrap_or_else(|| h.id.clone());
-                            Some(AppSnap { slot: slot as u8, app_id: h.id.clone(), name, nodes: build_ax(&h.controls, &h.controls_tree, &h.ax_text, &h.ax_meta) })
+                            Some(AppSnap { slot: slot as u8, app_id: h.id.clone(), name, nodes: with_actions(build_ax(&h.controls, &h.controls_tree, &h.ax_text, &h.ax_meta), &h.ax_actions) })
                         })
                         .chain(chrome)
                         .collect();

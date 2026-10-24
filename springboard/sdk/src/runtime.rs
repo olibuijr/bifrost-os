@@ -600,6 +600,8 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
     let mut tree_seen: Vec<crate::proto::NodeExt> = Vec::new();
     let mut ax_text_seen: Vec<bifrost_ui::ax::AxText> = Vec::new();
     let mut ax_meta_seen: Vec<bifrost_ui::ax::AxMeta> = Vec::new();
+    let mut ax_actions_seen: Vec<bifrost_ui::ax_action::AxActionSet> = Vec::new();
+    let mut drawn_actions: Vec<bifrost_ui::ax_action::AxActionSet> = Vec::new();
     // what the kit's draw helpers recorded in the last frame: the element map of an app that declares no controls itself
     let mut drawn_nodes: Vec<bifrost_ui::Node> = Vec::new();
     let mut drawn_links: Vec<bifrost_ui::ax::AxLink> = Vec::new();
@@ -784,6 +786,8 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                         need_frame |= app.event(c, Input::Key(k));
                     }
                 }
+                // a named custom action goes to `ax_custom_action` with the spelling the app listed, and only when it listed it
+                ToApp::AxSet { id, action: crate::proto::AxAction::Custom(name) } => {if let Some(c)=&ctx {if let Some(own)=ax_actions_seen.iter().find(|s| s.id==id).and_then(|s| s.canonical(&name)).map(str::to_string) {need_frame |= app.ax_custom_action(c,id,&own);}}}
                 ToApp::AxSet { id, action } => {if let Some(c)=&ctx {need_frame |= app.ax_set(c,id,action);}}
                 ToApp::Activate(id) => {if let Some(c)=&ctx {need_frame |= app.event(c,Input::Activate(id));}}
                 ToApp::Command(command) => {if let Some(c)=&ctx {need_frame |= app.event(c,Input::Command(command));}}
@@ -1081,6 +1085,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                     if sent {
                         busy = true;
                         drawn_links = bifrost_ui::ax::take_links();
+                        drawn_actions = bifrost_ui::ax_action::take();
                         drawn_nodes = bifrost_ui::ax::take_frame();
                         first_frame = false;
                         repaint_suspended = false;
@@ -1103,6 +1108,8 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
         if ax_text!=ax_text_seen {let _=chan.send(&ToShell::AxText(ax_text.clone()).encode(),&[]);ax_text_seen=ax_text;}
         let ax_meta=app.ax_meta(c);
         if ax_meta!=ax_meta_seen {let _=chan.send(&ToShell::AxMeta(ax_meta.clone()).encode(),&[]);ax_meta_seen=ax_meta;}
+        let ax_actions=bifrost_ui::ax_action::merge(app.ax_custom_actions(c),&drawn_actions);
+        if ax_actions!=ax_actions_seen {let _=chan.send(&ToShell::AxActions(ax_actions.clone()).encode(),&[]);ax_actions_seen=ax_actions;}
         // the notifications posted since the last frame (`ax::post`) reach the shell, which turns them into AT-SPI signals
         let notes=bifrost_ui::ax::take_notifications();
         for chunk in notes.chunks(crate::proto::axtext::MAX_NOTES) {let _=chan.send(&ToShell::AxNotify(chunk.to_vec()).encode(),&[]);}

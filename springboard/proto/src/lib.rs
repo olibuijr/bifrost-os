@@ -19,11 +19,13 @@ pub mod quicksearch;
 pub mod peek;
 pub mod axtext;
 pub mod axrotor;
+pub mod axaction;
 pub mod guided;
 pub mod touch;
 pub mod pointer;
 pub use bifrost_ui::touch::{Raw as RawTouch, Sample as TouchSample, Touch as TouchPoint, TouchEvent, TouchPhase, TouchTracker, TouchType};
 pub use bifrost_ui::ax::{AxCustomRotor, AxMeta, AxText, Priority as AnnouncePriority};
+pub use bifrost_ui::ax_action::AxActionSet;
 pub use guided::GuidedRestriction;
 pub mod workspace;
 pub use workspace::{WorkspaceEventKind, WorkspaceOp, WorkspaceStatus};
@@ -862,6 +864,8 @@ pub enum AxAction {
     Increment,
     /// `accessibilityPerformDecrement`: one step down.
     Decrement,
+    /// Runs the element's custom action with this name (`accessibilityCustomActions`, `ToShell::AxActions`).
+    Custom(String),
 }
 
 /// App -> shell.
@@ -1020,6 +1024,9 @@ pub enum ToShell {
     Announce { text: String, priority: AnnouncePriority },
     /// Custom rotors the screen reader steps through beside the standard ones (`bifrost_ui::ax_rotor`). Tag 0x213.
     AxRotors(Vec<AxCustomRotor>),
+    /// The named custom actions of the app's elements (`accessibilityCustomActions`, `bifrost_ui::ax_action`), sent when they
+    /// change; an empty list clears them. Tag 0x215.
+    AxActions(Vec<AxActionSet>),
     /// The accessibility notifications an app posted for its elements (`bifrost_ui::ax::post`), in posting order; the
     /// shell turns each into an AT-SPI signal on the element's object. Tag 0x214.
     AxNotify(Vec<(u64, bifrost_ui::ax::AxNotification)>),
@@ -1816,6 +1823,7 @@ impl ToApp {
                     AxAction::Increment => b.push(3),
                     AxAction::Decrement => b.push(4),
                     AxAction::SetValue(v) => {b.push(1);str_(&mut b, &short(v));}
+                    AxAction::Custom(name) => {b.push(5);str_(&mut b, axtext::cut(name, bifrost_ui::ax_action::MAX_ACTION_NAME));}
                 }
             }
             ToApp::SetMarkedText { text, sel_start, sel_len } => {
@@ -2011,6 +2019,7 @@ impl ToApp {
                     2 => AxAction::Focus,
                     3 => AxAction::Increment,
                     4 => AxAction::Decrement,
+                    5 => AxAction::Custom(axtext::get(&mut r, bifrost_ui::ax_action::MAX_ACTION_NAME)?),
                     _ => return Err(DecodeError::BadValue),
                 };
                 ToApp::AxSet { id, action }
@@ -2248,6 +2257,7 @@ impl ToShell {
             m @ (ToShell::Preview { .. } | ToShell::PreviewClose) => peek::encode_shell(m, &mut b),
             m @ (ToShell::AxText(_) | ToShell::AxMeta(_) | ToShell::Announce { .. } | ToShell::AxNotify(_)) => axtext::encode_shell(m, &mut b),
             m @ ToShell::AxRotors(_) => axrotor::encode_shell(m, &mut b),
+            m @ ToShell::AxActions(_) => axaction::encode_shell(m, &mut b),
             m @ ToShell::GuidedAccessRequest { .. } => guided::encode_shell(m, &mut b),
             m @ ToShell::PointerInterest { .. } => pointer::encode_shell(m, &mut b),
             m @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::NotifySettings { .. } | ToShell::NotifyAuthorize { .. } | ToShell::NotifyPresentDelegate { .. } | ToShell::NotifyPresentReply { .. } | ToShell::NotifySchedule { .. } | ToShell::Share { .. } | ToShell::DistPost { .. } | ToShell::ServiceCall { .. } | ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich::encode_shell(m, &mut b),
@@ -2803,6 +2813,7 @@ impl ToShell {
             t @ 0x230..=0x23f => workspace::decode_shell(t, &mut r)?,
             t @ 0x1e0..=0x1ef => peek::decode_shell(t, &mut r)?,
             t @ 0x213 => axrotor::decode_shell(t, &mut r)?,
+            t @ 0x215 => axaction::decode_shell(t, &mut r)?,
             t @ 0x170 => guided::decode_shell(t, &mut r)?,
             t @ 0x1f1 => pointer::decode_shell(t, &mut r)?,
             t @ 0x210..=0x21f => axtext::decode_shell(t, &mut r)?,
