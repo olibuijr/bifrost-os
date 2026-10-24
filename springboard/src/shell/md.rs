@@ -383,7 +383,8 @@ pub fn toggle_wrap_lines(text: &str, sel: Range<usize>, marker: &str) -> Replace
         ls = le + 1;
     }
     if parts.is_empty() {
-        return Replace { range: a..b, with: chars[a..b].iter().collect(), select: a..b };
+        // nothing to style: hand back the touched lines unchanged, like every other result, and keep the selection
+        return Replace { range: first..last, with: chars[first..last].iter().collect(), select: a..b };
     }
     let found: Vec<_> = parts.iter().map(|&(s, e)| wrapped_by(&chars, s, e, &m)).collect();
     let unwrap = found.iter().all(Option::is_some);
@@ -658,7 +659,7 @@ mod tests {
         let r = toggle_wrap_lines("x **b** y", 4..5, "*");
         assert_eq!(r.with, "x ***b*** y", "italic does not unwrap half of a bold pair");
         let r = toggle_wrap_lines("a\n\nb", 1..3, "**");
-        assert_eq!(r.with, "a\n\nb", "a selection of blank lines changes nothing");
+        assert_eq!((r.range, r.with.as_str(), r.select), (0..4, "a\n\nb", 1..3), "a selection of blank lines changes nothing");
     }
 
     #[test]
