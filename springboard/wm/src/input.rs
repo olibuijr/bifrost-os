@@ -467,6 +467,11 @@ impl WmState {
                 return;
             }
         }
+        // a press on the shell's chrome above the windows (a menu, the menu bar, the Dock) is the chrome's: the window
+        // whose frame lies under it keeps its place and the keyboard (E2E R1, a pop-up past its window's edge)
+        if self.layer_above_windows_at(pos) {
+            return;
+        }
         let hit = self.wm.at(pos.x as i32, pos.y as i32);
         if hit.is_some() || self.surface_under(pos).is_none() {
             self.focus(hit, serial);
