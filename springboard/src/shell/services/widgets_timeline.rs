@@ -36,6 +36,9 @@
 //! - `observe {kind, on}` starts or stops observing one widget; while observing, the shell sends the `visibility` event
 //!   `{kind, on_screen, large}` each time the person adds, removes or resizes it in Edit Widgets (WidgetObservation).
 //!
+//! Events to the app: `reload {kind}` (a new timeline is wanted), `visibility {kind, on_screen, large}` and `opened
+//! {kind, family}` (the person opened the app from that widget; any link arrives as `Open` just before).
+//!
 //! The store is process-wide because Notification Centre draws from it outside a service call; the logic lives in
 //! [`Store`], which the tests drive directly.
 use super::{Event, Shell, SystemService};
@@ -1207,6 +1210,11 @@ fn sync_manifests() {
     });
 }
 
+/// The body of the `opened` event an app gets when the person opens it from one of its widgets: `{kind, family}`.
+pub fn opened_body(kind: &str, family: Family) -> Json {
+    Json::Obj(vec![("kind".into(), Json::Str(kind.into())), ("family".into(), Json::Str(family.key().into()))])
+}
+
 /// The `widgets_timeline` service, registered in [`super::all`].
 pub struct WidgetsTimeline;
 
@@ -1792,6 +1800,12 @@ mod tests {
         assert_eq!(plain.for_family(Family::Small).detail, "");
         let bad = reload_with("k", vec![("families", obj(&[("huge", obj(&[]))]))]);
         assert!(s.call("is.a", "reload", &bad, 0).is_err(), "an unknown size is refused");
+    }
+
+    #[test]
+    fn the_opened_event_names_the_widget_and_its_size() {
+        let b = opened_body("next", Family::Large);
+        assert_eq!((b.str_field("kind").as_deref(), b.str_field("family").as_deref()), (Some("next"), Some("large")));
     }
 
     #[test]

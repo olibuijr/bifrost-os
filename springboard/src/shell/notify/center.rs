@@ -1122,17 +1122,24 @@ impl Shell {
         None
     }
 
-    /// Opens the app of a widget row. A widget with a link opens the app at it: the app gets `Open` with the link.
+    /// Opens the app of a widget row. A widget with a link opens the app at it: the app gets `Open` with the link. An
+    /// app also hears which widget it was opened from: the `widgets_timeline` event `opened {kind, family}` (the
+    /// reference passes the widget's kind and family with the activity that opens the app).
     fn open_widget(&mut self, i: usize, t: f64) {
         let Some((_, row)) = self.center_widget_rects().into_iter().nth(i) else { return };
+        let family = row.family;
         let Some((app, kind)) = row.widget else { return };
         let link = widgets_timeline::link(&app, &kind).map(|l| l.to_url());
         let def = apps::apps().iter().find(|a| a.icon == app.as_str()).map(|a| a.id).or_else(|| apphost::slot_of(&app).map(|slot| AppId::External(slot as u8)));
         let Some(def) = def else { return };
         self.notify.center.hide();
         self.desk_open_or_start(def, t);
-        if let (AppId::External(slot), Some(url)) = (def, link) {
-            self.ext_send(slot as usize, &bifrost_proto::ToApp::Open { url });
+        if let AppId::External(slot) = def {
+            if let Some(url) = link {
+                self.ext_send(slot as usize, &bifrost_proto::ToApp::Open { url });
+            }
+            let body = widgets_timeline::opened_body(&kind, family);
+            self.ext_send(slot as usize, &bifrost_proto::ToApp::ServiceEvent { service: "widgets_timeline".into(), event: "opened".into(), body: body.encode() });
         }
         self.dirty = true;
     }

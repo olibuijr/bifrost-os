@@ -23,6 +23,9 @@ pub const EVENT_RELOAD: &str = "reload";
 /// The event the shell sends to an app that observes a widget (see [`observe`]) when the person adds, removes or
 /// resizes it. Its body is `{"kind": "...", "on_screen": bool, "large": bool}`.
 pub const EVENT_VISIBILITY: &str = "visibility";
+/// The event the shell sends when the person opens the app from one of its widgets. Its body is
+/// `{"kind": "...", "family": "small"|"medium"|"large"}`; a widget link arrives as `Open` just before it.
+pub const EVENT_OPENED: &str = "opened";
 
 /// One dated entry of a widget timeline: shown from `date` until the next entry's date.
 #[derive(Clone, Debug, PartialEq)]
@@ -39,6 +42,9 @@ pub enum Event {
     Reload { kind: String },
     /// The person changed an observed widget: it is `on_screen` (in the column with an entry for now) and `large` or not.
     Visibility { kind: String, on_screen: bool, large: bool },
+    /// The person opened the app from its widget `kind`, shown at `family` (the reference widget kind and family keys
+    /// of the activity that opens the app).
+    Opened { kind: String, family: Family },
 }
 
 /// Decodes a service event: `Some` for this service's events the SDK knows, `None` for any other.
@@ -56,6 +62,7 @@ pub fn parse_event(service: &str, event: &str, body: &Json) -> Option<Event> {
             };
             Some(Event::Visibility { kind, on_screen: flag("on_screen")?, large: flag("large")? })
         }
+        EVENT_OPENED => Some(Event::Opened { kind, family: body.get("family").and_then(Json::as_str).and_then(Family::from_key)? }),
         _ => None,
     }
 }
@@ -564,6 +571,13 @@ mod tests {
         let partial = obj(&[("kind", Json::Str("next".into()))]);
         assert_eq!(parse_event(SERVICE, EVENT_VISIBILITY, &partial), None);
         assert_eq!(parse_event("dock", EVENT_VISIBILITY, &body), None);
+    }
+
+    #[test]
+    fn the_opened_event_names_the_widget_and_its_size() {
+        let body = obj(&[("kind", Json::Str("next".into())), ("family", Json::Str("medium".into()))]);
+        assert_eq!(parse_event(SERVICE, EVENT_OPENED, &body), Some(Event::Opened { kind: "next".into(), family: Family::Medium }));
+        assert_eq!(parse_event(SERVICE, EVENT_OPENED, &obj(&[("kind", Json::Str("next".into()))])), None, "it names a size");
     }
 
     #[test]
