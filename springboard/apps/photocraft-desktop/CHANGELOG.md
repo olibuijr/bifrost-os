@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.15.1
+
+- Upstream photocraft v0.15.1.
+  ## What's Changed
+  * fix(psd): keep pattern budget charges on parse failure by @dylanmtaylor in https://github.com/storytold/photocraft/pull/8767
+  * fix(algo): avoid repeated copies of duplicate EXIF text by @dylanmtaylor in https://github.com/storytold/photocraft/pull/8771
+  * fix(paint): validate gray tile dimensions safely by @dylanmtaylor in https://github.com/storytold/photocraft/pull/8772
+  * fix(text): bound untrusted font and PSD text processing by @dylanmtaylor in https://github.com/storytold/photocraft/pull/8768
+
 ## 0.13.0
 
 - Upstream photocraft v0.13.0.
