@@ -4040,7 +4040,7 @@ impl Settings {
             sb.select(selected);
             use std::hash::{Hash, Hasher};
             let mut k = std::collections::hash_map::DefaultHasher::new();
-            (format!("{selected:?}{:?}", self.side_pressed), sb.gen(), sb.draw_offset().to_bits(), side_w, h, bifrost_render::appearance::scheme().to_bits(), vibrant()).hash(&mut k);
+            (format!("{selected:?}{:?}", self.side_pressed), sb.gen(), sb.draw_offset().to_bits(), side_w, h, bifrost_render::appearance::scheme().to_bits(), vibrant(), bifrost_render::ui::scroll_bars_mode()).hash(&mut k);
             let key = k.finish();
             let fresh = !sb.animating(t) && self.side_cache.as_ref().is_some_and(|(k, i)| *k == key && (i.w, i.h) == (side_w, h));
             if !fresh {

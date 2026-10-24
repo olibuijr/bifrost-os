@@ -18,6 +18,23 @@ const SPRING_W: f32 = 0.012;
 const RUBBER_D: f32 = 1000.0;
 const SAMPLES: usize = 16;
 
+/// The overlay scroll indicator (knob), in points: thin and inset from the trailing edge, as `NativeScrollView` draws it.
+pub const INDICATOR_W_PT: f32 = 3.0;
+pub const INDICATOR_INSET_PT: f32 = 3.0;
+pub const INDICATOR_MIN_PT: f32 = 24.0;
+
+/// The knob's top and length along a viewport `viewport` long whose content scrolls `max` further, scrolled to
+/// `offset`: the knob is as long as the visible share of the content (at least `min_len`) and travels the rest of the
+/// track. None when there is nothing to scroll. All lengths in the same unit.
+pub fn indicator(viewport: f32, max: f32, offset: f32, min_len: f32) -> Option<(f32, f32)> {
+    if !(viewport > 0.0 && max > 0.0) {
+        return None;
+    }
+    let len = (viewport * viewport / (viewport + max)).max(min_len).min(viewport);
+    let t = (offset / max).clamp(0.0, 1.0);
+    Some((t * (viewport - len), len))
+}
+
 /// Where a revealed rectangle is placed in the viewport: the edge or the middle of the target meets that viewport place.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Anchor {
@@ -117,6 +134,11 @@ impl Scroller {
 
     pub fn dragging(&self) -> bool {
         self.touch.is_some_and(|t| t.dragging)
+    }
+
+    /// How far the content scrolls: its length past the viewport (0 when it fits).
+    pub fn max(&self) -> f32 {
+        self.max
     }
 
     pub fn set_max(&mut self, max: f32) {
@@ -245,6 +267,15 @@ impl Default for Scroller {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_indicator_shows_the_visible_share_and_travels_the_track() {
+        assert_eq!(super::indicator(100.0, 0.0, 0.0, 24.0), None, "nothing to scroll");
+        assert_eq!(super::indicator(100.0, 100.0, 0.0, 24.0), Some((0.0, 50.0)), "half the content is visible");
+        assert_eq!(super::indicator(100.0, 100.0, 100.0, 24.0), Some((50.0, 50.0)), "at the end");
+        assert_eq!(super::indicator(100.0, 100.0, -40.0, 24.0), Some((0.0, 50.0)), "a rubber band keeps it in the track");
+        assert_eq!(super::indicator(100.0, 9900.0, 0.0, 24.0).map(|k| k.1), Some(24.0), "a long list keeps a grabbable knob");
+    }
+
     #[test]
     fn the_wheel_moves_the_offset_by_its_travel_within_the_range() {
         let mut s = super::Scroller::new();
