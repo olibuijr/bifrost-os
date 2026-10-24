@@ -649,6 +649,13 @@ impl Display {
         }
         Ok(())
     }
+/// Adds the bounds of the glass shapes that came or went this frame (`moved`, screen px) to the damage of a chrome
+/// surface placed at `origin`: its backdrop changes there whatever its pixels did. A surface masked clear around its
+/// panel (the Apps grid) has no pixel damage outside it, so without this the blur of every shape it was first drawn
+/// with stayed on it, a band of stale plates under the grid (N11).
+fn owe_glass(pending:&mut Damage, origin:(i32,i32), moved:&[(f32,f32,f32,f32)]) {
+    for &(x,y,w,h) in moved { pending.add(x.floor() as i32-origin.0, y.floor() as i32-origin.1, w.ceil() as i32+1, h.ceil() as i32+1); }
+}
 /// Anchors a chrome surface and reserves its edge. The menu bar (id 0) spans the top edge and the Dock (id 2) sits on
 /// the bottom edge, each with an exclusive zone, so the compositor keeps maximized and snapped windows clear of them
 /// (an exclusive zone only counts for a surface anchored to one edge or to three). Everything else is placed from
@@ -948,6 +955,9 @@ fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_
             }
             // a shape that came or went changes the backdrop under its bounds, so those bounds are drawn again
             let moved = bifrost_render::glass::changed_shapes(&before, &g.glass);
+            // the chrome surfaces (the Apps grid, Overview, Search...) blur under the same shapes: a shape that came or went
+            // is owed to each of them too, or the shapes of earlier frames stay on a surface whose pixels did not change (N11)
+            for c in self.state.chrome.values_mut() { owe_glass(&mut c.pending, (c.frame.x, c.frame.y), &moved); }
             let grown;
             let damage = if moved.is_empty() || damage.is_all() { damage } else {
                 let mut d = damage.clone();
@@ -1490,6 +1500,19 @@ fn window_buffer_count(count:usize, available:bool, dirty:bool) -> usize {
 #[cfg(test)]
 mod tests {
     use super::{dock_placement,DockEdge,DockPlacement,focus_on_configure,min_size_of,DEFAULT_MIN_SIZE};
+    /// N11: a glass shape that went away is owed to a chrome surface under it, in the surface's own pixels and clipped
+    /// to it; a shape elsewhere owes it nothing.
+    #[test]
+    fn a_glass_shape_that_changes_is_owed_to_the_chrome_surface_under_it() {
+        let mut pending = crate::gfx::Damage::new(2560, 1300);
+        super::owe_glass(&mut pending, (0, 35), &[(450.0, 1190.0, 1650.0, 150.0), (0.0, 0.0, 100.0, 30.0)]);
+        let a = pending.areas();
+        assert_eq!(a.len(), 1, "the shape above the surface owes it nothing: {a:?}");
+        assert_eq!((a[0].x0, a[0].y0, a[0].x1, a[0].y1), (450, 1155, 2101, 1300), "moved to the surface and clipped to it");
+        let mut none = crate::gfx::Damage::new(100, 100);
+        super::owe_glass(&mut none, (0, 0), &[]);
+        assert!(none.is_empty());
+    }
     #[test]
     fn a_toplevel_advertises_the_frames_minimum_or_the_default() {
         assert_eq!(min_size_of((940,600)),(940,600), "the app's own minimum, e.g. Settings' split width");
