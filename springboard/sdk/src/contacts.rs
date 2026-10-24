@@ -252,9 +252,42 @@ fn decode_date(v: &Json) -> Option<DateComponents> {
     DateComponents::new(part("year").map(|y| y as i32), u8::try_from(part("month")?).ok()?, u8::try_from(part("day")?).ok()?)
 }
 
+/// The reference error domain's raw codes (`CNErrorCode`), measured from the reference SDK's bridge metadata. An app
+/// that reports or logs a contacts failure the way the reference framework does reads them through
+/// [`ContactsError::code`].
+pub mod error_code {
+    pub const COMMUNICATION_ERROR: i64 = 1;
+    pub const DATA_ACCESS_ERROR: i64 = 2;
+    pub const AUTHORIZATION_DENIED: i64 = 100;
+    pub const NO_ACCESSIBLE_WRITABLE_CONTAINERS: i64 = 101;
+    pub const UNAUTHORIZED_KEYS: i64 = 102;
+    pub const FEATURE_DISABLED_BY_USER: i64 = 103;
+    pub const FEATURE_NOT_AVAILABLE: i64 = 104;
+    pub const RECORD_DOES_NOT_EXIST: i64 = 200;
+    pub const INSERTED_RECORD_ALREADY_EXISTS: i64 = 201;
+    pub const CONTAINMENT_CYCLE: i64 = 202;
+    pub const CONTAINMENT_SCOPE: i64 = 203;
+    pub const PARENT_RECORD_DOES_NOT_EXIST: i64 = 204;
+    pub const RECORD_IDENTIFIER_INVALID: i64 = 205;
+    pub const RECORD_NOT_WRITABLE: i64 = 206;
+    pub const PARENT_CONTAINER_NOT_WRITABLE: i64 = 207;
+    pub const VALIDATION_MULTIPLE_ERRORS: i64 = 300;
+    pub const VALIDATION_TYPE_MISMATCH: i64 = 301;
+    pub const VALIDATION_CONFIGURATION_ERROR: i64 = 302;
+    pub const PREDICATE_INVALID: i64 = 400;
+    pub const POLICY_VIOLATION: i64 = 500;
+    pub const CLIENT_IDENTIFIER_INVALID: i64 = 600;
+    pub const CLIENT_IDENTIFIER_DOES_NOT_EXIST: i64 = 601;
+    pub const CLIENT_IDENTIFIER_COLLISION: i64 = 602;
+    pub const CHANGE_HISTORY_EXPIRED: i64 = 603;
+    pub const CHANGE_HISTORY_INVALID_ANCHOR: i64 = 604;
+    pub const CHANGE_HISTORY_INVALID_FETCH_REQUEST: i64 = 605;
+    pub const VCARD_MALFORMED: i64 = 700;
+    pub const VCARD_SUMMARIZATION_ERROR: i64 = 701;
+}
+
 /// Why a contacts call failed. The shell sends the reason as the error message; this maps the reasons it has a name for
-/// and keeps any other message in `Other`. The variants are not `CNErrorCode` raw values: the raw numbers are not
-/// verified yet, so apps match on the variant.
+/// and keeps any other message in `Other`. [`ContactsError::code`] gives the reference raw code of each variant.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ContactsError {
     /// The app holds no grant, or no write access (`CNError` authorization denied).
@@ -278,6 +311,12 @@ pub enum ContactsError {
     FileTooLarge,
     /// The contacts file is in a format this version does not read.
     UnknownFormat,
+    /// The call names a contact the book does not hold (or the app cannot see), with the shell's message.
+    RecordNotFound(String),
+    /// The text is not a readable vCard, with the shell's message.
+    VCardMalformed(String),
+    /// The change token is older than the history the shell keeps; read the whole book again.
+    ChangeHistoryExpired,
     /// Any other failure, with the shell's message.
     Other(String),
 }
@@ -293,11 +332,41 @@ impl ContactsError {
             "Invalid contact" => ContactsError::InvalidContact(String::new()),
             "Contacts file too large" => ContactsError::FileTooLarge,
             "Unknown contacts format" => ContactsError::UnknownFormat,
+            "the change token has expired; read the whole book again" => ContactsError::ChangeHistoryExpired,
+            "no such contact" => ContactsError::RecordNotFound("no such contact".into()),
+            "no vCard in the text" => ContactsError::VCardMalformed("no vCard in the text".into()),
+            other if other.starts_with("not a readable vCard") => ContactsError::VCardMalformed(other.to_string()),
+            other if other.starts_with("no contact ") && other["no contact ".len()..].chars().all(|c| c.is_ascii_digit()) => {
+                ContactsError::RecordNotFound(other.to_string())
+            }
             other if other.starts_with("a contact needs a name") => ContactsError::InvalidContact(other.to_string()),
             other if other.ends_with("is a list") || other.ends_with("cannot be saved yet") || other.ends_with("is not a contacts file field") || other.contains(" is longer than ") || other.ends_with("is not in the shape fetch returns") || other.ends_with("is text") || other.contains("takes one value per contact") || other.ends_with("is text or a list of text") || other.starts_with("a contact is an object") => {
                 ContactsError::InvalidContact(other.to_string())
             }
             other => ContactsError::Other(other.to_string()),
+        }
+    }
+}
+
+impl ContactsError {
+    /// The reference raw code (`CNErrorCode`) this failure stands for. The access-model failures (no grant, restricted,
+    /// nothing picked, already decided) are all authorization denied, as the reference reports them; a read-only grant
+    /// has no writable container; a contact that is not valid is a validation error; a store file that cannot be read
+    /// is a data access error. A failure the shell has no name for reads as a data access error.
+    pub fn code(&self) -> i64 {
+        use error_code::*;
+        match self {
+            ContactsError::NotGranted | ContactsError::Restricted | ContactsError::NothingPicked | ContactsError::AlreadyDecided => {
+                AUTHORIZATION_DENIED
+            }
+            ContactsError::ReadOnly => NO_ACCESSIBLE_WRITABLE_CONTAINERS,
+            ContactsError::NothingToSave => VALIDATION_CONFIGURATION_ERROR,
+            ContactsError::MissingId => RECORD_IDENTIFIER_INVALID,
+            ContactsError::InvalidContact(_) => VALIDATION_MULTIPLE_ERRORS,
+            ContactsError::FileTooLarge | ContactsError::UnknownFormat | ContactsError::Other(_) => DATA_ACCESS_ERROR,
+            ContactsError::RecordNotFound(_) => RECORD_DOES_NOT_EXIST,
+            ContactsError::VCardMalformed(_) => VCARD_MALFORMED,
+            ContactsError::ChangeHistoryExpired => CHANGE_HISTORY_EXPIRED,
         }
     }
 }
@@ -1237,5 +1306,19 @@ mod tests {
     fn the_shell_messages_for_sidecar_fields_map_to_an_invalid_contact() {
         assert!(matches!(ContactsError::from_message("nickname is longer than 320 characters"), ContactsError::InvalidContact(_)));
         assert!(matches!(ContactsError::from_message("birthday is not in the shape fetch returns"), ContactsError::InvalidContact(_)));
+    }
+
+    #[test]
+    fn each_error_has_its_reference_code_and_the_new_messages_are_named() {
+        assert_eq!(ContactsError::NotGranted.code(), 100);
+        assert_eq!(ContactsError::Restricted.code(), error_code::AUTHORIZATION_DENIED);
+        assert_eq!(ContactsError::ReadOnly.code(), 101);
+        assert_eq!(ContactsError::MissingId.code(), 205);
+        assert_eq!(ContactsError::from_message("no contact 9"), ContactsError::RecordNotFound("no contact 9".into()));
+        assert_eq!(ContactsError::from_message("no contact 9").code(), 200);
+        assert!(matches!(ContactsError::from_message("no contact field shoe_size"), ContactsError::Other(_)));
+        assert_eq!(ContactsError::from_message("the change token has expired; read the whole book again").code(), 603);
+        assert_eq!(ContactsError::from_message("no vCard in the text").code(), error_code::VCARD_MALFORMED);
+        assert_eq!(ContactsError::from_message("disk on fire").code(), error_code::DATA_ACCESS_ERROR);
     }
 }
