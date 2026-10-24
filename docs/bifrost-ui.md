@@ -1751,13 +1751,43 @@ Gaps (recorded per the Apple parity rule): no visual format language (`constrain
 debugging (`hasAmbiguousLayout`, `exerciseAmbiguityInLayout`, the constraint-breaking log and the debug view UI;
 conflicting required constraints are only listed in `Window::broken_constraints`), no `activate`/`isActive` toggling of
 single constraints after the fact (rebuild with `remove_constraints` then `constrain`), no `NSLayoutConstraint.constant`
-animation, no baseline anchors, no `systemSpacing(after:)`, no `NSStackView` gravity areas, `detachesHiddenViews` or
-custom spacing per view, no baseline alignment, no `NSLayoutGuide` owned by a view (guides are window-wide), no
+animation, no `systemSpacing(after:)`, no `NSStackView` gravity areas, `detachesHiddenViews` or
+custom spacing per view (baseline anchors and baseline alignment: see "SwiftUI views and layout" below), no `NSLayoutGuide` owned by a view (guides are window-wide), no
 per-view `translatesAutoresizingMaskIntoConstraints` (all frames are window coordinates), and no `updateConstraints` /
 `setNeedsLayout` pass: constraints are re-solved on every `Window::layout`, which is also where a resize arrives. The
 solver is re-created per layout (an edit-variable resize through `suggest` is available on `Solver` but the window does not
 keep a persistent solver yet). `Fill` shrinks stretchable children first and does not rank compression resistance among
 fixed children (use constraints for that). Not compiled or run when written; the lead verifies the tests.
+
+## SwiftUI views and layout (baselines, scroll position, button styles, groupings)
+
+Matrix framework "SwiftUI (Views, View layout)". Reference behaviour comes from the official documentation pages, read
+with REA (evidence ids below); no reference code or strings are copied. Not compiled or run when written; the lead
+verifies the tests.
+
+| Reference | BifrOSt |
+|---|---|
+| `VerticalAlignment.firstTextBaseline` / `.lastTextBaseline` (REA ev_b93a5d6115e46cd5d057bd6f1baba6f5bab80712a0302d4e2fd8db9ed91a5c91) | `View::baselines(ui) -> Option<(first, last)>` (points below the frame's top), reported by `Label`, `Button`, `Switch`, `Segmented`, `Checkbox`, `PopUpButton` and `TextField`; `Stack` folds its children's. `Align::FirstBaseline` / `Align::LastBaseline` on a horizontal `Stack` move the children so their baseline guides meet the lowest one; a child without text aligns its bottom edge, as the reference guide does. Render `Ui::centred_baseline(pt, h)` and `Ui::image_baseline(pt)` give the baseline from the font's line metrics (Dynamic Type included). Tests: `tests_controls.rs` (`first_baseline_alignment_*`, `last_baseline_alignment_*`), render `ui.rs` `the_centred_baseline_*` |
+| `firstBaselineAnchor` / `lastBaselineAnchor` | `anchors(id).first_baseline()` / `.last_baseline()` (`Anchor::FirstBaseline`, `LastBaseline`); the window passes `ViewInfo::baselines`, and the solver keeps each baseline's distance from the frame's vertical centre (exact for the single-line controls, whose text is centred). An item without text offers its bottom edge. Tests: `autolayout.rs` `baseline_anchors_*`, `a_view_without_text_*` |
+| `ScrollPosition` (`init(id:anchor:)`, `init(idType:)`, `edge`, `y`/`point`, `viewID`, `isPositionedByUser`, `scrollTo(id:anchor:)`, `scrollTo(edge:)`, `scrollTo(y:)`), `scrollPosition(_:anchor:)`, `scrollTargetLayout()` (REA ev_c3f2fc904288ef066a11d9985a43fb1422ee185f8672869a681b629037434f56) | `bifrost_ui::scroll_position::{ScrollPosition, ScrollTarget, Edge}`; SDK `ScrollView::set_scroll_targets`, `position()`, `set_position(p)`. An identity without anchor scrolls the minimal amount; with an anchor it meets that viewport place. User scrolling (wheel, drag, fling) sets `is_positioned_by_user`, clears edge and point and reports the top-most visible target (bottom-most with a `Trailing` anchor). On relayout an edge stays at its edge, a user-scrolled row keeps its distance from the viewport top, an app-chosen identity stays visible and a point is left alone. Tests: `ui/src/scroll_position.rs`, `sdk/src/view/scroll.rs` (`the_bound_position_*`, `user_scrolling_updates_*`, `a_relayout_keeps_*`) |
+| `ButtonStyle`, `ButtonStyleConfiguration` (`label`, `isPressed`, `role`), `ButtonRole`, `.bordered`, `.borderedProminent`, `.borderless`, `.plain`, `.link` (REA ev_ed0948f3d1cbfc813ba01d8632df27a86ec8079573d60b20e31314657d0c2be9) | `view::ButtonStyle` trait (`draw`, `size` from a `ButtonConfiguration`), `Button::styled` / `set_style` / `with_role` / `configuration`, built-ins `Bordered` (default, unchanged look), `BorderedProminent` (accent plate), `Borderless`, `Plain`, `LinkStyle` (`LINK`); `ButtonRole::Destructive` draws in `DESTRUCTIVE`. Tests: `tests_groupings.rs` |
+| `GroupBox` (REA ev_82d999d9ca35bf7c060d40b88c1ea62d8270a37a9072e3299303d6f8c0aefd65) | `view::GroupBox::new(content).titled(t)`: a `CARD_BG` card (`m::CARD_RADIUS`) with the content inset by `SPACE_M`, the title above in the group-header style |
+| `ControlGroup`, `ControlGroupStyle` `.automatic`, `.navigation`, `.palette` (REA ev_9abf836f62e12e7ecab6b3d336a9f72862b59ddd808a0024f73147708e31470e) | `view::ControlGroup::new(label, controls).styled(ControlGroupStyle::…)`: buttons take `Borderless`; joined styles share one capsule plate with hairline dividers and equal shares, palette packs them `SPACE_XS` apart; a narrow group shrinks all controls together |
+| `TabView`, `Tab(value:)`, selection binding (REA ev_dd0e19f2411dc509513a1656094075b4f70b1983a8ea321a107c53d698b1a8c4) | `view::TabView::new(action, [(id, label, content)])` over `bifrost_ui::tab_selection`: a centred tab row (`widgets::segmented`) on the top edge of a card, only the selected page visible; click or Left/Right selects and sends `action`; `select(id)` and `selected_id()` bind it to app state |
+
+Gaps (recorded per the Apple parity rule):
+- Baselines: multi-line text views report one line (the SDK has no wrapped text view yet); horizontal-axis baseline
+  alignment (`.firstTextBaseline` in a `VStack` aligns horizontally in the reference only via `HorizontalAlignment`, which
+  has no baseline guides) is not applicable. Custom alignment guides (`alignmentGuide(_:computeValue:)`) are not built.
+- Scroll position: vertical only (no x, no leading or trailing edges), targets are supplied by the app (`ScrollTarget`
+  rows) instead of being read from the view tree, and programmatic scrolls jump (no animated `withAnimation` scroll).
+- Styles: only buttons have a style protocol; `GroupBoxStyle`, `ControlGroupStyle` custom bodies, `ToggleStyle`,
+  `LabelStyle` and `PickerStyle` are not protocols yet. The glass button styles (`.glass`, `.glassProminent`) and
+  `.accessoryBar` are not built.
+- `ControlGroup` `.menu` and `.compactMenu` styles (a pull-down of the controls) are not built; a group has no
+  accessibility element of its own (`Role` has no group case).
+- `TabView`: the desktop tab row only; no sidebar-adaptable style, `TabSection`, tab customization, badges or page
+  style. The tab row reports as a segmented control (`Role` has no tab-group case).
 
 ## App Intents (`AppIntent`, `AppEntity`, `EntityQuery`, `AppShortcutsProvider`)
 
