@@ -1,5 +1,5 @@
-//! JPEG reading: the segment headers give size, components, density, EXIF (APP1), ICC profile (APP2) and comments
-//! without decoding; baseline and progressive pixels are decoded by `zune-jpeg`.
+//! JPEG reading: the segment headers give size, components, density, EXIF and XMP (APP1), ICC profile (APP2), image
+//! resources with IPTC (APP13) and comments without decoding; baseline and progressive pixels are decoded by `zune-jpeg`.
 
 use super::exif::{ColorModel, Dict, PropValue, Properties};
 use super::{Decoded, Frame, MAX_SIDE};
@@ -15,6 +15,8 @@ pub fn probe(data: &[u8]) -> Option<Properties> {
     let mut jfif = Dict::new();
     let mut icc: Vec<(u8, Vec<u8>)> = Vec::new();
     let mut exif: Option<Vec<u8>> = None;
+    let mut xmp: Option<Vec<u8>> = None;
+    let mut resources: Option<Vec<u8>> = None;
     let mut dpi: Option<(f64, f64)> = None;
     let mut progressive = false;
     while p + 4 <= data.len() {
@@ -67,6 +69,8 @@ pub fn probe(data: &[u8]) -> Option<Properties> {
                 }
             }
             0xE1 if seg.starts_with(b"Exif\0\0") => exif = Some(seg[6..].to_vec()),
+            0xE1 if seg.starts_with(super::encode::XMP_APP1_HEADER) => xmp = Some(seg[super::encode::XMP_APP1_HEADER.len()..].to_vec()),
+            0xED if seg.starts_with(b"Photoshop 3.0\0") => resources = Some(seg.to_vec()),
             0xE2 if seg.starts_with(b"ICC_PROFILE\0") && seg.len() > 14 => icc.push((seg[12], seg[14..].to_vec())),
             0xFE => {
                 jfif.insert("Comment".into(), PropValue::Text(String::from_utf8_lossy(seg).into_owned()));
@@ -85,11 +89,71 @@ pub fn probe(data: &[u8]) -> Option<Properties> {
     if let Some(e) = exif {
         props.absorb_exif(&e);
     }
+    props.xmp = xmp;
+    props.image_resources = resources;
     if !icc.is_empty() {
         icc.sort_by_key(|c| c.0);
         props.icc_profile = Some(icc.into_iter().flat_map(|c| c.1).collect());
     }
     Some(props)
+}
+
+/// One marker segment before the first scan: its marker and the byte range from its 0xFF to just past its body.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Segment {
+    pub marker: u8,
+    pub start: usize,
+    pub end: usize,
+}
+
+impl Segment {
+    /// The bytes after the length field (empty for the markers that have no length).
+    pub fn body<'a>(&self, data: &'a [u8]) -> &'a [u8] {
+        data.get(self.start + 4..self.end).unwrap_or(&[])
+    }
+}
+
+/// The segments between SOI and the first scan (SOS) and the offset where that scan starts. Stricter than [`probe`]:
+/// any byte that is not a marker where one belongs, or a segment that runs past the data, gives `None`, so a writer
+/// that copies the scan data verbatim never cuts a file in the wrong place.
+pub fn header_segments(data: &[u8]) -> Option<(Vec<Segment>, usize)> {
+    if data.get(..2)? != [0xFF, 0xD8] {
+        return None;
+    }
+    let mut p = 2;
+    let mut v = Vec::new();
+    while p + 2 <= data.len() {
+        if data[p] != 0xFF {
+            return None;
+        }
+        let m = data[p + 1];
+        if m == 0xFF {
+            p += 1; // fill byte
+            continue;
+        }
+        if m == 0xDA || m == 0xD9 {
+            return Some((v, p));
+        }
+        if (0xD0..=0xD7).contains(&m) || m == 0x01 {
+            v.push(Segment { marker: m, start: p, end: p + 2 });
+            p += 2;
+            continue;
+        }
+        let len = u16::from_be_bytes([*data.get(p + 2)?, *data.get(p + 3)?]) as usize;
+        let end = p + 2 + len;
+        if len < 2 || end > data.len() {
+            return None;
+        }
+        v.push(Segment { marker: m, start: p, end });
+        p = end;
+    }
+    None
+}
+
+/// The TIFF-structured block of the APP1 `Exif` segment, without its prefix.
+pub fn exif_block(data: &[u8]) -> Option<&[u8]> {
+    let (segs, _) = header_segments(data)?;
+    segs.iter().filter(|s| s.marker == 0xE1).map(|s| s.body(data)).find(|b| b.starts_with(b"Exif\0\0")).map(|b| &b[6..])
 }
 
 pub fn decode(data: &[u8]) -> Option<Decoded> {

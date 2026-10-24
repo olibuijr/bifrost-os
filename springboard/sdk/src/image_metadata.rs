@@ -7,7 +7,12 @@
 //! ```
 //!
 //! Location values are decimal degrees: north and east are positive, south and west are negative.
+//!
+//! The descriptive metadata (title, caption, keywords, creator, copyright, rating) comes from the XMP packet when the
+//! file has one, and otherwise from the IPTC datasets of a JPEG's APP13 segment, the order the reference reader
+//! uses when it syncs the two. [`Descriptive`] holds them; [`PictureInfo::descriptive`] is read with the rest.
 
+use bifrost_core::imgmeta;
 use bifrost_render::cg::imageio::exif::{Dict, PropValue};
 use bifrost_render::cg::imageio::{orient_image, ImageSource as Source};
 use bifrost_render::gfx::Image;
@@ -57,6 +62,90 @@ pub struct PictureInfo {
     pub gps_speed_kmh: Option<f64>,
     /// The direction the camera pointed in degrees clockwise from north, 0 up to 360.
     pub gps_direction_deg: Option<f64>,
+    /// Title, caption, keywords, creator, copyright and rating from the XMP packet or the IPTC datasets.
+    pub descriptive: Descriptive,
+}
+
+/// The descriptive metadata of a picture: what a photo library shows and searches.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Descriptive {
+    /// XMP `dc:title`, else IPTC object name (2:05).
+    pub title: Option<String>,
+    /// XMP `dc:description`, else IPTC caption (2:120).
+    pub caption: Option<String>,
+    /// XMP `dc:subject` items, else the IPTC keywords (2:25), in file order.
+    pub keywords: Vec<String>,
+    /// XMP `dc:creator` items, else the IPTC by-line (2:80).
+    pub creators: Vec<String>,
+    /// XMP `dc:rights`, else IPTC copyright notice (2:116).
+    pub copyright: Option<String>,
+    /// XMP `xmp:Rating`: -1 (rejected) or 0 to 5 stars. Other values are dropped.
+    pub rating: Option<i8>,
+}
+
+impl Descriptive {
+    /// Whether nothing is set.
+    pub fn is_empty(&self) -> bool {
+        *self == Descriptive::default()
+    }
+
+    /// Reads the fields from an XMP packet (UTF-8) and an APP13 payload, the XMP value winning for each field.
+    pub fn read(xmp: Option<&[u8]>, image_resources: Option<&[u8]>) -> Descriptive {
+        let packet = xmp.and_then(|x| std::str::from_utf8(x).ok());
+        let iptc = image_resources.map(imgmeta::iptc_from_app13).unwrap_or_default();
+        let one = |name: &str, dataset: u8| {
+            packet.and_then(|p| imgmeta::xmp_value(p, name)).map(|v| v.trim().to_string()).filter(|v| !v.is_empty()).or_else(|| imgmeta::application_value(&iptc, dataset).map(|v| v.trim().to_string()).filter(|v| !v.is_empty()))
+        };
+        let many = |name: &str, dataset: u8| {
+            let from_xmp = packet.map(|p| imgmeta::xmp_values(p, name)).unwrap_or_default();
+            if from_xmp.is_empty() {
+                imgmeta::application_values(&iptc, dataset).into_iter().map(|v| v.trim().to_string()).filter(|v| !v.is_empty()).collect()
+            } else {
+                from_xmp
+            }
+        };
+        let rating = packet.and_then(|p| imgmeta::xmp_value(p, "xmp:Rating")).and_then(|r| r.trim().parse::<f64>().ok()).filter(|r| (-1.0..=5.0).contains(r)).map(|r| r.round() as i8);
+        Descriptive {
+            title: one("dc:title", imgmeta::DS_OBJECT_NAME),
+            caption: one("dc:description", imgmeta::DS_CAPTION),
+            keywords: many("dc:subject", imgmeta::DS_KEYWORDS),
+            creators: many("dc:creator", imgmeta::DS_BYLINE),
+            copyright: one("dc:rights", imgmeta::DS_COPYRIGHT),
+            rating,
+        }
+    }
+
+    /// The XMP packet that holds the fields, or `None` when nothing is set.
+    pub fn xmp_packet(&self) -> Option<String> {
+        if self.is_empty() {
+            return None;
+        }
+        let rating = self.rating.map(|r| r.to_string());
+        let mut props: Vec<(&str, &str)> = Vec::new();
+        for (name, value) in [("dc:title", &self.title), ("dc:description", &self.caption), ("dc:rights", &self.copyright), ("xmp:Rating", &rating)] {
+            if let Some(v) = value {
+                props.push((name, v.as_str()));
+            }
+        }
+        Some(imgmeta::xmp_packet_with_lists(&props, &[("dc:subject", self.keywords.as_slice()), ("dc:creator", self.creators.as_slice())]))
+    }
+
+    /// The APP13 payload with the same fields as IPTC datasets (title, caption, keywords, by-line, copyright), for
+    /// readers that look only there. `None` when none of those fields is set (the rating has no IPTC dataset).
+    pub fn image_resources(&self) -> Option<Vec<u8>> {
+        let mut fields = Vec::new();
+        for (dataset, value) in [(imgmeta::DS_OBJECT_NAME, &self.title), (imgmeta::DS_CAPTION, &self.caption), (imgmeta::DS_COPYRIGHT, &self.copyright)] {
+            if let Some(v) = value {
+                imgmeta::add_application_text(&mut fields, dataset, v);
+            }
+        }
+        for (dataset, list) in [(imgmeta::DS_KEYWORDS, &self.keywords), (imgmeta::DS_BYLINE, &self.creators)] {
+            for v in list {
+                imgmeta::add_application_text(&mut fields, dataset, v);
+            }
+        }
+        (!fields.is_empty()).then(|| imgmeta::app13_payload(&fields))
+    }
 }
 
 /// The UTC time of a GPS fix, as the GPS block stores it: a date (when present) and a time of day.
@@ -110,7 +199,62 @@ pub fn read(bytes: &[u8]) -> Option<PictureInfo> {
         gps_time: gps_time(&p.gps),
         gps_speed_kmh: gps_speed_kmh(&p.gps),
         gps_direction_deg: gps_direction(&p.gps),
+        descriptive: Descriptive::read(p.xmp.as_deref(), p.image_resources.as_deref()),
     })
+}
+
+/// A change to a picture's metadata that leaves its compressed pixels as they are; see [`edit`].
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct MetadataEdit {
+    /// A new EXIF orientation 1..=8 (viewers turn the stored pixels by it).
+    pub orientation: Option<u8>,
+    /// A new capture time, `YYYY:MM:DD HH:MM:SS`.
+    pub date_taken: Option<String>,
+    /// A new location (latitude and longitude; other GPS values are kept).
+    pub location: Option<Location>,
+    /// Remove every location value: the GPS block and the GPS properties of the XMP packet. Wins over `location`.
+    pub remove_location: bool,
+    /// Remove the XMP packet.
+    pub remove_xmp: bool,
+    /// New descriptive fields, written as the XMP packet (and IPTC in a JPEG) in place of the old ones. An empty
+    /// `Descriptive` removes them.
+    pub descriptive: Option<Descriptive>,
+}
+
+pub use bifrost_render::cg::imageio::CopyError;
+
+/// Writes `bytes` again with the metadata changed by `change`, copying the compressed pixels byte for byte, so a JPEG
+/// loses no quality. JPEG, PNG and WebP can be edited; other formats give `CopyError::Unsupported`. Every tag the
+/// edit does not touch is kept (camera maker notes excepted).
+pub fn edit(bytes: &[u8], change: &MetadataEdit) -> Result<Vec<u8>, CopyError> {
+    use bifrost_render::cg::imageio::{copy_image_source, CopyOptions, MetadataSet};
+    let mut set = MetadataSet::default();
+    if let Some(loc) = change.location {
+        let (lat_ref, lon_ref) = (if loc.latitude < 0.0 { "S" } else { "N" }, if loc.longitude < 0.0 { "W" } else { "E" });
+        set.gps.insert("LatitudeRef".into(), PropValue::Text(lat_ref.into()));
+        set.gps.insert("Latitude".into(), PropValue::Floats(decimal_to_dms(loc.latitude).to_vec()));
+        set.gps.insert("LongitudeRef".into(), PropValue::Text(lon_ref.into()));
+        set.gps.insert("Longitude".into(), PropValue::Floats(decimal_to_dms(loc.longitude).to_vec()));
+    }
+    if let Some(d) = &change.descriptive {
+        set.xmp = Some(d.xmp_packet().map(String::into_bytes).unwrap_or_default());
+        set.image_resources = Some(d.image_resources().unwrap_or_default());
+    }
+    let options = CopyOptions {
+        metadata: Some(set),
+        merge: true,
+        exclude_gps: change.remove_location,
+        exclude_xmp: change.remove_xmp,
+        date_time: change.date_taken.clone(),
+        orientation: change.orientation,
+    };
+    copy_image_source(bytes, &options)
+}
+
+/// The picture without any location (GPS block and XMP GPS properties), pixels untouched: what to send when a photo
+/// is shared and its place should stay private.
+pub fn without_location(bytes: &[u8]) -> Result<Vec<u8>, CopyError> {
+    edit(bytes, &MetadataEdit { remove_location: true, ..MetadataEdit::default() })
 }
 
 /// The first image of `bytes` as premultiplied pixels, turned upright by its EXIF orientation.
@@ -315,6 +459,48 @@ mod tests {
         assert!(close(gps_speed_kmh(&gps).unwrap(), 185.2));
         gps.insert("Speed".into(), PropValue::Float(-1.0));
         assert_eq!(gps_speed_kmh(&gps), None);
+    }
+
+    fn located_jpeg() -> Vec<u8> {
+        let mut writer = crate::picture_writer::PictureWriter::new(Format::Jpeg).location(Location { latitude: 64.25, longitude: -21.5 }).altitude(12.0).camera("Acme", "One").caption("Pier");
+        assert!(writer.add_frame(4, 2, vec![200, 100, 50, 255].repeat(8), 0));
+        writer.finish().unwrap()
+    }
+
+    #[test]
+    fn a_shared_copy_loses_its_location_and_nothing_else() {
+        let original = located_jpeg();
+        assert!(read(&original).unwrap().location.is_some());
+        let shared = without_location(&original).unwrap();
+        let info = read(&shared).unwrap();
+        assert_eq!((info.location, info.altitude_m), (None, None));
+        assert_eq!(info.camera_make.as_deref(), Some("Acme"));
+        assert_eq!(info.descriptive.caption.as_deref(), Some("Pier"));
+        assert_eq!(decode_upright(&shared).unwrap().px, decode_upright(&original).unwrap().px, "pixels copied, not re-encoded");
+    }
+
+    #[test]
+    fn an_edit_turns_redates_relocates_and_recaptions_in_place() {
+        let change = MetadataEdit {
+            orientation: Some(6),
+            date_taken: Some("2026:10:24 07:30:00".into()),
+            location: Some(Location { latitude: -33.5, longitude: 151.25 }),
+            descriptive: Some(Descriptive { title: Some("Harbour".into()), keywords: vec!["sea".into()], ..Descriptive::default() }),
+            ..MetadataEdit::default()
+        };
+        let info = read(&edit(&located_jpeg(), &change).unwrap()).unwrap();
+        assert_eq!(info.orientation, 6);
+        assert_eq!(info.date_taken.as_deref(), Some("2026:10:24 07:30:00"));
+        let at = info.location.unwrap();
+        assert!(close(at.latitude, -33.5) && close(at.longitude, 151.25));
+        assert!(close(info.altitude_m.unwrap(), 12.0), "GPS values the edit does not name are kept");
+        assert_eq!(info.descriptive.title.as_deref(), Some("Harbour"));
+        assert_eq!(info.descriptive.caption, None, "the descriptive fields are replaced as a set");
+        let cleared = edit(&located_jpeg(), &MetadataEdit { descriptive: Some(Descriptive::default()), ..MetadataEdit::default() }).unwrap();
+        assert!(read(&cleared).unwrap().descriptive.is_empty());
+        let gif = graphics_imageio::encode(Format::Gif, 2, 1, &[255, 0, 0, 255, 0, 0, 255, 255]).unwrap();
+        assert_eq!(without_location(&gif), Err(CopyError::Unsupported(Format::Gif)));
+        assert_eq!(edit(&located_jpeg(), &MetadataEdit { orientation: Some(0), ..MetadataEdit::default() }), Err(CopyError::BadOptions));
     }
 
     #[test]

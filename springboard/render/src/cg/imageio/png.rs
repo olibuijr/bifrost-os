@@ -24,6 +24,38 @@ fn chunks(data: &[u8]) -> Vec<([u8; 4], &[u8])> {
     out
 }
 
+/// The body of the `eXIf` chunk (a TIFF-structured block).
+pub fn exif_chunk(data: &[u8]) -> Option<&[u8]> {
+    if data.get(..8)? != SIGNATURE {
+        return None;
+    }
+    chunks(data).into_iter().find(|c| &c.0 == b"eXIf").map(|c| c.1)
+}
+
+/// Every chunk as `(type, offset of its length field, offset just past its CRC)`, up to and including IEND. `None`
+/// for data that is not a PNG or whose chunks run past the end, so a writer that copies chunks never cuts one.
+pub fn chunk_spans(data: &[u8]) -> Option<Vec<([u8; 4], usize, usize)>> {
+    if data.get(..8)? != SIGNATURE {
+        return None;
+    }
+    let mut out = Vec::new();
+    let mut p = 8;
+    while p + 12 <= data.len() {
+        let len = u32::from_be_bytes([data[p], data[p + 1], data[p + 2], data[p + 3]]) as usize;
+        let ty = [data[p + 4], data[p + 5], data[p + 6], data[p + 7]];
+        let end = p.checked_add(12)?.checked_add(len)?;
+        if end > data.len() {
+            return None;
+        }
+        out.push((ty, p, end));
+        if &ty == b"IEND" {
+            return Some(out);
+        }
+        p = end;
+    }
+    None
+}
+
 fn latin1(b: &[u8]) -> String {
     b.iter().map(|&c| c as char).collect()
 }
@@ -113,6 +145,9 @@ pub fn probe(data: &[u8]) -> Option<Properties> {
                         let mut parts = rest.splitn(3, |&c| c == 0);
                         let (_, _, text) = (parts.next(), parts.next(), parts.next().unwrap_or(&[]));
                         let text = if flag == 1 { inflate(text).unwrap_or_default() } else { text.to_vec() };
+                        if key == "XML:com.adobe.xmp" {
+                            p.xmp = Some(text.clone());
+                        }
                         png.insert(key, PropValue::Text(String::from_utf8_lossy(&text).into_owned()));
                     }
                 }
@@ -123,6 +158,50 @@ pub fn probe(data: &[u8]) -> Option<Properties> {
     }
     p.png = png;
     Some(p)
+}
+
+/// Rows wider than this are not streamed by [`decode_region`] (one row is held while the rows are read).
+pub const MAX_STREAMED_SIDE: usize = 65_536;
+
+/// The straight RGBA pixels of the rectangle `x`, `y`, `w`, `h` of the (first) image, read row by row: only one row
+/// and the rectangle are held, so a picture larger than `MAX_SIDE` can still be shown a tile at a time. The rows
+/// above the rectangle are inflated and dropped; the rows below are not read. 16-bit samples are narrowed to 8 bits.
+/// `None` for an interlaced picture (its passes interleave the rows), a row wider than `MAX_STREAMED_SIDE`, or a
+/// rectangle outside the picture or larger than `MAX_SIDE` squared pixels.
+pub fn decode_region(data: &[u8], x: usize, y: usize, w: usize, h: usize) -> Option<Vec<u8>> {
+    use ::png::{BitDepth, Transformations};
+    if w == 0 || h == 0 || w.checked_mul(h)? > MAX_SIDE * MAX_SIDE {
+        return None;
+    }
+    let mut d = ::png::Decoder::new(Cursor::new(data));
+    d.set_transformations(Transformations::EXPAND | Transformations::STRIP_16);
+    let mut r = d.read_info().ok()?;
+    let info = r.info();
+    let (iw, ih) = (info.width as usize, info.height as usize);
+    if info.interlaced || iw > MAX_STREAMED_SIDE || x.checked_add(w)? > iw || y.checked_add(h)? > ih {
+        return None;
+    }
+    let (ct, bd) = r.output_color_type();
+    let n = ct.samples();
+    if bd != BitDepth::Eight || !(1..=4).contains(&n) {
+        return None;
+    }
+    let mut out = Vec::with_capacity(w * h * 4);
+    for index in 0..y + h {
+        let row = r.next_row().ok()??;
+        if index < y {
+            continue;
+        }
+        for p in row.data().get(x * n..(x + w) * n)?.chunks_exact(n) {
+            out.extend(match n {
+                1 => [p[0], p[0], p[0], 255],
+                2 => [p[0], p[0], p[0], p[1]],
+                3 => [p[0], p[1], p[2], 255],
+                _ => [p[0], p[1], p[2], p[3]],
+            });
+        }
+    }
+    Some(out)
 }
 
 /// An animated PNG is decoded only when its composited frames hold at most this many pixels in all; a larger one
