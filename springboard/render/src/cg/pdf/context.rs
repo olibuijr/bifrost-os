@@ -377,7 +377,31 @@ fn blend_name(m: BlendMode) -> &'static str {
 fn paint_alpha(p: &Paint) -> f32 {
     match p {
         Paint::Solid(c) => c.alpha().clamp(0.0, 1.0),
+        Paint::Shading(s) => shading_alpha(s),
         _ => 1.0,
+    }
+}
+
+/// The alpha of a shading whose function returns the space's components followed by an alpha, when that alpha is
+/// the same over the whole domain; 1 otherwise. A PDF shading carries no alpha of its own, so a constant one is
+/// written as the fill alpha and a varying one is not written (the colour still is).
+fn shading_alpha(s: &Shading) -> f32 {
+    let f = s.function();
+    let comps = s.space().num_components();
+    if f.outputs() <= comps {
+        return 1.0;
+    }
+    let (d0, d1) = f.domain();
+    let alphas: Vec<f32> = (0..=RAMP_SAMPLES)
+        .map(|i| f.eval(d0 + (d1 - d0) * i as f32 / RAMP_SAMPLES as f32).get(comps).copied().unwrap_or(1.0))
+        .map(|a| if a.is_finite() { a.clamp(0.0, 1.0) } else { 1.0 })
+        .collect();
+    let lo = alphas.iter().copied().fold(1.0f32, f32::min);
+    let hi = alphas.iter().copied().fold(0.0f32, f32::max);
+    if hi - lo < 1.0 / 512.0 {
+        hi
+    } else {
+        1.0
     }
 }
 
@@ -992,9 +1016,11 @@ impl PdfContext {
         let f = s.function();
         let (d0, d1) = f.domain();
         let space = s.space().clone();
+        let k = space.num_components();
         let at = |t: f32| -> [f32; 3] {
+            // the function may return the space's components followed by an alpha: the colour is the first `k`
             let comps = f.eval(d0 + (d1 - d0) * t);
-            let c = Color::new(space.clone(), &comps, 1.0).and_then(|c| c.to_srgb()).unwrap_or([0.0, 0.0, 0.0, 1.0]);
+            let c = Color::new(space.clone(), &comps[..k.min(comps.len())], 1.0).and_then(|c| c.to_srgb()).unwrap_or([0.0, 0.0, 0.0, 1.0]);
             [c[0].clamp(0.0, 1.0), c[1].clamp(0.0, 1.0), c[2].clamp(0.0, 1.0)]
         };
         let samples = sample_ramp(&[], &at);
@@ -1119,7 +1145,7 @@ impl PdfContext {
             Paint::Solid(_) | Paint::Pattern(_) => self.paint_area(&page_area, FillRule::NonZero, paint, false),
             _ => {
                 let Some(body) = self.paint_body(paint, None) else { return };
-                let gs = self.ext_op(self.gs.alpha, 1.0);
+                let gs = self.ext_op(self.gs.alpha * paint_alpha(paint), 1.0);
                 let line = format!("q {gs}{}{body}Q\n", cm(&self.gs.ctm));
                 self.emit(&line);
             }
@@ -1496,7 +1522,8 @@ fn stream(entries: &str, data: &[u8]) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cg::paint::ColorRamp;
+    use crate::cg::color::ColorSpace;
+    use crate::cg::paint::{ColorRamp, Function};
     use crate::cg::pdf::doc::Doc;
     use crate::cg::pdf::{draw, page};
 
@@ -1613,6 +1640,30 @@ mod tests {
         let right = pixel(&pdf, 97, 50);
         assert!(left[0] > 200 && left[2] < 60, "{left:?}");
         assert!(right[2] > 200 && right[0] < 60, "{right:?}");
+    }
+
+    #[test]
+    fn a_shading_with_an_alpha_output_keeps_its_colour() {
+        // red to blue with a constant half alpha: four outputs for a three-component space
+        let f = Function::exponential((0.0, 1.0), vec![1.0, 0.0, 0.0, 0.5], vec![0.0, 0.0, 1.0, 0.5], 1.0).unwrap();
+        let s = Shading::axial(&ColorSpace::Srgb, (0.0, 0.0), (100.0, 0.0), f, true, true).unwrap();
+        let pdf = letter_page(|cx| cx.draw_shading(&s));
+        let text = String::from_utf8_lossy(&pdf);
+        assert!(text.contains("/ShadingType 2"), "{text}");
+        assert!(text.contains("/C0 [1 0 0]"), "the first segment starts red, not black: {text}");
+        assert!(text.contains("/ca 0.5"), "the constant alpha becomes the fill alpha: {text}");
+        let left = pixel(&pdf, 2, 50);
+        let right = pixel(&pdf, 97, 50);
+        // half red or half blue over white
+        assert!(left[0] > 200 && left[1] > 90 && left[1] < 170 && left[2] > 90 && left[2] < 170, "{left:?}");
+        assert!(right[2] > 200 && right[0] > 90 && right[0] < 170, "{right:?}");
+
+        // a varying alpha is not written, but the colour still is
+        let f = Function::exponential((0.0, 1.0), vec![0.0, 1.0, 0.0, 0.0], vec![0.0, 1.0, 0.0, 1.0], 1.0).unwrap();
+        let s = Shading::axial(&ColorSpace::Srgb, (0.0, 0.0), (100.0, 0.0), f, true, true).unwrap();
+        let pdf = letter_page(|cx| cx.draw_shading(&s));
+        let mid = pixel(&pdf, 50, 50);
+        assert!(near(mid, [0, 255, 0]), "green, not black: {mid:?}");
     }
 
     #[test]
