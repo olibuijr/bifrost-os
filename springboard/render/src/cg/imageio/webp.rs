@@ -1,5 +1,6 @@
-//! WebP: container and header reading for every variant (size, alpha, ICC, EXIF) and a full lossless (VP8L)
-//! decoder. Lossy (VP8) and animated files report their size and properties but do not decode.
+//! WebP: container and header reading for every variant (size, alpha, ICC, EXIF), a full lossless (VP8L)
+//! decoder and a lossless encoder (predictor and subtract-green transforms, backward copies, Huffman codes). Lossy
+//! (VP8) and animated files report their size and properties but do not decode; the encoder writes lossless only.
 
 use super::exif::{Dict, PropValue, Properties};
 use super::{Decoded, Frame, MAX_SIDE};
@@ -561,6 +562,461 @@ pub fn decode(data: &[u8]) -> Option<Decoded> {
     Some(Decoded { frames: vec![Frame { w, h, rgba8, rgba16: None, delay_ms: 0 }], props: vec![props], loop_count: None })
 }
 
+// ---------------------------------------------------------------------------------------------------------------
+// lossless encoder
+
+/// The largest side a lossless file can hold (14 bits).
+const MAX_ENCODE_SIDE: usize = 1 << 14;
+/// Predictor blocks are 2^PREDICTOR_BITS pixels square.
+const PREDICTOR_BITS: u32 = 4;
+/// The longest backward copy the length prefix codes reach.
+const MAX_COPY: usize = 4096;
+/// The farthest plain distance whose code (distance + 120) stays inside the 40-symbol distance alphabet.
+const MAX_DIST: usize = (1 << 20) - 120;
+
+/// LSB-first bit writer.
+struct Bw {
+    out: Vec<u8>,
+    acc: u64,
+    n: u32,
+}
+
+impl Bw {
+    fn new() -> Bw {
+        Bw { out: Vec::new(), acc: 0, n: 0 }
+    }
+
+    fn put(&mut self, v: u32, bits: u32) {
+        if bits == 0 {
+            return;
+        }
+        self.acc |= (v as u64 & ((1u64 << bits) - 1)) << self.n;
+        self.n += bits;
+        while self.n >= 8 {
+            self.out.push(self.acc as u8);
+            self.acc >>= 8;
+            self.n -= 8;
+        }
+    }
+
+    fn finish(mut self) -> Vec<u8> {
+        if self.n > 0 {
+            self.out.push(self.acc as u8);
+        }
+        self.out
+    }
+}
+
+/// Huffman code lengths for `freq`, none longer than `limit`. One used symbol gets length 1 (the decoder reads it
+/// with no bits); a code with two or more symbols is complete.
+fn huffman_lengths(freq: &[u32], limit: u32) -> Vec<u8> {
+    use std::cmp::Reverse;
+    use std::collections::BinaryHeap;
+    let mut lens = vec![0u8; freq.len()];
+    let used: Vec<usize> = (0..freq.len()).filter(|&i| freq[i] > 0).collect();
+    match used.len() {
+        0 => return lens,
+        1 => {
+            lens[used[0]] = 1;
+            return lens;
+        }
+        _ => {}
+    }
+    let n = used.len();
+    let mut w: Vec<u64> = used.iter().map(|&i| freq[i] as u64).collect();
+    loop {
+        let mut parent = vec![usize::MAX; 2 * n - 1];
+        let mut heap = BinaryHeap::with_capacity(n);
+        for (k, &wk) in w.iter().enumerate() {
+            heap.push(Reverse((wk, k)));
+        }
+        let mut next = n;
+        while heap.len() > 1 {
+            let (Some(Reverse((wa, a))), Some(Reverse((wb, b)))) = (heap.pop(), heap.pop()) else { break };
+            parent[a] = next;
+            parent[b] = next;
+            heap.push(Reverse((wa + wb, next)));
+            next += 1;
+        }
+        // a parent is always numbered after its children, so walking down from the root fills every depth
+        let mut depth = vec![0u32; next];
+        for k in (0..next - 1).rev() {
+            depth[k] = depth[parent[k]] + 1;
+        }
+        if depth[..n].iter().all(|&d| d <= limit) {
+            for (k, &i) in used.iter().enumerate() {
+                lens[i] = depth[k] as u8;
+            }
+            return lens;
+        }
+        for x in &mut w {
+            *x = (*x >> 1).max(1);
+        }
+    }
+}
+
+/// A prefix code ready for writing: per symbol its code and length. A code with one symbol writes no bits.
+struct Hc {
+    codes: Vec<u16>,
+    lens: Vec<u8>,
+    single: bool,
+}
+
+impl Hc {
+    fn new(lens: Vec<u8>) -> Hc {
+        let mut count = [0u16; 16];
+        for &l in &lens {
+            if l > 0 {
+                count[l as usize] += 1;
+            }
+        }
+        let mut next = [0u16; 16];
+        let mut code = 0u16;
+        for l in 1..16 {
+            code = (code + count[l - 1]) << 1;
+            next[l] = code;
+        }
+        let codes = lens
+            .iter()
+            .map(|&l| {
+                if l == 0 {
+                    0
+                } else {
+                    let c = next[l as usize];
+                    next[l as usize] += 1;
+                    c
+                }
+            })
+            .collect();
+        let single = lens.iter().filter(|&&l| l > 0).count() <= 1;
+        Hc { codes, lens, single }
+    }
+
+    /// Writes `sym`, most significant code bit first (the order the decoder reads them in).
+    fn put(&self, bw: &mut Bw, sym: usize) {
+        if self.single {
+            return;
+        }
+        let (code, len) = (self.codes[sym], self.lens[sym] as u32);
+        for i in (0..len).rev() {
+            bw.put((code >> i) as u32 & 1, 1);
+        }
+    }
+}
+
+/// Writes the code lengths `lens` of one alphabet as a simple code when that is possible, else as a normal code.
+fn write_lengths(bw: &mut Bw, lens: &[u8]) {
+    let used: Vec<usize> = (0..lens.len()).filter(|&i| lens[i] > 0).collect();
+    if used.is_empty() {
+        // one symbol, 0, read with no bits
+        bw.put(1, 1);
+        bw.put(0, 1);
+        bw.put(0, 1);
+        bw.put(0, 1);
+        return;
+    }
+    if used.len() <= 2 && used.iter().all(|&s| s < 256) {
+        bw.put(1, 1);
+        bw.put(used.len() as u32 - 1, 1);
+        if used[0] < 2 {
+            bw.put(0, 1);
+            bw.put(used[0] as u32, 1);
+        } else {
+            bw.put(1, 1);
+            bw.put(used[0] as u32, 8);
+        }
+        if used.len() == 2 {
+            bw.put(used[1] as u32, 8);
+        }
+        return;
+    }
+    bw.put(0, 1);
+    // code length symbols: 0..=15 literally, 17 for 3..=10 zeros, 18 for 11..=138 zeros
+    let mut toks: Vec<(usize, u32, u32)> = Vec::new();
+    let mut i = 0;
+    while i < lens.len() {
+        if lens[i] == 0 {
+            let mut run = 1;
+            while i + run < lens.len() && lens[i + run] == 0 && run < 138 {
+                run += 1;
+            }
+            if run >= 11 {
+                toks.push((18, 7, run as u32 - 11));
+                i += run;
+                continue;
+            }
+            if run >= 3 {
+                toks.push((17, 3, run as u32 - 3));
+                i += run;
+                continue;
+            }
+        }
+        toks.push((lens[i] as usize, 0, 0));
+        i += 1;
+    }
+    let mut freq = [0u32; 19];
+    for t in &toks {
+        freq[t.0] += 1;
+    }
+    let cl = huffman_lengths(&freq, 7);
+    let n = CODE_LENGTH_ORDER.iter().rposition(|&o| cl[o] != 0).map_or(0, |k| k + 1).max(4);
+    bw.put(n as u32 - 4, 4);
+    for &o in CODE_LENGTH_ORDER.iter().take(n) {
+        bw.put(cl[o] as u32, 3);
+    }
+    bw.put(0, 1); // the lengths cover the whole alphabet
+    let hc = Hc::new(cl);
+    for (sym, bits, extra) in toks {
+        hc.put(bw, sym);
+        bw.put(extra, bits);
+    }
+}
+
+/// The prefix symbol, extra bit count and extra bits of a length or distance value (1 or more).
+fn prefix_code(v: u32) -> (usize, u32, u32) {
+    let d = v - 1;
+    if d < 4 {
+        return (d as usize, 0, 0);
+    }
+    let h = 31 - d.leading_zeros();
+    let second = (d >> (h - 1)) & 1;
+    (2 * h as usize + second as usize, h - 1, d & ((1 << (h - 1)) - 1))
+}
+
+enum Tok {
+    Lit(u32),
+    Copy { len: usize, code: u32 },
+}
+
+/// Literal pixels and backward copies for `px`, a `w` pixel wide image: candidates are the pixel to the left, the
+/// pixel above and the last position with the same colour.
+fn tokens(px: &[u32], w: usize) -> Vec<Tok> {
+    const HASH_BITS: u32 = 16;
+    let mut last = vec![usize::MAX; 1 << HASH_BITS];
+    let hash = |p: u32| (p.wrapping_mul(0x1e35_a7bd) >> (32 - HASH_BITS)) as usize;
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < px.len() {
+        let limit = (px.len() - i).min(MAX_COPY);
+        let mut best = (0usize, 0usize);
+        let try_dist = |dist: usize, best: &mut (usize, usize)| {
+            if dist == 0 || dist > i || dist > MAX_DIST {
+                return;
+            }
+            let mut len = 0;
+            while len < limit && px[i + len] == px[i + len - dist] {
+                len += 1;
+            }
+            if len > best.0 {
+                *best = (len, dist);
+            }
+        };
+        try_dist(1, &mut best);
+        try_dist(w, &mut best);
+        let h = hash(px[i]);
+        if last[h] != usize::MAX {
+            try_dist(i - last[h], &mut best);
+        }
+        let (len, dist) = best;
+        if len >= 3 {
+            let code = if dist == w {
+                1
+            } else if dist == 1 {
+                2
+            } else {
+                dist as u32 + 120
+            };
+            out.push(Tok::Copy { len, code });
+            for k in i..i + len {
+                last[hash(px[k])] = k;
+            }
+            i += len;
+        } else {
+            out.push(Tok::Lit(px[i]));
+            last[h] = i;
+            i += 1;
+        }
+    }
+    out
+}
+
+/// Writes one entropy-coded image: no colour cache, no meta prefix codes (`level0` adds that bit), one group of
+/// five codes built from the tokens' frequencies, then the tokens.
+fn write_stream(bw: &mut Bw, px: &[u32], w: usize, level0: bool) {
+    bw.put(0, 1); // no colour cache
+    if level0 {
+        bw.put(0, 1); // no meta prefix codes
+    }
+    let toks = tokens(px, w);
+    let mut green = vec![0u32; 256 + 24];
+    let mut red = vec![0u32; 256];
+    let mut blue = vec![0u32; 256];
+    let mut alpha = vec![0u32; 256];
+    let mut dist = vec![0u32; 40];
+    for t in &toks {
+        match *t {
+            Tok::Lit(p) => {
+                green[(p >> 8 & 255) as usize] += 1;
+                red[(p >> 16 & 255) as usize] += 1;
+                blue[(p & 255) as usize] += 1;
+                alpha[(p >> 24) as usize] += 1;
+            }
+            Tok::Copy { len, code } => {
+                green[256 + prefix_code(len as u32).0] += 1;
+                dist[prefix_code(code).0] += 1;
+            }
+        }
+    }
+    let codes: Vec<Hc> = [green, red, blue, alpha, dist]
+        .iter()
+        .map(|f| {
+            let lens = huffman_lengths(f, 15);
+            write_lengths(bw, &lens);
+            Hc::new(lens)
+        })
+        .collect();
+    for t in &toks {
+        match *t {
+            Tok::Lit(p) => {
+                codes[0].put(bw, (p >> 8 & 255) as usize);
+                codes[1].put(bw, (p >> 16 & 255) as usize);
+                codes[2].put(bw, (p & 255) as usize);
+                codes[3].put(bw, (p >> 24) as usize);
+            }
+            Tok::Copy { len, code } => {
+                let (s, bits, extra) = prefix_code(len as u32);
+                codes[0].put(bw, 256 + s);
+                bw.put(extra, bits);
+                let (s, bits, extra) = prefix_code(code);
+                codes[4].put(bw, s);
+                bw.put(extra, bits);
+            }
+        }
+    }
+}
+
+fn sub_px(a: u32, b: u32) -> u32 {
+    let mut r = 0;
+    for s in [0, 8, 16, 24] {
+        r |= (((a >> s) & 255).wrapping_sub((b >> s) & 255) & 255) << s;
+    }
+    r
+}
+
+/// How costly a residual is to code: the sum of its channels read as signed bytes.
+fn residual_cost(r: u32) -> u32 {
+    [0u32, 8, 16, 24].iter().map(|&s| ((r >> s) as u8 as i8 as i32).unsigned_abs()).sum()
+}
+
+/// The predictor residuals of `px` (`w` x `h`) and the mode chosen for each block: per block the mode whose residuals
+/// cost least. The edges follow the decoder: the first pixel predicts opaque black, the first row the pixel to the
+/// left and the first column the pixel above.
+fn predict_forward(px: &[u32], w: usize, h: usize) -> (Vec<u32>, Vec<u32>, usize) {
+    let bw = div_ceil(w, PREDICTOR_BITS);
+    let bh = div_ceil(h, PREDICTOR_BITS);
+    let pred_at = |mode: u32, x: usize, y: usize| -> u32 {
+        let i = y * w + x;
+        if y == 0 && x == 0 {
+            0xff00_0000
+        } else if y == 0 {
+            px[i - 1]
+        } else if x == 0 {
+            px[i - w]
+        } else {
+            predict(mode, px[i - 1], px[i - w], px[i - w + 1], px[i - w - 1])
+        }
+    };
+    let side = 1usize << PREDICTOR_BITS;
+    let mut modes = vec![0u32; bw * bh];
+    for by in 0..bh {
+        for bx in 0..bw {
+            let (x0, y0) = (bx * side, by * side);
+            let (x1, y1) = ((x0 + side).min(w), (y0 + side).min(h));
+            let mut best = (u64::MAX, 1u32);
+            for mode in 0..14u32 {
+                let mut cost = 0u64;
+                for y in y0..y1 {
+                    for x in x0..x1 {
+                        cost += residual_cost(sub_px(px[y * w + x], pred_at(mode, x, y))) as u64;
+                    }
+                }
+                if cost < best.0 {
+                    best = (cost, mode);
+                }
+            }
+            modes[by * bw + bx] = best.1;
+        }
+    }
+    let mut res = vec![0u32; w * h];
+    for y in 0..h {
+        for x in 0..w {
+            let mode = modes[(y >> PREDICTOR_BITS) * bw + (x >> PREDICTOR_BITS)];
+            res[y * w + x] = sub_px(px[y * w + x], pred_at(mode, x, y));
+        }
+    }
+    let sub: Vec<u32> = modes.iter().map(|&m| 0xff00_0000 | m << 8).collect();
+    (res, sub, bw)
+}
+
+/// The VP8L bitstream for straight RGBA pixels: a predictor transform, the subtract-green transform, then the
+/// entropy-coded residuals.
+fn encode_vp8l(w: usize, h: usize, rgba: &[u8]) -> Vec<u8> {
+    let px: Vec<u32> = rgba
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .take(w * h)
+        .map(|p| (p[3] as u32) << 24 | (p[0] as u32) << 16 | (p[1] as u32) << 8 | p[2] as u32)
+        .collect();
+    let alpha_used = px.iter().any(|p| p >> 24 != 255);
+    let mut bw = Bw::new();
+    bw.put(0x2f, 8);
+    bw.put(w as u32 - 1, 14);
+    bw.put(h as u32 - 1, 14);
+    bw.put(alpha_used as u32, 1);
+    bw.put(0, 3);
+    // predictor
+    let (res, modes, mw) = predict_forward(&px, w, h);
+    bw.put(1, 1);
+    bw.put(0, 2);
+    bw.put(PREDICTOR_BITS - 2, 3);
+    write_stream(&mut bw, &modes, mw, false);
+    // subtract green
+    bw.put(1, 1);
+    bw.put(2, 2);
+    let res: Vec<u32> = res
+        .into_iter()
+        .map(|p| {
+            let g = (p >> 8) & 255;
+            let r = (((p >> 16) & 255).wrapping_sub(g)) & 255;
+            let b = ((p & 255).wrapping_sub(g)) & 255;
+            (p & 0xff00_ff00) | r << 16 | b
+        })
+        .collect();
+    bw.put(0, 1); // no more transforms
+    write_stream(&mut bw, &res, w, true);
+    bw.finish()
+}
+
+/// A lossless WebP file (a RIFF container with one `VP8L` chunk) for straight RGBA pixels, rows top to bottom.
+/// `None` for an empty image, too few bytes or a side above 16384. Colour profiles and metadata are not written.
+pub fn encode(w: usize, h: usize, rgba: &[u8]) -> Option<Vec<u8>> {
+    if w == 0 || h == 0 || w > MAX_ENCODE_SIDE || h > MAX_ENCODE_SIDE || rgba.len() < w.checked_mul(h)?.checked_mul(4)? {
+        return None;
+    }
+    let body = encode_vp8l(w, h, rgba);
+    let mut out = b"RIFF".to_vec();
+    let padded = body.len() + (body.len() & 1);
+    out.extend(((4 + 8 + padded) as u32).to_le_bytes());
+    out.extend(b"WEBPVP8L");
+    out.extend((body.len() as u32).to_le_bytes());
+    out.extend(&body);
+    if body.len() & 1 == 1 {
+        out.push(0);
+    }
+    Some(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -655,5 +1111,67 @@ mod tests {
         assert_eq!(c.decode(&mut br), 0);
         assert_eq!(c.decode(&mut br), 2);
         assert!(Code::build(&[1, 1, 1]).is_none(), "over-subscribed");
+    }
+
+    fn gradient_rgba(w: usize, h: usize) -> Vec<u8> {
+        let mut v = Vec::with_capacity(w * h * 4);
+        for y in 0..h {
+            for x in 0..w {
+                v.extend([(x * 255 / w.max(1)) as u8, (y * 255 / h.max(1)) as u8, ((x ^ y) & 255) as u8, if (x + y) % 7 == 0 { 128 } else { 255 }]);
+            }
+        }
+        v
+    }
+
+    #[test]
+    fn the_lossless_encoder_round_trips_exactly() {
+        for (w, h) in [(1, 1), (2, 1), (1, 3), (17, 9), (64, 40)] {
+            let rgba = gradient_rgba(w, h);
+            let file = encode(w, h, &rgba).unwrap();
+            let p = probe(&file).unwrap();
+            assert_eq!((p.pixel_width, p.pixel_height), (w, h));
+            let d = decode(&file).unwrap_or_else(|| panic!("{w}x{h} decodes"));
+            assert_eq!(d.frames[0].rgba8, rgba, "{w}x{h}");
+        }
+    }
+
+    #[test]
+    fn flat_and_repeating_images_compress_through_copies() {
+        let (w, h) = (128, 128);
+        let mut rgba = Vec::with_capacity(w * h * 4);
+        for i in 0..w * h {
+            rgba.extend(if (i / 5) % 2 == 0 { [10, 200, 30, 255] } else { [250, 250, 250, 255] });
+        }
+        let file = encode(w, h, &rgba).unwrap();
+        assert!(file.len() < w * h, "{} bytes for {} raw", file.len(), w * h * 4);
+        assert_eq!(decode(&file).unwrap().frames[0].rgba8, rgba);
+        let p = probe(&file).unwrap();
+        assert!(!p.has_alpha, "an opaque image does not claim alpha");
+    }
+
+    #[test]
+    fn the_encoder_refuses_what_the_format_cannot_hold() {
+        assert!(encode(0, 1, &[]).is_none());
+        assert!(encode(2, 2, &[0; 8]).is_none(), "too few bytes");
+        assert!(encode(MAX_ENCODE_SIDE + 1, 1, &vec![0; (MAX_ENCODE_SIDE + 1) * 4]).is_none());
+    }
+
+    #[test]
+    fn length_limited_codes_stay_complete() {
+        // Fibonacci-like frequencies force a deep tree; the limit must hold and the code stay decodable
+        let mut freq = vec![0u32; 40];
+        let (mut a, mut b) = (1u32, 1u32);
+        for f in freq.iter_mut().take(30) {
+            *f = a;
+            let c = a.saturating_add(b);
+            a = b;
+            b = c;
+        }
+        let lens = huffman_lengths(&freq, 15);
+        assert!(lens.iter().all(|&l| l <= 15));
+        assert!(Code::build(&lens).is_some(), "complete");
+        assert_eq!(prefix_code(1), (0, 0, 0));
+        assert_eq!(prefix_code(5), (4, 1, 0));
+        assert_eq!(prefix_code(4096).0, 23);
     }
 }

@@ -2,7 +2,7 @@
 //! PNG, JPEG, GIF, BMP, TIFF or ICO, with an orientation, a capture date, a camera, the software that wrote it, a
 //! location, altitude, speed, direction and GPS time, the exposure and lens, a JPEG quality, a frame delay and a GIF loop count. Each format keeps the metadata it can
 //! carry (JPEG, PNG and TIFF keep the orientation, date, camera, software and location; GIF, BMP and ICO keep only the
-//! pixels and frame timing). WebP is read only.
+//! pixels and frame timing). WebP is written lossless and keeps only the pixels.
 //!
 //! ```ignore
 //! let mut writer = PictureWriter::new(Format::Jpeg)
@@ -46,7 +46,7 @@ pub struct PictureWriter {
 }
 
 impl PictureWriter {
-    /// A writer for `format`. Formats that cannot be written (WebP) make [`PictureWriter::finish`] return `None`.
+    /// A writer for `format`. Every format can be written; WebP is written lossless with the first frame only.
     pub fn new(format: Format) -> Self {
         PictureWriter {
             format,
@@ -349,11 +349,12 @@ mod tests {
     }
 
     #[test]
-    fn no_frames_or_a_read_only_format_gives_nothing() {
+    fn no_frames_gives_nothing_and_webp_is_written_lossless() {
         assert_eq!(PictureWriter::new(Format::Png).finish(), None);
         let mut webp = PictureWriter::new(Format::Webp);
         assert!(webp.add_frame(2, 1, two_pixels(), 0));
-        assert_eq!(webp.finish(), None);
+        let bytes = webp.finish().expect("webp writes");
+        assert_eq!(Format::detect(&bytes), Some(Format::Webp));
     }
 
     #[test]
