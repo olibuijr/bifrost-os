@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 0.10.25 — 2026-10-24
+
+Fixes from the 0.10.24 end-to-end pass on Midget.
+
+- Locking the desktop (Ctrl+Cmd+Q, the menu, a hot corner or AssistiveTouch) keeps the display on and always opens the login window. The lock screen takes the keyboard before menus, sheets, Overview and other layers, and a key wakes a locked display that went dark.
+- Typing `exit` in Terminal closes only its window. Show Desktop toggles back, and Bring All to Front returns windows that Show Desktop put aside. Overview ends Show Desktop, leaves out minimised windows and shows covered windows' contents.
+- Window arrangement (Fill, halves, Center, Return to Previous Size and Ctrl+Cmd+arrows) acts on the window in front, including other apps' windows, and works under Terminal Secure Keyboard Entry. Requires the matching window server, version 7 of the window-level protocol.
+- Clock alerts on the desktop ring as a banner with Stop instead of taking over the screen. The desktop repaints completely after a full-screen alert.
+- The scroll wheel no longer resizes a window when the pointer is at a window edge, and the click after a wheel notch over Settings is no longer lost. Viewing Settings or Overview no longer changes preferences.
+- The translucent backdrop behind the app grid and other glass panels lines up with the panel.
+- Settings: Return in Search opens the highlighted result, and Up and Down step through results. The sidebar keeps its scroll position across resizes, applies a new icon size immediately, and shows scroll bars when they are set to Always.
+- The CPU and RAM menu bar panels no longer list apps that have quit.
+- Notes Cmd+B on a selection spanning several lines styles each line (with Notes 1.24.1). Also shipping: Clock 1.6.1 (timer presets select a duration; Start starts it) and Mail 0.17.2 (the main window takes back its own size after a compose window; compose errors appear in the compose window).
+
 ## 0.10.24 — 2026-10-23
 
 - Dock changes from Settings use the full output after window-local input handling finishes. A filled Settings window no longer loses space repeatedly when moving the Dock between edges or toggling auto-hide.
