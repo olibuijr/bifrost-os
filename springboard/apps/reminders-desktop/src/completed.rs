@@ -13,8 +13,8 @@ use bifrost_app::layout::UNIFIED_BAR_PT;
 const STRIP_TOP: f32 = 96.0;
 pub(super) const STRIP_H: f32 = 24.0;
 /// The alert's buttons.
-const ASK_CLEAR: u32 = 1;
-const ASK_CANCEL: u32 = 2;
+pub(super) const ASK_CLEAR: u32 = 1;
+pub(super) const ASK_CANCEL: u32 = 2;
 /// Extra touch room around the strip's links (points).
 const SLOP: f32 = 6.0;
 /// " • " between the count and Clear.
@@ -105,8 +105,11 @@ impl Reminders {
         s.fill_rrect(ui.pt(SPACE_XL), p.y + p.h - hair, self.w as f32 - ui.pt(SPACE_HUGE), hair, 0.0, SEPARATOR_C.now());
     }
 
-    /// The Clear alert while it is up.
+    /// The Clear alert while it is up (or Recently Deleted's purge alert, `purge.rs`, which shares its buttons).
     pub(super) fn clear_sheet(&self) -> Option<Sheet> {
+        if self.purge_ask.is_some() {
+            return self.purge_sheet();
+        }
         if !self.clear_ask {
             return None;
         }
@@ -127,6 +130,7 @@ impl Reminders {
         let (parent, bar) = self.sheet_parent(ui);
         let k = ui.pt(1.0);
         match sheet.hit(parent, bar, 1.0, x / k, y / k) {
+            Hit::Button(ASK_CLEAR) if self.purge_ask.is_some() => Some(Target::PurgeConfirm),
             Hit::Button(ASK_CLEAR) => Some(Target::ClearConfirm),
             Hit::Button(_) => Some(Target::ClearCancel),
             _ => None,

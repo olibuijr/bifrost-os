@@ -236,7 +236,8 @@ impl App for RemindersApp {
         let mut reminder = vec![
             AppMenuItem::new(MENU_NEW, "New Reminder").key("cmd+n").enabled(on_items),
             AppMenuItem::separator(),
-            AppMenuItem::new(MENU_DELETE, "Delete Reminder").key("cmd+backspace").enabled(selected),
+            // on Recently Deleted it is Delete Permanently for the selected kept reminder (asks first)
+            AppMenuItem::new(MENU_DELETE, "Delete Reminder").key("cmd+backspace").enabled(selected || (on_items && a.kept_selected().is_some())),
             AppMenuItem::new(MENU_COMPLETE, "Mark as Completed").enabled(selected),
             AppMenuItem::new(MENU_URGENT, if a.selected_urgent() { "Remove Urgent Mark" } else { "Mark as Urgent" }).enabled(selected),
             AppMenuItem::separator(),
