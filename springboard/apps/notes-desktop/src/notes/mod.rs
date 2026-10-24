@@ -5877,7 +5877,8 @@ mod tests {
         assert!(n.erase_sheet().is_some(), "Delete Permanently asks too");
         assert!(dir.join(folders::TRASH).join("1.md").exists());
         // the window behind the alert is blocked: a tap far from its buttons does nothing
-        tap(&mut n, &ui, 4.0, n.h as f32 - 4.0, 410.0);
+        let y = n.h as f32 - 4.0;
+        tap(&mut n, &ui, 4.0, y, 410.0);
         assert!(n.erase_sheet().is_some() && n.editing().is_some());
         n.run(&ui, Act::EraseConfirmed, 420.0);
         assert!(n.erase_sheet().is_none() && n.editing().is_none());
