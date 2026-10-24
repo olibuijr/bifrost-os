@@ -568,7 +568,9 @@ fn run() -> std::io::Result<()> {
         #[cfg(feature = "desktop-wayland")]
         if wayland {
             // the wallpaper stays pending until the presenter reports the blur landed (a failed rebuild is retried)
-            let live = shell.live_look().animated();
+            // the animated look a frame belongs to: its blur is built once per look and size, not per frame
+            let look = shell.live_look();
+            let live = look.animated().then_some(look as u8);
             let uploaded = match shell.desktop_wallpaper_once() {
                 Some((wp, x)) => disp.wayland_wallpaper(wp, x, live),
                 None => disp.wayland_gpu_active(),

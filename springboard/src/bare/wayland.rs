@@ -823,9 +823,9 @@ fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_
         out.append(&mut self.state.inputs);
     }
     /// The wallpaper the GPU draws under the desktop (uploaded and blurred once per change), always covering the output
-    /// whatever the picture's size. `live` marks a frame of an animated look (its blur is rebuilt less often).
+    /// whatever the picture's size. `live` is the animated look a frame belongs to (its blur is built once per look and size).
     /// Returns false when there is no GPU presenter or the blur did not land (the shell asks again).
-    pub fn wallpaper(&mut self, wp: crate::gfx::View, x: i32, live: bool) -> bool {
+    pub fn wallpaper(&mut self, wp: crate::gfx::View, x: i32, live: Option<u8>) -> bool {
         let screen = (self.state.size.0 as usize, self.state.size.1 as usize);
         if let Some(g) = &mut self.gpu { g.p.set_wallpaper(wp, x, 0, screen, live) } else { false }
     }

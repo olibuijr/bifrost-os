@@ -1357,7 +1357,14 @@ impl Window {
             }
         }
         let wanted: Vec<TileId> = self.maps.view.tiles().into_iter().map(|(id, _, _)| id).collect();
-        changed |= self.loader.want(&wanted);
+        // once the view's own tiles are in, the level a Zoom Out shows loads too, so zooming out finds it ready (E2E
+        // W4-15: the outer squares stayed empty for ~2 s). It goes first: the loader fetches the last wanted first.
+        let mut base = Vec::new();
+        if wanted.iter().all(|&t| self.loader.image(t).is_some()) {
+            base = self.maps.view.zoom_out_tiles(crate::state::ZOOM_STEP);
+        }
+        base.extend_from_slice(&wanted);
+        changed |= self.loader.want(&base);
         changed |= self.loader.pump();
         if self.maps.show_traffic != self.traffic_on {
             self.traffic_on = self.maps.show_traffic;
