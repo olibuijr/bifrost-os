@@ -103,6 +103,7 @@ fn disclosure(s: &mut Surface, x: f32, y: f32, size: f32, folded: bool, color: u
     }
 }
 use bifrost_app::kit::ui::{SPACE_XS};
+use bifrost_app::controls::sheet::{ButtonRole, Hit, Sheet, SheetButton};
 
 /// Picker sheet header height and thumbnail decode size (pt).
 const PICK_HEAD_PT: f32 = 52.0;
@@ -321,7 +322,10 @@ enum Act {
     Duplicate,
     ClearChecked,
     Recover,
+    /// Delete Permanently: asks first (`erase_ask`)
     EraseNote,
+    /// the alert's Delete: the note goes for good
+    EraseConfirmed,
     AttachPhoto,
     InsertSketch,
     ChoosePhoto,
@@ -575,7 +579,17 @@ pub struct Notes {
     copied: Option<String>,
     /// what each row of the context menu the shell shows does (row id = index + 1)
     context: Vec<Act>,
+    /// the id of the note in Recently Deleted that Delete Note or Delete Permanently asks about: the alert is up
+    erase_ask: Option<String>,
+    /// Cmd+B (or another character style) inside a run of that style, with nothing selected: the run is split at
+    /// `pending_at` by the next typing there, which goes in plain. Nothing is inserted until then, so no empty marker
+    /// pair is left in the note when the caret moves on or nothing is typed
+    split: Option<Fmt>,
 }
+
+/// The buttons of the Delete Permanently alert.
+const ERASE_DELETE: u32 = 1;
+const ERASE_CANCEL: u32 = 2;
 
 /// Every note on disk (root, folders and the bin after purging the expired),
 /// where each lives, and the folder names.
@@ -620,7 +634,7 @@ impl Notes {
     /// The scroll wheel (or a two-finger scroll) at pixel `(x, y)`: `dy` px moves the content of the column under the
     /// pointer (positive scrolls toward the top). True when something moved.
     pub fn wheel(&mut self, ui: &Ui, x: f32, _y: f32, dy: f32) -> bool {
-        if self.menu.is_some() || self.settings_open || self.sketch.is_some() || self.picker.is_some() || dy == 0.0 {
+        if self.menu.is_some() || self.erase_ask.is_some() || self.settings_open || self.sketch.is_some() || self.picker.is_some() || dy == 0.0 {
             return false;
         }
         self.fit_scroll(ui);
@@ -683,7 +697,7 @@ impl Notes {
         }
         self.editor.select_all();
         self.editor.focused = true;
-        self.pending.clear();
+        self.clear_pending();
         self.dirty = true;
         true
     }
@@ -702,7 +716,7 @@ impl Notes {
             Some(copied) if md::to_plain(copied) == text || *copied == text => copied.clone(),
             _ => text,
         };
-        self.pending.clear();
+        self.clear_pending();
         self.paste_text(ui, &text, t);
         true
     }
@@ -861,6 +875,8 @@ impl Notes {
             pending_at: 0,
             copied: None,
             context: vec![],
+            erase_ask: None,
+            split: None,
         };
         n.search.focused = false;
         n.editor.set_markdown(ui, true);
@@ -1310,7 +1326,7 @@ impl Notes {
     /// frame is needed.
     pub fn text_input(&mut self, ui: &Ui, ev: &bifrost_app::proto::ToApp, t: f64) -> bool {
         use bifrost_app::proto::ToApp;
-        if self.sketch.is_some() || self.naming.is_some() || self.replacing.is_some() {
+        if self.sketch.is_some() || self.naming.is_some() || self.replacing.is_some() || self.erase_ask.is_some() {
             return false;
         }
         if self.search.focused {
@@ -2087,6 +2103,8 @@ impl Notes {
         match self.screen {
             Screen::Editor(_) => self.run(ui, Act::DeleteNote, t),
             Screen::List => match self.selected_index() {
+                // Delete Note on a selected note in Recently Deleted asks first, as it does with the note open
+                Some(row) if self.loc_of(&self.notes[self.shown[row]].id) == folders::TRASH => self.ask_erase(self.shown[row]),
                 Some(row) => self.delete_row(ui, row, t),
                 None => return false,
             },
@@ -2205,6 +2223,63 @@ impl Notes {
         let y = self.content_bottom(ui) - ui.pt(SPACE_HUGE);
         let (lx, lw) = self.list_px(ui);
         (lx + ui.pt(SPACE_M), y, lw - ui.pt(SPACE_XL), ui.pt(36.0))
+    }
+
+    /// Delete Note or Delete Permanently on note `i` in Recently Deleted: the alert asks first, as the reference does
+    /// (it cannot be undone).
+    fn ask_erase(&mut self, i: usize) {
+        self.menu = None;
+        self.erase_ask = Some(self.notes[i].id.clone());
+        self.dirty = true;
+    }
+
+    /// The alert's Delete: the asked-about note goes for good (closed first when it is open).
+    fn erase_confirmed(&mut self, ui: &Ui, t: f64) {
+        let Some(id) = self.erase_ask.take() else { return };
+        self.dirty = true;
+        let Some(i) = self.notes.iter().position(|n| n.id == id) else { return };
+        if self.screen == Screen::Editor(i) {
+            self.autosave.fire(t, true);
+            self.unsaved = None;
+            self.screen = Screen::List;
+            self.keyboard.set_shown(false, t);
+            self.editor.focused = false;
+            self.hl.clear();
+        }
+        self.erase(i);
+        self.rebuild(ui, t);
+    }
+
+    /// The Delete Permanently alert while it is up.
+    fn erase_sheet(&self) -> Option<Sheet> {
+        self.erase_ask.as_ref()?;
+        let buttons = vec![SheetButton::new(ERASE_DELETE, "Delete", ButtonRole::Destructive), SheetButton::new(ERASE_CANCEL, "Cancel", ButtonRole::Cancel)];
+        Some(Sheet::alert("This note will be deleted immediately. You can\u{2019}t undo this action.", "", buttons))
+    }
+
+    /// The window in points (the alert's parent) and the height of its title bar, which the alert hangs from.
+    fn sheet_parent(&self, ui: &Ui) -> (bifrost_app::controls::Rect, f32) {
+        let k = ui.pt(1.0);
+        (bifrost_app::controls::Rect { x: 0.0, y: 0.0, w: self.w as f32 / k, h: self.h as f32 / k }, nav_bottom_pt())
+    }
+
+    /// A tap while the alert is up: Delete erases, Cancel closes it, and the rest of the window is blocked.
+    fn erase_tap(&mut self, ui: &Ui, x: f32, y: f32, t: f64) {
+        let Some(sheet) = self.erase_sheet() else { return };
+        let (parent, bar) = self.sheet_parent(ui);
+        let k = ui.pt(1.0);
+        match sheet.hit(parent, bar, 1.0, x / k, y / k) {
+            Hit::Button(ERASE_DELETE) => self.run(ui, Act::EraseConfirmed, t),
+            Hit::Button(_) => self.erase_ask = None,
+            _ => {}
+        }
+    }
+
+    /// Draws the alert over the whole window (`draw` calls it last).
+    fn draw_erase_ask(&self, s: &mut Surface, ui: &Ui) {
+        let Some(sheet) = self.erase_sheet() else { return };
+        let (parent, bar) = self.sheet_parent(ui);
+        bifrost_app::widgets::sheet(s, ui, parent, bar, &sheet, 1.0, None);
     }
 
     /// Swipe-delete: into Recently Deleted, or for good from inside it.
@@ -2449,7 +2524,7 @@ impl Notes {
                     // nothing selected: the style waits for the next typing (a typing attribute), so no markers
                     // appear in the note until there is text for them to hold
                     if self.pending_at != sel.start {
-                        self.pending.clear();
+                        self.clear_pending();
                         self.pending_at = sel.start;
                     }
                     match self.pending.iter().position(|p| *p == f) {
@@ -2483,41 +2558,56 @@ impl Notes {
     /// past the closing marker, at its start before the opening one, and inside it the run is split at the caret
     /// (one undo step). False when the caret is not in such a run.
     fn end_style_at_caret(&mut self, ui: &Ui, f: Fmt, caret: usize, t: f64) -> bool {
+        let _ = (ui, t);
         let Some(style) = style_of(f) else { return false };
+        if self.split == Some(f) && self.pending_at == caret {
+            // pressed again before any typing: the style goes on for the typing after all
+            self.split = None;
+            self.dirty = true;
+            return true;
+        }
         let para = self.editor.paragraph_of(caret);
         let line: String = self.editor.text().chars().skip(para.start).take(para.len()).collect();
         let c = caret - para.start;
         let Some((inner, ml)) = md::emphasis_at(&line, md::classify(&line).prefix, c, style) else { return false };
-        self.pending.clear();
+        self.clear_pending();
         self.dirty = true;
         if c == inner.end {
             self.editor.set_caret(caret + ml);
         } else if c == inner.start {
             self.editor.set_caret(caret - ml);
         } else {
-            let m = marker_of(f);
-            self.editor.replace_range(ui, caret..caret, &format!("{m}{m}"), t, false);
-            self.editor.set_caret(caret + ml);
-            self.changed(ui, t);
+            // the split waits for the typing (`type_pending`): inserting an empty `****` now would stay in the note
+            // when nothing is typed there
+            self.split = Some(f);
+            self.pending_at = caret;
         }
         true
+    }
+
+    /// Drops the styles waiting for the next typing and a split waiting at the caret.
+    fn clear_pending(&mut self) {
+        self.pending.clear();
+        self.split = None;
     }
 
     /// Typed `s` at the caret with styles pending (Cmd+B with nothing selected): the text goes in wrapped in their
     /// markers and the caret stays inside them, so the typing that follows keeps the style. False (nothing done) when
     /// no style is pending at the caret; a pending style left behind by a caret move is dropped.
     fn type_pending(&mut self, ui: &Ui, s: &str, t: f64) -> bool {
-        if self.pending.is_empty() {
+        if self.pending.is_empty() && self.split.is_none() {
             return false;
         }
         let caret = self.editor.caret();
         if self.editor.selection().is_some() || caret != self.pending_at {
-            self.pending.clear();
+            self.clear_pending();
             return false;
         }
-        let open: String = self.pending.iter().map(|f| marker_of(*f)).collect();
-        let close: String = self.pending.iter().rev().map(|f| marker_of(*f)).collect();
-        self.pending.clear();
+        // a split run closes before the typing and opens again after it, so the typing between is without its style
+        let cut = self.split.map_or("", marker_of);
+        let open: String = std::iter::once(cut).chain(self.pending.iter().map(|f| marker_of(*f))).collect();
+        let close: String = self.pending.iter().rev().map(|f| marker_of(*f)).chain(std::iter::once(cut)).collect();
+        self.clear_pending();
         self.editor.replace_range(ui, caret..caret, &format!("{open}{s}{close}"), t, false);
         self.editor.set_caret(caret + open.chars().count() + s.chars().count());
         true
@@ -2943,8 +3033,8 @@ impl Notes {
             Act::ClearChecked => self.clear_checked(ui, t),
             Act::DeleteNote => {
                 if let Screen::Editor(i) = self.screen {
-                    // a note already in Recently Deleted goes for good, as a swipe there does (`delete_row`): trashing
-                    // it again would move it onto itself
+                    // a note already in Recently Deleted goes for good, after the alert Delete Permanently shows too:
+                    // trashing it again would move it onto itself
                     if self.loc_of(&self.notes[i].id) == folders::TRASH {
                         self.run(ui, Act::EraseNote, t);
                         return;
@@ -2970,16 +3060,10 @@ impl Notes {
             }
             Act::EraseNote => {
                 if let Screen::Editor(i) = self.screen {
-                    self.autosave.fire(t, true);
-                    self.unsaved = None;
-                    self.screen = Screen::List;
-                    self.keyboard.set_shown(false, t);
-                    self.editor.focused = false;
-                    self.erase(i);
-                    self.hl.clear();
-                    self.rebuild(ui, t);
+                    self.ask_erase(i);
                 }
             }
+            Act::EraseConfirmed => self.erase_confirmed(ui, t),
             Act::AttachPhoto => self.attach_latest_photo(ui, t),
             Act::InsertSketch => self.open_sketch(),
             Act::InsertTable => self.insert_table(ui, t),
@@ -3475,6 +3559,13 @@ impl Notes {
     /// Typed input for the search field or the editor.
     pub fn key(&mut self, ui: &Ui, out: Out, t: f64) {
         self.dirty = true;
+        if self.erase_ask.is_some() {
+            // the alert takes the keys: Return does not answer its destructive Delete, and Escape (`escape`) cancels
+            if matches!(out, Out::Hide) {
+                self.erase_ask = None;
+            }
+            return;
+        }
         if self.sketch.is_some() {
             // the sketch pad takes no typing; Hide closes it
             if matches!(out, Out::Hide) {
@@ -3574,6 +3665,10 @@ impl Notes {
         let editing = matches!(self.screen, Screen::Editor(_));
         let field = self.field_focused();
         let (ctrl, shift, alt, meta) = (mods & CHORD_CTRL != 0, mods & CHORD_SHIFT != 0, mods & CHORD_ALT != 0, mods & CHORD_META != 0);
+        if self.erase_ask.is_some() {
+            // the alert is modal: no command reaches the note behind it
+            return true;
+        }
         if key == KEY_TAB && mods == CHORD_SHIFT && editing {
             // Shift+Tab takes a level off the list lines
             self.shift_indent(ui, false, t);
@@ -3595,7 +3690,7 @@ impl Notes {
         let Some(changed) = self.editor.key_combo(ui, combo, t) else { return false };
         self.dirty = true;
         if changed {
-            self.pending.clear();
+            self.clear_pending();
             self.changed(ui, t);
         } else {
             self.show_caret(ui);
@@ -3691,6 +3786,11 @@ impl Notes {
     /// pending style. The open note stays open, as in the reference (Back and the list close it).
     pub fn escape(&mut self, ui: &Ui, t: f64) -> bool {
         let _ = ui;
+        if self.erase_ask.take().is_some() {
+            // Escape is the alert's Cancel
+            self.dirty = true;
+            return true;
+        }
         if self.menu.take().is_some() {
             self.dirty = true;
             return true;
@@ -3712,10 +3812,10 @@ impl Notes {
         }
         match self.screen {
             Screen::Editor(_) => {
-                let had = self.editor.selection().is_some() || !self.pending.is_empty();
+                let had = self.editor.selection().is_some() || !self.pending.is_empty() || self.split.is_some();
                 let caret = self.editor.caret();
                 self.editor.set_caret(caret);
-                self.pending.clear();
+                self.clear_pending();
                 self.dirty |= had;
                 had
             }
@@ -3834,6 +3934,13 @@ impl Notes {
             Event::Power | Event::Wake | Event::VolumeUp | Event::VolumeDown | Event::Screenshot => return,
         };
         self.sync_width(ui);
+        if self.erase_ask.is_some() {
+            // the alert is modal: its buttons answer and the window behind it is blocked
+            if let Event::Up(..) = ev {
+                self.erase_tap(ui, x, y, t);
+            }
+            return;
+        }
         let kb_top = self.kb_top(ui);
         let in_list = !matches!(self.screen, Screen::Editor(_)) || x < self.ed_px(ui).0;
         if self.sketch.is_some() {
@@ -3906,7 +4013,7 @@ impl Notes {
                         let (ox, oy) = self.text_origin(ui);
                         self.pressed = None;
                         self.text_drag = true;
-                        self.pending.clear();
+                        self.clear_pending();
                         self.search.focused = false;
                         self.editor.press(ui, x - ox, y - oy, t, self.pointer_shift);
                     }
@@ -4399,6 +4506,7 @@ impl Notes {
             let undo = self.labels.get(ui, "Undo", MAC_FOOTNOTE_PT, Weight::Semibold, LINK);
             s.blit(undo, (x + w - ui.pt(SPACE_M) - undo.w as f32) as i32, (y + h / 2.0 - undo.h as f32 / 2.0) as i32, 255, 255);
         }
+        self.draw_erase_ask(s, ui);
     }
 }
 
@@ -5732,9 +5840,47 @@ mod tests {
         n.run(&ui, Act::View(View::Trash), 200.0);
         n.open_note(&ui, n.shown[0], false, 300.0);
         assert!(n.chord(&ui, 14, bifrost_app::proto::CHORD_META, 400.0), "Cmd+Backspace");
+        // it asks first, as the reference does: the note cannot come back
+        let sheet = n.erase_sheet().expect("the alert is up");
+        assert_eq!(sheet.title, "This note will be deleted immediately. You can\u{2019}t undo this action.");
+        assert!(sheet.buttons.iter().any(|b| b.title == "Delete" && b.role == ButtonRole::Destructive));
+        assert!(dir.join(folders::TRASH).join("1.md").exists(), "nothing erased yet");
+        n.key(&ui, Out::Enter, 410.0);
+        assert!(n.erase_sheet().is_some(), "Return does not answer the destructive Delete");
+        assert!(n.escape(&ui, 420.0) && n.erase_sheet().is_none(), "Escape cancels");
+        assert!(n.editing().is_some() && dir.join(folders::TRASH).join("1.md").exists(), "the note stays");
+        // asked again, the alert's Delete erases it
+        assert!(n.chord(&ui, 14, bifrost_app::proto::CHORD_META, 430.0));
+        let (parent, bar) = n.sheet_parent(&ui);
+        let sheet = n.erase_sheet().unwrap();
+        let (_, r) = sheet.layout(parent, bar, 1.0).buttons.into_iter().find(|(id, _)| *id == ERASE_DELETE).unwrap();
+        let k = ui.pt(1.0);
+        tap(&mut n, &ui, (r.x + r.w / 2.0) * k, (r.y + r.h / 2.0) * k, 440.0);
+        assert_eq!(n.erase_sheet(), None);
         assert_eq!(n.notice, None, "no error notice");
         assert_eq!(n.editing(), None, "the note closed");
         assert!(n.listed().is_empty());
+        assert!(!dir.join(folders::TRASH).join("1.md").exists(), "erased from disk");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn delete_permanently_shares_the_alert() {
+        let ui = ui();
+        let dir = scratch("trash-delete-permanently");
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut n = seeded(&ui, &dir);
+        n.delete_row(&ui, 0, 100.0);
+        n.run(&ui, Act::View(View::Trash), 200.0);
+        n.open_note(&ui, n.shown[0], false, 300.0);
+        n.run(&ui, Act::EraseNote, 400.0);
+        assert!(n.erase_sheet().is_some(), "Delete Permanently asks too");
+        assert!(dir.join(folders::TRASH).join("1.md").exists());
+        // the window behind the alert is blocked: a tap far from its buttons does nothing
+        tap(&mut n, &ui, 4.0, n.h as f32 - 4.0, 410.0);
+        assert!(n.erase_sheet().is_some() && n.editing().is_some());
+        n.run(&ui, Act::EraseConfirmed, 420.0);
+        assert!(n.erase_sheet().is_none() && n.editing().is_none());
         assert!(!dir.join(folders::TRASH).join("1.md").exists(), "erased from disk");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -6152,12 +6298,41 @@ mod tests {
         assert_eq!(n.editor.caret(), 10, "the caret stepped out past the closing marker");
         type_text(&mut n, &ui, " plain", 2100.0);
         assert_eq!(n.editor.text(), "T\n**bold** plain");
-        // inside the bold text the run is split at the caret
+        // inside the bold text the run is split at the caret by the typing
         n.editor.set_caret(6);
         n.run(&ui, Act::Do(Format::Char(Fmt::Bold)), 2200.0);
-        assert_eq!(n.editor.text(), "T\n**bo****ld** plain");
-        type_text(&mut n, &ui, "x", 2300.0);
-        assert_eq!(n.editor.text(), "T\n**bo**x**ld** plain", "the typing between the runs is plain");
+        assert_eq!(n.editor.text(), "T\n**bold** plain", "nothing goes in before the typing");
+        type_text(&mut n, &ui, "xy", 2300.0);
+        assert_eq!(n.editor.text(), "T\n**bo**xy**ld** plain", "the typing between the runs is plain");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_split_with_nothing_typed_leaves_no_empty_marker_pair() {
+        // Cmd+B inside bold, then the caret moves on (or Cmd+B again): no `**bo****ld**` is left in the note
+        let ui = ui();
+        let dir = scratch("bold-split-moved");
+        let mut n = app(&ui, &dir);
+        open_with(&mut n, &ui, "T\n**bold** z");
+        n.editor.set_caret(6);
+        n.run(&ui, Act::Do(Format::Char(Fmt::Bold)), 2000.0);
+        assert_eq!(n.editor.text(), "T\n**bold** z");
+        // the caret moves to the end: the typing there is plain text, not a split
+        n.editor.set_caret(12);
+        type_text(&mut n, &ui, "q", 2100.0);
+        assert_eq!(n.editor.text(), "T\n**bold** zq");
+        // Cmd+B twice at the same caret: the bold goes on for the typing, which joins the run
+        n.editor.set_caret(6);
+        n.run(&ui, Act::Do(Format::Char(Fmt::Bold)), 2200.0);
+        n.run(&ui, Act::Do(Format::Char(Fmt::Bold)), 2300.0);
+        type_text(&mut n, &ui, "x", 2400.0);
+        assert_eq!(n.editor.text(), "T\n**boxld** zq");
+        // Escape drops the split as it drops a pending style
+        n.editor.set_caret(6);
+        n.run(&ui, Act::Do(Format::Char(Fmt::Bold)), 2500.0);
+        assert!(n.escape(&ui, 2600.0));
+        type_text(&mut n, &ui, "w", 2700.0);
+        assert_eq!(n.editor.text(), "T\n**bowxld** zq");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
