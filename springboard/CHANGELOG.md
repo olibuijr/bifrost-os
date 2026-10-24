@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Quitting Music (or any app that started playback) stops it: the audio service gives playback to the connection that set the queue, and when that app quits, crashes or is killed the queue is cleared and a radio station's network connection closes, instead of the station playing on with no app.
+
 ## 0.10.26 — 2026-10-24
 
 - Modifier keys stay in step with the keyboard: the shell follows the window server's modifier state when keyboard focus enters or leaves it and on every modifier change, so a Shift or Cmd release that went to another window can no longer leave the key held (which turned every click in Mail into a range selection). Right Alt keeps working as AltGr on layouts where the window server reports it as Alt, and modifiers taken by event taps or Switch Control stay taken. The state report gains a `key_mods=` line.
