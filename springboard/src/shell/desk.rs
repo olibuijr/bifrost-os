@@ -2703,6 +2703,13 @@ impl Shell {
                     }
                     self.desk_layout(i);
                 }
+                // the cascade places a window once, when it first opens: shown again (after the desk dropped it while
+                // the table kept it) it comes back where the person left it, not cascaded anew
+                if cascade {
+                    if let Some(Some(h)) = self.ext.get_mut(slot as usize) {
+                        h.windows.set_cascade(&h.id, id, false);
+                    }
+                }
             }
         }
         // the placement and collapse the table asks for (`WindowMove`, `WindowCollapse`), on every window the desk shows

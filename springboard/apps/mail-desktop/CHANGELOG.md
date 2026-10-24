@@ -5,7 +5,7 @@
 - Switching mailboxes shows the mailbox's last listing at once, with the message it had selected, and the new listing
   refreshes it in place: the list was emptied to "Loading..." for several seconds on every switch, even for an inbox
   listed moments before. Only a mailbox never listed in this run shows Loading. Each account keeps its own rows.
-- A message opened in its own viewer window is placed where it is meant to be again.
+- Message viewer windows open cascaded beside the main window instead of over its message list.
 
 ## 0.17.2 — 2026-10-24
 
