@@ -243,8 +243,20 @@ settings. `Gradient::draw_in_path`, `draw_in_rect` (linear, at an angle, same di
 and `stroke_with_shadow` cast a `ShadowStyle` (`ShadowStyle::effect`) under the shape. `ColorList::system(dark)` is the built-in
 System list of the 13 named system colours, `ColorLists::standard(dark)` starts a registry with it, `swatches()` and
 `apply_to_panel(key, panel)` feed a colour well and the colour panel, and `to_text` / `from_text` keep a list in a text file.
-Gaps: NSImage representations per codec, NSColorSpace pickers, an eyedropper, NSPrintOperation.runModal and NSPageLayout in the
+Gaps: NSColorSpace pickers, an eyedropper, NSPrintOperation.runModal and NSPageLayout in the
 shell are not built yet. Host tests only; not yet checked on Midget.
+
+2026-10-24, image objects draw themselves (`bifrost_app::image_object`): `ImageObject::draw(canvas, pixels, dst, scale,
+tint, alpha)` draws the decoded pixels of the chosen representation on any `Canvas` the way NSImage draws in a view. A
+template image (`isTemplate`) is a coverage mask filled with the context tint (the caller passes `LABEL.now()`, the
+accent or a selected-row colour, so it follows Light, Dark and the accent; opacity scales the mask); any other image
+draws as itself at the opacity and ignores the tint; cap insets keep the corners and stretch edges and centre (nine
+slices, insets read in the image's own pixels per point). Per-codec representations: `ImageRep::codec` records the codec a
+bitmap came from (PNG, JPEG, GIF, BMP, ICO, TIFF, WebP; the reference has per-codec rep classes, ours is one type with a
+codec field) and `frame_count` the frames of an animation (`NSBitmapImageRep.frameCount`, `is_animated`).
+`from_encoded` gives an icon file or a multi-page TIFF one representation per image, so `best_rep` chooses among an
+icon's sizes. Gaps: `from_encoded` keeps 72 dpi instead of reading the file's resolution; there is no HEIC codec; no kit
+widget takes an `ImageObject` yet (apps call `draw` from their own canvas code).
 
 ## Screen savers in the shell (`springboard/src/shell/screensaver.rs`)
 
@@ -488,11 +500,33 @@ swatches, letterbox, blur bases, plus the legacy gaps below).
 | The accent reaching an app process | `ToApp::Appearance` flags, bits 8 to 11 (`appearance::ACCENT_SHIFT`, `ACCENT_MASK`; `Accent::to_wire`) | The shell sends the accent with the other appearance flags and the SDK runtime calls `appearance::set_accent`, so `CONTROL_ACCENT.now()`, `appearance::accent_now()` and `SELECTION` follow the user's accent in apps too (0 from an older shell keeps blue). Controls tinted by the accent use `accent_now()`: list checkmarks, switches, the default button of sheets and the save panel, focus rings. Text links keep `LINK`. Apps that draw their own switch use `CONTROL_ACCENT.now()` (Reminders does); other hand-drawn blue controls are not converted yet. |
 | selectedTextBackgroundColor (Highlight Colour), sidebar icon size, `NSScroller.preferredScrollerStyle` (Show Scroll Bars) | `ui::highlight_now()`, `ui::sidebar_icon_scale()`, `ui::scroll_bars_always()`; `ToApp::Appearance` bits 12 to 15, 16 to 17 and 18 to 19 (`appearance::HIGHLIGHT_*`, `SIDEBAR_ICON_*`, `SCROLL_BARS_*`, value plus one, 0 = not sent) | Highlight Colour paints text selections (kit text fields, `TextLayout`, TextEdit, the shell's fields and text areas); "Accent Colour" is the `SELECTION` plate. Sidebar Icon Size scales `SourceList` row heights (drawing and hit-testing), the kit's row glyphs and the shell's Settings sidebar (small 0.85, large 1.2). Show Scroll Bars "Always" keeps the kit scroll views' knobs drawn at rest; Apple's legacy scroller with a track is not drawn yet (knob only). The SDK runtime applies the three on every appearance push, so apps follow a change live. |
 | systemRed ... systemGray (13 colours incl. mint, cyan, indigo, brown) | `SYSTEM_RED` ... `SYSTEM_GRAY` | Apple's Light and Dark values |
-| windowFrameColor, findHighlightColor, shadowColor | `WINDOW_FRAME`, `FIND_HIGHLIGHT`, `SHADOW` | new (findHighlight is a design approximation, confirm on Midget) |
+| windowFrameColor, findHighlightColor, shadowColor | `WINDOW_FRAME`, `FIND_HIGHLIGHT`, `SHADOW` | new (findHighlight is a design approximation, confirm on Midget; premultiplied since 2026-10-24, it was straight alpha and drew too bright under `fill_rrect`) |
+| controlColor, controlTextColor, disabledControlTextColor | `CONTROL`, `CONTROL_TEXT`, `DISABLED_CONTROL_TEXT` | measured (2026-10-24, below) |
+| selectedControlColor, selectedControlTextColor, alternateSelectedControlTextColor | `SELECTED_CONTROL` (= `SELECTION`, follows the accent), `SELECTED_CONTROL_TEXT`, `ALTERNATE_SELECTED_CONTROL_TEXT` | measured, except selectedControlColor (accent-derived) |
+| selectedTextBackgroundColor, selectedTextColor, unemphasizedSelectedTextBackgroundColor, unemphasizedSelectedTextColor | `SELECTED_TEXT_BACKGROUND` (= `SELECTION`), `SELECTED_TEXT`, `UNEMPHASIZED_SELECTED_TEXT_BACKGROUND`, `UNEMPHASIZED_SELECTED_TEXT` | the unemphasized plate is measured (220 grey Light, 70 Dark) |
+| keyboardFocusIndicatorColor, textInsertionPointColor | `KEYBOARD_FOCUS_INDICATOR`, `TEXT_INSERTION_POINT` (= `CONTROL_ACCENT`) | the focus ring is the measured blue; the reference ring also takes the accent, ours does not yet |
+| headerTextColor, selectedMenuItemTextColor, highlightColor, windowFrameTextColor | `HEADER_TEXT`, `SELECTED_MENU_ITEM_TEXT`, `HIGHLIGHT`, `WINDOW_FRAME_TEXT` | measured |
+| quinaryLabelColor, systemFillColor ... quinarySystemFillColor | `QUINARY_LABEL`, `SYSTEM_FILL`, `SECONDARY_SYSTEM_FILL`, `TERTIARY_SYSTEM_FILL`, `QUATERNARY_SYSTEM_FILL`, `QUINARY_SYSTEM_FILL` | measured: black (Light) or white (Dark) at 10, 8, 5, 3 and 1 % |
+| alternatingContentBackgroundColors | `ALTERNATING_CONTENT_BACKGROUNDS` (`CONTROL_BACKGROUND`, `ALTERNATING_ROW`) | measured second row colour (244,245,245 Light; white at 5 % Dark) |
+| controlShadowColor, controlDarkShadowColor, controlHighlightColor, controlLightHighlightColor | `CONTROL_SHADOW`, `CONTROL_DARK_SHADOW`, `CONTROL_HIGHLIGHT`, `CONTROL_LIGHT_HIGHLIGHT` | measured |
+| Lookup by name (`NSColor(named:)` for the catalogue names, colour lists that refer to dynamic colours) | `system::NAMED`, `system::named("labelColor")` | every name above, exact match |
+
+Measured values (2026-10-24, clean-room): the named-colour tables of the reference's light and dark system appearance
+catalogues (macOS 27 26A434 `SystemAppearance.bundle`, `Aqua.car` sha256 `c8f2a0a7...4cb50c` and `DarkAqua.car`
+`a1584765...4a6772e9`, extracted with `bifrost pc ref extract` outside the repo) were read with a small BOM reader and
+the colours written here as numbers. A name the dark table leaves out keeps its light value, as the reference
+resolves it. New translucent values are stored premultiplied. REA evidence for the documented API:
+ev_6a696e64493877091a178708ee554577c759c04ad87cb1546ee692e8f8fd131d (systemFill).
 
 Gaps (Apple parity rule):
 - `windowBackgroundColor` and `controlBackgroundColor` share `DETAIL_BG` (Dark pure black, per the Golden Gate reference); Apple's Dark values differ slightly.
-- Other `NSColor` names are not provided.
+- The existing pairs were not re-valued. The measured tables differ from them: labels are black or white at 85 / 50 / 25 %
+  (ours are opaque greys), windowBackgroundColor is 236 grey Light and 50 Dark, linkColor is 0,104,218 Light and
+  65,156,255 Dark, and the 26A434 system colours moved (systemBlue 0,136,255 Light / 0,145,255 Dark; systemRed 255,56,60
+  / 255,66,69; systemOrange 255,141,40; systemMint 0,200,179; systemTeal 0,195,208; systemCyan 0,192,232; systemIndigo
+  97,85,245; systemPurple 203,48,224; systemBrown 172,127,94). Re-valuing them changes every screen, so it is left to a
+  lead decision with a Midget comparison.
+- `shadowColor` is opaque black in the reference; ours stays black at one third, which the shell's drop shadows were tuned to.
 - The old `u32` constants (`SYSTEM_RED` ...) remain for fixed-colour uses; migrating callers is ongoing.
 - Still dark-only (allowlisted in the guard): Browser chrome, Clock full-screen, the power alert, `apps/remote`.
   Fixed in 0.4.100 work: the built-in App Store (all backgrounds, text, separators, tab bar) and it now redraws during the Light/Dark fade.
@@ -2509,7 +2543,7 @@ copies stay inside BifrOSt until multi-MIME sources land; file representations t
   socket `/run/cups/cups.sock` when it exists (what `cups.socket` activation provides), else `localhost:631`.
 - **Errors**: `PrintError::NoCups` (the scheduler cannot be reached, any I/O or HTTP failure), `NoPrinter` (no name and no default),
   `Failed(String)`. `print::available()` is a 200 ms connect to the local scheduler port.
-- **Printer capabilities** (NSPrinter): `Client::get_printer_attributes(name)` returns `printer_caps::PrinterCapabilities`: `papers` (PWG self-describing names with sizes, `PaperSize::ppd_name()` = PMPaperGetPPDPaperName), `default_paper`, `duplex`, `color_modes`, `status` (state, reasons, message; `statusForTable`), `page_size_for_paper(name)` (`pageSize(forPaper:)`). Printers omitting attributes fall back to Letter/A4, one-sided, auto colour. Not yet done: `deviceDescription`, `isKey(_:inTable:)`, `languageLevel`, the print panel using the lists.
+- **Printer capabilities** (NSPrinter): `Client::get_printer_attributes(name)` returns `printer_caps::PrinterCapabilities`: `papers` (PWG self-describing names with sizes, `PaperSize::ppd_name()` = PMPaperGetPPDPaperName), `default_paper`, `duplex`, `color_modes`, `status` (state, reasons, message; `statusForTable`), `page_size_for_paper(name)` (`pageSize(forPaper:)`). Printers omitting attributes fall back to Letter/A4, one-sided, auto colour. Since 2026-10-24 also `make_and_model` (`type`, from `printer-make-and-model`), `formats` (`document-format-supported`), `resolutions` and `default_resolution` (IPP resolution values, dots per centimetre converted to dpi; no default: the finest offered, else 300 dpi), `language_level()` (3 for a queue that takes `application/postscript`, else 0, as a non-PostScript printer reports) and `device_description()` (`deviceDescription`: is a printer, never a screen; resolution; default paper size in points; RGB or grey from the colour modes; 8 bits per sample). REA ev_718c7c2f272eff48acd3dad39768bd1d0c20bbe35ab21b643425783b55deedf1 and ev_54eacf1088c9c1e27dce9ec56f7386ff23618c8b28b9ed08b757acb7dca16b09 (the page names the printer key the only one guaranteed). Decision: the language level is derived from the formats because IPP has no PostScript-level attribute. Not yet done: `isKey(_:inTable:)` (deprecated tables), the print panel using the lists.
 - **Print sheet rows** (wave 15, 2026-10-19): the shell sheet (`springboard/src/shell/print_sheet.rs`) has Printer, Paper, Orientation, Scale, Copies, Pages, Sides (one-sided, two-sided, two-sided short edge) and Colour (colour, black and white). Sides and Colour fill `PrintInfo.sides` and `PrintInfo.color`, so the job carries `sides` and `print-color-mode`; black and white also greys the pages (`to_grey`) so Save as PDF is monochrome.
 - **Printers**: `bifrost_app::cups` (`Client::printers()`, with the default flagged). The old `print::printers()` (`lpstat`) is gone.
 
@@ -2786,6 +2820,28 @@ Code: `springboard/ui/src/table.rs`, `springboard/ui/src/panels.rs` (SDK: `bifro
 - **Sortable columns.** `SortDescriptor` (key, ascending), `Column` (`sort_key` = `sortDescriptorPrototype`), `TableColumns::click_header` (first click ascending, second descending; the key becomes primary, earlier keys stay secondary), `indicator(i)` for the header arrow, `sort_rows` (stable multi-key sort). Resize (`resize`, divider grab zone `RESIZE_GRAB`, min and max width), reorder (`reorder`, `drop_index`), and `save`/`restore` for `autosaveName`.
 - **Font panel.** `FontPanel`: family, style, size (1 to 288, list `FONT_SIZES`), `on_change` as the `NSFontManager` target action. Families come from the fonts the renderer has, supplied by the caller.
 - **Color panel.** `ColorPanel`: RGB, HSB wheel hit-test (`wheel_pick`), hex field (`parse_hex`), alpha, `on_change`. Named system colours are the `render::ui::SYSTEM_*` tokens.
+- **Colour panel pickers (2026-10-24).** `PanelMode` holds `NSColorPanel.Mode` with the reference raw values (none -1,
+  gray 0, RGB 1, CMYK 2, HSB 3, customPalette 4, colorList 5, wheel 6, crayon 7; REA
+  ev_6c3ad0e07099189a330191100d5b1564f636b6064b3a70563d484aca64e11954) and `PanelModes` the picker mask (`1 << raw`,
+  all modes `0xffff`). `set_mode` refuses a picker outside the mask and `set_mask` moves a hidden picker to the first one
+  left. `shows_alpha` (default off, as the reference; the alpha is still stored), `is_continuous` (default on) with
+  `track_rgb(c, done)` for drag steps, `attach_color_list` / `detach_color_list`, and `components(mode)` /
+  `set_component(mode, i, v, done)` for the slider pickers (grey by Rec. 601 weights, RGB 0..255, naive device CMYK,
+  HSB). Decision: CMYK and grey are device conversions without a profile; a profile-managed slider waits for the
+  ColorSync profiles to reach the panel.
+- **Colour well (2026-10-24).** `springboard/ui/src/color_well.rs`: `ColorWell` in the three `NSColorWell.Style`s
+  (default, minimal, expanded), `bordered`, `supports_alpha` (a well without alpha stays opaque and hides the panel's
+  opacity slider), `enabled`. `ColorWells` plays the shared-panel protocol: `activate(i, exclusive, panel)` (exclusive
+  deactivates the others; additive keeps several wells following the panel), `deactivate`, `panel_changed(panel)`
+  sends the panel colour to every active well, `take_color` is `takeColorFrom` and a drop (the panel follows an active
+  well). `click` follows the style: a default well toggles the panel, a minimal well and an expanded well's swatch open
+  the swatch popover, the expanded well's square trailing button shows the panel. `SwatchGrid` lays out and hit-tests
+  the popover; `bifrost_app::color_list::ColorList::swatch_grid` and `pick_into_well` fill it from a colour list.
+  `draw_well` draws the face (`system::CONTROL`), border (`SEPARATOR`), a light/dark split under a translucent colour,
+  the swatch, an accent ring when active, 6 pt corners. REA ev_707cf40ef10ba0a4f1899622a486b7b1d441668d39a5c31a9cdc6fbef9e5e470.
+  Gaps: no shell screen hosts a well or draws the panel's pickers yet, the popover is a layout model, the eyedropper
+  (`NSColorSampler`) needs a screen read from the shell, crayon and custom palette pickers have no content, and
+  `maximumLinearExposure` (HDR) is not modelled.
 - **Gaps.** No drawing yet: the shell does not render the two panels or a clickable header row, and Files was not adopted (it keeps its toolbar sort). Column hiding (header context menu), `NSColorPanel` crayons/sliders modes and eyedropper, font collections and typography effects are not matched. Sort descriptors compare through a caller closure (no key-path reflection). Contract tests are model-level (`Ctx::testing` not needed: nothing is sent to the shell yet).
 
 ## Quick Look (`QLPreviewPanel`, `QLPreviewItem`, `QLThumbnailGenerator`)
