@@ -501,7 +501,7 @@ impl Shell {
         if self.recording_active() && !center.mirroring {
             return id;
         }
-        let covered = self.screen == Screen::Lock || self.cc_active() || self.center_active() || self.clock.alert().is_some();
+        let covered = self.screen == Screen::Lock || self.cc_active() || self.center_active() || self.clock_takeover();
         if !covered {
             if self.overview_active() {
                 // a banner over Overview would sit on its desktops strip: it comes when Overview closes
@@ -520,7 +520,7 @@ impl Shell {
             return;
         }
         let Some((id, app)) = self.notify.held_banner.take() else { return };
-        let covered = self.screen == Screen::Lock || self.cc_active() || self.center_active() || self.clock.alert().is_some();
+        let covered = self.screen == Screen::Lock || self.cc_active() || self.center_active() || self.clock_takeover();
         if self.screen_on && !covered && self.notify_exists(id) {
             self.start_banner(id, app);
             self.dirty = true;
@@ -947,8 +947,55 @@ impl Shell {
             let Some(app) = app else { continue };
             let now = self.notify.now();
             let body = if a.is_timer { "Your timer is done.".to_string() } else { a.time.clone() };
-            self.notify(Notification::new(app, a.title, body, now));
+            let id = self.notify_id(Notification::new(app, a.title, body, now));
+            // on the desktop this notification's banner is the alert (`clock_banner_sync`, E2E N5)
+            self.clock_banners.push(id);
         }
+    }
+
+    /// On an unlocked desktop the ringing Clock alert is its notification's banner (E2E N5): it shows whatever the Focus
+    /// or the app's alert style, as an alarm rings through them, and rests until Stop or Snooze answers it. An alert
+    /// that rang under the full-screen alert (the lock screen), or waited behind another, gets its banner here once the
+    /// desktop shows. Runs every tick.
+    pub(super) fn clock_banner_sync(&mut self) {
+        if self.clock.alert().is_none() {
+            self.clock_banners.clear();
+            return;
+        }
+        // Overview puts banners away (`notify_tick`); the banner comes back when it closes
+        if !self.clock_as_banner() || !self.screen_on || self.overview_active() {
+            return;
+        }
+        let up = self.notify.banner.as_ref().filter(|b| !b.gone() && matches!(b.phase(), banner::Phase::In | banner::Phase::Hold)).map(|b| b.id);
+        if up.is_some_and(|id| self.clock_banners.contains(&id)) {
+            if let Some(b) = self.notify.banner.take() {
+                self.notify.banner = Some(b.persistent(true));
+            }
+            return;
+        }
+        if self.notify.banner_behind.iter().any(|(id, _)| self.clock_banners.contains(id)) {
+            return;
+        }
+        self.clock_banners.retain(|&id| self.notify.store.get(id).is_some());
+        let Some(&id) = self.clock_banners.first() else { return };
+        let Some(app) = self.notify.store.get(id).map(|n| n.app) else { return };
+        self.start_banner(id, app);
+        if let Some(b) = self.notify.banner.take() {
+            self.notify.banner = Some(b.persistent(true));
+        }
+        self.dirty = true;
+    }
+
+    /// Answers the ringing Clock alert from its desktop banner `id`: Stop, or Snooze when `snooze`. The next queued alert
+    /// (if any) keeps its own banner. Returns the RTC effects of the change.
+    pub(super) fn clock_banner_answer(&mut self, id: u64, snooze: bool, t: f64) -> Vec<Effect> {
+        self.clock_banners.retain(|&b| b != id);
+        let fx = self.clock.stop_alert(snooze, t);
+        if self.clock.alert().is_none() {
+            self.clock_banners.clear();
+        }
+        self.dirty = true;
+        fx
     }
 
     /// The Terminal's shell exited.

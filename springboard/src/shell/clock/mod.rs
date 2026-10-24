@@ -1,5 +1,7 @@
 //! The shell's side of the Clock: the headless alarm and timer service and
-//! the full-screen "time's up" alert. The Clock app itself (World Clock,
+//! the full-screen "time's up" alert (a tablet and the lock screen; an
+//! unlocked desktop shows a ringing alert as the Clock's notification banner,
+//! `Shell::clock_banner_sync`). The Clock app itself (World Clock,
 //! alarm cards and editor, Stopwatch, Timer tab) is the
 //! `is.olibuijr.clock` system-app package; it persists alarms and timers
 //! beside its data (`clock.ini`, `clock-timers.ini`) and this service
@@ -307,6 +309,14 @@ impl Clock {
             self.alarms.dismiss(id);
         }
         self.persist(t)
+    }
+
+    /// Answers the alert on screen from outside it (the desktop's banner, E2E N5): Stop, or Snooze when `snooze` and
+    /// the alarm allows it. The next queued alert comes up. Returns the RTC effects of the change.
+    pub fn stop_alert(&mut self, snooze: bool, t: f64) -> Vec<Effect> {
+        let snooze = snooze && self.alert.as_ref().is_some_and(|a| a.snooze);
+        self.pressed = None;
+        self.close_alert(snooze, t)
     }
 
     // ----- geometry -----
