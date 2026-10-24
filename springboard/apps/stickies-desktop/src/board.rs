@@ -32,9 +32,14 @@ fn title_shade() -> u32 {
 fn shadow_colour() -> u32 {
     SHADOW.now()
 }
-/// The fill behind selected text.
+/// The fill behind selected text (premultiplied, as `findHighlightColor` is).
 fn selection_fill() -> u32 {
     FIND_HIGHLIGHT.now()
+}
+/// Draws the selection plate over the note body. The colour is premultiplied and translucent, so it is blended
+/// source-over (`fill_rrect`); `fill_rect` writes the pixels as they are and would punch a translucent hole in the note.
+fn fill_selection(c: &mut dyn Canvas, r: RectF) {
+    c.fill_rrect(r, 0.0, selection_fill());
 }
 /// Opacity of a note that is not the focused one (translucent when inactive).
 pub const INACTIVE_ALPHA: f32 = 0.82;
@@ -296,7 +301,7 @@ fn draw_body(c: &mut dyn Canvas, ui: &Ui, note: &Note, focused: bool, marks: &[M
         if focused && !sel.is_empty() {
             let (a, b) = (sel.start.max(line.start), sel.end.min(line.end));
             if a < b {
-                c.fill_rect(RectF::new(text_x + width(line.start, a), ly, width(a, b), m.step), selection_fill());
+                fill_selection(c, RectF::new(text_x + width(line.start, a), ly, width(a, b), m.step));
             }
         }
         if line.start == line.end {
@@ -473,6 +478,22 @@ pub fn draw_link_entry(c: &mut dyn Canvas, ui: &Ui, entry: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_selection_plate_blends_over_the_note_and_keeps_it_opaque() {
+        let note = colour_value(Colour::Yellow);
+        let mut px = vec![note; 4 * 4];
+        let mut s = bifrost_app::kit::Surface { w: 4, h: 4, stride: 4, px: &mut px, y0: 0 };
+        fill_selection(&mut s, RectF::new(0.0, 0.0, 4.0, 4.0));
+        let p = px[5];
+        assert_eq!(p >> 24, 255, "the note stays opaque under the selection");
+        let fill = selection_fill();
+        for shift in [0, 8, 16] {
+            let (n, f, a) = ((note >> shift) & 255, (fill >> shift) & 255, fill >> 24);
+            let want = f + (n * (255 - a) + 127) / 255;
+            assert!(((p >> shift) & 255).abs_diff(want) <= 1, "channel {shift}: {p:#010x}");
+        }
+    }
 
     #[test]
     fn every_colour_has_a_token_value() {
