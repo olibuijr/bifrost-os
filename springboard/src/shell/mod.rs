@@ -3439,6 +3439,10 @@ impl Shell {
         // a touch that is a key of the on-screen keyboard does not raise it again (a Hide lowers it)
         let on_keyboard = self.kb_touch;
         let fx = self.event_inner(ev, t);
+        // the wheel's mark is for the very next press only, whichever surface took that press
+        if matches!(ev, Event::Down(..)) {
+            self.desk_wheel_spent();
+        }
         // a tap that leaves a text field in focus on the tablet desktop raises the keyboard for it
         if matches!(ev, Event::Up(..)) && !on_keyboard && self.desk_active() && !self.keyboard.shown() && self.desk_text_focus() == Some(true) {
             self.set_keyboard(true, t);
@@ -3448,8 +3452,11 @@ impl Shell {
     }
 
     /// A shell surface took the wheel event at `t`: the Down, Move and Up the pointer emulates for it are dropped.
+    /// This is the one record of a notch a shell surface took: the desk's mark for it (`desk_wheel`) is spent here, since
+    /// the desk never sees the press it was for.
     pub(super) fn swallow_wheel_drag(&mut self, t: f64) {
         self.wheel_drag = (3, t + apphost::WHEEL_DRAG_MS);
+        self.desk_wheel_spent();
     }
 
     /// True for each touch of the drag emulated for a wheel notch a shell surface took already.

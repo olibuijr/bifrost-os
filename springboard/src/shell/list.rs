@@ -1327,13 +1327,29 @@ impl ListPage {
     /// Settings > Appearance > Show scroll bars: Always keeps the overlay knob drawn at the trailing edge while the list
     /// rests (a list that fits has none).
     fn draw_scroller(&self, s: &mut Surface, ui: &Ui) {
-        use crate::deildu::scroll::{indicator, INDICATOR_INSET_PT, INDICATOR_MIN_PT, INDICATOR_W_PT};
         if !bifrost_render::ui::scroll_bars_always() {
             return;
         }
-        let Some((y, len)) = indicator(self.h as f32, self.scroll.max(), self.scroll.offset(), ui.pt(INDICATOR_MIN_PT)) else { return };
-        let (w, x) = (ui.pt(INDICATOR_W_PT), self.w as f32 - ui.pt(INDICATOR_INSET_PT + INDICATOR_W_PT));
+        let Some((x, y, w, len)) = self.scroller_rect(ui) else { return };
         s.fill_rrect(x, y, w, len, w / 2.0, LABEL_2.now());
+    }
+
+    /// The Always scroll knob (x, y, w, h px). Its track runs below the navigation bar the large title scrolls under and
+    /// above the bottom inset the content keeps (`home_zone`), each with the knob's own inset, so it never sits under
+    /// the bar; its length is the visible share of the content along that track.
+    fn scroller_rect(&self, ui: &Ui) -> Option<(f32, f32, f32, f32)> {
+        use crate::deildu::scroll::{indicator, INDICATOR_INSET_PT, INDICATOR_MIN_PT, INDICATOR_W_PT};
+        let inset = ui.pt(INDICATOR_INSET_PT);
+        let (top, bottom) = (self.nav_bottom(ui) + inset, self.h as f32 - home_zone(ui) - inset);
+        let (view, track) = (self.h as f32, bottom - top);
+        if view <= 0.0 || track <= 0.0 {
+            return None;
+        }
+        // scaled to the track, so the knob is the visible share of the content and travels the rest of the track
+        let k = track / view;
+        let (y, len) = indicator(track, self.scroll.max() * k, self.scroll.offset() * k, ui.pt(INDICATOR_MIN_PT))?;
+        let w = ui.pt(INDICATOR_W_PT);
+        Some((self.w as f32 - inset - w, top + y, w, len))
     }
 
     /// The open pop-up menu: a translucent rounded card, a checkmark on the chosen item and the highlighted item filled.
@@ -1825,6 +1841,24 @@ mod tests {
         assert_eq!(root.hit(&ui, ui.pt(40.0), ui.pt(42.0)), None, "no back on the root");
         let (gx, gy) = root.row_centre(&ui, 1, 0);
         assert_eq!(root.hit(&ui, gx, gy - ui.pt(ROW_PT)), None, "the header is not a row");
+    }
+
+    /// The Always scroll knob stays inside its track: below the navigation bar and above the bottom inset, at the top
+    /// and at the end of the content alike.
+    #[test]
+    fn the_always_scroll_knob_is_inset_below_the_bar_and_above_the_bottom() {
+        use crate::deildu::scroll::INDICATOR_INSET_PT;
+        let ui = ui();
+        let mut page = ListPage::new(&ui, spec(true, 40), 1200, 1920, None);
+        let (top, bottom) = (page.nav_bottom(&ui) + ui.pt(INDICATOR_INSET_PT), 1920.0 - home_zone(&ui) - ui.pt(INDICATOR_INSET_PT));
+        let (_, y, _, len) = page.scroller_rect(&ui).expect("a long page has a knob");
+        assert!((y - top).abs() < 0.5, "at rest the knob starts below the bar: {y} vs {top}");
+        assert!(len < bottom - top);
+        page.jump_to(page.scroll.max());
+        let (_, y, _, len) = page.scroller_rect(&ui).expect("knob");
+        assert!((y + len - bottom).abs() < 0.5, "at the end it stops above the bottom inset: {} vs {bottom}", y + len);
+        let short = ListPage::new(&ui, spec(true, 2), 1200, 1920, None);
+        assert!(short.scroller_rect(&ui).is_none(), "a list that fits has no knob");
     }
 
     #[test]

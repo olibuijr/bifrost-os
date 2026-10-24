@@ -649,13 +649,6 @@ impl Display {
         }
         Ok(())
     }
-/// Adds the bounds of the glass shapes that came or went this frame (`moved`, screen px) to the damage of a chrome
-/// surface placed at `origin`: its backdrop changes there whatever its pixels did. A surface masked clear around its
-/// panel (the Apps grid) has no pixel damage outside it, so without this the blur of every shape it was first drawn
-/// with stayed on it, a band of stale plates under the grid (N11).
-fn owe_glass(pending:&mut Damage, origin:(i32,i32), moved:&[(f32,f32,f32,f32)]) {
-    for &(x,y,w,h) in moved { pending.add(x.floor() as i32-origin.0, y.floor() as i32-origin.1, w.ceil() as i32+1, h.ceil() as i32+1); }
-}
 /// Anchors a chrome surface and reserves its edge. The menu bar (id 0) spans the top edge and the Dock (id 2) sits on
 /// the bottom edge, each with an exclusive zone, so the compositor keeps maximized and snapped windows clear of them
 /// (an exclusive zone only counts for a surface anchored to one edge or to three). Everything else is placed from
@@ -1050,6 +1043,13 @@ fn mark_first_frame() {
     if let Some(dir) = std::env::var_os("XDG_RUNTIME_DIR") {
         let _ = std::fs::write(std::path::Path::new(&dir).join("shell-ready"), b"1\n");
     }
+}
+/// Adds the bounds of the glass shapes that came or went this frame (`moved`, screen px) to the damage of a chrome
+/// surface placed at `origin`: its backdrop changes there whatever its pixels did. A surface masked clear around its
+/// panel (the Apps grid) has no pixel damage outside it, so without this the blur of every shape it was first drawn
+/// with stayed on it, a band of stale plates under the grid (N11).
+fn owe_glass(pending:&mut Damage, origin:(i32,i32), moved:&[(f32,f32,f32,f32)]) {
+    for &(x,y,w,h) in moved { pending.add(x.floor() as i32-origin.0, y.floor() as i32-origin.1, w.ceil() as i32+1, h.ceil() as i32+1); }
 }
 impl Dispatch<wl_registry::WlRegistry, ()> for State {
     fn event(s: &mut Self, reg: &wl_registry::WlRegistry, e: wl_registry::Event, _: &(), _: &Connection, q: &QueueHandle<Self>) {

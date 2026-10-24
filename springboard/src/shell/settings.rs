@@ -451,6 +451,9 @@ pub struct Settings {
     search: Search,
     /// what Search finds, while it has a query (see `settings_search::index`)
     index: Option<Vec<settings_search::Entry>>,
+    /// the page of each hit for the query it was found for (`hit_pages`), kept by `requery` so the sidebar's draw does
+    /// not match the whole index again every frame
+    hits: (String, Vec<PageId>),
     /// Users & Groups: the last error from privd, shown under the list ("" when none)
     users_note: String,
 }
@@ -677,6 +680,7 @@ impl Settings {
             st_gate: None,
             search: Search::new(ui, w),
             index: None,
+            hits: (String::new(), Vec::new()),
             users_note: String::new(),
         };
         let root = st.build(ui, PageId::Root, None);
@@ -2283,8 +2287,21 @@ impl Settings {
         Some(settings_search::results(self.index.as_deref().unwrap_or(&[]), query))
     }
 
-    /// The page of each search hit, in the order the results list them (empty without a query).
+    /// The page of each search hit, in the order the results list them (empty without a query): the hits `requery` kept
+    /// for this query, else matched now.
     fn hit_pages(&self) -> Vec<PageId> {
+        let query = self.search.query();
+        if query.trim().is_empty() {
+            return Vec::new();
+        }
+        if self.hits.0 == query {
+            return self.hits.1.clone();
+        }
+        self.match_hit_pages()
+    }
+
+    /// Matches the query against the index: the page of each hit, in the order the results list them.
+    fn match_hit_pages(&self) -> Vec<PageId> {
         let query = self.search.query();
         if query.trim().is_empty() {
             return Vec::new();
@@ -2315,6 +2332,8 @@ impl Settings {
         } else if self.index.is_none() {
             self.index = Some(self.build_index());
         }
+        // the hits for this query and index, for every draw of the sidebar until the query changes
+        self.hits = (self.search.query().to_string(), self.match_hit_pages());
         // a query replaces the root list with its matches
         if self.stack.first().is_some_and(|e| e.id == PageId::Root) {
             self.rebuild_pages(ui, 0..1);
@@ -5338,6 +5357,22 @@ mod e2e_w3_tests {
         super::super::pages::set_test_form(FormFactor::Tablet);
         tap(&mut st, &ui, &mut prefs, middle, mid);
         assert_eq!(st.options().dnd, before, "a finger flips it from anywhere on the row");
+    }
+
+    /// The sidebar's draw reads the hits `requery` kept for the query instead of matching the index every frame, and
+    /// they are the hits a fresh match finds.
+    #[test]
+    fn search_hits_are_kept_per_query() {
+        let ui = crate::shell::tests::ui();
+        let (mut st, _) = split(&ui);
+        st.search.active = true;
+        st.key(&ui, Out::Text("display".into()), 0.0);
+        assert_eq!(st.hits.0, st.search.query(), "kept for the typed query");
+        assert!(!st.hits.1.is_empty());
+        assert_eq!(st.hit_pages(), st.match_hit_pages());
+        st.key(&ui, Out::Text("x".into()), 0.0);
+        assert_eq!(st.hits.0, st.search.query(), "a new query replaces them");
+        assert_eq!(st.hit_pages(), st.match_hit_pages());
     }
 
     /// N3: Return opened the first match even when another hit was highlighted (opened by Down or a tap).
