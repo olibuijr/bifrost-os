@@ -70,6 +70,11 @@ pub struct Properties {
     pub is_indexed: bool,
     pub icc_profile: Option<Vec<u8>>,
     pub profile_name: Option<String>,
+    /// The XMP packet (UTF-8 XML) when the file carries one: JPEG APP1, PNG `iTXt` `XML:com.adobe.xmp`, WebP `XMP `.
+    pub xmp: Option<Vec<u8>>,
+    /// The image resource blocks of a JPEG APP13 segment, header included (the IPTC datasets live in resource
+    /// 0x0404; `bifrost_core::imgmeta::iptc_from_app13` reads them).
+    pub image_resources: Option<Vec<u8>>,
     pub exif: Dict,
     pub tiff: Dict,
     pub gps: Dict,

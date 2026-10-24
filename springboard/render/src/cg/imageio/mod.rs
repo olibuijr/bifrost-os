@@ -1,5 +1,5 @@
 //! Image input and output: format detection, incremental image sources with properties and thumbnails, and
-//! destinations that write PNG, JPEG, GIF, BMP, TIFF and ICO with metadata.
+//! destinations that write PNG, JPEG, GIF, BMP, TIFF, ICO and (lossless) WebP with metadata.
 //!
 //! Decoders live in one module per format (`png`, `jpeg`, `gif`, `bmp` (also ICO), `tiff`, `webp`); each offers a
 //! cheap `probe` that reads only headers and a `decode` that returns straight RGBA frames. `ImageSource` wraps
@@ -42,7 +42,7 @@ pub struct Decoded {
     pub loop_count: Option<u32>,
 }
 
-/// The container formats this module reads and (except WebP) writes.
+/// The container formats this module reads and writes (WebP is written lossless and as one still picture).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Format {
     Png,
@@ -124,9 +124,9 @@ impl Format {
 
     pub const ALL: [Format; 7] = [Format::Png, Format::Jpeg, Format::Gif, Format::Bmp, Format::Ico, Format::Tiff, Format::Webp];
 
-    /// True when `ImageDestination` can write the format.
+    /// True when `ImageDestination` can write the format (every format: WebP is written lossless).
     pub fn can_write(self) -> bool {
-        self != Format::Webp
+        Self::ALL.contains(&self)
     }
 }
 
@@ -290,6 +290,7 @@ impl ImageSource {
             Format::Png => png::frame_count(&self.data),
             Format::Ico => bmp::ico_count(&self.data).unwrap_or(1),
             Format::Tiff => tiff::count(&self.data).unwrap_or(1),
+            Format::Webp => webp::frame_count(&self.data),
             _ => 1,
         }
     }
@@ -640,7 +641,8 @@ impl ImageDestination {
                 }
                 (!v.is_empty()).then(|| bmp::ico_encode(&v))
             }
-            Format::Webp => None,
+            // Lossless and still: the quality setting does not apply, and only the first picture is written.
+            Format::Webp => webp::encode(*w, *h, first_px, Self::exif_block(fo).as_deref(), fo.icc.as_deref(), None),
         }
     }
 
@@ -692,7 +694,7 @@ pub mod tests {
         assert_eq!(Format::from_type_identifier("public.tiff"), Some(Format::Tiff));
         assert_eq!(Format::from_extension("JPG"), Some(Format::Jpeg));
         assert!(is_image_name("a.WebP") && is_image_name("b.ico") && !is_image_name("c.txt") && !is_image_name("png"));
-        assert!(destination_type_identifiers().len() == 6 && source_type_identifiers().len() == 7);
+        assert!(destination_type_identifiers().len() == 7 && source_type_identifiers().len() == 7);
     }
 
     #[test]
@@ -755,7 +757,7 @@ pub mod tests {
     #[test]
     fn destination_round_trips_every_writable_format() {
         let img = sample_image(6, 5);
-        for f in [Format::Png, Format::Bmp, Format::Tiff, Format::Gif, Format::Ico] {
+        for f in [Format::Png, Format::Bmp, Format::Tiff, Format::Gif, Format::Ico, Format::Webp] {
             let mut d = ImageDestination::new(f, 1).unwrap();
             d.add_image(&img, None);
             let bytes = d.finalize().unwrap();
@@ -771,7 +773,6 @@ pub mod tests {
         d.add_image(&img, Some(WriteOptions { quality: Some(0.9), ..Default::default() }));
         let s = ImageSource::new(d.finalize().unwrap());
         assert_eq!(s.status(), Status::Complete);
-        assert!(ImageDestination::new(Format::Webp, 1).is_none());
         assert!(ImageDestination::new(Format::Png, 1).unwrap().finalize().is_none());
     }
 

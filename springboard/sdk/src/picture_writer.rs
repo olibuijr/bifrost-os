@@ -1,8 +1,9 @@
 //! Writes pictures with their metadata for apps. A writer takes one or more straight RGBA frames and writes one file in
-//! PNG, JPEG, GIF, BMP, TIFF or ICO, with an orientation, a capture date, a camera, the software that wrote it, a
+//! PNG, JPEG, GIF, BMP, TIFF, ICO or WebP, with an orientation, a capture date, a camera, the software that wrote it, a
 //! location, altitude, speed, direction and GPS time, the exposure and lens, a JPEG quality, a frame delay and a GIF loop count. Each format keeps the metadata it can
-//! carry (JPEG, PNG and TIFF keep the orientation, date, camera, software and location; GIF, BMP and ICO keep only the
-//! pixels and frame timing). WebP is read only.
+//! carry (JPEG, PNG, TIFF and WebP keep the orientation, date, camera, software and location; GIF, BMP and ICO keep
+//! only the pixels and frame timing). WebP is written lossless and still: the quality is not used and only the first
+//! frame is written.
 //!
 //! ```ignore
 //! let mut writer = PictureWriter::new(Format::Jpeg)
@@ -46,7 +47,7 @@ pub struct PictureWriter {
 }
 
 impl PictureWriter {
-    /// A writer for `format`. Formats that cannot be written (WebP) make [`PictureWriter::finish`] return `None`.
+    /// A writer for `format`. Every format of `Format` can be written.
     pub fn new(format: Format) -> Self {
         PictureWriter {
             format,
@@ -349,11 +350,18 @@ mod tests {
     }
 
     #[test]
-    fn no_frames_or_a_read_only_format_gives_nothing() {
+    fn no_frames_gives_nothing() {
         assert_eq!(PictureWriter::new(Format::Png).finish(), None);
-        let mut webp = PictureWriter::new(Format::Webp);
-        assert!(webp.add_frame(2, 1, two_pixels(), 0));
-        assert_eq!(webp.finish(), None);
+    }
+
+    #[test]
+    fn a_webp_keeps_orientation_date_and_location() {
+        let mut writer = PictureWriter::new(Format::Webp).orientation(3).date_taken("2026:10:24 08:15:00").location(Location { latitude: 64.25, longitude: -21.5 });
+        assert!(writer.add_frame(2, 1, two_pixels(), 0));
+        let info = image_metadata::read(&writer.finish().unwrap()).unwrap();
+        assert_eq!((info.format, info.width, info.height, info.orientation), (Format::Webp, 2, 1, 3));
+        assert_eq!(info.date_taken.as_deref(), Some("2026:10:24 08:15:00"));
+        assert!((info.location.unwrap().latitude - 64.25).abs() < 1e-9);
     }
 
     #[test]

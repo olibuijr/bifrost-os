@@ -1,5 +1,8 @@
-//! WebP: container and header reading for every variant (size, alpha, ICC, EXIF) and a full lossless (VP8L)
-//! decoder. Lossy (VP8) and animated files report their size and properties but do not decode.
+//! WebP: container and header reading for every variant (size, alpha, ICC, EXIF, XMP, animation loop count and
+//! canvas), our own lossless (VP8L) decoder for still lossless files, and the `image-webp` crate (MIT or Apache-2.0)
+//! for lossy (VP8, with or without an ALPH plane) and animated files, whose frames it composites onto the canvas.
+//! [`encode`] writes a lossless still picture with its EXIF block and ICC profile; animated and lossy writing are not
+//! offered.
 
 use super::exif::{Dict, PropValue, Properties};
 use super::{Decoded, Frame, MAX_SIDE};
@@ -62,6 +65,15 @@ pub fn probe(data: &[u8]) -> Option<Properties> {
     let mut d = Dict::new();
     d.insert("Lossless".into(), PropValue::Int(c.get(b"VP8L").is_some() as i64));
     d.insert("Animated".into(), PropValue::Int(c.get(b"ANMF").is_some() as i64));
+    if let Some(a) = c.get(b"ANIM").filter(|a| a.len() >= 6) {
+        // ANIM: background colour (4 bytes), then the loop count (0 repeats forever).
+        d.insert("LoopCount".into(), PropValue::Int(u16::from_le_bytes([a[4], a[5]]) as i64));
+        d.insert("CanvasPixelWidth".into(), PropValue::Int(w as i64));
+        d.insert("CanvasPixelHeight".into(), PropValue::Int(h as i64));
+    }
+    if let Some(x) = c.get(b"XMP ") {
+        p.xmp = Some(x.to_vec());
+    }
     p.webp = d;
     Some(p)
 }
@@ -549,9 +561,17 @@ fn decode_vp8l(d: &[u8]) -> Option<(usize, usize, Vec<u32>)> {
     Some((w, h, px))
 }
 
+/// The number of images: the animation frames of an animated file, otherwise one.
+pub fn frame_count(data: &[u8]) -> usize {
+    chunks(data).map_or(1, |c| c.list.iter().filter(|x| &x.0 == b"ANMF").count().max(1))
+}
+
 pub fn decode(data: &[u8]) -> Option<Decoded> {
     let c = chunks(data)?;
     let props = probe(data)?;
+    if c.get(b"ANMF").is_some() || c.get(b"VP8L").is_none() {
+        return decode_with_library(data, props);
+    }
     let l = c.get(b"VP8L")?;
     let (w, h, px) = decode_vp8l(l)?;
     let mut rgba8 = Vec::with_capacity(w * h * 4);
@@ -559,6 +579,77 @@ pub fn decode(data: &[u8]) -> Option<Decoded> {
         rgba8.extend([(p >> 16) as u8, (p >> 8) as u8, p as u8, (p >> 24) as u8]);
     }
     Some(Decoded { frames: vec![Frame { w, h, rgba8, rgba16: None, delay_ms: 0 }], props: vec![props], loop_count: None })
+}
+
+/// Lossy and animated files, through `image-webp`. Animation frames come back composited onto the full canvas with
+/// their display times; a file whose frames would hold more than `png::MAX_ANIMATION_PIXELS` pixels keeps the frames
+/// that fit.
+fn decode_with_library(data: &[u8], props: Properties) -> Option<Decoded> {
+    use image_webp::{LoopCount, WebPDecoder};
+    let mut dec = WebPDecoder::new(std::io::Cursor::new(data)).ok()?;
+    let (w, h) = dec.dimensions();
+    let (w, h) = (w as usize, h as usize);
+    if w == 0 || h == 0 || w > MAX_SIDE || h > MAX_SIDE {
+        return None;
+    }
+    let alpha = dec.has_alpha();
+    let mut buf = vec![0u8; dec.output_buffer_size()?];
+    let rgba = |buf: &[u8]| -> Vec<u8> {
+        if alpha {
+            buf.to_vec()
+        } else {
+            buf.as_chunks::<3>().0.iter().flat_map(|c| [c[0], c[1], c[2], 255]).collect()
+        }
+    };
+    if !dec.is_animated() {
+        dec.read_image(&mut buf).ok()?;
+        return Some(Decoded { frames: vec![Frame { w, h, rgba8: rgba(&buf), rgba16: None, delay_ms: 0 }], props: vec![props], loop_count: None });
+    }
+    let loop_count = match dec.loop_count() {
+        LoopCount::Forever => 0,
+        LoopCount::Times(n) => n.get() as u32,
+    };
+    let mut frames = Vec::new();
+    for _ in 0..dec.num_frames() {
+        if (frames.len() + 1).saturating_mul(w * h) > super::png::MAX_ANIMATION_PIXELS && !frames.is_empty() {
+            break;
+        }
+        match dec.read_frame(&mut buf) {
+            Ok(delay_ms) => frames.push(Frame { w, h, rgba8: rgba(&buf), rgba16: None, delay_ms }),
+            Err(_) if !frames.is_empty() => break,
+            Err(_) => return None,
+        }
+    }
+    let props = vec![props; frames.len()];
+    Some(Decoded { frames, props, loop_count: Some(loop_count) })
+}
+
+/// Writes one lossless WebP picture from straight RGBA (an opaque picture is stored without alpha). `exif` is a
+/// TIFF-structured block (stored in the EXIF chunk without a prefix) and `icc` an ICC profile; either makes the file
+/// an extended (VP8X) one. `None` for an empty or oversized picture or a pixel count that does not match.
+pub fn encode(w: usize, h: usize, rgba: &[u8], exif: Option<&[u8]>, icc: Option<&[u8]>, xmp: Option<&[u8]>) -> Option<Vec<u8>> {
+    use image_webp::{ColorType, WebPEncoder};
+    if w == 0 || h == 0 || w > 16384 || h > 16384 || rgba.len() != w.checked_mul(h)?.checked_mul(4)? {
+        return None;
+    }
+    let mut out = Vec::new();
+    let mut enc = WebPEncoder::new(&mut out);
+    if let Some(e) = exif.filter(|e| !e.is_empty()) {
+        enc.set_exif_metadata(e.to_vec());
+    }
+    if let Some(p) = icc.filter(|p| !p.is_empty()) {
+        enc.set_icc_profile(p.to_vec());
+    }
+    if let Some(x) = xmp.filter(|x| !x.is_empty()) {
+        enc.set_xmp_metadata(x.to_vec());
+    }
+    if rgba.as_chunks::<4>().0.iter().all(|p| p[3] == 255) {
+        let rgb: Vec<u8> = rgba.as_chunks::<4>().0.iter().flat_map(|p| [p[0], p[1], p[2]]).collect();
+        enc.encode(&rgb, w as u32, h as u32, ColorType::Rgb8).ok()?;
+    } else {
+        enc.encode(rgba, w as u32, h as u32, ColorType::Rgba8).ok()?;
+    }
+    Some(out)
 }
 
 #[cfg(test)]
@@ -628,6 +719,89 @@ mod tests {
         assert!(p.has_alpha);
         let d = decode(&file).unwrap();
         assert_eq!(d.frames[0].rgba8, vec![0x10, 0x80, 0x20, 0xff]);
+    }
+
+    fn gradient(w: usize, h: usize, alpha: u8) -> Vec<u8> {
+        (0..w * h).flat_map(|i| [(i * 7) as u8, (i * 13) as u8, (i / w * 30) as u8, alpha]).collect()
+    }
+
+    #[test]
+    fn the_lossless_writer_round_trips_through_our_own_decoder() {
+        for alpha in [255u8, 128] {
+            let px = gradient(9, 5, alpha);
+            let file = encode(9, 5, &px, None, None, None).unwrap();
+            let p = probe(&file).unwrap();
+            assert_eq!((p.pixel_width, p.pixel_height), (9, 5));
+            assert_eq!(p.has_alpha, alpha != 255, "an opaque picture is stored without alpha");
+            assert_eq!(decode(&file).unwrap().frames[0].rgba8, px, "lossless: every pixel comes back");
+        }
+    }
+
+    #[test]
+    fn the_writer_keeps_exif_icc_and_xmp_in_an_extended_file() {
+        let mut tiff = Dict::new();
+        tiff.insert("Orientation".into(), PropValue::Int(6));
+        let exif = crate::cg::imageio::exif::build_block(&tiff, &Dict::new(), &Dict::new()).unwrap();
+        let file = encode(2, 2, &gradient(2, 2, 255), Some(&exif), Some(b"profile-bytes"), Some(b"<x:xmpmeta/>")).unwrap();
+        assert!(chunks(&file).unwrap().get(b"VP8X").is_some());
+        let p = probe(&file).unwrap();
+        assert_eq!(p.orientation, 6);
+        assert_eq!(p.icc_profile.as_deref(), Some(b"profile-bytes".as_slice()));
+        assert_eq!(p.xmp.as_deref(), Some(b"<x:xmpmeta/>".as_slice()));
+        assert_eq!(decode(&file).unwrap().frames[0].rgba8, gradient(2, 2, 255));
+    }
+
+    #[test]
+    fn the_writer_refuses_a_wrong_pixel_count() {
+        assert!(encode(2, 2, &[0; 15], None, None, None).is_none());
+        assert!(encode(0, 2, &[], None, None, None).is_none());
+    }
+
+    #[test]
+    fn a_still_file_counts_one_frame() {
+        assert_eq!(frame_count(&encode(1, 1, &[1, 2, 3, 255], None, None, None).unwrap()), 1);
+    }
+
+    // Two pictures made for these tests from solid colours (8 x 6): a lossy red still, and a two-frame lossless
+    // animation (red for 200 ms, then blue for 350 ms, played three times, frames not blended).
+    const LOSSY_RED_8X6: [u8; 72] = [
+        82, 73, 70, 70, 64, 0, 0, 0, 87, 69, 66, 80, 86, 80, 56, 32, 52, 0, 0, 0, 48, 2, 0, 157,
+        1, 42, 8, 0, 6, 0, 0, 192, 18, 37, 160, 2, 116, 186, 1, 248, 1, 248, 0, 4, 104, 0, 0, 254,
+        250, 33, 151, 255, 119, 154, 176, 211, 119, 245, 173, 255, 245, 163, 159, 174, 137, 254, 180, 115, 255, 89, 88, 0,
+    ];
+    const ANIMATED_RED_BLUE_8X6: [u8; 148] = [
+        82, 73, 70, 70, 140, 0, 0, 0, 87, 69, 66, 80, 86, 80, 56, 88, 10, 0, 0, 0, 2, 0, 0, 0,
+        7, 0, 0, 5, 0, 0, 65, 78, 73, 77, 6, 0, 0, 0, 255, 255, 255, 255, 3, 0, 65, 78, 77, 70,
+        44, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 0, 5, 0, 0, 200, 0, 0, 2, 86, 80, 56, 76,
+        20, 0, 0, 0, 47, 7, 64, 1, 0, 7, 16, 253, 143, 254, 7, 0, 130, 240, 191, 109, 34, 162, 255, 33,
+        65, 78, 77, 70, 44, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 0, 5, 0, 0, 94, 1, 0, 0,
+        86, 80, 56, 76, 20, 0, 0, 0, 47, 7, 64, 1, 0, 7, 16, 209, 255, 254, 7, 0, 130, 240, 191, 109,
+        34, 162, 255, 33,
+    ];
+
+    #[test]
+    fn a_lossy_picture_decodes() {
+        let p = probe(&LOSSY_RED_8X6).unwrap();
+        assert_eq!((p.pixel_width, p.pixel_height, p.has_alpha), (8, 6, false));
+        assert_eq!(p.webp["Lossless"], PropValue::Int(0));
+        let d = decode(&LOSSY_RED_8X6).unwrap();
+        assert_eq!((d.frames[0].w, d.frames[0].h, d.frames.len()), (8, 6, 1));
+        let px = &d.frames[0].rgba8[(2 * 8 + 3) * 4..(2 * 8 + 3) * 4 + 4];
+        assert!(px[0] > 200 && px[1] < 60 && px[2] < 60 && px[3] == 255, "red within lossy error: {px:?}");
+    }
+
+    #[test]
+    fn an_animated_picture_gives_every_frame_its_delay_and_the_loop_count() {
+        let p = probe(&ANIMATED_RED_BLUE_8X6).unwrap();
+        assert_eq!(p.webp["Animated"], PropValue::Int(1));
+        assert_eq!(p.webp["LoopCount"], PropValue::Int(3));
+        assert_eq!(frame_count(&ANIMATED_RED_BLUE_8X6), 2);
+        let d = decode(&ANIMATED_RED_BLUE_8X6).unwrap();
+        assert_eq!(d.frames.iter().map(|f| f.delay_ms).collect::<Vec<_>>(), vec![200, 350]);
+        assert_eq!(d.loop_count, Some(3));
+        assert_eq!(d.props.len(), 2);
+        assert_eq!(&d.frames[0].rgba8[..4], &[255, 0, 0, 255]);
+        assert_eq!(&d.frames[1].rgba8[..4], &[0, 0, 255, 255], "the second frame replaces the canvas");
     }
 
     #[test]
