@@ -1,7 +1,10 @@
 //! Postal address formatter: the lines a postal address prints as on an envelope or a card. The model takes the parts
-//! of a [`PostalAddress`] and returns non-empty lines only, so a missing part leaves no gap. Two layouts are modelled:
-//! city first ("Springfield, IL 62701") and postal code first ("101 Reykjavik"). The administrative area below the city
-//! is not printed. Country names are printed as stored; there is no country code lookup.
+//! of a [`PostalAddress`] and returns non-empty lines only, so a missing part leaves no gap. Four layouts are modelled:
+//! city first ("Springfield, IL 62701"), postal code first ("101 Reykjavik"), the postal code on a line of its own after
+//! the city, and largest part first (postal code, region and city, then the street). [`Style::for_country`] picks the
+//! layout from the address's ISO country code, as the reference formatter does; the layouts follow the public postal
+//! conventions of each country, and a country without an entry uses city first. The administrative area below the city
+//! is not printed. Country names are printed as stored.
 
 use crate::contact_book::PostalAddress;
 
@@ -12,11 +15,55 @@ pub enum Style {
     CityFirst,
     /// Postal code, then city and state: "101 Reykjavik".
     PostalFirst,
+    /// City (and state) on one line, then the postal code on its own line.
+    PostalLine,
+    /// Largest part first: the postal code, then the state, city and district, then the street.
+    LargestFirst,
+}
+
+/// Countries whose locality line puts the postal code before the city.
+const POSTAL_FIRST: [&str; 31] = [
+    "AT", "BE", "BG", "CH", "CZ", "DE", "DK", "EE", "ES", "FI", "FO", "FR", "GL", "GR", "HR", "HU", "IS", "IT", "LI", "LT",
+    "LU", "LV", "MC", "NL", "NO", "PL", "PT", "RO", "SE", "SI", "SK",
+];
+/// Countries that print the postal code on its own line below the city.
+const POSTAL_LINE: [&str; 4] = ["GB", "IE", "IM", "JE"];
+/// Countries that write the address from the largest part down.
+const LARGEST_FIRST: [&str; 5] = ["CN", "JP", "KR", "TW", "HK"];
+
+impl Style {
+    /// The layout for an ISO 3166 country code (any case, surrounding spaces ignored); city first when the code is
+    /// empty or has no entry.
+    pub fn for_country(iso_code: &str) -> Style {
+        let code = iso_code.trim().to_ascii_uppercase();
+        let code = code.as_str();
+        if POSTAL_FIRST.contains(&code) {
+            Style::PostalFirst
+        } else if POSTAL_LINE.contains(&code) {
+            Style::PostalLine
+        } else if LARGEST_FIRST.contains(&code) {
+            Style::LargestFirst
+        } else {
+            Style::CityFirst
+        }
+    }
+}
+
+/// The lines of the address in the layout of its own country (its `iso_country_code`).
+pub fn lines_for_country(address: &PostalAddress) -> Vec<String> {
+    lines(address, Style::for_country(&address.iso_country_code))
 }
 
 /// The non-empty lines of the address, from the street down to the country.
 pub fn lines(address: &PostalAddress, style: Style) -> Vec<String> {
     let mut out = Vec::new();
+    if style == Style::LargestFirst {
+        push_nonempty(&mut out, address.postal_code.trim());
+        push_nonempty(&mut out, &join(&[&address.state, &address.city, &address.sub_locality], " "));
+        push_nonempty(&mut out, address.street.trim());
+        push_nonempty(&mut out, address.country.trim());
+        return out;
+    }
     for part in [&address.street, &address.sub_locality] {
         push_nonempty(&mut out, part.trim());
     }
@@ -26,8 +73,12 @@ pub fn lines(address: &PostalAddress, style: Style) -> Vec<String> {
             join(&[&address.city, &rest], ", ")
         }
         Style::PostalFirst => join(&[&address.postal_code, &address.city, &address.state], " "),
+        Style::PostalLine | Style::LargestFirst => join(&[&address.city, &address.state], " "),
     };
     push_nonempty(&mut out, &locality);
+    if style == Style::PostalLine {
+        push_nonempty(&mut out, address.postal_code.trim());
+    }
     push_nonempty(&mut out, address.country.trim());
     out
 }
@@ -115,5 +166,40 @@ mod tests {
     #[test]
     fn single_line_joins_the_lines() {
         assert_eq!(single_line(&address(), Style::CityFirst), "1 Main St, Springfield, IL 62701, USA");
+    }
+
+    #[test]
+    fn the_country_code_picks_the_layout() {
+        assert_eq!(Style::for_country("is"), Style::PostalFirst);
+        assert_eq!(Style::for_country(" DE "), Style::PostalFirst);
+        assert_eq!(Style::for_country("US"), Style::CityFirst);
+        assert_eq!(Style::for_country("GB"), Style::PostalLine);
+        assert_eq!(Style::for_country("JP"), Style::LargestFirst);
+        assert_eq!(Style::for_country(""), Style::CityFirst);
+        assert_eq!(Style::for_country("zz"), Style::CityFirst);
+    }
+
+    #[test]
+    fn the_postal_code_gets_its_own_line_or_leads_the_address() {
+        let london = PostalAddress {
+            street: "10 Downing Street".into(),
+            city: "London".into(),
+            postal_code: "SW1A 2AA".into(),
+            country: "United Kingdom".into(),
+            iso_country_code: "gb".into(),
+            ..PostalAddress::default()
+        };
+        assert_eq!(lines_for_country(&london), vec!["10 Downing Street", "London", "SW1A 2AA", "United Kingdom"]);
+        let tokyo = PostalAddress {
+            street: "1-1 Chiyoda".into(),
+            city: "Chiyoda-ku".into(),
+            state: "Tokyo".into(),
+            postal_code: "100-0001".into(),
+            iso_country_code: "JP".into(),
+            ..PostalAddress::default()
+        };
+        assert_eq!(lines_for_country(&tokyo), vec!["100-0001", "Tokyo Chiyoda-ku", "1-1 Chiyoda"]);
+        let reykjavik = PostalAddress { city: "Reykjavik".into(), postal_code: "101".into(), iso_country_code: "IS".into(), ..PostalAddress::default() };
+        assert_eq!(lines_for_country(&reykjavik), vec!["101 Reykjavik"]);
     }
 }

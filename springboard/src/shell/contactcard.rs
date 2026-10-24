@@ -1,6 +1,8 @@
 //! vCard import and export for the contact store. The store keeps one name, one phone, one email and one address per
 //! contact plus a sidecar of extras (`contactextras`); a card carries the full contact model. This module maps between
-//! the two, so the `contacts` service can export the people an app may read and import cards the person gave it.
+//! the two, so the `contacts` service can export the people an app may read and import cards the person gave it. The name
+//! prefix, nickname, job title, department, relations, social profiles and instant message addresses travel through
+//! the sidecar, so they survive an export and import.
 //!
 //! Pure: no file access. `export` writes cards, `plan_import` reads cards and says what the book would become, and the
 //! caller stores the plan only when it succeeded. Import never overwrites a contact: a card that matches a person
@@ -8,8 +10,10 @@
 use super::contactextras::{Book as ExtraBook, Extras};
 use super::contactstore::{self, Contact, MAX_NAME, MAX_NOTES, MAX_VALUE};
 use super::services::contacts::{join_name, name_parts, NameParts};
-use bifrost_ui::contact_book::{label, Contact as Card, DateComponents as CardDate, LabeledValue as CardValue, PostalAddress};
-use bifrost_ui::contact_fetch::{DateComponents, LabeledValue};
+use bifrost_ui::contact_book::{
+    label, Contact as Card, DateComponents as CardDate, InstantMessageAddress, LabeledValue as CardValue, PostalAddress, SocialProfile,
+};
+use bifrost_ui::contact_fetch::{DateComponents, LabeledValue, Profile};
 use bifrost_ui::contact_vcard::{self, Version};
 use std::collections::HashSet;
 
@@ -65,11 +69,31 @@ pub fn card_of(c: &Contact, extras: &Extras, photo: Option<Vec<u8>>) -> Card {
         middle_name: parts.middle,
         family_name: parts.family,
         name_suffix: parts.suffix,
+        name_prefix: extras.name_prefix.clone(),
+        nickname: extras.nickname.clone(),
         organization_name: c.company.clone(),
+        department_name: extras.department.clone(),
+        job_title: extras.job_title.clone(),
         note: c.notes.clone(),
         image_data: photo,
         ..Card::default()
     };
+    for r in &extras.relations {
+        card.contact_relations.push(CardValue::new(card_label(&r.label).as_deref(), r.value.clone()));
+    }
+    for p in &extras.social_profiles {
+        let profile = SocialProfile {
+            url_string: p.url.clone(),
+            username: p.username.clone(),
+            user_identifier: p.user_identifier.clone(),
+            service: p.service.clone(),
+        };
+        card.social_profiles.push(CardValue::new(card_label(&p.label).as_deref(), profile));
+    }
+    for m in &extras.instant_messages {
+        let address = InstantMessageAddress { username: m.username.clone(), service: m.service.clone() };
+        card.instant_message_addresses.push(CardValue::new(card_label(&m.label).as_deref(), address));
+    }
     if !c.phone.trim().is_empty() {
         let name = contactstore::LABELS[0].get(c.labels[0] as usize).copied().unwrap_or("other");
         card.phone_numbers.push(CardValue::new(card_label(name).as_deref(), c.phone.clone()));
@@ -177,6 +201,37 @@ fn read_card(card: &Card) -> Option<(Contact, Extras, Option<Vec<u8>>)> {
     for d in &card.dates {
         extras.dates.push((clean(&store_label(&d.label), MAX_EXTRA), store_date(d.value)));
     }
+    extras.name_prefix = clean(card.name_prefix.trim(), MAX_EXTRA);
+    extras.nickname = clean(card.nickname.trim(), MAX_EXTRA);
+    extras.job_title = clean(card.job_title.trim(), MAX_EXTRA);
+    extras.department = clean(card.department_name.trim(), MAX_EXTRA);
+    for r in &card.contact_relations {
+        let value = clean(r.value.trim(), MAX_EXTRA);
+        if !value.is_empty() {
+            extras.relations.push(LabeledValue::new(&clean(&store_label(&r.label), MAX_EXTRA), &value));
+        }
+    }
+    // a profile or address the card left unlabeled stays unlabeled, not "other"
+    let label_of = |label: &Option<String>| if label.is_some() { clean(&store_label(label), MAX_EXTRA) } else { String::new() };
+    for p in &card.social_profiles {
+        let profile = Profile {
+            label: label_of(&p.label),
+            service: clean(p.value.service.trim(), MAX_EXTRA),
+            username: clean(p.value.username.trim(), MAX_EXTRA),
+            url: clean(p.value.url_string.trim(), MAX_EXTRA),
+            user_identifier: clean(p.value.user_identifier.trim(), MAX_EXTRA),
+            identifier: String::new(),
+        };
+        if !profile.is_blank() {
+            extras.social_profiles.push(profile);
+        }
+    }
+    for m in &card.instant_message_addresses {
+        let profile = Profile::new(&label_of(&m.label), &clean(m.value.service.trim(), MAX_EXTRA), &clean(m.value.username.trim(), MAX_EXTRA));
+        if !profile.is_blank() {
+            extras.instant_messages.push(profile);
+        }
+    }
     contact.valid().then_some((contact, extras, card.image_data.clone()))
 }
 
@@ -276,6 +331,13 @@ mod tests {
             urls: vec![LabeledValue::new("other", "https://ada.is")],
             birthday: DateComponents::new(Some(1815), 12, 10),
             dates: vec![("anniversary".into(), DateComponents::new(Some(1835), 7, 8).unwrap())],
+            name_prefix: "Dr.".into(),
+            nickname: "Countess".into(),
+            job_title: "Analyst".into(),
+            department: "Engines".into(),
+            relations: vec![LabeledValue::new("spouse", "William King")],
+            social_profiles: vec![Profile { url: "https://example.social/@ada".into(), ..Profile::new("", "mastodon", "ada") }],
+            instant_messages: vec![Profile::new("", "xmpp", "ada@chat.example")],
         }
     }
 
@@ -335,6 +397,11 @@ mod tests {
             assert_eq!(got.urls[0].value, "https://ada.is");
             assert_eq!(got.birthday, DateComponents::new(Some(1815), 12, 10));
             assert_eq!(got.dates.len(), 1);
+            assert_eq!((got.name_prefix.as_str(), got.nickname.as_str()), ("Dr.", "Countess"), "{version:?}");
+            assert_eq!((got.job_title.as_str(), got.department.as_str()), ("Analyst", "Engines"), "{version:?}");
+            assert_eq!(got.relations, vec![LabeledValue::new("spouse", "William King")], "{version:?}");
+            assert_eq!(got.social_profiles.first().map(|p| (p.service.as_str(), p.username.as_str())), Some(("mastodon", "ada")), "{version:?}");
+            assert_eq!(got.instant_messages.first().map(|p| p.username.as_str()), Some("ada@chat.example"), "{version:?}");
         }
     }
 

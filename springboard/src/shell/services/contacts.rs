@@ -8,16 +8,21 @@
 //! - `request {}` returns `{status}`, the current status. It changes nothing: an app cannot grant itself access. The
 //!   person's answer is set by [`answer_prompt`] (the access sheet) or [`change_by_user`] (Settings).
 //! - `fetch {keys, query?}` returns `{contacts: [{id, <key>: value | null, ...}]}`. `keys` names the fields
-//!   (`given_name`, `family_name`, `organization`, `phones`, `emails`, `address`, `note`, `urls`, `birthday`, `dates`)
-//!   and must not be empty. `phones`, `emails` and `urls` are lists of `{label, value, identifier}`, `birthday` is
-//!   `{year?, month, day}` and `dates` is a list of `{label, year?, month, day}`. `query`
+//!   (`given_name`, `middle_name`, `family_name`, `name_suffix`, `name_prefix`, `nickname`, `organization`,
+//!   `job_title`, `department`, `phones`, `emails`, `address`, `note`, `urls`, `relations`, `birthday`, `dates`,
+//!   `social_profiles`, `instant_messages`) and must not be empty. `phones`, `emails`, `urls` and `relations` are lists
+//!   of `{label, value, identifier}`, `birthday` is `{year?, month, day}`, `dates` is a list of
+//!   `{label, year?, month, day}`, and `social_profiles` and `instant_messages` are lists of
+//!   `{label, service, username, url, user_identifier, identifier}`. `query`
 //!   filters by any text of the contact. Answers only the contacts the app may read, sorted by name. Without a
 //!   read grant it is an error.
 //! - `view {contact}` shows the person one contact's card in Contacts (`contact` is a name or an identifier) and
 //!   returns `{status: "shown"}`. It reads nothing from the book, so it needs no grant.
 //! - `save {add?, update?, delete?}` changes the book and returns `{added: [id, ...]}`, the ids the new contacts got.
-//!   `add` and `update` hold records of the fields above (`update` also needs the contact `id` and changes only the
-//!   fields it names; `null` clears one). `delete` holds `{id}` objects. Only full access writes: a limited grant is read-only. The whole
+//!   `add` and `update` hold records of the fields above in the shapes `fetch` returns (`update` also needs the contact
+//!   `id` and changes only the fields it names; `null` clears one). A list of labeled values may also be plain strings.
+//!   The first phone and email go to the contacts file, the rest and every other multi-value or extra field to the
+//!   sidecar; the address takes one value. `delete` holds `{id}` objects. Only full access writes: a limited grant is read-only. The whole
 //!   call applies or none of it does, and the shell stores the book only when it succeeds.
 //!
 //! - `export_vcard {ids?, version?}` returns `{vcard, count}`: the contacts the app may read as vCard text (`version` is
@@ -43,7 +48,8 @@
 //!   never offered again. Only the Contacts app (the owner of the book) may call these two.
 //!
 //! The first phone and email come from the contacts file (labeled by its label row); more phones and emails, URLs, the
-//! birthday and dates come from the sidecar (`contactextras`). A contact without a sidecar entry reads as before, with
+//! birthday and dates, the name prefix, nickname, job title, department, relations, social profiles and instant
+//! message addresses come from the sidecar (`contactextras`). A contact without a sidecar entry reads as before, with
 //! one-element lists.
 //!
 //! The store holds one name per contact: the last word of it is the family name and the rest is the given name. The
@@ -64,7 +70,7 @@ use bifrost_ui::contact_vcard;
 use bifrost_ui::contact_access::{Access, Choice, Error, Status};
 use bifrost_ui::contact_book::{Contact as BookContact, LabeledValue as BookValue};
 use bifrost_ui::contact_donation::{DonationStore, Feedback, Handle, Refusal};
-use bifrost_ui::contact_fetch::{project, DateComponents, Key, Keys, LabeledValue, Partial, Record, Value};
+use bifrost_ui::contact_fetch::{project, DateComponents, Key, Keys, LabeledValue, Partial, Profile, Record, Value};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 
@@ -133,6 +139,13 @@ pub fn record_with(c: &Contact, extras: &Extras) -> Record {
     r.set(Key::Dates, Value::Dates(extras.dates.clone()));
     r.set(Key::Address, Value::Text(c.address.clone()));
     r.set(Key::Note, Value::Text(c.notes.clone()));
+    r.set(Key::NamePrefix, Value::Text(extras.name_prefix.clone()));
+    r.set(Key::Nickname, Value::Text(extras.nickname.clone()));
+    r.set(Key::JobTitle, Value::Text(extras.job_title.clone()));
+    r.set(Key::Department, Value::Text(extras.department.clone()));
+    r.set(Key::Relations, Value::Labeled(LabeledValue::numbered(extras.relations.clone())));
+    r.set(Key::SocialProfiles, Value::Profiles(Profile::numbered(extras.social_profiles.clone())));
+    r.set(Key::InstantMessages, Value::Profiles(Profile::numbered(extras.instant_messages.clone())));
     r
 }
 
@@ -197,6 +210,7 @@ pub fn partial_json(p: &Partial) -> Json {
             Ok(Some(Value::Dates(items))) => {
                 Json::Arr(items.iter().map(|(label, d)| date_fields(*d, vec![("label".to_string(), Json::Str(label.clone()))])).collect())
             }
+            Ok(Some(Value::Profiles(items))) => Json::Arr(items.iter().map(profile_json).collect()),
             _ => Json::Null,
         };
         fields.push((key.name().to_string(), value));
@@ -209,6 +223,18 @@ fn labeled_json(item: &LabeledValue) -> Json {
         ("label".to_string(), Json::Str(item.label.clone())),
         ("value".to_string(), Json::Str(item.value.clone())),
         ("identifier".to_string(), Json::Str(item.identifier.clone())),
+    ])
+}
+
+fn profile_json(p: &Profile) -> Json {
+    let field = |name: &str, value: &str| (name.to_string(), Json::Str(value.to_string()));
+    Json::Obj(vec![
+        field("label", &p.label),
+        field("service", &p.service),
+        field("username", &p.username),
+        field("url", &p.url),
+        field("user_identifier", &p.user_identifier),
+        field("identifier", &p.identifier),
     ])
 }
 
@@ -245,29 +271,106 @@ fn record_of_json(v: &Json) -> Result<(Record, Vec<Key>), String> {
             continue;
         }
         let key = Key::from_name(name).ok_or_else(|| format!("no contact field {name}"))?;
-        let value = match value {
-            Json::Null => {
-                // a record drops blank values, so a cleared field is kept aside
-                cleared.push(key);
-                continue;
-            }
-            Json::Str(text) => Value::Text(text.clone()),
-            Json::Arr(items) => Value::List(
-                items
-                    .iter()
-                    .map(|item| item.as_str().map(str::to_string).ok_or_else(|| format!("{name} is a list of text")))
-                    .collect::<Result<Vec<String>, String>>()?,
-            ),
-            _ => return Err(format!("{name} is text or a list of text")),
-        };
-        record.set(key, value);
+        if matches!(value, Json::Null) {
+            // a record drops blank values, so a cleared field is kept aside
+            cleared.push(key);
+            continue;
+        }
+        record.set(key, value_of_json(key, value)?);
     }
     Ok((record, cleared))
 }
 
-/// The one value a record holds for a key, or blank. The book keeps one phone, one email and one address per contact,
-/// so a list of more than one is refused rather than cut down.
+/// The date in a `{year?, month, day}` object.
+fn date_of_json(v: &Json) -> Option<DateComponents> {
+    let year = match v.get("year").and_then(Json::number) {
+        Some(y) if y.fract() == 0.0 && y.abs() < 1.0e6 => Some(y as i32),
+        Some(_) => return None,
+        None => None,
+    };
+    DateComponents::new(year, u8::try_from(v.get("month")?.as_u64()?).ok()?, u8::try_from(v.get("day")?.as_u64()?).ok()?)
+}
+
+/// The text under `field` of a JSON object, empty when it is missing.
+fn text_field(item: &Json, field: &str) -> String {
+    item.get(field).and_then(Json::as_str).unwrap_or("").to_string()
+}
+
+/// A `save` field in the shape `fetch` returns it. Labeled lists may be plain strings (no label) or `{label, value}`
+/// objects; a list of only strings stays a plain list.
+fn value_of_json(key: Key, value: &Json) -> Result<Value, String> {
+    let name = key.name();
+    match (key, value) {
+        (Key::Birthday, Json::Obj(_)) => date_of_json(value).map(Value::Date).ok_or_else(|| format!("{name} is {{year?, month, day}}")),
+        (Key::Dates, Json::Arr(items)) => items
+            .iter()
+            .map(|d| date_of_json(d).map(|date| (text_field(d, "label"), date)).ok_or_else(|| format!("{name} is a list of {{label, year?, month, day}}")))
+            .collect::<Result<Vec<_>, String>>()
+            .map(Value::Dates),
+        (Key::SocialProfiles | Key::InstantMessages, Json::Arr(items)) => {
+            let social = key == Key::SocialProfiles;
+            items
+                .iter()
+                .map(|p| match p {
+                    Json::Obj(_) => Ok(Profile {
+                        label: text_field(p, "label"),
+                        service: text_field(p, "service"),
+                        username: text_field(p, "username"),
+                        url: if social { text_field(p, "url") } else { String::new() },
+                        user_identifier: if social { text_field(p, "user_identifier") } else { String::new() },
+                        identifier: String::new(),
+                    }),
+                    _ => Err(format!("{name} is a list of {{label, service, username}} objects")),
+                })
+                .collect::<Result<Vec<_>, String>>()
+                .map(Value::Profiles)
+        }
+        (Key::Birthday | Key::Dates | Key::SocialProfiles | Key::InstantMessages, _) => {
+            Err(format!("{name} is not in the shape fetch returns"))
+        }
+        (_, Json::Str(text)) => Ok(Value::Text(text.clone())),
+        (_, Json::Arr(items)) if items.iter().all(|i| matches!(i, Json::Str(_))) => {
+            Ok(Value::List(items.iter().filter_map(|i| i.as_str().map(str::to_string)).collect()))
+        }
+        (_, Json::Arr(items)) => items
+            .iter()
+            .map(|item| match item {
+                Json::Str(v) => Ok(LabeledValue::new("", v)),
+                Json::Obj(_) => item
+                    .get("value")
+                    .and_then(Json::as_str)
+                    .map(|v| LabeledValue::new(&text_field(item, "label"), v))
+                    .ok_or_else(|| format!("{name} entries are text or {{label, value}}")),
+                _ => Err(format!("{name} is a list of text")),
+            })
+            .collect::<Result<Vec<_>, String>>()
+            .map(Value::Labeled),
+        _ => Err(format!("{name} is text or a list of text")),
+    }
+}
+
+/// The entries of a text, list or labeled field, in order, trimmed, with blank ones left out.
+fn entries_of(record: &Record, key: Key) -> Vec<LabeledValue> {
+    let items: Vec<(&str, &str)> = match record.get(key) {
+        Some(Value::Text(text)) => vec![("", text.as_str())],
+        Some(Value::List(items)) => items.iter().map(|v| ("", v.as_str())).collect(),
+        Some(Value::Labeled(items)) => items.iter().map(|i| (i.label.as_str(), i.value.as_str())).collect(),
+        _ => Vec::new(),
+    };
+    items
+        .into_iter()
+        .filter(|(_, value)| !value.trim().is_empty())
+        .map(|(label, value)| LabeledValue::new(label.trim(), value.trim()))
+        .collect()
+}
+
+/// The one value a record holds for a key, or blank. The book keeps one address per contact, so a list of more than
+/// one is refused rather than cut down. Phones and emails give their first entry: the rest go to the sidecar
+/// ([`extras_of`]).
 fn value_of(record: &Record, key: Key) -> Result<String, String> {
+    if matches!(key, Key::Phones | Key::Emails) {
+        return Ok(entries_of(record, key).first().map(|i| i.value.clone()).unwrap_or_default());
+    }
     match record.get(key) {
         None => Ok(String::new()),
         Some(Value::Text(text)) => Ok(text.trim().to_string()),
@@ -281,8 +384,8 @@ fn value_of(record: &Record, key: Key) -> Result<String, String> {
             [one] => Ok(one.value.trim().to_string()),
             _ => Err(format!("{} takes one value per contact", key.name())),
         },
-        // birthday and dates live in the contacts sidecar, which `save` does not write yet
-        Some(Value::Date(_) | Value::Dates(_)) => Err(format!("{} cannot be saved yet", key.name())),
+        // these live in the sidecar, written by `extras_of`
+        Some(Value::Date(_) | Value::Dates(_) | Value::Profiles(_)) => Err(format!("{} is not a contacts file field", key.name())),
     }
 }
 
@@ -316,13 +419,118 @@ fn contact_of(id: u64, (record, cleared): &(Record, Vec<Key>), base: Option<&Con
         notes: field(Key::Note, base.map_or("", |c| &c.notes))?,
         favorite: base.is_some_and(|c| c.favorite),
         uid: base.map_or_else(|| crate::shell::contactstore::new_uid(id), |c| c.uid.clone()),
-        labels: base.map_or([0; 3], |c| c.labels),
+        labels: first_labels(record, cleared, base.map_or([0; 3], |c| c.labels)),
     };
     if contact.valid() {
         Ok(contact)
     } else {
         Err("a contact needs a name, company, address, phone or email, within the field limits".into())
     }
+}
+
+/// The label rows of a saved contact: a labeled first phone or email the save names sets its row (a label the row
+/// does not hold reads as `other`); anything else keeps the row.
+fn first_labels(record: &Record, cleared: &[Key], mut labels: [u8; 3]) -> [u8; 3] {
+    for (set, key) in [(0usize, Key::Phones), (1, Key::Emails)] {
+        if cleared.contains(&key) {
+            continue;
+        }
+        if let Some(first) = entries_of(record, key).into_iter().next().filter(|i| !i.label.is_empty()) {
+            let label = first.label.to_lowercase();
+            let names = LABELS[set];
+            let at = names.iter().position(|n| *n == label).or_else(|| names.iter().position(|n| *n == "other")).unwrap_or(0);
+            labels[set] = at as u8;
+        }
+    }
+    labels
+}
+
+/// Refuses text longer than the sidecar keeps, rather than cutting it.
+fn fits(key: Key, text: &str) -> Result<(), String> {
+    if text.chars().count() > contactextras::MAX_FIELD {
+        Err(format!("{} is longer than {} characters", key.name(), contactextras::MAX_FIELD))
+    } else {
+        Ok(())
+    }
+}
+
+/// The sidecar extras of a saved contact. An update (`base`) changes only the fields the record names, and `null`
+/// clears one. Phones and emails after the first, URLs, relations, the birthday, dates, the name prefix, nickname, job
+/// title, department, social profiles and instant message addresses live here.
+fn extras_of(record: &Record, cleared: &[Key], base: Option<&Extras>) -> Result<Extras, String> {
+    let mut e = base.cloned().unwrap_or_default();
+    let named = |key: Key| record.get(key).is_some() || cleared.contains(&key);
+    for (key, skip) in [(Key::Phones, 1), (Key::Emails, 1), (Key::Urls, 0), (Key::Relations, 0)] {
+        if !named(key) {
+            continue;
+        }
+        let items: Vec<LabeledValue> = entries_of(record, key).into_iter().skip(skip).collect();
+        for i in &items {
+            fits(key, &i.label)?;
+            fits(key, &i.value)?;
+        }
+        match key {
+            Key::Phones => e.phones = items,
+            Key::Emails => e.emails = items,
+            Key::Urls => e.urls = items,
+            _ => e.relations = items,
+        }
+    }
+    if named(Key::Birthday) {
+        e.birthday = match record.get(Key::Birthday) {
+            Some(Value::Date(d)) => Some(*d),
+            _ => None,
+        };
+    }
+    if named(Key::Dates) {
+        e.dates = match record.get(Key::Dates) {
+            Some(Value::Dates(items)) => items.iter().map(|(l, d)| (l.trim().to_string(), *d)).collect(),
+            _ => Vec::new(),
+        };
+        for (label, _) in &e.dates {
+            fits(Key::Dates, label)?;
+        }
+    }
+    for key in [Key::NamePrefix, Key::Nickname, Key::JobTitle, Key::Department] {
+        if !named(key) {
+            continue;
+        }
+        let text = match record.get(key) {
+            None => String::new(),
+            Some(Value::Text(t)) => t.trim().to_string(),
+            Some(Value::List(items)) if items.len() <= 1 => items.first().map(|t| t.trim().to_string()).unwrap_or_default(),
+            Some(_) => return Err(format!("{} is text", key.name())),
+        };
+        fits(key, &text)?;
+        match key {
+            Key::NamePrefix => e.name_prefix = text,
+            Key::Nickname => e.nickname = text,
+            Key::JobTitle => e.job_title = text,
+            _ => e.department = text,
+        }
+    }
+    for key in [Key::SocialProfiles, Key::InstantMessages] {
+        if !named(key) {
+            continue;
+        }
+        let items: Vec<Profile> = match record.get(key) {
+            Some(Value::Profiles(items)) => {
+                items.iter().filter(|p| !p.is_blank()).map(|p| Profile { identifier: String::new(), ..p.clone() }).collect()
+            }
+            _ => Vec::new(),
+        };
+        for p in &items {
+            for text in [&p.label, &p.service, &p.username, &p.url, &p.user_identifier] {
+                fits(key, text)?;
+            }
+        }
+        if key == Key::SocialProfiles {
+            e.social_profiles = items;
+        } else {
+            e.instant_messages = items;
+        }
+    }
+    Ok(e)
 }
 
 /// The list under `key` in a `save` call, empty when the call omits it.
@@ -334,10 +542,27 @@ fn list_of<'a>(params: &'a Json, key: &str) -> Result<&'a [Json], String> {
     }
 }
 
-/// Applies a `save` call to `book` for `app_id` and returns the reply and the new book. Pure: the caller stores the new
-/// book only when this is `Ok`, so a call that fails in any item changes nothing. Only full access writes. An add gets
-/// the next free id; an update and a delete must name a contact the book holds.
+/// Applies a `save` call to `book` for `app_id` and returns the reply and the new book, without the sidecar fields
+/// (more phones and emails, URLs, dates and the other extras are dropped). For a caller that keeps no sidecar; the
+/// service uses [`apply_save_with`].
 pub fn apply_save(app_id: &str, params: &Json, book: &[Contact]) -> Result<(Json, Vec<Contact>), String> {
+    apply_save_with(app_id, params, book, &Book::new()).map(|(reply, next, _)| (reply, next))
+}
+
+/// Keeps a contact's extras in `book`, or drops its entry when it has none.
+fn keep_extras(book: &mut Book, id: u64, extras: Extras) {
+    if extras.is_empty() {
+        book.remove(&id);
+    } else {
+        book.insert(id, extras);
+    }
+}
+
+/// Applies a `save` call to `book` and its sidecar `extras` for `app_id`, and returns the reply, the new book and the
+/// new sidecar. Pure: the caller stores both only when this is `Ok`, so a call that fails in any item changes nothing.
+/// Only full access writes. An add gets the next free id; an update and a delete must name a contact the book holds. A
+/// deleted contact leaves the sidecar too.
+pub fn apply_save_with(app_id: &str, params: &Json, book: &[Contact], extras: &Book) -> Result<(Json, Vec<Contact>, Book), String> {
     access_of(app_id).check_write().map_err(|e| match e {
         Error::ReadOnly => "a limited contacts grant only reads; saving needs full access".to_string(),
         _ => "contacts write access is not granted".to_string(),
@@ -349,28 +574,34 @@ pub fn apply_save(app_id: &str, params: &Json, book: &[Contact]) -> Result<(Json
         return Err("save needs add, update or delete".into());
     }
     let mut next = book.to_vec();
+    let mut more = extras.clone();
     let mut added = Vec::new();
     for item in adds {
         let id = contactstore::new_id(&next).ok_or_else(|| "the book is full".to_string())?;
-        next.push(contact_of(id, &record_of_json(item)?, None)?);
+        let parsed = record_of_json(item)?;
+        next.push(contact_of(id, &parsed, None)?);
+        keep_extras(&mut more, id, extras_of(&parsed.0, &parsed.1, None)?);
         added.push(Json::Num(id as f64));
     }
     for item in updates {
         let parsed = record_of_json(item)?;
-        let record = &parsed.0;
-        if record.id == 0 {
+        let id = parsed.0.id;
+        if id == 0 {
             return Err("update needs the id of a contact".into());
         }
-        let at = next.iter().position(|c| c.id == record.id).ok_or_else(|| format!("no contact {}", record.id))?;
-        let updated = contact_of(record.id, &parsed, Some(&next[at]))?;
+        let at = next.iter().position(|c| c.id == id).ok_or_else(|| format!("no contact {id}"))?;
+        let updated = contact_of(id, &parsed, Some(&next[at]))?;
+        let e = extras_of(&parsed.0, &parsed.1, more.get(&id))?;
+        keep_extras(&mut more, id, e);
         next[at] = updated;
     }
     for item in deletes {
         let id = item.get("id").and_then(Json::as_u64).ok_or_else(|| "delete needs the id of a contact".to_string())?;
         let at = next.iter().position(|c| c.id == id).ok_or_else(|| format!("no contact {id}"))?;
         next.remove(at);
+        more.remove(&id);
     }
-    Ok((Json::Obj(vec![("added".into(), Json::Arr(added))]), next))
+    Ok((Json::Obj(vec![("added".into(), Json::Arr(added))]), next, more))
 }
 
 /// The answer to one method call by `app_id`. `contacts` is the store's book, loaded by the caller only for a
@@ -751,8 +982,13 @@ impl SystemService for Contacts {
         match method {
             "save" => {
                 let book = if access_of(app_id).check_write().is_ok() { load()? } else { Vec::new() };
-                let (reply, next) = apply_save(app_id, params, &book)?;
+                let extras_path = contactextras::path_for(&path);
+                let extras = if book.is_empty() { Book::new() } else { contactextras::load(&extras_path) };
+                let (reply, next, next_extras) = apply_save_with(app_id, params, &book, &extras)?;
                 contactstore::save(&path, &next).map_err(|e| e.to_string())?;
+                if next_extras != extras {
+                    contactextras::save(&extras_path, &next_extras).map_err(|e| e.to_string())?;
+                }
                 let changes = contactchanges::diff(&book, &next);
                 if !changes.is_empty() {
                     let log_path = contactchanges::path_for(&path);
@@ -1396,6 +1632,7 @@ mod tests {
                 urls: vec![LabeledValue::new("home", "https://ada.example")],
                 birthday: DateComponents::new(Some(1815), 12, 10),
                 dates: vec![("anniversary".into(), DateComponents::new(None, 7, 8).unwrap())],
+                ..Default::default()
             },
         );
         book
@@ -1576,5 +1813,78 @@ mod tests {
         let (members, _, _) = containers_answer(id, "container_members", &ask, &book(), &mut containers).unwrap();
         assert_eq!(members.get("contacts"), Some(&Json::Arr(vec![Json::Num(1.0), Json::Num(3.0)])));
         assert!(containers_answer(id, "container_of", &obj(&[("contact", Json::Num(2.0))]), &book(), &mut containers).is_err());
+    }
+
+    fn labeled(items: &[(&str, &str)]) -> Json {
+        Json::Arr(items.iter().map(|(l, v)| obj(&[("label", text(l)), ("value", text(v))])).collect())
+    }
+
+    #[test]
+    fn a_save_stores_every_phone_and_the_extra_fields_and_a_fetch_returns_them() {
+        let id = "is.example.contacts-save-extras";
+        answer_prompt(id, Choice::All).unwrap();
+        let add = obj(&[(
+            "add",
+            Json::Arr(vec![obj(&[
+                ("given_name", text("Ada")),
+                ("name_prefix", text("Dr.")),
+                ("job_title", text("Analyst")),
+                ("phones", labeled(&[("work", "+354 1"), ("home", "+354 2")])),
+                ("relations", labeled(&[("spouse", "William")])),
+                ("birthday", obj(&[("month", Json::Num(12.0)), ("day", Json::Num(10.0))])),
+                ("dates", Json::Arr(vec![obj(&[("label", text("anniversary")), ("year", Json::Num(1835.0)), ("month", Json::Num(7.0)), ("day", Json::Num(8.0))])])),
+                ("social_profiles", Json::Arr(vec![obj(&[("service", text("mastodon")), ("username", text("@ada")), ("url", text("https://example.social/@ada"))])])),
+                ("instant_messages", Json::Arr(vec![obj(&[("label", text("home")), ("service", text("xmpp")), ("username", text("ada@chat.example"))])])),
+            ])]),
+        )]);
+        let (_, next, extras) = apply_save_with(id, &add, &book(), &Book::new()).unwrap();
+        let ada = next.iter().find(|c| c.id == 4).unwrap();
+        assert_eq!(ada.phone, "+354 1");
+        assert_eq!(LABELS[0][ada.labels[0] as usize], "work", "the first phone's label sets the file's label row");
+        let e = &extras[&4];
+        assert_eq!(e.phones, vec![LabeledValue::new("home", "+354 2")]);
+        assert_eq!((e.name_prefix.as_str(), e.job_title.as_str()), ("Dr.", "Analyst"));
+        assert_eq!(e.birthday, DateComponents::new(None, 12, 10));
+        assert_eq!(e.instant_messages[0].url, "", "an instant message address has no URL");
+        let reply = answer_with(id, "fetch", &keys(&["phones", "relations", "social_profiles", "job_title"]), &next, &extras).unwrap();
+        let people = reply.get("contacts").and_then(Json::as_array).unwrap();
+        let fetched = people.iter().find(|p| p.get("id").and_then(Json::as_u64) == Some(4)).unwrap();
+        assert_eq!(fetched.get("phones").and_then(Json::as_array).map(|p| p.len()), Some(2));
+        assert_eq!(fetched.get("relations").and_then(Json::as_array).and_then(|r| r[0].get("label")).and_then(Json::as_str), Some("spouse"));
+        let social = &fetched.get("social_profiles").and_then(Json::as_array).unwrap()[0];
+        assert_eq!(social.get("service").and_then(Json::as_str), Some("mastodon"));
+        assert_eq!(social.get("identifier").and_then(Json::as_str), Some("1"));
+        assert_eq!(fetched.get("job_title").and_then(Json::as_str), Some("Analyst"));
+    }
+
+    #[test]
+    fn an_update_changes_only_the_extras_it_names_null_clears_one_and_a_delete_drops_them() {
+        let id = "is.example.contacts-save-extras-update";
+        answer_prompt(id, Choice::All).unwrap();
+        let mut extras = Book::new();
+        extras.insert(1, Extras { nickname: "Countess".into(), urls: vec![LabeledValue::new("home", "https://ada.example")], ..Default::default() });
+        let update = obj(&[("update", Json::Arr(vec![obj(&[("id", Json::Num(1.0)), ("department", text("Engines")), ("nickname", Json::Null)])]))]);
+        let (_, _, after) = apply_save_with(id, &update, &book(), &extras).unwrap();
+        assert_eq!(after[&1].department, "Engines");
+        assert_eq!(after[&1].nickname, "");
+        assert_eq!(after[&1].urls.len(), 1, "a field the update does not name is kept");
+        let delete = obj(&[("delete", Json::Arr(vec![obj(&[("id", Json::Num(1.0))])]))]);
+        let (_, _, gone) = apply_save_with(id, &delete, &book(), &after).unwrap();
+        assert!(!gone.contains_key(&1));
+    }
+
+    #[test]
+    fn a_save_refuses_a_bad_date_a_bare_profile_and_an_overlong_extra() {
+        let id = "is.example.contacts-save-extras-bad";
+        answer_prompt(id, Choice::All).unwrap();
+        let add = |field: &str, value: Json| obj(&[("add", Json::Arr(vec![obj(&[("given_name", text("Ada")), (field, value)])]))]);
+        let bad_date = add("birthday", obj(&[("month", Json::Num(13.0)), ("day", Json::Num(1.0))]));
+        assert!(apply_save_with(id, &bad_date, &[], &Book::new()).is_err());
+        assert!(apply_save_with(id, &add("social_profiles", texts(&["@ada"])), &[], &Book::new()).is_err());
+        let long = "x".repeat(contactextras::MAX_FIELD + 1);
+        assert_eq!(
+            apply_save_with(id, &add("nickname", text(&long)), &[], &Book::new()).err(),
+            Some(format!("nickname is longer than {} characters", contactextras::MAX_FIELD))
+        );
     }
 }
