@@ -203,6 +203,60 @@ pub fn read(bytes: &[u8]) -> Option<PictureInfo> {
     })
 }
 
+/// A change to a picture's metadata that leaves its compressed pixels as they are; see [`edit`].
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct MetadataEdit {
+    /// A new EXIF orientation 1..=8 (viewers turn the stored pixels by it).
+    pub orientation: Option<u8>,
+    /// A new capture time, `YYYY:MM:DD HH:MM:SS`.
+    pub date_taken: Option<String>,
+    /// A new location (latitude and longitude; other GPS values are kept).
+    pub location: Option<Location>,
+    /// Remove every location value: the GPS block and the GPS properties of the XMP packet. Wins over `location`.
+    pub remove_location: bool,
+    /// Remove the XMP packet.
+    pub remove_xmp: bool,
+    /// New descriptive fields, written as the XMP packet (and IPTC in a JPEG) in place of the old ones. An empty
+    /// `Descriptive` removes them.
+    pub descriptive: Option<Descriptive>,
+}
+
+pub use bifrost_render::cg::imageio::CopyError;
+
+/// Writes `bytes` again with the metadata changed by `change`, copying the compressed pixels byte for byte, so a JPEG
+/// loses no quality. JPEG, PNG and WebP can be edited; other formats give `CopyError::Unsupported`. Every tag the
+/// edit does not touch is kept (camera maker notes excepted).
+pub fn edit(bytes: &[u8], change: &MetadataEdit) -> Result<Vec<u8>, CopyError> {
+    use bifrost_render::cg::imageio::{copy_image_source, CopyOptions, MetadataSet};
+    let mut set = MetadataSet::default();
+    if let Some(loc) = change.location {
+        let (lat_ref, lon_ref) = (if loc.latitude < 0.0 { "S" } else { "N" }, if loc.longitude < 0.0 { "W" } else { "E" });
+        set.gps.insert("LatitudeRef".into(), PropValue::Text(lat_ref.into()));
+        set.gps.insert("Latitude".into(), PropValue::Floats(decimal_to_dms(loc.latitude).to_vec()));
+        set.gps.insert("LongitudeRef".into(), PropValue::Text(lon_ref.into()));
+        set.gps.insert("Longitude".into(), PropValue::Floats(decimal_to_dms(loc.longitude).to_vec()));
+    }
+    if let Some(d) = &change.descriptive {
+        set.xmp = Some(d.xmp_packet().map(String::into_bytes).unwrap_or_default());
+        set.image_resources = Some(d.image_resources().unwrap_or_default());
+    }
+    let options = CopyOptions {
+        metadata: Some(set),
+        merge: true,
+        exclude_gps: change.remove_location,
+        exclude_xmp: change.remove_xmp,
+        date_time: change.date_taken.clone(),
+        orientation: change.orientation,
+    };
+    copy_image_source(bytes, &options)
+}
+
+/// The picture without any location (GPS block and XMP GPS properties), pixels untouched: what to send when a photo
+/// is shared and its place should stay private.
+pub fn without_location(bytes: &[u8]) -> Result<Vec<u8>, CopyError> {
+    edit(bytes, &MetadataEdit { remove_location: true, ..MetadataEdit::default() })
+}
+
 /// The first image of `bytes` as premultiplied pixels, turned upright by its EXIF orientation.
 pub fn decode_upright(bytes: &[u8]) -> Option<Image> {
     let source = Source::new(bytes.to_vec());
@@ -405,6 +459,48 @@ mod tests {
         assert!(close(gps_speed_kmh(&gps).unwrap(), 185.2));
         gps.insert("Speed".into(), PropValue::Float(-1.0));
         assert_eq!(gps_speed_kmh(&gps), None);
+    }
+
+    fn located_jpeg() -> Vec<u8> {
+        let mut writer = crate::picture_writer::PictureWriter::new(Format::Jpeg).location(Location { latitude: 64.25, longitude: -21.5 }).altitude(12.0).camera("Acme", "One").caption("Pier");
+        assert!(writer.add_frame(4, 2, vec![200, 100, 50, 255].repeat(8), 0));
+        writer.finish().unwrap()
+    }
+
+    #[test]
+    fn a_shared_copy_loses_its_location_and_nothing_else() {
+        let original = located_jpeg();
+        assert!(read(&original).unwrap().location.is_some());
+        let shared = without_location(&original).unwrap();
+        let info = read(&shared).unwrap();
+        assert_eq!((info.location, info.altitude_m), (None, None));
+        assert_eq!(info.camera_make.as_deref(), Some("Acme"));
+        assert_eq!(info.descriptive.caption.as_deref(), Some("Pier"));
+        assert_eq!(decode_upright(&shared).unwrap().px, decode_upright(&original).unwrap().px, "pixels copied, not re-encoded");
+    }
+
+    #[test]
+    fn an_edit_turns_redates_relocates_and_recaptions_in_place() {
+        let change = MetadataEdit {
+            orientation: Some(6),
+            date_taken: Some("2026:10:24 07:30:00".into()),
+            location: Some(Location { latitude: -33.5, longitude: 151.25 }),
+            descriptive: Some(Descriptive { title: Some("Harbour".into()), keywords: vec!["sea".into()], ..Descriptive::default() }),
+            ..MetadataEdit::default()
+        };
+        let info = read(&edit(&located_jpeg(), &change).unwrap()).unwrap();
+        assert_eq!(info.orientation, 6);
+        assert_eq!(info.date_taken.as_deref(), Some("2026:10:24 07:30:00"));
+        let at = info.location.unwrap();
+        assert!(close(at.latitude, -33.5) && close(at.longitude, 151.25));
+        assert!(close(info.altitude_m.unwrap(), 12.0), "GPS values the edit does not name are kept");
+        assert_eq!(info.descriptive.title.as_deref(), Some("Harbour"));
+        assert_eq!(info.descriptive.caption, None, "the descriptive fields are replaced as a set");
+        let cleared = edit(&located_jpeg(), &MetadataEdit { descriptive: Some(Descriptive::default()), ..MetadataEdit::default() }).unwrap();
+        assert!(read(&cleared).unwrap().descriptive.is_empty());
+        let gif = graphics_imageio::encode(Format::Gif, 2, 1, &[255, 0, 0, 255, 0, 0, 255, 255]).unwrap();
+        assert_eq!(without_location(&gif), Err(CopyError::Unsupported(Format::Gif)));
+        assert_eq!(edit(&located_jpeg(), &MetadataEdit { orientation: Some(0), ..MetadataEdit::default() }), Err(CopyError::BadOptions));
     }
 
     #[test]

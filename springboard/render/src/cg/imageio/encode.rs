@@ -24,7 +24,7 @@ pub fn crc32(data: &[u8]) -> u32 {
     !data.iter().fold(!0u32, |c, &b| t[((c ^ b as u32) & 255) as usize] ^ (c >> 8))
 }
 
-fn chunk(out: &mut Vec<u8>, ty: &[u8; 4], data: &[u8]) {
+pub(super) fn chunk(out: &mut Vec<u8>, ty: &[u8; 4], data: &[u8]) {
     out.extend((data.len() as u32).to_be_bytes());
     let start = out.len();
     out.extend(ty);
