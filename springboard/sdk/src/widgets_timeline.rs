@@ -169,6 +169,51 @@ pub fn reload_rich(ctx: &Ctx, kind: &str, entries: &[Rich], policy: ReloadPolicy
     service::call(ctx, SERVICE, "reload", &rich_reload_body(kind, entries, policy, link))
 }
 
+/// Asks the shell for a new timeline for each of this app's widgets of `kind` in the column (the reference
+/// `WidgetCenter` `reloadTimelines(ofKind:)`): the shell answers with one [`Event::Reload`] per widget on its next
+/// tick, however often the app asked before then. The reply is how many widgets will be asked.
+pub fn reload_timelines(ctx: &Ctx, kind: &str) -> u32 {
+    service::call(ctx, SERVICE, "reload_timelines", &obj(&[("kind", Json::Str(kind.into()))]))
+}
+
+/// [`reload_timelines`] for every kind this app offers (the reference `reloadAllTimelines()`).
+pub fn reload_all_timelines(ctx: &Ctx) -> u32 {
+    service::call(ctx, SERVICE, "reload_all_timelines", &Json::Null)
+}
+
+/// Asks which of this app's widgets the person has in the column (the reference `getCurrentConfigurations`). The reply
+/// is `[{kind, family, configuration: {key: value}}]`; read it with [`parse_configurations`].
+pub fn current_configurations(ctx: &Ctx) -> u32 {
+    service::call(ctx, SERVICE, "current_configurations", &Json::Null)
+}
+
+/// One widget the person has placed (the reference `WidgetInfo`): its kind, its size and its option values, a choice
+/// by its name.
+#[derive(Clone, Debug, PartialEq)]
+pub struct WidgetInfo {
+    pub kind: String,
+    pub family: Family,
+    pub configuration: Vec<(String, Json)>,
+}
+
+/// Decodes the reply to [`current_configurations`]. Rows without a kind or with an unknown size are skipped.
+pub fn parse_configurations(reply: &Json) -> Vec<WidgetInfo> {
+    reply
+        .as_array()
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|r| {
+            let kind = r.str_field("kind")?;
+            let family = r.get("family").and_then(Json::as_str).and_then(Family::from_key)?;
+            let configuration = match r.get("configuration") {
+                Some(Json::Obj(pairs)) => pairs.clone(),
+                _ => Vec::new(),
+            };
+            Some(WidgetInfo { kind, family, configuration })
+        })
+        .collect()
+}
+
 /// Drops the timeline `kind`.
 pub fn remove(ctx: &Ctx, kind: &str) -> u32 {
     service::call(ctx, SERVICE, "remove", &obj(&[("kind", Json::Str(kind.into()))]))
@@ -401,6 +446,20 @@ mod tests {
         assert_eq!(sizes, vec!["small".to_string(), "large".to_string()]);
         let default_sizes: Vec<&str> = list[1].get("families").and_then(Json::array).unwrap().iter().filter_map(Json::as_str).collect();
         assert_eq!(default_sizes, vec!["small", "medium"]);
+    }
+
+    #[test]
+    fn the_current_configurations_reply_decodes_into_widget_infos() {
+        let reply = Json::Arr(vec![
+            obj(&[("kind", Json::Str("next".into())), ("family", Json::Str("medium".into())), ("configuration", obj(&[("city", Json::Str("Oslo".into()))]))]),
+            obj(&[("kind", Json::Str("bad".into())), ("family", Json::Str("huge".into()))]),
+            obj(&[("family", Json::Str("small".into()))]),
+        ]);
+        let infos = parse_configurations(&reply);
+        assert_eq!(infos.len(), 1, "an unknown size or a missing kind is skipped");
+        assert_eq!((infos[0].kind.as_str(), infos[0].family), ("next", Family::Medium));
+        assert_eq!(infos[0].configuration, vec![("city".to_string(), Json::Str("Oslo".into()))]);
+        assert!(parse_configurations(&Json::Null).is_empty());
     }
 
     #[test]

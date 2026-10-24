@@ -15,6 +15,11 @@
 //! - `register {kinds:[{id, name?, description?, families?:["small","medium","large"], configurable?}]}` registers the
 //!   widget kinds the app offers; the Edit Widgets gallery lists them (with their name, description and the size chips
 //!   they support) before a first `reload`. Apps can also declare them as `[[widget]]` tables in `manifest.toml`.
+//! - `reload_timelines {kind}` / `reload_all_timelines {}` (the reference `WidgetCenter` reload calls): the app asks for
+//!   new timelines; each of its widgets of that kind (or all of them) in the column gets one `reload` event on the next
+//!   tick, however often it asked before then. Returns how many widgets will be asked.
+//! - `current_configurations {}` (the reference `WidgetInfo` list): `[{kind, family, configuration: {key: value}}]` for
+//!   each of the app's widgets the person has in the column.
 //! - `remove {kind}` drops it; returns whether one was there.
 //! - `current {kind}` returns `{date,title,text}` of the entry on screen now, or null.
 //! - `search {kind, description?, placeholder?, results:[string]}` sets the widget's search view (the reference
@@ -262,6 +267,9 @@ struct Widget {
     config: Option<Configuration>,
     /// the toggles of the entry on screen between a tap and the app's answer; a reload clears them
     toggles: ToggleSet,
+    /// the app asked for a new timeline (`reload_timelines`, `reload_all_timelines`); the next tick sends the reload
+    /// event once, however many times it asked before then
+    forced: bool,
 }
 
 impl Widget {
@@ -439,6 +447,7 @@ impl Store {
             link: None,
             config,
             toggles: ToggleSet::default(),
+            forced: false,
         });
         Ok(n)
     }
@@ -476,6 +485,7 @@ impl Store {
                     link: None,
                     config: None,
                     toggles: ToggleSet::default(),
+                    forced: false,
                 }),
             }
         }
@@ -650,14 +660,20 @@ impl Store {
         w.timeline.entry_at(now as f64).cloned()
     }
 
-    /// The timelines whose reload date has passed at `now`. Each is returned once until its timeline is replaced.
+    /// The timelines whose reload date has passed at `now`, then those the app asked to reload. A dated reload is
+    /// returned once until its timeline is replaced; an asked-for one once per request (requests made between two
+    /// ticks are one reload).
     pub fn due(&mut self, now: i64) -> Vec<(String, String)> {
         let mut out = Vec::new();
         for w in self.widgets.iter_mut() {
             // the date itself, not `next_reload(now)`, which clamps to now and would always be due
             let at = w.timeline.next_reload(f64::NEG_INFINITY);
-            if !w.requested && at.map_or(false, |d| d <= now as f64) {
+            let dated = !w.requested && at.map_or(false, |d| d <= now as f64);
+            if dated {
                 w.requested = true;
+            }
+            if dated || w.forced {
+                w.forced = false;
                 out.push((w.app.clone(), w.kind.clone()));
             }
         }
@@ -666,6 +682,42 @@ impl Store {
         let activities = &self.activities;
         self.owners.retain(|(id, _)| activities.state(*id, now_u).map_or(false, |s| s != State::Dismissed));
         out
+    }
+
+    /// The app asks for new timelines (the reference `WidgetCenter` `reloadTimelines(ofKind:)` with `Some(kind)`,
+    /// `reloadAllTimelines()` with None): each of its widgets of that kind that the person has in the column gets one
+    /// reload event on the next tick. A widget taken off in the gallery is not asked, as the reference asks only
+    /// configured widgets. Returns how many widgets will be asked.
+    pub fn request_reload(&mut self, app: &str, kind: Option<&str>) -> Result<usize, String> {
+        if let Some(k) = kind {
+            check_kind(k)?;
+        }
+        let mut n = 0;
+        for w in self.widgets.iter_mut().filter(|w| w.app == app && w.placed && kind.map_or(true, |k| w.kind == k)) {
+            w.forced = true;
+            n += 1;
+        }
+        Ok(n)
+    }
+
+    /// The options of one widget as a JSON object `{key: value}` (a choice by its name); empty without options.
+    fn options_json(&self, app: &str, kind: &str) -> Json {
+        let Some(c) = self.configuration(app, kind) else { return Json::Obj(Vec::new()) };
+        let pairs = c
+            .params()
+            .iter()
+            .map(|param| {
+                let key = param.key();
+                let value = match c.value(key) {
+                    Some(Value::Choice(_)) => Json::Str(c.choice_label(key).unwrap_or_default().to_string()),
+                    Some(Value::Flag(b)) => Json::Bool(b),
+                    Some(Value::Number(n)) => Json::Num(n as f64),
+                    None => Json::Null,
+                };
+                (key.to_string(), value)
+            })
+            .collect();
+        Json::Obj(pairs)
     }
 
     /// What an app may observe of one of its widgets: `(on_screen, large)`. On screen means the person has it in the
@@ -764,6 +816,27 @@ impl Store {
                 let n = self.reload_ranked(app, &kind, entries, policy, hint)?;
                 self.set_link(app, &kind, link);
                 Ok(Json::Num(n as f64))
+            }
+            "reload_timelines" => {
+                let kind = p.str_field("kind").ok_or("reload_timelines needs a kind")?;
+                Ok(Json::Num(self.request_reload(app, Some(&kind))? as f64))
+            }
+            "reload_all_timelines" => Ok(Json::Num(self.request_reload(app, None)? as f64)),
+            "current_configurations" => {
+                // the reference `WidgetInfo` list: one per widget the person has in the column
+                let list = self
+                    .widgets
+                    .iter()
+                    .filter(|w| w.app == app && w.placed)
+                    .map(|w| {
+                        Json::Obj(vec![
+                            ("kind".to_string(), Json::Str(w.kind.clone())),
+                            ("family".to_string(), Json::Str(w.family.key().into())),
+                            ("configuration".to_string(), self.options_json(app, &w.kind)),
+                        ])
+                    })
+                    .collect();
+                Ok(Json::Arr(list))
             }
             "register" => {
                 let mut kinds = Vec::new();
@@ -1630,6 +1703,51 @@ mod tests {
         assert!(s.listing(0).is_empty(), "a refused call registers nothing");
         assert_eq!(s.call("is.a", "register", &body(vec![obj(&[("id", s_("k"))])]), 0), Ok(Json::Num(1.0)));
         assert_eq!(s.listing(0)[0].families, vec![Family::Small, Family::Medium], "left out: small and medium");
+    }
+
+    #[test]
+    fn an_app_asks_for_new_timelines_by_kind_or_all_and_each_is_sent_once() {
+        let mut s = Store::default();
+        s.reload("is.a", "one", vec![entry(0.0, "One", "a")], ReloadPolicy::Never).unwrap();
+        s.reload("is.a", "two", vec![entry(0.0, "Two", "b")], ReloadPolicy::Never).unwrap();
+        s.reload("is.b", "one", vec![entry(0.0, "Other", "c")], ReloadPolicy::Never).unwrap();
+        assert!(s.due(10).is_empty(), "never timelines are not due on their own");
+        assert_eq!(s.call("is.a", "reload_timelines", &obj(&[("kind", s_("one"))]), 10), Ok(Json::Num(1.0)));
+        s.call("is.a", "reload_timelines", &obj(&[("kind", s_("one"))]), 10).unwrap();
+        assert_eq!(s.due(10), vec![("is.a".to_string(), "one".to_string())], "two requests before a tick are one reload, and only the asking app's");
+        assert!(s.due(11).is_empty(), "a request is sent once");
+        s.set_placed("is.a", "two", false);
+        assert_eq!(s.call("is.a", "reload_all_timelines", &Json::Null, 12), Ok(Json::Num(1.0)), "a widget off the column is not asked");
+        assert_eq!(s.due(12), vec![("is.a".to_string(), "one".to_string())]);
+        assert_eq!(s.call("is.a", "reload_timelines", &obj(&[("kind", s_("nope"))]), 12), Ok(Json::Num(0.0)));
+        assert!(s.call("is.a", "reload_timelines", &Json::Null, 12).is_err(), "it names a kind");
+    }
+
+    #[test]
+    fn an_asked_for_reload_does_not_use_up_the_dated_one() {
+        let mut s = Store::default();
+        s.reload("is.a", "k", vec![entry(0.0, "t", "x")], ReloadPolicy::After(100.0)).unwrap();
+        s.request_reload("is.a", Some("k")).unwrap();
+        assert_eq!(s.due(10).len(), 1, "the asked-for reload");
+        assert_eq!(s.due(100).len(), 1, "the reload date still comes due");
+        assert!(s.due(200).is_empty());
+    }
+
+    #[test]
+    fn current_configurations_lists_the_placed_widgets_with_size_and_options() {
+        let mut s = Store::default();
+        s.reload("is.a", "k", vec![entry(0.0, "t", "x")], ReloadPolicy::Never).unwrap();
+        s.reload("is.a", "off", vec![entry(0.0, "t", "y")], ReloadPolicy::Never).unwrap();
+        s.set_placed("is.a", "off", false);
+        s.set_large("is.a", "k", true);
+        s.configure("is.a", "k", vec![Parameter::Choice { key: "city".into(), options: vec!["Oslo".into(), "Reykjavik".into()], default: 1 }]).unwrap();
+        let list = s.call("is.a", "current_configurations", &Json::Null, 0).unwrap();
+        let rows = list.as_array().unwrap();
+        assert_eq!(rows.len(), 1, "a widget taken off is not a current configuration");
+        assert_eq!(rows[0].get("kind").and_then(Json::as_str), Some("k"));
+        assert_eq!(rows[0].get("family").and_then(Json::as_str), Some("large"));
+        assert_eq!(rows[0].get("configuration").and_then(|c| c.str_field("city")).as_deref(), Some("Reykjavik"));
+        assert!(s.call("is.b", "current_configurations", &Json::Null, 0).unwrap().as_array().unwrap().is_empty());
     }
 
     #[test]
