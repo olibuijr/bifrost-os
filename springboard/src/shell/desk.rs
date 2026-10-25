@@ -606,6 +606,8 @@ pub fn full_size(app: AppId) -> bool {
     match app {
         // the built-in sidebar apps: the sidebar runs to the top edge under the traffic lights (no title bar)
         AppId::Settings | AppId::AppStore => true,
+        // Photos on the desktop form factor: its source list runs to the top edge (the tablet keeps the title bar)
+        AppId::Photos => super::photos::sidebar::sidebar_layout(),
         AppId::External(slot) => apphost::installed().get(slot as usize).is_some_and(|a| a.manifest.full_size_content()),
         // an extra window keeps its title bar: the app's full-size content is for its main window
         AppId::ExternalWindow(..) => false,
@@ -635,6 +637,8 @@ pub fn drag_zone(w: &Win, m: &Metrics, controls: &[bifrost_proto::Node]) -> (i32
     let own = match w.app {
         AppId::Settings => Some(settings_toolbar_controls(w, m)),
         AppId::AppStore => Some(super::store::toolbar_controls(w.r.w, m.pt, super::store::back_control_pt())),
+        // and Photos: the toolbar's title, search capsule and buttons it last drew
+        AppId::Photos if full_size(w.app) => Some(super::photos::sidebar::toolbar_controls()),
         _ => None,
     };
     zone_of(w, m, own.as_deref().unwrap_or(controls), full_size(w.app))
@@ -821,11 +825,11 @@ impl Win {
                     return Some(Hit::Light(l));
                 }
             }
-            if !matches!(self.app, AppId::Settings | AppId::AppStore) {
+            if !matches!(self.app, AppId::Settings | AppId::AppStore | AppId::Photos) {
                 // a full-size app: its unified toolbar band is the title bar; controls in it are sorted out on the press
                 return Some(if y < self.r.y as f32 + UNIFIED_BAR_PT * pt { Hit::Title } else { Hit::Content });
             }
-            // Settings and the App Store: the same band and holes as the window server's drag zone (`drag_zone`), so
+            // Settings, the App Store and Photos: the same band and holes as the window server's drag zone (`drag_zone`), so
             // the empty toolbar moves the window and the pill, back control and search field get the press
             let (band, holes) = drag_zone(self, m, &[]);
             let (lx, ly) = (x as i32 - self.r.x, y as i32 - self.r.y);
@@ -1752,6 +1756,12 @@ impl Shell {
                     // the App Store's sidebar is the same `.sidebar` material (its column is painted translucent)
                     AppId::AppStore => {
                         if let Some(side) = self.store.as_ref().map(|st| st.sidebar_px()).filter(|&p| p > 0) {
+                            rects.push((0.0, top, side as f32, (w.r.h as f32 - top).max(0.0), 0.0, bifrost_render::glass::Kind::Sidebar, None, None));
+                        }
+                    }
+                    // Photos' source list on the desktop, the same `.sidebar` material
+                    AppId::Photos => {
+                        if let Some(side) = self.photos.as_ref().map(|p| p.sidebar_px()).filter(|&p| p > 0) {
                             rects.push((0.0, top, side as f32, (w.r.h as f32 - top).max(0.0), 0.0, bifrost_render::glass::Kind::Sidebar, None, None));
                         }
                     }

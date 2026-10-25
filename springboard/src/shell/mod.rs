@@ -6219,6 +6219,9 @@ impl Shell {
     fn ensure_photos(&mut self) {
         // Image > Edit With lists the apps from the registry, which the menus read without building it
         self.ensure_defaults();
+        // a desktop window has the source list and toolbar; the tablet (and the full-screen presentation) keeps the
+        // push navigation
+        let desktop = self.desk_active() && self.form().is_desktop();
         match &mut self.photos {
             Some(p) => p.rescan(),
             None => {
@@ -6228,6 +6231,9 @@ impl Shell {
                     Err(e) => eprintln!("springboard: photos: {e}"),
                 }
             }
+        }
+        if let Some(p) = &mut self.photos {
+            p.set_desktop(&self.ui, desktop);
         }
     }
 

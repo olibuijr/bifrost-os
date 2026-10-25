@@ -653,7 +653,7 @@ impl Photos {
     /// The Keyword Manager's panel (x, y, w, h).
     pub(super) fn keyword_panel(&self, ui: &Ui) -> (f32, f32, f32, f32) {
         let margin = ui.pt(MARGIN_PT);
-        let top = content_top(ui) + ui.pt(8.0);
+        let top = self.top(ui) + ui.pt(8.0);
         let rows = self.keywords.len().max(1) as f32 * ui.pt(KEYWORD_ROW_PT);
         let room = (self.content_bottom(ui) - top - ui.pt(8.0)).max(ui.pt(KEYWORD_ROW_PT));
         (margin, top, ui.pt(320.0).min(self.w as f32 - 2.0 * margin), rows.min(room))
@@ -859,7 +859,7 @@ impl Photos {
     /// The line of news under the navigation bar.
     pub(super) fn draw_note(&mut self, s: &mut Surface, ui: &Ui) {
         let Some((text, _)) = self.note.clone() else { return };
-        let (top, h) = (content_top(ui), ui.pt(36.0));
+        let (top, h) = (self.top(ui), ui.pt(36.0));
         s.fill_rect(0, top as usize, self.w as usize, h as usize, SHEET);
         self.label(s, ui, &text, 14.0, Weight::Regular, WHITE, self.w as f32 / 2.0, top + h / 2.0);
     }

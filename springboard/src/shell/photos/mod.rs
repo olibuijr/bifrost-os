@@ -28,6 +28,7 @@ pub mod models;
 pub mod places;
 pub mod recipe;
 pub mod repair;
+pub mod sidebar;
 pub mod slideshow;
 pub mod stars;
 pub mod thumbs;
@@ -507,8 +508,18 @@ enum Done {
 }
 
 pub struct Photos {
+    /// the photo pane's width: the window's, less the source list on the desktop
     w: i32,
     h: i32,
+    /// the window's width (px); `w` plus `sidebar`
+    win_w: i32,
+    /// the desktop sidebar layout (`sidebar.rs`): a source list beside the pane and a toolbar in the unified band
+    desktop: bool,
+    /// the source list's width in px (0 on the tablet)
+    sidebar: i32,
+    /// the press in progress began in the source list, and the row it landed on
+    side_down: bool,
+    side_press: Option<sidebar::Row>,
     data: PathBuf,
     pictures: PathBuf,
     dirs: Vec<PathBuf>,
@@ -669,6 +680,7 @@ fn nav_mid(ui: &Ui) -> f32 {
 impl Photos {
     /// A pinch step on the open picture, about `focal` (px in the Photos content). False when no picture is open.
     pub fn pinch(&mut self, step: f32, focal: (f32, f32)) -> bool {
+        let focal = (focal.0 - self.sidebar_px() as f32, focal.1);
         match self.viewer.as_mut() {
             Some(v) => {
                 v.pinch(step, focal);
@@ -687,8 +699,54 @@ impl Photos {
 
     /// Lays the app out for a pane of `w` x `h` px (Split View, Slide Over).
     pub fn set_size(&mut self, w: i32, h: i32) {
-        self.w = w;
+        self.win_w = w;
         self.h = h;
+        // the desktop pane is the window less the source list, laid out again on the next draw or touch (`fit_pane`)
+        if !self.desktop {
+            self.w = w;
+        }
+    }
+
+    /// Turns the desktop sidebar layout on or off: a full-size window with a source list and a toolbar on the desktop
+    /// form factor; the tablet keeps its push navigation (`sidebar.rs`).
+    pub fn set_desktop(&mut self, ui: &Ui, on: bool) {
+        self.desktop = on;
+        sidebar::set_sidebar_layout(on);
+        self.fit_pane(ui);
+    }
+
+    /// The source list's width in px (0 on the tablet): the column the shell declares as the `.sidebar` material.
+    pub fn sidebar_px(&self) -> i32 {
+        if self.desktop { self.sidebar } else { 0 }
+    }
+
+    /// Sizes the source list for the window and gives the pane the rest; the grid is laid out again when the pane's
+    /// width changed.
+    fn fit_pane(&mut self, ui: &Ui) {
+        let pt = ui.pt(1.0).max(0.01);
+        self.sidebar = if self.desktop { ui.pt(sidebar::width(self.win_w as f32 / pt, self.h as f32 / pt)).round() as i32 } else { 0 };
+        let w = (self.win_w - self.sidebar).max(1);
+        if w != self.w {
+            self.w = w;
+            self.grid = Grid::build(&self.sections, self.cols, self.w as f32, GAP_PX, ui.pt(HEADER_PT));
+            self.fit_scroll(ui);
+            self.dirty = true;
+        }
+    }
+
+    /// Top of the pane's content: under the navigation bar on the tablet, under the unified toolbar band on the desktop.
+    fn top(&self, ui: &Ui) -> f32 {
+        if self.desktop { ui.pt(sidebar::BAR_PT) } else { content_top(ui) }
+    }
+
+    /// Vertical centre of the navigation bar, or of the desktop toolbar band.
+    fn mid(&self, ui: &Ui) -> f32 {
+        if self.desktop { ui.pt(sidebar::BAR_PT / 2.0) } else { nav_mid(ui) }
+    }
+
+    /// Where the navigation bar starts: under the status bar on the tablet, the window's top edge on the desktop.
+    fn status_top(&self, ui: &Ui) -> f32 {
+        if self.desktop { 0.0 } else { ui.pt(STATUS_PT) }
     }
 
     /// `data` holds the caches and settings, `dirs` are scanned for pictures
@@ -703,6 +761,11 @@ impl Photos {
         let mut p = Photos {
             w,
             h,
+            win_w: w,
+            desktop: false,
+            sidebar: 0,
+            side_down: false,
+            side_press: None,
             pictures,
             dirs,
             pool: Pool::new(WORKERS)?,
@@ -1347,7 +1410,7 @@ impl Photos {
     }
 
     fn fit_scroll(&mut self, ui: &Ui) {
-        let view = self.content_bottom(ui) - content_top(ui);
+        let view = self.content_bottom(ui) - self.top(ui);
         self.scroll.set_max(self.grid.height - view);
     }
 
@@ -1395,7 +1458,7 @@ impl Photos {
 
     fn request_thumbs(&mut self, ui: &Ui) {
         let top = self.scroll.offset();
-        let view = self.content_bottom(ui) - content_top(ui);
+        let view = self.content_bottom(ui) - self.top(ui);
         // while moving, also the screenful the scroll is heading to
         let ahead = if top > self.thumb_scroll { (top + view, top + 2.0 * view) } else if top < self.thumb_scroll { (top - view, top) } else { (top, top) };
         self.thumb_scroll = top;
@@ -1657,7 +1720,10 @@ impl Photos {
     }
 
     fn nav_hit(&self, ui: &Ui, x: f32, y: f32) -> Option<Target> {
-        if y >= ui.pt(STATUS_PT) && y < content_top(ui) {
+        if self.desktop {
+            return self.toolbar_hit(ui, x, y);
+        }
+        if y >= self.status_top(ui) && y < self.top(ui) {
             let m = ui.pt(MARGIN_PT);
             if x < m + ui.pt(150.0) {
                 return Some(if self.showing_pick() { Target::PlacesBack } else { Target::Album });
@@ -1754,7 +1820,7 @@ impl Photos {
                         return Some(t);
                     }
                 }
-                if y < content_top(ui) && x < ui.pt(120.0) {
+                if y < self.top(ui) && x < ui.pt(120.0) {
                     return Some(Target::ShowDone);
                 }
             }
@@ -1779,15 +1845,15 @@ impl Photos {
                     Target::Content
                 });
             }
-            if y < content_top(ui) || y >= self.content_bottom(ui) {
+            if y < self.top(ui) || y >= self.content_bottom(ui) {
                 return None;
             }
             if self.album == Album::Places && self.place_pick.is_none() {
-                let (local_x, local_y) = (f64::from(x), f64::from(y - content_top(ui)));
+                let (local_x, local_y) = (f64::from(x), f64::from(y - self.top(ui)));
                 let radius = f64::from(ui.pt(18.0));
                 return Some(places::cluster_at(&self.place_clusters(ui), local_x, local_y, radius).map_or(Target::Content, Target::Place));
             }
-            return Some(self.grid.hit(x, y - content_top(ui) + self.scroll.offset()).map_or(Target::Content, Target::Cell));
+            return Some(self.grid.hit(x, y - self.top(ui) + self.scroll.offset()).map_or(Target::Content, Target::Cell));
         };
         if let Some(sheet) = self.sheet {
             if sheet == Sheet::Details {
@@ -1845,7 +1911,7 @@ impl Photos {
             }
         }
         if v.chrome {
-            if y < content_top(ui) {
+            if y < self.top(ui) {
                 return Some(if x < ui.pt(160.0) {
                     Target::Back
                 } else if x >= self.w as f32 - ui.pt(100.0) && self.album != Album::Trash {
@@ -1888,6 +1954,16 @@ impl Photos {
     }
 
     pub fn touch(&mut self, ui: &Ui, ev: Event, t: f64) {
+        if self.desktop {
+            self.fit_pane(ui);
+            // a press in the source list is the list's; the rest reaches the pane in its own coordinates
+            let Some(ev) = self.side_touch(ui, ev) else { return };
+            return self.touch_pane(ui, ev, t);
+        }
+        self.touch_pane(ui, ev, t)
+    }
+
+    fn touch_pane(&mut self, ui: &Ui, ev: Event, t: f64) {
         self.dirty = true;
         self.now = t;
         if self.entry.is_some() {
@@ -2498,7 +2574,7 @@ impl Photos {
 
     fn edit_hit(&self, ui: &Ui, x: f32, y: f32) -> Option<Target> {
         let w = self.w as f32;
-        if y >= ui.pt(STATUS_PT) && y < content_top(ui) {
+        if y >= self.status_top(ui) && y < self.top(ui) {
             return Some(if x < w / 3.0 {
                 Target::EditCancel
             } else if x < w * 2.0 / 3.0 {
@@ -2665,6 +2741,22 @@ impl Photos {
     }
 
     pub fn draw(&mut self, s: &mut Surface, ui: &Ui, t: f64) {
+        if !self.desktop {
+            return self.draw_pane(s, ui, t);
+        }
+        // the desktop window: the source list, then the pane drawn on its own and set beside it
+        self.fit_pane(ui);
+        let mut image = Image::new(self.w.max(1) as usize, self.h.max(1) as usize);
+        {
+            let mut pane = Surface { w: image.w, h: image.h, stride: image.w, px: &mut image.px, y0: 0 };
+            self.draw_pane(&mut pane, ui, t);
+        }
+        self.draw_sidebar(s, ui);
+        s.blit(&image, self.sidebar, 0, 255, 255);
+        self.publish_toolbar(ui);
+    }
+
+    fn draw_pane(&mut self, s: &mut Surface, ui: &Ui, t: f64) {
         self.dirty = false;
         s.fill_rect(0, 0, self.w as usize, self.h as usize, BLACK);
         if self.slideshow.is_some() {
@@ -2741,7 +2833,7 @@ impl Photos {
 
     /// The centre of the viewer's play/pause control.
     fn clip_centre(&self, ui: &Ui) -> (f32, f32) {
-        (self.w as f32 / 2.0, (content_top(ui) + self.bar_top(ui)) / 2.0)
+        (self.w as f32 / 2.0, (self.top(ui) + self.bar_top(ui)) / 2.0)
     }
 
     /// The movie's controls under a touch: the progress bar (seek) or the play/pause button.
@@ -2790,14 +2882,14 @@ impl Photos {
 
     /// The pins of the Places map for the current window: clusters of photos that would overlap on screen.
     fn place_clusters(&self, ui: &Ui) -> Vec<places::Cluster> {
-        let h = (self.content_bottom(ui) - content_top(ui)).max(0.0) as u32;
+        let h = (self.content_bottom(ui) - self.top(ui)).max(0.0) as u32;
         places::layout(&self.place_points, self.w as u32, h, f64::from(ui.pt(PIN_CELL_PT)))
     }
 
     /// The Places map: a graticule over the content area, the shared map tiles over it, and one pin per cluster with
     /// a count on pins that stand for several photos.
     fn draw_places(&mut self, s: &mut Surface, ui: &Ui) {
-        let (top, bottom) = (content_top(ui), self.content_bottom(ui));
+        let (top, bottom) = (self.top(ui), self.content_bottom(ui));
         let step = ui.pt(48.0) as usize;
         let (w, top_u, h) = (self.w as usize, top as usize, (bottom - top).max(0.0) as usize);
         let mut x = 0;
@@ -2821,6 +2913,9 @@ impl Photos {
             if many {
                 self.label(s, ui, &c.members.len().to_string(), 14.0, Weight::Bold, WHITE, cx, cy);
             }
+        }
+        if self.desktop {
+            self.draw_toolbar(s, ui);
         }
     }
 
@@ -2864,7 +2959,7 @@ impl Photos {
     }
 
     fn draw_grid(&mut self, s: &mut Surface, ui: &Ui) {
-        let (top, bottom) = (content_top(ui), self.content_bottom(ui));
+        let (top, bottom) = (self.top(ui), self.content_bottom(ui));
         let off = self.scroll.offset();
         let pressed = self.pressed;
         let empty = self.photos().is_empty();
@@ -2947,9 +3042,13 @@ impl Photos {
                 self.label(s, ui, hint, 15.0, Weight::Regular, SECONDARY, cx, cy + ui.pt(14.0));
             }
         }
-        // navigation bar over the content
+        // navigation bar over the content; on the desktop, the toolbar in the unified band
+        if self.desktop {
+            self.draw_toolbar(s, ui);
+            return self.finish_grid(s, ui);
+        }
         s.fill_rect(0, 0, self.w as usize, top as usize, BLACK);
-        let mid = nav_mid(ui);
+        let mid = self.mid(ui);
         let m = ui.pt(MARGIN_PT);
         let blank = self.blank_library();
         let title = if self.selection.active {
@@ -3036,7 +3135,7 @@ impl Photos {
     fn album_row(&self, ui: &Ui, album: Album) -> (f32, f32, f32, f32) {
         let row = self.menu_albums().iter().position(|&a| a == album).unwrap_or(0);
         let margin = ui.pt(MARGIN_PT);
-        (margin, content_top(ui) + ui.pt(8.0 + row as f32 * 56.0), ui.pt(280.0).min(self.w as f32 - 2.0 * margin), ui.pt(56.0))
+        (margin, self.top(ui) + ui.pt(8.0 + row as f32 * 56.0), ui.pt(280.0).min(self.w as f32 - 2.0 * margin), ui.pt(56.0))
     }
 
     /// The `k`-th row under the album list.
@@ -3149,12 +3248,12 @@ impl Photos {
             self.draw_clip_controls(s, ui);
         }
         let current = around.into_iter().find(|(i, _)| *i == index).map(|(_, p)| p);
-        let top = content_top(ui);
+        let top = self.top(ui);
         s.fill_rect(0, 0, w, top as usize, BAR);
         let bar_top = self.bar_top(ui);
         s.fill_rect(0, bar_top as usize, w, h - bar_top as usize, BAR);
         let pressed = self.pressed;
-        let mid = nav_mid(ui);
+        let mid = self.mid(ui);
         let m = ui.pt(MARGIN_PT);
         let back = if pressed == Some(Target::Back) { rgba(10, 132, 255, 140) } else { BLUE };
         self.label_left(s, ui, "‹", 34.0, Weight::Medium, back, m - ui.pt(6.0), mid - ui.pt(2.0));
@@ -3256,7 +3355,7 @@ impl Photos {
 
     /// The edit screen: the live preview and the tool panel.
     fn draw_editor(&mut self, s: &mut Surface, ui: &Ui) {
-        let (w, top, panel) = (self.w as f32, content_top(ui), self.edit_panel_top(ui));
+        let (w, top, panel) = (self.w as f32, self.top(ui), self.edit_panel_top(ui));
         let Some((cur, preview)) = self.editor.as_ref().map(|e| (e.edit, (e.preview.w as f32, e.preview.h as f32))) else { return };
         if let Some(ed) = &self.editor {
             let (aw, ah) = (w, panel - top);
@@ -3267,7 +3366,7 @@ impl Photos {
         }
         s.fill_rect(0, 0, w as usize, top as usize, BAR);
         s.fill_rect(0, panel as usize, w as usize, self.h as usize - panel as usize, BAR);
-        let (mid, m, pressed) = (nav_mid(ui), ui.pt(MARGIN_PT), self.pressed);
+        let (mid, m, pressed) = (self.mid(ui), ui.pt(MARGIN_PT), self.pressed);
         let tint = |t: Target, c: u32| if pressed == Some(t) { crate::gfx::scale(c, 140) } else { c };
         if cur.is_identity() {
             self.label(s, ui, "Edit", 17.0, Weight::Semibold, WHITE, w / 2.0, mid);
@@ -3440,13 +3539,13 @@ impl Photos {
         if !controls {
             return;
         }
-        let top = content_top(ui);
+        let top = self.top(ui);
         s.fill_rect(0, 0, w, top as usize, BAR);
         let bar_top = self.bar_top(ui);
         s.fill_rect(0, bar_top as usize, w, h - bar_top as usize, BAR);
         let pressed = self.pressed;
         let col = |t: Target| if pressed == Some(t) { rgba(10, 132, 255, 140) } else { BLUE };
-        self.label_left(s, ui, "Done", 17.0, Weight::Semibold, col(Target::ShowDone), ui.pt(MARGIN_PT), nav_mid(ui));
+        self.label_left(s, ui, "Done", 17.0, Weight::Semibold, col(Target::ShowDone), ui.pt(MARGIN_PT), self.mid(ui));
         let (cx, cy, k) = (w as f32 / 2.0, self.show_bar_y(ui) + ui.pt(BAR_PT) / 2.0, ui.pt(10.0));
         let step = ui.pt(96.0);
         for (t, bx, dir) in [(Target::ShowPrev, cx - step, -1.0f32), (Target::ShowNext, cx + step, 1.0)] {
