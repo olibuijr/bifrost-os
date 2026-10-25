@@ -200,6 +200,9 @@ struct DictionaryApp {
     known: HashMap<String, bool>,
     /// The windows opened with File > New Window, in the order they were opened. The main window is `self`.
     windows: Vec<ExtraWindow>,
+    /// A word another app asked for (the look-up intent) before the dictionaries were loaded: on a cold launch the
+    /// control socket answers before the first configure. It is shown once they are (`library_loaded`).
+    pending_word: Option<String>,
 }
 
 /// A window opened with File > New Window. It is a whole lookup of its own (query, answer, history, scope, find), so
@@ -243,6 +246,15 @@ impl DictionaryApp {
             rows_top: 0.0,
             known: HashMap::new(),
             windows: Vec::new(),
+            pending_word: None,
+        }
+    }
+
+    /// The dictionaries were just loaded: shows the word an intent asked for before then. True when it showed one.
+    fn library_loaded(&mut self) -> bool {
+        match self.pending_word.take() {
+            Some(word) => self.show_from_intent(&word),
+            None => false,
         }
     }
 
@@ -475,9 +487,14 @@ impl DictionaryApp {
     }
 
     /// Shows `word` in this window after another app asked for it (the look-up intent). Before the window has loaded its
-    /// dictionaries there is nothing to show it with, so nothing changes. True when the screen needs a frame.
+    /// dictionaries there is nothing to show it with: the word waits in `pending_word` and nothing changes yet. True
+    /// when the screen needs a frame.
     fn show_from_intent(&mut self, word: &str) -> bool {
         if self.library.is_none() {
+            let word = word.trim();
+            if !word.is_empty() {
+                self.pending_word = Some(word.to_string());
+            }
             return false;
         }
         self.settings = false;
@@ -960,6 +977,7 @@ impl App for DictionaryApp {
                 self.save_prefs();
             }
             self.library = Some(library);
+            self.library_loaded();
         }
     }
 
@@ -1066,7 +1084,7 @@ impl App for DictionaryApp {
         vec![Intent::new("look-up", "Look Up", "Looks a word up in the installed dictionaries and returns its definition.").param(Param::new("word", "Word", ParamType::String))]
     }
 
-    fn perform_intent(&mut self, ctx: Option<&Ctx>, data_dir: &Path, id: &str, params: &Json) -> Result<IntentResult, RpcError> {
+    fn perform_intent(&mut self, _ctx: Option<&Ctx>, data_dir: &Path, id: &str, params: &Json) -> Result<IntentResult, RpcError> {
         if id != "look-up" {
             return Err(RpcError::new(INVALID_PARAMS, format!("no intent {id}")));
         }
@@ -1077,10 +1095,9 @@ impl App for DictionaryApp {
         };
         let text = first.text.clone();
         // a running window shows the word too, so Look Up from another app (the Services menu, the look-up popover's
-        // Open in Dictionary row) lands in the app's own window with its history, scope bar and find
-        if ctx.is_some() {
-            self.show_from_intent(&word);
-        }
+        // Open in Dictionary row) lands in the app's own window with its history, scope bar and find. On a cold launch
+        // the intent arrives before the window is configured: the word waits and shows once the dictionaries load.
+        self.show_from_intent(&word);
         Ok(IntentResult::value(Json::Str(text.clone())).with_dialog(&format!("{word}: {text}")))
     }
 
@@ -1408,6 +1425,22 @@ mod window_tests {
         assert_eq!(app.shown.as_ref().map(|s| s.word.as_str()), Some("cat"));
         assert_eq!(app.history.current(), Some("cat"));
         assert!(!app.show_from_intent("   "), "a blank word shows nothing");
+    }
+
+    /// E2E9 2: a look-up intent that arrives on a cold launch, before the dictionaries are loaded, is shown once they are.
+    #[test]
+    fn a_look_up_intent_before_the_dictionaries_load_is_shown_once_they_do() {
+        let mut app = DictionaryApp::new();
+        assert!(!app.show_from_intent(" terminal "));
+        assert!(app.shown.is_none());
+        assert_eq!(app.pending_word.as_deref(), Some("terminal"));
+        let dir = std::env::temp_dir().join(format!("bifrost-dictionary-pending-{}", std::process::id()));
+        app.library = Some(load_library(&dir));
+        assert!(app.library_loaded());
+        assert_eq!(app.shown.as_ref().map(|s| s.word.as_str()), Some("terminal"));
+        assert_eq!(app.query, "terminal", "the search field holds the word");
+        assert!(app.pending_word.is_none());
+        assert!(!app.library_loaded(), "the word is shown once");
     }
 
     #[test]
