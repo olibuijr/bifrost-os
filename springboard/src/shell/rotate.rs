@@ -303,6 +303,7 @@ impl Shell {
             Some((super::Anim::Unlock { to, .. }, _)) if to >= 1.0 => {
                 self.screen = Screen::Home;
                 self.wallpaper_owed();
+                self.desk_restack_after_unlock();
             }
             _ => {}
         }

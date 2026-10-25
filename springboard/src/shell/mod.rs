@@ -3387,6 +3387,8 @@ impl Shell {
     }
 
     fn sleep_screen(&mut self) -> Vec<Effect> {
+        // before the screen becomes the lock: whether the shell's windows come back over other clients' at the unlock
+        self.desk_note_lock();
         self.grace_from = None;
         self.power_menu = None;
         self.shield = None;
@@ -4382,6 +4384,8 @@ impl Shell {
                         self.screen = Screen::Home;
                         self.leave_today();
                         self.wallpaper_owed();
+                        // the lock took the windows' toplevels down: they map again in the shell's order (E2E13 2)
+                        self.desk_restack_after_unlock();
                         // the lock screen's buffers are gone: hand their pages back to the system
                         #[cfg(target_env = "gnu")]
                         {
