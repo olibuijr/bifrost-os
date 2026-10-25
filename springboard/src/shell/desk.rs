@@ -4439,7 +4439,12 @@ impl Shell {
             let off = k == 1;
             draw_light(s, &lr, if off { TRAFFIC_INACTIVE_C.now() } else { c }, !off, self.ui.pt(1.));
             if hover && !off {
-                draw_light_glyph(s, &lr, k, true, self.ui.pt(1.));
+                // the green light of a full-screen window leaves full screen: its glyph is the two inward arrowheads
+                if k == 2 {
+                    draw_exit_full_screen_glyph(s, &lr, self.ui.pt(1.));
+                } else {
+                    draw_light_glyph(s, &lr, k, false, self.ui.pt(1.));
+                }
             }
         }
     }
@@ -4872,6 +4877,28 @@ fn draw_light_glyph(s: &mut Surface, lr: &Rect, i: usize, maximized: bool, p: f3
     }
 }
 
+/// The green light's glyph on a full-screen window (the band revealed under the menu bar): two solid arrowheads, at
+/// the top-left and bottom-right of the centre, whose right-angle corners point in at it, as the reference's "Exit Full
+/// Screen" glyph does (the opposite of the outward pair that enters full screen).
+#[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+fn draw_exit_full_screen_glyph(s: &mut Surface, lr: &Rect, p: f32) {
+    let (cx, cy) = (lr.x as f32 + lr.w as f32 / 2.0, lr.y as f32 + lr.h as f32 / 2.0);
+    let gap = (p * 0.6).max(0.6);
+    let len = lr.w as f32 * 0.28;
+    let rows = len.ceil() as i32;
+    for r in 0..rows {
+        let d = r as f32;
+        let run = (len - d).max(0.0);
+        if run <= 0.0 {
+            break;
+        }
+        // top-left: the corner at (cx - gap, cy - gap), legs to the left and upwards
+        s.fill_rrect(cx - gap - run, cy - gap - d - 1.0, run, 1.0, 0.0, TRAFFIC_GLYPH);
+        // bottom-right: the corner at (cx + gap, cy + gap), legs to the right and downwards
+        s.fill_rrect(cx + gap, cy + gap + d, run, 1.0, 0.0, TRAFFIC_GLYPH);
+    }
+}
+
 /// Copies a `w` x `h` image into `s` with its top-left at (x, y), clipped to the surface.
 /// The dot under a dock icon: white for an app with a window, systemGray for an app whose process still runs
 /// with no window (as Golden Gate shows a quit app that is still running), none for an app that is not running.
@@ -5177,6 +5204,22 @@ mod tests {
             assert!(px.iter().any(|p| (p & 0xff) < 110), "glyph {i} has a clearly dark core");
             assert_eq!(px[0], WHITE, "nothing outside the light");
         }
+    }
+
+    #[test]
+    fn the_exit_full_screen_glyph_draws_two_marks_inside_the_light_that_meet_at_the_centre() {
+        let mut px = vec![WHITE; 20 * 20];
+        let mut s = Surface { w: 20, h: 20, stride: 20, px: &mut px, y0: 0 };
+        draw_exit_full_screen_glyph(&mut s, &Rect { x: 4, y: 4, w: 12, h: 12 }, 1.0);
+        let dark = |x: usize, y: usize| px[y * 20 + x] != WHITE;
+        let (tl, br) = ((4..10).flat_map(|y| (4..10).map(move |x| (x, y))).filter(|&(x, y)| dark(x, y)).count(), (10..16).flat_map(|y| (10..16).map(move |x| (x, y))).filter(|&(x, y)| dark(x, y)).count());
+        assert!(tl > 3 && br > 3, "one arrowhead each side of the centre: {tl} and {br} px");
+        let (tr, bl) = ((4..10).flat_map(|y| (10..16).map(move |x| (x, y))).filter(|&(x, y)| dark(x, y)).count(), (10..16).flat_map(|y| (4..10).map(move |x| (x, y))).filter(|&(x, y)| dark(x, y)).count());
+        assert_eq!((tr, bl), (0, 0), "nothing on the other diagonal");
+        assert_eq!(px[0], WHITE, "nothing outside the light");
+        let mut zoom = vec![WHITE; 20 * 20];
+        draw_light_glyph(&mut Surface { w: 20, h: 20, stride: 20, px: &mut zoom, y0: 0 }, &Rect { x: 4, y: 4, w: 12, h: 12 }, 2, true, 1.0);
+        assert_ne!(px, zoom, "not the maximized window's hollow square");
     }
 
     fn metrics() -> Metrics {
