@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.13.6
+
+- Closing the last document closes its window too, and Text Editor keeps running with no window, as the reference does (it used to leave an empty, disabled window). Clicking its Dock icon, choosing it in the app switcher or opening it again shows a new Untitled; File > New or a file opened meanwhile brings the window back with that document (with the matching system update).
+
 ## 1.13.5
 
 - Undo of Make Plain Text makes the document rich text again: the format bar, the ruler and the formatting commands come back with the fonts. Redo makes it plain text again.

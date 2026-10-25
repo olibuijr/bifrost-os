@@ -2664,12 +2664,27 @@ impl App for TextEditApp {
         document::set_markup_as_code(self.opts.markup_as_code);
         // pictures dropped from Files or another app land in this window (see `drag`)
         dnd::register_types(ctx, &["public.image"]);
-        // a window starts with an untitled document, as a new document would
-        if self.docs.is_empty() {
+        // a window starts with an untitled document, as a new document would. Not while the main window is ordered out
+        // after the last document closed: a later configure (appearance, scale) must not bring a window back
+        if self.docs.is_empty() && ctx.windows().main_shown() {
             let id = self.docs.new_document();
             self.apply_new_defaults(id);
         }
         self.sync_windows(ctx);
+    }
+
+    /// Activated (Dock, the app switcher, Search) with no window open, after the last document closed: the shell has put
+    /// the main window back, and it shows a new Untitled. The reference shows its open panel here when the iCloud
+    /// document picker is on; this editor starts with an Untitled on launch, so a reopen does the same (E2E12 2).
+    fn reopen(&mut self, ctx: &Ctx) -> bool {
+        if self.docs.is_empty() {
+            let id = self.docs.new_document();
+            self.apply_new_defaults(id);
+            // the window shows it from its top (`sync_windows`)
+            self.notices.push(Notice::Created(id));
+        }
+        self.sync_windows(ctx);
+        true
     }
 
     /// The format bar's items are the window's controls (the shell moves the window by its title row, except over these).
