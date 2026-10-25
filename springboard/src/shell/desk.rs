@@ -3697,7 +3697,12 @@ impl Shell {
     pub(super) fn desk_front_intent(&self) -> Option<AppId> {
         let d = self.desk.as_ref()?;
         let intent = d.front_intent?;
-        (d.front().map(|w| w.app.parent()) == Some(intent.app.parent())).then_some(intent.app)
+        // an app whose process is gone cannot be brought to the front: the focus goes to the window under it
+        let alive = match intent.app.parent() {
+            AppId::External(slot) => self.ext.get(slot as usize).and_then(Option::as_ref).is_some_and(|h| h.running()),
+            _ => true,
+        };
+        (alive && d.front().map(|w| w.app.parent()) == Some(intent.app.parent())).then_some(intent.app)
     }
 
     /// Per tick: ends the front intent once it no longer stands or after `FRONT_INTENT_MS`; while it stands and the

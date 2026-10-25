@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.10.31 — 2026-10-25
+
+- Whatever Spotlight, the Applications grid, the Dock or the open-app control opens becomes the front window with the keyboard, whether it is a built-in or an app, and whatever was in front before. For three seconds after an open the shell ignores focus the window server hands to other windows on its own (a keyboard hand-back when Search closes, its own pick of a next window) and activates the opened window again when it maps; a click on another window ends this at once, and so does the opened app exiting.
+- Window focus decisions are written to the journal while tracing is on (`springboard: focus` lines).
+
 ## 0.10.30 — 2026-10-25
 
 Fixes from the 0.10.29 end-to-end pass on Midget.
