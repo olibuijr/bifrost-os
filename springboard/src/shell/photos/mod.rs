@@ -92,6 +92,15 @@ const BAR_PT: f32 = 50.0;
 const MARGIN_PT: f32 = 16.0;
 const EMPTY_BUTTON_W_PT: f32 = 137.0;
 const EMPTY_BUTTON_H_PT: f32 = 28.5;
+/// The empty library's hint, its first line in the reference's two-line layout, and its type.
+const EMPTY_HINT: &str = "You can take photos and videos using the camera, or copy photos and videos into Pictures using Files.";
+const EMPTY_HINT_FIRST: &str = "You can take photos and videos using the camera, or";
+const EMPTY_HINT_PT: f32 = 17.0;
+/// Line pitch of the empty library's hint.
+const EMPTY_LINE_PT: f32 = 22.0;
+/// Empty-state text wraps to at least this width and at most this many lines.
+const EMPTY_HINT_MIN_PT: f32 = 40.0;
+const EMPTY_HINT_MAX_LINES: usize = 6;
 const SHEET_ROW_PT: f32 = 56.0;
 const SHEET_W_PT: f32 = 260.0;
 /// Columns the zoom buttons step through (fewer = bigger).
@@ -1729,10 +1738,28 @@ impl Photos {
         self.album == Album::All && self.filter.is_none() && self.search.is_empty() && !self.selection.active && !self.scanning && self.photos().is_empty()
     }
 
-    /// The empty library's Open Camera button (x, y, w, h), centred on the screen.
+    /// The empty library's hint wrapped to the pane: the reference's two lines (broken after "or") where they fit,
+    /// more lines in a narrow pane so nothing runs past its edges or under the source list.
+    fn empty_hint_lines(&self, ui: &Ui) -> Vec<String> {
+        let max = (self.w as f32 - 2.0 * ui.pt(MARGIN_PT)).max(ui.pt(EMPTY_HINT_MIN_PT));
+        let second = &EMPTY_HINT[EMPTY_HINT_FIRST.len() + 1..];
+        if [EMPTY_HINT_FIRST, second].iter().all(|l| ui.measure(l, EMPTY_HINT_PT, Weight::Regular) <= max) {
+            return vec![EMPTY_HINT_FIRST.to_string(), second.to_string()];
+        }
+        ui.wrap_capped(EMPTY_HINT, EMPTY_HINT_PT, Weight::Regular, max, EMPTY_HINT_MAX_LINES)
+    }
+
+    /// How far (pixels) the empty library's block moves down from its two-line layout; negative moves it up. The
+    /// block stays centred on the pane as the hint gains or loses lines.
+    fn empty_shift(&self, ui: &Ui, lines: usize) -> f32 {
+        ui.pt((lines as f32 - 2.0) * EMPTY_LINE_PT / 2.0)
+    }
+
+    /// The empty library's Open Camera button (x, y, w, h), centred in the pane under the hint.
     fn camera_button(&self, ui: &Ui) -> (f32, f32, f32, f32) {
         let (w, h) = (ui.pt(EMPTY_BUTTON_W_PT), ui.pt(EMPTY_BUTTON_H_PT));
-        ((self.w as f32 - w) / 2.0, self.h as f32 / 2.0 + ui.pt(34.0), w, h)
+        let shift = self.empty_shift(ui, self.empty_hint_lines(ui).len());
+        ((self.w as f32 - w) / 2.0, self.h as f32 / 2.0 + shift + ui.pt(34.0), w, h)
     }
 
     fn nav_hit(&self, ui: &Ui, x: f32, y: f32) -> Option<Target> {
@@ -2744,6 +2771,12 @@ impl Photos {
 
     // --- drawing ---
 
+    /// A one-line bold empty-state title shortened with an ellipsis to the pane's width less its margins.
+    fn fit_pane_text(&self, ui: &Ui, text: &str, pt: f32) -> String {
+        let max = (self.w as f32 - 2.0 * ui.pt(MARGIN_PT)).max(ui.pt(EMPTY_HINT_MIN_PT));
+        ui.wrap_capped(text, pt, Weight::Bold, max, 1).into_iter().next().unwrap_or_default()
+    }
+
     fn label(&mut self, s: &mut Surface, ui: &Ui, text: &str, pt: f32, weight: Weight, color: u32, cx: f32, cy: f32) {
         let img = self.text.get(ui, text, pt, weight, color);
         let (w, h) = (img.w as i32, img.h as i32);
@@ -3032,9 +3065,15 @@ impl Photos {
             let cx = self.w as f32 / 2.0;
             if self.blank_library() {
                 let cy = self.h as f32 / 2.0;
-                self.label(s, ui, "No Photos or Videos", 22.0, Weight::Bold, EMPTY_STATE_GRAY, cx, cy - ui.pt(50.5));
-                self.label(s, ui, "You can take photos and videos using the camera, or", 17.0, Weight::Regular, EMPTY_STATE_GRAY, cx, cy - ui.pt(22.0));
-                self.label(s, ui, "copy photos and videos into Pictures using Files.", 17.0, Weight::Regular, EMPTY_STATE_GRAY, cx, cy);
+                let lines = self.empty_hint_lines(ui);
+                // the two-line layout's last line sits at cy; extra lines grow the block equally up and down
+                let shift = self.empty_shift(ui, lines.len());
+                let first = cy + shift - ui.pt(EMPTY_LINE_PT) * (lines.len().max(1) - 1) as f32;
+                let title = self.fit_pane_text(ui, "No Photos or Videos", 22.0);
+                self.label(s, ui, &title, 22.0, Weight::Bold, EMPTY_STATE_GRAY, cx, first - ui.pt(28.5));
+                for (i, line) in lines.iter().enumerate() {
+                    self.label(s, ui, line, EMPTY_HINT_PT, Weight::Regular, EMPTY_STATE_GRAY, cx, first + ui.pt(EMPTY_LINE_PT) * i as f32);
+                }
                 let (bx, by, bw, bh) = self.camera_button(ui);
                 let (r, line) = (ui.pt(2.0), ui.pt(1.0));
                 s.fill_rrect(bx, by, bw, bh, r, EMPTY_STATE_GRAY);
@@ -3057,8 +3096,15 @@ impl Photos {
                     (Album::Smart(_), _) => ("No Photos", "No photo matches the rules of this smart album."),
                     (Album::Memory(_), _) => ("No Photos", "This memory has no photos left."),
                 };
-                self.label(s, ui, title, 22.0, Weight::Bold, self.pane_label(), cx, cy - ui.pt(14.0));
-                self.label(s, ui, hint, 15.0, Weight::Regular, self.pane_label2(), cx, cy + ui.pt(14.0));
+                let max = (self.w as f32 - 2.0 * ui.pt(MARGIN_PT)).max(ui.pt(EMPTY_HINT_MIN_PT));
+                let lines = ui.wrap_capped(hint, 15.0, Weight::Regular, max, EMPTY_HINT_MAX_LINES);
+                let step = ui.pt(19.0);
+                let first = cy + ui.pt(14.0) - step * (lines.len().max(1) - 1) as f32 / 2.0;
+                let title = self.fit_pane_text(ui, title, 22.0);
+                self.label(s, ui, &title, 22.0, Weight::Bold, self.pane_label(), cx, first - ui.pt(28.0));
+                for (i, line) in lines.iter().enumerate() {
+                    self.label(s, ui, line, 15.0, Weight::Regular, self.pane_label2(), cx, first + step * i as f32);
+                }
             }
         }
         // navigation bar over the content; on the desktop, the toolbar in the unified band
@@ -3816,6 +3862,35 @@ mod tests {
         let mut buf = vec![0u32; 1200 * 1920];
         p.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, ui, 0.0);
         buf
+    }
+
+    /// E2E7 finding 3: in a narrow desktop window the empty library's hint wraps to the pane (right of the source
+    /// list) instead of running under it, and the Open Camera button follows the taller block; a wide pane keeps the
+    /// reference's two lines.
+    #[test]
+    fn the_empty_library_hint_wraps_to_a_narrow_pane() {
+        let (mut p, dir, ui) = photos("empty-wrap", 0);
+        p.set_desktop(&ui, true);
+        p.set_size(&ui, ui.pt(1400.0) as i32, ui.pt(900.0) as i32);
+        assert!(p.blank_library());
+        assert_eq!(p.empty_hint_lines(&ui), [EMPTY_HINT_FIRST, "copy photos and videos into Pictures using Files."], "a wide pane: the reference's two lines");
+        let wide = p.camera_button(&ui);
+        assert_eq!(wide.1, p.h as f32 / 2.0 + ui.pt(34.0));
+
+        p.set_size(&ui, ui.pt(500.0) as i32, ui.pt(300.0) as i32);
+        let lines = p.empty_hint_lines(&ui);
+        let max = p.w as f32 - 2.0 * ui.pt(MARGIN_PT);
+        assert!(lines.len() > 2, "a narrow pane wraps the hint: {lines:?}");
+        assert!(lines.iter().all(|l| ui.measure(l, EMPTY_HINT_PT, Weight::Regular) <= max), "every line fits the pane: {lines:?}");
+        assert_eq!(lines.join(" "), EMPTY_HINT, "no words dropped");
+        let (bx, by, bw, bh) = p.camera_button(&ui);
+        assert!(bx >= 0.0 && bx + bw <= p.w as f32, "the button is centred in the pane");
+        assert_eq!(by, p.h as f32 / 2.0 + p.empty_shift(&ui, lines.len()) + ui.pt(34.0), "the button moves down with the extra lines");
+        // a click on the moved button (window coordinates: right of the source list) still opens the camera
+        tap(&mut p, &ui, p.sidebar_px() as f32 + bx + bw / 2.0, by + bh / 2.0, 100.0);
+        assert!(p.take_camera_request());
+        p.set_desktop(&ui, false);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

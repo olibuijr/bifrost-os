@@ -408,6 +408,11 @@ pub struct Desk {
     /// the newest files of Downloads, fanned out by the Dock's stack, and when the folder was last listed (seconds)
     pub(super) stack_files:Vec<String>,
     pub(super) stack_listed:Option<f64>,
+    /// the open stack (`Menu::Stack`): the items it lists, newest first, and the Dock icon it opened from (px)
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+    pub(super) stack_items:Vec<super::dock_stack::Item>,
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+    pub(super) stack_icon:Option<(f32,f32,f32,f32)>,
     pub(super) dock_menu_target:Option<usize>,
     pub(super) dock_menu_anchor:(f32,f32),
     grab: Option<Grab>,
@@ -3370,9 +3375,15 @@ impl Shell {
                                 return Some(vec![]);
                             }
                             if entry == super::dock_stack::DOCK_STACK {
-                                // the Downloads stack opens its folder in Files
-                                let folder = super::dock_stack::downloads_dir();
-                                if let Err(e)=self.desktop_open_folder(FILES_APP,&folder.to_string_lossy(),t){eprintln!("BifrOSt Downloads: {e}");}
+                                // the Downloads stack opens above its icon, a fan or a grid of its newest items
+                                // (`dock_stack::layout`); without the desktop menus it opens its folder in Files
+                                #[cfg(feature = "desktop-wayland")]
+                                self.stack_open(rect);
+                                #[cfg(not(feature = "desktop-wayland"))]
+                                {
+                                    let folder = super::dock_stack::downloads_dir();
+                                    if let Err(e)=self.desktop_open_folder(FILES_APP,&folder.to_string_lossy(),t){eprintln!("BifrOSt Downloads: {e}");}
+                                }
                                 return Some(vec![]);
                             }
                             if let Some(wi) = super::desktop_dock::dock_min_index(entry) {
