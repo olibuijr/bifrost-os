@@ -65,17 +65,19 @@ fn icon_cache_path(root: &std::path::Path, id: &str) -> PathBuf {
     root.join("icon-cache").join(format!("{safe}.png"))
 }
 
-/// An app's icon from disk: the installed copy first, then the copy cached from an earlier download. Read on the
-/// store's own thread before anything is fetched, so the first frame after opening shows the real icons instead of
-/// letter tiles while the network catches up (E2E11 9). Each source must decode before it counts, so a damaged
-/// installed icon falls through to the cache.
-fn local_icon(local: Option<&std::path::Path>, cache: &std::path::Path) -> Option<Image> {
+/// An app's icon from disk: the installed copy first, then the copy cached from an earlier download, with `true` when
+/// it came from the cache (which the catalogue may have changed since). Read and decoded on a store worker ahead of
+/// any download, never on the UI thread, so the icons appear a moment after opening instead of letter tiles while the
+/// network catches up (E2E11 9). Each source must decode before it counts, so a damaged installed icon falls through
+/// to the cache.
+fn local_icon(local: Option<&std::path::Path>, cache: &std::path::Path) -> Option<(Image, bool)> {
     let decode = |b: &[u8]| crate::cg::imageio::decode(b);
     local
         .filter(|p| p.is_file())
         .and_then(|p| std::fs::read(p).ok())
         .and_then(|b| decode(&b))
-        .or_else(|| std::fs::read(cache).ok().and_then(|b| decode(&b)))
+        .map(|img| (img, false))
+        .or_else(|| std::fs::read(cache).ok().and_then(|b| decode(&b)).map(|img| (img, true)))
 }
 
 /// An icon that is on disk nowhere: the catalogue's download, written to `cache` once it decodes so the next
@@ -353,6 +355,8 @@ pub fn button_for(a: &StoreApp, installed: Option<&str>, shell: u32) -> Btn {
 enum Done {
     Catalog(Result<Vec<StoreApp>, String>),
     Icon { id: String, image: Option<Image> },
+    /// an icon read from disk on a worker ([`local_icon`]); `url` and `cache` are what a download would need
+    LocalIcon { id: String, image: Option<Image>, from_cache: bool, url: String, cache: PathBuf },
     Shot { url: String, image: Option<Image> },
     Installed { id: String, result: Result<InstalledApp, String> },
 }
@@ -399,6 +403,8 @@ pub struct AppStore {
     icon_pending: HashSet<String>,
     /// when each icon that would not load failed (the clock of `maintain`)
     icon_failed: HashMap<String, f64>,
+    /// icons painted from the cache whose catalogue copy has been fetched again this session (once each)
+    icon_revalidated: HashSet<String>,
     /// the last time `maintain` ran
     clock: f64,
     jobs: HashMap<String, Job>,
@@ -499,6 +505,7 @@ impl AppStore {
             icon_px: HashMap::new(),
             icon_pending: HashSet::new(),
             icon_failed: HashMap::new(),
+            icon_revalidated: HashSet::new(),
             clock: 0.0,
             jobs: HashMap::new(),
             coord: coordination::Coordinator::new(coordination::current_uid()),
@@ -790,18 +797,21 @@ impl AppStore {
                 }
                 Done::Icon { id, image } => {
                     self.icon_pending.remove(&id);
-                    self.icon_px.retain(|(i, _), _| *i != id);
                     match image {
                         Some(img) => {
+                            self.icon_px.retain(|(i, _), _| *i != id);
                             self.icon_failed.remove(&id);
                             self.icons.insert(id, Some(img));
                         }
+                        // a revalidation that failed keeps the cached icon and is not retried
+                        None if self.icons.contains_key(&id) => {}
                         // not cached as missing: it is asked for again after ICON_RETRY_MS
                         None => {
                             self.icon_failed.insert(id, self.clock);
                         }
                     }
                 }
+                Done::LocalIcon { id, image, from_cache, url, cache } => self.local_icon_done(id, image, from_cache, url, cache),
                 // a cancelled job was already removed; a newer job for the same app must stay
                 Done::Installed { result: Err(e), .. } if e == install::CANCELLED => {}
                 Done::Installed { id, result } => {
@@ -890,26 +900,62 @@ impl AppStore {
             // the catalogue's URL for this id (an installed app's own row carries none)
             let url = if icon.is_empty() { self.catalog.iter().find(|a| a.id == id).map(|a| a.icon.clone()).unwrap_or_default() } else { icon };
             let cache = icon_cache_path(&self.root, &id);
-            // the installed or cached icon is painted from the first frame; the network is asked only when neither is on disk
-            if let Some(img) = local_icon(local.as_deref(), &cache) {
-                self.icon_failed.remove(&id);
-                self.icon_px.retain(|(i, _), _| *i != id);
-                self.icons.insert(id, Some(img));
-                self.dirty = true;
-                continue;
-            }
-            if url.is_empty() {
-                // nothing to download: wait for the retry like a failed fetch rather than asking every tick
+            let Some(p) = &self.pool else {
+                // no workers: nothing reads the disk or the network, so the letter tile stays until the retry
                 self.icon_failed.insert(id, t);
                 continue;
-            }
+            };
+            // the installed or cached icon is read and decoded on a worker, ahead of the downloads, so the tick never
+            // waits on the disk; the letter tile shows until it answers (a frame or two). The network is asked only
+            // when neither is on disk, or to revalidate a cached copy (`local_icon_done`).
             self.icon_pending.insert(id.clone());
-            if let Some(p) = &self.pool {
-                p.spawn(move || {
+            let fallback = (id.clone(), url.clone(), cache.clone());
+            p.spawn_front_or(
+                move || {
                     crate::gfx::affinity::background_thread();
-                    let fetch = || net::get(&net::absolute(&url), 1_000_000).ok();
-                    Done::Icon { image: fetch_icon(fetch, &cache), id }
-                });
+                    let found = local_icon(local.as_deref(), &cache);
+                    let from_cache = found.as_ref().is_some_and(|(_, c)| *c);
+                    Done::LocalIcon { id, image: found.map(|(img, _)| img), from_cache, url, cache }
+                },
+                move || Done::LocalIcon { id: fallback.0, image: None, from_cache: false, url: fallback.1, cache: fallback.2 },
+            );
+        }
+    }
+
+    /// The worker's answer for an icon on disk. A found icon is painted; one from the cache is then fetched from the
+    /// catalogue once more in the background (once per session), so an icon the catalogue changed replaces the cached
+    /// copy. With nothing on disk the catalogue's copy is downloaded, or, without a URL, the retry waits as for a
+    /// failed fetch rather than asking every tick.
+    fn local_icon_done(&mut self, id: String, image: Option<Image>, from_cache: bool, url: String, cache: PathBuf) {
+        let download = match image {
+            Some(img) => {
+                self.icon_failed.remove(&id);
+                self.icon_px.retain(|(i, _), _| *i != id);
+                self.icons.insert(id.clone(), Some(img));
+                from_cache && !url.is_empty() && self.icon_revalidated.insert(id.clone())
+            }
+            None if url.is_empty() => {
+                self.icon_failed.insert(id.clone(), self.clock);
+                false
+            }
+            None => true,
+        };
+        self.dirty = true;
+        match &self.pool {
+            Some(p) if download => {
+                // still pending: its `Done::Icon` clears it
+                let fallback = id.clone();
+                p.spawn_or(
+                    move || {
+                        crate::gfx::affinity::background_thread();
+                        let fetch = || net::get(&net::absolute(&url), 1_000_000).ok();
+                        Done::Icon { image: fetch_icon(fetch, &cache), id }
+                    },
+                    move || Done::Icon { id: fallback, image: None },
+                );
+            }
+            _ => {
+                self.icon_pending.remove(&id);
             }
         }
     }
@@ -2473,24 +2519,26 @@ mod tests {
         assert!(local_icon(Some(broken.as_path()), &cache).is_none(), "a damaged install and no cache: fetch it");
         assert!(fetch_icon(|| Some(png.to_vec()), &cache).is_some(), "the catalogue's icon is used");
         assert_eq!(std::fs::read(&cache).unwrap(), png, "the downloaded icon is kept");
-        assert!(local_icon(Some(broken.as_path()), &cache).is_some(), "a damaged installed icon falls through to the cache");
-        assert!(local_icon(None, &cache).is_some(), "the cached icon is shown without the network");
+        assert_eq!(local_icon(Some(broken.as_path()), &cache).map(|(_, c)| c), Some(true), "a damaged installed icon falls through to the cache");
+        assert_eq!(local_icon(None, &cache).map(|(_, c)| c), Some(true), "the cached icon is shown without the network");
         assert!(fetch_icon(|| Some(b"junk".to_vec()), &cache).is_none(), "an undecodable download is no icon");
         assert_eq!(std::fs::read(&cache).unwrap(), png, "and does not replace the cached one");
         assert!(fetch_icon(|| None, &cache).is_none(), "a failed download is no icon");
         let good = dir.join("installed.png");
         std::fs::write(&good, png).unwrap();
         std::fs::remove_file(&cache).unwrap();
-        assert!(local_icon(Some(good.as_path()), &cache).is_some(), "an installed icon needs no cache");
+        assert_eq!(local_icon(Some(good.as_path()), &cache).map(|(_, c)| c), Some(false), "an installed icon needs no cache");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// E2E11 9: an icon already on disk is in place on the first tick, before any download; an app with no icon
-    /// anywhere waits for the retry instead of being asked for again every tick.
+    /// E2E11 9 and E2E12: an icon already on disk is decoded on a worker, not on the tick (the UI thread), and is in
+    /// place as soon as the worker answers, before any download; an app with no icon anywhere waits for the retry
+    /// instead of being asked for again every tick.
     #[test]
-    fn a_cached_icon_is_ready_on_the_first_tick_without_a_download() {
+    fn a_cached_icon_is_decoded_off_the_tick_and_painted_without_a_download() {
         let png: &[u8] = include_bytes!("../../../apps/files/icon.png");
         let mut s = store();
+        s.pool = Pool::new(1).ok();
         let dir = std::env::temp_dir().join(format!("apps-store-first-tick-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         s.root = dir.clone();
@@ -2500,11 +2548,57 @@ mod tests {
         std::fs::write(&cache, png).unwrap();
         s.fetching = true; // no catalogue refresh in this test
         s.maintain(0.0);
-        assert!(matches!(s.icons.get("is.o.calc"), Some(Some(_))), "the cached icon is painted at once");
-        assert!(!s.icon_pending.contains("is.o.calc"), "and nothing is downloaded for it");
+        assert!(s.icons.get("is.o.calc").is_none(), "the tick does not read or decode the PNG");
+        assert!(s.icon_pending.contains("is.o.calc") && s.icon_pending.contains("is.o.chess"), "the worker does");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while !s.icon_pending.is_empty() && std::time::Instant::now() < deadline {
+            s.pump();
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert!(matches!(s.icons.get("is.o.calc"), Some(Some(_))), "the cached icon is painted once the worker answers");
+        assert!(!s.icon_pending.contains("is.o.calc"), "and nothing is downloaded for it (no catalogue URL)");
         assert!(s.icons.get("is.o.chess").is_none() && !s.icon_pending.contains("is.o.chess"));
         assert_eq!(s.icon_failed.get("is.o.chess"), Some(&0.0), "no icon on disk and no URL: retried later");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn without_workers_the_tick_reads_no_icon_and_waits_for_the_retry() {
+        let mut s = store();
+        s.fetching = true;
+        s.maintain(0.0);
+        assert!(s.icons.get("is.o.calc").is_none() && !s.icon_pending.contains("is.o.calc"));
+        assert_eq!(s.icon_failed.get("is.o.calc"), Some(&0.0));
+    }
+
+    /// A cached icon is painted first and then fetched from the catalogue once more, so an icon the catalogue
+    /// changed shows; it is revalidated once per session, and a failed revalidation keeps the cached icon.
+    #[test]
+    fn a_cached_icon_is_revalidated_once_after_it_is_painted() {
+        let png: &[u8] = include_bytes!("../../../apps/files/icon.png");
+        let img = crate::cg::imageio::decode(png).unwrap();
+        let mut s = store(); // no workers: the revalidation is decided but not sent
+        let cache = PathBuf::from("/nonexistent/icon.png");
+        s.icon_pending.insert("is.o.calc".into());
+        s.local_icon_done("is.o.calc".into(), Some(img.clone()), true, "/store/calc.png".into(), cache.clone());
+        assert!(matches!(s.icons.get("is.o.calc"), Some(Some(_))), "the cached copy is painted first");
+        assert!(s.icon_revalidated.contains("is.o.calc"), "then fetched again from the catalogue");
+        assert!(!s.icon_pending.contains("is.o.calc"));
+        // an installed icon, or a cached one with no catalogue URL, is not fetched
+        s.local_icon_done("is.o.chess".into(), Some(img.clone()), false, "/store/chess.png".into(), cache.clone());
+        s.local_icon_done("is.o.notes".into(), Some(img), true, String::new(), cache);
+        assert!(!s.icon_revalidated.contains("is.o.chess") && !s.icon_revalidated.contains("is.o.notes"));
+        // the revalidation failing keeps the painted icon and schedules no retry (which would wake the store)
+        s.icon_pending.insert("is.o.calc".into());
+        s.pool = Pool::new(1).ok();
+        s.pool.as_ref().unwrap().spawn(|| Done::Icon { id: "is.o.calc".into(), image: None });
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while s.icon_pending.contains("is.o.calc") && std::time::Instant::now() < deadline {
+            s.pump();
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert!(matches!(s.icons.get("is.o.calc"), Some(Some(_))));
+        assert!(!s.icon_failed.contains_key("is.o.calc"));
     }
 
     #[test]
