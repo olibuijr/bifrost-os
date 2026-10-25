@@ -47,11 +47,22 @@ pub struct WindowSpec {
     /// With no `position`, the shell cascades the window from the app's other windows (`window_flags::CASCADE`) instead
     /// of placing it at the desk's next cascade slot.
     pub cascade: bool,
+    /// The content runs under the title bar (`window_flags::FULL_SIZE`): the shell draws the traffic lights over the
+    /// window and no title row of its own, so the app's unified title and toolbar row is the only one.
+    pub full_size: bool,
 }
 
 impl WindowSpec {
     pub fn new(title: &str, width: f32, height: f32) -> Self {
-        Self { title: title.to_string(), width, height, position: None, title_double_click: false, cascade: false }
+        Self { title: title.to_string(), width, height, position: None, title_double_click: false, cascade: false, full_size: false }
+    }
+
+    /// Asks for a full-size-content window, as AppKit's `NSWindowStyleMaskFullSizeContentView`: the app draws its own
+    /// title and toolbar row under the traffic lights, the way its main window does with `window = "full-size"` (a
+    /// second document window looks like the first instead of carrying the shell's title row over the app's).
+    pub fn full_size_content(mut self) -> Self {
+        self.full_size = true;
+        self
     }
 
     /// Asks the shell to cascade the window from the app's own windows, as AppKit's `cascadeTopLeftFromPoint:` does
@@ -844,6 +855,19 @@ mod tests {
             ctx.take_sent(),
             vec![ToShell::WindowOpen { id: 1, title: "Viewer".into(), w: 560.0, h: 640.0, position: None, flags: crate::proto::window_flags::CASCADE }]
         );
+    }
+
+    /// E2E9 4: a second document window asks for full-size content, so the shell draws no title row over the app's.
+    #[test]
+    fn a_full_size_window_sends_the_full_size_flag() {
+        let ctx = crate::runtime::test_ctx();
+        ctx.open_window(WindowSpec::new("Untitled 2", 560.0, 640.0).cascaded().full_size_content()).unwrap();
+        use crate::proto::window_flags::{CASCADE, FULL_SIZE};
+        assert_eq!(
+            ctx.take_sent(),
+            vec![ToShell::WindowOpen { id: 1, title: "Untitled 2".into(), w: 560.0, h: 640.0, position: None, flags: CASCADE | FULL_SIZE }]
+        );
+        assert!(!WindowSpec::new("Plain", 1.0, 1.0).full_size, "a window keeps the shell's title bar unless it asks");
     }
 
     #[test]

@@ -147,7 +147,9 @@ impl TextEditApp {
     fn open_doc_window(&mut self, ctx: &Ctx, doc: DocId) -> bool {
         let (w, h) = self.px_size(ctx);
         let title = self.docs.window_title(doc).unwrap_or_else(|| "Untitled".into());
-        let spec = WindowSpec::new(&title, w as f32 / ctx.ui.s, h as f32 / ctx.ui.s).cascaded();
+        // full-size content, as the main window (`window = "full-size"`): the page draws its own title row under the
+        // lights, so the shell adds none (E2E9 4: second windows showed the title twice)
+        let spec = WindowSpec::new(&title, w as f32 / ctx.ui.s, h as f32 / ctx.ui.s).cascaded().full_size_content();
         let Ok(window) = ctx.open_window(spec) else { return false };
         let mut v = View::fresh(window, doc, Some((w, h)));
         swap_state(self, &mut v);
@@ -359,6 +361,19 @@ mod tests {
         let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice());
         let cfg = bifrost_app::Configure { w, h, scale: 1.0, safe_top: 0.0, safe_bottom: 0.0, dark: true, text_scale: 1.0, reduce_motion: false };
         Ctx::testing(Ui::new(Font::parse(data).unwrap(), 1.0), cfg)
+    }
+
+    /// E2E9 4: a document window draws its own title row, so it asks the shell for full-size content.
+    #[test]
+    fn a_second_window_asks_for_full_size_content() {
+        let ctx = window(1200, 780);
+        let mut app = TextEditApp::new();
+        app.configure(&ctx);
+        ctx.take_sent();
+        assert!(app.menu_action(&ctx, item::NEW));
+        let flags: Vec<u32> = ctx.take_sent().into_iter().filter_map(|m| if let ToShell::WindowOpen { flags, .. } = m { Some(flags) } else { None }).collect();
+        assert_eq!(flags.len(), 1);
+        assert_ne!(flags[0] & bifrost_app::proto::window_flags::FULL_SIZE, 0, "no shell title row over the page's own");
     }
 
     fn opened(ctx: &Ctx) -> Vec<String> {

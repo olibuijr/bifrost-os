@@ -575,6 +575,10 @@ pub mod window_flags {
     /// `cascadeTopLeftFromPoint:` places a new document window: the first one beside (or over the trailing side of) the
     /// main window, each later one a title bar's height down and right of the one opened before it.
     pub const CASCADE: u32 = 2;
+    /// The window's content runs under the title bar (`NSWindowStyleMaskFullSizeContentView`), as the app's main window
+    /// does with `window = "full-size"`: the shell draws only the traffic lights over it and no title row, because the
+    /// app draws its own unified title and toolbar row (a second document window of an editor).
+    pub const FULL_SIZE: u32 = 4;
 }
 
 /// Shell -> app.

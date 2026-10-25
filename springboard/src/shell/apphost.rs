@@ -1456,6 +1456,7 @@ impl AppHost {
                     self.windows.set_title_double_click(&self.id, id, flags & bifrost_proto::window_flags::TITLE_DOUBLE_CLICK != 0);
                     // a position the app asked for wins over the cascade
                     self.windows.set_cascade(&self.id, id, position.is_none() && flags & bifrost_proto::window_flags::CASCADE != 0);
+                    self.windows.set_full_size(&self.id, id, flags & bifrost_proto::window_flags::FULL_SIZE != 0);
                     self.replay_early(id, out);
                 }
                 out.chrome();
@@ -3556,6 +3557,11 @@ mod window_table_tests {
         assert!(cascades(6), "a window opened with the flag and no position cascades");
         assert!(!cascades(7), "a requested position wins over the cascade");
         assert!(!cascades(5), "a plain window does not cascade");
+        let full = bifrost_proto::window_flags::FULL_SIZE;
+        host.handle(ToShell::WindowOpen { id: 8, title: "Untitled 2".into(), w: 10.0, h: 10.0, position: None, flags: full }, Vec::new(), &mut out);
+        let full_size = |id: u32| host.windows.of_app("fixture").iter().any(|w| w.id == id && w.full_size);
+        assert!(full_size(8), "a window opened with the flag draws its own title row");
+        assert!(!full_size(5), "a plain window keeps the shell's title bar");
     }
 
     #[test]

@@ -379,6 +379,9 @@ impl Ctx {
         if spec.cascade {
             flags |= crate::proto::window_flags::CASCADE;
         }
+        if spec.full_size {
+            flags |= crate::proto::window_flags::FULL_SIZE;
+        }
         let position = spec.position;
         let id = self.windows.borrow_mut().open(spec.clone())?;
         self.send(ToShell::WindowOpen { id: id.0, title: spec.title, w: spec.width, h: spec.height, position, flags });

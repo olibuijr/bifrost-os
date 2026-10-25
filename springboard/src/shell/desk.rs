@@ -654,10 +654,32 @@ pub fn full_size(app: AppId) -> bool {
         // Photos on the desktop form factor: its source list runs to the top edge (the tablet keeps the title bar)
         AppId::Photos => photos_full_size(),
         AppId::External(slot) => apphost::installed().get(slot as usize).is_some_and(|a| a.manifest.full_size_content()),
-        // an extra window keeps its title bar: the app's full-size content is for its main window
-        AppId::ExternalWindow(..) => false,
+        // an extra window keeps its title bar unless its app asked for full-size content (`window_flags::FULL_SIZE`):
+        // then the app draws its own title row, as a second document window of an editor does (E2E9 4)
+        AppId::ExternalWindow(slot, id) => full_size_extra(slot, id),
         _ => false,
     }
+}
+
+/// The extra windows (slot, app window id) whose app asked for full-size content (`window_flags::FULL_SIZE`). The desk
+/// rebuilds it from the app hosts' window tables on every sync, before it opens a window, so [`full_size`] answers for
+/// an `AppId` alone wherever the desk asks (title height, lights, hit testing, drawing). The desk and its app hosts live
+/// on the shell's thread, so the set is that thread's.
+thread_local! {
+    static FULL_SIZE_EXTRA: std::cell::RefCell<Vec<(u8, u16)>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Replaces the set of full-size extra windows (the desk syncs every tick; an unchanged set is left alone).
+fn note_full_size_extra(now: Vec<(u8, u16)>) {
+    FULL_SIZE_EXTRA.with(|g| {
+        if *g.borrow() != now {
+            *g.borrow_mut() = now;
+        }
+    });
+}
+
+fn full_size_extra(slot: u8, id: u16) -> bool {
+    FULL_SIZE_EXTRA.with(|g| g.borrow().contains(&(slot, id)))
 }
 
 /// The unified title and toolbar row of a full-size app window, in points (`bifrost_app::layout::UNIFIED_BAR_PT`).
@@ -781,7 +803,7 @@ pub fn outer_px(app: AppId, m: &Metrics, (w, h): (f32, f32)) -> (i32, i32) {
 /// an app cannot open a window with no width (a zero-width toplevel is a protocol error for the window server).
 fn extra_window_px(app: AppId, (w, h): (f32, f32), k: f32, m: &Metrics) -> (i32, i32) {
     let (min_w, min_h, _, _) = size_range(app, m);
-    (((w * k) as i32).max(min_w), ((h * k) as i32 + m.title).max(min_h))
+    (((w * k) as i32).max(min_w), ((h * k) as i32 + title_of(app, m)).max(min_h))
 }
 
 /// The outer size range (px) a window of `app` may be resized within: `(min_w, min_h, max_w, max_h)`.
@@ -3002,6 +3024,17 @@ impl Shell {
         }
         let Some(d) = self.desk.as_ref() else { return };
         let k = self.ui.pt(1.0) as f32;
+        // which extra windows draw their own title row, known before any of them opens (their size and chrome follow it)
+        let mut full = Vec::new();
+        for (slot, host) in self.ext.iter().enumerate() {
+            let Some(h) = host else { continue };
+            for x in h.windows.of_app(&h.id) {
+                if let (true, Ok(id)) = (x.full_size, u16::try_from(x.id)) {
+                    full.push((slot as u8, id));
+                }
+            }
+        }
+        note_full_size_extra(full);
         let mut plan = Vec::new();
         for (slot, host) in self.ext.iter().enumerate() {
             let Some(h) = host else { continue };
@@ -4588,6 +4621,27 @@ mod tests {
         let (cx, cy) = bifrost_ui::prefs_layout::Frame::traffic_light(0);
         assert_eq!(w.hit(&m, (r.x + px(cx)) as f32, (r.y + px(cy)) as f32), Some(Hit::Light(Light::Close)));
         assert!(holes[0][0] == 0 && holes[0][2] > 0, "the lights are a hole");
+    }
+
+    /// E2E9 4: an extra window opened with `window_flags::FULL_SIZE` (a second TextEdit document) has no shell title row:
+    /// its body is the whole window under the lights, and its outer size is the size the app asked for. A plain extra
+    /// window keeps the shell's title bar.
+    #[test]
+    fn a_full_size_extra_window_has_no_shell_title_row() {
+        let m = Metrics { pt: 1.5, ..metrics() };
+        let (doc, plain) = (AppId::ExternalWindow(3, 2), AppId::ExternalWindow(3, 4));
+        note_full_size_extra(vec![(3, 2)]);
+        assert!(full_size(doc));
+        assert!(!full_size(plain), "a window that did not ask keeps its title bar");
+        assert_eq!(title_of(doc, &m), 0);
+        assert_eq!(title_of(plain, &m), m.title);
+        let r = Rect { x: 100, y: 50, w: 900, h: 700 };
+        let w = Win { app: doc, r, maximized: false, minimized: false, full: false, restore: r };
+        assert_eq!(w.body(&m), r, "the app draws the whole window, its own title row included");
+        assert_eq!(extra_window_px(doc, (600.0, 400.0), 1.5, &m).1, 600, "no title bar is added to the asked height");
+        assert_eq!(extra_window_px(plain, (600.0, 400.0), 1.5, &m).1, 600 + m.title);
+        note_full_size_extra(Vec::new());
+        assert!(!full_size(doc), "the set follows the app hosts' tables");
     }
 
     #[test]
