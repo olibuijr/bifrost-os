@@ -88,7 +88,7 @@ impl MailApp {
                 let title = bifrost_mail::draw::main_title(&mail.mail);
                 if self.title != title {
                     self.title = title.to_string();
-                    ctx.set_document_state(&self.title, false, "");
+                    bifrost_app::document::DocumentHost::set_document_state(ctx, &self.title, false, "");
                 }
                 self.composes.sync(ctx, mail)
             }
