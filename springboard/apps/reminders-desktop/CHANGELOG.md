@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.20.2 — 2026-10-25
+
+- Recently Deleted: Delete Permanently and Restore act on the chosen row even when two kept reminders once had the same id. Kept reminders are told apart by their store row, and a new reminder no longer takes the id of one in Recently Deleted.
+- Undo of a deletion (the "Deleted ..." strip or Edit > Undo) also takes the reminder out of Recently Deleted; Redo keeps it there again.
+
 ## 1.20.1 — 2026-10-24
 
 - Delete Reminder and Cmd+Backspace act only on a selected reminder that is on screen. A selection made in another list, or one hidden under Recently Deleted, is no longer deleted; opening another list clears the selection.

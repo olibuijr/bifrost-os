@@ -7,7 +7,8 @@ use super::*;
 use bifrost_app::controls::sheet::{ButtonRole, Sheet, SheetButton};
 use bifrost_proto::ContextItem;
 
-/// What the alert is about to delete for good: one kept reminder (by id) or every kept reminder.
+/// What the alert is about to delete for good: one kept reminder (by its store row, `archive::Kept::row`) or every
+/// kept reminder.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Purge {
     One(u64),
@@ -32,10 +33,11 @@ pub(super) fn purge_question(purge: Purge, title: &str, n: usize) -> String {
 }
 
 impl Reminders {
-    /// The kept reminder selected on the Recently Deleted page, while the page is open and it is still kept.
+    /// The store row of the kept reminder selected on the Recently Deleted page, while the page is open and it is
+    /// still kept.
     pub fn kept_selected(&self) -> Option<u64> {
         let kept = self.deleted.as_ref()?;
-        self.kept_selected.filter(|id| kept.iter().any(|r| r.id == *id))
+        self.kept_selected.filter(|row| kept.iter().any(|k| k.row == *row))
     }
 
     /// Whether the Recently Deleted page is open with something on it (Delete All applies).
@@ -76,7 +78,7 @@ impl Reminders {
     pub(super) fn ask_purge(&mut self, purge: Purge) -> bool {
         let Some(kept) = &self.deleted else { return false };
         let ok = match purge {
-            Purge::One(id) => kept.iter().any(|r| r.id == id),
+            Purge::One(row) => kept.iter().any(|k| k.row == row),
             Purge::All => !kept.is_empty(),
         };
         if ok {
@@ -89,8 +91,8 @@ impl Reminders {
     /// File > Delete Reminder and Cmd+Backspace on the Recently Deleted page: asks before the selected kept reminder
     /// goes for good. False when none is selected.
     pub fn purge_selected(&mut self) -> bool {
-        let Some(id) = self.kept_selected() else { return false };
-        self.ask_purge(Purge::One(id))
+        let Some(row) = self.kept_selected() else { return false };
+        self.ask_purge(Purge::One(row))
     }
 
     /// The purge alert while it is up.
@@ -98,7 +100,7 @@ impl Reminders {
         let purge = self.purge_ask?;
         let kept = self.deleted.as_deref().unwrap_or_default();
         let title = match purge {
-            Purge::One(id) => kept.iter().find(|r| r.id == id).map(|r| clean(&r.title)).unwrap_or_default(),
+            Purge::One(row) => kept.iter().find(|k| k.row == row).map(|k| clean(&k.reminder.title)).unwrap_or_default(),
             Purge::All => String::new(),
         };
         let button = match purge {
@@ -118,7 +120,7 @@ impl Reminders {
         let Some(purge) = self.purge_ask.take() else { return };
         let path = archive::path_beside(&self.path);
         let gone: Vec<Reminder> = match purge {
-            Purge::One(id) => archive::take(&path, id).ok().flatten().into_iter().collect(),
+            Purge::One(row) => archive::take(&path, row).ok().flatten().into_iter().collect(),
             Purge::All => archive::purge_all(&path).unwrap_or_default(),
         };
         if gone.is_empty() {
@@ -132,8 +134,7 @@ impl Reminders {
                 self.thumbs.remove(name);
             }
         }
-        self.kept_count = kept.len();
-        self.deleted = Some(kept);
+        self.refresh_kept();
         self.kept_selected = None;
         self.rebuild(ui);
     }

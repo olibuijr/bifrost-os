@@ -2,6 +2,10 @@
 //! its subtasks) here, so it survives a restart and can be taken back out. The store holds each reminder as its own
 //! `R` line (see `store::Codec`), in the order they were deleted. Delete Permanently (`take` without putting the reminder
 //! back) and Delete All (`purge_all`) empty it for good.
+//!
+//! A kept reminder is addressed by its store row (`Kept::row`), never by its reminder id: two kept reminders can share a
+//! reminder id (one deleted, then a new reminder given the same id and deleted too), and the row is unique for the
+//! store's life (E2E N3).
 
 use crate::model::Reminder;
 use bifrost_app::controls::managed_context::ManagedContext;
@@ -27,24 +31,53 @@ pub fn keep(path: &Path, removed: &[Reminder]) -> io::Result<()> {
     persistent_store::write(path, &context)
 }
 
-/// The kept reminders, oldest deletion first.
-pub fn kept(path: &Path) -> io::Result<Vec<Reminder>> {
-    let context: ManagedContext<Reminder> = persistent_store::load(path)?;
-    Ok(context.saved_state().into_iter().map(|(_, reminder)| reminder).collect())
+/// A kept reminder and its store row. The row is unique and never reused; the reminder's own id may repeat.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Kept {
+    pub row: u64,
+    pub reminder: Reminder,
 }
 
-/// Takes the first kept reminder with reminder id `id` out of the store and returns it, for restoring it.
-pub fn take(path: &Path, id: u64) -> io::Result<Option<Reminder>> {
+/// The kept reminders with their rows, oldest deletion first.
+pub fn kept_rows(path: &Path) -> io::Result<Vec<Kept>> {
+    let context: ManagedContext<Reminder> = persistent_store::load(path)?;
+    Ok(context.saved_state().into_iter().map(|(row, reminder)| Kept { row, reminder }).collect())
+}
+
+/// The kept reminders, oldest deletion first.
+pub fn kept(path: &Path) -> io::Result<Vec<Reminder>> {
+    Ok(kept_rows(path)?.into_iter().map(|k| k.reminder).collect())
+}
+
+/// Takes the kept reminder in store row `row` out of the store and returns it, for restoring or purging it.
+pub fn take(path: &Path, row: u64) -> io::Result<Option<Reminder>> {
     let mut context: ManagedContext<Reminder> = persistent_store::load(path)?;
-    let Some((object, reminder)) = context.saved_state().into_iter().find(|(_, r)| r.id == id) else {
+    let Ok(reminder) = context.delete(row) else {
         return Ok(None);
     };
-    if context.delete(object).is_err() {
-        return Ok(None);
-    }
     context.save();
     persistent_store::write(path, &context)?;
     Ok(Some(reminder))
+}
+
+/// The undo of a deletion: takes back out of the store the reminders it kept, each the newest row holding exactly
+/// that reminder. Returns how many rows went.
+pub fn take_back(path: &Path, removed: &[Reminder]) -> io::Result<usize> {
+    let mut context: ManagedContext<Reminder> = persistent_store::load(path)?;
+    let mut rows = context.saved_state();
+    let mut gone = 0;
+    for reminder in removed {
+        let Some(at) = rows.iter().rposition(|(_, r)| r == reminder) else { continue };
+        let (row, _) = rows.remove(at);
+        if context.delete(row).is_ok() {
+            gone += 1;
+        }
+    }
+    if gone > 0 {
+        context.save();
+        persistent_store::write(path, &context)?;
+    }
+    Ok(gone)
 }
 
 /// Delete All: empties the store and returns the reminders it held, so their pictures can go too.
@@ -90,10 +123,39 @@ mod tests {
         let dir = scratch("take");
         let path = dir.join(FILE);
         keep(&path, &[Reminder::new(3, "Keep"), Reminder::new(5, "Restore me")]).unwrap();
-        let back = take(&path, 5).unwrap().expect("kept");
+        let row = kept_rows(&path).unwrap()[1].row;
+        let back = take(&path, row).unwrap().expect("kept");
         assert_eq!(back.title, "Restore me");
         assert_eq!(kept(&path).unwrap().iter().map(|r| r.id).collect::<Vec<_>>(), vec![3]);
-        assert_eq!(take(&path, 5).unwrap(), None, "already taken");
+        assert_eq!(take(&path, row).unwrap(), None, "already taken");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn kept_reminders_sharing_a_reminder_id_are_told_apart_by_their_row() {
+        // E2E N3: ids restart at 1 when the list is empty, so two kept reminders can both be reminder 1
+        let dir = scratch("same-id");
+        let path = dir.join(FILE);
+        keep(&path, &[Reminder::new(1, "E2E test list")]).unwrap();
+        keep(&path, &[Reminder::new(1, "E2E rem")]).unwrap();
+        let rows = kept_rows(&path).unwrap();
+        assert_ne!(rows[0].row, rows[1].row, "each kept reminder has its own row");
+        assert_eq!(take(&path, rows[1].row).unwrap().map(|r| r.title), Some("E2E rem".to_string()));
+        assert_eq!(kept(&path).unwrap().iter().map(|r| r.title.as_str()).collect::<Vec<_>>(), ["E2E test list"]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn take_back_removes_the_newest_row_holding_each_reminder() {
+        let dir = scratch("take-back");
+        let path = dir.join(FILE);
+        let older = Reminder::new(1, "Same");
+        keep(&path, &[older.clone(), Reminder::new(2, "Other")]).unwrap();
+        keep(&path, &[older.clone()]).unwrap();
+        assert_eq!(take_back(&path, &[older.clone()]).unwrap(), 1);
+        let rows = kept_rows(&path).unwrap();
+        assert_eq!(rows.iter().map(|k| k.reminder.title.as_str()).collect::<Vec<_>>(), ["Same", "Other"], "the older keep stays");
+        assert_eq!(take_back(&path, &[Reminder::new(9, "Never kept")]).unwrap(), 0);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
