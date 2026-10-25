@@ -556,12 +556,8 @@ impl App for Files {
     /// No timer: jobs and searches wake the loop through their `Feed`, and Show in Files through the data-folder watch.
     fn next_wake(&self, t: f64) -> Option<f64> {
         // a drag hovering over a folder opens it; a batch of folder events matures; otherwise the loop sleeps
-        let spring = self.fx.spring.as_ref().map(|_| t + 0.1);
-        let events = self.watch.as_ref().and_then(|w| w.next_deadline(Instant::now())).map(|d| t + d.as_secs_f64());
-        match (spring, events) {
-            (Some(a), Some(b)) => Some(a.min(b)),
-            (a, b) => a.or(b),
-        }
+        let events = self.watch.as_ref().and_then(|w| w.next_deadline(Instant::now()));
+        wake_at(t, self.fx.spring.is_some(), events)
     }
     fn wake_fd(&self) -> Option<i32> {
         self.watch.as_ref().and_then(|w| w.fd())
@@ -573,6 +569,19 @@ impl App for Files {
     }
     fn draw(&mut self, ctx: &Ctx, s: &mut Surface, _: f64) -> Damage {
         self.render(&ctx.ui,s)
+    }
+}
+/// How often a drag hovering over a folder is checked for its spring-loaded open (ms).
+const SPRING_POLL_MS: f64 = 100.0;
+
+/// When the loop wakes, in ms like `t`: soon while a drag hovers (spring-loading), when the next batch of folder events
+/// matures (`events` from now), else never.
+fn wake_at(t: f64, spring: bool, events: Option<Duration>) -> Option<f64> {
+    let spring = spring.then_some(t + SPRING_POLL_MS);
+    let events = events.map(|d| t + d.as_secs_f64() * 1000.0);
+    match (spring, events) {
+        (Some(a), Some(b)) => Some(a.min(b)),
+        (a, b) => a.or(b),
     }
 }
 impl Files {
@@ -852,6 +861,15 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_background_window_wakes_in_milliseconds_not_every_millisecond() {
+        // `t` is in ms: a batch maturing in 250 ms wakes 250 ms on, and a hovering drag polls every 100 ms
+        assert_eq!(wake_at(1000.0, false, Some(Duration::from_millis(250))), Some(1250.0));
+        assert_eq!(wake_at(1000.0, true, None), Some(1100.0));
+        assert_eq!(wake_at(1000.0, true, Some(Duration::from_millis(40))), Some(1040.0));
+        assert_eq!(wake_at(1000.0, false, None), None);
+    }
     pub(crate) fn fixture(rows: Vec<Entry>) -> Files {
         Files {
             scope_bar: ScopeBar::default(),
