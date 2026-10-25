@@ -1465,6 +1465,20 @@ impl Photos {
         true
     }
 
+    /// Opens the viewer on the picture at `path` (the Dock's Downloads stack opens a picture whose default app is
+    /// Photos): from the library, or, for a picture outside it, read now and kept with the pictures added this session
+    /// (`add_photo`, which a rescan keeps). False when the file cannot be read as a picture.
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+    pub fn open_file(&mut self, ui: &Ui, path: &Path) -> bool {
+        if self.show(ui, path) {
+            return true;
+        }
+        let Some(image) = std::fs::read(path).ok().and_then(|b| decode_upright(&b)) else { return false };
+        let Some(photo) = Photo::from_path_at(path.to_path_buf(), self.offset) else { return false };
+        self.add_photo(ui, photo, image);
+        self.show(ui, path)
+    }
+
     fn open_viewer(&mut self, i: usize) {
         if i >= self.photos().len() {
             return;
@@ -3812,6 +3826,25 @@ mod tests {
         out.extend(&t);
         out.extend(&dot[2..]);
         out
+    }
+
+    /// The Dock's stack opens a picture from Downloads in Photos: one in the library opens in place, one outside it is
+    /// added for the session and shown, and a file that is no picture is refused.
+    #[test]
+    fn a_picture_outside_the_library_opens_in_the_viewer() {
+        let (mut p, dir, ui) = photos("open-file", 2);
+        let inside = dir.join("Pictures/IMG_0001.png");
+        assert!(p.open_file(&ui, &inside));
+        assert_eq!(p.viewing().map(|v| v.path.clone()), Some(inside));
+        let outside = dir.join("Downloads/shot.png");
+        picture(&outside, 1_790_500_000);
+        assert!(p.open_file(&ui, &outside));
+        assert_eq!(p.viewing().map(|v| v.path.clone()), Some(outside.clone()));
+        let text = dir.join("Downloads/notes.png");
+        std::fs::write(&text, b"not a picture").unwrap();
+        assert!(!p.open_file(&ui, &text));
+        assert!(!p.open_file(&ui, &dir.join("Downloads/missing.png")));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

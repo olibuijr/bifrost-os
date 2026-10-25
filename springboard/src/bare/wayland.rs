@@ -61,8 +61,10 @@ pub fn chrome_z(id:u32)->u32 {
 fn chrome_namespace(id:u32)->String {format!("bifrost-desktop-chrome.z{}",chrome_z(id))}
 /// A chrome surface's pixels at screen (x, y). `input` limits the pointer to a part of the surface (x, y, w, h in
 /// surface px) when the surface is larger than what takes input: a popup is exported with room for its shadow, and a
-/// click on the shadow must reach what is below. `None` takes the whole surface.
-pub struct ChromeFrame {pub id:u32,pub x:i32,pub y:i32,pub width:usize,pub height:usize,pub pixels:Vec<u32>,pub input:Option<[i32;4]>,pub dock:Option<DockPlacement>}
+/// click on the shadow must reach what is below. `None` takes the whole surface. `shape`, when not empty, replaces
+/// `input` with several rects (surface px): the open Dock stack's fan takes the pointer on its icons and name capsules
+/// only, so a click in the clear room between them reaches what is below.
+pub struct ChromeFrame {pub id:u32,pub x:i32,pub y:i32,pub width:usize,pub height:usize,pub pixels:Vec<u32>,pub input:Option<[i32;4]>,pub shape:Vec<[i32;4]>,pub dock:Option<DockPlacement>}
 /// The Dock's edge and reserved depth, independent of the transparent room for its icons, labels and shadow.
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 pub struct DockPlacement {pub edge:DockEdge,pub reserve:i32}
@@ -761,13 +763,18 @@ fn input_rects(margin:i32,width:usize,height:usize,shape:Option<&[[i32;4]]>)->Ve
         None=>vec![[margin,margin,width as i32,height as i32]],
     }
 }
-/// Limits the pointer input of a chrome surface to `input` (x, y, w, h in surface px); `None` gives the whole surface
-/// back. Applies on the next commit.
-fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_surface::WlSurface,input:Option<[i32;4]>,qh:&QueueHandle<State>) {
-    match (input,compositor) {
-        (Some([x,y,w,h]),Some(compositor))=>{let region=compositor.create_region(qh,());region.add(x,y,w,h);surface.set_input_region(Some(&region));region.destroy();}
+/// Limits the pointer input of a chrome surface to `input` (x, y, w, h in surface px), or to the `shape` rects when
+/// there are any (`chrome_input_rects`); neither gives the whole surface back. Applies on the next commit.
+fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_surface::WlSurface,input:Option<[i32;4]>,shape:&[[i32;4]],qh:&QueueHandle<State>) {
+    match (Self::chrome_input_rects(input,shape),compositor) {
+        (Some(rects),Some(compositor))=>{let region=compositor.create_region(qh,());for [x,y,w,h] in rects {region.add(x,y,w,h);}surface.set_input_region(Some(&region));region.destroy();}
         _=>surface.set_input_region(None),
     }
+}
+/// The input region of a chrome surface (`set_chrome_input`): the `shape` rects without the empty ones when there are
+/// any, else the `input` rect; None for the whole surface.
+fn chrome_input_rects(input:Option<[i32;4]>,shape:&[[i32;4]])->Option<Vec<[i32;4]>> {
+    if shape.is_empty() {input.map(|r|vec![r])} else {Some(shape.iter().filter(|r|r[2]>0&&r[3]>0).copied().collect())}
 }
 
     pub fn chrome(&mut self, frames:Vec<ChromeFrame>) -> io::Result<()> {
@@ -782,7 +789,7 @@ fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_
             let screen=self.state.size;
             if let Some(w)=self.state.chrome.get_mut(&frame.id) {
                 Self::place_chrome(&w.layer,&frame,screen,top_reserved);
-                if w.frame.input!=frame.input {Self::set_chrome_input(self.state.compositor.as_ref(),&w.surface,frame.input,&qh);}
+                if w.frame.input!=frame.input||w.frame.shape!=frame.shape {Self::set_chrome_input(self.state.compositor.as_ref(),&w.surface,frame.input,&frame.shape,&qh);}
                 if (w.frame.width,w.frame.height)!=(frame.width,frame.height) {
                     for slot in w.slots.drain(..) {slot.buffer.destroy();}
                     if let Some(slots)=self.state.gpu_slots.remove(&frame.id) {for s in slots {s.buffer.destroy();}}
@@ -798,7 +805,7 @@ fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_
                 let s=self.state.compositor.as_ref().unwrap().create_surface(&qh,());
                 let l=self.state.layer.as_ref().unwrap().get_layer_surface(&s,None,if frame.id==0 {layer::Layer::Top}else{layer::Layer::Overlay},chrome_namespace(frame.id),&qh,frame.id);
                 l.set_size(frame.width as u32,frame.height as u32);Self::place_chrome(&l,&frame,screen,top_reserved);
-                if frame.input.is_some() {Self::set_chrome_input(self.state.compositor.as_ref(),&s,frame.input,&qh);}
+                if frame.input.is_some()||!frame.shape.is_empty() {Self::set_chrome_input(self.state.compositor.as_ref(),&s,frame.input,&frame.shape,&qh);}
                 // id 3 is Search, id 6 the assistant panel, id 8 the Apps grid, id 9 Overview and id 11 the screenshot session
                 // (Space and Escape are its keys), id 15 the system sheets and alerts, id 14 the Force Quit, About and Log Out card (Esc, Return and the arrows are its
                 // keys; without this they would reach the app in front, which is the hung one): they take the keyboard from the
@@ -1730,6 +1737,14 @@ mod tests {
         assert_eq!(super::Display::input_rects(0,300,200,Some(&shape)),vec![[10,20,100,50]],"empty rects are dropped");
         assert_eq!(super::Display::input_rects(4,300,200,Some(&shape)),vec![[14,24,100,50]]);
         assert!(super::Display::input_rects(0,300,200,Some(&[])).is_empty(),"nothing drawn: no input at all");
+    }
+    /// The open Dock stack's fan takes the pointer on its parts only (`ChromeFrame::shape`); a plain popup keeps its rect.
+    #[test]
+    fn a_chrome_shape_replaces_its_input_rect() {
+        assert_eq!(super::Display::chrome_input_rects(None,&[]),None,"the whole surface");
+        assert_eq!(super::Display::chrome_input_rects(Some([4,4,100,50]),&[]),Some(vec![[4,4,100,50]]));
+        let shape=[[10,20,30,30],[0,0,0,9],[50,60,70,22]];
+        assert_eq!(super::Display::chrome_input_rects(Some([4,4,100,50]),&shape),Some(vec![[10,20,30,30],[50,60,70,22]]),"the shape wins, empty rects dropped");
     }
     #[test]
     fn the_dock_is_anchored_to_its_own_edge() {

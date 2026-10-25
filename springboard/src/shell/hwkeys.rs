@@ -1439,8 +1439,17 @@ impl Shell {
             return Some(fx);
         }
         #[cfg(feature = "desktop-wayland")]
-        if self.desktop_menu.is_some() {
-            return Some(if down { self.desktop_menu_key(code, t).unwrap_or_default() } else { vec![] });
+        if let Some(menu) = self.desktop_menu {
+            if !down {
+                return Some(vec![]);
+            }
+            return match self.desktop_menu_key(code, t) {
+                Some(fx) => Some(fx),
+                // the open Dock stack lets the keys it does not use through (a shortcut, a key for the app in front);
+                // a menu swallows them
+                None if menu == super::desktop_bar::Menu::Stack => None,
+                None => Some(vec![]),
+            };
         }
         let _ = (code, down, t);
         None
