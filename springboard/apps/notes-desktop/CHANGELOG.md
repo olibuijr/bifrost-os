@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.24.8
+
+- Headings show no Markdown marker: the `##` (and `###`, or a `#` after the first line) of a heading is hidden as the title's `# ` and the emphasis markers are. A click or the arrows put the caret after the hidden marker, so typing at the start of a heading stays in the heading; Backspace there turns the line into body text and Return opens a line above it.
+- The note list's snippet line drops block markers too: a heading, list, checklist or quote line reads as its text ("## Plan" shows "Plan").
+- Delete Permanently asks with the kit's alert sheet, as TextEdit's confirmations do: hung from the title bar with the question "Are you sure you want to delete this note?" in bold, the informative text under it, and Delete and Cancel stacked full width.
+
 ## 1.24.7
 
 - A heading line that also carries a checkbox marker (`## - [ ] Item two`, as older versions wrote a checklist item turned into a heading) shows as the heading "Item two": a paragraph has one style, the heading wins, and the checkbox marker is no longer drawn as text. Changing its style, exporting and copying as plain text drop the marker too.
