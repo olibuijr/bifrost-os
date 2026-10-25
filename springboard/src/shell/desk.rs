@@ -339,6 +339,16 @@ struct CachedWindow {
     look:u64,
 }
 
+#[cfg(feature = "desktop-wayland")]
+impl CachedWindow {
+    /// Whether these pixels are at the size (`pw`, `ph`) the window is presented at now (`presented_size`): a client
+    /// window whose app frame is smaller than the window is cached at that smaller size, so comparing the cache with the
+    /// window's own frame never matched and the window was drawn afresh on every desk frame.
+    fn sized(&self, (pw, ph): (i32, i32)) -> bool {
+        self.width == pw.max(0) as usize && self.height == ph.max(0) as usize
+    }
+}
+
 /// The appearance a window's cached pixels depend on: the scheme position (0 dark .. 1 light, moving during the fade)
 /// and the accent colour. The position is quantised (`appearance::scheme_step`): keyed on the raw value every window
 /// was redrawn in full on every frame of the 280 ms fade; now a quiet window redraws a few times and on the end value.
@@ -4211,13 +4221,22 @@ impl Shell {
                 let hover = self.desk.as_ref().unwrap().lights_hover == Some(w.app);
                 let mut cached = self.desk.as_mut().unwrap().window_cache.remove(&id);
                 let look = window_look();
+                // an app's window is drawn at the size its newest frame covers while that frame is smaller than the
+                // window (configured to a new size, not drawn at it yet): the rest was the body's black over the
+                // wallpaper (0.10.39: Mail restored at 2560x1309 behind other windows, its frame 1200x860)
+                let app_frame = match w.app {
+                    AppId::External(slot) => self.ext.get(slot as usize).and_then(Option::as_ref).filter(|h| h.running()).and_then(|h| h.frame()).map(|(_, fw, fh)| (fw, fh)),
+                    _ => None,
+                };
+                let (pw, ph) = presented_size(w, &m, app_frame);
+                // the cache holds the pixels at the size they were presented at (`presented_size`), not the window's frame
                 let unchanged = cached.as_ref().is_some_and(|c|
-                    c.width == w.r.w as usize && c.height == w.r.h as usize && c.focused == focused && c.maximized == w.maximized && c.hover == hover && c.look == look);
+                    c.sized((pw, ph)) && c.focused == focused && c.maximized == w.maximized && c.hover == hover && c.look == look);
                 // only the key state moved (Cmd-Tab, a click on a back window): a full-size app's window is its body plus
                 // the lights over it, so the body is copied again from the app's last frame (dimmed when it lost focus)
                 // instead of drawing the whole window afresh (a 31 ms frame on the lab PC, round 75)
                 let refocus = !unchanged && w.is_full_size() && matches!(w.app, AppId::External(_)) && cached.as_ref().is_some_and(|c|
-                    c.width == w.r.w as usize && c.height == w.r.h as usize && c.focused != focused && c.maximized == w.maximized && c.hover == hover && c.look == look);
+                    c.sized((pw, ph)) && c.focused != focused && c.maximized == w.maximized && c.hover == hover && c.look == look);
                 if self.keyboard.shown() || self.keyboard.animating() {
                     self.desk.as_mut().unwrap().body_cache.remove(&w.app);
                 }
@@ -4242,14 +4261,6 @@ impl Shell {
                 let corner=self.ui.pt(bifrost_ui::prefs_layout::m::WINDOW_RADIUS);
                 // shell-drawn content is opaque (no vibrancy, see `take_wayland_materials`); a client's may not be
                 let opaque=!matches!(w.app.parent(),AppId::External(_));
-                // an app's window is drawn at the size its newest frame covers while that frame is smaller than the
-                // window (configured to a new size, not drawn at it yet): the rest was the body's black over the
-                // wallpaper (0.10.39: Mail restored at 2560x1309 behind other windows, its frame 1200x860)
-                let app_frame = match w.app {
-                    AppId::External(slot) => self.ext.get(slot as usize).and_then(Option::as_ref).filter(|h| h.running()).and_then(|h| h.frame()).map(|(_, fw, fh)| (fw, fh)),
-                    _ => None,
-                };
-                let (pw, ph) = presented_size(w, &m, app_frame);
                 if hidden[i] {
                     // a window in front covers it: its surface keeps the last pixels presented, and its cache is
                     // dropped so that it repaints in full once it is uncovered. It keeps the size it was last presented
@@ -4266,17 +4277,21 @@ impl Shell {
                     continue;
                 }
                 if unchanged && quiet {
+                    // the pixels held are at the presented size, which `unchanged` compared
+                    let (kw, kh) = (pw as usize, ph as usize);
                     self.desk.as_mut().unwrap().frames.push(crate::bare::wayland::WindowFrame {
                         id, title: frame_title(id), x:w.r.x, y:w.r.y,
-                        width:w.r.w as usize, height:w.r.h as usize, pixels:None,
-                        damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize), maximized:w.maximized, fullscreen:w.full, title_height:m.title,
+                        width:kw, height:kh, pixels:None,
+                        damage:crate::gfx::Damage::new(kw,kh), maximized:w.maximized, fullscreen:w.full, title_height:m.title,
                         drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None,position:None, min_size:(0,0),input:None,
                     });
                     self.desk.as_mut().unwrap().window_cache.insert(id,cached.unwrap());
                     continue;
                 }
                 if let AppId::External(slot)=w.app {
-                    let width=w.r.w as usize; let height=w.r.h as usize; let top=w.title_h(&m) as usize;
+                    // the retained pixels are at the presented size (the app's frame plus the title bar while that frame
+                    // is smaller than the window), so the body the frame is copied into is too
+                    let width=pw as usize; let height=ph as usize; let top=w.title_h(&m) as usize;
                     let body_h=height.saturating_sub(top);
                     let mapped=self.ext.get(slot as usize).and_then(Option::as_ref).filter(|h|h.running()).and_then(|h|h.frame()).map(|(_,w,h)|(w,h));
                     // on a key-state change the app's last frame may still be a few pixels larger than the window (the
@@ -4329,7 +4344,7 @@ impl Shell {
                         if w.is_full_size() && !bare && !w.full {
                             // the lights sit over the app: repaint them where the app just drew under them (a full-screen
                             // window hides them; the band revealed under the menu bar shows them, `draw_desk_reveal`)
-                            let mut local=*w; local.r.x=0; local.r.y=0;
+                            let mut local=*w; local.r.x=0; local.r.y=0; local.r.w=pw; local.r.h=ph;
                             let mut surf=Surface{w:width,h:height,stride:width,px:&mut pixels[..],y0:0};
                             for (k,c) in [SYSTEM_RED, SYSTEM_YELLOW, SYSTEM_GREEN].into_iter().enumerate() {
                                 let lr=local.light_rect_px(&m,k);
@@ -4357,7 +4372,7 @@ impl Shell {
                 // last change Settings reported): its body is reused and only the frame, dim and lights are drawn
                 // (bringing another window forward cost a 31 ms frame on the lab PC, round 75)
                 let quiet_body = !matches!(w.app, AppId::External(_)) && cached.as_ref().is_some_and(|c|
-                    c.width == w.r.w as usize && c.height == w.r.h as usize && c.focused != focused && c.maximized == w.maximized && c.look == look
+                    c.sized((pw, ph)) && c.focused != focused && c.maximized == w.maximized && c.look == look
                     && c.drawn > self.last_input && c.drawn > self.settings_changed && t - c.drawn < 1000.)
                     && (w.app != AppId::Settings || self.settings.as_ref().is_some_and(|st| st.next_wake(t).map_or(true, |x| x > t)));
                 self.desk.as_mut().unwrap().reuse_body = quiet_body.then_some(w.app);
@@ -5328,6 +5343,26 @@ mod tests {
             let full = Win { full: true, r: Desk::screen_rect(&m), ..w };
             assert_eq!(presented_size(&full, &m, Some((1200, 860))), (1920, 1080), "a full-screen window keeps the screen");
         }
+    }
+
+    /// The window cache holds the pixels at the size they were presented at: while a client's frame is smaller than its
+    /// window the cache is at that smaller size, and it is reused for the next frame (it was compared with the window's
+    /// own frame, never matched, and the window was drawn afresh on every desk frame).
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn a_window_cached_at_its_presented_size_is_reused() {
+        let m = metrics();
+        let r = Rect { x: 0, y: 28, w: 1920, h: 952 };
+        let w = Win { app: AppId::External(18), r, maximized: false, minimized: false, full: false, restore: r, full_size: false };
+        let presented = presented_size(&w, &m, Some((1200, 860)));
+        assert_ne!(presented, (r.w, r.h));
+        let cached = CachedWindow {
+            width: presented.0 as usize, height: presented.1 as usize, pixels: vec![0u32; presented.0 as usize * presented.1 as usize].into(),
+            focused: false, maximized: false, hover: false, drawn: 0.0, look: 0,
+        };
+        assert!(cached.sized(presented), "the next frame at the same app frame reuses the cache");
+        assert!(!cached.sized((r.w, r.h)), "the window's own frame is not the size the pixels were presented at");
+        assert!(!cached.sized(presented_size(&w, &m, Some((1920, 952 - w.title_h(&m) as usize)))), "the app drew at the window's size: drawn afresh");
     }
 
     #[test]
