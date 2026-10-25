@@ -259,11 +259,10 @@ fn surface_nodes(importer: &mut Importer, surface: &smithay::reexports::wayland_
     );
 }
 
-/// The surfaces of one layer-shell layer, bottom first (the map lists them top first).
+/// The surfaces of one layer-shell layer, bottom first: the newest surface is on top, as the pointer finds it
+/// (`scene::layers_bottom_first`).
 fn layer_surfaces(importer: &mut Importer, map: &smithay::desktop::LayerMap, layer: ShellLayer, scale: f32, out: &mut Vec<SceneNode>) {
-    let mut ls: Vec<_> = map.layers_on(layer).collect();
-    ls.reverse();
-    for l in ls {
+    for l in crate::scene::layers_bottom_first(map.layers_on(layer)) {
         let Some(geo) = map.layer_geometry(l) else { continue };
         surface_nodes(importer, l.wl_surface(), geo.loc, scale, 0.0, out);
     }

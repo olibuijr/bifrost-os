@@ -396,6 +396,18 @@ impl WmState {
         self.dirty = true;
     }
 
+    /// `set_stack_rank` for a mapped toplevel: it goes over its band, under the shown windows with a higher rank
+    /// (`Wm::raise_ranked`), and the keyboard stays where it is. False when `surface` is no mapped toplevel: its rank
+    /// then waits for the map.
+    pub fn rank_window(&mut self, surface: &WlSurface, rank: u32) -> bool {
+        let Some(window) = self.window_for_surface(surface) else { return false };
+        let Some(id) = Self::known_id(&window) else { return false };
+        self.wm.raise_ranked(id, rank);
+        self.apply_frames();
+        self.dirty = true;
+        true
+    }
+
     pub fn window_for_surface(&self, surface: &WlSurface) -> Option<Window> {
         self.space.elements().find(|w| w.wl_surface().is_some_and(|s| s.as_ref() == surface)).cloned()
     }

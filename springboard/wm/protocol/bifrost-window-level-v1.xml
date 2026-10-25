@@ -4,7 +4,7 @@
     Copyright 2026 BifrOSt. Private protocol of the BifrOSt window server (docs/bifrost-ui.md, "Window level").
   </copyright>
 
-  <interface name="bifrost_window_level_manager_v1" version="7">
+  <interface name="bifrost_window_level_manager_v1" version="8">
     <description summary="stacking level of a toplevel">
       Lets the shell put a toplevel on the floating level. A floating window stays above the normal windows of the
       desktop and is raised only within its own band; menus, panels and the menu bar are not affected. The level
@@ -29,6 +29,10 @@
       Since version 7 the shell can place the window of another client too (`tile_toplevel`), named by the
       wlr-foreign-toplevel handle it holds: the Window menu's arrange commands act on the window the shell shows as
       front, which may be a native app's toplevel, and never on whichever window the window server's focus is on.
+
+      Since version 8 the shell can give its toplevels a stacking order (`set_stack_rank`): when it brings a set of its
+      windows forward (the Apps grid closing, a hidden app shown again, Bring All to Front), they stack in its order
+      above the windows of other clients, whether they are mapped already or map later in any order.
     </description>
 
     <request name="destroy" type="destructor"/>
@@ -95,6 +99,19 @@
       </description>
       <arg name="toplevel" type="object" interface="zwlr_foreign_toplevel_handle_v1"/>
       <arg name="placement" type="uint" summary="a placement value"/>
+    </request>
+
+    <request name="set_stack_rank" since="8">
+      <description summary="bring the toplevel of a surface forward in the client's order">
+        Ranks only compare with each other and a larger rank stacks higher; the client sends ever larger ranks, the
+        bottom window of a set first, and 0 is no rank. A mapped toplevel goes at once to the top of its level band,
+        under the shown windows of the band with a higher rank; a toplevel that has not mapped yet goes there when it
+        maps (the rank applies to that map). Neither takes the keyboard focus: the client activates the window it
+        wants in front. Only the privileged client (the shell) may rank its windows; the request of any other client is
+        ignored.
+      </description>
+      <arg name="surface" type="object" interface="wl_surface"/>
+      <arg name="rank" type="uint"/>
     </request>
 
     <event name="frame" since="2">

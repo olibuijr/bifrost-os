@@ -16,6 +16,10 @@
 //! Version 7 adds `tile_toplevel`: the shell places another client's window, named by the wlr-foreign-toplevel handle
 //! it holds, so the Window menu and the Ctrl+Cmd arrow keys act on the window the shell shows as front (a native app's
 //! toplevel included) and not on whichever window the focus happens to be on.
+//!
+//! Version 8 adds `set_stack_rank`: the shell destroys the toplevels of windows it hides (the Apps grid, Hide) and the
+//! window server activates another client's window meanwhile; when the shell brings a set of its windows back it ranks
+//! them, bottom first, so they stack in its order above that window whatever order they map in (`Wm::map_ranked`).
 
 #[allow(
     dead_code,
@@ -61,8 +65,8 @@ use crate::{
 };
 
 /// The protocol version the global offers: 2 adds the `frame` event, 3 the `tile` request, 4 `set_origin`, 5
-/// `set_white_point` and `white_point_mode`, 6 `set_zoom`, 7 `tile_toplevel`.
-pub const VERSION: u32 = 7;
+/// `set_white_point` and `white_point_mode`, 6 `set_zoom`, 7 `tile_toplevel`, 8 `set_stack_rank`.
+pub const VERSION: u32 = 8;
 /// The version that introduced `frame`; a manager bound at an older version is never sent one.
 pub const FRAME_SINCE: u32 = 2;
 /// The version that introduced `tile`.
@@ -75,6 +79,8 @@ pub const WHITE_POINT_SINCE: u32 = 5;
 pub const ZOOM_SINCE: u32 = 6;
 /// The version that introduced `tile_toplevel`.
 pub const TILE_TOPLEVEL_SINCE: u32 = 7;
+/// The version that introduced `set_stack_rank`.
+pub const STACK_RANK_SINCE: u32 = 8;
 
 /// Most managers one client may keep bound: each one is a reporter that `report_frames` walks, so a client that binds in
 /// a loop would otherwise make every frame report cost more. The shell binds once.
@@ -93,6 +99,8 @@ pub enum LevelRequest {
     WhitePoint,
     /// `set_zoom`: the magnification of every output.
     Zoom,
+    /// `set_stack_rank`: a window brought forward over other clients' windows.
+    StackRank,
 }
 
 /// Which requests a client may make. Every request names a surface of the requesting client only (a client holds no
@@ -103,7 +111,7 @@ pub enum LevelRequest {
 pub fn request_allowed(privileged: bool, request: LevelRequest) -> bool {
     match request {
         LevelRequest::SetLevel(Level::Normal) | LevelRequest::SetOrigin => true,
-        LevelRequest::SetLevel(_) | LevelRequest::Tile | LevelRequest::WhitePoint | LevelRequest::Zoom => privileged,
+        LevelRequest::SetLevel(_) | LevelRequest::Tile | LevelRequest::WhitePoint | LevelRequest::Zoom | LevelRequest::StackRank => privileged,
     }
 }
 
@@ -197,6 +205,15 @@ pub fn level(surface: &WlSurface) -> Level {
 /// The position the shell asked for the toplevel of `surface` to map at (`set_origin`), if it asked.
 pub fn origin(surface: &WlSurface) -> Option<(i32, i32)> {
     with_states(surface, |s| s.data_map.get::<Mutex<Option<(i32, i32)>>>().and_then(|o| *o.lock().unwrap_or_else(|p| p.into_inner())))
+}
+
+/// The stacking rank the shell gave `surface` for its next map (`set_stack_rank`), kept on the surface.
+struct StackRank(Mutex<Option<u32>>);
+
+/// Takes the stacking rank the shell gave the toplevel of `surface` before it mapped, if it gave one (0 is none): it
+/// applies to that one map.
+pub fn take_stack_rank(surface: &WlSurface) -> Option<u32> {
+    with_states(surface, |s| s.data_map.get::<StackRank>().and_then(|r| r.0.lock().unwrap_or_else(|p| p.into_inner()).take())).filter(|&r| r > 0)
 }
 
 /// The level of a wire value (`bifrost_window_level_manager_v1.set_level`), or `None` for an unknown one.
@@ -303,6 +320,20 @@ impl Dispatch<BifrostWindowLevelManagerV1, ()> for WmState {
                     state.dirty = true;
                 }
             }
+            bifrost_window_level_manager_v1::Request::SetStackRank { surface, rank } => {
+                if !request_allowed(privileged, LevelRequest::StackRank) {
+                    return;
+                }
+                // a mapped toplevel moves now; one still to map takes the rank when it maps (`place_pending`)
+                if !state.rank_window(&surface, rank) {
+                    with_states(&surface, |s| {
+                        s.data_map.insert_if_missing_threadsafe(|| StackRank(Mutex::new(None)));
+                        if let Some(r) = s.data_map.get::<StackRank>() {
+                            *r.0.lock().unwrap_or_else(|p| p.into_inner()) = Some(rank);
+                        }
+                    });
+                }
+            }
             _ => {}
         }
     }
@@ -349,7 +380,8 @@ mod tests {
         assert!(xml.contains(&format!("<request name=\"set_zoom\" since=\"{ZOOM_SINCE}\">")));
         assert!(xml.contains(&format!("<request name=\"tile_toplevel\" since=\"{TILE_TOPLEVEL_SINCE}\">")));
         assert!(xml.contains("<arg name=\"toplevel\" type=\"object\" interface=\"zwlr_foreign_toplevel_handle_v1\"/>"));
-        assert!(FRAME_SINCE <= TILE_SINCE && TILE_SINCE <= ORIGIN_SINCE && ORIGIN_SINCE <= WHITE_POINT_SINCE && WHITE_POINT_SINCE <= ZOOM_SINCE && ZOOM_SINCE <= TILE_TOPLEVEL_SINCE && TILE_TOPLEVEL_SINCE <= VERSION);
+        assert!(xml.contains(&format!("<request name=\"set_stack_rank\" since=\"{STACK_RANK_SINCE}\">")));
+        assert!(FRAME_SINCE <= TILE_SINCE && TILE_SINCE <= ORIGIN_SINCE && ORIGIN_SINCE <= WHITE_POINT_SINCE && WHITE_POINT_SINCE <= ZOOM_SINCE && ZOOM_SINCE <= TILE_TOPLEVEL_SINCE && TILE_TOPLEVEL_SINCE <= STACK_RANK_SINCE && STACK_RANK_SINCE <= VERSION);
     }
 
     #[test]
@@ -372,11 +404,12 @@ mod tests {
         assert!(request_allowed(false, LevelRequest::SetOrigin));
         assert!(!request_allowed(false, LevelRequest::WhitePoint), "an app may not tint the whole screen");
         assert!(!request_allowed(false, LevelRequest::Zoom), "an app may not magnify the whole screen");
+        assert!(!request_allowed(false, LevelRequest::StackRank), "an app may not lift its windows over other apps'");
     }
 
     #[test]
     fn the_shell_may_make_every_request() {
-        for request in [LevelRequest::SetLevel(Level::Normal), LevelRequest::SetLevel(Level::Floating), LevelRequest::SetOrigin, LevelRequest::Tile, LevelRequest::WhitePoint, LevelRequest::Zoom] {
+        for request in [LevelRequest::SetLevel(Level::Normal), LevelRequest::SetLevel(Level::Floating), LevelRequest::SetOrigin, LevelRequest::Tile, LevelRequest::WhitePoint, LevelRequest::Zoom, LevelRequest::StackRank] {
             assert!(request_allowed(true, request), "{request:?}");
         }
     }

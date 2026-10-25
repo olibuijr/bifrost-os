@@ -445,6 +445,9 @@ pub struct Desk {
     ghosts: Vec<(usize, crate::bare::wayland::WindowFrame)>,
     /// an open or focus asked for the front window to be raised over native clients
     pub(super) raise_front: bool,
+    /// windows brought forward together (Bring All to Front, a hidden app shown, the Apps grid closing): the window
+    /// server is told to stack them in the shell's order over other clients' windows (`Shell::take_wayland_restack`)
+    pub(super) restack: Vec<AppId>,
     #[cfg(feature = "desktop-wayland")]
     window_cache: std::collections::HashMap<u32, CachedWindow>,
     /// the windows the last desktop frame did not draw because windows in front cover them completely: they keep no cache
@@ -903,7 +906,7 @@ impl Desk {
         self.unhide(|a| a.parent() == parent);
         let mine: Vec<AppId> = self.wins.iter().filter(|w| !w.minimized && w.app.parent() == parent).map(|w| w.app).collect();
         let mut front = None;
-        for app in mine {
+        for &app in &mine {
             if let Some(i) = self.index_of(app) {
                 let mut w = self.wins.remove(i);
                 w.minimized = false;
@@ -911,6 +914,9 @@ impl Desk {
                 self.wins.insert(at, w);
             }
         }
+        // their toplevels map again, each when it has drawn: the window server is told their order, or the ones that map
+        // before the front one go under the window it activated meanwhile (E2E5 3: Mail's main window under App Store)
+        self.note_restack(&mine);
         // the band order may put a floating window of the app above a normal one: the front is the topmost of the app
         for (i, w) in self.wins.iter().enumerate() {
             if !w.minimized && w.app.parent() == parent {
@@ -949,9 +955,21 @@ impl Desk {
     /// as on Golden Gate, where the command never takes a window out of the Dock (W3-6).
     pub(super) fn bring_all_to_front(&mut self, parent: AppId) {
         let mine: Vec<AppId> = self.wins.iter().filter(|w| !w.minimized && w.app.parent() == parent).map(|w| w.app).collect();
-        for app in mine {
+        for &app in &mine {
             if let Some(i) = self.index_of(app) {
                 self.raise(i);
+            }
+        }
+        // the window server raises only the front window it is asked to activate: it is told the app's whole set (E2E5 3)
+        self.note_restack(&mine);
+    }
+
+    /// Windows brought forward together: the window server stacks them in the shell's order over other clients'
+    /// windows with the next frame (`Shell::take_wayland_restack`), mapped already or still to map.
+    pub(super) fn note_restack(&mut self, apps: &[AppId]) {
+        for &app in apps {
+            if !self.restack.contains(&app) {
+                self.restack.push(app);
             }
         }
     }
@@ -1683,6 +1701,11 @@ impl Shell {
     }
     /// True once after an open or focus that should raise the front window over native clients.
     pub fn take_raise_front(&mut self) -> bool { self.desk.as_mut().is_some_and(|d|std::mem::take(&mut d.raise_front)) }
+    /// The windows (window server ids) the shell brought forward together since the last call, for
+    /// `Wayland::restack`: the window server stacks them in the shell's order over other clients' windows (E2E5 1, 3).
+    pub fn take_wayland_restack(&mut self) -> Vec<u32> {
+        self.desk.as_mut().map(|d| std::mem::take(&mut d.restack).into_iter().filter_map(win_id).collect()).unwrap_or_default()
+    }
     /// Each open window's behind-window materials (`NativeVisualEffectView` .sidebar / .titlebar) in window px, for
     /// `Wayland::window_materials`: an app's `ToShell::Materials` (window points, under the title bar of a titled
     /// window) and the Settings sidebar column. Empty without vibrancy, so the presenter draws windows opaque.
@@ -2971,7 +2994,7 @@ impl Shell {
         if changed {
             self.desk_refocus();
             self.dirty = true;
-        } else if !self.is_locked() && self.overview.grid.bar_front().is_none() {
+        } else if !self.is_locked() && self.bar_held_front().is_none() {
             // the front window decides the screen on every tick; only a different answer is something to draw. Under the
             // Apps grid every window is hidden, and the screen stays the app that was in front, whose menus the bar
             // keeps (Lead (a)); the grid's close refocuses
@@ -4889,6 +4912,54 @@ mod tests {
         assert!(sh.take_raise_front(), "the window server raises and focuses the viewer");
         assert!(!sh.desk_activate_shown_app(AppId::Terminal, 0.0), "one window: the open path");
         assert!(!sh.desk_activate_shown_app(viewer, 0.0), "only an app (its main id) is activated");
+    }
+
+    /// E2E5 3: the window server raises only the window it is asked to activate, so a Dock click on an app showing a
+    /// viewer tells it the app's whole set: the main window comes over the other apps too, under the viewer.
+    #[test]
+    fn activating_an_app_tells_the_window_server_all_of_its_windows_in_order() {
+        let mut sh = crate::shell::tests::desktop_shell();
+        let m = sh.desk_metrics();
+        let (main, viewer) = (AppId::External(3), AppId::ExternalWindow(3, 2));
+        {
+            let d = sh.desk.as_mut().unwrap();
+            d.wins.clear();
+            d.open(&m, main, (900, 600));
+            d.open(&m, viewer, (500, 400));
+            d.open(&m, AppId::Terminal, (900, 600));
+        }
+        sh.take_wayland_restack();
+        assert!(sh.desk_activate_shown_app(main, 0.0));
+        // the window server ids of the app's windows (the main window's needs the app in the catalogue)
+        let ids: Vec<u32> = [main, viewer].into_iter().filter_map(win_id).collect();
+        assert!(!ids.is_empty());
+        assert_eq!(sh.take_wayland_restack(), ids, "the app's windows, bottom first; not the other app's");
+        assert!(sh.take_wayland_restack().is_empty(), "told once");
+        // Window > Bring All to Front says the same
+        sh.screen = crate::shell::Screen::App(main);
+        sh.desk_bring_all_to_front();
+        let mut told = sh.take_wayland_restack();
+        told.sort_unstable();
+        let mut want = ids.clone();
+        want.sort_unstable();
+        assert_eq!(told, want);
+    }
+
+    /// E2E5 3: a hidden app shown again brings all of its windows back, and the window server is told the set, so the
+    /// toplevels that map before the front one do not go under the window it activated meanwhile.
+    #[test]
+    fn a_hidden_app_shown_again_tells_the_window_server_all_of_its_windows() {
+        let m = metrics();
+        let mut d = Desk::new();
+        let (main, viewer) = (AppId::External(3), AppId::ExternalWindow(3, 2));
+        d.open(&m, main, (900, 600));
+        d.open(&m, viewer, (500, 400));
+        d.open(&m, AppId::Terminal, (900, 600));
+        assert!(d.hide_app(main));
+        d.restack.clear();
+        d.open(&m, main, (900, 600));
+        assert!(d.restack.contains(&main) && d.restack.contains(&viewer), "{:?}", d.restack);
+        assert!(!d.restack.contains(&AppId::Terminal), "the other app stays where it is");
     }
 
     /// The Dock activating an app with extra windows still counts as opening it: it is in Recent Items, as every open is.

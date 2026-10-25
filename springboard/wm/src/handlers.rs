@@ -151,10 +151,17 @@ impl WmState {
         let takes_front = map_takes_front(self.shell_stacks(&window), activation_asked, others_shown);
         // the level the shell asked for this surface before it mapped (`bifrost_window_level_v1`)
         let level = window.wl_surface().map(|s| crate::window_level::level(&s)).unwrap_or_default();
+        // the rank the shell gave a window it brings back with others (`set_stack_rank`): their order, over other clients
+        let rank = window.wl_surface().and_then(|s| crate::window_level::take_stack_rank(&s));
         let r = if takes_front {
             let r = self.wm.map_at(id, size.w, size.h, origin);
             self.wm.set_level(id, level);
+            if let Some(rank) = rank {
+                self.wm.set_rank(id, rank);
+            }
             r
+        } else if let Some(rank) = rank {
+            self.wm.map_ranked(id, size.w, size.h, origin, level, rank)
         } else {
             self.wm.map_behind(id, size.w, size.h, origin, level)
         };

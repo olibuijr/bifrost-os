@@ -35,8 +35,11 @@ pub mod protocol {
 /// `set_origin`, where a toplevel maps again after the shell destroyed it while the window was hidden; 5 adds
 /// `set_white_point` and `white_point_mode`, Night Shift applied by the window server to the whole output; 6 adds
 /// `set_zoom`, Screen Zoom of the whole output; 7 adds `tile_toplevel`, the shell's request to place another client's
-/// window (a native app's), named by its foreign toplevel handle.
-pub const VERSION: u32 = 7;
+/// window (a native app's), named by its foreign toplevel handle; 8 adds `set_stack_rank`, the shell's order for a set
+/// of its windows it brings forward over other clients' windows.
+pub const VERSION: u32 = 8;
+/// The version that introduced `set_stack_rank`; a manager bound at an older version is never sent one.
+pub const STACK_RANK_SINCE: u32 = 8;
 /// The version that introduced `tile_toplevel`; a manager bound at an older version is never sent one.
 pub const TILE_TOPLEVEL_SINCE: u32 = 7;
 /// The version that introduced `tile`; a manager bound at an older version is never sent one.
@@ -134,6 +137,13 @@ mod tests {
         assert!(xml.contains(&format!("<request name=\"tile_toplevel\" since=\"{TILE_TOPLEVEL_SINCE}\">")));
         assert!(xml.contains("<arg name=\"toplevel\" type=\"object\" interface=\"zwlr_foreign_toplevel_handle_v1\"/>"));
         assert!(TILE_SINCE <= TILE_TOPLEVEL_SINCE && TILE_TOPLEVEL_SINCE <= VERSION);
+    }
+
+    #[test]
+    fn the_shell_asks_for_the_stack_rank_request_the_protocol_declares() {
+        let xml = include_str!("../../wm/protocol/bifrost-window-level-v1.xml");
+        assert!(xml.contains(&format!("<request name=\"set_stack_rank\" since=\"{STACK_RANK_SINCE}\">")));
+        assert!(TILE_TOPLEVEL_SINCE <= STACK_RANK_SINCE && STACK_RANK_SINCE <= VERSION);
     }
 
     #[test]

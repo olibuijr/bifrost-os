@@ -1993,6 +1993,7 @@ fn run() -> std::io::Result<()> {
         #[cfg(feature = "desktop-wayland")]
         if wayland && last_present != previous_present {
             if shell.take_raise_front() { disp.wayland_raise_front(); }
+            disp.wayland_restack(shell.take_wayland_restack());
             let pt = shell.points_px();
             if pt != presenter_scale { presenter_scale = pt; disp.wayland_set_scale(pt); }
             disp.wayland_window_materials(shell.take_wayland_materials());

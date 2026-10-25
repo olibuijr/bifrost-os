@@ -452,10 +452,20 @@ impl AppGrid {
             return;
         }
         if let Some(d) = sh.desk.as_mut() {
+            let mut shown = Vec::new();
             for (app, min) in std::mem::take(&mut self.saved) {
                 if let Some(w) = d.wins.iter_mut().find(|w| w.app == app) {
                     w.minimized = min;
+                    if !min {
+                        shown.push(app);
+                    }
                 }
+            }
+            // the grid destroyed their toplevels and the window server activated another client's window meanwhile: the
+            // windows come back over it in their own order, not only the front one (E2E5 1). When another client's
+            // window was in front as the grid opened, they stay where the window server maps them.
+            if self.bar_foreign.is_none() {
+                d.note_restack(&shown);
             }
         }
         sh.desk_refocus();
@@ -1116,6 +1126,72 @@ mod overlay_tests {
         assert!(!sh.overview.grid.visible(), "the second Esc closes the grid");
         assert_eq!(sh.desk.as_ref().unwrap().front().map(|w| w.app), Some(AppId::Terminal));
         assert!(sh.overview.grid.bar_front().is_none() && sh.overview.grid.bar_foreign().is_none(), "the bar follows the live windows again");
+    }
+
+    /// E2E5 1: the grid destroyed the windows' toplevels and the window server activated another client's window; when
+    /// the grid closes the window server is told every window that comes back, bottom first, so they all stack over that
+    /// window in their order (only the front one came back over FilmCraft). When another client's window was in front as
+    /// the grid opened, nothing is restacked over it.
+    #[test]
+    fn closing_the_grid_brings_every_window_back_in_its_order_over_other_clients() {
+        use crate::shell::apps::AppId;
+        use crate::shell::desk::win_id;
+        let mut sh = desktop_shell();
+        sh.anim = None;
+        let m = sh.desk_metrics();
+        {
+            let d = sh.desk.as_mut().unwrap();
+            d.wins.clear();
+            d.open(&m, AppId::Terminal, (900, 600));
+            d.open(&m, AppId::Photos, (900, 600));
+            d.open(&m, AppId::Settings, (900, 600));
+            let p = d.index_of(AppId::Photos).unwrap();
+            d.wins[p].minimized = true;
+        }
+        sh.screen = Screen::App(AppId::Settings);
+        sh.take_wayland_restack();
+        sh.appgrid_toggle(1.0);
+        assert!(sh.take_wayland_restack().is_empty(), "opening the grid restacks nothing");
+        sh.appgrid_toggle(2.0);
+        finish(&mut sh);
+        let want: Vec<u32> = [AppId::Terminal, AppId::Settings].into_iter().filter_map(win_id).collect();
+        assert_eq!(want.len(), 2);
+        assert_eq!(sh.take_wayland_restack(), want, "the shown windows, bottom first; the minimized one stays in the Dock");
+        // another client's window was in front when the grid opened: the shell's windows are not lifted over it
+        sh.desk.as_mut().unwrap().native_windows.push(crate::bare::wayland::ForeignWindow { id: 40, title: "Film".into(), app_id: "x.film".into(), active: true, maximized: false, minimized: false });
+        sh.appgrid_toggle(3.0);
+        sh.appgrid_toggle(4.0);
+        finish(&mut sh);
+        assert!(sh.take_wayland_restack().is_empty());
+    }
+
+    /// E2E5 5: Overview hides the windows and the window server then activates another client's window; the bar keeps
+    /// the app that was in front when Overview opened, as under the Apps grid, until Overview has gone.
+    #[test]
+    fn the_bar_keeps_the_front_app_under_overview() {
+        use crate::shell::apps::AppId;
+        use crate::shell::desktop_bar::FrontApp;
+        let mut sh = desktop_shell();
+        sh.anim = None;
+        let m = sh.desk_metrics();
+        {
+            let d = sh.desk.as_mut().unwrap();
+            d.wins.clear();
+            d.open(&m, AppId::Terminal, (900, 600));
+        }
+        sh.screen = Screen::App(AppId::Terminal);
+        // a native window behind, inactive while Terminal is in front
+        sh.desk.as_mut().unwrap().native_windows.push(crate::bare::wayland::ForeignWindow { id: 41, title: "Film".into(), app_id: "x.film".into(), active: false, maximized: false, minimized: false });
+        sh.overview_toggle(1.0);
+        assert!(sh.overview.open, "Overview opens");
+        assert!(sh.desk.as_ref().unwrap().front().is_none(), "Overview hid the window");
+        // the window server activates the native window once the shell's toplevel is gone
+        sh.desk.as_mut().unwrap().native_windows[0].active = true;
+        assert!(sh.front_app() == FrontApp::Desk(AppId::Terminal), "the bar keeps Terminal, not the activated window");
+        sh.desk_sync_extra_windows();
+        assert_eq!(sh.screen, Screen::App(AppId::Terminal), "the per-tick refocus leaves the screen to that app");
+        assert_eq!(sh.bar_held_front(), Some(AppId::Terminal));
+        assert_eq!(sh.bar_held_foreign(), Some(None));
     }
 
     #[test]

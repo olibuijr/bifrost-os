@@ -30,7 +30,9 @@ pub const MIN_H: i32 = 160;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, PartialOrd, Ord)]
 pub enum Level { #[default] Normal, Floating }
 
-struct Window { id: WindowId, rect: Rect, restore: Option<Rect>, tiled: Option<Layout>, minimized: bool, level: Level, full: Option<Saved> }
+/// `rank` is the shell's stacking rank (`bifrost_window_level_v1` set_stack_rank), 0 for none: ranks only compare
+/// with each other, a larger one stacks higher (`Wm::map_ranked`).
+struct Window { id: WindowId, rect: Rect, restore: Option<Rect>, tiled: Option<Layout>, minimized: bool, level: Level, full: Option<Saved>, rank: u32 }
 
 /// What a window held when it went full screen: the frame, the frame from before its maximize or tile, and its tile.
 /// Leaving full screen puts all three back, fitted to the usable area as it is then.
@@ -84,7 +86,7 @@ impl Wm {
     /// drag keeps it (`keep_on_screen`), so the window returns exactly where the person left it.
     pub fn map_at(&mut self, id: WindowId, w: i32, h: i32, origin: Option<(i32, i32)>) -> Rect {
         let (rect, level) = self.new_frame(id, w, h, origin);
-        self.insert_top(Window { id, rect, restore: None, tiled: None, minimized: false, level, full: None });
+        self.insert_top(Window { id, rect, restore: None, tiled: None, minimized: false, level, full: None, rank: 0 });
         self.key = Some(id);
         rect
     }
@@ -102,12 +104,49 @@ impl Wm {
             .filter(|&k| self.visible(k))
             .and_then(|k| self.windows.iter().position(|o| o.id == k && o.level == level))
             .or_else(|| self.windows.iter().rposition(|o| !o.minimized && o.level == level));
-        let win = Window { id, rect, restore: None, tiled: None, minimized: false, level, full: None };
+        let win = Window { id, rect, restore: None, tiled: None, minimized: false, level, full: None, rank: 0 };
         match key {
             Some(at) => self.windows.insert(at, win),
             None => self.insert_top(win),
         }
         rect
+    }
+
+    /// Like `map_behind`, for a window the shell gave a stacking rank (`set_stack_rank`) before it mapped: the shell
+    /// brings a set of its windows forward in one order (the Apps grid closing, a hidden app shown again). The window
+    /// goes above every window of its band, other clients' included, except the shown windows with a higher rank, and
+    /// under the lowest of those; the keyboard focus does not change. So the set comes back in the shell's order over
+    /// the window the window server activated meanwhile, whatever order the toplevels happen to map in (E2E5 1, 3).
+    pub fn map_ranked(&mut self, id: WindowId, w: i32, h: i32, origin: Option<(i32, i32)>, level: Level, rank: u32) -> Rect {
+        let (rect, _) = self.new_frame(id, w, h, origin);
+        self.insert_ranked(Window { id, rect, restore: None, tiled: None, minimized: false, level, full: None, rank });
+        rect
+    }
+
+    /// The shell's stacking rank for a window that is mapped: it goes where `map_ranked` would put it (over its band,
+    /// under the shown windows with a higher rank). The keyboard focus does not change.
+    pub fn raise_ranked(&mut self, id: WindowId, rank: u32) {
+        if let Some(i) = self.windows.iter().position(|w| w.id == id) {
+            let mut w = self.windows.remove(i);
+            w.rank = rank;
+            self.insert_ranked(w);
+        }
+    }
+
+    /// Records the shell's stacking rank of a window without moving it (a ranked window that mapped in front).
+    pub fn set_rank(&mut self, id: WindowId, rank: u32) {
+        if let Some(w) = self.get_mut(id) {
+            w.rank = rank;
+        }
+    }
+
+    /// Puts `w` at the top of its band, under the lowest shown window of the band with a higher rank (rank 0 is none).
+    fn insert_ranked(&mut self, w: Window) {
+        let higher = self.windows.iter().position(|o| o.level == w.level && !o.minimized && w.rank > 0 && o.rank > w.rank);
+        match higher {
+            Some(at) => self.windows.insert(at, w),
+            None => self.insert_top(w),
+        }
     }
 
     /// The frame and level a newly mapped `w` x `h` window takes (`map_at`); the window is taken out of the stack.
@@ -1002,6 +1041,52 @@ mod tests {
         empty.map_behind(7, 640, 480, None, Level::Normal);
         assert_eq!(empty.stack(), vec![7]);
         assert_eq!(empty.focused(), Some(7), "the only window shown is the topmost");
+    }
+
+    /// E2E5 1, 3: the shell brings a set of its windows back with ranks, bottom first, while another client's window is
+    /// key; they come back over it in the shell's order whatever order they map in, and the key window keeps the keyboard.
+    #[test]
+    fn ranked_windows_come_back_over_other_windows_in_the_shells_order() {
+        let mut wm = Wm::new(AREA);
+        // 9 is another client's window, key while the shell's windows were away
+        wm.map(9, 800, 600);
+        // the shell's set is 1 (bottom), 2, 3 (front); 3 maps first, then 1, then 2
+        wm.map_ranked(3, 640, 480, None, Level::Normal, 13);
+        wm.map_ranked(1, 640, 480, None, Level::Normal, 11);
+        wm.map_ranked(2, 640, 480, None, Level::Normal, 12);
+        assert_eq!(wm.stack(), vec![9, 1, 2, 3], "over the other window, in rank order");
+        assert_eq!(wm.focused(), Some(9), "mapping ranked takes no focus");
+        // a later set outranks the earlier one: its window goes on top of the band
+        wm.map_ranked(4, 640, 480, None, Level::Normal, 20);
+        assert_eq!(wm.stack(), vec![9, 1, 2, 3, 4]);
+        // a floating window stays above, and a ranked normal window stays in its band
+        wm.map(5, 200, 100);
+        wm.set_level(5, Level::Floating);
+        wm.map_ranked(6, 640, 480, None, Level::Normal, 30);
+        assert_eq!(wm.stack(), vec![9, 1, 2, 3, 4, 6, 5]);
+    }
+
+    /// E2E5 3: mapped windows the shell ranks again (Bring All to Front, a Dock click on an app with a viewer) come
+    /// forward in rank order without taking the keyboard; a ranked window still to map goes under the higher ones.
+    #[test]
+    fn raising_ranked_windows_reorders_them_over_the_rest_without_focus() {
+        let mut wm = Wm::new(AREA);
+        wm.map(1, 800, 600); // the app's main window
+        wm.map(2, 800, 600); // its viewer
+        wm.map(3, 800, 600); // another app in front
+        assert_eq!(wm.focused(), Some(3));
+        wm.raise_ranked(1, 5);
+        wm.raise_ranked(2, 6);
+        assert_eq!(wm.stack(), vec![3, 1, 2], "both of the app's windows over the other app, the viewer in front");
+        assert_eq!(wm.focused(), Some(3), "the shell's activation moves the keyboard, not the rank");
+        wm.map_ranked(4, 640, 480, None, Level::Normal, 5);
+        assert_eq!(wm.stack(), vec![3, 1, 4, 2], "an equal rank goes just under the higher one");
+        wm.set_rank(3, 7);
+        wm.map_ranked(7, 640, 480, None, Level::Normal, 6);
+        assert_eq!(wm.stack(), vec![7, 3, 1, 4, 2], "under the lowest shown window with a higher rank");
+        // rank 0 is no rank: the top of the band
+        wm.raise_ranked(7, 0);
+        assert_eq!(wm.stack(), vec![3, 1, 4, 2, 7]);
     }
 
     /// W4-3: the window server keeps the toplevel's pending size in step only when the frame really changed.
