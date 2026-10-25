@@ -3920,7 +3920,8 @@ mod tests {
         assert!(bx >= 0.0 && bx + bw <= p.w as f32, "the button is centred in the pane");
         assert_eq!(by, p.h as f32 / 2.0 + p.empty_shift(&ui, lines.len()) + ui.pt(34.0), "the button moves down with the extra lines");
         // a click on the moved button (window coordinates: right of the source list) still opens the camera
-        tap(&mut p, &ui, p.sidebar_px() as f32 + bx + bw / 2.0, by + bh / 2.0, 100.0);
+        let sx = p.sidebar_px() as f32;
+        tap(&mut p, &ui, sx + bx + bw / 2.0, by + bh / 2.0, 100.0);
         assert!(p.take_camera_request());
         p.set_desktop(&ui, false);
         let _ = std::fs::remove_dir_all(&dir);
