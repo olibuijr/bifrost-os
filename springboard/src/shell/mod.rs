@@ -4823,6 +4823,12 @@ impl Shell {
                 let veil = self.veil_animating(t);
                 self.draw_desk(s, t);
                 self.draw_overview(s, t);
+                // a menu-bar menu opened over Overview or the Apps grid is above them: drawn again over the overlay, so the
+                // menu's surface (cut from this frame) shows its rows, not the grid under it (Lead (a): an empty frosted box)
+                #[cfg(feature = "desktop-wayland")]
+                if self.overview.visible() && self.desktop_menu.is_some() {
+                    self.draw_desktop_popup(s);
+                }
                 // Control Center and Notification Center float over the live desktop, at the menus' layer
                 if self.center_active() {
                     self.draw_center(s, t);

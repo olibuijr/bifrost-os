@@ -148,6 +148,10 @@ struct State {
     lock_manager:Option<lock_manager::ExtSessionLockManagerV1>, output:Option<wl_output::WlOutput>, lock:Option<Lock>, lock_wanted:bool, redraw:bool, refresh:u32,
     idle_notifier:Option<idle_notifier::ExtIdleNotifierV1>, idle:bool, resumed:bool, keys:HashSet<u16>, power_manager:Option<power_manager::ZwlrOutputPowerManagerV1>, output_power:Option<output_power::ZwlrOutputPowerV1>,
     activation:Option<activation::XdgActivationV1>, focused:Option<u32>, serial:u32, raise_front:bool, z:Vec<u32>,
+    /// a fresh toplevel the window server gave the keyboard while another window is the shell's front one: (front,
+    /// entered). The front window takes the keyboard back once the events read with it are handled, unless a press on
+    /// the entered window came with them (the person clicked it: E2E N2)
+    refocus:Option<(u32,u32)>,
     wm:Option<xdg_wm_base::XdgWmBase>, seat:Option<wl_seat::WlSeat>, windows:HashMap<u32,Window>, materials:HashMap<u32,Vec<Glass>>, scale:f32, window_events:Vec<WindowEvent>, target:Option<u32>,
     compositor: Option<wl_compositor::WlCompositor>, shm: Option<wl_shm::WlShm>,
     layer: Option<layer::ZwlrLayerShellV1>, surface: Option<wl_surface::WlSurface>,
@@ -383,7 +387,16 @@ impl Display {
         if let (Some(w),Some(seat))=(self.state.foreign.iter().find(|w|w.info.id==id),self.state.seat.as_ref()) { w.handle.unset_minimized(); w.handle.activate(seat); transient(self.conn.flush())?; }
         Ok(())
     }
-    pub fn window_events(&mut self) -> Vec<WindowEvent> { std::mem::take(&mut self.state.window_events) }
+    pub fn window_events(&mut self) -> Vec<WindowEvent> {
+        // a fresh window took the keyboard from the front one and no press on it came with it: the front one gets it back
+        if let Some((front,_))=self.state.refocus.take() {
+            if self.state.focused==Some(front) && self.state.windows.contains_key(&front) {
+                request_activation(&self.state,&self.queue.handle(),front);
+                let _=self.conn.flush();
+            }
+        }
+        std::mem::take(&mut self.state.window_events)
+    }
     /// The input method batches received since the last call; each one ended with its `done`.
     pub fn input_method_batches(&mut self) -> Vec<ImBatch> { std::mem::take(&mut self.state.im_batches) }
     /// Sends the keyboard's output for the focused client's field: text, preedit and deletions go to the input method
@@ -1235,12 +1248,12 @@ impl Dispatch<wl_pointer::WlPointer, ()> for State {
                 }
                 if s.pressed { s.inputs.push(Event::Move { x:s.xy.0+offset.0,y:s.xy.1+offset.1,t }); }else{s.inputs.push(Event::Hover{x:s.xy.0+offset.0,y:s.xy.1+offset.1,t});}
             },
-            wl_pointer::Event::Button {button:273,state:WEnum::Value(wl_pointer::ButtonState::Pressed),..}=>{if let Some(id)=s.target{s.focused=Some(id);s.window_events.push(WindowEvent::Focus(id));}s.inputs.push(Event::Context{x:s.xy.0+offset.0,y:s.xy.1+offset.1,t});},
+            wl_pointer::Event::Button {button:273,state:WEnum::Value(wl_pointer::ButtonState::Pressed),..}=>{if let Some(id)=s.target{s.refocus=keep_refocus(s.refocus,id);s.focused=Some(id);s.window_events.push(WindowEvent::Focus(id));}s.inputs.push(Event::Context{x:s.xy.0+offset.0,y:s.xy.1+offset.1,t});},
             wl_pointer::Event::Leave {..} if !s.pressed=>s.inputs.push(Event::Hover{x:-100.,y:-100.,t}),
             wl_pointer::Event::Button { button:272,state:WEnum::Value(v),serial,.. } => {
                 s.serial=serial;
                 s.pressed = v == wl_pointer::ButtonState::Pressed;
-                if s.pressed {if let Some(id)=s.target {s.focused=Some(id);s.window_events.push(WindowEvent::Focus(id));}}
+                if s.pressed {if let Some(id)=s.target {s.refocus=keep_refocus(s.refocus,id);s.focused=Some(id);s.window_events.push(WindowEvent::Focus(id));}}
                 let drags=s.target.and_then(|id|s.windows.get(&id)).is_some_and(|w|{let (x,y)=(s.xy.0 as i32,s.xy.1 as i32);
                     s.xy.1<w.frame.drag_height as f32 && !w.frame.no_drag.iter().any(|r|x>=r[0]&&x<r[0]+r[2]&&y>=r[1]&&y<r[1]+r[3])});
                 // the traffic lights are in `no_drag` (the shell lists them for every window), so a press on one still reaches
@@ -1277,7 +1290,7 @@ impl Dispatch<wl_touch::WlTouch, ()> for State {
             wl_touch::Event::Down { serial,surface,id,x,y,.. } => {
                 s.serial = serial;
                 let (place, window) = touch_surface(s, &surface);
-                if let Some(wid) = window { s.focused = Some(wid); s.window_events.push(WindowEvent::Focus(wid)); }
+                if let Some(wid) = window { s.refocus = keep_refocus(s.refocus, wid); s.focused = Some(wid); s.window_events.push(WindowEvent::Focus(wid)); }
                 // the first finger on a window's title area moves the window, as a pointer press there does
                 let drags = s.fingers.is_idle() && window.and_then(|wid| s.windows.get(&wid)).is_some_and(|w| touch_model::starts_window_drag(place.local(x, y), w.frame.drag_height, &w.frame.no_drag));
                 if drags {
@@ -1294,7 +1307,7 @@ impl Dispatch<wl_touch::WlTouch, ()> for State {
     }
 }
 impl Dispatch<wl_keyboard::WlKeyboard, ()> for State {
-    fn event(s: &mut Self, _: &wl_keyboard::WlKeyboard, e: wl_keyboard::Event, _: &(), _: &Connection, qh: &QueueHandle<Self>) {
+    fn event(s: &mut Self, _: &wl_keyboard::WlKeyboard, e: wl_keyboard::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {
         match e {
             wl_keyboard::Event::Enter {surface,keys,..}=>{
                 // the keys already down as the shell gets the keyboard: a modifier held across the focus change counts
@@ -1307,8 +1320,10 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for State {
                         s.focused=Some(id);s.window_events.push(WindowEvent::Focus(id));
                     } else if let Some(front)=s.focused.filter(|f|s.windows.contains_key(f)) {
                         // the window server focused a window it just mapped (one that came back from Overview or a
-                        // minimize behind the front): the front window the shell raised gets the keyboard back
-                        request_activation(s,qh,front);
+                        // minimize behind the front): the front window the shell raised gets the keyboard back, after the
+                        // events read with this one (`window_events`): the window server focuses a window on a press
+                        // before the press reaches the client, and a press on the entered window keeps it (E2E N2)
+                        s.refocus=Some((front,id));
                     }
                 }
             },
@@ -1493,6 +1508,9 @@ fn focus_on_configure(first:bool,activated:bool,was_activated:bool)->bool { firs
 /// (Overview, a minimize, a window covered until now), not a choice of the person: following it lifted that window over
 /// the one the Dock, Overview or the Window menu had just brought forward (W4-1, W4-5).
 fn follows_keyboard_enter(fresh:bool,id:u32,front:Option<u32>)->bool { !fresh || front.map_or(true,|f|f==id) }
+/// The keyboard hand-back still owed after a press on window `pressed`: none when the press is on the fresh window that
+/// just took the keyboard (the person chose it), else the one owed before.
+fn keep_refocus(refocus:Option<(u32,u32)>,pressed:u32)->Option<(u32,u32)> { refocus.filter(|(_,entered)|*entered!=pressed) }
 /// Asks the window server to activate (raise and focus) the shell's window `id`, with the shell's last input serial.
 fn request_activation(s:&State,qh:&QueueHandle<State>,id:u32) {
     if let (Some(activation),Some(seat),Some(surface))=(s.activation.as_ref(),s.seat.as_ref(),s.surface.as_ref()) {
@@ -1509,7 +1527,7 @@ fn window_buffer_count(count:usize, available:bool, dirty:bool) -> usize {
 }
 #[cfg(test)]
 mod tests {
-    use super::{dock_placement,DockEdge,DockPlacement,focus_on_configure,min_size_of,DEFAULT_MIN_SIZE};
+    use super::{dock_placement,DockEdge,DockPlacement,focus_on_configure,keep_refocus,min_size_of,DEFAULT_MIN_SIZE};
     /// N11: a glass shape that went away is owed to a chrome surface under it, in the surface's own pixels and clipped
     /// to it; a shape elsewhere owes it nothing.
     #[test]
@@ -1535,6 +1553,15 @@ mod tests {
         assert!(focus_on_configure(false,true,false), "a window that became active is focused");
         assert!(!focus_on_configure(false,false,false), "a resize of a background window");
         assert!(!focus_on_configure(false,true,true), "a resize of the active window raises nothing again");
+    }
+    /// E2E N2: a window that came back from Hide is fresh; a press on it gets the keyboard from the window server before
+    /// the press reaches the shell, and that keyboard must stay with it. A press elsewhere still owes the front window.
+    #[test]
+    fn a_press_on_the_fresh_window_that_took_the_keyboard_keeps_it() {
+        let (front, viewer, other) = (1, 0x0100_2002, 7);
+        assert_eq!(keep_refocus(Some((front, viewer)), viewer), None, "the person clicked the window: no hand-back");
+        assert_eq!(keep_refocus(Some((front, viewer)), other), Some((front, viewer)), "a press on another window keeps it owed");
+        assert_eq!(keep_refocus(None, viewer), None);
     }
     /// W4-1/W4-5: the window server focuses every window it maps; a window that maps behind the front one (back from
     /// Overview or a minimize) must not take the front from the window the shell just raised.

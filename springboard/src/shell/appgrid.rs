@@ -306,6 +306,8 @@ pub(super) struct AppGrid {
     icons: HashMap<(usize, usize), Image>,
     /// every window's minimized flag from before the grid hid them; restored when the grid closes
     pub(super) saved: Vec<(AppId, bool)>,
+    /// the other client's window that was active when the grid opened (the app whose menus the bar shows), if any
+    bar_foreign: Option<u32>,
 }
 
 fn catalogue() -> Vec<(String, String)> {
@@ -328,6 +330,23 @@ impl AppGrid {
     /// The grid is on screen but animating out: a toggle then brings it back instead of asking it to close again.
     pub(super) fn closing(&self) -> bool {
         self.open && self.closing.is_some()
+    }
+
+    /// While the grid is open (not closing): the app whose menus the bar keeps. `Some(Some(id))` is another client's
+    /// window that was active when the grid opened, `Some(None)` none was (a shell window was in front, see
+    /// `bar_front`); `None` when the grid is not up and the bar follows the live windows (Lead (a)).
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+    pub(super) fn bar_foreign(&self) -> Option<Option<u32>> {
+        (self.open && self.closing.is_none()).then_some(self.bar_foreign)
+    }
+
+    /// While the grid is open (not closing): the shell window that was in front when it opened (the grid hid every
+    /// window; `saved` holds them back to front with their own minimized flags).
+    pub(super) fn bar_front(&self) -> Option<AppId> {
+        if !self.open || self.closing.is_some() {
+            return None;
+        }
+        self.saved.iter().rev().find(|(_, minimized)| !*minimized).map(|(app, _)| *app)
     }
 
     /// The veil's rectangle (x, y, w, h px): between the menu bar and the Dock. On the window server the grid is
@@ -413,6 +432,9 @@ impl AppGrid {
         self.lifted = None;
         self.selected = None;
         self.scroll_acc = 0.0;
+        // the bar keeps the app in front: hiding the shell's windows makes the window server activate another client's
+        // window, which must not take the menu bar while the grid is up (Lead (a))
+        self.bar_foreign = sh.foreign_front_window();
         if self.saved.is_empty() {
             if let Some(d) = sh.desk.as_mut() {
                 self.saved = d.wins.iter().map(|w| (w.app, w.minimized)).collect();
@@ -1058,6 +1080,42 @@ mod overlay_tests {
         sh.appgrid_toggle(2.2);
         finish(&mut sh);
         assert!(!sh.overview.grid.visible(), "and the next one closes it");
+    }
+
+    /// Lead (a): the grid hides the windows, and the window server then activates another client's window; the bar keeps
+    /// the app that was in front (its name and menus), the screen stays that app, and Esc with a bar menu open over the
+    /// grid closes the menu first, leaving the grid up.
+    #[test]
+    fn the_bar_keeps_the_front_app_under_the_grid_and_escape_closes_its_menu_first() {
+        use crate::shell::apps::AppId;
+        use crate::shell::desktop_bar::{FrontApp, Menu};
+        use crate::shell::overview::{KeyMods, KEY_ESC};
+        let mut sh = desktop_shell();
+        sh.anim = None;
+        let m = sh.desk_metrics();
+        {
+            let d = sh.desk.as_mut().unwrap();
+            d.wins.clear();
+            d.open(&m, AppId::Terminal, (900, 600));
+        }
+        sh.screen = Screen::App(AppId::Terminal);
+        sh.appgrid_toggle(1.0);
+        assert!(sh.overview.grid.visible());
+        assert!(sh.desk.as_ref().unwrap().front().is_none(), "the grid hid the window");
+        assert!(sh.front_app() == FrontApp::Desk(AppId::Terminal), "the bar keeps the app that was in front");
+        sh.desk_sync_extra_windows();
+        assert_eq!(sh.screen, Screen::App(AppId::Terminal), "the per-tick refocus leaves the screen to that app");
+        sh.desktop_menu = Some(Menu::App);
+        let mods = KeyMods { ctrl: false, cmd: false, shift: false };
+        assert!(!sh.hw_overview_key(KEY_ESC, true, mods, false, 2.0), "Esc is the open menu's, not the grid's");
+        sh.hw_shortcut(Shortcut::Back, 2.0);
+        assert!(sh.desktop_menu.is_none(), "the first Esc closes the menu");
+        assert!(sh.overview.grid.visible() && !sh.overview.grid.closing(), "and the grid stays up");
+        sh.hw_shortcut(Shortcut::Back, 3.0);
+        finish(&mut sh);
+        assert!(!sh.overview.grid.visible(), "the second Esc closes the grid");
+        assert_eq!(sh.desk.as_ref().unwrap().front().map(|w| w.app), Some(AppId::Terminal));
+        assert!(sh.overview.grid.bar_front().is_none() && sh.overview.grid.bar_foreign().is_none(), "the bar follows the live windows again");
     }
 
     #[test]
