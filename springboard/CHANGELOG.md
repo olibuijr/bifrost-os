@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.10.30 — 2026-10-25
+
+Fixes from the 0.10.29 end-to-end pass on Midget.
+
+- An app opened from Spotlight or the Applications grid comes to the front; the keyboard hand-back after Search or the grid closes no longer raises the previous window over it. A click on another window during the launch still raises that window.
+- A pointer that lands on a surface by an absolute jump (tablet, remote control) hovers where it landed.
+- The Applications grid's Dock icon is labelled Applications, and the open grid dims the whole desktop, other apps' windows included.
+- Chinese, Japanese and Korean text draws whole: CID-keyed fonts use each glyph's own font dictionary (local subroutines and widths).
+- The Downloads stack opens above the Dock as a fan or a grid of its newest items with Open in Files; arrows, Return and typing select, other keys and clicks pass through, and files open in their default app, including Photos.
+- The Photos empty state wraps and stays centred in a narrow window.
+
 ## 0.10.29 — 2026-10-25
 
 Fixes from the 0.10.28 end-to-end pass on Midget.
