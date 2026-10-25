@@ -202,9 +202,12 @@ impl Shell {
         let windows = desk
             .wins
             .iter()
-            .filter_map(|w| {
+            .enumerate()
+            .filter_map(|(i, w)| {
                 let (desktop, minimized) = self.overview.spaces.saved_state(w.app, w.minimized);
-                let rec = WindowRec::from_px(&key_of(w.app)?, (w.r.x, w.r.y, w.r.w, w.r.h), (m.w, m.h), w.maximized, minimized);
+                // a full-screen or zoomed window is written down with the frame it goes back to (`Desk::saved_frame`)
+                let (r, maximized) = desk.saved_frame(i)?;
+                let rec = WindowRec::from_px(&key_of(w.app)?, (r.x, r.y, r.w, r.h), (m.w, m.h), maximized, minimized);
                 Some(WindowRec { desktop, ..rec })
             })
             .take(MAX_WINDOWS)
@@ -333,11 +336,11 @@ impl Shell {
         for slot in due {
             let app = AppId::External(slot);
             let m = self.desk_metrics();
-            let frame = self
-                .desk
-                .as_ref()
-                .and_then(|d| d.index_of(app).map(|i| &d.wins[i]))
-                .map(|w| WindowRec::from_px(&key_of(app).unwrap_or_default(), (w.r.x, w.r.y, w.r.w, w.r.h), (m.w, m.h), w.maximized, w.minimized));
+            let frame = self.desk.as_ref().and_then(|d| {
+                let i = d.index_of(app)?;
+                let (r, maximized) = d.saved_frame(i)?;
+                Some(WindowRec::from_px(&key_of(app).unwrap_or_default(), (r.x, r.y, r.w, r.h), (m.w, m.h), maximized, d.wins[i].minimized))
+            });
             let id = registered.get(slot as usize).map(|a| a.manifest.id.as_str()).unwrap_or_default();
             bifrost_core::log::shell_logger("session").info(format!("{id} was updated while it ran: relaunching it at the new version"));
             self.session.relaunch.push(Relaunch { slot, frame });

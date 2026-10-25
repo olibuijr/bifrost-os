@@ -694,6 +694,26 @@ pub fn full_size(app: AppId) -> bool {
 /// The unified title and toolbar row of a full-size app window, in points (`bifrost_app::layout::UNIFIED_BAR_PT`).
 pub const UNIFIED_BAR_PT: f32 = 52.0;
 
+/// The size (px) window `w` of a client app is drawn and presented at when the app's newest frame is `frame` px: the
+/// window's own frame, or, while that frame is smaller than the window's body (the app was configured to a larger size and
+/// has not drawn at it yet), only what the frame covers plus the title bar, as a compositor keeps a surface at its last
+/// buffer's size until the client commits a new one. The window never paints its own black past the app's pixels
+/// (0.10.39: Mail restored at 2560x1309 drew at 1200x860; the rest of the window was black over the wallpaper). A
+/// full-screen window, a window with no frame yet and a frame that covers the body keep the window's frame.
+#[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+pub fn presented_size(w: &Win, m: &Metrics, frame: Option<(usize, usize)>) -> (i32, i32) {
+    let whole = (w.r.w.max(1), w.r.h.max(1));
+    let Some((fw, fh)) = frame.filter(|&(fw, fh)| fw > 0 && fh > 0 && !w.full) else { return whole };
+    let b = w.body(m);
+    let top = (b.y - w.r.y).max(0);
+    let fw = i32::try_from(fw).unwrap_or(i32::MAX);
+    let fh = i32::try_from(fh).unwrap_or(i32::MAX);
+    if fw >= b.w && fh >= b.h {
+        return whole;
+    }
+    (fw.min(b.w).max(1), (top + fh.min(b.h)).max(1))
+}
+
 /// Where a press moves window `w` instead of reaching the app: above `drag_height` (window px), except in the
 /// rectangles returned (window px). A full-size app's empty toolbar band drags; its traffic lights and the controls
 /// it publishes (`App::controls`) do not, as the native toolkit lets the empty part of a unified toolbar move the window.
@@ -1469,6 +1489,22 @@ impl Desk {
         }
         w.full = on;
         true
+    }
+
+    /// The frame window `i` is written down with (the session file, an update relaunch) and whether it comes back zoomed:
+    /// a normal window's own frame; a zoomed one's frame from before the zoom, zoomed again on the way back; a full-screen
+    /// one's way back from full screen (`set_full_screen`), never the screen it covers. Saving the full-screen frame
+    /// brought the window back after a restart as a normal window held to the work area, a near-screen frame its app
+    /// had never drawn at (0.10.39: Mail at 0,35,2560,1309 with black where its pixels ended).
+    pub fn saved_frame(&self, i: usize) -> Option<(Rect, bool)> {
+        let w = self.wins.get(i)?;
+        Some(if w.full {
+            (w.restore, self.full_from_zoom.contains(&w.app))
+        } else if w.maximized {
+            (w.restore, true)
+        } else {
+            (w.r, false)
+        })
     }
 
     /// Whether the front window is full screen (Game Mode reads it).
@@ -4206,14 +4242,24 @@ impl Shell {
                 let corner=self.ui.pt(bifrost_ui::prefs_layout::m::WINDOW_RADIUS);
                 // shell-drawn content is opaque (no vibrancy, see `take_wayland_materials`); a client's may not be
                 let opaque=!matches!(w.app.parent(),AppId::External(_));
+                // an app's window is drawn at the size its newest frame covers while that frame is smaller than the
+                // window (configured to a new size, not drawn at it yet): the rest was the body's black over the
+                // wallpaper (0.10.39: Mail restored at 2560x1309 behind other windows, its frame 1200x860)
+                let app_frame = match w.app {
+                    AppId::External(slot) => self.ext.get(slot as usize).and_then(Option::as_ref).filter(|h| h.running()).and_then(|h| h.frame()).map(|(_, fw, fh)| (fw, fh)),
+                    _ => None,
+                };
+                let (pw, ph) = presented_size(w, &m, app_frame);
                 if hidden[i] {
                     // a window in front covers it: its surface keeps the last pixels presented, and its cache is
-                    // dropped so that it repaints in full once it is uncovered
+                    // dropped so that it repaints in full once it is uncovered. It keeps the size it is drawn at: a client
+                    // window drawn smaller than its frame (`presented_size`) is not told a size its pixels lack
+                    let (kw, kh) = (pw as usize, ph as usize);
                     self.desk.as_mut().unwrap().hidden_ids.push(id);
                     self.desk.as_mut().unwrap().frames.push(crate::bare::wayland::WindowFrame {
                         id, title: frame_title(id), x:w.r.x, y:w.r.y,
-                        width:w.r.w as usize, height:w.r.h as usize, pixels:None,
-                        damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize), maximized:w.maximized, fullscreen:w.full, title_height:m.title,
+                        width:kw, height:kh, pixels:None,
+                        damage:crate::gfx::Damage::new(kw,kh), maximized:w.maximized, fullscreen:w.full, title_height:m.title,
                         drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None,position:None, min_size:(0,0),input:None,
                     });
                     continue;
@@ -4316,9 +4362,9 @@ impl Shell {
                 self.desk.as_mut().unwrap().reuse_body = quiet_body.then_some(w.app);
                 // Reuse the shared scratch buffer instead of a fresh zeroed allocation per window per frame.
                 let mut px = std::mem::take(&mut self.desk.as_mut().unwrap().window_buf);
-                px.clear(); px.resize(w.r.w as usize * w.r.h as usize, 0);
-                let mut image = Image { w: w.r.w as usize, h: w.r.h as usize, px };
-                let mut local = *w; local.r.x = 0; local.r.y = 0;
+                px.clear(); px.resize(pw as usize * ph as usize, 0);
+                let mut image = Image { w: pw as usize, h: ph as usize, px };
+                let mut local = *w; local.r.x = 0; local.r.y = 0; local.r.w = pw; local.r.h = ph;
                 {
                     let mut surf = Surface { w:image.w,h:image.h,stride:image.w,px:&mut image.px,y0:0 };
                     self.draw_window(&mut surf, &local, Some(i) == front, &m, t, false);
@@ -4336,7 +4382,7 @@ impl Shell {
                 desk.window_buf = image.px;
                 desk.frames.push(crate::bare::wayland::WindowFrame {
                     id, title: frame_title(id), x:w.r.x, y:w.r.y,
-                    width:w.r.w as usize, height:w.r.h as usize, pixels, damage, maximized:w.maximized, fullscreen:w.full, title_height:m.title,
+                    width:pw as usize, height:ph as usize, pixels, damage, maximized:w.maximized, fullscreen:w.full, title_height:m.title,
                     drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None,position:None, min_size:(0,0),input:None,
                 });
                 continue;
@@ -5230,6 +5276,57 @@ mod tests {
 
     fn metrics() -> Metrics {
         Metrics { w: 1920, h: 1080, title: 30, menubar: 28, min_w: 320, min_h: 220, edge: 6, light: 12, light_gap: 8, light_x: 12, dock_left: 0, dock_right: 0, dock_bottom: 100, pt: 1.0 }
+    }
+
+    /// 0.10.39: Mail was full screen at a restart and came back at 0,35,2560,1309 (the screen held to the work area). A
+    /// full-screen window is saved with its way back, a zoomed one with its frame from before the zoom.
+    #[test]
+    fn a_full_screen_or_zoomed_window_is_saved_with_the_frame_it_goes_back_to() {
+        let m = metrics();
+        let mut d = Desk::new();
+        let i = d.open(&m, AppId::ExternalWindow(0, 4), (500, 400));
+        let before = d.wins[i].r;
+        assert_eq!(d.saved_frame(i), Some((before, false)), "a normal window: its own frame");
+        assert!(d.set_full_screen(&m, i, true));
+        assert_eq!(d.wins[i].r, Desk::screen_rect(&m));
+        assert_eq!(d.saved_frame(i), Some((before, false)), "full screen: the frame before it, not the screen");
+        assert!(d.set_full_screen(&m, i, false));
+        d.toggle_zoom(&m, i);
+        assert_eq!(d.saved_frame(i), Some((before, true)), "zoomed: the frame before the zoom, zoomed on the way back");
+        assert!(d.set_full_screen(&m, i, true));
+        assert_eq!(d.saved_frame(i), Some((before, true)), "full screen from a zoom: back zoomed, over the same frame");
+        assert_eq!(d.saved_frame(i + 1), None);
+        // the restore puts it back as the session restore does (`place`, then the zoom): where it was before, zoomed
+        let mut e = Desk::new();
+        let k = e.open(&m, AppId::ExternalWindow(0, 4), (300, 200));
+        let (r, zoomed) = d.saved_frame(i).unwrap();
+        e.place(&m, k, r);
+        if zoomed {
+            e.toggle_zoom(&m, k);
+        }
+        assert!(e.wins[k].maximized && e.wins[k].r == Desk::area(&m));
+        e.toggle_zoom(&m, k);
+        assert_eq!(e.wins[k].r, before, "un-zooming the restored window goes back to the frame from before");
+    }
+
+    /// 0.10.39: a client window whose app frame is smaller than the window (Mail at 2560x1309 with a 1200x860 frame) is
+    /// drawn at the size its frame covers, never with black past it; a frame that covers the body keeps the window's size.
+    #[test]
+    fn a_client_window_is_presented_at_the_size_its_frame_covers() {
+        let m = metrics();
+        let r = Rect { x: 0, y: 28, w: 1920, h: 952 };
+        for full_size in [false, true] {
+            let w = Win { app: AppId::External(18), r, maximized: false, minimized: false, full: false, restore: r, full_size };
+            let top = w.title_h(&m);
+            let b = w.body(&m);
+            assert_eq!(presented_size(&w, &m, Some((1200, 860))), (1200, top + 860), "the frame and the title bar ({full_size})");
+            assert_eq!(presented_size(&w, &m, Some((b.w as usize, b.h as usize))), (1920, 952), "a frame at the body size: the whole window");
+            assert_eq!(presented_size(&w, &m, Some((2000, 1000))), (1920, 952), "a larger frame is clipped to the window, not grown");
+            assert_eq!(presented_size(&w, &m, Some((2000, 400))), (1920, top + 400), "only the side the frame falls short on shrinks");
+            assert_eq!(presented_size(&w, &m, None), (1920, 952), "no frame yet: the window's frame");
+            let full = Win { full: true, r: Desk::screen_rect(&m), ..w };
+            assert_eq!(presented_size(&full, &m, Some((1200, 860))), (1920, 1080), "a full-screen window keeps the screen");
+        }
     }
 
     #[test]
