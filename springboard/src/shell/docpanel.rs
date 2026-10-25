@@ -2827,40 +2827,61 @@ impl super::Shell {
     /// file in place. Photos picks the change up on its next scan. False when the app or the file cannot be opened.
     #[cfg(feature = "desktop-wayland")]
     pub(super) fn photo_edit_with(&mut self, key: &str, path: &Path, t: f64) -> bool {
+        self.open_path_in(key, path, DocMode::Write, t)
+    }
+
+    /// Opens the file at `path` (in the account's home) read-only in the app `key`, as a file dropped on it: the Dock's
+    /// stack opens an item with its default app this way. False when the app or the file cannot be opened (the stack
+    /// then shows the file in Files).
+    #[cfg(feature = "desktop-wayland")]
+    pub(super) fn open_path_with(&mut self, key: &str, path: &Path, t: f64) -> bool {
+        self.open_path_in(key, path, DocMode::Read, t)
+    }
+
+    /// Opens the file at `path` in the app `key`. An installed app comes up and gets a grant in `mode` and the
+    /// descriptor as an inbound document (`Write`: it saves the file in place); a built-in app opens the file itself
+    /// (`open_in_builtin`). False when `key` is no app, the file is not under the account's home or cannot be granted,
+    /// or the built-in app cannot open it.
+    #[cfg(feature = "desktop-wayland")]
+    fn open_path_in(&mut self, key: &str, path: &Path, mode: DocMode, t: f64) -> bool {
         use super::apps::{apps, AppId};
         let Some(def) = apps().iter().find(|a| a.icon == key).map(|a| a.id) else { return false };
+        let AppId::External(slot) = def else { return self.open_in_builtin(def, path, t) };
         let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
         let Some(broker) = self.doc_broker() else { return false };
         // grants name files relative to the account's home
         let Ok(rel) = path.strip_prefix(broker.opener.home()).map(Path::to_path_buf) else { return false };
-        let Ok(file) = broker.opener.open_any(&rel, DocMode::Write) else { return false };
+        let Ok(file) = broker.opener.open_any(&rel, mode) else { return false };
         let size = file.metadata().map_or(0, |m| m.len());
-        let Ok(grant) = broker.grants.add(key, &rel, DocMode::Write, &file) else { return false };
+        let Ok(grant) = broker.grants.add(key, &rel, mode, &file) else { return false };
         self.desk_open_or_start(def, t);
-        if let AppId::External(slot) = def {
-            let request = self.app_share.next_inbound();
-            self.doc_send(slot, ToApp::DocGranted { request, grant, mode: DocMode::Write, name, size }, Some(file));
-        }
+        let request = self.app_share.next_inbound();
+        self.doc_send(slot, ToApp::DocGranted { request, grant, mode, name, size }, Some(file));
         true
     }
 
-    /// Opens the file at `path` (in the account's home) read-only in the installed app `key`: the app comes up and gets
-    /// a grant and the descriptor as an inbound document, as a file dropped on it does. False when `key` is not an
-    /// installed app or the file cannot be granted (the Dock's stack then shows the file in Files).
+    /// Opens the file at `path` in the built-in app `app`, which reads it as the shell: Photos shows a picture in its
+    /// viewer (one outside the library too), Files shows the file's folder. False for a built-in app that takes no file
+    /// (the caller then shows the file in Files) and when the app cannot open it.
     #[cfg(feature = "desktop-wayland")]
-    pub(super) fn open_path_with(&mut self, key: &str, path: &Path, t: f64) -> bool {
-        use super::apps::{apps, AppId};
-        let Some(AppId::External(slot)) = apps().iter().find(|a| a.icon == key).map(|a| a.id) else { return false };
-        let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
-        let Some(broker) = self.doc_broker() else { return false };
-        let Ok(rel) = path.strip_prefix(broker.opener.home()).map(Path::to_path_buf) else { return false };
-        let Ok(file) = broker.opener.open_any(&rel, DocMode::Read) else { return false };
-        let size = file.metadata().map_or(0, |m| m.len());
-        let Ok(grant) = broker.grants.add(key, &rel, DocMode::Read, &file) else { return false };
-        self.desk_open_or_start(AppId::External(slot), t);
-        let request = self.app_share.next_inbound();
-        self.doc_send(slot, ToApp::DocGranted { request, grant, mode: DocMode::Read, name, size }, Some(file));
-        true
+    fn open_in_builtin(&mut self, app: super::apps::AppId, path: &Path, t: f64) -> bool {
+        use super::apps::AppId;
+        match app {
+            AppId::Photos => {
+                self.ensure_photos();
+                let ui = &self.ui;
+                if !self.photos.as_mut().is_some_and(|p| p.open_file(ui, path)) {
+                    return false;
+                }
+                self.desk_open_or_start(AppId::Photos, t);
+                true
+            }
+            AppId::Files => {
+                let folder = path.parent().unwrap_or(path).to_string_lossy().into_owned();
+                self.desktop_open_folder(super::workspace::FILES_APP, &folder, t).is_ok()
+            }
+            _ => false,
+        }
     }
 
     /// Image > Edit With for the photo open in the viewer.

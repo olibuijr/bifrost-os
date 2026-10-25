@@ -6895,6 +6895,27 @@ arrow, so the arrow chords reach an app only through the shell's key path. Code 
 Gaps (not matched yet): the thumbnail is taken once, when the window is minimized, and is not refreshed while it stays minimized. Minimized windows of other Wayland clients (direct and Linux apps) have no slot of their own yet, only their app's tile: the shell does not learn that the window server minimized one. Every slot keeps the same square size, so a thumbnail is letterboxed inside it instead of the slot taking the
 window's width. Code only: not built or run, not verified on Midget.
 
+## Dock stacks: the Downloads stack (`shell/dock_stack.rs`, E2E7, 2026-10-25)
+
+The Dock has one stack, Downloads, just left of the Trash: a folder with the three newest files fanned behind its
+flap. A click opens it above (or beside) its icon as `Menu::Stack`, in the reference's Automatic view.
+
+| Ours | Apple | Notes |
+|---|---|---|
+| `dock_stack::layout`, `Style::Fan` | Stack, View content as Automatic: Fan | Up to `FAN_MAX` (10) items over a bottom Dock: a fan rising from the icon, newest lowest, bending right, each name in a capsule, Open in Files at the top. The fan has no panel: the GPU path clears its bounding box, and the popup's input region (`ChromeFrame::shape`, `stack_input_shape`) is its icons and capsules only, so a click in the clear room reaches what is below |
+| `Style::Grid` | Automatic: Grid | More items, a fan that does not fit, or a side Dock: a grid popover on the menu material, 3 to 6 columns, a "Downloads" title, Open in Files at its foot, beside a side Dock |
+| `stack_open_item`, `Shell::open_path_with` (`shell/docpanel.rs`) | A click opens the item in its default app | The malware gate first; a package goes to the install sheet; an installed app gets a read grant and the descriptor (as a dropped file), a built-in app opens the file itself (`open_in_builtin`: Photos shows a picture, also one outside its library; Files shows the folder); a folder or a file no app opens is shown in Files. Image > Edit With shares the helper (`open_path_in`, with a write grant) |
+| `stack_key`, `key_use`, `step`, `type_select` | Keyboard in an open stack | Esc closes; the arrows move a selection (the fan up and down, the grid by cell and row, Open in Files last); Return opens the selection; a letter selects the next item by its first letter. A modifier alone waits; every other key, and every chord, closes the stack and goes on (`hw_menu_key` answers None), so shortcuts and the app in front keep their keys |
+| `desktop_bar_event` (`Menu::Stack`) | A click outside an open stack | Closes the stack and acts as it would have (another Dock icon opens, a window is clicked); a press on the stack's own Dock icon only closes it |
+| `downloads_in` | | The open stack lists Downloads under the document broker's home, the one grants are made relative to, so a shell whose `$HOME` differs still opens the files instead of showing each one in Files |
+
+Gaps (not matched yet): the stack's context menu (Display as Folder or Stack, View content as Fan, Grid or List, Sort by
+Name, Date Added, Date Modified, Date Created or Kind) is missing, and the order is always Date Modified, newest first;
+only Downloads is a stack (no folder can be dragged to the Dock); items show a page with their kind badge, not the file's
+thumbnail; the grid shows the rows that fit and does not scroll (the rest stays in Files). Parity row: AppKit "Menus,
+Cursors, and the Dock" (`docs/parity-matrix/data/appkit-user-interface.json`), partial. Code only: not built or run, not
+verified on Midget.
+
 ## Mission Control as an overlay (E2E round 3, MC1)
 
 Mission Control (`shell/overview.rs`, "Overview" in code) is an overlay-layer chrome surface (id 9) above every window on the desktop, on the rectangle between the menu bar and the Dock, with exclusive keyboard focus while it is open; the surface list and the reasons are in `docs/gpu-first.md` ("Mission Control is an overlay surface").
