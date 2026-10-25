@@ -2251,7 +2251,7 @@ pub fn desktop_display(m: &Model<'_>) -> Spec {
         display.push(Item::new("Resolution").value(resolution_label(m.resolution)).link(PageId::Resolution));
         display.push(Item::new("Refresh Rate").value(m.refresh.label()).link(PageId::RefreshRate));
     }
-    display.push(Item::new("Appearance").value(bifrost_render::appearance::mode_label(bifrost_render::appearance::mode())).link(PageId::Appearance));
+    // no Appearance row: Light, Dark and Auto live in the Appearance pane only, as in the reference Displays pane (E2E8 12)
     display.push(Item::new("Interface Scale").value(scale_label(crate::layout::user_scale())).link(PageId::InterfaceScale));
     display.push(Item::new("Graphics").link(PageId::Graphics));
     let mut groups = vec![Group::new(display).header("CONNECTED DISPLAY")
@@ -2811,6 +2811,7 @@ mod tests {
         assert_eq!(s.groups[0].items[1].value, "Highest Available", "the row shows the choice, Highest Available by default");
         assert_eq!(s.groups[0].items[1].action, Action::Push(PageId::RefreshRate));
         assert!(s.groups[0].items.iter().any(|i| i.label == "Graphics" && i.action == Action::Push(PageId::Graphics)), "the Graphics page is reachable");
+        assert!(!s.groups.iter().flat_map(|g| &g.items).any(|i| i.label == "Appearance"), "Appearance is its own pane, not a Displays row");
         assert!(!s.groups.iter().flat_map(|g| &g.items).any(|i| i.label == "Use as" || i.label == "Brightness"));
         assert_eq!(s.groups[1].items[0].label, "Night Shift");
         assert!(!s.groups.iter().flat_map(|g| &g.items).any(|i| i.label == "True Tone"));
