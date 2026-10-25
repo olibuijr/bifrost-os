@@ -152,6 +152,9 @@ struct TextEditApp {
     views: Vec<doc_windows::View>,
     notices: Vec<Notice>,
     routed: bool,
+    /// The text state last reported to the shell (`ctx.text_state`): the active document's selection and caret, which
+    /// the Services submenu and Look Up read, as an SDK text field reports its own.
+    text_published: Option<bifrost_app::proto::TextState>,
 }
 
 /// What a press in the page did.
@@ -233,6 +236,48 @@ fn word_here(doc: &TextDocument) -> Option<(Range<usize>, String)> {
     let range = if doc.text.has_selection() { doc.text.selection() } else { spell::word_at(doc.text.cells(), doc.text.head())? };
     let word: String = doc.text.cells()[range.clone()].iter().map(|c| c.ch).collect();
     (!word.is_empty() && !word.chars().any(char::is_whitespace)).then_some((range, word))
+}
+
+/// Characters of context reported on each side of the selection (`TextState::text` is a window of the document).
+const TEXT_STATE_CONTEXT: usize = 400;
+
+/// The document's selection as the text state an SDK text field reports (`ctx.text_state`): a window of the text around
+/// the selection, at most `MAX_SURROUNDING` bytes, with the caret (`cursor`) and the selection's other end (`anchor`) as
+/// byte offsets into it. A selection longer than the window is cut at the window's end.
+fn text_state_of(doc: &TextDocument) -> bifrost_app::proto::TextState {
+    let cells = doc.text.cells();
+    let len = cells.len();
+    let (anchor, head) = (doc.text.anchor().min(len), doc.text.head().min(len));
+    let (from, to) = (anchor.min(head), anchor.max(head));
+    let limit = bifrost_app::proto::MAX_SURROUNDING;
+    let w = |i: usize| cells[i].ch.len_utf8();
+    // the selection first, then context on both sides while it fits
+    let mut used = 0;
+    let mut hi = from;
+    while hi < to && used + w(hi) <= limit {
+        used += w(hi);
+        hi += 1;
+    }
+    let (mut lo, mut end) = (from, hi);
+    loop {
+        let mut grew = false;
+        if lo > 0 && from - lo < TEXT_STATE_CONTEXT && used + w(lo - 1) <= limit {
+            lo -= 1;
+            used += w(lo);
+            grew = true;
+        }
+        if hi == to && end < len && end - to < TEXT_STATE_CONTEXT && used + w(end) <= limit {
+            used += w(end);
+            end += 1;
+            grew = true;
+        }
+        if !grew {
+            break;
+        }
+    }
+    let text: String = cells[lo..end].iter().map(|c| c.ch).collect();
+    let offset = |i: usize| cells[lo..i.clamp(lo, hi)].iter().map(|c| c.ch.len_utf8()).sum::<usize>() as u32;
+    bifrost_app::proto::TextState { text, cursor: offset(head), anchor: offset(anchor), marked: None }
 }
 
 /// The cells with every size scaled by the view zoom; the text itself is unchanged.
@@ -319,6 +364,7 @@ impl TextEditApp {
             image_request: None,
             plain_sheet: false,
             drop_sessions: Vec::new(),
+            text_published: None,
             props: None,
             link: None,
             line: None,
@@ -410,6 +456,17 @@ impl TextEditApp {
 
     /// A document was reverted: the page starts at the top. A created or opened one is placed in a window by
     /// `sync_windows`, whose page then starts at the top.
+    /// Reports the active document's selection and caret to the shell when they changed (`ctx.text_state`), so the
+    /// Services submenu lists the services for a selection and Look Up finds the word at the caret. No document reports
+    /// an empty state.
+    pub(crate) fn sync_text_state(&mut self, ctx: &Ctx) {
+        let now = active_doc(&self.docs).map(text_state_of).unwrap_or_default();
+        if self.text_published.as_ref() != Some(&now) {
+            ctx.text_state(now.clone());
+            self.text_published = Some(now);
+        }
+    }
+
     fn after_documents(&mut self, notices: &[Notice]) {
         for n in notices {
             if matches!(n, Notice::Reverted(_)) {
@@ -2531,9 +2588,11 @@ impl App for TextEditApp {
         "is.olibuijr.textedit.desktop"
     }
 
-    /// Look Up and the Services menu act on the document's selection (the text is drawn here, not in an SDK field).
+    /// Look Up and the Services menu act on the document's selection (the text is drawn here, not in an SDK field);
+    /// with only a caret, on the word at the caret, as Look Up defines it. `Some("")` when there is neither.
     fn selected_text(&mut self, _ctx: &Ctx) -> Option<String> {
-        Some(active_doc(&self.docs).and_then(|doc| doc.text.selected_text()).unwrap_or_default())
+        let Some(doc) = active_doc(&self.docs) else { return Some(String::new()) };
+        Some(doc.text.selected_text().unwrap_or_else(|| text_state_of(doc).word_at_cursor().to_string()))
     }
 
     fn configure(&mut self, ctx: &Ctx) {
@@ -3374,6 +3433,45 @@ mod tests {
         let before: f32 = text.chars().take(index).map(width).sum();
         let this = text.chars().nth(index).map_or(0.0, width);
         (geom.text_x + before + this * 0.25, geom.body_top + 6.0)
+    }
+
+    /// The shell's Services submenu and Look Up read the text state: the selection, or the word at the caret.
+    #[test]
+    fn the_selection_and_caret_are_reported_as_the_text_state() {
+        use bifrost_app::proto::ToShell;
+        let ctx = window(1200, 780);
+        let mut app = app_with_text("look up quokka now", 8..14);
+        app.sync_text_state(&ctx);
+        let states: Vec<_> = ctx.take_sent().into_iter().filter_map(|m| if let ToShell::TextState(t) = m { Some(t) } else { None }).collect();
+        assert_eq!(states.len(), 1);
+        assert_eq!(states[0].selected_text(), "quokka");
+        assert_eq!(app.selected_text(&ctx), Some("quokka".to_string()));
+        // unchanged: not sent again
+        app.sync_text_state(&ctx);
+        assert!(!ctx.take_sent().iter().any(|m| matches!(m, ToShell::TextState(_))));
+        // a caret inside a word: nothing selected, Look Up takes the word
+        active_doc_mut(&mut app.docs).unwrap().text.select(10, 10);
+        app.sync_text_state(&ctx);
+        let caret = active_doc(&app.docs).map(text_state_of).unwrap();
+        assert_eq!(caret.selected_text(), "");
+        assert_eq!(caret.word_at_cursor(), "quokka");
+        assert_eq!(app.selected_text(&ctx), Some("quokka".to_string()));
+        // a caret before the first word takes that word
+        active_doc_mut(&mut app.docs).unwrap().text.select(0, 0);
+        assert_eq!(app.selected_text(&ctx), Some("look".to_string()));
+    }
+
+    /// The reported window is a piece of a long document around the selection, with byte offsets into it.
+    #[test]
+    fn the_text_state_is_a_window_around_the_selection_in_bytes() {
+        let long = format!("{}é quokka {}", "x".repeat(5000), "y".repeat(5000));
+        let start = 5000 + 2;
+        let app = app_with_text(&long, start..start + 6);
+        let t = text_state_of(active_doc(&app.docs).unwrap());
+        assert!(t.text.len() <= bifrost_app::proto::MAX_SURROUNDING);
+        assert_eq!(t.selected_text(), "quokka");
+        assert!(t.text.contains("é quokka "));
+        assert!(t.text.is_char_boundary(t.cursor as usize) && t.text.is_char_boundary(t.anchor as usize));
     }
 
     fn press(app: &mut TextEditApp, ctx: &Ctx, kind: TouchKind, (x, y): (f32, f32), t: f64) -> bool {

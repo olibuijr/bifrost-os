@@ -3,6 +3,7 @@
 ## 1.13.2
 
 - Each document has its own window: File > New (and Duplicate, or shared text) opens a second window and keeps the first; a file opened while the front window holds an empty Untitled takes its place; closing a document closes its window.
+- The Services submenu lists the services for the selected text, and Look Up with only a caret defines the word at the caret: the document reports its selection to the system as text fields do.
 
 ## 1.13.1
 

@@ -279,6 +279,7 @@ impl TextEditApp {
             self.docs.set_active(d);
         }
         self.sync_titles(ctx);
+        self.sync_text_state(ctx);
     }
 
     /// The shell's titles of the document windows follow their documents (renamed, saved, edited).
