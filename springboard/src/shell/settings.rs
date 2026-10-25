@@ -457,6 +457,9 @@ pub struct Settings {
     /// the page opened (by a tap on a result, an arrow key or Return) since the query last changed: the search highlight.
     /// A new query clears it, so the highlight starts at the first hit rather than at a pane that was already open.
     hit_open: Option<PageId>,
+    /// The split layout's earlier panes, latest last: a pane opened from Search goes over the stack that was open, so
+    /// Back returns to it (E2E13 5). A sidebar row, a deep link and the single column start a new history.
+    pane_back: Vec<Vec<Entry>>,
     /// Users & Groups: the last error from privd, shown under the list ("" when none)
     users_note: String,
 }
@@ -471,6 +474,9 @@ fn slide(push: bool) -> Transition {
     let e = Transition::push(Subtype::FromRight).parallax(PARALLAX, 60.0 / 255.0).ease(Ease::OutCubic);
     if push { e } else { e.reversed() }
 }
+
+/// How many earlier panes Back keeps in the split layout (`Settings::pane_back`).
+const PANE_HISTORY: usize = 8;
 
 /// The page an arrow key moves the search highlight to: the next (or previous) hit on another page than the highlighted
 /// one, since every hit of a page is filled together. Down from no highlight is the first hit, Up the last.
@@ -527,6 +533,7 @@ impl Settings {
                 self.stack.clear();
             }
             self.sidebar = None;
+            self.pane_back.clear();
             if self.stack.first().is_none_or(|e| e.id != PageId::Root) {
                 let root = self.build(ui, PageId::Root, None);
                 self.stack.insert(0, root);
@@ -685,6 +692,7 @@ impl Settings {
             index: None,
             hits: (String::new(), Vec::new()),
             hit_open: None,
+            pane_back: Vec::new(),
             users_note: String::new(),
         };
         let root = st.build(ui, PageId::Root, None);
@@ -1674,8 +1682,20 @@ impl Settings {
             return vec![];
         }
         // while Search has a query the page opened is the highlighted hit (when it is one)
-        self.hit_open = (!self.search.query().trim().is_empty()).then_some(id);
+        let searching = !self.search.query().trim().is_empty();
+        let first_hit = self.hit_open.is_none_or(|p| !self.stack.iter().any(|e| e.id == p));
+        self.hit_open = searching.then_some(id);
         let path = self.path_to(id);
+        // the first hit opened for a query in the split layout keeps the pane that was open under it, so Back returns
+        // there; stepping on through the hits replaces only the hit, and any other way in starts a new history
+        if self.side_w > 0 && searching && first_hit && !self.stack.is_empty() && self.stack.first().map(|e| e.id) != path.first().copied() {
+            self.pane_back.push(std::mem::take(&mut self.stack));
+            if self.pane_back.len() > PANE_HISTORY {
+                self.pane_back.remove(0);
+            }
+        } else if !searching {
+            self.pane_back.clear();
+        }
         self.stack.truncate(usize::from(self.side_w == 0));
         for p in path {
             self.push(ui, p, t);
@@ -1882,7 +1902,7 @@ impl Settings {
 
     /// Esc: backs out of the page on top (an open sheet or picker swallows it); false at the root.
     pub fn back_page(&mut self, t: f64) -> bool {
-        if self.stack.len() <= 1 {
+        if self.stack.len() <= 1 && !self.has_earlier_pane() {
             return false;
         }
         if self.transition.is_none() && !self.overlay_open() {
@@ -1891,14 +1911,29 @@ impl Settings {
         true
     }
 
-    /// Back (the pill's back half, Esc, Cmd+[): pops the top page and keeps it for Forward.
+    /// Back (the pill's back half, Esc, Cmd+[): pops the top page and keeps it for Forward. At a pane opened from
+    /// Search it returns to the pane that was open before (its whole stack); Forward does not bring that pane back.
     fn go_back(&mut self, t: f64) {
         if self.stack.len() > 1 {
             let id = self.page();
             self.pop(t);
             self.forward.push(id);
             self.sync_forward();
+        } else if self.has_earlier_pane() {
+            if let Some(earlier) = self.pane_back.pop() {
+                let leaving = std::mem::replace(&mut self.stack, earlier).pop();
+                self.transition = Some(Slide { push: false, start: t, leaving, imgs: None });
+                // the pane was built when it was left: `tick` brings it up to date once the slide ends
+                self.stale_depth = usize::MAX;
+                self.forward.clear();
+                self.sync_forward();
+            }
         }
+    }
+
+    /// Whether Back at the first page returns to an earlier pane (the split layout, after a pane opened from Search).
+    fn has_earlier_pane(&self) -> bool {
+        self.side_w > 0 && !self.pane_back.is_empty()
     }
 
     /// Forward (the pill's forward half, Cmd+]): opens again the page Back left last; false when there is none.
@@ -1919,13 +1954,21 @@ impl Settings {
         !self.forward.is_empty()
     }
 
-    /// Shows the forward state on the top page's toolbar pill.
+    /// Shows the forward state on the top page's toolbar pill, and an earlier pane behind the first page on its back
+    /// half.
     fn sync_forward(&mut self) {
         let on = !self.forward.is_empty();
         if let Some(top) = self.stack.last_mut() {
             top.nav.set_forward(on);
             if let View::List(p) = &mut top.view {
                 p.set_forward(on);
+            }
+        }
+        let earlier = self.has_earlier_pane();
+        if let Some(first) = self.stack.first_mut() {
+            first.nav.set_earlier(earlier);
+            if let View::List(p) = &mut first.view {
+                p.set_earlier(earlier);
             }
         }
     }
@@ -2159,6 +2202,7 @@ impl Settings {
             return vec![];
         }
         self.stack.clear();
+        self.pane_back.clear();
         self.push(ui, id, t);
         match id {
             PageId::Wifi => vec![Effect::Wifi(WifiAction::Scan)],
@@ -2322,12 +2366,13 @@ impl Settings {
         hits.iter().position(|p| *p == open)
     }
 
-    /// The page whose sidebar rows are filled: the highlighted hit while Search has a query, else the open pane.
+    /// The page whose sidebar rows are filled: the highlighted hit while Search has a query (the first hit until one
+    /// is opened, the one Return opens, as the reference highlights it, E2E13 5), else the open pane.
     fn side_selected(&self) -> PageId {
         let hits = self.hit_pages();
         match self.highlighted_hit(&hits) {
             Some(i) => hits[i],
-            None => self.stack.first().map_or(PageId::Root, |e| e.id),
+            None => hits.first().copied().unwrap_or_else(|| self.stack.first().map_or(PageId::Root, |e| e.id)),
         }
     }
 
@@ -2380,7 +2425,8 @@ impl Settings {
             if let Out::Named(dir @ ("Up" | "Down")) = out {
                 // the sidebar keeps the results beside the page they open; the single column has them on its root only
                 if self.side_w > 0 && !hits.is_empty() {
-                    return match step_hit(&hits, self.highlighted_hit(&hits), dir == "Down") {
+                    // the first hit shows highlighted before any is opened, so the arrows step on from it
+                    return match step_hit(&hits, self.highlighted_hit(&hits).or(Some(0)), dir == "Down") {
                         Some(id) => self.open_page_id(ui, id, t),
                         None => vec![],
                     };
@@ -5488,6 +5534,55 @@ mod e2e_w3_tests {
         assert_eq!(step_hit(&hits, Some(2), false), Some(PageId::Display));
         assert_eq!(step_hit(&hits, Some(3), true), None);
         assert_eq!(step_hit(&hits, Some(0), false), None);
+    }
+
+    /// E2E13 5: after Return opened Bluetooth from Search the back half of the pill did nothing; it returns to the pane
+    /// that was open before, and the first hit is highlighted before Return.
+    #[test]
+    fn back_returns_from_a_search_opened_pane_to_the_previous_one() {
+        let ui = crate::shell::tests::ui();
+        let (mut st, mut prefs) = split(&ui);
+        st.open_page(&ui, "Sound", 0.0);
+        settle(&mut st, &ui);
+        assert_eq!(st.stack(), vec![PageId::Sounds], "Sound is a pane of its own");
+        assert!(!st.list().expect("list").nav().has_back(), "a pane opened by itself has nothing behind it");
+        st.search.active = true;
+        st.key(&ui, Out::Text("bluet".into()), 0.0);
+        let first = *st.hit_pages().first().expect("a match");
+        assert_eq!(first, PageId::Bluetooth);
+        assert_eq!(st.side_selected(), first, "the first hit is highlighted before Return");
+        st.key(&ui, Out::Enter, 0.0);
+        settle(&mut st, &ui);
+        assert_eq!(st.stack(), vec![PageId::Bluetooth]);
+        assert!(st.list().expect("list").nav().has_back(), "the pill's back half is enabled");
+        let (bx, by) = pill(&st, &ui, false);
+        tap(&mut st, &ui, &mut prefs, bx, by);
+        assert_eq!(st.stack(), vec![PageId::Sounds], "Back returns to the pane open before the search");
+        assert!(!st.list().expect("list").nav().has_back(), "and nothing is behind that one");
+        assert!(!st.back_page(0.0));
+    }
+
+    /// Esc walks back over a search-opened pane too, and a sidebar row starts a new history.
+    #[test]
+    fn a_sidebar_row_clears_the_pane_history() {
+        let ui = crate::shell::tests::ui();
+        let (mut st, _) = split(&ui);
+        st.open_page(&ui, "Sound", 0.0);
+        settle(&mut st, &ui);
+        st.search.active = true;
+        st.key(&ui, Out::Text("bluet".into()), 0.0);
+        st.key(&ui, Out::Enter, 0.0);
+        settle(&mut st, &ui);
+        assert!(st.back_page(0.0), "Esc goes back to Sound");
+        settle(&mut st, &ui);
+        assert_eq!(st.stack(), vec![PageId::Sounds]);
+        st.open_page_id(&ui, PageId::Bluetooth, 0.0);
+        settle(&mut st, &ui);
+        assert_eq!(st.stack(), vec![PageId::Bluetooth], "the hit opens again over Sound");
+        assert!(st.list().expect("list").nav().has_back());
+        st.select(&ui, PageId::General, 0.0);
+        settle(&mut st, &ui);
+        assert!(!st.back_page(0.0), "a sidebar row has nothing behind it");
     }
 
     /// W3-11: Return in the search field did nothing; it opens the first match.
