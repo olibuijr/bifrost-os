@@ -32,6 +32,8 @@ pub enum SelectionUse {
     Service(Service),
     /// an app's service, by its Services row index (past the built-in ones)
     AppService(usize),
+    /// the Look Up chord (Ctrl+Cmd+D): the in-place popover on the term. The Services item opens Dictionary instead.
+    LookUpPopover,
 }
 
 /// A `SelectionRequest` the shell sent to the app in `slot` and waits on until `deadline` (ms).
@@ -167,13 +169,26 @@ impl Shell {
         match then {
             SelectionUse::Service(service) => self.run_service_on(service, sel, t),
             SelectionUse::AppService(index) => self.run_app_service_on(index, sel, t),
+            SelectionUse::LookUpPopover => {
+                let Selection::Text(text) = &sel else { return };
+                if let Some(term) = bifrost_ui::look_up::term_of(text) {
+                    self.open_look_up(term, Some(sel));
+                }
+            }
         }
     }
 
     /// Carries out `service` on the front window's selection (`with_selection`). Nothing happens when the selection
-    /// does not take it.
+    /// does not take it. Look Up in Dictionary opens the Dictionary app on the term; [`Self::look_up_selection`] is
+    /// the chord's in-place popover.
     pub(super) fn run_service(&mut self, service: Service, t: f64) -> Vec<Effect> {
         self.with_selection(SelectionUse::Service(service), t);
+        Vec::new()
+    }
+
+    /// Ctrl+Cmd+D: the Look Up popover on the front window's selection (`with_selection`), near the selection.
+    pub(super) fn look_up_selection(&mut self, t: f64) -> Vec<Effect> {
+        self.with_selection(SelectionUse::LookUpPopover, t);
         Vec::new()
     }
 
@@ -181,7 +196,6 @@ impl Shell {
         let Some(route) = menu::route(service, &sel) else { return };
         match route {
             Route::Intent { app, intent, param, text } => self.run_intent(app, intent, param, &text, t),
-            Route::LookUp(term) => self.open_look_up(term, Some(sel)),
             Route::Search(text) => self.search_for(&text, t),
             Route::OpenUrl(url) => {
                 if let Err(e) = self.desktop_open_url(&url, t) {
@@ -299,14 +313,14 @@ mod tests {
         bifrost_render::clipboard::set_text("e2e-test.pdf");
         sh.ext[slot as usize].as_mut().unwrap().text_state = field("the second line", 6, 6);
         // the chord asks; nothing opens until the app answers
-        sh.run_service(Service::LookUp, 1000.0);
+        sh.look_up_selection(1000.0);
         let ask = sh.selection_ask.expect("the front app is asked for its selection");
         let mut asked = Vec::new();
         while let bifrost_proto::sys::Recv::Packet(packet, _) = theirs.recv(false).unwrap() {
             asked.push(bifrost_proto::ToApp::decode(&packet).unwrap());
         }
         assert!(asked.contains(&bifrost_proto::ToApp::SelectionRequest { request: ask.request }), "{asked:?}");
-        assert_eq!((ask.slot, ask.then), (slot, SelectionUse::Service(Service::LookUp)));
+        assert_eq!((ask.slot, ask.then), (slot, SelectionUse::LookUpPopover));
         assert!(sh.look_up.is_none());
         assert_eq!(sh.selection_deadline(), Some(1000.0 + SELECTION_WAIT_MS));
         // an answer to another request, or from another app, is not the one waited on
@@ -319,7 +333,7 @@ mod tests {
         sh.look_up = None;
         // no answer by the deadline: the word at the caret
         sh.ext[slot as usize].as_mut().unwrap().text_state = field("look up quokka now", 10, 10);
-        sh.run_service(Service::LookUp, 2000.0);
+        sh.look_up_selection(2000.0);
         sh.selection_tick(2000.0 + SELECTION_WAIT_MS - 1.0);
         assert!(sh.look_up.is_none(), "still waiting");
         sh.selection_tick(2000.0 + SELECTION_WAIT_MS);
@@ -327,10 +341,35 @@ mod tests {
         sh.look_up = None;
         // nothing selected and no word at the caret: nothing opens, the clipboard is not used
         sh.ext[slot as usize].as_mut().unwrap().text_state = TextState::default();
-        sh.run_service(Service::LookUp, 3000.0);
+        sh.look_up_selection(3000.0);
         let ask = sh.selection_ask.unwrap();
         sh.selection_reply(slot, ask.request, "", 3010.0);
         assert!(sh.look_up.is_none());
+    }
+
+    /// E2E11 (c): Services > Look Up in Dictionary hands the term to the Dictionary app (its look-up intent), as the
+    /// reference's Services item opens Dictionary; only the chord shows the in-place popover.
+    #[test]
+    fn the_services_look_up_item_goes_to_dictionary_not_the_popover() {
+        let _lock = crate::test_support::global_lock();
+        let (mine, theirs) = bifrost_proto::sys::socketpair_pair().unwrap();
+        let cfg = bifrost_proto::Configure { w: 100, h: 100, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
+        let host = super::super::apphost::AppHost::with_channel("fixture", mine, None, cfg);
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.anim = None;
+        sh.ext.push(Some(host));
+        sh.ext_fg = Some(0);
+        sh.screen = Screen::App(AppId::External(0));
+        sh.run_service(Service::LookUp, 1000.0);
+        let ask = sh.selection_ask.expect("the front app is asked for its selection");
+        assert_eq!(ask.then, SelectionUse::Service(Service::LookUp));
+        sh.selection_reply(0, ask.request, "harbor", 1010.0);
+        assert!(sh.look_up.is_none(), "the Services item does not open the popover");
+        assert_eq!(
+            menu::route(Service::LookUp, &Selection::Text("harbor".into())),
+            Some(Route::Intent { app: menu::DICTIONARY_APP, intent: "look-up", param: "word", text: "harbor".into() })
+        );
+        drop(theirs);
     }
 
     #[test]

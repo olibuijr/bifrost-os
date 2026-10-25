@@ -1603,7 +1603,8 @@ impl Shell {
                 self.capture = None;
                 vec![]
             }
-            Shortcut::LookUp if self.desk_active() && !self.is_locked() => self.run_service(bifrost_ui::services_menu::Service::LookUp, t),
+            // Ctrl+Cmd+D shows the in-place popover; the Services item opens the Dictionary app instead
+            Shortcut::LookUp if self.desk_active() && !self.is_locked() => self.look_up_selection(t),
             // Escape closes the Look Up popover first, then the Accessibility Shortcut panel, then the character viewer, before it goes Back
             Shortcut::Back if self.visual_search_escape() => vec![],
             Shortcut::Back if self.look_up_escape() => vec![],

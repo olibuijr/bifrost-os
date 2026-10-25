@@ -1,8 +1,8 @@
 //! App control endpoint (tasks/app-control.md): one JSON-RPC 2.0 request per
 //! connection, newline-terminated, on an owner-only Unix socket. The SDK
 //! serves it from the app's main loop, so handlers run on the thread that owns
-//! the app state. Only the owning UID and root (the shell runs as root and sends intents; root can do anything to the
-//! app anyway) may connect (SO_PEERCRED).
+//! the app state. Only the owning UID may connect (SO_PEERCRED); root too when the app runs outside a user namespace
+//! (root can do anything to it there anyway). The shell dials sandboxed apps with the account's credentials.
 
 use bifrost_core::json::{self, Json};
 use std::ffi::c_void;
@@ -331,20 +331,30 @@ extern "C" {
 const SOL_SOCKET: i32 = 1;
 const SO_PEERCRED: i32 = 17;
 
-/// True when the connecting process runs as this app's UID or as root. The shell runs as root and the app drops to
-/// the account's UID, so the shell's intents arrive from uid 0; any other user is refused.
+/// True when the connecting process runs as this app's UID, or as root while the app runs in the initial user
+/// namespace (an app started outside the sandbox). A sandboxed app's user namespace maps only the account's UID, so
+/// the shell dials it with the account's credentials (`shell::intents`); a host root there shows up as the overflow
+/// UID and is refused, as is every other user.
 fn peer_is_owner(stream: &UnixStream) -> bool {
     let mut cred = Ucred { pid: 0, uid: u32::MAX, gid: 0 };
     let mut len = std::mem::size_of::<Ucred>() as u32;
     let rc = unsafe {
         getsockopt(stream.as_raw_fd(), SOL_SOCKET, SO_PEERCRED, &mut cred as *mut Ucred as *mut c_void, &mut len)
     };
-    rc == 0 && peer_uid_allowed(cred.uid, unsafe { geteuid() })
+    let initial = std::fs::read_to_string("/proc/self/uid_map").is_ok_and(|m| is_initial_uid_map(&m));
+    rc == 0 && peer_uid_allowed(cred.uid, unsafe { geteuid() }, initial)
 }
 
-/// The peer rule: the app's own UID or root, nothing else.
-fn peer_uid_allowed(peer: u32, own: u32) -> bool {
-    peer == own || peer == 0
+/// True for the initial user namespace's uid map: the whole range mapped onto itself (`0 0 4294967295`).
+fn is_initial_uid_map(map: &str) -> bool {
+    let rows: Vec<Vec<&str>> = map.lines().map(|l| l.split_whitespace().collect::<Vec<&str>>()).filter(|r| !r.is_empty()).collect();
+    rows.len() == 1 && rows[0] == ["0", "0", "4294967295"]
+}
+
+/// The peer rule: the app's own UID; root only when the app is in the initial user namespace (`initial_ns`), where
+/// uid 0 is the real root. Inside a user namespace uid 0 would be a namespace-local root, never the shell.
+fn peer_uid_allowed(peer: u32, own: u32, initial_ns: bool) -> bool {
+    peer == own || (peer == 0 && initial_ns)
 }
 
 #[cfg(test)]
@@ -361,12 +371,30 @@ mod tests {
 
     #[test]
     fn admits_the_owner_and_root_only() {
-        assert!(peer_uid_allowed(1000, 1000));
-        assert!(peer_uid_allowed(0, 1000), "the shell runs as root");
-        assert!(peer_uid_allowed(0, 0));
-        assert!(!peer_uid_allowed(1001, 1000), "a foreign uid is refused");
-        assert!(!peer_uid_allowed(u32::MAX, 1000), "a failed lookup is refused");
-        assert!(!peer_uid_allowed(1000, 0), "a root app admits only root");
+        assert!(peer_uid_allowed(1000, 1000, true));
+        assert!(peer_uid_allowed(0, 1000, true), "an unsandboxed app admits the real root");
+        assert!(peer_uid_allowed(0, 0, true));
+        assert!(!peer_uid_allowed(1001, 1000, true), "a foreign uid is refused");
+        assert!(!peer_uid_allowed(u32::MAX, 1000, true), "a failed lookup is refused");
+        assert!(!peer_uid_allowed(1000, 0, true), "a root app admits only root");
+    }
+
+    #[test]
+    fn a_sandboxed_app_admits_only_its_own_uid() {
+        // in the app's user namespace (`1000 1000 1`) the host root arrives as the overflow uid, and a uid 0 would be
+        // a namespace-local root: neither is the shell, which dials as the account
+        assert!(peer_uid_allowed(1000, 1000, false));
+        assert!(!peer_uid_allowed(0, 1000, false));
+        assert!(!peer_uid_allowed(65534, 1000, false));
+    }
+
+    #[test]
+    fn only_the_identity_uid_map_is_the_initial_namespace() {
+        assert!(is_initial_uid_map("         0          0 4294967295\n"));
+        assert!(!is_initial_uid_map("      1000       1000          1\n"));
+        assert!(!is_initial_uid_map("0 100000 65536\n"));
+        assert!(!is_initial_uid_map("0 0 4294967295\n1 1 1\n"));
+        assert!(!is_initial_uid_map(""));
     }
 
     #[test]

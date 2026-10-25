@@ -69,8 +69,6 @@ impl Service {
 pub enum Route {
     /// Opens the app and runs its intent with one string parameter over the app's control socket.
     Intent { app: &'static str, intent: &'static str, param: &'static str, text: String },
-    /// Opens the Look Up popover for the term, near the selection (see `look_up`).
-    LookUp(String),
     /// Opens Search with the text in its field.
     Search(String),
     /// Opens the link in the browser.
@@ -100,7 +98,9 @@ pub fn route(service: Service, selection: &Selection) -> Option<Route> {
         return None;
     }
     Some(match (service, selection) {
-        (Service::LookUp, Selection::Text(t)) => Route::LookUp(crate::look_up::term_of(t)?),
+        // the Services item opens the Dictionary app on the term, as the reference does; the Look Up chord (Ctrl+Cmd+D)
+        // shows the in-place popover instead (the shell runs that itself, not through this route)
+        (Service::LookUp, Selection::Text(t)) => Route::Intent { app: DICTIONARY_APP, intent: "look-up", param: "word", text: crate::look_up::term_of(t)? },
         (Service::NewNoteWithSelection, Selection::Text(t)) => Route::Intent { app: NOTES_APP, intent: "create-note", param: "text", text: t.clone() },
         (Service::MakeStickyNote, Selection::Text(t)) => Route::Intent { app: STICKIES_APP, intent: "create-sticky", param: "text", text: t.clone() },
         (Service::OpenUrl, Selection::Text(t)) => Route::OpenUrl(web_url(t)?),
@@ -193,7 +193,11 @@ mod tests {
 
     #[test]
     fn look_up_takes_the_first_line_as_the_term() {
-        assert_eq!(route(Service::LookUp, &text("  cat \nthe second line")), Some(Route::LookUp("cat".into())));
+        assert_eq!(
+            route(Service::LookUp, &text("  cat \nthe second line")),
+            Some(Route::Intent { app: DICTIONARY_APP, intent: "look-up", param: "word", text: "cat".into() }),
+            "the Services item opens Dictionary on the term"
+        );
     }
 
     #[test]

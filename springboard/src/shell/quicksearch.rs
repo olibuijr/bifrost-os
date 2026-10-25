@@ -374,12 +374,57 @@ fn row_text(hit: &Hit, apps_name: impl Fn(AppId) -> String, (now, offset): (i64,
     }
 }
 
-/// The filter chips of a result list: the title of each group that is a kind of result, once each, in list order.
+/// The filter chips of a result list: the title of each group that is a kind of result, once each, in list order. The
+/// Top Hit counts as its own kind ("settings" with the Settings app on top shows an Applications chip, as in the
+/// reference), since the row is taken out of its section.
 fn chips_of(groups: &[Group]) -> Vec<&'static str> {
     let mut out: Vec<&'static str> = vec![];
     for g in groups {
-        if !NOT_A_KIND.contains(&g.title) && !out.contains(&g.title) && !g.hits.is_empty() {
-            out.push(g.title);
+        let kind = if g.title == "Top Hit" { g.hits.first().and_then(kind_of_hit) } else { Some(g.title) };
+        let Some(kind) = kind else { continue };
+        if !NOT_A_KIND.contains(&kind) && !out.contains(&kind) && !g.hits.is_empty() {
+            out.push(kind);
+        }
+    }
+    out
+}
+
+/// The section a hit is listed in when it is not the Top Hit (the group titles `build_tables` and the other sources
+/// give), or None for a hit whose section is not fixed (an app's indexed items are titled with the app's name).
+fn kind_of_hit(hit: &Hit) -> Option<&'static str> {
+    Some(match hit {
+        Hit::App(_) => "Applications",
+        Hit::Settings(_) => "Settings",
+        Hit::Contact { .. } => "Contacts",
+        Hit::City(_) => "Clock",
+        Hit::Deildu(_) => "Deildu",
+        Hit::File { .. } => "Files",
+        Hit::Event { .. } => "Calendar",
+        Hit::Definition { .. } => "Dictionary",
+        Hit::Answer(_) => "Calculator",
+        Hit::Shortcut { .. } | Hit::SettingsIntent { .. } | Hit::SettingsAction { .. } | Hit::MediaTransport { .. } => "Shortcuts",
+        _ => return None,
+    })
+}
+
+/// The list filtered to the chip `chip`: that kind's sections, with the Top Hit leading them when it is of that kind
+/// (it was taken out of its section, so the filtered list would miss its best row otherwise).
+fn filter_to_chip(groups: Vec<Group>, chip: &'static str) -> Vec<Group> {
+    let mut lead: Vec<Hit> = vec![];
+    let mut out: Vec<Group> = vec![];
+    for g in groups {
+        if g.title == "Top Hit" && g.hits.first().and_then(kind_of_hit) == Some(chip) {
+            lead.extend(g.hits);
+        } else if g.title == chip {
+            out.push(g);
+        }
+    }
+    if !lead.is_empty() {
+        if let Some(first) = out.first_mut() {
+            lead.append(&mut first.hits);
+            first.hits = lead;
+        } else {
+            out.push(Group { title: chip, hits: lead });
         }
     }
     out
@@ -552,9 +597,28 @@ mod symbol_and_line_tests {
     #[test]
     fn one_chip_per_kind_of_result_and_none_for_the_best_match_or_the_actions() {
         let g = |title: &'static str, n: usize| Group { title, hits: (0..n).map(|i| Hit::City(if i == 0 { "A" } else { "B" })).collect() };
-        let groups = vec![g("Top Hit", 1), g("Applications", 2), g("Settings", 1), g("Shortcuts", 3), g("Applications", 1), g("Files", 0), g("Show in Folder", 1), g("Search in Apps", 1)];
+        // a Top Hit whose kind has no fixed section (the Search in Apps action here) adds no chip
+        let top = Group { title: "Top Hit", hits: vec![Hit::Terminal("x".into())] };
+        let groups = vec![top, g("Applications", 2), g("Settings", 1), g("Shortcuts", 3), g("Applications", 1), g("Files", 0), g("Show in Folder", 1), g("Search in Apps", 1)];
         assert_eq!(chips_of(&groups), vec!["Applications", "Settings", "Shortcuts"]);
         assert!(chips_of(&[]).is_empty());
+    }
+
+    /// E2E11 12: "settings" put the Settings app in the Top Hit and showed only a Mail chip; the Top Hit's kind is a chip
+    /// too, and that chip lists the Top Hit first.
+    #[test]
+    fn the_top_hit_gives_its_kind_a_chip_and_leads_that_chip_list() {
+        let groups = vec![
+            Group { title: "Top Hit", hits: vec![Hit::App(AppId::Settings)] },
+            Group { title: "Mail", hits: vec![Hit::City("A")] },
+            Group { title: "Search in Apps", hits: vec![Hit::Terminal("settings".into())] },
+        ];
+        assert_eq!(chips_of(&groups), vec!["Applications", "Mail"]);
+        assert_eq!(filter_to_chip(groups.clone(), "Applications"), vec![Group { title: "Applications", hits: vec![Hit::App(AppId::Settings)] }]);
+        assert_eq!(filter_to_chip(groups.clone(), "Mail"), vec![Group { title: "Mail", hits: vec![Hit::City("A")] }]);
+        let more = vec![Group { title: "Top Hit", hits: vec![Hit::App(AppId::Settings)] }, Group { title: "Applications", hits: vec![Hit::App(AppId::Terminal)] }];
+        assert_eq!(chips_of(&more), vec!["Applications"], "one chip per kind");
+        assert_eq!(filter_to_chip(more, "Applications"), vec![Group { title: "Applications", hits: vec![Hit::App(AppId::Settings), Hit::App(AppId::Terminal)] }]);
     }
 }
 
@@ -1871,7 +1935,7 @@ impl QuickSearch {
             }
             self.chips = kinds.into_iter().map(|t| (t, ui.text(t, MAC_BODY_PT * k, Weight::Regular, WHITE))).collect();
             if let Some(c) = self.chip {
-                groups.retain(|g| g.title == c);
+                groups = filter_to_chip(groups, c);
             }
         } else {
             self.chips.clear();

@@ -8,9 +8,9 @@
 //! for the items the ranker does not score.
 //!
 //! Ranking: the query is split into words (`bifrost_ui::lexical_tags::words`) and every word must match an item
-//! (case and accent folded; prefix, word start or subsequence, see `super::fuzzy`). Keywords and the description (a
-//! mail body, a note's text) count only a prefix, a word start or a contiguous run, never letters scattered over a long
-//! text, so a result always shows why it matched. A title match outranks a keyword
+//! (case and accent folded, see `super::fuzzy`). Every field, the title (a mail subject) as well as the keywords and
+//! the description (a mail body, a note's text), counts only a prefix, a word start or a contiguous run, never letters
+//! scattered over the text, so a result always shows why it matched. A title match outranks a keyword
 //! match, which outranks a description match; then an item in the query's language (`bifrost_ui::language`) ranks
 //! above one in another language; then shorter matches; then the newest item.
 //! Expiry: an item can carry a Unix time after which it is dropped (`CSSearchableItem.expirationDate`), set through the
@@ -287,7 +287,7 @@ impl Entry {
 fn score(words: &[Matcher], e: &Entry, query_lang: Option<Language>) -> Option<(u8, u8, bool, usize)> {
     let (mut field, mut kind, mut len) = (0u8, 0u8, 0usize);
     for w in words {
-        let (f, r) = [(0u8, &e.title_folded), (1, &e.keywords_folded), (2, &e.desc_folded)].into_iter().filter_map(|(f, text)| field_rank(w, f, text).map(|r| (f, r))).min()?;
+        let (f, r) = [(0u8, &e.title_folded), (1, &e.keywords_folded), (2, &e.desc_folded)].into_iter().filter_map(|(f, text)| field_rank(w, text).map(|r| (f, r))).min()?;
         field = field.max(f);
         kind += r.kind as u8;
         len += r.len;
@@ -296,11 +296,13 @@ fn score(words: &[Matcher], e: &Entry, query_lang: Option<Language>) -> Option<(
     Some((field, kind, other_language, len))
 }
 
-/// How word `w` matches field `field` (0 title, 1 keywords, 2 description). A title may match by scattered letters; the
-/// other fields only by a prefix, a word start or a contiguous run, since a long body holds almost any word's letters.
-fn field_rank(w: &Matcher, field: u8, text: &str) -> Option<super::fuzzy::Rank> {
+/// How word `w` matches one field of an indexed item (title, keywords or description): only by a prefix, a word start
+/// or a contiguous run. Scattered letters never count, not even in a title: a mail subject is a sentence that holds
+/// almost any short word's letters ("lantern" in "vuLnerAbility iN The nEws, youR moNey"). Apps keep their fuzzy name
+/// matching in Search itself (`quicksearch`); this ranks only what apps indexed.
+fn field_rank(w: &Matcher, text: &str) -> Option<super::fuzzy::Rank> {
     let r = w.rank_folded(text)?;
-    (field == 0 || r.kind != super::fuzzy::Kind::Subsequence || text.contains(w.query())).then_some(r)
+    (r.kind != super::fuzzy::Kind::Subsequence || text.contains(w.query())).then_some(r)
 }
 
 /// Words of context shown before the matched word in a description snippet, and the most words a snippet has.
@@ -1446,6 +1448,27 @@ mod tests {
         assert_eq!(found[0].snippet, "", "a title match needs no snippet");
         assert_eq!(found[1].snippet, "\u{2026}to ask about the glacier tour you mentioned on Friday evening");
         assert!(ix.search("lacie", 10).iter().any(|f| f.unique_id == "body"), "a contiguous run inside a word still matches");
+    }
+
+    /// E2E11 4: "lantern" listed "PHP vulnerability in the news: your money is safe" and "glacier" a Polish genealogy
+    /// subject, both by letters scattered over the subject; a title now needs the word as well.
+    #[test]
+    fn a_title_match_needs_the_word_not_scattered_letters() {
+        let mut ix = Index::default();
+        ix.index(
+            "mail",
+            vec![
+                it("php", "", "PHP vulnerability in the news: your money is safe", "", &[]),
+                it("pl", "", "Kwerenda genealogiczna \u{2013} akty urodzenia: Agnes", "", &[]),
+                it("lamp", "", "The lantern festival", "", &[]),
+                it("mid", "", "Glacierwalk tickets", "", &[]),
+            ],
+        );
+        let ids = |q: &str| -> Vec<String> { ix.search(q, 10).into_iter().map(|f| f.unique_id).collect() };
+        assert_eq!(ids("lantern"), ["lamp"], "scattered letters in a subject are not a match");
+        assert_eq!(ids("glacier"), ["mid"], "a prefix of a title word still matches");
+        assert_eq!(ids("walk"), ["mid"], "a contiguous run inside a title word still matches");
+        assert_eq!(ids("fest"), ["lamp"]);
     }
 
     #[test]
