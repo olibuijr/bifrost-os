@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- World Clock shows a day and night map above the city cards: the land outline (Natural Earth 1:110m, public domain),
+  the night side shaded behind the terminator computed from the sun's position, and each city as a dot with its name
+  and local time. Each card adds the city's sunrise and sunset.
+
 ## 1.6.1 — 2026-10-24
 
 - A timer preset sets the duration pickers; Start starts the timer.

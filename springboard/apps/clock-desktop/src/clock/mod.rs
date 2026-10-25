@@ -7,7 +7,10 @@
 //! the service changed (a one-shot alarm switched off, a finished timer).
 
 pub mod intent;
+mod land;
+mod map;
 pub mod stopwatch;
+mod sun;
 pub mod world;
 
 pub use springboard::shell::clock::{alarm, offset_fn, picker, store, timer, tz, Wall};
@@ -637,7 +640,8 @@ impl Clock {
         let (m, g) = (ui.pt(CARD_MARGIN_PT), ui.pt(CARD_MARGIN_PT));
         let cw = (self.w as f32 - 2.0 * m - 2.0 * g) / 3.0;
         let ch = ui.pt(WORLD_CARD_H_PT);
-        (m + (i % 3) as f32 * (cw + g), Self::content_top(ui) + ui.pt(SPACE_M) + (i / 3) as f32 * (ch + g) - self.world.scroll.offset(), cw, ch)
+        let top = Self::content_top(ui) + self.world_map_h(ui) + ui.pt(SPACE_M);
+        (m + (i % 3) as f32 * (cw + g), top + (i / 3) as f32 * (ch + g) - self.world.scroll.offset(), cw, ch)
     }
 
     /// Alarm card `i`: (x, y, w, h), three to a row inside the window's margin like the World Clock cards (the first
@@ -1396,13 +1400,16 @@ impl Clock {
         let unix = self.wall.now(t);
         let home = self.wall.offset;
         self.fit_world(ui);
-        if self.world.selected.is_empty() {
-            self.label(s, ui, "No World Clocks", MAC_LARGE_TITLE_PT, Weight::Regular, LABEL_3.now(), self.w as f32 / 2.0, (Self::content_top(ui) + self.tab_top(ui)) / 2.0, 0.5);
-            self.label(s, ui, "Tap + to add a city", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), self.w as f32 / 2.0, (Self::content_top(ui) + self.tab_top(ui)) / 2.0 + ui.pt(SPACE_HUGE), 0.5);
-            return;
-        }
         let mut content = s.rows(Self::content_top(ui) as usize, self.tab_top(ui) as usize);
         let s = &mut content;
+        // the day and night map above the cards
+        self.draw_world_map(s, ui, unix);
+        if self.world.selected.is_empty() {
+            let mid = (Self::content_top(ui) + self.world_map_h(ui) + self.tab_top(ui)) / 2.0;
+            self.label(s, ui, "No World Clocks", MAC_LARGE_TITLE_PT, Weight::Regular, LABEL_3.now(), self.w as f32 / 2.0, mid, 0.5);
+            self.label(s, ui, "Tap + to add a city", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), self.w as f32 / 2.0, mid + ui.pt(SPACE_HUGE), 0.5);
+            return;
+        }
         for (i, index) in self.world.selected.clone().into_iter().enumerate() {
             let city = &CITIES[index];
             let (x, y, w, h) = self.world_card(ui, i);
@@ -1436,6 +1443,9 @@ impl Clock {
             let (word, diff) = tz::relative(city, unix, home);
             let rel = format!("{word}, {}", tz::hours_text(diff));
             self.dynamic(s, ui, &rel, MAC_BODY_PT, Weight::Regular, LABEL_2.now(), c.0, y + ui.pt(WORLD_REL_Y_PT), 0.5);
+            if let Some(daylight) = map::daylight_text(city, unix) {
+                self.dynamic(s, ui, &daylight, MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), c.0, y + ui.pt(map::WORLD_SUN_Y_PT), 0.5);
+            }
             // day or night at that city, or the move-earlier arrow while editing
             let corner = (x + w - ui.pt(SPACE_XXL), y + ui.pt(SPACE_XXL));
             let sym = ui.pt(SPACE_S);
