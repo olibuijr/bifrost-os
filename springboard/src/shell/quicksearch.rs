@@ -221,8 +221,9 @@ pub enum Hit {
     /// Sent to the session's owner; no window opens.
     MediaTransport { command: bifrost_ui::media_session::RemoteCommand, title: String },
     /// an item an app put into the Core Search index: opens the app and sends it a continue-activity message.
-    /// `kind` is the file type's name ("PDF document", "" when unknown); `thumb` the thumbnail path in the app's data dir.
-    Indexed { app_id: String, unique_id: String, domain: String, title: String, kind: String, thumb: String },
+    /// `kind` is the file type's name ("PDF document", "" when unknown); `thumb` the thumbnail path in the app's data dir;
+    /// `snippet` the indexed text around the match when the title does not match (a mail found by its body), else "".
+    Indexed { app_id: String, unique_id: String, domain: String, title: String, kind: String, thumb: String, snippet: String },
     /// a calendar event: opens the Calendar app
     Event { title: String },
 }
@@ -367,6 +368,8 @@ fn row_text(hit: &Hit, apps_name: impl Fn(AppId) -> String, (now, offset): (i64,
         Hit::SettingsIntent { id, title } => (title.to_string(), super::settings_intents::find(id).map_or("Settings", |i| i.description).to_string()),
         Hit::SettingsAction { intent, title } => (title.clone(), action_line(intent).to_string()),
         Hit::MediaTransport { title, .. } => (title.clone(), "Control the playing media".to_string()),
+        // a match in the body shows the text around it, so the row says why it is listed
+        Hit::Indexed { title, snippet, .. } if !snippet.is_empty() => (title.clone(), snippet.clone()),
         Hit::Indexed { title, kind, .. } => (title.clone(), kind.clone()),
     }
 }
@@ -538,8 +541,10 @@ mod symbol_and_line_tests {
         assert_eq!(row_text(&wallpaper, name, W).1, "Use this picture as the desktop wallpaper");
         assert_eq!(row_text(&Hit::Answer("4".into()), name, W), ("= 4".to_string(), "Calculator".to_string()));
         assert_eq!(row_text(&Hit::Terminal("ls".into()), name, W), ("Search in Terminal".to_string(), "ls".to_string()));
-        let indexed = Hit::Indexed { app_id: "a".into(), unique_id: "1".into(), domain: String::new(), title: "Q1 report".into(), kind: "PDF document".into(), thumb: String::new() };
+        let indexed = Hit::Indexed { app_id: "a".into(), unique_id: "1".into(), domain: String::new(), title: "Q1 report".into(), kind: "PDF document".into(), thumb: String::new(), snippet: String::new() };
         assert_eq!(row_text(&indexed, name, W), ("Q1 report".to_string(), "PDF document".to_string()));
+        let body = Hit::Indexed { app_id: "m".into(), unique_id: "2".into(), domain: String::new(), title: "Ný bókunarsíða".into(), kind: String::new(), thumb: String::new(), snippet: "\u{2026}about the glacier tour".into() };
+        assert_eq!(row_text(&body, name, W), ("Ný bókunarsíða".to_string(), "\u{2026}about the glacier tour".to_string()), "a body match shows its snippet");
         let intent = Hit::SettingsIntent { id: "open-keyboard", title: "Open Keyboard" };
         assert_eq!(row_text(&intent, name, W), ("Open Keyboard".to_string(), "Show the keyboard settings".to_string()));
     }
@@ -1014,6 +1019,7 @@ fn indexed_groups(query: &str) -> Vec<Group> {
             unique_id: f.unique_id,
             domain: f.domain,
             title: f.title,
+            snippet: f.snippet,
         };
         match groups.iter_mut().find(|g| g.title == title) {
             Some(g) => {
@@ -1914,6 +1920,7 @@ impl QuickSearch {
                     Hit::Shortcut { title, app_name, .. } => format!("{title} ({app_name})"),
                     Hit::SettingsIntent { title, .. } => title.to_string(),
                     Hit::SettingsAction { title, .. } | Hit::MediaTransport { title, .. } => title.clone(),
+                    Hit::Indexed { title, snippet, .. } if !snippet.is_empty() => indexed_label(title, snippet),
                     Hit::Indexed { title, kind, .. } => indexed_label(title, kind),
                     Hit::Definition { word, preview, .. } if !preview.is_empty() => format!("{word}: {preview}"),
                     Hit::Definition { word, .. } => format!("Look up \u{201c}{word}\u{201d}"),

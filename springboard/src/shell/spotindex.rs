@@ -8,7 +8,9 @@
 //! for the items the ranker does not score.
 //!
 //! Ranking: the query is split into words (`bifrost_ui::lexical_tags::words`) and every word must match an item
-//! (case and accent folded; prefix, word start or subsequence, see `super::fuzzy`). A title match outranks a keyword
+//! (case and accent folded; prefix, word start or subsequence, see `super::fuzzy`). Keywords and the description (a
+//! mail body, a note's text) count only a prefix, a word start or a contiguous run, never letters scattered over a long
+//! text, so a result always shows why it matched. A title match outranks a keyword
 //! match, which outranks a description match; then an item in the query's language (`bifrost_ui::language`) ranks
 //! above one in another language; then shorter matches; then the newest item.
 //! Expiry: an item can carry a Unix time after which it is dropped (`CSSearchableItem.expirationDate`), set through the
@@ -285,13 +287,47 @@ impl Entry {
 fn score(words: &[Matcher], e: &Entry, query_lang: Option<Language>) -> Option<(u8, u8, bool, usize)> {
     let (mut field, mut kind, mut len) = (0u8, 0u8, 0usize);
     for w in words {
-        let (f, r) = [(0u8, &e.title_folded), (1, &e.keywords_folded), (2, &e.desc_folded)].into_iter().filter_map(|(f, text)| w.rank_folded(text).map(|r| (f, r))).min()?;
+        let (f, r) = [(0u8, &e.title_folded), (1, &e.keywords_folded), (2, &e.desc_folded)].into_iter().filter_map(|(f, text)| field_rank(w, f, text).map(|r| (f, r))).min()?;
         field = field.max(f);
         kind += r.kind as u8;
         len += r.len;
     }
     let other_language = matches!((query_lang, e.lang), (Some(q), Some(l)) if q != l);
     Some((field, kind, other_language, len))
+}
+
+/// How word `w` matches field `field` (0 title, 1 keywords, 2 description). A title may match by scattered letters; the
+/// other fields only by a prefix, a word start or a contiguous run, since a long body holds almost any word's letters.
+fn field_rank(w: &Matcher, field: u8, text: &str) -> Option<super::fuzzy::Rank> {
+    let r = w.rank_folded(text)?;
+    (field == 0 || r.kind != super::fuzzy::Kind::Subsequence || text.contains(w.query())).then_some(r)
+}
+
+/// Words of context shown before the matched word in a description snippet, and the most words a snippet has.
+const SNIPPET_BEFORE: usize = 4;
+const SNIPPET_WORDS: usize = 14;
+
+/// The part of `description` around the first word that a query word matches (prefix or contiguous run, folded), with
+/// an ellipsis where text was cut; empty when no word of it matches. What a result row shows when the match is in the
+/// body rather than the title.
+fn snippet(words: &[Matcher], description: &str) -> String {
+    let all: Vec<&str> = description.split_whitespace().collect();
+    let Some(at) = all.iter().position(|word| {
+        let folded = super::fuzzy::fold(word);
+        words.iter().any(|w| !w.query().is_empty() && folded.contains(w.query()))
+    }) else {
+        return String::new();
+    };
+    let start = at.saturating_sub(SNIPPET_BEFORE);
+    let end = (start + SNIPPET_WORDS).min(all.len());
+    let mut out = all[start..end].join(" ");
+    if start > 0 {
+        out.insert_str(0, "\u{2026}");
+    }
+    if end < all.len() {
+        out.push('\u{2026}');
+    }
+    out
 }
 
 /// A search result.
@@ -309,6 +345,9 @@ pub struct Found {
     pub text: String,
     /// Unix seconds the item was indexed (or last replaced); 0 when unknown
     pub modified: u64,
+    /// the description text around the match when the title does not match the query (a mail found by its body); empty
+    /// when the title matches or the match is only in the keywords
+    pub snippet: String,
 }
 
 /// The entries a word query matched, and the query they matched for. A query whose words extend these (more typing)
@@ -473,7 +512,9 @@ impl Index {
                 let (app, list) = lists[ai];
                 let e = &list[ei];
                 let text = format!("{} {}", e.item.keywords.join(" "), e.item.description);
-                Found { app_id: app.to_string(), unique_id: e.item.unique_id.clone(), domain: e.item.domain.clone(), title: e.item.title.clone(), kind: e.kind, thumbnail: e.item.thumbnail.clone(), text, modified: e.indexed }
+                let title_matches = !words.is_empty() && words.iter().all(|w| w.rank_folded(&e.title_folded).is_some());
+                let snippet = if title_matches || words.is_empty() { String::new() } else { snippet(&words, &e.item.description) };
+                Found { app_id: app.to_string(), unique_id: e.item.unique_id.clone(), domain: e.item.domain.clone(), title: e.item.title.clone(), kind: e.kind, thumbnail: e.item.thumbnail.clone(), text, modified: e.indexed, snippet }
             })
             .collect()
     }
@@ -1383,6 +1424,38 @@ mod tests {
         }
         assert_eq!(scan_folder("Documents", &many).len(), SCAN_MAX_FILES);
         let _ = std::fs::remove_dir_all(&many);
+    }
+
+    /// E2E10 11: mails listed for "glacier" showed no match; letters scattered over a body no longer count, and a body
+    /// match shows the text around it.
+    #[test]
+    fn a_body_match_needs_the_word_and_shows_a_snippet() {
+        let mut ix = Index::default();
+        let body = "Hello Ana, we met at the conference last spring and I wanted to ask about the glacier tour you mentioned on Friday evening";
+        ix.index(
+            "mail",
+            vec![
+                it("scattered", "", "Familienforschung", "gestern las ich alle Akten, cirka einhundert Eintraege, ohne Resultat", &[]),
+                it("body", "", "Ny bokunarsida", body, &[]),
+                it("title", "", "Glacier walk", "booking", &[]),
+            ],
+        );
+        let found = ix.search("glacier", 10);
+        let ids: Vec<&str> = found.iter().map(|f| f.unique_id.as_str()).collect();
+        assert_eq!(ids, ["title", "body"], "scattered letters in a body are not a match");
+        assert_eq!(found[0].snippet, "", "a title match needs no snippet");
+        assert_eq!(found[1].snippet, "\u{2026}to ask about the glacier tour you mentioned on Friday evening");
+        assert!(ix.search("lacie", 10).iter().any(|f| f.unique_id == "body"), "a contiguous run inside a word still matches");
+    }
+
+    #[test]
+    fn a_snippet_cuts_long_text_on_both_sides() {
+        let words = [Matcher::new("needle")];
+        let text = (0..40).map(|i| if i == 20 { "Needle".to_string() } else { format!("w{i}") }).collect::<Vec<_>>().join(" ");
+        let s = snippet(&words, &text);
+        assert!(s.starts_with("\u{2026}w16 ") && s.ends_with("w29\u{2026}"), "{s}");
+        assert_eq!(snippet(&words, "needle at the start"), "needle at the start");
+        assert_eq!(snippet(&words, "no match here"), "");
     }
 
     #[test]
