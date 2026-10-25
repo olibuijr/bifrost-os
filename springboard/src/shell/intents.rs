@@ -150,8 +150,10 @@ fn run_at(path: &std::path::Path, line: &str, wait: Duration) -> Result<Option<S
 
 fn exchange_at(path: &std::path::Path, line: &str, wait: Duration) -> Result<String, String> {
     let deadline = Instant::now() + wait;
-    let dial_as = super::screenshot::account_owner();
+    let account = super::screenshot::account_owner();
     let mut stream = loop {
+        // the owner is looked up on every attempt: the socket appears (or is replaced) while the app starts
+        let dial_as = dial_identity(socket_owner(path), socket_owner(path.parent().unwrap_or(path)), account);
         match dial(path, dial_as) {
             Ok(s) => break s,
             Err(e) if Instant::now() >= deadline => return Err(format!("{}: {e}", path.display())),
@@ -159,6 +161,7 @@ fn exchange_at(path: &std::path::Path, line: &str, wait: Duration) -> Result<Str
         }
     };
     let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
+    let _ = stream.set_write_timeout(Some(Duration::from_secs(5)));
     stream.write_all(line.as_bytes()).map_err(|e| e.to_string())?;
     let _ = stream.shutdown(std::net::Shutdown::Write);
     let mut reply = String::new();
@@ -166,18 +169,94 @@ fn exchange_at(path: &std::path::Path, line: &str, wait: Duration) -> Result<Str
     Ok(reply)
 }
 
-/// Connects to an app's control socket. `as_account` is the installed account's `(uid, gid)` when the shell runs as
-/// root ([`super::screenshot::account_owner`]): apps run in a user namespace that maps only the account's uid, so a
-/// connection made as root reaches the app as the overflow uid and the SDK's peer check (own uid) refuses it. The
-/// connect then runs on a short-lived thread that takes the account's credentials, because `SO_PEERCRED` records the
-/// credentials of the task that calls `connect`. Without an account, or when the shell is not root, the socket is
-/// dialled directly as the process's own user.
+/// The uid that owns `path` itself (a symbolic link is not followed), or None when it cannot be read.
+fn socket_owner(path: &std::path::Path) -> Option<u32> {
+    use std::os::unix::fs::MetadataExt;
+    std::fs::symlink_metadata(path).ok().map(|m| m.uid())
+}
+
+/// Whose credentials dial a control socket. `account` is the installed account's `(uid, gid)` when the shell runs as
+/// root ([`super::screenshot::account_owner`]), else None and the shell dials as itself. A root shell dials as root
+/// only when the socket and the folder holding it are both root's: that is an app the shell started as root (the
+/// launch route without the sandbox), whose socket is root-only. Every other socket, above all one the account owns
+/// (a sandboxed app, whose user namespace maps only the account's uid, so root would arrive as the overflow uid and be
+/// refused) or one that is missing or unreadable, is dialled with the account's credentials: the least privilege that
+/// reaches an app, and an app cannot point a root dial elsewhere by swapping its socket for a link.
+fn dial_identity(socket_owner: Option<u32>, dir_owner: Option<u32>, account: Option<(u32, u32)>) -> Option<(u32, u32)> {
+    match (socket_owner, dir_owner) {
+        (Some(0), Some(0)) => None,
+        _ => account,
+    }
+}
+
+/// Connects to an app's control socket, as `as_account` (`(uid, gid)`, see [`dial_identity`]) or, with None, as the
+/// process's own user. The connect never waits: an app that does not accept (its backlog full) fails the attempt with
+/// `WouldBlock` at once, and [`exchange_at`] retries until its deadline, so a dial is bounded and never holds the
+/// credential lock for long.
 fn dial(path: &std::path::Path, as_account: Option<(u32, u32)>) -> std::io::Result<UnixStream> {
     match as_account {
         #[cfg(target_os = "linux")]
         Some((uid, gid)) => account_dial::connect_as(path, uid, gid),
-        _ => UnixStream::connect(path),
+        _ => connect_now(path),
     }
+}
+
+/// A connect that does not wait for the app to accept. On Linux a non-blocking connect on a Unix stream socket either
+/// completes at once or fails with `EAGAIN` when the listener's backlog is full (it never goes `EINPROGRESS`).
+#[cfg(target_os = "linux")]
+fn connect_now(path: &std::path::Path) -> std::io::Result<UnixStream> {
+    use std::io;
+    use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+    use std::os::unix::ffi::OsStrExt;
+
+    const AF_UNIX: i32 = 1;
+    const SOCK_STREAM: i32 = 1;
+    const SOCK_NONBLOCK: i32 = 0o4000;
+    const SOCK_CLOEXEC: i32 = 0o2000000;
+    const EAGAIN: i32 = 11;
+    const EINPROGRESS: i32 = 115;
+
+    #[repr(C)]
+    struct SockaddrUn {
+        sun_family: u16,
+        sun_path: [u8; 108],
+    }
+    extern "C" {
+        fn socket(domain: i32, ty: i32, protocol: i32) -> i32;
+        fn connect(fd: i32, addr: *const SockaddrUn, len: u32) -> i32;
+    }
+
+    let bytes = path.as_os_str().as_bytes();
+    let mut addr = SockaddrUn { sun_family: AF_UNIX as u16, sun_path: [0; 108] };
+    if bytes.is_empty() || bytes.len() >= addr.sun_path.len() || bytes.contains(&0) {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "control socket path does not fit a Unix socket address"));
+    }
+    addr.sun_path[..bytes.len()].copy_from_slice(bytes);
+    // the family, the path and its terminating NUL (`sun_path` is zeroed past the path)
+    let len = (std::mem::size_of::<u16>() + bytes.len() + 1) as u32;
+    // SAFETY: plain integers; the returned descriptor is owned right below.
+    let fd = unsafe { socket(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0) };
+    if fd < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY: `fd` is a fresh descriptor nothing else owns; OwnedFd closes it on every path out.
+    let owned = unsafe { OwnedFd::from_raw_fd(fd) };
+    // SAFETY: `addr` is a live sockaddr_un and `len` stays within it (checked above).
+    if unsafe { connect(owned.as_raw_fd(), &addr, len) } != 0 {
+        let e = io::Error::last_os_error();
+        return Err(match e.raw_os_error() {
+            Some(EAGAIN) | Some(EINPROGRESS) => io::Error::new(io::ErrorKind::WouldBlock, "the app is not accepting connections on its control socket"),
+            _ => e,
+        });
+    }
+    let stream = UnixStream::from(owned);
+    stream.set_nonblocking(false)?;
+    Ok(stream)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn connect_now(path: &std::path::Path) -> std::io::Result<UnixStream> {
+    UnixStream::connect(path)
 }
 
 /// The account-credential connect: one thread whose own credentials (not the process's) become the account's.
@@ -186,6 +265,7 @@ mod account_dial {
     use std::io;
     use std::os::unix::net::UnixStream;
     use std::path::Path;
+    use std::sync::{Mutex, MutexGuard, OnceLock};
 
     #[cfg(target_arch = "x86_64")]
     mod nr {
@@ -209,6 +289,52 @@ mod account_dial {
     }
     const PR_GET_DUMPABLE: i32 = 3;
     const PR_SET_DUMPABLE: i32 = 4;
+
+    /// Serialises every credential-switching dial. A thread's credential change resets the dumpable flag of the
+    /// whole process (the kernel sets it on the shared mm to `fs.suid_dumpable`), so two dials running at once could
+    /// read each other's reset value, and one dial's restore could make the process dumpable (ptrace-able by the
+    /// account) while another dial thread still runs as the account. Held from before the switch until the flag is
+    /// restored after the dial thread has exited.
+    static DIAL_LOCK: Mutex<()> = Mutex::new(());
+    /// The shell's own dumpable flag, read once under [`DIAL_LOCK`] before the first credential switch (so never a
+    /// value a dial left behind) and restored after every dial.
+    static STARTUP_DUMPABLE: OnceLock<i32> = OnceLock::new();
+
+    fn lock() -> MutexGuard<'static, ()> {
+        // the guarded state is the process flag, not data a panic could leave half written
+        DIAL_LOCK.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    /// The flag recorded at the first dial. The caller holds [`DIAL_LOCK`].
+    fn startup_dumpable() -> i32 {
+        // SAFETY: PR_GET_DUMPABLE takes plain integers.
+        *STARTUP_DUMPABLE.get_or_init(|| unsafe { prctl(PR_GET_DUMPABLE, 0, 0, 0, 0) })
+    }
+
+    /// What to put back for a recorded flag: `PR_SET_DUMPABLE` takes only 0 and 1, so anything but a recorded 1 (the
+    /// root-only 2, or a failed read) restores the safe 0.
+    pub(super) fn restore_value(recorded: i32) -> usize {
+        if recorded == 1 {
+            1
+        } else {
+            0
+        }
+    }
+
+    /// Sets the dumpable flag to `want` and checks that it holds.
+    fn restore_dumpable(want: usize) -> io::Result<()> {
+        // SAFETY: PR_GET_DUMPABLE and PR_SET_DUMPABLE take plain integers.
+        unsafe {
+            if prctl(PR_GET_DUMPABLE, 0, 0, 0, 0) as i64 != want as i64 {
+                prctl(PR_SET_DUMPABLE, want, 0, 0, 0);
+            }
+            let now = prctl(PR_GET_DUMPABLE, 0, 0, 0, 0);
+            if now as i64 != want as i64 {
+                return Err(io::Error::other(format!("the shell's dumpable flag is {now} after a dial, not {want}")));
+            }
+        }
+        Ok(())
+    }
 
     /// Switches the calling thread, and only it, to `uid`/`gid` (real, effective and saved, plus the supplementary
     /// groups when it may set them). The raw syscalls are used on purpose: the libc wrappers apply a change to every
@@ -240,29 +366,27 @@ mod account_dial {
     }
 
     /// Connects to `path` as `uid`/`gid` from a dedicated thread that ends right after, so the shell's other threads
-    /// keep their credentials. The returned stream belongs to the process and is used as usual. A credential change
-    /// resets the process's dumpable flag (the kernel does it on the shared mm), so it is put back afterwards and the
-    /// shell keeps its core dumps.
+    /// keep their credentials. The returned stream belongs to the process and is used as usual. Dials are serialised
+    /// ([`DIAL_LOCK`]); the dial thread clears the dumpable flag as soon as it has switched (so the account cannot
+    /// trace it whatever `fs.suid_dumpable` says), and once it has exited the shell's recorded flag is put back and
+    /// checked. The connect does not wait ([`super::connect_now`]), so the lock is held only briefly.
     pub fn connect_as(path: &Path, uid: u32, gid: u32) -> io::Result<UnixStream> {
-        // SAFETY: PR_GET_DUMPABLE takes no pointers.
-        let dumpable = unsafe { prctl(PR_GET_DUMPABLE, 0, 0, 0, 0) };
+        let _serial = lock();
+        let want = restore_value(startup_dumpable());
         let path = path.to_path_buf();
         let joined = std::thread::Builder::new()
             .name("app-dial".into())
             .spawn(move || {
                 become_thread(uid, gid)?;
-                UnixStream::connect(&path)
+                // SAFETY: PR_SET_DUMPABLE takes plain integers.
+                unsafe { prctl(PR_SET_DUMPABLE, 0, 0, 0, 0) };
+                super::connect_now(&path)
             })?
             .join();
-        if dumpable >= 0 {
-            // SAFETY: PR_GET_DUMPABLE and PR_SET_DUMPABLE take plain integers.
-            unsafe {
-                if prctl(PR_GET_DUMPABLE, 0, 0, 0, 0) != dumpable {
-                    prctl(PR_SET_DUMPABLE, dumpable as usize, 0, 0, 0);
-                }
-            }
-        }
-        joined.map_err(|_| io::Error::other("the dial thread panicked"))?
+        let restored = restore_dumpable(want);
+        let stream = joined.map_err(|_| io::Error::other("the dial thread panicked"))??;
+        restored?;
+        Ok(stream)
     }
 }
 
@@ -415,6 +539,95 @@ mod tests {
     #[test]
     fn without_an_account_the_socket_is_dialled_directly() {
         assert!(dial(std::path::Path::new("/nonexistent/bifrost-dial.sock"), None).is_err());
+    }
+
+    #[test]
+    fn the_socket_owner_picks_the_dial_credentials() {
+        let account = Some((1000, 1000));
+        // a sandboxed app: the account owns its data folder and socket
+        assert_eq!(dial_identity(Some(1000), Some(1000), account), account);
+        // an app the shell started as root (no sandbox): a root-only socket in a root folder is dialled as root
+        assert_eq!(dial_identity(Some(0), Some(0), account), None);
+        // a root-owned socket in the account's folder may have been swapped in by the app: least privilege
+        assert_eq!(dial_identity(Some(0), Some(1000), account), account);
+        // missing or unreadable socket, or a foreign owner: as the account (the app refuses what it must)
+        assert_eq!(dial_identity(None, Some(0), account), account);
+        assert_eq!(dial_identity(Some(1001), Some(1001), account), account);
+        // no account (the shell is not root, or before setup): always as the shell itself
+        assert_eq!(dial_identity(Some(1000), Some(1000), None), None);
+        assert_eq!(dial_identity(Some(0), Some(0), None), None);
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn the_dumpable_flag_restores_only_what_prctl_accepts() {
+        assert_eq!(account_dial::restore_value(1), 1);
+        assert_eq!(account_dial::restore_value(0), 0);
+        assert_eq!(account_dial::restore_value(2), 0, "the root-only 2 a credential change leaves is never restored");
+        assert_eq!(account_dial::restore_value(-1), 0, "a failed read restores the safe value");
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn a_socket_that_never_accepts_fails_the_dial_instead_of_blocking() {
+        use std::os::fd::AsRawFd;
+        extern "C" {
+            fn listen(fd: i32, backlog: i32) -> i32;
+        }
+        let dir = std::env::temp_dir().join(format!("bifrost-intents-full-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let sock = dir.join("f.sock");
+        let _ = std::fs::remove_file(&sock);
+        let l = std::os::unix::net::UnixListener::bind(&sock).unwrap();
+        // a backlog of 0 holds one pending connection; the app never accepts it
+        // SAFETY: a live listening socket; listen again only changes its backlog
+        assert_eq!(unsafe { listen(l.as_raw_fd(), 0) }, 0);
+        let _pending = UnixStream::connect(&sock).unwrap();
+        let err = dial(&sock, None).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::WouldBlock, "{err}");
+        let (uid, gid) = unsafe { (geteuid(), getegid()) };
+        let err = dial(&sock, Some((uid, gid))).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::WouldBlock, "the credential dial does not wait either: {err}");
+        let started = Instant::now();
+        assert!(run_at(&sock, &request_line("go"), Duration::from_millis(300)).is_err());
+        assert!(started.elapsed() < Duration::from_secs(3), "the intent fails once its wait is over");
+        drop(l);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn concurrent_account_dials_leave_the_dumpable_flag_as_it_was() {
+        extern "C" {
+            fn prctl(option: i32, arg2: usize, arg3: usize, arg4: usize, arg5: usize) -> i32;
+        }
+        // SAFETY: PR_GET_DUMPABLE (3) takes plain integers.
+        let before = unsafe { prctl(3, 0, 0, 0, 0) };
+        let dir = std::env::temp_dir().join(format!("bifrost-intents-many-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let sock = dir.join("m.sock");
+        let _ = std::fs::remove_file(&sock);
+        let l = std::os::unix::net::UnixListener::bind(&sock).unwrap();
+        const DIALS: usize = 8;
+        let server = std::thread::spawn(move || {
+            for _ in 0..DIALS {
+                let _ = l.accept().unwrap();
+            }
+        });
+        let (uid, gid) = unsafe { (geteuid(), getegid()) };
+        let dialers: Vec<_> = (0..DIALS)
+            .map(|_| {
+                let sock = sock.clone();
+                std::thread::spawn(move || dial(&sock, Some((uid, gid))).map(|_| ()))
+            })
+            .collect();
+        for d in dialers {
+            d.join().unwrap().unwrap();
+        }
+        server.join().unwrap();
+        // SAFETY: as above
+        assert_eq!(unsafe { prctl(3, 0, 0, 0, 0) }, account_dial::restore_value(before) as i32, "every dial restores the recorded flag");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

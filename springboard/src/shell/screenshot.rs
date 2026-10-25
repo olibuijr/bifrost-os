@@ -45,11 +45,18 @@ pub fn encode_alpha(frame: &Image) -> Vec<u8> {
 }
 
 /// The user and group that own what the shell saves for the session's account: the installed account when the shell runs
-/// as root (the session service does), else nobody to hand the file to (the process owns it already).
+/// as root (the session service does), else nobody to hand the file to (the process owns it already). The account is
+/// looked up once it exists and then remembered (an account's uid and gid never change); before setup it is looked
+/// up again on each call, so the account created by setup is found without a restart.
 pub fn account_owner() -> Option<(u32, u32)> {
     #[cfg(target_os = "linux")]
     if crate::appearance_portal::is_root() {
-        return crate::bare::account::Account::installed().ok().map(|a| (a.uid, a.gid));
+        static OWNER: std::sync::OnceLock<(u32, u32)> = std::sync::OnceLock::new();
+        if let Some(owner) = OWNER.get() {
+            return Some(*owner);
+        }
+        let found = crate::bare::account::Account::installed().ok().map(|a| (a.uid, a.gid))?;
+        return Some(*OWNER.get_or_init(|| found));
     }
     None
 }
