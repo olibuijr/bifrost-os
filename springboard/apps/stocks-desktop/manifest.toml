@@ -1,6 +1,6 @@
 id = "is.olibuijr.stocks.desktop"
 name = "Stocks"
-version = "0.2.2"
+version = "0.2.3"
 exec = "bifrost-stocks"
 icon = "icon.png"
 min_shell = "0.4.84"

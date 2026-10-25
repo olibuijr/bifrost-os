@@ -2,6 +2,10 @@
 
 - The web viewer uses the system font; it no longer bundles a font BifrOSt may not redistribute.
 
+## 0.2.5
+
+- Rebuilt with the current SDK: the app redraws after an action from the shell (Look Up, Services, Spotlight) and accepts the shell's account-credential connections.
+
 ## 0.2.4
 
 - Rebuilt with the current SDK and renderer: shell actions such as Look Up and Services reach the app, and vibrant text draws inside clipped areas.

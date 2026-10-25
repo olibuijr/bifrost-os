@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.13.4
+
+- Rebuilt with the current SDK: the app redraws after an action from the shell (Look Up, Services, Spotlight) and accepts the shell's account-credential connections.
+
 ## 1.13.3
 
 - Rebuilt with the current SDK and renderer: shell actions such as Look Up and Services reach the app, and vibrant text draws inside clipped areas.

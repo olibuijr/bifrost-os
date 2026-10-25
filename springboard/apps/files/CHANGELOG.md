@@ -3,6 +3,10 @@
 - While a search is active the four view buttons collapse into one view pop-up, so the whole "Searching ..." title fits.
 - Generic document icons have a light folded corner instead of a black one.
 
+## 1.34.4
+
+- Rebuilt with the current SDK: the app redraws after an action from the shell (Look Up, Services, Spotlight) and accepts the shell's account-credential connections.
+
 ## 1.34.3
 
 - Rebuilt with the current SDK and renderer: shell actions such as Look Up and Services reach the app, and vibrant text draws inside clipped areas.

@@ -1,6 +1,6 @@
 id = "is.olibuijr.diskutil.desktop"
 name = "Disk Utility"
-version = "0.8.2"
+version = "0.8.3"
 exec = "bifrost-diskutil"
 icon = "icon.png"
 min_shell = "0.4.84"
