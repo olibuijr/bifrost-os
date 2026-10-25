@@ -2037,6 +2037,10 @@ impl Shell {
                 trace("press: raised");
                 self.desk.as_mut().unwrap().raise(i); if !self.is_locked() { self.screen = Screen::App(app.parent()); } self.dirty = true;
             },
+            // Under the lock and while the unlock slides it away the toplevels map again in the order they draw and the
+            // window server focuses them as they come: raising here would rewrite the shell's stack, so the order the unlock
+            // restacks to (`desk_restack_after_unlock`) is the one from before the lock
+            WindowEvent::ServerFocus(_) | WindowEvent::HandBack(_) if self.desk_lock_holds_order() => trace("window server focus ignored: locked or unlocking"),
             // The app the shell is bringing to the front (Spotlight, the Apps grid, the Dock) stays in front against the
             // window server's own focus of another window: the keyboard it hands back to the window it knows in front as
             // the exclusive layer goes (Settings over a Calculator that drew its first frame but has no toplevel yet), the
@@ -2871,6 +2875,13 @@ impl Shell {
         if let Some(d) = self.desk.as_mut() {
             d.restack_on_unlock = !foreign;
         }
+    }
+
+    /// The screen is locked, or the lock is sliding in or out (`Anim::Unlock`): the window server's focus of a shell
+    /// window then raises nothing (`wayland_window_event`).
+    #[cfg(feature = "desktop-wayland")]
+    pub(super) fn desk_lock_holds_order(&self) -> bool {
+        self.is_locked() || matches!(self.anim, Some((super::Anim::Unlock { .. }, _)))
     }
 
     /// The unlock ended (the lock or login window is gone): the windows' toplevels map again in whatever order they draw,
@@ -5661,6 +5672,38 @@ mod tests {
         sh.anim = Some((crate::shell::Anim::Unlock { from: 0.0, to: 1.0 }, 7_000.0));
         sh.tick(12_000.0);
         assert!(sh.take_wayland_restack().is_empty(), "told once per lock");
+    }
+
+    /// While the screen is locked or the unlock runs, the window server's focus of a toplevel as it maps again raises
+    /// nothing, so the unlock restacks to the order from before the lock.
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn the_window_server_focus_under_the_lock_keeps_the_shells_order() {
+        use crate::bare::wayland::WindowEvent;
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.anim = None;
+        let m = sh.desk_metrics();
+        {
+            let d = sh.desk.as_mut().unwrap();
+            d.wins.clear();
+            d.open(&m, AppId::Terminal, (900, 600));
+            d.open(&m, AppId::Settings, (900, 600));
+        }
+        sh.screen = Screen::App(AppId::Settings);
+        sh.take_wayland_restack();
+        sh.lock_screen();
+        let term = win_id(AppId::Terminal).unwrap();
+        sh.wayland_window_event(WindowEvent::ServerFocus(term));
+        sh.wayland_window_event(WindowEvent::HandBack(term));
+        assert_eq!(sh.desk.as_ref().unwrap().front().map(|w| w.app), Some(AppId::Settings), "nothing raised under the lock");
+        sh.anim = Some((crate::shell::Anim::Unlock { from: 0.0, to: 1.0 }, 1000.0));
+        assert!(sh.desk_lock_holds_order());
+        sh.wayland_window_event(WindowEvent::ServerFocus(term));
+        assert_eq!(sh.desk.as_ref().unwrap().front().map(|w| w.app), Some(AppId::Settings), "nothing raised while unlocking");
+        sh.tick(6_000.0);
+        assert!(!sh.desk_lock_holds_order());
+        let want: Vec<u32> = [AppId::Terminal, AppId::Settings].into_iter().filter_map(win_id).collect();
+        assert_eq!(sh.take_wayland_restack(), want, "restacked in the order from before the lock");
     }
 
     /// When another client's window was in front as the lock came, the shell's windows are not lifted over it at the
