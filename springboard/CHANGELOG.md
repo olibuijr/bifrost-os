@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- The Window menu lists a hosted app's main window by the title the app gave it (`DocumentState`), as Mail's window by its mailbox ("Inbox"), instead of always by the app's name.
+
 ## 0.10.27 — 2026-10-24
 
 Fixes from the second 0.10.25 end-to-end pass on Midget.

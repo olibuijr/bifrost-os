@@ -408,9 +408,20 @@ pub fn menus(mail: &Mail, undo_pending: bool) -> Vec<AppMenu> {
     let loaded = open && open_body_loaded(mail);
     let targets = mail.move_targets();
     let shown_targets = &targets[..targets.len().min(MENU_TARGETS_SHOWN)];
-    let mut message = vec![
+    // File, as the reference Mail has it: the shell's File menu (Close Window, Minimize, Print) takes these at its top
+    // and puts the Print item where its own Print stands
+    let file = vec![
         AppMenuItem::new(MENU_NEW, "New Message").key("cmd+n"),
-        AppMenuItem::new(MENU_NEW_VIEWER, "New Viewer Window").enabled(open),
+        AppMenuItem::new(MENU_NEW_VIEWER, "Open Message").key("cmd+o").enabled(open),
+        AppMenuItem::separator(),
+        AppMenuItem::new(MENU_SAVE_AS, "Save As...").key("cmd+shift+s").enabled(loaded),
+        AppMenuItem::new(MENU_SAVE, "Save Attachments...").key("cmd+alt+a").enabled(open_has_files(mail)),
+        AppMenuItem::new(MENU_EXPORT_PDF, "Export as PDF...").enabled(loaded),
+        AppMenuItem::separator(),
+        AppMenuItem::new(MENU_IMPORT_MBOX, "Import Mailboxes...").enabled(!mail.accounts.is_empty()),
+        AppMenuItem::print(MENU_PRINT).enabled(open),
+    ];
+    let mut message = vec![
         AppMenuItem::new(MENU_REPLY, "Reply").key("cmd+shift+r").enabled(open),
         AppMenuItem::new(MENU_REPLY_ALL, "Reply All").key("cmd+alt+r").enabled(open_has_others(mail)),
         AppMenuItem::new(MENU_FORWARD, "Forward").key("cmd+shift+f").enabled(loaded),
@@ -442,8 +453,10 @@ pub fn menus(mail: &Mail, undo_pending: bool) -> Vec<AppMenu> {
     }
     message.push(AppMenuItem::new(MENU_CLEAR_FLAG, "Clear Flag").depth(1).enabled(open && flagged.is_some()));
     let muted = mail.open.is_some_and(|uid| mail.is_muted(uid));
+    // the open message was read when it was opened; after Mark as Unread the item turns into Mark as Read
+    let unread = mail.open.and_then(|uid| mail.flags_of(uid)).is_some_and(|f| !f.contains(Flag::Seen));
     message.extend([
-        AppMenuItem::new(MENU_UNREAD, "Mark as Unread").enabled(open),
+        AppMenuItem::new(MENU_UNREAD, if unread { "Mark as Read" } else { "Mark as Unread" }).enabled(open),
         AppMenuItem::new(MENU_MUTE, if muted { "Unmute" } else { "Mute" }).enabled(open),
         AppMenuItem::new(MENU_REMIND, "Remind Me...").enabled(open),
         AppMenuItem::new(MENU_IGNORE_FOLLOW_UP, "Ignore Follow-Up").enabled(mail.open.is_some_and(|uid| mail.has_reminder(uid))),
@@ -453,11 +466,6 @@ pub fn menus(mail: &Mail, undo_pending: bool) -> Vec<AppMenu> {
         AppMenuItem::separator(),
         AppMenuItem::new(MENU_ADD_TO_CONTACTS, "Add Sender to Contacts").enabled(open),
         AppMenuItem::new(MENU_REMOVE_ATTACHMENTS, "Remove Attachments").enabled(open_has_files(mail)),
-        AppMenuItem::new(MENU_SAVE, "Save Attachments...").key("cmd+alt+a").enabled(open_has_files(mail)),
-        AppMenuItem::new(MENU_SAVE_AS, "Save As...").key("cmd+shift+s").enabled(loaded),
-        AppMenuItem::new(MENU_EXPORT_PDF, "Export as PDF...").enabled(loaded),
-        AppMenuItem::separator(),
-        AppMenuItem::new(MENU_PRINT, "Print...").key("cmd+p").enabled(open),
     ]);
 
     // Move To and Copy To list the account's mailboxes, so they have a menu of their own: one menu holds 48 items
@@ -496,7 +504,6 @@ pub fn menus(mail: &Mail, undo_pending: bool) -> Vec<AppMenu> {
         AppMenuItem::new(MENU_ERASE_TRASH, "Erase Deleted Items").enabled(mail.find_mailbox(&TRASH_NAMES).is_some()),
         AppMenuItem::new(MENU_ERASE_JUNK, "Erase Junk Mail").enabled(mail.find_mailbox(&JUNK_NAMES).is_some()),
         AppMenuItem::separator(),
-        AppMenuItem::new(MENU_IMPORT_MBOX, "Import Mailbox...").enabled(!mail.accounts.is_empty()),
         AppMenuItem::new(MENU_EXPORT_MBOX, "Export Mailbox...").enabled(!mail.accounts.is_empty()),
         AppMenuItem::separator(),
         AppMenuItem::submenu("Rules"),
@@ -594,6 +601,7 @@ pub fn menus(mail: &Mail, undo_pending: bool) -> Vec<AppMenu> {
         AppMenuItem::new(MENU_FIND_PREVIOUS, "Find Previous").key("cmd+shift+g").enabled(mail.find.is_some()),
     ];
     vec![
+        AppMenu { title: "File".into(), items: file },
         AppMenu { title: "Message".into(), items: message },
         AppMenu { title: "Move".into(), items: moves },
         AppMenu { title: "Mailbox".into(), items: mailbox },
@@ -1507,7 +1515,7 @@ impl MailWindow {
         }
     }
 
-    /// File > New Viewer Window: the open message goes into a viewer window of its own.
+    /// File > Open Message: the open message goes into a viewer window of its own.
     fn new_viewer(&mut self) {
         if let Some(uid) = self.mail.open {
             self.viewer_requests.push(uid);
@@ -3625,6 +3633,28 @@ mod tests {
             assert!(seen.insert(item.id), "{} repeats id {}", item.title, item.id);
         }
         assert!(seen.contains(&MENU_ATTACH) && seen.contains(&MENU_FIND_IN_MESSAGE) && seen.contains(&(MENU_RULE_BASE + 11)));
+    }
+
+    #[test]
+    fn the_file_menu_is_mails_own_and_prints_in_the_shells_place() {
+        let menus = menus(&busy_mail(false), false);
+        let file = menus.iter().find(|m| m.title == "File").expect("a File menu");
+        let titles: Vec<&str> = file.items.iter().filter(|i| !i.separator).map(|i| i.title.as_str()).collect();
+        assert_eq!(titles, ["New Message", "Open Message", "Save As...", "Save Attachments...", "Export as PDF...", "Import Mailboxes...", "Print\u{2026}"]);
+        let print = file.items.iter().find(|i| i.id == MENU_PRINT).unwrap();
+        assert!(print.prints && print.enabled, "the shell's File > Print… becomes Mail's");
+        let message = menus.iter().find(|m| m.title == "Message").unwrap();
+        assert!(!message.items.iter().any(|i| [MENU_NEW, MENU_NEW_VIEWER, MENU_PRINT, MENU_SAVE_AS].contains(&i.id)), "each item is in one menu");
+    }
+
+    #[test]
+    fn mark_as_unread_turns_into_mark_as_read_on_an_unread_message() {
+        let title = |mail: &Mail| menus(mail, false).iter().flat_map(|m| &m.items).find(|i| i.id == MENU_UNREAD).unwrap().title.clone();
+        let mut mail = busy_mail(false);
+        mail.set_flag_locally(1, Flag::Seen, true);
+        assert_eq!(title(&mail), "Mark as Unread");
+        mail.set_flag_locally(1, Flag::Seen, false);
+        assert_eq!(title(&mail), "Mark as Read");
     }
 
     #[test]

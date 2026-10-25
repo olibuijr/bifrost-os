@@ -4,6 +4,13 @@
 
 - Add to Contacts saves the sender in the contacts service's new save format, where phones and emails are labeled
   values (`{label, value}`), so the contact is saved by the system release that brings that format. Built with it.
+- Mail has its own File menu, as the reference Mail does: New Message, Open Message (Cmd+O, the open message in a
+  window of its own; was Message > New Viewer Window), Save As, Save Attachments, Export as PDF, Import Mailboxes and
+  Print, above the shell's Close Window and Minimize. Mail's Print takes the place of the shell's window snapshot.
+  File had only the shell's generic items. A second main viewer window is not offered yet (Mail has one main window).
+- Message > Mark as Unread reads "Mark as Read" while the open message is unread.
+- The main window is titled after the mailbox it shows ("Inbox"), so the Window menu lists it by that name instead of
+  "Mail" (needs the system release that names a hosted app's main window by its title).
 
 ## 0.17.4 — 2026-10-24
 
