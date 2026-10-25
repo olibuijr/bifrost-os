@@ -12,6 +12,7 @@ Installs the SpringBoard shell as the sole UI of an x86_64 Arch machine (desktop
 | `/usr/lib/systemd/system/springboard.service` | runs the shell on tty1 |
 | `/usr/lib/springboard/seed-data` | the seeding script (copies changed assets, mirrors `icons/`) |
 | `/usr/lib/bifrost/services/<id>/` | the system services `bifrostd` supervises: `is.olibuijr.audio` (`audiod`), `is.olibuijr.net` (`netd`), `is.olibuijr.update` (`updated`), each with its `manifest.toml` (from `springboard/system/<dir>`) and executable; a package-owned path, so an update changes it with no conflict (see `springboard/docs/services.md`, "System services ship with the OS") |
+| `/usr/share/stardict/wordnet.{ifo,idx,dict}` | the system English dictionary the Dictionary app and Look Up read: WordNet 3.0 converted to StarDict by `tools/build-wordnet-stardict.py` (pinned tarball and SHA-256 in `dictionaries/wordnet.json`, cached in `out/upstream/`); licence: WordNet 3.0 licence (Princeton University, redistribution permitted with the notice), notice at `/usr/share/licenses/springboard-shell/LICENSE-WordNet` |
 | `/usr/lib/springboard/prune-stale-assets`, `assets-allowlist.txt` | the scriptlet's cleanup of unowned files under `assets/` (see below) |
 
 ## Build

@@ -76,6 +76,12 @@ pub const DETAIL_BG: Pair = Pair::new(pack(0, 0, 0, 255), pack(255, 255, 255, 25
 pub const CONTENT_BG: Pair = Pair::new(pack(30, 30, 30, 255), pack(255, 255, 255, 255));
 /// A grouped card (secondarySystemGroupedBackground).
 pub const CARD_BG: Pair = Pair::new(pack(28, 28, 30, 255), pack(247, 247, 247, 255));
+/// The sea of a world map (the Clock's day and night map).
+pub const MAP_OCEAN: Pair = Pair::new(pack(0, 0, 0, 255), pack(214, 220, 228, 255));
+/// The land of a world map.
+pub const MAP_LAND: Pair = Pair::new(pack(66, 66, 70, 255), pack(250, 250, 250, 255));
+/// The shade laid over the night side of a world map (premultiplied black).
+pub const MAP_NIGHT: Pair = Pair::new(pack(0, 0, 0, 140), pack(0, 0, 0, 64));
 /// Hairline between rows.
 pub const SEPARATOR_C: Pair = Pair::new(pack(56, 56, 58, 255), pack(232, 232, 232, 255));
 /// Primary text.

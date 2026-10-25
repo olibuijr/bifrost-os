@@ -272,6 +272,19 @@ def stage_system_assets(work, assets=ASSETS_SRC):
     return {"PC_SYSTEM_ASSETS": dest}
 
 
+def stage_dictionaries(work):
+    """Build the system English dictionary (WordNet 3.0 as StarDict, tools/build-wordnet-stardict.py; the tarball is
+    pinned in packaging/arch/dictionaries/wordnet.json and cached in out/upstream) into `work`/dictionaries and return
+    the environment for the package build ({"PC_DICTIONARIES": dir}). When it cannot be built (offline with no cached
+    tarball) the publish goes on and the package ships no dictionary."""
+    dest = os.path.join(work, "dictionaries")
+    r = subprocess.run([sys.executable, os.path.join(REPO, "tools/build-wordnet-stardict.py"), dest])
+    if r.returncode:
+        print("pc-publish: the WordNet dictionary could not be built; the package ships no dictionary", file=sys.stderr)
+        return {}
+    return {"PC_DICTIONARIES": dest}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--release", action="store_true")
@@ -335,7 +348,8 @@ def main():
     for f in ("fast/PKGBUILD", "fast/springboard.install"):
         shutil.copy(os.path.join(src, f), work)
     assets_env = stage_system_assets(work)
-    env = {**os.environ, **assets_env, "PC_VER": ver, "PC_PKGSRC": src, "PC_BIN": binpath, "PC_BOOTWEAVE": bootweave, "PC_PORTAL": portal, "PC_PRIVD": privd, "PC_MCP": mcp, "PC_BIFROSTD": bifrostd, "PC_AUDIOD": audiod, "PC_SVC_AUDIOD": svc_audiod, "PC_SVC_NETD": svc_netd, "PC_SVC_UPDATED": svc_updated, "PC_AUDIO_BENCH": audio_bench, "PC_MIDID": midid, "PC_ALSA_PLUGIN": alsa_plugin, "PC_CMD_DIR": tdir, **wm_env, "PC_GUARD": os.path.join(REPO,"out/bifrost-update-guard-publish"), "PKGDEST": POOL, "BUILDDIR": work + "/b", "SRCDEST": work + "/s", "PKGEXT": ".pkg.tar.zst", **signing_env(sign)}
+    dict_env = stage_dictionaries(work)
+    env = {**os.environ, **assets_env, **dict_env, "PC_VER": ver, "PC_PKGSRC": src, "PC_BIN": binpath, "PC_BOOTWEAVE": bootweave, "PC_PORTAL": portal, "PC_PRIVD": privd, "PC_MCP": mcp, "PC_BIFROSTD": bifrostd, "PC_AUDIOD": audiod, "PC_SVC_AUDIOD": svc_audiod, "PC_SVC_NETD": svc_netd, "PC_SVC_UPDATED": svc_updated, "PC_AUDIO_BENCH": audio_bench, "PC_MIDID": midid, "PC_ALSA_PLUGIN": alsa_plugin, "PC_CMD_DIR": tdir, **wm_env, "PC_GUARD": os.path.join(REPO,"out/bifrost-update-guard-publish"), "PKGDEST": POOL, "BUILDDIR": work + "/b", "SRCDEST": work + "/s", "PKGEXT": ".pkg.tar.zst", **signing_env(sign)}
     run(["makepkg", "-f", "--nodeps", "--skipinteg", "--nocheck", *signing_args(sign)], cwd=work, env=env, stdout=subprocess.DEVNULL)
     pkg = sorted(glob.glob(os.path.join(POOL, f"springboard-shell-{ver}-1-x86_64.pkg.tar.zst")))[-1]
     # licence guard: the package may carry only BifrOSt's own and openly licensed files. A failing package is deleted

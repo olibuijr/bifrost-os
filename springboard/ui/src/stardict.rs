@@ -439,6 +439,36 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 
+    /// The system dictionary (tools/build-wordnet-stardict.py) gives an inflected form an index row that points at its
+    /// base form's definition block, and multi-word lemmas are headwords with spaces.
+    #[test]
+    fn the_wordnet_layout_shares_a_block_between_a_form_and_its_base() {
+        let dir = scratch("wordnet");
+        let goose = "noun\n1. web-footed long-necked birds\n   Synonyms: Anser";
+        let ice = "noun\n1. frozen dessert";
+        let mut data = goose.as_bytes().to_vec();
+        data.extend_from_slice(ice.as_bytes());
+        let g = goose.len() as u32;
+        let index = idx(&[("geese", 0, g), ("goose", 0, g), ("ice cream", g, ice.len() as u32)]);
+        let ifo = format!(
+            "StarDict's dict ifo file\nversion=2.4.2\nbookname=WordNet 3.0 (English)\nwordcount=3\nidxfilesize={}\nsametypesequence=m\n",
+            index.len()
+        );
+        fs::write(dir.join("wordnet.ifo"), ifo).unwrap();
+        fs::write(dir.join("wordnet.idx"), index).unwrap();
+        fs::write(dir.join("wordnet.dict"), data).unwrap();
+        let lib = Library::load(&[dir.clone()], Path::new("/no/such/words"));
+        assert!(lib.problems.is_empty(), "{:?}", lib.problems);
+        let hit = |w: &str| lib.lookup(w).into_iter().map(|h| h.text).collect::<Vec<_>>();
+        assert_eq!(hit("Geese"), vec![goose.to_string()]);
+        assert_eq!(hit("goose"), hit("geese"));
+        assert_eq!(hit("Ice Cream"), vec![ice.to_string()]);
+        assert!(lib.lookup("ice").is_empty());
+        assert_eq!(lib.suggest("ice", 5), vec!["ice cream".to_string()]);
+        assert_eq!(lib.dictionaries[0].info.name, "WordNet 3.0 (English)");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn an_empty_library_finds_nothing() {
         let lib = Library::load(&[], Path::new("/no/such/words"));
