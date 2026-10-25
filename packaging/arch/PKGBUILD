@@ -60,9 +60,10 @@ build() {
   cargo build --release --locked -p bifrost-chrome --bins ${SPRINGBOARD_CARGO_FLAGS:---offline}
   # the command-line tools (springboard/cmd/src/bin): package-files.sh installs every one of them
   cargo build --release --locked -p bifrost-cmd --bins ${SPRINGBOARD_CARGO_FLAGS:---offline}
-  # the system English dictionary (WordNet 3.0 as StarDict; pinned in packaging/arch/dictionaries/wordnet.json). Offline
-  # with no cached tarball the package ships none.
-  python3 "$_repo/tools/build-wordnet-stardict.py" "$srcdir/dictionaries" || echo "no WordNet dictionary: the package ships none" >&2
+  # the system English dictionary (WordNet 3.0 as StarDict; pinned in packaging/arch/dictionaries/wordnet.json). The
+  # tarball and the built files are cached in the repo's out/ (upstream/, dictionaries/wordnet/) and rebuilt only when
+  # the pin or the converter changes; a download that is needed and fails stops the build.
+  python3 "$_repo/tools/build-wordnet-stardict.py" "$srcdir/dictionaries" || { echo "PKGBUILD: the WordNet dictionary could not be built" >&2; return 1; }
 }
 
 check() {

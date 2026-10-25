@@ -27,7 +27,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 #[path = "quicksearch_dict.rs"]
-mod dict;
+pub(super) mod dict;
 #[path = "quicksearch_files.rs"]
 mod files_walk;
 

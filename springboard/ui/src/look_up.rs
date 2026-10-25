@@ -41,6 +41,9 @@ pub enum Row {
     Suggest { title: &'static str, item: String, route: Route },
 }
 
+/// The dictionary section's text while the dictionaries load.
+pub const LOADING: &str = "Looking up\u{2026}";
+
 /// The popover's content for one term.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LookUp {
@@ -51,11 +54,19 @@ pub struct LookUp {
     pub search_hits: Vec<String>,
     /// Actions for the items the selection holds, in reading order (`suggested_actions::offers`).
     pub suggestions: Vec<Offer>,
+    /// The dictionaries are still loading: the dictionary section says so until the definition comes in.
+    pub loading: bool,
 }
 
 impl LookUp {
     pub fn new(term: impl Into<String>, definition: Option<String>, search_hits: Vec<String>) -> Self {
-        LookUp { term: term.into(), definition, search_hits, suggestions: Vec::new() }
+        LookUp { term: term.into(), definition, search_hits, suggestions: Vec::new(), loading: false }
+    }
+
+    /// The same content while the dictionaries are still loading (`loading` true): the definition is not known yet.
+    pub fn with_loading(mut self, loading: bool) -> Self {
+        self.loading = loading;
+        self
     }
 
     /// The same content with suggested actions for the selection's items.
@@ -70,6 +81,7 @@ impl LookUp {
         let mut rows = vec![Row::Heading("Dictionary")];
         match self.definition.as_deref().map(str::trim).filter(|d| !d.is_empty()) {
             Some(def) => rows.push(Row::Text(cut_definition(def))),
+            None if self.loading => rows.push(Row::Text(LOADING.into())),
             None => rows.push(Row::Text("No definition in the installed dictionaries.".into())),
         }
         rows.push(Row::Heading("Search"));
@@ -97,6 +109,14 @@ fn cut_definition(def: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn while_the_dictionaries_load_the_section_says_so_instead_of_no_definition() {
+        let rows = LookUp::new("cat", None, vec![]).with_loading(true).rows();
+        assert_eq!(rows[1], Row::Text(LOADING.into()));
+        let rows = LookUp::new("cat", None, vec![]).rows();
+        assert_eq!(rows[1], Row::Text("No definition in the installed dictionaries.".into()));
+    }
 
     #[test]
     fn the_term_is_the_first_non_blank_line_trimmed() {

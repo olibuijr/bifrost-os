@@ -9,7 +9,9 @@ dictionary files in /usr/share/stardict, where the Dictionary app and the shell'
 (bifrost_ui::stardict::SYSTEM_DICTIONARIES), and the notice in /usr/share/licenses/springboard-shell/.
 
 The source is the WordNet 3.0 release tarball named in packaging/arch/dictionaries/wordnet.json (URL and SHA-256),
-downloaded once into out/upstream/ and checked; `--tarball` reads a local copy instead. WordNet 3.0 is licensed by
+downloaded once into out/upstream/ and checked; `--tarball` reads a local copy instead. The StarDict files are built
+once into out/dictionaries/wordnet/ (with a STAMP of the tarball's SHA-256 and this script's) and only rebuilt when
+the cache is missing or either changes; a needed download that fails stops with an error. WordNet 3.0 is licensed by
 Princeton University under the WordNet licence, which permits use, copying, modification and distribution for any
 purpose without fee as long as the copyright notice and disclaimer appear on all copies.
 
@@ -248,21 +250,73 @@ def build(tarball, out_dir, source=""):
     return count
 
 
+# what a built dictionary consists of; the build cache holds all of them or is rebuilt
+OUTPUTS = (f"{STEM}.ifo", f"{STEM}.idx", f"{STEM}.dict", "LICENSE-WordNet")
+STAMP = "STAMP"
+
+
+def build_stamp(src):
+    """What the cached build was made from: the pinned tarball's SHA-256 and this converter's own source, so a new
+    pin or a change to the conversion rebuilds it."""
+    with open(os.path.abspath(__file__), "rb") as f:
+        me = hashlib.sha256(f.read()).hexdigest()
+    return f"{src['sha256']} {me}\n"
+
+
+def cached_build(src, tarball_for, cache_dir):
+    """The built dictionary in `cache_dir`, built from `tarball_for()` only when the cache is missing, incomplete or
+    was made from another tarball or converter (`build_stamp`). Returns the headword count, or None when the cache
+    was used as it was."""
+    stamp = build_stamp(src)
+    stamp_path = os.path.join(cache_dir, STAMP)
+    try:
+        with open(stamp_path, encoding="utf-8") as f:
+            fresh = f.read() == stamp
+    except OSError:
+        fresh = False
+    if fresh and all(os.path.isfile(os.path.join(cache_dir, n)) for n in OUTPUTS):
+        return None
+    tarball = tarball_for()
+    shutil.rmtree(cache_dir, ignore_errors=True)
+    part = cache_dir + ".part"
+    shutil.rmtree(part, ignore_errors=True)
+    os.makedirs(part)
+    count = build(tarball, part, source=src.get("homepage", ""))
+    with open(os.path.join(part, STAMP), "w", encoding="utf-8") as f:
+        f.write(stamp)
+    os.replace(part, cache_dir)
+    return count
+
+
+def copy_outputs(cache_dir, out_dir):
+    """The built dictionary and its licence notice, copied from the cache into `out_dir`."""
+    os.makedirs(out_dir, exist_ok=True)
+    for n in OUTPUTS:
+        shutil.copyfile(os.path.join(cache_dir, n), os.path.join(out_dir, n))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("out_dir")
     ap.add_argument("--tarball", help="a local copy of the pinned tarball (its SHA-256 is still checked)")
+    ap.add_argument("--cache", default=os.path.join(ROOT, "out", "dictionaries", STEM), help="the build cache (default out/dictionaries/wordnet)")
     a = ap.parse_args()
     src = load_source()
-    if a.tarball:
-        with open(a.tarball, "rb") as f:
-            if hashlib.sha256(f.read()).hexdigest() != src["sha256"]:
-                sys.exit(f"{a.tarball} does not match the SHA-256 in {SOURCE}")
-        tarball = a.tarball
-    else:
-        tarball = fetch(src)
-    count = build(tarball, a.out_dir, source=src.get("homepage", ""))
-    print(f"{a.out_dir}: {count} headwords")
+
+    def tarball_for():
+        if a.tarball:
+            with open(a.tarball, "rb") as f:
+                if hashlib.sha256(f.read()).hexdigest() != src["sha256"]:
+                    sys.exit(f"{a.tarball} does not match the SHA-256 in {SOURCE}")
+            return a.tarball
+        try:
+            return fetch(src)
+        except (OSError, ValueError) as e:
+            sys.exit(f"build-wordnet-stardict: the WordNet tarball is not cached and could not be downloaded from {src['url']}: {e}")
+
+    count = cached_build(src, tarball_for, a.cache)
+    copy_outputs(a.cache, a.out_dir)
+    print(f"{a.out_dir}: {'cached build' if count is None else f'{count} headwords'}")
 
 
 if __name__ == "__main__":

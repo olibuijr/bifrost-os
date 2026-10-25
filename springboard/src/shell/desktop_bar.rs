@@ -1348,7 +1348,7 @@ impl Shell {
         let items:Vec<MenuItem>=rows.iter().enumerate().map(|(i,r)|if r.sep{MenuItem::separator()}else{MenuItem::new(i as u32,r.text.trim_start_matches(|c:char|c=='\u{2713}'||c==' ')).enabled(r.action.is_some())}).collect();
         let mut model=self.desktop_menu_typed.take().unwrap_or_else(||Model::new(Vec::new()));
         model.items=items;model.highlighted=self.menu_row_of(menu);
-        if let Some(i)=model.type_select(c,t){self.desktop_menu_row=Some((menu,i));self.menu_reveal(menu,i);}
+        if let Some(i)=type_select_at(&mut model,c,t){self.desktop_menu_row=Some((menu,i));self.menu_reveal(menu,i);}
         self.desktop_menu_typed=Some(model);
     }
     /// Pointer movement with a menu open, at the time of the last input (`desktop_menu_hover_at`).
@@ -1949,6 +1949,28 @@ pub(super) fn wallpaper_is_light(wp: crate::gfx::View, rows: usize) -> bool {
 
 /// Mean luma above which white menu bar text loses contrast and the bar switches to dark text.
 const BAR_LIGHT_LUMA: u64 = 160;
+
+/// The kit's type-select for a key typed at `t` ms: `Menu::type_select` counts its typing window
+/// (`TYPE_SELECT_SECS`) in seconds, as the Dock's stack passes it.
+#[cfg(any(test, feature = "desktop-wayland"))]
+fn type_select_at(model:&mut bifrost_ui::menu::Menu,c:char,t:f64)->Option<usize> {model.type_select(c,t/1000.0)}
+
+#[cfg(test)]
+mod type_select_tests {
+    use super::type_select_at;
+    use bifrost_ui::menu::{Menu, MenuItem};
+
+    #[test]
+    fn letters_typed_a_few_hundred_milliseconds_apart_extend_one_prefix() {
+        let mut m = Menu::new(vec![MenuItem::new(0, "Save"), MenuItem::new(1, "Select All"), MenuItem::new(2, "Settings")]);
+        assert_eq!(type_select_at(&mut m, 's', 10_000.0), Some(0));
+        assert_eq!(type_select_at(&mut m, 'e', 10_200.0), Some(1), "within the window: 'se'");
+        assert_eq!(type_select_at(&mut m, 't', 10_400.0), Some(2), "'set'");
+        // after a pause longer than the window the typing starts again
+        assert_eq!(type_select_at(&mut m, 's', 20_000.0), Some(2));
+        assert_eq!(type_select_at(&mut m, 'a', 30_000.0), None, "'a' alone matches no title");
+    }
+}
 
 #[cfg(test)]
 mod bar_ink_tests {

@@ -124,6 +124,34 @@ class Build(unittest.TestCase):
         text = open(os.path.join(self.out, "LICENSE-WordNet")).read()
         self.assertTrue(text.startswith("This software and database"))
 
+    def test_the_build_is_cached_and_redone_only_when_the_pin_changes(self):
+        tarball(self.tar)
+        cache = os.path.join(self.tmp, "cache")
+        src = {"sha256": "a" * 64, "homepage": ""}
+        asked = []
+
+        def tarball_for():
+            asked.append(1)
+            return self.tar
+
+        self.assertEqual(wn.cached_build(src, tarball_for, cache), 4)
+        self.assertIsNone(wn.cached_build(src, tarball_for, cache), "a fresh cache is used as it is")
+        self.assertEqual(len(asked), 1, "the tarball is not needed for a cached build")
+        wn.copy_outputs(cache, self.out)
+        self.assertTrue(all(os.path.isfile(os.path.join(self.out, n)) for n in wn.OUTPUTS), "the licence notice comes along")
+        # a new pin, or a file gone from the cache, builds again
+        self.assertEqual(wn.cached_build({"sha256": "b" * 64}, tarball_for, cache), 4)
+        os.unlink(os.path.join(cache, "wordnet.idx"))
+        self.assertEqual(wn.cached_build({"sha256": "b" * 64}, tarball_for, cache), 4)
+        self.assertEqual(len(asked), 3)
+
+    def test_a_needed_download_that_fails_stops_with_an_error(self):
+        def failing():
+            raise SystemExit("no network")
+
+        with self.assertRaises(SystemExit):
+            wn.cached_build({"sha256": "c" * 64}, failing, os.path.join(self.tmp, "cache"))
+
     def test_the_pinned_source_names_a_url_checksum_and_licence(self):
         src = wn.load_source()
         self.assertTrue(src["url"].startswith("https://"))

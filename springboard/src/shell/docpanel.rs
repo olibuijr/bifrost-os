@@ -1313,6 +1313,28 @@ impl Broker {
         Ok((ToApp::DocGranted { request, grant: id, mode: DocMode::Read, name, size }, f))
     }
 
+    /// `transfer` for opening a file with an app (Files' Open and Open With): when `may_write` (the sender may hand out
+    /// write access: it holds a write grant or the whole home) the new grant is read-write where the account owns the
+    /// file and may write it, as opening a document from the reference's file manager is (`Opener::open_default`), so
+    /// the app saves in place; read-only otherwise. The file must still be the one the sender's grant names.
+    pub fn transfer_open(&mut self, from: &str, grant: &GrantId, to: &str, request: u32, may_write: bool) -> Result<(ToApp, std::fs::File), DocErrorCode> {
+        let (f, g) = self.grants.reopen(&self.opener, from, grant)?;
+        let may_write = may_write || g.mode == DocMode::Write;
+        let path = g.path.clone();
+        let same = |a: &std::fs::File, b: &std::fs::File| {
+            use std::os::unix::fs::MetadataExt;
+            matches!((a.metadata(), b.metadata()), (Ok(x), Ok(y)) if (x.dev(), x.ino()) == (y.dev(), y.ino()))
+        };
+        let (f, mode) = match may_write.then(|| self.opener.open_default(&path)) {
+            Some(Ok((w, DocMode::Write))) if same(&w, &f) => (w, DocMode::Write),
+            _ => (f, DocMode::Read),
+        };
+        let size = f.metadata().map_or(0, |m| m.len());
+        let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+        let id = self.grants.add(to, &path, mode, &f).map_err(|_| DocErrorCode::Denied)?;
+        Ok((ToApp::DocGranted { request, grant: id, mode, name, size }, f))
+    }
+
     pub fn new(opener: Opener, grants_file: &Path) -> Self {
         Broker { opener, grants: Grants::load(grants_file), saves: Vec::new(), last_dir: Default::default() }
     }
@@ -1549,11 +1571,26 @@ impl super::Shell {
     /// several), all with `request`. Files whose grant is not the sender's, or is stale, are left out. Returns
     /// (sender grant, new grant) for each file handed over.
     pub(super) fn inbound_files(&mut self, from: &str, to_app: &str, to_slot: u8, request: u32, grants: &[GrantId]) -> Vec<(GrantId, GrantId)> {
+        self.hand_over(from, to_app, to_slot, request, grants, None)
+    }
+
+    /// `inbound_files` for opening the files with the app (Files' Open and Open With): each grant is `transfer_open`ed,
+    /// so a document the person owns and may write opens read-write. `may_write`: the sender may hand out write access.
+    pub(super) fn open_files_in(&mut self, from: &str, to_app: &str, to_slot: u8, request: u32, grants: &[GrantId], may_write: bool) -> Vec<(GrantId, GrantId)> {
+        self.hand_over(from, to_app, to_slot, request, grants, Some(may_write))
+    }
+
+    /// `inbound_files` (`open` None) and `open_files_in` (`open` Some(may write)).
+    fn hand_over(&mut self, from: &str, to_app: &str, to_slot: u8, request: u32, grants: &[GrantId], open: Option<bool>) -> Vec<(GrantId, GrantId)> {
         let mut out = Vec::new();
         let mut mapping = Vec::new();
         if let Some(b) = self.doc_broker() {
             for g in grants.iter().take(bifrost_proto::MAX_DOC_BATCH as usize) {
-                if let Ok(r) = b.transfer(from, g, to_app, request) {
+                let r = match open {
+                    Some(may_write) => b.transfer_open(from, g, to_app, request, may_write),
+                    None => b.transfer(from, g, to_app, request),
+                };
+                if let Ok(r) = r {
                     if let ToApp::DocGranted { grant, .. } = &r.0 {
                         mapping.push((*g, *grant));
                     }
@@ -2252,6 +2289,30 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn opening_with_the_default_app_hands_over_a_write_grant_for_an_owned_file() {
+        let (d, o) = scratch("open-default");
+        fs::write(d.join("home/Documents/locked.txt"), "l").unwrap();
+        fs::set_permissions(d.join("home/Documents/locked.txt"), std::os::unix::fs::PermissionsExt::from_mode(0o444)).unwrap();
+        let mut b = Broker::new(o, &d.join("state/grants.json"));
+        // Files holds read grants for what it browses
+        let (reply, _) = b.finish("files", 1, Kind::Open(DocMode::Read), Outcome::Open("Documents/b.txt".into()));
+        let ToApp::DocGranted { grant: files_grant, .. } = reply else { panic!("{reply:?}") };
+        let (reply, _) = b.finish("files", 2, Kind::Open(DocMode::Read), Outcome::Open("Documents/locked.txt".into()));
+        let ToApp::DocGranted { grant: locked_grant, .. } = reply else { panic!("{reply:?}") };
+
+        // a share or a drop stays read-only; an open from a sender that may write gives the editor a write grant
+        assert!(matches!(b.transfer("files", &files_grant, "editor", 3), Ok((ToApp::DocGranted { mode: DocMode::Read, .. }, _))));
+        assert!(matches!(b.transfer_open("files", &files_grant, "editor", 4, false), Ok((ToApp::DocGranted { mode: DocMode::Read, .. }, _))), "a read-only sender cannot widen it");
+        let Ok((ToApp::DocGranted { grant: edit, mode: DocMode::Write, .. }, _)) = b.transfer_open("files", &files_grant, "editor", 5, true) else { panic!("an owned writable file opens read-write") };
+        // the editor saves in place through it
+        assert!(matches!(b.request("editor", ToShell::DocSaveGrant { request: 6, grant: edit }), Some((ToApp::DocGranted { mode: DocMode::Write, .. }, Some(_)))));
+        if fs::metadata(&d).unwrap().uid() != 0 {
+            assert!(matches!(b.transfer_open("files", &locked_grant, "editor", 7, true), Ok((ToApp::DocGranted { mode: DocMode::Read, .. }, _))), "a file the person may not write stays read-only");
+        }
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
     fn the_broker_grants_opens_and_saves_with_commit_and_abort() {
         use std::io::{Read, Write};
         let (d, o) = scratch("broker");
@@ -2827,23 +2888,24 @@ impl super::Shell {
     /// file in place. Photos picks the change up on its next scan. False when the app or the file cannot be opened.
     #[cfg(feature = "desktop-wayland")]
     pub(super) fn photo_edit_with(&mut self, key: &str, path: &Path, t: f64) -> bool {
-        self.open_path_in(key, path, DocMode::Write, t)
+        self.open_path_in(key, path, Some(DocMode::Write), t)
     }
 
-    /// Opens the file at `path` (in the account's home) read-only in the app `key`, as a file dropped on it: the Dock's
-    /// stack opens an item with its default app this way. False when the app or the file cannot be opened (the stack
-    /// then shows the file in Files).
+    /// Opens the file at `path` (in the account's home) in the app `key`, as the reference's file manager opens a
+    /// document with its default app: read-write when the account owns the file and may write it (the app saves and
+    /// autosaves in place), read-only otherwise (`Opener::open_default`). The Dock's stack opens an item this way.
+    /// False when the app or the file cannot be opened (the stack then shows the file in Files).
     #[cfg(feature = "desktop-wayland")]
     pub(super) fn open_path_with(&mut self, key: &str, path: &Path, t: f64) -> bool {
-        self.open_path_in(key, path, DocMode::Read, t)
+        self.open_path_in(key, path, None, t)
     }
 
-    /// Opens the file at `path` in the app `key`. An installed app comes up and gets a grant in `mode` and the
-    /// descriptor as an inbound document (`Write`: it saves the file in place); a built-in app opens the file itself
-    /// (`open_in_builtin`). False when `key` is no app, the file is not under the account's home or cannot be granted,
-    /// or the built-in app cannot open it.
+    /// Opens the file at `path` in the app `key`. An installed app comes up and gets a grant in `mode` (`None`: the
+    /// default-app mode, `Opener::open_default`) and the descriptor as an inbound document (`Write`: it saves the file in
+    /// place); a built-in app opens the file itself (`open_in_builtin`). False when `key` is no app, the file is not
+    /// under the account's home or cannot be granted, or the built-in app cannot open it.
     #[cfg(feature = "desktop-wayland")]
-    fn open_path_in(&mut self, key: &str, path: &Path, mode: DocMode, t: f64) -> bool {
+    fn open_path_in(&mut self, key: &str, path: &Path, mode: Option<DocMode>, t: f64) -> bool {
         use super::apps::{apps, AppId};
         let Some(def) = apps().iter().find(|a| a.icon == key).map(|a| a.id) else { return false };
         let AppId::External(slot) = def else { return self.open_in_builtin(def, path, t) };
@@ -2851,7 +2913,11 @@ impl super::Shell {
         let Some(broker) = self.doc_broker() else { return false };
         // grants name files relative to the account's home
         let Ok(rel) = path.strip_prefix(broker.opener.home()).map(Path::to_path_buf) else { return false };
-        let Ok(file) = broker.opener.open_any(&rel, mode) else { return false };
+        let opened = match mode {
+            Some(m) => broker.opener.open_any(&rel, m).map(|f| (f, m)),
+            None => broker.opener.open_default(&rel),
+        };
+        let Ok((file, mode)) = opened else { return false };
         let size = file.metadata().map_or(0, |m| m.len());
         let Ok(grant) = broker.grants.add(key, &rel, mode, &file) else { return false };
         self.desk_open_or_start(def, t);

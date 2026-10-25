@@ -17,7 +17,7 @@
 
 ## 1.19.2 — 2026-10-20
 
-- The Recently Deleted tile in the sidebar shows its whole name: a name wider than the tile wraps to a second line instead of ending in an ellipsis. The tiles are a little taller to make room.
+- The Recently Deleted tile in the sidebar shows its whole name on one line: a name wider than the tile is drawn a text style smaller (callout, then subhead) instead of ending in an ellipsis, and is cut only when even subhead does not fit.
 - The switches in a reminder's details follow the accent colour chosen in Settings > Appearance instead of staying blue.
 
 ## 1.19.1

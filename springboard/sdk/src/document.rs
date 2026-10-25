@@ -1060,11 +1060,10 @@ fn failed(doc: Option<DocId>, code: Option<DocErrorCode>, message: &str) -> Noti
 
 const AUTOSAVE_DIR: &str = "autosave";
 
-/// The path a granted descriptor was opened from (Linux keeps it in `/proc/self/fd`); `None` when it has none.
 /// Whether `request` is an inbound document the shell sent unasked (`share::INBOUND` set): a file opened with this app
 /// from Files or the Dock, a share, or a drop.
 fn is_inbound(request: u32) -> bool {
-    request & crate::share::INBOUND != 0
+    crate::share::is_inbound(request)
 }
 
 /// The device and inode of an open file, which name it whatever grant it came under.
@@ -1073,6 +1072,7 @@ fn file_id(file: &std::fs::File) -> Option<(u64, u64)> {
     file.metadata().ok().map(|m| (m.dev(), m.ino()))
 }
 
+/// The path a granted descriptor was opened from (Linux keeps it in `/proc/self/fd`); `None` when it has none.
 fn package_path(file: &std::fs::File) -> Option<PathBuf> {
     use std::os::unix::io::AsRawFd;
     std::fs::read_link(format!("/proc/self/fd/{}", file.as_raw_fd())).ok()
