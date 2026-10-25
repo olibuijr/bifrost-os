@@ -886,25 +886,55 @@ fn crop(img: &Image, r: Rect) -> Image {
     out
 }
 
-/// The desktop's app switcher: Cmd+Tab walks the open windows most recent first (Shift reverses), showing the
-/// icon strip drawn by `draw_cmdtab`; releasing the modifier lands on the selection (`cmdtab_release`). Cmd+`
-/// walks the windows of the front app. Esc cancels, the arrows move the selection.
+/// The Cmd+Tab strip's entries: one per app, most recently used first. `front` is an app whose window is in front of
+/// every desk window (a native client's active toplevel); `windows` are the desk's windows front first, then the apps
+/// that show native toplevels. An extra window stands for its app, so an app with two windows in front is one entry
+/// and the next one is the app used before it (E2E11 4: the second entry was the front app's other window, and Cmd+Tab
+/// did nothing).
+pub(super) fn app_switch_order(front: Option<AppId>, windows: impl IntoIterator<Item = AppId>) -> Vec<AppId> {
+    let mut order: Vec<AppId> = Vec::new();
+    for app in front.into_iter().chain(windows).map(AppId::parent) {
+        if !order.contains(&app) {
+            order.push(app);
+        }
+    }
+    order
+}
+
+/// The installed app (`External(slot)`) a native client's toplevel belongs to, by its Wayland app id or package id.
+#[cfg(feature = "desktop-wayland")]
+fn native_window_app(installed: &[super::apphost::Installed], w: &crate::bare::wayland::ForeignWindow) -> Option<AppId> {
+    if w.app_id.is_empty() {
+        return None;
+    }
+    let slot = installed.iter().position(|a| a.manifest.wayland_app_id == w.app_id || a.manifest.id == w.app_id)?;
+    u8::try_from(slot).ok().map(AppId::External)
+}
+
+/// The desktop's app switcher: Cmd+Tab walks the running apps most recently used first (Shift reverses), showing the
+/// icon strip drawn by `draw_cmdtab`; releasing the modifier activates the selection with all of its windows
+/// (`cmdtab_release`, `desk_open`). Cmd+` walks the windows of the front app. Esc cancels, the arrows move the selection.
 impl Shell {
-    /// Opens the strip on the previous window, or moves the selection one step.
+    /// Opens the strip on the previously used app, or moves the selection one step.
     pub(super) fn switcher_cycle(&mut self, reverse: bool) {
         if let Some(d) = &mut self.desk {
-            match &mut d.cmdtab {
-                Some((order, sel)) => {
-                    let n = order.len();
-                    *sel = if reverse { (*sel + n - 1) % n } else { (*sel + 1) % n };
+            if d.cmdtab.is_none() {
+                #[cfg(feature = "desktop-wayland")]
+                let order = {
+                    let installed = super::apphost::installed();
+                    let front = d.native_windows.iter().find(|w| w.active).and_then(|w| native_window_app(&installed, w));
+                    let native: Vec<AppId> = d.native_windows.iter().filter_map(|w| native_window_app(&installed, w)).collect();
+                    app_switch_order(front, d.wins.iter().rev().map(|w| w.app).chain(native))
+                };
+                #[cfg(not(feature = "desktop-wayland"))]
+                let order = app_switch_order(None, d.wins.iter().rev().map(|w| w.app));
+                if order.len() >= 2 {
+                    let sel = if reverse { order.len() - 1 } else { 1 };
+                    d.cmdtab = Some((order, sel));
                 }
-                None => {
-                    let order: Vec<AppId> = d.wins.iter().rev().map(|w| w.app).collect();
-                    if order.len() >= 2 {
-                        let sel = if reverse { order.len() - 1 } else { 1 };
-                        d.cmdtab = Some((order, sel));
-                    }
-                }
+            } else if let Some((order, sel)) = &mut d.cmdtab {
+                let n = order.len();
+                *sel = if reverse { (*sel + n - 1) % n } else { (*sel + 1) % n };
             }
         }
         self.dirty = true;
@@ -994,6 +1024,15 @@ mod tests {
             sh.event(Event::Move(600.0, 1915.0 + (y1 - 1915.0) * i as f32 / 10.0), t + ms * i as f64 / 10.0);
         }
         sh.event(Event::Up(600.0, y1), t + ms + pause);
+    }
+
+    /// E2E11 4: the strip lists apps, most recent first, each once; a native client's window in front leads it.
+    #[test]
+    fn the_app_switcher_lists_each_app_once_most_recent_first() {
+        let (te, te2, files) = (AppId::External(3), AppId::ExternalWindow(3, 1), AppId::External(5));
+        assert_eq!(app_switch_order(None, [te2, te, AppId::Settings, te]), vec![te, AppId::Settings], "an extra window stands for its app");
+        assert_eq!(app_switch_order(Some(files), [te, AppId::Settings, files]), vec![files, te, AppId::Settings], "the active native window's app first");
+        assert_eq!(app_switch_order(None, [te2, te]), vec![te], "one app: nothing to switch to");
     }
 
     fn open_app(sh: &mut Shell, app: AppId, t: f64) {

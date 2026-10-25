@@ -1656,7 +1656,7 @@
     fn cmd_tab_cycles_while_held_and_raises_the_selection_on_release() {
         let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
         sh.desk_open(AppId::Settings,0.);sh.desk_open(AppId::Files,1.);
-        // Cmd+Tab is the switcher (all windows, most recent first); Cmd+` is `desk_cycle_window`
+        // Cmd+Tab is the switcher (the running apps, most recent first); Cmd+` is `desk_cycle_window`
         sh.switcher_cycle(false);
         assert_eq!(sh.desk.as_ref().unwrap().cmdtab.as_ref().map(|c|c.1),Some(1));
         let (w,h)=(sh.w as usize,sh.h as usize);let mut buf=vec![0u32;w*h];
@@ -1664,6 +1664,24 @@
         sh.cmdtab_release(3.);
         assert!(sh.desk.as_ref().unwrap().cmdtab.is_none());
         assert_eq!(sh.desk.as_ref().unwrap().front().map(|w|w.app),Some(AppId::Settings));
+    }
+
+    /// E2E11 4: Cmd+Tab switches apps, not windows. An app showing two windows in front is one entry and the selection is
+    /// the app used before it; releasing on an app brings all of its windows forward in their own order.
+    #[test]
+    fn cmd_tab_switches_apps_when_the_front_app_owns_the_two_newest_windows() {
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        let m=sh.desk_metrics();
+        let (main,second)=(AppId::External(3),AppId::ExternalWindow(3,1));
+        {let d=sh.desk.as_mut().unwrap();d.wins.clear();d.open(&m,AppId::Settings,(700,500));d.open(&m,main,(900,600));d.open(&m,second,(900,600));}
+        sh.switcher_cycle(false);
+        assert_eq!(sh.desk.as_ref().unwrap().cmdtab.clone(),Some((vec![main,AppId::Settings],1)),"one entry per app, the previous app selected");
+        sh.cmdtab_release(1.);
+        assert_eq!(sh.desk.as_ref().unwrap().front().map(|w|w.app),Some(AppId::Settings),"the switch happened");
+        sh.switcher_cycle(false);
+        assert_eq!(sh.desk.as_ref().unwrap().cmdtab.clone(),Some((vec![AppId::Settings,main],1)));
+        sh.cmdtab_release(2.);
+        assert_eq!(sh.desk.as_ref().unwrap().wins.iter().map(|w|w.app).collect::<Vec<_>>(),vec![AppId::Settings,main,second],"both windows came back, the second still in front");
     }
 
     /// The strip is chrome surface 13 above the windows, only while Cmd+Tab is open; it takes neither pointer nor keys.
