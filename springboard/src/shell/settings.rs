@@ -479,10 +479,11 @@ fn slide(push: bool) -> Transition {
 const PANE_HISTORY: usize = 8;
 
 /// The page an arrow key moves the search highlight to: the next (or previous) hit on another page than the highlighted
-/// one, since every hit of a page is filled together. Down from no highlight is the first hit, Up the last.
+/// one, since every hit of a page is filled together. With none highlighted explicitly (`at` None) the first hit shows
+/// highlighted only as a cue: Down steps on from it to the next page's hit, and Up opens the last hit.
 fn step_hit(hits: &[PageId], at: Option<usize>, down: bool) -> Option<PageId> {
     let Some(at) = at else {
-        return if down { hits.first() } else { hits.last() }.copied();
+        return if down { step_hit(hits, (!hits.is_empty()).then_some(0), true) } else { hits.last().copied() };
     };
     let cur = hits[at];
     if down { hits[at + 1..].iter().find(|p| **p != cur) } else { hits[..at].iter().rev().find(|p| **p != cur) }.copied()
@@ -2360,19 +2361,24 @@ impl Settings {
     }
 
     /// The hit the sidebar fills: the first one on the page opened since the query changed (by a tap or an arrow key),
-    /// while it is still open, so Return opens what is highlighted. None until one is opened: Return then opens the first.
+    /// while it is still open, so Return opens what is highlighted. Once Back left that page, the hit of the pane shown
+    /// now, if it is one. None until one is opened (Return then opens the first) or when the shown pane is no hit.
     fn highlighted_hit(&self, hits: &[PageId]) -> Option<usize> {
-        let open = self.hit_open.filter(|p| self.stack.iter().any(|e| e.id == *p))?;
-        hits.iter().position(|p| *p == open)
+        let open = self.hit_open?;
+        let shown = if self.stack.iter().any(|e| e.id == open) { open } else { self.stack.iter().rev().map(|e| e.id).find(|p| hits.contains(p))? };
+        hits.iter().position(|p| *p == shown)
     }
 
     /// The page whose sidebar rows are filled: the highlighted hit while Search has a query (the first hit until one
     /// is opened, the one Return opens, as the reference highlights it, E2E13 5), else the open pane.
     fn side_selected(&self) -> PageId {
         let hits = self.hit_pages();
+        let shown = || self.stack.first().map_or(PageId::Root, |e| e.id);
         match self.highlighted_hit(&hits) {
             Some(i) => hits[i],
-            None => hits.first().copied().unwrap_or_else(|| self.stack.first().map_or(PageId::Root, |e| e.id)),
+            // Back left the hit opened from Search for a pane that is no hit: no hit row is highlighted
+            None if self.hit_open.is_some() => shown(),
+            None => hits.first().copied().unwrap_or_else(shown),
         }
     }
 
@@ -2425,8 +2431,8 @@ impl Settings {
             if let Out::Named(dir @ ("Up" | "Down")) = out {
                 // the sidebar keeps the results beside the page they open; the single column has them on its root only
                 if self.side_w > 0 && !hits.is_empty() {
-                    // the first hit shows highlighted before any is opened, so the arrows step on from it
-                    return match step_hit(&hits, self.highlighted_hit(&hits).or(Some(0)), dir == "Down") {
+                    // the first hit shows highlighted before any is opened: Down steps on from it, Up opens the last
+                    return match step_hit(&hits, self.highlighted_hit(&hits), dir == "Down") {
                         Some(id) => self.open_page_id(ui, id, t),
                         None => vec![],
                     };
@@ -5528,8 +5534,10 @@ mod e2e_w3_tests {
     #[test]
     fn arrow_keys_step_over_the_hits_of_the_highlighted_page() {
         let hits = [PageId::Display, PageId::Display, PageId::NightShift, PageId::About];
-        assert_eq!(step_hit(&hits, None, true), Some(PageId::Display));
-        assert_eq!(step_hit(&hits, None, false), Some(PageId::About));
+        assert_eq!(step_hit(&hits, None, true), Some(PageId::NightShift), "Down from the default highlight on the first");
+        assert_eq!(step_hit(&hits, None, false), Some(PageId::About), "Up with nothing chosen opens the last hit");
+        assert_eq!(step_hit(&[], None, true), None);
+        assert_eq!(step_hit(&[], None, false), None);
         assert_eq!(step_hit(&hits, Some(0), true), Some(PageId::NightShift));
         assert_eq!(step_hit(&hits, Some(2), false), Some(PageId::Display));
         assert_eq!(step_hit(&hits, Some(3), true), None);
@@ -5560,6 +5568,25 @@ mod e2e_w3_tests {
         assert_eq!(st.stack(), vec![PageId::Sounds], "Back returns to the pane open before the search");
         assert!(!st.list().expect("list").nav().has_back(), "and nothing is behind that one");
         assert!(!st.back_page(0.0));
+        let hits = st.hit_pages();
+        assert!(!hits.contains(&PageId::Sounds));
+        assert_eq!(st.highlighted_hit(&hits), None, "the Bluetooth hit is not shown, so it is not highlighted");
+        assert!(!hits.contains(&st.side_selected()), "no hit row is highlighted beside Sound");
+    }
+
+    /// Up in Search with no hit chosen yet opens the last hit (the first one's highlight is only a cue).
+    #[test]
+    fn up_with_no_hit_chosen_opens_the_last_hit() {
+        let ui = crate::shell::tests::ui();
+        let (mut st, _) = split(&ui);
+        st.search.active = true;
+        st.key(&ui, Out::Text("display".into()), 0.0);
+        let hits = st.hit_pages();
+        let last = *hits.last().expect("a match");
+        assert_eq!(st.side_selected(), hits[0], "the first hit shows highlighted");
+        st.key(&ui, Out::Named("Up"), 0.0);
+        settle(&mut st, &ui);
+        assert_eq!(st.side_selected(), last, "Up opened the last hit");
     }
 
     /// Esc walks back over a search-opened pane too, and a sidebar row starts a new history.
