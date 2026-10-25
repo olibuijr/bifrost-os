@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.
+
 ## 0.2.0 — 2026-10-23
 
 - Quotes from Yahoo Finance's public chart endpoint (Stooq is gone), sent without cookies or identifiers, with the source named.

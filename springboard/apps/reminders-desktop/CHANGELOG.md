@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.3
+
+- Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.
+
 ## 1.20.2 — 2026-10-25
 
 - Recently Deleted: Delete Permanently and Restore act on the chosen row even when two kept reminders once had the same id. Kept reminders are told apart by their store row, and a new reminder no longer takes the id of one in Recently Deleted.

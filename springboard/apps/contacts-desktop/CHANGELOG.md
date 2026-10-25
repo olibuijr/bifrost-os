@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.17.1
+
+- Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.
+
 ## 1.17.0 — 2026-10-23
 
 - + and File > New Card (Cmd+N) create a contact; one Print item; sidebar labels fit.

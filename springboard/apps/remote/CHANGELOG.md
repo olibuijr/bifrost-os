@@ -2,6 +2,10 @@
 
 - The web viewer uses the system font; it no longer bundles a font BifrOSt may not redistribute.
 
+## 0.2.3
+
+- Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.
+
 ## 0.2.0 — 2026-10-12
 
 - Nearby computers: Remote looks on the local network for other computers that share a desktop and lists them. Tap one to see its address.

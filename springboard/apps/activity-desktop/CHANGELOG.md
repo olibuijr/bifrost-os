@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.5
+
+- Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.
+
 ## 0.10.4 — 2026-10-23
 
 - Extra windows receive wheel and hover events.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.7
+
+- Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.
+
 ## 0.17.6 — 2026-10-25
 
 - Opening a message in its own window (double-click, File > Open Message, Open in New Window) marks it read, as the

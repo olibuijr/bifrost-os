@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.2
+
+- Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.
+
 ## 0.7.1 — 2026-10-24
 
 - Zoom Out no longer shows empty squares around the old view for about two seconds: once the shown tiles are in, the

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.9
+
+- Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.
+
 ## 0.2.8
 
 - Documentation only: the doc comment of the one-time-code clock helper is back above it.

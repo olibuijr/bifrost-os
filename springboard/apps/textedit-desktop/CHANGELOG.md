@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.13.1
+
+- Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.
+
 ## 1.13.0 — 2026-10-23
 
 - Fonts (Cmd+T) and Colors panels; text draws in its chosen family; all installed families are listed.

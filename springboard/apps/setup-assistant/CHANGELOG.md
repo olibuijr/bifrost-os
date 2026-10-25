@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3
+
+- Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.
+
 ## 0.1.2
 
 - Exported the existing vector icon as the required 180 × 180 PNG.

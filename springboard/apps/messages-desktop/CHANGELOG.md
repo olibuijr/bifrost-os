@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.3
+
+- Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.
+
 ## 0.7.2 — 2026-10-20
 
 - The search field has its own row under the window buttons instead of sitting beneath them.

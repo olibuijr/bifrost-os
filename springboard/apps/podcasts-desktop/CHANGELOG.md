@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.14.1
+
+- Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.
+
 ## 1.14.0 — 2026-10-23
 
 - Search also asks gpodder.net and matches authors; a Top Charts page; Select All works in the fields.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.4
+
+- Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.
+
 ## 1.9.3
 
 - The code identity pane (executable, hash, requirements) shows a process only when it was running when the entry was logged, so a recycled process id no longer shows an unrelated program; a crash report's detail is matched on the dump's own time as well as its process id.

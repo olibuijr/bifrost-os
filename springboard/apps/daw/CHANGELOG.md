@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.7
+
+- Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.
+
 ## 0.5.6 — 2026-10-20
 
 - Sound plays on the default output, and the app waits before reconnecting to the media service instead of retrying in a tight loop.

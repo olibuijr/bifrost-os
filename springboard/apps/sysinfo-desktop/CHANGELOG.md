@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.4
+
+- Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.
+
 ## 0.9.3
 
 - Fix: under the compliance harness (pinned clock) the app shows a fixed system profile at once instead of reading the machine, so its snapshot no longer varies with the host or with timing.

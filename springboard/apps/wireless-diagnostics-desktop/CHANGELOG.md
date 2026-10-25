@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.7
+
+- Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.
+
 ## 0.1.6
 
 - Wireless Diagnostics stops reading the radio while its window is hidden or minimised and starts again when it is shown, repaints only when a reading changes what is on screen, and kills an `iw` that does not answer in time (5 s for a link read, 30 s for a scan).

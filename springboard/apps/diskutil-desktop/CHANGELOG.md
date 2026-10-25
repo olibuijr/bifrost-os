@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.1
+
+- Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.
+
 ## 0.8.0 — 2026-10-23
 
 - Mount points and usage come from the system, so the system volume shows / and its real usage; Erase and First Aid are disabled for the running system.

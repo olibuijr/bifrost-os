@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.19.2
+
+- Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.
+
 ## 1.19.1 — 2026-10-24
 
 - The hour grid keeps its scroll when the quick-event popover opens and closes (8 AM at the top no longer jumps to midnight).

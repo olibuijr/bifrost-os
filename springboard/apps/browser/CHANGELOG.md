@@ -2,6 +2,10 @@
 
 - Nothing else changed: this release only rewords the notes for the start page.
 
+## 0.17.3
+
+- Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.
+
 ## 0.17.1 — 2026-10-20
 
 - The built-in start page is set in the system font.
