@@ -1225,15 +1225,16 @@ pub fn focus_ring(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, radius: f32) {
 }
 
 /// A push button of a sheet. The default button is filled with the accent and white text; others are control plates;
-/// destructive titles are red. `pressed` darkens.
-fn sheet_button(s: &mut dyn Canvas, ui: &Ui, r: Rect, b: &bifrost_ui::sheet::SheetButton, pressed: bool) {
+/// destructive titles are red. `pressed` darkens. `radius` is the corner (points): an alert's stacked buttons are
+/// capsules, a free-form sheet's buttons 6 pt.
+fn sheet_button(s: &mut dyn Canvas, ui: &Ui, r: Rect, b: &bifrost_ui::sheet::SheetButton, pressed: bool, radius: f32) {
     use bifrost_ui::sheet::ButtonRole;
     bifrost_ui::ax::record(bifrost_ui::Role::Button, &b.title, if b.role == ButtonRole::Default { "default" } else { "" }, r, true);
     let default = b.role == ButtonRole::Default;
     let fill = if default { crate::kit::appearance::accent_now() } else if pressed { CONTROL_PRESSED.now() } else { FIELD_BG.now() };
-    s.fill_rrect(RectF::new(ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h)), ui.pt(6.), fill);
+    s.fill_rrect(RectF::new(ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h)), ui.pt(radius), fill);
     if !default {
-        s.stroke_rrect(RectF::new(ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h)), ui.pt(6.), ui.pt(1.0).max(1.0), HAIRLINE_C.now());
+        s.stroke_rrect(RectF::new(ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h)), ui.pt(radius), ui.pt(1.0).max(1.0), HAIRLINE_C.now());
     }
     let color = if default { WHITE } else if b.role == ButtonRole::Destructive { crate::kit::ui::DESTRUCTIVE } else { LABEL.now() };
     let img = ui.text(&ui.fit(&b.title, MAC_BODY_PT, ui.pt(r.w - 8.)), MAC_BODY_PT, Weight::Regular, color);
@@ -1254,8 +1255,10 @@ pub fn alert_lines(ui: &Ui, sheet: &bifrost_ui::sheet::Sheet, panel_w_pt: f32) -
     (title, message)
 }
 
-/// A sheet over `parent` (the window rectangle, points): dims and blocks the parent, then draws the panel hanging from
-/// the title bar (`titlebar_h` tall) at slide `progress` (0..1, from `motion::Kind::SheetSlide`). Alerts draw their
+/// A sheet over `parent` (the window rectangle, points): dims and blocks the parent, then draws the panel attached to
+/// the title bar (`titlebar_h` tall) at slide `progress` (0..1, from `motion::Kind::SheetSlide`): its top edge is the
+/// title bar's bottom edge, square, with no gap, and it slides out from under the title bar
+/// (`bifrost_ui::sheet::attached_body`). An alert stacks its buttons full width (`Sheet::layout`). Alerts draw their
 /// title and message; free-form sheets draw the title and leave the area above the buttons to the caller, who gets the
 /// content rectangle back. Return/Escape and click blocking: `bifrost_ui::sheet::Sheet::key` and `::hit`.
 pub fn sheet(s: &mut dyn Canvas, ui: &Ui, parent: Rect, titlebar_h: f32, sheet: &bifrost_ui::sheet::Sheet, progress: f32, pressed: Option<u32>) -> Rect {
@@ -1265,7 +1268,7 @@ pub fn sheet(s: &mut dyn Canvas, ui: &Ui, parent: Rect, titlebar_h: f32, sheet: 
     let alert_text = sheet.alert.then(|| {
         let (title, message) = alert_lines(ui, sheet, sheet.size.0.min(parent.w));
         let message_lines = message.iter().map(|lines| lines.len().max(1)).sum::<usize>();
-        let h = bifrost_ui::sheet::alert_height(title.len().max(1), message_lines);
+        let h = bifrost_ui::sheet::alert_sheet_height(title.len().max(1), message_lines, sheet.buttons.len());
         bifrost_ui::sheet::record_alert_height(&sheet.title, &sheet.message, sheet.size.0, h);
         (title, message)
     });
@@ -1274,14 +1277,14 @@ pub fn sheet(s: &mut dyn Canvas, ui: &Ui, parent: Rect, titlebar_h: f32, sheet: 
     bifrost_ui::ax::begin_group(bifrost_ui::Role::Window, &sheet.title, l.panel);
     let dim = (0.28 * progress.clamp(0.0, 1.0) * 255.0) as u8;
     s.fill_rrect(RectF::new(ui.pt(parent.x), ui.pt(parent.y), ui.pt(parent.w), ui.pt(parent.h)), ui.pt(m::WINDOW_RADIUS), crate::kit::pack(0, 0, 0, dim));
-    // the top edge is square against the title bar: extend the rounded panel upward and keep it inside the parent
+    // attached to the title bar: everything is clipped to below its bottom edge, and the rounded body reaches above
+    // the clip, so its top corners are cut off square and only the bottom corners are rounded
     let r = bifrost_ui::sheet::SHEET_RADIUS_PT;
-    let top = (l.panel.y - r).max(parent.y);
-    let body = Rect { x: l.panel.x, y: top, w: l.panel.w, h: l.panel.bottom() - top };
-    if body.h <= r {
+    let Some((clip, body)) = bifrost_ui::sheet::attached_body(l.panel, parent, titlebar_h) else {
         bifrost_ui::ax::end_group();
         return l.panel;
-    }
+    };
+    s.push_clip(RectF::new(ui.pt(clip.x), ui.pt(clip.y), ui.pt(clip.w), ui.pt(clip.h)), 0.0);
     material(s, ui, body, r, Material::Popover);
     s.stroke_rrect(RectF::new(ui.pt(body.x), ui.pt(body.y), ui.pt(body.w), ui.pt(body.h)), ui.pt(r), ui.pt(1.0).max(1.0), HAIRLINE_C.now());
     let mut y = l.panel.y + SHEET_PAD_PT;
@@ -1312,10 +1315,14 @@ pub fn sheet(s: &mut dyn Canvas, ui: &Ui, parent: Rect, titlebar_h: f32, sheet: 
         blit(s, &head, ui.pt(l.panel.x + SHEET_PAD_PT) as i32, ui.pt(y) as i32);
         y += 26.0;
     }
-    for (b, (id, rect)) in sheet.buttons.iter().zip(&l.buttons) {
-        sheet_button(s, ui, *rect, b, pressed == Some(*id));
+    let radius = if sheet.alert { bifrost_ui::sheet::ALERT_BUTTON_H_PT / 2.0 } else { 6.0 };
+    for (id, rect) in &l.buttons {
+        if let Some(b) = sheet.buttons.iter().find(|b| b.id == *id) {
+            sheet_button(s, ui, *rect, b, pressed == Some(*id), radius);
+        }
     }
     let btn_top = l.buttons.first().map(|(_, r)| r.y).unwrap_or(l.panel.bottom() - SHEET_PAD_PT);
+    s.pop_clip();
     bifrost_ui::ax::end_group();
     Rect { x: l.panel.x + SHEET_PAD_PT, y, w: l.panel.w - SHEET_PAD_PT * 2.0, h: (btn_top - 12.0 - y).max(0.0) }
 }
@@ -2040,7 +2047,7 @@ mod tests {
 
     #[test]
     fn an_alert_of_wide_text_is_sized_from_the_wrap_it_draws_and_its_buttons_stay_clear() {
-        use bifrost_ui::sheet::{alert_height, wrapped_lines, ButtonRole, Hit, Sheet, SheetButton, SHEET_PAD_PT};
+        use bifrost_ui::sheet::{alert_sheet_height, stacked_buttons_h, wrapped_lines, ButtonRole, Hit, Sheet, SheetButton, ALERT_BUTTON_INSET_PT};
         let ui = test_ui();
         let (w, h) = (400usize, 600usize);
         let parent = Rect { x: 0.0, y: 0.0, w: 400.0, h: 600.0 };
@@ -2053,10 +2060,10 @@ mod tests {
         let mut px = vec![0u32; w * h];
         let content = sheet(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, &ui, parent, 28.0, &sh, 1.0, None);
         let l = sh.layout(parent, 28.0, 1.0);
-        assert_eq!(l.panel.h, alert_height(t.len(), drawn), "the panel is as tall as the lines drawn");
+        assert_eq!(l.panel.h, alert_sheet_height(t.len(), drawn, 2), "the panel is as tall as the lines drawn and the button stack");
         let btn_top = l.buttons[0].1.y;
         assert!(btn_top - content.y >= 12.0, "the last line ends above the buttons: text to {}, buttons at {btn_top}", content.y);
-        assert_eq!(btn_top, l.panel.bottom() - SHEET_PAD_PT - bifrost_ui::sheet::BUTTON_H_PT);
+        assert_eq!(btn_top, l.panel.bottom() - ALERT_BUTTON_INSET_PT - stacked_buttons_h(2));
         // a sheet built again (as apps do each frame) hits its buttons where they were drawn
         let again = Sheet::alert(title, message, buttons());
         let b = l.buttons[0].1;
