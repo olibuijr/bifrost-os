@@ -917,17 +917,21 @@ fn native_window_app(installed: &[super::apphost::Installed], w: &crate::bare::w
 impl Shell {
     /// Opens the strip on the previously used app, or moves the selection one step.
     pub(super) fn switcher_cycle(&mut self, reverse: bool) {
+        // a running app with no window is still an app to switch to (E2E13 1): the active one leads, the others follow
+        // the apps with windows; releasing on one reopens its window (`cmdtab_release`, `desk_open`, `ToApp::Reopen`)
+        let windowless_front = self.desk_windowless_front();
+        let windowless = self.ext_windowless_apps();
         if let Some(d) = &mut self.desk {
             if d.cmdtab.is_none() {
                 #[cfg(feature = "desktop-wayland")]
                 let order = {
                     let installed = super::apphost::installed();
-                    let front = d.native_windows.iter().find(|w| w.active).and_then(|w| native_window_app(&installed, w));
+                    let front = windowless_front.or_else(|| d.native_windows.iter().find(|w| w.active).and_then(|w| native_window_app(&installed, w)));
                     let native: Vec<AppId> = d.native_windows.iter().filter_map(|w| native_window_app(&installed, w)).collect();
-                    app_switch_order(front, d.wins.iter().rev().map(|w| w.app).chain(native))
+                    app_switch_order(front, d.wins.iter().rev().map(|w| w.app).chain(native).chain(windowless))
                 };
                 #[cfg(not(feature = "desktop-wayland"))]
-                let order = app_switch_order(None, d.wins.iter().rev().map(|w| w.app));
+                let order = app_switch_order(windowless_front, d.wins.iter().rev().map(|w| w.app).chain(windowless));
                 if order.len() >= 2 {
                     let sel = if reverse { order.len() - 1 } else { 1 };
                     d.cmdtab = Some((order, sel));

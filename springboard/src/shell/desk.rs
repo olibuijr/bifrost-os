@@ -359,6 +359,11 @@ pub(super) struct FrontIntent {
 pub struct Desk {
     /// the app the shell is bringing to the front, until it is in front for good (`FrontIntent`)
     pub(super) front_intent: Option<FrontIntent>,
+    /// The active app that has no window: an SDK app that ordered its last window out while it was in front (Cmd+W on
+    /// its last document). As on the reference it keeps the menu bar, the Dock dot and its place in Cmd+Tab, and the
+    /// window under it does not take the front, until another window is raised or opened (`raise`, `open`) or the app
+    /// gets a window back (`Shell::desk_windowless_front`).
+    pub(super) windowless_front: Option<AppId>,
     /// the window server's toplevel list changed since the front intent last looked at it (`Shell::desk_intent_tick`)
     #[cfg(feature = "desktop-wayland")]
     pub(super) intent_check: bool,
@@ -954,6 +959,8 @@ impl Desk {
     /// Brings window `i` to the front (and shows it); returns its new index. A hidden app comes back whole: raising one
     /// of its windows (the Dock, Cmd+Tab, the Window menu) shows every window Hide put away, as activating a hidden app does.
     pub fn raise(&mut self, i: usize) -> usize {
+        // a window coming to the front makes its app the active one
+        self.windowless_front = None;
         let app = self.wins[i].app;
         let parent = app.parent();
         let i = if self.hidden.iter().any(|a| a.parent() == parent) {
@@ -1269,6 +1276,7 @@ impl Desk {
 
     /// Opens (or raises) the window for `app`; `size` is the wanted outer size.
     pub fn open(&mut self, m: &Metrics, app: AppId, size: (i32, i32)) -> usize {
+        self.windowless_front = None;
         if let Some(i) = self.index_of(app) {
             // opening a hidden app (the Dock, Cmd+Tab, Spotlight) activates it: its windows come back in the order Hide
             // left them, the one that was in front in front, not the main window over its viewer (E2E N2)
@@ -2038,6 +2046,9 @@ impl Shell {
             // server hands back as Spotlight or the Apps grid closes went to the window it still knows in front (E2E6 1).
             // Only that hand-back: a press on the window below (a `Focus`) is the person's choice and raises it
             WindowEvent::HandBack(_) if self.desk_launching_above(i) => trace("hand-back ignored: the app above it is launching"),
+            // the active app closed its last window and stays active with none (`Desk::windowless_front`): the focus the
+            // window server gives the toplevel under the one that went is not an activation of that window's app (E2E13 1)
+            WindowEvent::ServerFocus(_) | WindowEvent::HandBack(_) if self.desk_windowless_front().is_some() => trace("window server focus ignored: the active app has no window"),
             WindowEvent::ServerFocus(_) | WindowEvent::HandBack(_) => {
                 trace(if matches!(ev, WindowEvent::HandBack(_)) { "hand-back: raised" } else { "window server focus: raised" });
                 self.desk.as_mut().unwrap().raise(i); if !self.is_locked() { self.screen = Screen::App(app.parent()); } self.dirty = true;
@@ -2841,11 +2852,33 @@ impl Shell {
             self.dirty = true;
             return;
         }
-        self.screen = match self.desk.as_ref().and_then(|d| d.front()).map(|w| w.app) {
+        // the active app with no window keeps the front (`Desk::windowless_front`)
+        self.screen = match self.desk_windowless_front().or_else(|| self.desk.as_ref().and_then(|d| d.front()).map(|w| w.app)) {
             Some(app) => Screen::App(app.parent()),
             None => Screen::Home,
         };
         self.dirty = true;
+    }
+
+    /// The active app that has no window (`Desk::windowless_front`) while that still holds: its process runs and none
+    /// of its windows (main or extra) is on the desk. The screen, the menu bar and the application menu follow it.
+    pub(super) fn desk_windowless_front(&self) -> Option<AppId> {
+        let d = self.desk.as_ref()?;
+        let app = d.windowless_front?;
+        let AppId::External(slot) = app else { return None };
+        let alive = self.ext.get(slot as usize).and_then(Option::as_ref).is_some_and(|h| h.running());
+        (alive && !d.wins.iter().any(|w| w.app.parent() == app)).then_some(app)
+    }
+
+    /// The running SDK apps that ordered their main window out (`AppHost::main_ordered_out`): they keep their Dock dot
+    /// and their place in Cmd+Tab with no window, and activating one sends `ToApp::Reopen` (`desk_open`).
+    pub(super) fn ext_windowless_apps(&self) -> Vec<AppId> {
+        self.ext
+            .iter()
+            .enumerate()
+            .filter(|(_, h)| h.as_ref().is_some_and(|h| h.running() && h.main_ordered_out))
+            .filter_map(|(slot, _)| u8::try_from(slot).ok().map(AppId::External))
+            .collect()
     }
 
     /// Alt/Ctrl/Meta+Tab on the desktop: raises the visible window behind the front one,
@@ -3007,6 +3040,9 @@ impl Shell {
         if !self.desk.as_ref().is_some_and(|d| d.index_of(app).is_some()) {
             return;
         }
+        // the app in front stays the active app with no window, its menu bar kept (File > New works), as on the
+        // reference: the window under it does not take the front (E2E13 1)
+        let was_front = self.screen == Screen::App(app);
         let t = self.last_input;
         self.desk_fx_start(app, FxCall::Close, t);
         #[cfg(feature = "desktop-wayland")]
@@ -3015,6 +3051,9 @@ impl Shell {
             if let Some(i) = d.index_of(app) {
                 d.close(i);
                 self.heap_trim_due = true;
+            }
+            if was_front {
+                d.windowless_front = Some(app);
             }
         }
         self.desk_refocus();
@@ -3233,7 +3272,7 @@ impl Shell {
             // keeps (Lead (a)); the grid's close refocuses
             // the app being brought to the front is the screen while the intent stands, whatever the window server's
             // focus did meanwhile (`desk_front_intent`)
-            let front = self.desk_front_intent().or_else(|| self.desk.as_ref().and_then(|d| d.front()).map(|w| w.app));
+            let front = self.desk_front_intent().or_else(|| self.desk_windowless_front()).or_else(|| self.desk.as_ref().and_then(|d| d.front()).map(|w| w.app));
             let screen = match front {
                 Some(app) => Screen::App(app.parent()),
                 None => Screen::Home,
@@ -5372,6 +5411,75 @@ mod tests {
         sh.desk.as_mut().unwrap().wins.retain(|w| w.app != main);
         sh.desk_open(main, 5.0);
         assert_eq!(reopens(), 0, "a window closed by the desk, not ordered out by the app, is no reopen");
+    }
+
+    /// E2E13 1: an app in front that orders its last window out (Cmd+W on TextEdit's last document) stays the active
+    /// app with no window, as on the reference: the screen (and so its menu bar) stays on it, the window under it does
+    /// not take the front, Cmd+Tab lists it first, and switching to it reopens its window with `Reopen`. A press on
+    /// another window hands the front over; an app that was not in front gives the front to nobody new.
+    #[test]
+    fn an_app_that_closes_its_last_window_stays_the_active_app() {
+        use crate::shell::Screen;
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.anim = None;
+        let (mine, peer) = bifrost_proto::sys::socketpair_pair().unwrap();
+        let cfg = bifrost_proto::Configure { w: 100, h: 100, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
+        sh.ext.push(Some(apphost::AppHost::with_channel("fixture", mine, None, cfg)));
+        let slot = (sh.ext.len() - 1) as u8;
+        let reopens = || {
+            let mut n = 0;
+            while let Ok(bifrost_proto::sys::Recv::Packet(p, _)) = peer.recv(false) {
+                n += usize::from(bifrost_proto::ToApp::decode(&p) == Ok(bifrost_proto::ToApp::Reopen));
+            }
+            n
+        };
+        let (main, other) = (AppId::External(slot), AppId::Terminal);
+        let m = sh.desk_metrics();
+        {
+            let d = sh.desk.as_mut().unwrap();
+            d.wins.clear();
+            d.open(&m, other, (900, 600));
+            d.open(&m, main, (600, 400));
+        }
+        sh.screen = Screen::App(main);
+        sh.desk_order_main_out(slot);
+        assert!(sh.desk.as_ref().unwrap().index_of(main).is_none(), "the window is gone");
+        assert_eq!(sh.screen, Screen::App(main), "the app keeps the front and its menu bar");
+        assert_eq!(sh.desk_windowless_front(), Some(main));
+        assert!(sh.ext_windowless_apps().contains(&main), "it counts as running with no window (Dock dot, Cmd+Tab)");
+        sh.desk_refocus();
+        sh.desk_sync_extra_windows();
+        assert_eq!(sh.screen, Screen::App(main), "no refocus or tick hands the front to the window under it");
+        // Cmd+Tab: the active app leads, the selection starts on the next one
+        sh.switcher_cycle(false);
+        let (order, sel) = sh.desk.as_ref().unwrap().cmdtab.clone().unwrap();
+        assert_eq!(order, vec![main, other]);
+        assert_eq!(sel, 1);
+        // releasing on the app reopens its window and tells it
+        sh.desk.as_mut().unwrap().cmdtab = Some((order, 0));
+        sh.cmdtab_release(1.0);
+        assert!(sh.desk.as_ref().unwrap().index_of(main).is_some(), "switching to it reopens its window");
+        assert_eq!(reopens(), 1);
+        assert_eq!(sh.desk_windowless_front(), None);
+        // closed again, then a press on the other window: that window's app is the active one
+        sh.desk_order_main_out(slot);
+        assert_eq!(sh.screen, Screen::App(main));
+        {
+            let d = sh.desk.as_mut().unwrap();
+            let i = d.index_of(other).unwrap();
+            d.raise(i);
+        }
+        sh.desk_refocus();
+        assert_eq!(sh.screen, Screen::App(other), "a raised window takes the front");
+        assert_eq!(sh.desk_windowless_front(), None);
+        assert!(sh.ext_windowless_apps().contains(&main), "the app still runs with no window");
+        // an app in the background closing its last window takes nothing from the app in front
+        sh.desk_open(main, 2.0);
+        let _ = reopens();
+        sh.desk_open(other, 3.0);
+        sh.desk_order_main_out(slot);
+        assert_eq!(sh.screen, Screen::App(other));
+        assert_eq!(sh.desk_windowless_front(), None);
     }
 
     /// E2E13: an app started in the background (a login item, a notification or share target) or a direct app that fell

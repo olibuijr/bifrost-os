@@ -1588,7 +1588,8 @@ impl Shell {
     /// Close or minimize the front window (the File menu and Ctrl+W / Ctrl+M).
     pub(super) fn desk_window_close_or_minimize(&mut self,minimize:bool)->Vec<Effect> {
         let mut effects=Vec::new();
-        if let Some(id)=self.foreign_active(){effects.push(Effect::ForeignWindowAction(id,minimize));}else if let Some(app)=self.desk.as_ref().and_then(|d|d.front()).map(|w|w.app){if minimize {let t=self.last_input;if let Some(i)=self.desk.as_ref().and_then(|d|d.index_of(app)){self.desk_minimize_window(i,t);}else{self.desk_refocus();}}else{self.desk_close_app(app);}}
+        // the active app with no window has nothing to close or minimize: the window under it is another app's
+        if let Some(id)=self.foreign_active(){effects.push(Effect::ForeignWindowAction(id,minimize));}else if self.desk_windowless_front().is_some(){}else if let Some(app)=self.desk.as_ref().and_then(|d|d.front()).map(|w|w.app){if minimize {let t=self.last_input;if let Some(i)=self.desk.as_ref().and_then(|d|d.index_of(app)){self.desk_minimize_window(i,t);}else{self.desk_refocus();}}else{self.desk_close_app(app);}}
         effects
     }
     /// Quits the front app (Cmd+Q and the App menu's Quit); `quit_step` decides what that means for the window in front.
@@ -1598,7 +1599,8 @@ impl Shell {
             let foreign:Vec<(u32,&str,bool)>=desk.map(|d|d.native_windows.iter().chain(d.linux_apps.iter().flat_map(|a|a.windows.iter())).map(|w|(w.id,w.app_id.as_str(),w.active)).collect()).unwrap_or_default();
             let installed=super::apphost::installed();
             let sdk_slot=|app_id:&str|installed.iter().position(|a|a.manifest.id==app_id).filter(|slot|self.ext.get(*slot).and_then(Option::as_ref).is_some_and(|h|h.running()&&h.route()==super::apphost::Route::Direct)).map(|slot|slot as u8);
-            quit_step(&foreign,sdk_slot,desk.and_then(|d|d.front()).map(|w|w.app))
+            // the active app with no window is the one Quit quits, not the app of the window under it
+            quit_step(&foreign,sdk_slot,self.desk_windowless_front().or_else(||desk.and_then(|d|d.front()).map(|w|w.app)))
         };
         match step {
             QuitStep::App(slot)=>{self.desk_quit_app(slot);Vec::new()}
@@ -1619,7 +1621,8 @@ impl Shell {
             if let Some(w)=self.desk.as_ref().and_then(|d|d.native_windows.iter().chain(d.linux_apps.iter().flat_map(|a|a.windows.iter())).find(|w|w.id==id)) {return FrontApp::Foreign(w.app_id.clone());}
         }
         // under the Apps grid every window is hidden: the app in front is the one that was in front when it opened
-        match self.desk.as_ref().and_then(|d|d.front()).map(|w|w.app).or_else(||self.bar_held_front()) {Some(app)=>FrontApp::Desk(app.parent()),None=>FrontApp::Nothing}
+        // the active app with no window (`Desk::windowless_front`) keeps the application menu
+        match self.desk_windowless_front().or_else(||self.desk.as_ref().and_then(|d|d.front()).map(|w|w.app)).or_else(||self.bar_held_front()) {Some(app)=>FrontApp::Desk(app.parent()),None=>FrontApp::Nothing}
     }
     /// The installed app (its slot) the front app is: an SDK app on the shell desk, or one the window server runs under its
     /// Wayland app id.
@@ -1667,7 +1670,8 @@ impl Shell {
     pub(super) fn desk_hide_front(&mut self)->Vec<Effect> {
         let effects=match self.front_app() {
             FrontApp::Foreign(app_id)=>{let ids=self.foreign_ids_where(|a|a==app_id.as_str());self.hide_foreign(ids)}
-            FrontApp::Desk(app)=>{if let Some(d)=self.desk.as_mut(){d.hide_app(app);}Vec::new()}
+            // hiding the active app that has no window hands the front to the window under it
+            FrontApp::Desk(app)=>{if let Some(d)=self.desk.as_mut(){d.hide_app(app);d.windowless_front=None;}Vec::new()}
             FrontApp::Nothing=>Vec::new(),
         };
         self.desk_refocus();
