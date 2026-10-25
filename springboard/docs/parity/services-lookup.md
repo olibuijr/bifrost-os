@@ -30,8 +30,10 @@ Look Up popover with dictionary and quick search results on Ctrl+Cmd+D and three
 
 ### Look Up in Dictionary
 
-- BifrOSt path: route `Route::LookUp(term)`, opening the popover. Its Open in Dictionary row runs the `look-up` intent
-  (`Shell::run_intent` over `shell/intents.rs::run_with`, `intent.look-up` with `{"word": ...}`).
+- BifrOSt path: route `Route::Intent` to the Dictionary app's `look-up` intent (`Shell::run_intent` over
+  `shell/intents.rs::run_with`, `intent.look-up` with `{"word": ...}`), which opens Dictionary on the term as the
+  reference's Services item does. The Look Up popover opens only from the Ctrl+Cmd+D chord
+  (`SelectionUse::LookUpPopover`, see `look-up-popover.md`).
 - Done: the term is the first line of the selection, trimmed, up to 64 characters (`ui/src/look_up.rs::term_of`).
 - Needs Midget: the Dictionary app opens and answers the intent (it returns the definition as the reply's dialog).
   The reply is not yet shown anywhere except the Dictionary app itself.
