@@ -353,12 +353,8 @@ impl WmState {
                 self.pointer_motion(pos, event.time_msec());
             }
             InputEvent::PointerMotionAbsolute { event } => {
-                self.last_input_touch = false;
-                // the device range goes through the output transform, as a touch does (touch_position)
                 let norm = crate::touch::normalized::<I, _>(&event);
-                if let Some(pos) = self.touch_position(norm) {
-                    self.pointer_motion(pos, event.time_msec());
-                }
+                self.pointer_motion_absolute(norm, event.time_msec());
             }
             InputEvent::PointerButton { event } => {
                 self.pointer_button(event.button_code(), event.state() == ButtonState::Pressed, event.time_msec())
@@ -421,6 +417,18 @@ impl WmState {
     }
 
     /// Moves the pointer to `pos`, kept on the output. A pointer locked by the focused surface does not move.
+    /// An absolute pointer (a tablet, VNC, an absolute uinput device) at `norm`, 0..1 of the device's range: the device
+    /// range goes through the output transform, as a touch does (`touch_position`), and the move is the same
+    /// `pointer_motion` a relative move makes, so a move inside a surface reaches it as `wl_pointer.motion` and a move
+    /// onto another surface as a leave and an enter (hover follows the pointer; E2E7 d01-d04).
+    pub fn pointer_motion_absolute(&mut self, norm: crate::touch::Norm, time: u32) {
+        // real pointer motion shows the pointer image again after a touch (touch.rs)
+        self.last_input_touch = false;
+        if let Some(pos) = self.touch_position(norm) {
+            self.pointer_motion(pos, time);
+        }
+    }
+
     pub fn pointer_motion(&mut self, pos: Point<f64, Logical>, time: u32) {
         let pointer = self.seat.get_pointer().expect("pointer");
         if pointer.current_focus().is_some_and(|s| motion_locked(constraint_state(&s, &pointer))) {
