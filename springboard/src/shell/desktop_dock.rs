@@ -70,11 +70,11 @@ impl Shell {
    let d=self.desk.as_mut().unwrap();
    if magnify!=d.dock_ptr.is_some(){d.dock_mag=Some(Anim{from:cur,to:if magnify{1.}else{0.},start:now,kind:Kind::DockMagnify,curve:Curve::EaseOut});self.dirty=true;}
    let moved=d.dock_ptr!=magnify.then_some((x,y));d.dock_ptr=magnify.then_some((x,y));if moved&&magnify{self.dirty=true;}
-   // the hovered icon comes from the layout centred on this pointer, the one drawn and pressed next (W2-23): the
-   // layout of the previous pointer put the label, and a quick press, on a neighbour
-   let hov=if in_zone{self.dock_press(&self.dock_live(bar,&rects,now).1).iter().position(|r|r.contains(x,y))}else{None};
+   // the hovered icon comes from the row magnified about this pointer, the one drawn and pressed next (W2-23): the
+   // layout of the previous pointer put the label, and a quick press, on a neighbour; `dock_tick` re-tests it per frame
+   let hov=if in_zone{self.dock_hit(bar,&rects,x,y,now)}else{None};
+   self.dock_set_hover(hov,t);
    let d=self.desk.as_mut().unwrap();
-   if d.dock_hover!=hov{d.dock_label_last=d.dock_hover;d.dock_label_ms=t;d.dock_hover=hov;self.dirty=true;}
    if edge||in_zone||menu {d.dock_hide_at=None;dock_reveal(d,now);if !d.dock_visible{self.dirty=true;}}
    else if d.dock_autohides()&&d.dock_hide_at.is_none(){d.dock_hide_at=Some(t+550.);}
    return Some(vec![]);
@@ -99,6 +99,23 @@ impl Shell {
   }
   let d=self.desk.as_mut().unwrap();
   if d.dock_vis_anim.as_ref().is_some_and(|a|a.done(now)){let hide=d.dock_vis_anim.as_ref().is_some_and(|a|a.to<0.5);if hide{d.dock_visible=false;}d.dock_vis_anim=None;self.dirty=true;}
+  // the row keeps moving under a resting pointer while it grows, shrinks or slides in, so the hovered icon (its label,
+  // a press latched from it) is hit-tested again against the row this frame draws, not the one of the last pointer event
+  if let Some((x,y))=self.desk.as_ref().and_then(|d|d.dock_ptr){
+   let m=self.desk_metrics();let (_,bar,rects)=self.desk_dock(&m);
+   let hov=self.dock_hit(bar,&rects,x,y,now);self.dock_set_hover(hov,t);
+  }
+ }
+ /// The Dock slot whose press area (`dock_press`) contains (`x`, `y`) in the row drawn at `now` seconds: slid, then
+ /// magnified about the current pointer and clamped to the screen. Hover, labels, press, release and the context menu
+ /// all use this one geometry.
+ pub(super) fn dock_hit(&self,bar:Rect,rects:&[Rect],x:f32,y:f32,now:f64)->Option<usize>{
+  self.dock_press(&self.dock_live(bar,rects,now).1).iter().position(|r|r.contains(x,y))
+ }
+ /// Sets the hovered Dock slot, starting the label cross-fade when it changes (`t` ms).
+ fn dock_set_hover(&mut self,hov:Option<usize>,t:f64){
+  let Some(d)=self.desk.as_mut()else{return;};
+  if d.dock_hover!=hov{d.dock_label_last=d.dock_hover;d.dock_label_ms=t;d.dock_hover=hov;self.dirty=true;}
  }
  /// Whether a dock list entry is an app the user keeps in the Dock (not the Apps icon, Trash, the Downloads stack, a minimized window or a recent).
  pub(super) fn dock_removable(&self,entry:usize)->bool{entry!=apps().len()&&entry!=DOCK_TRASH&&dock_min_index(entry).is_none()&&self.dock_section(entry)==0}
@@ -170,25 +187,40 @@ pub fn magnify_factor(dist:f32,radius:f32)->f32{if radius<=0.||dist>=radius{0.}e
 pub(super) fn fade(c:u32,k:f32)->u32{let k=k.clamp(0.,1.);let m=|shift:u32|((((c>>shift)&255) as f32*k).round() as u32)<<shift;m(0)|m(8)|m(16)|m(24)}
 /// Magnifies a row of equal square icon `rects` around `ptr` (a coordinate along the dock axis: x unless `vertical`).
 /// Sizes follow `magnify_factor` between the base size and `max`, quantised to 2 px so scaled icons cache well; gaps are
-/// kept, the row stays centred where it was, and icons keep their far edge (`far`: bottom or right) or near edge, so they
-/// grow into the screen.
+/// kept, and icons keep their far edge (`far`: bottom or right) or near edge, so they grow into the screen.
+///
+/// The row grows about the pointer, as the reference Dock does: the point of the resting row under the pointer (a
+/// fraction of an icon, or of the gap between two) is the same fraction of the same icon or gap in the magnified row,
+/// and it stays under the pointer, so the icons before it grow away to the start and those after it to the end. The
+/// icon under the pointer is therefore the icon drawn under it at every magnification amount (E2E N5: the row used to
+/// stay centred on its resting middle, which slid a neighbour under a pointer away from the middle). A pointer beyond
+/// either end of the row keeps that end where it rests. `Shell::dock_magnified` clamps the ends to the screen after.
 pub fn magnified_rects(rects:&[Rect],vertical:bool,far:bool,ptr:f32,max:i32,radius:f32,amount:f32)->Vec<Rect>{
  if rects.is_empty()||amount<=0.{return rects.to_vec();}
  let (start,len):(fn(&Rect)->i32,fn(&Rect)->i32)=if vertical{(|r|r.y,|r|r.h)}else{(|r|r.x,|r|r.w)};
  let base=len(&rects[0]);
  let sizes:Vec<i32>=rects.iter().map(|r|{let c=start(r) as f32+len(r) as f32/2.;let f=magnify_factor((c-ptr).abs(),radius)*amount.min(1.);base+(((max-base).max(0) as f32*f/2.).round() as i32)*2}).collect();
- let last=&rects[rects.len()-1];
- let old_span=start(last)+len(last)-start(&rects[0]);
  let gaps:Vec<i32>=rects.windows(2).map(|w|start(&w[1])-start(&w[0])-len(&w[0])).collect();
- let new_span:i32=sizes.iter().sum::<i32>()+gaps.iter().sum::<i32>();
- let mut at=start(&rects[0])-(new_span-old_span)/2;
- let mut out=Vec::with_capacity(rects.len());
- for (i,r) in rects.iter().enumerate(){
-  let n=sizes[i];
-  out.push(if vertical{let x=if far{r.x+r.w-n}else{r.x};Rect{x,y:at,w:n,h:n}}else{let y=if far{r.y+r.h-n}else{r.y};Rect{x:at,y,w:n,h:n}});
-  at+=n+gaps.get(i).copied().unwrap_or(0);
- }
- out
+ // the magnified row laid out from 0
+ let mut at=0;let mut starts=Vec::with_capacity(rects.len());
+ for (i,sz) in sizes.iter().enumerate(){starts.push(at);at+=sz+gaps.get(i).copied().unwrap_or(0);}
+ // the anchor: a resting coordinate `a` and where the same point lies in the magnified row (`q`)
+ let n=rects.len();let last=&rects[n-1];
+ let (a,q)=if ptr<=start(&rects[0]) as f32{(start(&rects[0]) as f32,0.)}
+  else if ptr>=(start(last)+len(last)) as f32{((start(last)+len(last)) as f32,(starts[n-1]+sizes[n-1]) as f32)}
+  else{
+   let mut anchor=(ptr,(starts[n-1]+sizes[n-1]) as f32);
+   for (i,r) in rects.iter().enumerate(){
+    let (s0,l)=(start(r) as f32,len(r) as f32);
+    if ptr<s0+l{anchor=(ptr,starts[i] as f32+(ptr-s0).max(0.)/l.max(1.)*sizes[i] as f32);break;}
+    let g=gaps.get(i).copied().unwrap_or(0) as f32;
+    // gaps keep their width, so the pointer keeps its distance past the icon before it
+    if ptr<s0+l+g{anchor=(ptr,(starts[i]+sizes[i]) as f32+(ptr-s0-l));break;}
+   }
+   anchor
+  };
+ let offset=(a-q).round() as i32;
+ rects.iter().enumerate().map(|(i,r)|{let sz=sizes[i];let at=starts[i]+offset;if vertical{let x=if far{r.x+r.w-sz}else{r.x};Rect{x,y:at,w:sz,h:sz}}else{let y=if far{r.y+r.h-sz}else{r.y};Rect{x:at,y,w:sz,h:sz}}}).collect()
 }
 impl Shell {
  /// Where a dock list entry sits in the section order: 0 kept in the Dock, 1 recents (running, not kept), 2 minimized windows and the Trash.
@@ -485,6 +517,65 @@ fn dock_reveal(d:&mut super::desk::Desk,now:f64){
   assert_eq!(out[2].y+out[2].h,row[2].y+row[2].h,"icons keep the bottom edge");
   let (a,b)=(row[0].x+row[4].x+row[4].w,out[0].x+out[4].x+out[4].w);assert!((a-b).abs()<=2,"centred");
   assert_eq!(magnified_rects(&row,false,true,0.,96,150.,0.),row);
+ }
+ /// E2E N5: the row grows about the pointer, so the icon (or gap) under the pointer in the resting row is the icon (or
+ /// gap) drawn under it at every amount, for a pointer anywhere along the row; a pointer past an end keeps that end.
+ #[test]fn the_magnified_row_keeps_the_pointed_icon_under_the_pointer(){
+  let row:Vec<Rect>=(0..12).map(|i|Rect{x:300+i*58,y:700,w:48,h:48}).collect();
+  let (first,end)=(row[0].x,row[11].x+row[11].w);
+  for amount in[0.2,0.5,1.]{for p in (first-30)..(end+30){
+   let ptr=p as f32+0.5;
+   let out=magnified_rects(&row,false,true,ptr,96,150.,amount);
+   if p<first{assert_eq!(out[0].x,first,"a pointer before the row keeps its start ({p}, {amount})");continue;}
+   if p>=end{assert_eq!(out[11].x+out[11].w,end,"a pointer past the row keeps its end ({p}, {amount})");continue;}
+   let i=row.iter().position(|r|p<r.x+r.w).unwrap();
+   if p>=row[i].x{
+    assert!(out[i].contains(ptr,724.),"pointer {p} on resting icon {i} is on drawn icon {i} ({amount}): {:?}",out[i]);
+   }else{
+    // in the gap before icon i: still between the same two drawn icons
+    assert!(ptr>=(out[i-1].x+out[i-1].w) as f32-1.&&ptr<=out[i].x as f32+1.,"pointer {p} in gap {}..{i} stays in it ({amount})",i-1);
+   }
+   assert!(out[0].x<=first&&out[11].x+out[11].w>=end,"both ends grow away from the pointer");
+  }}
+  // the growth is shared about the pointer: on the middle of the row both ends move out alike
+  let mid=(row[5].x+row[5].w+row[6].x) as f32/2.;let out=magnified_rects(&row,false,true,mid,96,150.,1.);
+  assert!(((first-out[0].x)-(out[11].x+out[11].w-end)).abs()<=2,"symmetric about the pointer");
+ }
+
+ /// The pointer on each icon's centre, in each gap and at both ends, along the whole Dock: the hovered slot (its label)
+ /// is the slot drawn under the pointer in that frame, while the row grows and once it has grown, and a press there
+ /// resolves the same slot, for every Dock position; on a Bottom Dock with room to grow it is the icon that rested there.
+ #[test]fn the_hovered_dock_icon_is_the_one_drawn_under_the_pointer_across_the_dock(){
+  for(w,h,positions)in[(1920,1080,vec![Position::Bottom]),(1280,800,vec![Position::Bottom,Position::Left,Position::Right])]{for position in positions{
+   let probe={let mut sh=desktop(w,h);sh.desk.as_mut().unwrap().dock_preferences.position=position;sh};
+   let m=probe.desk_metrics();let(_,bar,rest)=probe.desk_dock(&m);let vertical=position!=Position::Bottom;
+   let at=|along:f32,r:&Rect|if vertical{((r.x+r.w/2) as f32,along)}else{(along,(r.y+r.h/2) as f32)};
+   let (s0,l0)=(|r:&Rect|if vertical{r.y}else{r.x},|r:&Rect|if vertical{r.h}else{r.w});
+   let mut points=vec![];
+   for k in 0..rest.len(){
+    points.push((at(s0(&rest[k]) as f32+l0(&rest[k]) as f32/2.,&rest[k]),Some(k)));
+    if let Some(n)=rest.get(k+1){let g=s0(n)-s0(&rest[k])-l0(&rest[k]);if g>=2{points.push((at((s0(&rest[k])+l0(&rest[k])) as f32+(g/2) as f32-0.5,&rest[k]),None));}}
+   }
+   // the row's two ends, on the plate's padding
+   points.push((at(s0(&rest[0]) as f32-1.,&rest[0]),None));
+   let last=rest[rest.len()-1];points.push((at((s0(&last)+l0(&last)) as f32,&last),None));
+   for((x,y),expect)in points{
+    let mut sh=desktop(w,h);sh.desk.as_mut().unwrap().dock_preferences.position=position;
+    sh.desktop_pointer(x,y,false,1000.);
+    for t in[1050.,1300.]{
+     sh.dock_tick(t);
+     let drawn=sh.dock_hit(bar,&rest,x,y,t/1000.);
+     assert_eq!(sh.desk.as_ref().unwrap().dock_hover,drawn,"{position:?} {w}x{h} at ({x},{y}), {t} ms: the label names the drawn icon");
+     if let(1920,Some(k))=(w,expect){
+      assert_eq!(drawn,Some(k),"at ({x},{y}), {t} ms: the icon that rested under the pointer stays under it");
+      assert!(sh.dock_live(bar,&rest,t/1000.).1[k].contains(x,y),"the pointer is on the drawn icon itself");
+     }
+    }
+    let hov=sh.desk.as_ref().unwrap().dock_hover;
+    let press=sh.dock_press(&sh.dock_live(bar,&rest,1.3).1);
+    assert_eq!(press.iter().position(|r|r.contains(x,y)),hov,"a press resolves the slot the label names");
+   }
+  }}
  }
  /// W2-24: the plate grows along the axis with the magnified row and keeps the end padding; at rest it is the capsule.
  #[test]fn the_plate_grows_with_the_magnified_row(){
