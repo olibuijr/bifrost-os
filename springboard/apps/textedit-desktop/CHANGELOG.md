@@ -4,6 +4,7 @@
 
 - Each document has its own window: File > New (and Duplicate, or shared text) opens a second window and keeps the first; a file opened while the front window holds an empty Untitled takes its place; closing a document closes its window.
 - The Services submenu lists the services for the selected text, and Look Up with only a caret defines the word at the caret: the document reports its selection to the system as text fields do.
+- Closing an edited document, with File > Close or the window's close button, asks first: a sheet offers Don't Save, Cancel and Save, and the document closes only once it is answered. The close button used to take the window away and bring the document straight back.
 
 ## 1.13.1
 

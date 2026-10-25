@@ -510,7 +510,8 @@ impl TextEditApp {
                 || self.settings
                 || self.encodings_panel
                 || self.spelling_panel
-                || self.plain_sheet;
+                || self.plain_sheet
+                || self.close_alert_here();
             if find_field && !sheet_open && matches!(action, Action::Paste | Action::PasteMatch) {
                 let line = clipboard::text().map(|s| s.lines().next().unwrap_or("").to_string()).unwrap_or_default();
                 return self.type_into(&line);
@@ -530,6 +531,9 @@ impl TextEditApp {
         if matches!(action, Action::Paste | Action::PasteMatch) && panel_open {
             let line = clipboard::text().map(|s| s.lines().next().unwrap_or("").to_string()).unwrap_or_default();
             return self.type_into(&line);
+        }
+        if let Action::CloseAnswer(choice) = action {
+            return self.answer_close(ctx, choice);
         }
         if matches!(action, Action::PlainDone) {
             self.plain_sheet = false;
@@ -1273,6 +1277,7 @@ impl TextEditApp {
             || self.settings
             || self.spelling_panel
             || self.plain_sheet
+            || self.close_alert_here()
             || self.line.is_some()
             || self.link.is_some();
         if sheet || py < geom.body_top || py >= geom.body_bottom {
@@ -1763,6 +1768,33 @@ impl TextEditApp {
         was_rich
     }
 
+    /// Whether the window being handled shows the close confirmation: its document is the one waiting to close.
+    fn close_alert_here(&self) -> bool {
+        self.current_doc.is_some() && self.docs.alert_doc() == self.current_doc
+    }
+
+    /// The close confirmation was answered: Save saves and then closes, Don't Save closes now (`sync_windows` closes the
+    /// window), Cancel keeps the document and its window as they are.
+    fn answer_close(&mut self, ctx: &Ctx, choice: u8) -> bool {
+        if self.docs.alert_doc().is_none() {
+            return false;
+        }
+        let notices = self.docs.answer_alert(ctx, choice as u32);
+        self.after_documents(&notices);
+        true
+    }
+
+    /// The close confirmation's touches: the buttons it shows; the rest of the window is blocked while it is up.
+    fn touch_close_alert(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
+        let geom = self.geom(ctx);
+        let layout = properties::layout_rows(geom.width, geom.body_top, 1);
+        let buttons = view::close_alert_buttons(&ctx.ui, &layout);
+        match buttons.iter().find(|b| b.rect.contains(px, py)).and_then(|b| b.action) {
+            Some(action) => self.perform(ctx, action),
+            None => true,
+        }
+    }
+
     /// The Make Plain Text confirmation's touches: the buttons it shows.
     fn touch_plain(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
         let geom = self.geom(ctx);
@@ -1861,7 +1893,7 @@ impl TextEditApp {
     /// Typed text: into the find field when it has the keyboard, otherwise into the page.
     fn type_into(&mut self, s: &str) -> bool {
         let printable: String = s.chars().filter(|c| !c.is_control()).collect();
-        if printable.is_empty() {
+        if printable.is_empty() || self.close_alert_here() {
             return false;
         }
         // the font panel jumps to the family whose name is typed (and applies it, as clicking it would)
@@ -2108,6 +2140,7 @@ impl TextEditApp {
             && !self.plain_sheet
             && self.fonts.is_none()
             && !self.colors_panel
+            && !self.close_alert_here()
     }
 
     /// A navigation key, with the modifiers a chord carries: Shift extends the selection, Alt or Ctrl move by word, Cmd by
@@ -2215,6 +2248,10 @@ impl TextEditApp {
         let (px, py) = (x / ctx.ui.s, y / ctx.ui.s);
         match kind {
             TouchKind::Down => {
+                // the close confirmation is a sheet over the whole window: it takes the touches first
+                if self.close_alert_here() {
+                    return self.touch_close_alert(ctx, px, py);
+                }
                 if self.fonts.is_some() {
                     return self.touch_fonts(ctx, px, py);
                 }
@@ -2839,6 +2876,15 @@ impl TextEditApp {
                         None => false,
                     };
                 }
+                // the close confirmation: Return saves, Escape cancels, other keys do nothing behind the sheet
+                if self.close_alert_here() {
+                    use bifrost_app::document::alert;
+                    return match code {
+                        13 => self.perform(ctx, Action::CloseAnswer(alert::SAVE as u8)),
+                        1 | 27 => self.perform(ctx, Action::CloseAnswer(alert::CANCEL as u8)),
+                        _ => false,
+                    };
+                }
                 // the properties panel takes the keys while it is open
                 if self.props.is_some() {
                     return match code {
@@ -3062,6 +3108,12 @@ impl TextEditApp {
             let layout = properties::layout_rows(geom.width, geom.body_top, 1);
             let buttons = view::plain_buttons(ui, &layout);
             view::draw_confirm(canvas, ui, &layout, "Make Plain Text", "Attachments will be removed from the document.", &buttons);
+        }
+        // the close confirmation of this window's document, over everything else in the window
+        if let Some(alert) = self.docs.alert().filter(|_| self.close_alert_here()) {
+            let layout = properties::layout_rows(geom.width, geom.body_top, 1);
+            let buttons = view::close_alert_buttons(ui, &layout);
+            view::draw_alert(canvas, ui, &layout, &alert.title, &alert.message, &buttons);
         }
         if let Some(typed) = &self.line {
             let layout = properties::layout_rows(geom.width, geom.body_top, 1);
