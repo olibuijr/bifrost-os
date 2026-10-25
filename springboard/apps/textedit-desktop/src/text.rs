@@ -374,6 +374,8 @@ struct Snapshot {
     anchor: usize,
     head: usize,
     kind: Kind,
+    /// The font new text takes (`Text::default_font`): Make Plain Text changes it, so Undo puts the rich one back.
+    default_font: u8,
 }
 
 /// Where the document is in its edit history. `position` is the undo depth, `epoch` changes when a new edit
@@ -423,6 +425,16 @@ impl Text {
         if self.cells.is_empty() {
             self.typing.font = self.default_font;
         }
+    }
+
+    /// A plain text document read from disk takes the plain text font throughout, as Make Plain Text leaves one, so
+    /// every plain document uses one font. Makes no undo entry (a load just started the history over).
+    pub fn use_plain_font(&mut self) {
+        for c in &mut self.cells {
+            c.style.font = PLAIN_FONT;
+        }
+        self.typing.font = PLAIN_FONT;
+        self.default_font = PLAIN_FONT;
     }
 
     /// Replaces the content (a file was read). Undo, redo and the selection start over.
@@ -621,7 +633,7 @@ impl Text {
             self.epoch += 1;
             self.redo.clear();
         }
-        self.undo.push(Snapshot { cells: self.cells.clone(), anchor: self.anchor, head: self.head, kind });
+        self.undo.push(Snapshot { cells: self.cells.clone(), anchor: self.anchor, head: self.head, kind, default_font: self.default_font });
         if self.undo.len() > UNDO_LIMIT {
             self.undo.remove(0);
         }
@@ -1144,20 +1156,21 @@ impl Text {
 
     pub fn undo(&mut self) -> bool {
         let Some(snap) = self.undo.pop() else { return false };
-        self.redo.push(Snapshot { cells: self.cells.clone(), anchor: self.anchor, head: self.head, kind: snap.kind });
+        self.redo.push(Snapshot { cells: self.cells.clone(), anchor: self.anchor, head: self.head, kind: snap.kind, default_font: self.default_font });
         self.restore(snap);
         true
     }
 
     pub fn redo(&mut self) -> bool {
         let Some(snap) = self.redo.pop() else { return false };
-        self.undo.push(Snapshot { cells: self.cells.clone(), anchor: self.anchor, head: self.head, kind: snap.kind });
+        self.undo.push(Snapshot { cells: self.cells.clone(), anchor: self.anchor, head: self.head, kind: snap.kind, default_font: self.default_font });
         self.restore(snap);
         true
     }
 
     fn restore(&mut self, snap: Snapshot) {
         self.cells = snap.cells;
+        self.default_font = snap.default_font;
         self.anchor = snap.anchor.min(self.len());
         self.head = snap.head.min(self.len());
         self.last_kind = None;
@@ -1841,6 +1854,18 @@ mod attachment_tests {
         assert!(!t.has_attachments());
         assert!(t.undo(), "one undo entry brings the picture back");
         assert!(t.has_attachments());
+    }
+
+    #[test]
+    fn undo_of_make_plain_restores_the_rich_default_font() {
+        let mut t = Text::new();
+        t.set_default_font(0);
+        t.make_plain();
+        assert_eq!(t.default_font, PLAIN_FONT);
+        assert!(t.undo());
+        assert_eq!(t.default_font, 0, "Undo brings the rich text default back");
+        assert!(t.redo());
+        assert_eq!(t.default_font, PLAIN_FONT, "Redo makes it plain again");
     }
 
     #[test]

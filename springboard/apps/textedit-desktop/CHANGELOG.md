@@ -4,6 +4,8 @@
 
 - Format > Make Plain Text asks first, as the reference does: "Convert this document to plain text?", with OK and Cancel (it used to convert at once unless the document had attachments).
 - A converted document takes the fixed-pitch plain text font instead of keeping Helvetica.
+- Undo of Make Plain Text also restores the rich text default font, so text typed afterwards is no longer in the plain font.
+- A plain text file opened from disk uses the plain text font too, so every plain document has one font.
 
 ## 1.13.3
 
