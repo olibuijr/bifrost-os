@@ -1783,9 +1783,11 @@ impl Shell {
             let w=w.min(width.saturating_sub(x));let h=h.min(height.saturating_sub(y));
             if w>0&&h>0 {
                 let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
-                // the surface spans the veil so a click anywhere closes the grid, but only the capsule and the panel are opaque
+                // the surface spans the veil so a click anywhere closes the grid; the capsule and the panel are opaque, the rest a dim backdrop
                 let mask=self.overview.grid.overlay_mask(self,(x,y,w,h));
                 let mut image=Image{w,h,px:data};image.apply_mask(&mask);
+                // and the rest of the veil dims the desktop behind it, other clients' windows included (E2E6 6)
+                self.overview.grid.overlay_backdrop(&mut image.px);
                 frames.push(crate::bare::wayland::ChromeFrame{dock:None,id:8,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
             }
         }
