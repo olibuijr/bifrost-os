@@ -664,7 +664,15 @@ fn table_row(hits: &mut BTreeMap<String, Hit>, key: String, title: &str, text: S
 fn build_tables(c: &Corpus) -> (Vec<Table>, BTreeMap<String, Hit>) {
     let mut hits: BTreeMap<String, Hit> = BTreeMap::new();
     let fx = fixed();
-    let apps_rows = apps().iter().map(|a| table_row(&mut hits, app_usage_key(a.id), a.name, String::new(), search_rank::Kind::App, Hit::App(a.id), fuzzy::fold(a.name))).collect();
+    // an app is found by its name and by its aliases ("terminal" for Term, "preview" for Viewer)
+    let apps_rows = apps()
+        .iter()
+        .map(|a| {
+            let aliases = super::apps::search_aliases(a.icon);
+            let folded = if aliases.is_empty() { fuzzy::fold(a.name) } else { format!("{} {}", fuzzy::fold(a.name), fuzzy::fold(aliases)) };
+            table_row(&mut hits, app_usage_key(a.id), a.name, aliases.to_string(), search_rank::Kind::App, Hit::App(a.id), folded)
+        })
+        .collect();
     let settings_rows = settings::PAGES
         .iter()
         .map(|&page| {
@@ -2812,6 +2820,15 @@ mod tests {
         assert_eq!(p.moved(114.0, 112.0, 10.0), Pull::Page, "more sideways than down pages");
         assert_eq!(p.moved(100.0, 88.0, 10.0), Pull::Page, "upwards is never a pull");
         assert_eq!(p.moved(-20.0, 100.0, 10.0), Pull::Page);
+    }
+
+    /// E2E9 1: "terminal" finds the built-in Terminal (named "Term" in the Dock) as an Application, and it is the
+    /// Top Hit, so Return raises it instead of opening the word in Dictionary.
+    #[test]
+    fn the_built_in_terminal_is_found_by_its_common_name() {
+        let g = results("terminal", &[]);
+        assert_eq!(g[0], Group { title: "Top Hit", hits: vec![Hit::App(AppId::Terminal)] });
+        assert!(results("term", &[]).iter().any(|g| g.hits.contains(&Hit::App(AppId::Terminal))), "its own name still finds it");
     }
 
     #[test]
