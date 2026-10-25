@@ -125,7 +125,7 @@ pub fn visual_search_apps(apps: &[super::apphost::Installed]) -> Vec<String> {
 /// Blocking: run it off the UI thread.
 pub fn visual_search_at(path: &std::path::Path, app_id: &str, scene: &bifrost_ui::visual_search::Scene, wait: Duration) -> Vec<bifrost_ui::visual_search::Match> {
     let line = bifrost_ui::visual_search_wire::request_line(scene, 1);
-    let Ok(reply) = exchange_at(path, &line, wait) else { return Vec::new() };
+    let Ok(reply) = exchange_within(path, &line, wait, VISUAL_SEARCH_REPLY_WAIT) else { return Vec::new() };
     let mut found = bifrost_ui::visual_search_wire::matches_from_reply(&reply).unwrap_or_default();
     for m in &mut found {
         m.app = app_id.to_string();
@@ -148,56 +148,242 @@ fn run_at(path: &std::path::Path, line: &str, wait: Duration) -> Result<Option<S
     parse_reply(&exchange_at(path, line, wait)?)
 }
 
+/// Largest reply the shell reads from an app, in bytes. A longer one fails the call instead of filling the shell's memory.
+pub const MAX_REPLY: u64 = 1024 * 1024;
+/// How long the shell gives an app to take the request and answer it, once connected: the SDK's longest pending call
+/// (`bifrost_core::app_control_socket::MAX_PENDING_MS`, `bifrost_app::control::MAX_TIMEOUT_MS`) plus a margin for the
+/// app's event loop, so a slow async answer arrives before the shell gives up.
+pub const REPLY_WAIT: Duration = Duration::from_millis(bifrost_core::app_control_socket::MAX_PENDING_MS + 2_000);
+/// The reply wait of one visual search provider. The providers are asked one after another, so one that never
+/// answers must not hold the whole search for [`REPLY_WAIT`].
+const VISUAL_SEARCH_REPLY_WAIT: Duration = Duration::from_secs(5);
+
 fn exchange_at(path: &std::path::Path, line: &str, wait: Duration) -> Result<String, String> {
+    exchange_within(path, line, wait, REPLY_WAIT)
+}
+
+/// One JSON-RPC exchange: connects (retrying while the app starts, up to `wait`), then writes `line` and reads the
+/// reply, all of it within `reply_wait` of the connect and at most [`MAX_REPLY`] bytes.
+fn exchange_within(path: &std::path::Path, line: &str, wait: Duration, reply_wait: Duration) -> Result<String, String> {
     let deadline = Instant::now() + wait;
-    let account = super::screenshot::account_owner();
-    let mut stream = loop {
-        // the owner is looked up on every attempt: the socket appears (or is replaced) while the app starts
-        let dial_as = dial_identity(socket_owner(path), socket_owner(path.parent().unwrap_or(path)), account);
-        match dial(path, dial_as) {
+    let caller = caller();
+    let stream = loop {
+        // the socket is opened again on every attempt: it appears (or is replaced) while the app starts
+        match dial(path, caller) {
             Ok(s) => break s,
             Err(e) if Instant::now() >= deadline => return Err(format!("{}: {e}", path.display())),
             Err(_) => std::thread::sleep(Duration::from_millis(100)),
         }
     };
-    let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
-    let _ = stream.set_write_timeout(Some(Duration::from_secs(5)));
-    stream.write_all(line.as_bytes()).map_err(|e| e.to_string())?;
+    let deadline = Instant::now() + reply_wait;
+    write_by(&stream, line.as_bytes(), deadline)?;
     let _ = stream.shutdown(std::net::Shutdown::Write);
-    let mut reply = String::new();
-    stream.read_to_string(&mut reply).map_err(|e| e.to_string())?;
-    Ok(reply)
+    read_reply(&stream, deadline)
 }
 
-/// The uid that owns `path` itself (a symbolic link is not followed), or None when it cannot be read.
-fn socket_owner(path: &std::path::Path) -> Option<u32> {
-    use std::os::unix::fs::MetadataExt;
-    std::fs::symlink_metadata(path).ok().map(|m| m.uid())
+/// The time left before `deadline`, or an error once it has passed.
+fn time_left(deadline: Instant) -> Result<Duration, String> {
+    let left = deadline.saturating_duration_since(Instant::now());
+    if left.is_zero() {
+        return Err("the app did not answer in time".into());
+    }
+    Ok(left)
 }
 
-/// Whose credentials dial a control socket. `account` is the installed account's `(uid, gid)` when the shell runs as
-/// root ([`super::screenshot::account_owner`]), else None and the shell dials as itself. A root shell dials as root
-/// only when the socket and the folder holding it are both root's: that is an app the shell started as root (the
-/// launch route without the sandbox), whose socket is root-only. Every other socket, above all one the account owns
-/// (a sandboxed app, whose user namespace maps only the account's uid, so root would arrive as the overflow uid and be
-/// refused) or one that is missing or unreadable, is dialled with the account's credentials: the least privilege that
-/// reaches an app, and an app cannot point a root dial elsewhere by swapping its socket for a link.
-fn dial_identity(socket_owner: Option<u32>, dir_owner: Option<u32>, account: Option<(u32, u32)>) -> Option<(u32, u32)> {
-    match (socket_owner, dir_owner) {
-        (Some(0), Some(0)) => None,
-        _ => account,
+/// Writes all of `buf`, giving up at `deadline` however the app paces its reads.
+fn write_by(stream: &UnixStream, mut buf: &[u8], deadline: Instant) -> Result<(), String> {
+    let mut w = stream;
+    while !buf.is_empty() {
+        stream.set_write_timeout(Some(time_left(deadline)?)).map_err(|e| e.to_string())?;
+        match w.write(buf) {
+            Ok(0) => return Err("the app closed the connection before taking the request".into()),
+            Ok(n) => buf = &buf[n..],
+            Err(e) if matches!(e.kind(), std::io::ErrorKind::Interrupted | std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut) => {}
+            Err(e) => return Err(e.to_string()),
+        }
+    }
+    Ok(())
+}
+
+/// Reads the reply up to end of stream: at most [`MAX_REPLY`] bytes and only until `deadline` (checked before every
+/// read, and each read waits no longer than what is left), so an app that trickles bytes or streams without end
+/// fails the call instead of holding the caller or exhausting the shell's memory.
+fn read_reply(stream: &UnixStream, deadline: Instant) -> Result<String, String> {
+    // one byte past the limit tells a reply of exactly MAX_REPLY bytes from a longer one
+    let mut limited = Read::take(stream, MAX_REPLY + 1);
+    let mut reply = Vec::new();
+    let mut chunk = [0u8; 16 * 1024];
+    loop {
+        stream.set_read_timeout(Some(time_left(deadline)?)).map_err(|e| e.to_string())?;
+        match limited.read(&mut chunk) {
+            Ok(0) => break,
+            Ok(n) => reply.extend_from_slice(&chunk[..n]),
+            Err(e) if matches!(e.kind(), std::io::ErrorKind::Interrupted | std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut) => {}
+            Err(e) => return Err(e.to_string()),
+        }
+        if reply.len() as u64 > MAX_REPLY {
+            return Err(format!("the app's reply is longer than {MAX_REPLY} bytes"));
+        }
+    }
+    String::from_utf8(reply).map_err(|_| "the app's reply is not UTF-8".to_string())
+}
+
+/// Who the shell is when it dials: an ordinary user (its effective uid), or root with the installed account's
+/// `(uid, gid)` (None before setup, or when the account cannot be read).
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Caller {
+    User(u32),
+    Root(Option<(u32, u32)>),
+}
+
+/// The credentials a dial uses: the shell's own, or the account's (`(uid, gid)`, switched in for the connect only).
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DialAs {
+    Itself,
+    Account(u32, u32),
+}
+
+/// The shell as it dials now.
+#[cfg(target_os = "linux")]
+fn caller() -> Caller {
+    if crate::appearance_portal::is_root() {
+        Caller::Root(super::screenshot::account_owner())
+    } else {
+        extern "C" {
+            fn geteuid() -> u32;
+        }
+        // SAFETY: geteuid has no preconditions.
+        Caller::User(unsafe { geteuid() })
     }
 }
 
-/// Connects to an app's control socket, as `as_account` (`(uid, gid)`, see [`dial_identity`]) or, with None, as the
-/// process's own user. The connect never waits: an app that does not accept (its backlog full) fails the attempt with
-/// `WouldBlock` at once, and [`exchange_at`] retries until its deadline, so a dial is bounded and never holds the
-/// credential lock for long.
-fn dial(path: &std::path::Path, as_account: Option<(u32, u32)>) -> std::io::Result<UnixStream> {
-    match as_account {
-        #[cfg(target_os = "linux")]
-        Some((uid, gid)) => account_dial::connect_as(path, uid, gid),
-        _ => connect_now(path),
+#[cfg(not(target_os = "linux"))]
+fn caller() -> Caller {
+    Caller::User(0)
+}
+
+/// Whose credentials dial a control socket whose inode belongs to `socket_owner`, inside the app folder owned by
+/// `dir_owner` (both read from the opened descriptors, never through a link). The socket and its folder must have one
+/// owner, and that owner decides:
+/// - a shell running as an ordinary user dials only its own sockets, as itself;
+/// - a root shell dials a root socket in a root folder (an app the shell started as root, without the sandbox) as
+///   root, and the account's socket in the account's folder (a sandboxed app, whose user namespace maps only the
+///   account's uid, so root would arrive as the overflow uid and be refused) as the account: least privilege;
+/// - everything else is refused. Above all a root shell with no account (before setup, or when the account cannot be
+///   read) never dials a socket that is not root's as root, so an app cannot turn a root dial on another socket.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn dial_identity(socket_owner: u32, dir_owner: u32, caller: Caller) -> Result<DialAs, String> {
+    if socket_owner != dir_owner {
+        return Err(format!("the control socket (uid {socket_owner}) and its folder (uid {dir_owner}) have different owners"));
+    }
+    match caller {
+        Caller::User(me) if socket_owner == me => Ok(DialAs::Itself),
+        Caller::Root(_) if socket_owner == 0 => Ok(DialAs::Itself),
+        Caller::Root(Some((uid, gid))) if socket_owner == uid => Ok(DialAs::Account(uid, gid)),
+        _ => Err(format!("the control socket belongs to uid {socket_owner}, which the shell does not dial")),
+    }
+}
+
+/// Connects to an app's control socket. The socket is pinned first ([`pinned::open`]: its folder and the socket are
+/// opened without following a link, and their owners read from the descriptors), [`dial_identity`] picks the
+/// credentials from those owners, and the connect goes to the pinned inode through `/proc/self/fd/<n>`, so nothing
+/// the app does between the check and the connect changes what is dialled. The connect never waits: an app that does
+/// not accept (its backlog full) fails the attempt with `WouldBlock` at once, and [`exchange_at`] retries until its
+/// deadline, so a dial is bounded and never holds the credential lock for long.
+#[cfg(target_os = "linux")]
+fn dial(path: &std::path::Path, caller: Caller) -> std::io::Result<UnixStream> {
+    let socket = pinned::open(path)?;
+    let how = dial_identity(socket.socket_owner, socket.dir_owner, caller).map_err(|e| std::io::Error::new(std::io::ErrorKind::PermissionDenied, e))?;
+    // `socket` stays open until the connect returns: the fd path names its descriptor
+    let via = socket.fd_path();
+    match how {
+        DialAs::Itself => connect_now(&via),
+        DialAs::Account(uid, gid) => account_dial::connect_as(&via, uid, gid),
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn dial(path: &std::path::Path, _caller: Caller) -> std::io::Result<UnixStream> {
+    connect_now(path)
+}
+
+/// A control socket opened without following links.
+#[cfg(target_os = "linux")]
+mod pinned {
+    use std::ffi::{c_char, c_int, CString};
+    use std::fs::File;
+    use std::io;
+    use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+    use std::os::unix::ffi::OsStrExt;
+    use std::os::unix::fs::{FileTypeExt, MetadataExt};
+    use std::path::{Path, PathBuf};
+
+    const O_CLOEXEC: c_int = 0o2000000;
+    const O_PATH: c_int = 0o10000000;
+    // the directory and no-follow bits differ on the ARM ABIs
+    #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+    const O_DIRECTORY: c_int = 0o40000;
+    #[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+    const O_NOFOLLOW: c_int = 0o100000;
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "arm")))]
+    const O_DIRECTORY: c_int = 0o200000;
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "arm")))]
+    const O_NOFOLLOW: c_int = 0o400000;
+    const AT_FDCWD: c_int = -100;
+
+    extern "C" {
+        fn openat(dirfd: c_int, path: *const c_char, flags: c_int, ...) -> c_int;
+    }
+
+    /// The socket inode, held by an `O_PATH` descriptor, with the owners of the socket and of its folder.
+    pub(super) struct Socket {
+        fd: File,
+        pub(super) socket_owner: u32,
+        pub(super) dir_owner: u32,
+    }
+
+    impl Socket {
+        /// The path that names the pinned inode while `self` lives (`connect` follows this one magic link to it).
+        pub(super) fn fd_path(&self) -> PathBuf {
+            PathBuf::from(format!("/proc/self/fd/{}", self.fd.as_raw_fd()))
+        }
+    }
+
+    fn open_path(dirfd: c_int, name: &[u8], flags: c_int) -> io::Result<File> {
+        let c = CString::new(name).map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "control socket path holds a NUL"))?;
+        // SAFETY: `c` is NUL-terminated and lives across the call; O_PATH opens take no mode argument.
+        let fd = unsafe { openat(dirfd, c.as_ptr(), flags | O_PATH | O_NOFOLLOW | O_CLOEXEC) };
+        if fd < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        // SAFETY: the kernel returned a new descriptor that nothing else owns.
+        Ok(File::from(unsafe { OwnedFd::from_raw_fd(fd) }))
+    }
+
+    /// Opens `path`'s folder (the app's data folder; its own last component is not followed) and then the socket in
+    /// it by descriptor, without following a link either. A link in either place, anything but a folder and a socket,
+    /// or a lookup that would leave the folder (the name is one plain component) is refused. Only `O_PATH`
+    /// descriptors are taken, so opening reads nothing and talks to no file system driver beyond the lookup.
+    pub(super) fn open(path: &Path) -> io::Result<Socket> {
+        let refuse = |what: &str| io::Error::new(io::ErrorKind::InvalidInput, format!("{}: {what}", path.display()));
+        let name = path.file_name().ok_or_else(|| refuse("no socket name"))?.as_bytes();
+        let dir = match path.parent() {
+            Some(d) if !d.as_os_str().is_empty() => d.as_os_str().as_bytes(),
+            _ => &b"."[..],
+        };
+        let dir = open_path(AT_FDCWD, dir, O_DIRECTORY)?;
+        let dir_meta = dir.metadata()?;
+        if !dir_meta.is_dir() {
+            return Err(refuse("the app folder is a link or not a folder"));
+        }
+        let fd = open_path(dir.as_raw_fd(), name, 0)?;
+        let meta = fd.metadata()?;
+        if !meta.file_type().is_socket() {
+            return Err(refuse("not a socket (a link is not followed)"));
+        }
+        Ok(Socket { fd, socket_owner: meta.uid(), dir_owner: dir_meta.uid() })
     }
 }
 
@@ -259,7 +445,15 @@ fn connect_now(path: &std::path::Path) -> std::io::Result<UnixStream> {
     UnixStream::connect(path)
 }
 
-/// The account-credential connect: one thread whose own credentials (not the process's) become the account's.
+/// The account-credential connect: the calling thread switches only its effective ids to the account's for the
+/// connect, and back right after.
+///
+/// Why only the effective ids: `SO_PEERCRED` records the connecting thread's effective uid and gid, so the app sees
+/// the account. The real and saved uid stay 0 throughout, so the account's processes match neither the signal rule
+/// (sender uid against the target's real or saved uid) nor the ptrace rule (the caller's ids against all of the
+/// target's) for this thread at any moment, and no thread ever exits with the account's credentials. While the
+/// effective uid is not 0 the thread's effective capabilities are dropped, so the socket's permission is checked as
+/// the account; back at effective uid 0 they return from the permitted set, which the switch never touched.
 #[cfg(target_os = "linux")]
 mod account_dial {
     use std::io;
@@ -269,12 +463,14 @@ mod account_dial {
 
     #[cfg(target_arch = "x86_64")]
     mod nr {
+        pub const GETGROUPS: i64 = 115;
         pub const SETGROUPS: i64 = 116;
         pub const SETRESUID: i64 = 117;
         pub const SETRESGID: i64 = 119;
     }
     #[cfg(target_arch = "aarch64")]
     mod nr {
+        pub const GETGROUPS: i64 = 158;
         pub const SETGROUPS: i64 = 159;
         pub const SETRESUID: i64 = 147;
         pub const SETRESGID: i64 = 149;
@@ -283,18 +479,20 @@ mod account_dial {
     extern "C" {
         #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
         fn syscall(n: i64, ...) -> i64;
-        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
         fn geteuid() -> u32;
+        fn getegid() -> u32;
         fn prctl(option: i32, arg2: usize, arg3: usize, arg4: usize, arg5: usize) -> i32;
     }
     const PR_GET_DUMPABLE: i32 = 3;
     const PR_SET_DUMPABLE: i32 = 4;
+    /// "Leave this id as it is" for setresuid and setresgid.
+    #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+    const KEEP: i64 = -1;
 
-    /// Serialises every credential-switching dial. A thread's credential change resets the dumpable flag of the
-    /// whole process (the kernel sets it on the shared mm to `fs.suid_dumpable`), so two dials running at once could
-    /// read each other's reset value, and one dial's restore could make the process dumpable (ptrace-able by the
-    /// account) while another dial thread still runs as the account. Held from before the switch until the flag is
-    /// restored after the dial thread has exited.
+    /// Serialises every credential-switching dial. Any change of a thread's effective ids resets the dumpable flag of
+    /// the whole process (`commit_creds` sets it on the shared mm to `fs.suid_dumpable`), so two dials running at once
+    /// could read each other's reset value as the one to restore. Held from before the switch until the flag is put
+    /// back after the switch back.
     static DIAL_LOCK: Mutex<()> = Mutex::new(());
     /// The shell's own dumpable flag, read once under [`DIAL_LOCK`] before the first credential switch (so never a
     /// value a dial left behind) and restored after every dial.
@@ -321,70 +519,145 @@ mod account_dial {
         }
     }
 
-    /// Sets the dumpable flag to `want` and checks that it holds.
+    /// Sets the dumpable flag to `want`, checking every prctl return, and checks that it holds.
     fn restore_dumpable(want: usize) -> io::Result<()> {
         // SAFETY: PR_GET_DUMPABLE and PR_SET_DUMPABLE take plain integers.
         unsafe {
-            if prctl(PR_GET_DUMPABLE, 0, 0, 0, 0) as i64 != want as i64 {
-                prctl(PR_SET_DUMPABLE, want, 0, 0, 0);
+            let now = prctl(PR_GET_DUMPABLE, 0, 0, 0, 0);
+            if now < 0 {
+                return Err(io::Error::last_os_error());
+            }
+            if now as usize != want && prctl(PR_SET_DUMPABLE, want, 0, 0, 0) != 0 {
+                return Err(io::Error::last_os_error());
             }
             let now = prctl(PR_GET_DUMPABLE, 0, 0, 0, 0);
-            if now as i64 != want as i64 {
+            if now < 0 || now as usize != want {
                 return Err(io::Error::other(format!("the shell's dumpable flag is {now} after a dial, not {want}")));
             }
         }
         Ok(())
     }
 
-    /// Switches the calling thread, and only it, to `uid`/`gid` (real, effective and saved, plus the supplementary
-    /// groups when it may set them). The raw syscalls are used on purpose: the libc wrappers apply a change to every
-    /// thread of the process, which would drop the whole shell's privileges.
+    /// The calling thread's supplementary groups.
     #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
-    pub(super) fn become_thread(uid: u32, gid: u32) -> io::Result<()> {
-        // SAFETY: plain credential syscalls on the calling thread; `groups` lives across the call.
+    fn thread_groups() -> io::Result<Vec<u32>> {
+        // SAFETY: a size of 0 only asks for the count and writes nothing.
+        let n = unsafe { syscall(nr::GETGROUPS, 0i64, std::ptr::null_mut::<u32>()) };
+        if n < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let mut groups = vec![0u32; n as usize];
+        // SAFETY: `groups` holds `n` writable u32s. Only this thread changes its own groups, so the count holds.
+        let got = unsafe { syscall(nr::GETGROUPS, n, groups.as_mut_ptr()) };
+        if got < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        groups.truncate(got as usize);
+        Ok(groups)
+    }
+
+    /// The calling thread's effective ids (and, for root, its groups) from before a switch. Dropping it switches the
+    /// thread back; a thread that cannot be switched back aborts the process, which must never go on with a thread
+    /// running as the account.
+    pub(super) struct Switched {
+        euid: u32,
+        egid: u32,
+        groups: Option<Vec<u32>>,
+    }
+
+    impl Switched {
+        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+        fn restore(&self) -> io::Result<()> {
+            // SAFETY: plain credential syscalls on the calling thread; `groups` lives across the call.
+            unsafe {
+                // the uid first: back at effective uid 0 the thread may set its gid and groups again. Going back is
+                // allowed without privilege, as the real and saved ids never changed.
+                if syscall(nr::SETRESUID, KEEP, self.euid as i64, KEEP) != 0 {
+                    return Err(io::Error::last_os_error());
+                }
+                if syscall(nr::SETRESGID, KEEP, self.egid as i64, KEEP) != 0 {
+                    return Err(io::Error::last_os_error());
+                }
+                if let Some(groups) = &self.groups {
+                    if syscall(nr::SETGROUPS, groups.len() as i64, groups.as_ptr()) != 0 {
+                        return Err(io::Error::last_os_error());
+                    }
+                }
+                if geteuid() != self.euid || getegid() != self.egid {
+                    return Err(io::Error::other("the dial thread's effective ids did not switch back"));
+                }
+            }
+            Ok(())
+        }
+
+        #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+        fn restore(&self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl Drop for Switched {
+        fn drop(&mut self) {
+            if let Err(e) = self.restore() {
+                eprintln!("springboard: cannot switch the dial thread back to uid {} gid {}: {e}; aborting", self.euid, self.egid);
+                std::process::abort();
+            }
+        }
+    }
+
+    /// Switches the calling thread's effective ids, and only those, to `uid`/`gid`, plus the supplementary groups (just
+    /// `gid`) when the thread is root. The raw syscalls are used on purpose: the libc wrappers apply a change to every
+    /// thread of the process, which would hand the whole shell to the account. Every return is checked; a failure
+    /// partway switches back what changed (the returned guard's drop does it on every path).
+    #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+    pub(super) fn switch_to(uid: u32, gid: u32) -> io::Result<Switched> {
+        // SAFETY: geteuid and getegid have no preconditions.
+        let (euid, egid) = unsafe { (geteuid(), getegid()) };
+        let groups = if euid == 0 { Some(thread_groups()?) } else { None };
+        // made before the first change, so an error below switches back whatever already changed
+        let back = Switched { euid, egid, groups };
+        // SAFETY: plain credential syscalls on the calling thread; `account_groups` lives across the call.
         unsafe {
-            if geteuid() == 0 {
-                let groups = [gid];
-                if syscall(nr::SETGROUPS, 1i64, groups.as_ptr()) != 0 {
+            if back.groups.is_some() {
+                let account_groups = [gid];
+                if syscall(nr::SETGROUPS, 1i64, account_groups.as_ptr()) != 0 {
                     return Err(io::Error::last_os_error());
                 }
             }
-            // The group first: once the uid is dropped the thread may no longer change it.
-            if syscall(nr::SETRESGID, gid as i64, gid as i64, gid as i64) != 0 {
+            // the group first: once the effective uid is the account's the thread may no longer change it
+            if syscall(nr::SETRESGID, KEEP, gid as i64, KEEP) != 0 {
                 return Err(io::Error::last_os_error());
             }
-            if syscall(nr::SETRESUID, uid as i64, uid as i64, uid as i64) != 0 {
+            if syscall(nr::SETRESUID, KEEP, uid as i64, KEEP) != 0 {
                 return Err(io::Error::last_os_error());
             }
         }
-        Ok(())
+        Ok(back)
     }
 
     #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
-    pub(super) fn become_thread(_uid: u32, _gid: u32) -> io::Result<()> {
+    pub(super) fn switch_to(_uid: u32, _gid: u32) -> io::Result<Switched> {
         Err(io::Error::new(io::ErrorKind::Unsupported, "per-thread credentials are not wired for this architecture"))
     }
 
-    /// Connects to `path` as `uid`/`gid` from a dedicated thread that ends right after, so the shell's other threads
-    /// keep their credentials. The returned stream belongs to the process and is used as usual. Dials are serialised
-    /// ([`DIAL_LOCK`]); the dial thread clears the dumpable flag as soon as it has switched (so the account cannot
-    /// trace it whatever `fs.suid_dumpable` says), and once it has exited the shell's recorded flag is put back and
-    /// checked. The connect does not wait ([`super::connect_now`]), so the lock is held only briefly.
+    /// Connects to `path` with the account's effective ids on the calling thread, which switches back before this
+    /// returns, so the shell's other threads never change and no thread is spawned. Dials are serialised
+    /// ([`DIAL_LOCK`]); after the switch back the shell's recorded dumpable flag is put back and checked, and a
+    /// failure to restore it is logged even when the dial failed too. The connect does not wait
+    /// ([`super::connect_now`]), so the lock is held only briefly.
     pub fn connect_as(path: &Path, uid: u32, gid: u32) -> io::Result<UnixStream> {
         let _serial = lock();
         let want = restore_value(startup_dumpable());
-        let path = path.to_path_buf();
-        let joined = std::thread::Builder::new()
-            .name("app-dial".into())
-            .spawn(move || {
-                become_thread(uid, gid)?;
-                // SAFETY: PR_SET_DUMPABLE takes plain integers.
-                unsafe { prctl(PR_SET_DUMPABLE, 0, 0, 0, 0) };
-                super::connect_now(&path)
-            })?
-            .join();
+        let dialled = switch_to(uid, gid).and_then(|back| {
+            let stream = super::connect_now(path);
+            drop(back);
+            stream
+        });
         let restored = restore_dumpable(want);
-        let stream = joined.map_err(|_| io::Error::other("the dial thread panicked"))??;
+        if let Err(e) = &restored {
+            eprintln!("springboard: control socket dial: {e}");
+        }
+        let stream = dialled?;
         restored?;
         Ok(stream)
     }
@@ -492,16 +765,23 @@ mod tests {
         fn getegid() -> u32;
     }
 
+    /// A listening socket in a fresh folder of its own, named for the test.
+    #[cfg(target_os = "linux")]
+    fn listener(tag: &str) -> (std::path::PathBuf, std::path::PathBuf, std::os::unix::net::UnixListener) {
+        let dir = std::env::temp_dir().join(format!("bifrost-intents-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let sock = dir.join("control.sock");
+        let l = std::os::unix::net::UnixListener::bind(&sock).unwrap();
+        (dir, sock, l)
+    }
+
     #[test]
     #[cfg(target_os = "linux")]
-    fn the_account_dial_connects_from_its_own_thread_and_leaves_the_caller_alone() {
-        // without root the dial can only take the credentials it already has; the connection is made from the dial
-        // thread, the app sees those credentials, and the calling thread (and the process) keep theirs
-        let dir = std::env::temp_dir().join(format!("bifrost-intents-dial-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let sock = dir.join("d.sock");
-        let _ = std::fs::remove_file(&sock);
-        let l = std::os::unix::net::UnixListener::bind(&sock).unwrap();
+    fn the_account_dial_connects_on_the_calling_thread_and_switches_back() {
+        // without root the dial can only take the effective ids it already has; the connect is made on the calling
+        // thread, the app sees those ids, and the thread has its own back once the dial returns
+        let (dir, sock, l) = listener("dial");
         let (uid, gid) = unsafe { (geteuid(), getegid()) };
         let h = std::thread::spawn(move || {
             let (mut s, _) = l.accept().unwrap();
@@ -511,51 +791,107 @@ mod tests {
             s.write_all(b"{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"value\":null,\"dialog\":\"Dialled\"}}\n").unwrap();
             seen
         });
-        let mut s = dial(&sock, Some((uid, gid))).unwrap();
-        s.write_all(request_line("go").as_bytes()).unwrap();
+        let s = account_dial::connect_as(&sock, uid, gid).unwrap();
+        write_by(&s, request_line("go").as_bytes(), Instant::now() + Duration::from_secs(2)).unwrap();
         let _ = s.shutdown(std::net::Shutdown::Write);
-        let mut reply = String::new();
-        s.read_to_string(&mut reply).unwrap();
+        let reply = read_reply(&s, Instant::now() + Duration::from_secs(2)).unwrap();
         assert_eq!(parse_reply(&reply), Ok(Some("Dialled".into())));
-        assert_eq!(h.join().unwrap(), uid, "SO_PEERCRED carries the dial thread's uid");
-        assert_eq!(unsafe { (geteuid(), getegid()) }, (uid, gid), "the caller's credentials are untouched");
+        assert_eq!(h.join().unwrap(), uid, "SO_PEERCRED carries the dialling thread's effective uid");
+        assert_eq!(unsafe { (geteuid(), getegid()) }, (uid, gid), "the calling thread is switched back");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     #[cfg(target_os = "linux")]
+    fn a_pinned_dial_reaches_the_socket_as_the_shell() {
+        // the dial goes through the descriptor of the socket it checked (`/proc/self/fd/<n>`), not the path
+        let (dir, sock, l) = listener("pinned");
+        let uid = unsafe { geteuid() };
+        let h = std::thread::spawn(move || peer_uid(&l.accept().unwrap().0));
+        dial(&sock, caller()).unwrap();
+        assert_eq!(h.join().unwrap(), uid);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn a_link_is_never_followed_to_a_socket() {
+        // an app that swaps its socket, or its folder, for a link to another socket reaches nothing
+        let (dir, sock, l) = listener("link");
+        l.set_nonblocking(true).unwrap();
+        let link = dir.join("link.sock");
+        std::os::unix::fs::symlink(&sock, &link).unwrap();
+        let err = dial(&link, caller()).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput, "{err}");
+        let folder_link = dir.with_extension("link");
+        let _ = std::fs::remove_file(&folder_link);
+        std::os::unix::fs::symlink(&dir, &folder_link).unwrap();
+        assert!(dial(&folder_link.join("control.sock"), caller()).is_err(), "the app folder itself is not followed either");
+        assert_eq!(l.accept().unwrap_err().kind(), std::io::ErrorKind::WouldBlock, "no dial reached the real socket");
+        // not a socket at all
+        std::fs::write(dir.join("plain"), b"x").unwrap();
+        assert_eq!(dial(&dir.join("plain"), caller()).unwrap_err().kind(), std::io::ErrorKind::InvalidInput);
+        let _ = std::fs::remove_file(&folder_link);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    #[cfg(all(target_os = "linux", any(target_arch = "x86_64", target_arch = "aarch64")))]
+    fn the_credential_switch_checks_every_step_and_puts_back_what_it_changed() {
+        let (uid, gid) = unsafe { (geteuid(), getegid()) };
+        // the ids the thread already has: the switch succeeds and dropping the guard switches back
+        let back = account_dial::switch_to(uid, gid).unwrap();
+        assert_eq!(unsafe { (geteuid(), getegid()) }, (uid, gid));
+        drop(back);
+        assert_eq!(unsafe { (geteuid(), getegid()) }, (uid, gid));
+        if uid == 0 {
+            return; // root may take any ids; the refusals below need an unprivileged thread
+        }
+        // a foreign gid or uid is refused without privilege, and the thread keeps its ids
+        assert_eq!(account_dial::switch_to(uid, gid.wrapping_add(1)).err().map(|e| e.kind()), Some(std::io::ErrorKind::PermissionDenied));
+        assert_eq!(account_dial::switch_to(uid.wrapping_add(1), gid).err().map(|e| e.kind()), Some(std::io::ErrorKind::PermissionDenied));
+        assert_eq!(unsafe { (geteuid(), getegid()) }, (uid, gid));
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
     fn the_account_dial_cannot_take_a_foreign_uid_without_privilege() {
-        // proves the credential switch really runs: a non-root dial thread may not become another user, so the dial
+        // proves the credential switch really runs: a non-root thread may not become another user, so the dial
         // fails with EPERM instead of quietly connecting as itself (skipped as root, where the switch succeeds)
         if unsafe { geteuid() } == 0 {
             return;
         }
         let (uid, gid) = unsafe { (geteuid(), getegid()) };
-        let err = dial(std::path::Path::new("/nonexistent/bifrost-dial.sock"), Some((uid + 1, gid))).unwrap_err();
+        let err = account_dial::connect_as(std::path::Path::new("/nonexistent/bifrost-dial.sock"), uid + 1, gid).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::PermissionDenied, "{err}");
-        assert_eq!(unsafe { geteuid() }, uid);
+        assert_eq!(unsafe { (geteuid(), getegid()) }, (uid, gid));
     }
 
     #[test]
-    fn without_an_account_the_socket_is_dialled_directly() {
-        assert!(dial(std::path::Path::new("/nonexistent/bifrost-dial.sock"), None).is_err());
+    fn a_missing_socket_fails_the_dial() {
+        assert!(dial(std::path::Path::new("/nonexistent/bifrost-dial.sock"), caller()).is_err());
     }
 
     #[test]
     fn the_socket_owner_picks_the_dial_credentials() {
-        let account = Some((1000, 1000));
-        // a sandboxed app: the account owns its data folder and socket
-        assert_eq!(dial_identity(Some(1000), Some(1000), account), account);
-        // an app the shell started as root (no sandbox): a root-only socket in a root folder is dialled as root
-        assert_eq!(dial_identity(Some(0), Some(0), account), None);
-        // a root-owned socket in the account's folder may have been swapped in by the app: least privilege
-        assert_eq!(dial_identity(Some(0), Some(1000), account), account);
-        // missing or unreadable socket, or a foreign owner: as the account (the app refuses what it must)
-        assert_eq!(dial_identity(None, Some(0), account), account);
-        assert_eq!(dial_identity(Some(1001), Some(1001), account), account);
-        // no account (the shell is not root, or before setup): always as the shell itself
-        assert_eq!(dial_identity(Some(1000), Some(1000), None), None);
-        assert_eq!(dial_identity(Some(0), Some(0), None), None);
+        let account = Caller::Root(Some((1000, 1000)));
+        // a sandboxed app: the account owns its data folder and socket, dialled as the account
+        assert_eq!(dial_identity(1000, 1000, account), Ok(DialAs::Account(1000, 1000)));
+        // an app the shell started as root (no sandbox): a root socket in a root folder is dialled as root
+        assert_eq!(dial_identity(0, 0, account), Ok(DialAs::Itself));
+        // socket and folder disagree (a socket swapped in by the app, or put there by someone else): refused
+        assert!(dial_identity(0, 1000, account).is_err());
+        assert!(dial_identity(1000, 0, account).is_err());
+        // a foreign owner is refused, whoever the shell is
+        assert!(dial_identity(1001, 1001, account).is_err());
+        // a root shell with no account (before setup, or the account unreadable) dials only root's sockets as root
+        // and never falls back to a root dial of anything else
+        assert_eq!(dial_identity(0, 0, Caller::Root(None)), Ok(DialAs::Itself));
+        assert!(dial_identity(1000, 1000, Caller::Root(None)).is_err());
+        // a shell running as a user dials only its own sockets, as itself
+        assert_eq!(dial_identity(1000, 1000, Caller::User(1000)), Ok(DialAs::Itself));
+        assert!(dial_identity(0, 0, Caller::User(1000)).is_err());
+        assert!(dial_identity(1001, 1001, Caller::User(1000)).is_err());
     }
 
     #[test]
@@ -574,19 +910,15 @@ mod tests {
         extern "C" {
             fn listen(fd: i32, backlog: i32) -> i32;
         }
-        let dir = std::env::temp_dir().join(format!("bifrost-intents-full-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let sock = dir.join("f.sock");
-        let _ = std::fs::remove_file(&sock);
-        let l = std::os::unix::net::UnixListener::bind(&sock).unwrap();
+        let (dir, sock, l) = listener("full");
         // a backlog of 0 holds one pending connection; the app never accepts it
         // SAFETY: a live listening socket; listen again only changes its backlog
         assert_eq!(unsafe { listen(l.as_raw_fd(), 0) }, 0);
         let _pending = UnixStream::connect(&sock).unwrap();
-        let err = dial(&sock, None).unwrap_err();
+        let err = dial(&sock, caller()).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::WouldBlock, "{err}");
         let (uid, gid) = unsafe { (geteuid(), getegid()) };
-        let err = dial(&sock, Some((uid, gid))).unwrap_err();
+        let err = account_dial::connect_as(&sock, uid, gid).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::WouldBlock, "the credential dial does not wait either: {err}");
         let started = Instant::now();
         assert!(run_at(&sock, &request_line("go"), Duration::from_millis(300)).is_err());
@@ -603,11 +935,7 @@ mod tests {
         }
         // SAFETY: PR_GET_DUMPABLE (3) takes plain integers.
         let before = unsafe { prctl(3, 0, 0, 0, 0) };
-        let dir = std::env::temp_dir().join(format!("bifrost-intents-many-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let sock = dir.join("m.sock");
-        let _ = std::fs::remove_file(&sock);
-        let l = std::os::unix::net::UnixListener::bind(&sock).unwrap();
+        let (dir, sock, l) = listener("many");
         const DIALS: usize = 8;
         let server = std::thread::spawn(move || {
             for _ in 0..DIALS {
@@ -618,7 +946,7 @@ mod tests {
         let dialers: Vec<_> = (0..DIALS)
             .map(|_| {
                 let sock = sock.clone();
-                std::thread::spawn(move || dial(&sock, Some((uid, gid))).map(|_| ()))
+                std::thread::spawn(move || account_dial::connect_as(&sock, uid, gid).map(|_| ()))
             })
             .collect();
         for d in dialers {
@@ -628,6 +956,54 @@ mod tests {
         // SAFETY: as above
         assert_eq!(unsafe { prctl(3, 0, 0, 0, 0) }, account_dial::restore_value(before) as i32, "every dial restores the recorded flag");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_reply_is_read_up_to_the_limit_and_no_further() {
+        let (a, b) = UnixStream::pair().unwrap();
+        let w = std::thread::spawn(move || {
+            let mut b = b;
+            b.write_all(&vec![b'a'; MAX_REPLY as usize]).unwrap();
+        });
+        let reply = read_reply(&a, Instant::now() + Duration::from_secs(10)).unwrap();
+        assert_eq!(reply.len() as u64, MAX_REPLY, "a reply of exactly the limit is whole");
+        w.join().unwrap();
+
+        let (a, b) = UnixStream::pair().unwrap();
+        let w = std::thread::spawn(move || {
+            let mut b = b;
+            // the reader stops after the limit; the rest fails to send once it hangs up
+            let _ = b.write_all(&vec![b'a'; MAX_REPLY as usize + 4096]);
+        });
+        let err = read_reply(&a, Instant::now() + Duration::from_secs(10)).unwrap_err();
+        assert!(err.contains("longer than"), "{err}");
+        drop(a);
+        w.join().unwrap();
+    }
+
+    #[test]
+    fn a_trickling_reply_fails_at_the_deadline() {
+        // one byte now and then never trips a per-read timeout; the overall deadline still ends the call
+        let (a, b) = UnixStream::pair().unwrap();
+        let w = std::thread::spawn(move || {
+            let mut b = b;
+            while b.write_all(b"x").is_ok() {
+                std::thread::sleep(Duration::from_millis(40));
+            }
+        });
+        let started = Instant::now();
+        let err = read_reply(&a, Instant::now() + Duration::from_millis(300)).unwrap_err();
+        assert!(err.contains("in time"), "{err}");
+        assert!(started.elapsed() < Duration::from_secs(2));
+        drop(a);
+        w.join().unwrap();
+        assert!(time_left(Instant::now()).is_err(), "a deadline that has passed leaves no time");
+    }
+
+    #[test]
+    fn the_shell_waits_for_the_longest_pending_reply_an_app_may_hold() {
+        assert!(REPLY_WAIT > Duration::from_millis(bifrost_core::app_control_socket::MAX_PENDING_MS));
+        assert!(VISUAL_SEARCH_REPLY_WAIT < REPLY_WAIT, "one visual search provider cannot hold the whole search");
     }
 
     #[test]

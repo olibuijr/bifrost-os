@@ -48,6 +48,11 @@ pub fn encode_alpha(frame: &Image) -> Vec<u8> {
 /// as root (the session service does), else nobody to hand the file to (the process owns it already). The account is
 /// looked up once it exists and then remembered (an account's uid and gid never change); before setup it is looked
 /// up again on each call, so the account created by setup is found without a restart.
+///
+/// None does not mean the shell is unprivileged: a root shell before setup, or one whose account file cannot be read,
+/// gets None too. A caller that would otherwise act as root must tell the two apart itself; the app control socket
+/// dial (`intents::dial_identity`) then refuses every socket that is not root's in a root folder instead of dialling
+/// it as root.
 pub fn account_owner() -> Option<(u32, u32)> {
     #[cfg(target_os = "linux")]
     if crate::appearance_portal::is_root() {

@@ -11,6 +11,11 @@ use std::path::{Path, PathBuf};
 /// The file name of the control socket inside the app's data directory.
 pub const FILE_NAME: &str = "control.sock";
 
+/// Longest an app may hold a call open before it answers (an async `RpcError::pending` reply), milliseconds. The SDK
+/// clamps every pending call to it (`bifrost_app::control::MAX_TIMEOUT_MS`) and the shell waits this long, plus a
+/// margin for the app's event loop, before it gives up on a reply.
+pub const MAX_PENDING_MS: u64 = 60_000;
+
 /// The control socket of an app whose data directory is `data_dir`; `explicit` (`BIFROST_CONTROL`) wins when given.
 pub fn socket_path(explicit: Option<&Path>, data_dir: &Path) -> PathBuf {
     match explicit {
