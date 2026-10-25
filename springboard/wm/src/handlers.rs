@@ -139,8 +139,13 @@ impl WmState {
         }
         self.pending.remove(i);
         let id = self.id_of(&window);
-        // a window the shell brought back maps where it was (`bifrost_window_level_v1` set_origin), not at the cascade
-        let origin = window.wl_surface().and_then(|s| crate::window_level::origin(&s));
+        // a window the shell brought back maps where it was (`bifrost_window_level_v1` set_origin), not at the cascade;
+        // so does one its client destroyed while it was minimized and has now created again (`parked`)
+        let origin = window.wl_surface().and_then(|s| crate::window_level::origin(&s)).or_else(|| {
+            let client = toplevel.wl_surface().client()?.id();
+            let app_id = toplevel_app_id(toplevel.wl_surface());
+            self.parked.take(&client, &app_id).map(|r| (r.x, r.y))
+        });
         let activation_asked = window.user_data().get::<ActivateOnMap>().is_some_and(|a| a.0.get());
         let others_shown = self.wm.stack().into_iter().any(|o| o != id && self.wm.visible(o));
         let takes_front = map_takes_front(self.shell_stacks(&window), activation_asked, others_shown);
@@ -379,9 +384,15 @@ impl XdgShellHandler for WmState {
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
         self.pending.retain(|w| w.toplevel().is_some_and(|t| t != &surface));
-        // a window closed while minimized is held hidden: free it with what capture kept for it
+        // a window closed while minimized is held hidden: free it with what capture kept for it. Its frame is parked: a
+        // client that destroys the toplevel of a hidden window and creates it again when it is shown gets it back where
+        // it was (Show Desktop's toggle back), not at the cascade
         if let Some(window) = self.hidden_for_surface(surface.wl_surface()) {
             if let Some(id) = WmState::known_id(&window) {
+                if let (Some(rect), Some(client)) = (self.wm.rect(id), surface.wl_surface().client()) {
+                    let app_id = toplevel_app_id(surface.wl_surface());
+                    self.parked.park(client.id(), &app_id, rect);
+                }
                 self.wm.unmap(id);
                 self.forget_window(id, &window);
             }
@@ -513,6 +524,17 @@ impl WlrLayerShellHandler for WmState {
 
 /// Whether `window` committed `committed` while a configure that resizes it is still unacknowledged: one whose size is
 /// neither the size it was last configured to nor the size it just committed (`resize_in_flight`).
+/// The app id an xdg toplevel set, or "" when it set none.
+fn toplevel_app_id(surface: &WlSurface) -> String {
+    with_states(surface, |states| {
+        states
+            .data_map
+            .get::<XdgToplevelSurfaceData>()
+            .and_then(|d| d.lock().unwrap_or_else(|p| p.into_inner()).app_id.clone())
+            .unwrap_or_default()
+    })
+}
+
 fn awaiting_resize(window: &Window, committed: (i32, i32)) -> bool {
     let Some(t) = window.toplevel() else { return false };
     with_states(t.wl_surface(), |states| {

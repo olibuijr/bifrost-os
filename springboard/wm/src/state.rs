@@ -174,6 +174,8 @@ pub struct WmState {
     pub window_capture: crate::window_capture::WindowCapture,
     /// Minimized toplevels: out of the space, but still held so they can be captured and shown again.
     pub hidden: Vec<Window>,
+    /// Frames of toplevels destroyed while minimized, for the toplevel their client creates again (`wm::ParkedFrames`).
+    pub parked: crate::wm::ParkedFrames<smithay::reexports::wayland_server::backend::ClientId>,
     /// The appearance materials follow: Dark unless `BIFROST_WM_APPEARANCE=light`.
     pub material_dark: bool,
     pub lock_state: smithay::wayland::session_lock::SessionLockManagerState,
@@ -295,6 +297,7 @@ impl WmState {
             bifrost_window_capture: crate::window_capture::init(&dh),
             window_capture: Default::default(),
             hidden: Vec::new(),
+            parked: Default::default(),
             material_dark: std::env::var("BIFROST_WM_APPEARANCE").map(|v| v != "light").unwrap_or(true),
             lock_state: smithay::wayland::session_lock::SessionLockManagerState::new::<WmState, _>(&dh, crate::privileged::is_privileged),
             locked: false,
