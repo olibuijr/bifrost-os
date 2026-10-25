@@ -403,7 +403,15 @@ impl Shell {
             }
             AppId::AppStore => self.store.iter_mut().for_each(|a| a.set_size(&self.ui, w, h)),
             AppId::Deildu => self.deildu.iter_mut().for_each(|a| a.set_size(w, h)),
-            AppId::Photos => self.photos.iter_mut().for_each(|a| a.set_size(w, h)),
+            AppId::Photos => {
+                // a desktop window has the source list and toolbar, whenever Photos was first opened; the tablet's panes
+                // keep the push navigation
+                let desktop = self.desk_active() && self.form().is_desktop();
+                if let Some(a) = &mut self.photos {
+                    a.set_size(&self.ui, w, h);
+                    a.set_desktop(&self.ui, desktop);
+                }
+            }
             AppId::External(_) => {}
             AppId::ExternalWindow(slot, id) => self.ext_window_resize(slot as usize, u32::from(id), w, h),
             AppId::Magnifier => self.magnifier.iter_mut().for_each(|a| a.set_size(w, h)),

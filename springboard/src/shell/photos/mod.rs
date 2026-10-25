@@ -520,6 +520,9 @@ pub struct Photos {
     /// the press in progress began in the source list, and the row it landed on
     side_down: bool,
     side_press: Option<sidebar::Row>,
+    /// the source list's scroll (px), and the album it last brought into view (`sidebar.rs` `fit_side`)
+    side_scroll: Scroller,
+    side_shown: Option<Album>,
     data: PathBuf,
     pictures: PathBuf,
     dirs: Vec<PathBuf>,
@@ -697,12 +700,19 @@ impl Photos {
         }
     }
 
-    /// Lays the app out for a pane of `w` x `h` px (Split View, Slide Over).
-    pub fn set_size(&mut self, w: i32, h: i32) {
+    /// Lays the app out for a pane of `w` x `h` px (Split View, Slide Over, a desktop window). On the desktop the pane
+    /// is the window less the source list, applied here so keys, menu commands and scrolling use the new width before
+    /// the next draw.
+    pub fn set_size(&mut self, ui: &Ui, w: i32, h: i32) {
+        // a new height may leave the open album's row out of view: bring it back on the fit below
+        if h != self.h {
+            self.side_shown = None;
+        }
         self.win_w = w;
         self.h = h;
-        // the desktop pane is the window less the source list, laid out again on the next draw or touch (`fit_pane`)
-        if !self.desktop {
+        if self.desktop {
+            self.fit_pane(ui);
+        } else {
             self.w = w;
         }
     }
@@ -732,6 +742,7 @@ impl Photos {
             self.fit_scroll(ui);
             self.dirty = true;
         }
+        self.fit_side(ui);
     }
 
     /// Top of the pane's content: under the navigation bar on the tablet, under the unified toolbar band on the desktop.
@@ -766,6 +777,8 @@ impl Photos {
             sidebar: 0,
             side_down: false,
             side_press: None,
+            side_scroll: Scroller::new(),
+            side_shown: None,
             pictures,
             dirs,
             pool: Pool::new(WORKERS)?,
@@ -904,7 +917,7 @@ impl Photos {
         if let Some((_, until)) = &self.note {
             due = earliest(due, Some(*until));
         }
-        if self.keywords_open && self.kw_scroll.animating() {
+        if (self.keywords_open && self.kw_scroll.animating()) || (self.desktop && self.side_scroll.animating()) {
             due = earliest(due, Some(self.now));
         }
         due
@@ -1672,6 +1685,9 @@ impl Photos {
         if self.keywords_open {
             self.dirty |= self.kw_scroll.tick(t);
         }
+        if self.desktop {
+            self.dirty |= self.side_scroll.tick(t);
+        }
         if let Some(e) = self.entry.as_mut() {
             let typed = e.keyboard.tick(t);
             e.field.tick(ui, t);
@@ -1957,7 +1973,7 @@ impl Photos {
         if self.desktop {
             self.fit_pane(ui);
             // a press in the source list is the list's; the rest reaches the pane in its own coordinates
-            let Some(ev) = self.side_touch(ui, ev) else { return };
+            let Some(ev) = self.side_touch(ui, ev, t) else { return };
             return self.touch_pane(ui, ev, t);
         }
         self.touch_pane(ui, ev, t)
@@ -2758,7 +2774,9 @@ impl Photos {
 
     fn draw_pane(&mut self, s: &mut Surface, ui: &Ui, t: f64) {
         self.dirty = false;
-        s.fill_rect(0, 0, self.w as usize, self.h as usize, BLACK);
+        // the viewer, the editor and a slideshow are black on every form; the grid follows the appearance on the desktop
+        let bg = if self.slideshow.is_some() || self.editor.is_some() || self.viewer.is_some() { BLACK } else { self.pane_bg() };
+        s.fill_rect(0, 0, self.w as usize, self.h as usize, bg);
         if self.slideshow.is_some() {
             self.draw_slideshow(s, ui);
         } else if self.editor.is_some() {
@@ -2965,13 +2983,14 @@ impl Photos {
         let empty = self.photos().is_empty();
         let selecting = self.selection.active;
         let fit = self.fit_grid();
+        let (header_ink, cell_bg) = (self.pane_label(), self.pane_cell());
         let keys: Vec<(usize, String, bool, bool)> = self.grid.visible(off, off + bottom - top).into_iter().filter_map(|i| self.photos().get(i).map(|p| (i, self.thumb_key(p), self.album != Album::Trash && self.fav_paths.contains(&p.path), self.selection.contains(&p.path)))).collect();
         {
             let mut band = s.rows(top as usize, bottom as usize);
             for (si, y) in self.grid.headers(off, off + bottom - top) {
                 let title = self.sections[si].title.clone();
                 let hy = top + y - off + ui.pt(HEADER_PT) / 2.0 + ui.pt(4.0);
-                self.label_left(&mut band, ui, &title, 22.0, Weight::Bold, WHITE, ui.pt(MARGIN_PT), hy);
+                self.label_left(&mut band, ui, &title, 22.0, Weight::Bold, header_ink, ui.pt(MARGIN_PT), hy);
             }
             for (i, key, favorite, picked) in keys {
                 let (x, y, cw, ch) = self.grid.cell_rect(i);
@@ -2982,7 +3001,7 @@ impl Photos {
                         let target = if fit { fit_rect(r, img.w, img.h) } else { r };
                         super::switcher::draw_scaled(&mut band, img, target, 0.0, 255)
                     }
-                    None => band.fill_rect(r.x as usize, r.y as usize, r.w as usize, r.h as usize, CELL),
+                    None => band.fill_rect(r.x as usize, r.y as usize, r.w as usize, r.h as usize, cell_bg),
                 }
                 if pressed == Some(Target::Cell(i)) {
                     band.fill_rrect(r.x as f32, r.y as f32, r.w as f32, r.h as f32, 0.0, pack(0, 0, 0, 100));
@@ -3019,7 +3038,7 @@ impl Photos {
                 let (bx, by, bw, bh) = self.camera_button(ui);
                 let (r, line) = (ui.pt(2.0), ui.pt(1.0));
                 s.fill_rrect(bx, by, bw, bh, r, EMPTY_STATE_GRAY);
-                s.fill_rrect(bx + line, by + line, bw - 2.0 * line, bh - 2.0 * line, (r - line).max(0.0), if pressed == Some(Target::OpenCamera) { rgba(255, 255, 255, 40) } else { BLACK });
+                s.fill_rrect(bx + line, by + line, bw - 2.0 * line, bh - 2.0 * line, (r - line).max(0.0), if pressed == Some(Target::OpenCamera) { rgba(255, 255, 255, 40) } else { self.pane_bg() });
                 self.label(s, ui, "Open Camera", 17.0, Weight::Regular, EMPTY_STATE_GRAY, cx, by + bh / 2.0);
             } else {
                 let cy = (top + bottom) / 2.0;
@@ -3038,8 +3057,8 @@ impl Photos {
                     (Album::Smart(_), _) => ("No Photos", "No photo matches the rules of this smart album."),
                     (Album::Memory(_), _) => ("No Photos", "This memory has no photos left."),
                 };
-                self.label(s, ui, title, 22.0, Weight::Bold, WHITE, cx, cy - ui.pt(14.0));
-                self.label(s, ui, hint, 15.0, Weight::Regular, SECONDARY, cx, cy + ui.pt(14.0));
+                self.label(s, ui, title, 22.0, Weight::Bold, self.pane_label(), cx, cy - ui.pt(14.0));
+                self.label(s, ui, hint, 15.0, Weight::Regular, self.pane_label2(), cx, cy + ui.pt(14.0));
             }
         }
         // navigation bar over the content; on the desktop, the toolbar in the unified band
