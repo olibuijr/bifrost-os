@@ -167,6 +167,12 @@ struct DictionaryApp {
     shown: Option<Shown>,
     suggestions: Vec<String>,
     scroll: Scroller,
+    /// The sidebar's own scroll, under the traffic lights' band: its rows scroll by wheel and drag when they overflow.
+    side_scroll: Scroller,
+    /// The touch that is down started in the sidebar, so it drags `side_scroll` and not the content.
+    side_touch: bool,
+    /// The next frame scrolls the sidebar so its selected row is in view (set when the word on screen changes).
+    reveal_selection: bool,
     prefs: Prefs,
     prefs_path: PathBuf,
     history: History,
@@ -218,6 +224,9 @@ impl DictionaryApp {
             shown: None,
             suggestions: Vec::new(),
             scroll: Scroller::new(),
+            side_scroll: Scroller::new(),
+            side_touch: false,
+            reveal_selection: false,
             prefs: Prefs::default(),
             prefs_path: PathBuf::new(),
             history: History::default(),
@@ -424,6 +433,7 @@ impl DictionaryApp {
         self.find = None;
         self.suggestions = self.library.as_ref().map(|l| l.suggest(&self.query, SUGGESTIONS)).unwrap_or_default();
         self.scroll.jump_top();
+        self.side_scroll.jump_top();
         true
     }
 
@@ -449,8 +459,13 @@ impl DictionaryApp {
             }
         }
         self.query = word.to_string();
-        // the sidebar keeps listing the headwords that match, with this one selected
-        self.suggestions = self.library.as_ref().map(|l| l.suggest(word, SUGGESTIONS)).unwrap_or_default();
+        // the sidebar keeps the search's matches when the word is one of them (a tap on a row, Back to a listed word);
+        // a word from elsewhere (a link, another app, the history) lists the headwords that match it, selected
+        if !self.suggestions.iter().any(|w| w.eq_ignore_ascii_case(word)) {
+            self.suggestions = self.library.as_ref().map(|l| l.suggest(word, SUGGESTIONS)).unwrap_or_default();
+            self.side_scroll.jump_top();
+        }
+        self.reveal_selection = true;
         self.shown = Some(Shown { word: word.to_string(), hits });
         if let Some(f) = &mut self.find {
             f.cur = None;
@@ -575,7 +590,7 @@ impl DictionaryApp {
                 // links only for the terms of a cross-reference line that a dictionary defines
                 let refs: Vec<(usize, usize)> = model::cross_references(&para).into_iter().filter(|&(s, e)| self.is_link(&para[s..e])).collect();
                 let wrapped = ui.wrap(&para, size, Weight::Regular, wrap_px(SENSE_INDENT));
-                let starts = model::line_starts(&wrapped);
+                let starts = model::line_starts(&para, &wrapped);
                 for (line, start) in wrapped.into_iter().zip(starts) {
                     let links = model::clip_links(start, line.len(), &refs).into_iter().map(|(a, b, i)| (a, b, para[refs[i].0..refs[i].1].to_string())).collect();
                     out.push(Line { indent: SENSE_INDENT, links, ..Line::plain(line, size, Weight::Regular, LABEL.now(), size * LEADING) });
@@ -596,7 +611,9 @@ impl DictionaryApp {
                         return true;
                     }
                 }
-                self.scroll.down(py, t);
+                // a touch (or the wheel's emulated drag) in the sidebar scrolls the sidebar, anywhere else the content
+                self.side_touch = self.sidebar.w > 0.0 && self.sidebar.contains(px, py);
+                self.active_scroll().down(py, t);
                 false
             }
             TouchKind::Move => {
@@ -604,7 +621,7 @@ impl DictionaryApp {
                     d.y = py;
                     return true;
                 }
-                self.scroll.moved(py, t);
+                self.active_scroll().moved(py, t);
                 true
             }
             // Scroller::up reports a tap (no drag): a suggestion row looks its word up
@@ -617,7 +634,7 @@ impl DictionaryApp {
                     }
                     return true;
                 }
-                if self.scroll.up(py, t) {
+                if self.active_scroll().up(py, t) {
                     if let Some(act) = self.hit_test(px, py) {
                         if let Act::TextSize(ax, ay) = act {
                             self.open_text_size_menu(ctx, ax, ay);
@@ -640,10 +657,20 @@ impl DictionaryApp {
                 if self.drag.take().is_some() {
                     return true;
                 }
-                self.scroll.up(py, t);
+                self.active_scroll().up(py, t);
                 true
             }
         }
+    }
+
+    /// The scroller the touch that is down drags: the sidebar's when it started there, else the content's.
+    fn active_scroll(&mut self) -> &mut Scroller {
+        if self.side_touch { &mut self.side_scroll } else { &mut self.scroll }
+    }
+
+    /// The scroll offset the sidebar's rows are drawn and hit with: its own scroll, rows starting under the bar band.
+    fn sidebar_scroll(&self) -> f32 {
+        self.side_scroll.offset() - bifrost_app::layout::UNIFIED_BAR_PT
     }
 
     /// The toolbar's text size pull-down (`NSMenuToolbarItem`): its menu opens under the button, at (`x`, `y`) points, and
@@ -666,7 +693,11 @@ impl DictionaryApp {
         if self.sidebar.w <= 0.0 || !self.sidebar.contains(px, py) {
             return false;
         }
-        match self.source_list().hit(self.sidebar, -bifrost_app::layout::UNIFIED_BAR_PT, px, py) {
+        // the band under the traffic lights is not a row, even with rows scrolled under it
+        if py < self.sidebar.y + bifrost_app::layout::UNIFIED_BAR_PT {
+            return true;
+        }
+        match self.source_list().hit(self.sidebar, self.sidebar_scroll(), px, py) {
             Some(i) => match self.suggestions.get(i as usize).cloned() {
                 Some(word) => {
                     self.settings = false;
@@ -1059,6 +1090,10 @@ impl App for DictionaryApp {
             self.scroll.tick(t);
             redraw = true;
         }
+        if self.side_scroll.animating() {
+            self.side_scroll.tick(t);
+            redraw = true;
+        }
         for e in &mut self.windows {
             redraw |= e.app.tick(ctx, t);
         }
@@ -1066,7 +1101,7 @@ impl App for DictionaryApp {
     }
 
     fn next_wake(&self, t: f64) -> Option<f64> {
-        let own = self.scroll.animating().then_some(t + 16.0);
+        let own = (self.scroll.animating() || self.side_scroll.animating()).then_some(t + 16.0);
         self.windows.iter().filter_map(|e| e.app.next_wake(t)).chain(own).reduce(f64::min)
     }
 
@@ -1138,7 +1173,17 @@ impl App for DictionaryApp {
 
         // the sidebar: the matching headwords under the traffic lights, the one on screen selected
         if regions.sidebar.w > 0.0 {
-            widgets::source_list(canvas, ui, regions.sidebar, &self.source_list(), -bar_h, None);
+            let list = self.source_list();
+            // the rows scroll in the column under the bar band; a new word on screen brings its row into view
+            let rows_h = (regions.sidebar.h - bar_h).max(0.0);
+            self.side_scroll.set_max(list.content_height() - rows_h);
+            if std::mem::take(&mut self.reveal_selection) {
+                let to = list.scroll_to_selected(rows_h, self.side_scroll.offset());
+                if to != self.side_scroll.offset() {
+                    self.side_scroll.jump_to(to);
+                }
+            }
+            widgets::source_list(canvas, ui, regions.sidebar, &list, self.sidebar_scroll(), None);
             canvas.fill_rect(RectF::new(ui.pt(regions.sidebar.w) - 1.0, 0.0, 1.0, ch as f32), SEPARATOR_C.now());
         }
 
@@ -1391,6 +1436,43 @@ mod window_tests {
         assert_eq!(app.history.current(), Some("computer"));
         app.sidebar = Rect::default();
         assert!(!app.tap_sidebar(50.0, 70.0), "a window without a sidebar takes no sidebar taps");
+    }
+
+    #[test]
+    fn a_tap_on_a_sidebar_row_keeps_the_searchs_matches() {
+        let mut app = DictionaryApp::new();
+        let matches: Vec<String> = vec!["comp".into(), "computer".into(), "computer-aided".into()];
+        app.suggestions = matches.clone();
+        app.sidebar = Rect { x: 0.0, y: 0.0, w: 200.0, h: 600.0 };
+        assert!(app.tap_sidebar(50.0, bifrost_app::layout::UNIFIED_BAR_PT + ROW_H * 1.5));
+        assert_eq!(app.shown.as_ref().map(|s| s.word.as_str()), Some("computer"));
+        assert_eq!(app.suggestions, matches, "the list is the search's, not the matches of the chosen word");
+        assert!(app.reveal_selection, "the selected row is brought into view on the next frame");
+        assert_eq!(app.source_list().selected(), Some(1));
+        // a word that is not listed (a link, another app) lists its own matches
+        app.show("abacus", true);
+        assert!(app.suggestions.is_empty(), "no library: nothing matches");
+    }
+
+    #[test]
+    fn a_scrolled_sidebar_hits_the_row_under_the_pointer_and_not_the_bar_band() {
+        let mut app = DictionaryApp::new();
+        app.suggestions = (0..40).map(|i| format!("word{i}")).collect();
+        app.sidebar = Rect { x: 0.0, y: 0.0, w: 200.0, h: 300.0 };
+        let list = app.source_list();
+        let rows_h = app.sidebar.h - bifrost_app::layout::UNIFIED_BAR_PT;
+        app.side_scroll.set_max(list.content_height() - rows_h);
+        assert!(app.side_scroll.max() > 0.0, "40 rows overflow the column");
+        app.side_scroll.jump_to(ROW_H * 10.0);
+        assert!(app.tap_sidebar(50.0, bifrost_app::layout::UNIFIED_BAR_PT + ROW_H * 0.5));
+        assert_eq!(app.shown.as_ref().map(|s| s.word.as_str()), Some("word10"));
+        // the band under the traffic lights takes the tap without choosing the row scrolled beneath it
+        assert!(app.tap_sidebar(50.0, bifrost_app::layout::UNIFIED_BAR_PT * 0.5));
+        assert_eq!(app.shown.as_ref().map(|s| s.word.as_str()), Some("word10"));
+        // a selection below the column scrolls into view
+        app.shown = Some(Shown { word: "word30".into(), hits: Vec::new() });
+        let to = app.source_list().scroll_to_selected(rows_h, app.side_scroll.offset());
+        assert!(to + rows_h >= ROW_H * 31.0 && to <= ROW_H * 30.0);
     }
 
     #[test]

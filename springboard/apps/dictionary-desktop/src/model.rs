@@ -488,19 +488,26 @@ pub fn cross_references(paragraph: &str) -> Vec<(usize, usize)> {
 }
 
 /// `paragraph` with its runs of white space collapsed to single spaces and trimmed: the text `Ui::wrap` breaks into
-/// lines, so the wrapped lines joined by single spaces give it back and `line_starts` can place them.
+/// lines. Every wrapped line is a piece of it, which `line_starts` finds again.
 pub fn normalize(paragraph: &str) -> String {
     paragraph.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// Where each wrapped line of a normalized paragraph starts in it, in bytes.
-pub fn line_starts(lines: &[String]) -> Vec<usize> {
+/// Where each wrapped line of the normalized `paragraph` starts in it, in bytes. The wrap breaks after spaces, after
+/// hyphens, between CJK characters and inside overlong runs, so lines are not rejoined with spaces: each line is found
+/// in the paragraph from where the previous one ended. A line that cannot be found (not a piece of the paragraph)
+/// starts where the previous one ended, past one separating space when there is one.
+pub fn line_starts(paragraph: &str, lines: &[String]) -> Vec<usize> {
     let mut at = 0;
     lines
         .iter()
         .map(|l| {
-            let start = at;
-            at += l.len() + 1;
+            let start = match paragraph.get(at..).and_then(|rest| rest.find(l.as_str())) {
+                Some(off) => at + off,
+                None if paragraph.get(at..).is_some_and(|rest| rest.starts_with(' ')) => at + 1,
+                None => at,
+            };
+            at = (start + l.len()).min(paragraph.len());
             start
         })
         .collect()
@@ -673,7 +680,7 @@ mod tests {
         let links = cross_references(&para);
         let lines = vec!["Synonyms: computing".to_string(), "machine, data processor".to_string()];
         assert_eq!(lines.join(" "), para);
-        let starts = line_starts(&lines);
+        let starts = line_starts(&para, &lines);
         assert_eq!(starts, [0, 20]);
         let first = clip_links(starts[0], lines[0].len(), &links);
         assert_eq!(first, [(10, 19, 0)]);
@@ -684,6 +691,44 @@ mod tests {
         assert_eq!(r, [Run { start: 0, end: 7, link: true }, Run { start: 7, end: 9, link: false }, Run { start: 9, end: 23, link: true }]);
         assert_eq!(runs(5, &[]), [Run { start: 0, end: 5, link: false }]);
         assert!(runs(0, &[]).is_empty());
+    }
+
+    #[test]
+    fn line_starts_follow_a_wrap_at_hyphens_and_between_cjk_characters() {
+        // a break after a hyphen leaves no space between the lines
+        let para = normalize("see also: well-known word, other");
+        let lines = vec!["see also: well-".to_string(), "known word,".to_string(), "other".to_string()];
+        let starts = line_starts(&para, &lines);
+        assert_eq!(starts, [0, 15, 27]);
+        for (l, s) in lines.iter().zip(&starts) {
+            assert_eq!(&para[*s..*s + l.len()], l);
+        }
+        let links = cross_references(&para);
+        let terms: Vec<&str> = links.iter().map(|&(s, e)| &para[s..e]).collect();
+        assert_eq!(terms, ["well-known word", "other"]);
+        let second = clip_links(starts[1], lines[1].len(), &links);
+        assert_eq!(second, [(0, 10, 0)]);
+        assert_eq!(&lines[1][0..10], "known word");
+        let third = clip_links(starts[2], lines[2].len(), &links);
+        assert_eq!(third, [(0, 5, 1)]);
+
+        // CJK lines break between characters, with no space at all
+        let para = normalize("See also: 計算機科学, 電子計算機");
+        let lines = vec!["See also: 計算".to_string(), "機科学, 電子".to_string(), "計算機".to_string()];
+        let starts = line_starts(&para, &lines);
+        for (l, s) in lines.iter().zip(&starts) {
+            assert_eq!(&para[*s..*s + l.len()], l);
+        }
+        assert_eq!(starts, [0, "See also: 計算".len(), "See also: 計算機科学, 電子".len()]);
+        let links = cross_references(&para);
+        let terms: Vec<&str> = links.iter().map(|&(s, e)| &para[s..e]).collect();
+        assert_eq!(terms, ["計算機科学", "電子計算機"]);
+        let second = clip_links(starts[1], lines[1].len(), &links);
+        assert_eq!(second, [(0, "機科学".len(), 0), ("機科学, ".len(), lines[1].len(), 1)]);
+        assert_eq!(&lines[1][second[1].0..second[1].1], "電子");
+        assert_eq!(clip_links(starts[2], lines[2].len(), &links), [(0, "計算機".len(), 1)]);
+        // the old join-with-spaces placement would have put the third line one byte per break too far
+        assert_ne!(starts[2], "See also: 計算".len() + 1 + "機科学, 電子".len() + 1);
     }
 
     #[test]

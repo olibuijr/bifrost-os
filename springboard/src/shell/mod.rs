@@ -118,6 +118,7 @@ pub mod print_scan_page;
 pub mod workspace;
 pub mod services;
 pub mod chrome_host;
+pub mod chrome_ids;
 pub mod sticky_keys;
 pub mod slow_keys;
 pub mod scripts_menu;

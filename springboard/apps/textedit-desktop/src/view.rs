@@ -123,6 +123,9 @@ pub enum Action {
     /// The Make Plain Text confirmation sheet (when the document has attachments): remove them, or cancel
     PlainDone,
     PlainCancel,
+    /// The close confirmation of an edited document (File > Close or the window's close button): the button pressed,
+    /// as the document controller's `alert::SAVE`, `CANCEL` or `DONT_SAVE`
+    CloseAnswer(u8),
     /// Edit > Add Link, Open Link, Remove Link, and the link panel's buttons
     AddLink,
     OpenLink,
@@ -248,6 +251,7 @@ impl Action {
             Action::InsertImage => MENU_BASE + 0xeb,
             Action::PlainDone => MENU_BASE + 0xec,
             Action::PlainCancel => MENU_BASE + 0xed,
+            Action::CloseAnswer(choice) => MENU_BASE + 0x90 + choice.clamp(1, 3) as u32,
             Action::Transform(Transform::Upper) => MENU_BASE + 0x78,
             Action::Transform(Transform::Lower) => MENU_BASE + 0x79,
             Action::Transform(Transform::Capitalize) => MENU_BASE + 0x7a,
@@ -369,6 +373,7 @@ impl Action {
             0xeb => Action::InsertImage,
             0xec => Action::PlainDone,
             0xed => Action::PlainCancel,
+            0x91..=0x93 => Action::CloseAnswer((offset - 0x90) as u8),
             0x78 => Action::Transform(Transform::Upper),
             0x79 => Action::Transform(Transform::Lower),
             0x7a => Action::Transform(Transform::Capitalize),
@@ -861,6 +866,26 @@ pub fn plain_buttons(ui: &Ui, l: &PanelLayout) -> Vec<Button> {
     sheet_buttons(ui, l, &[("Cancel", Action::PlainCancel, false), ("Remove Attachments", Action::PlainDone, true)])
 }
 
+/// The close confirmation's buttons, in the Golden Gate order: Don't Save, Cancel, then Save (the default).
+pub fn close_alert_buttons(ui: &Ui, l: &PanelLayout) -> Vec<Button> {
+    use bifrost_app::document::alert;
+    sheet_buttons(
+        ui,
+        l,
+        &[
+            ("Don\u{2019}t Save", Action::CloseAnswer(alert::DONT_SAVE as u8), false),
+            ("Cancel", Action::CloseAnswer(alert::CANCEL as u8), false),
+            ("Save", Action::CloseAnswer(alert::SAVE as u8), true),
+        ],
+    )
+}
+
+/// A confirmation whose title and message name things from elsewhere (a document's name): each cut to the panel's width.
+pub fn draw_alert(c: &mut dyn Canvas, ui: &Ui, l: &PanelLayout, title: &str, message: &str, buttons: &[Button]) {
+    let w = ui.pt(l.right - l.labels_x);
+    draw_confirm(c, ui, l, &ui.fit(title, MAC_BODY_PT, w), &ui.fit(message, MAC_BODY_PT, w), buttons);
+}
+
 /// The confirmation sheet: its title, a one-line message in the first row, and its buttons.
 pub fn draw_confirm(c: &mut dyn Canvas, ui: &Ui, l: &PanelLayout, title: &str, message: &str, buttons: &[Button]) {
     draw_sheet(c, ui, l, title, &[], 0, buttons);
@@ -1290,6 +1315,9 @@ mod tests {
             Action::ShowProperties,
             Action::PropsDone,
             Action::PropsCancel,
+            Action::CloseAnswer(1),
+            Action::CloseAnswer(2),
+            Action::CloseAnswer(3),
             Action::MarkupAsCode,
             Action::Encoding(0),
             Action::Encoding(6),

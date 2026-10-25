@@ -10,7 +10,7 @@ use super::{AppId,Screen,Effect,Event,desktop_network,ui::{WHITE,SECONDARY,CELL,
 use crate::gfx::{Image,Surface};
 /// The overlay surface (the whole screen) the system sheets and alerts are drawn into on the desktop (`Shell::modal_layer`).
 #[cfg(feature = "desktop-wayland")]
-pub(super) const MODAL_CHROME_ID:u32=15;
+pub(super) const MODAL_CHROME_ID:u32=super::chrome_ids::MODAL;
 /// Width of a menu extra's button, in pt (Golden Gate spaces menu extras about 8 pt apart).
 #[cfg(feature = "desktop-wayland")]
 const STATUS_ICON_PT:f32=30.;
@@ -220,9 +220,10 @@ pub(super) const FLYOUT_SAFE_MS:f64=300.;
 #[cfg(feature = "desktop-wayland")]
 const FLYOUT_OVERLAP_PT:f32=3.;
 /// The chrome surface of the first cascading submenu (the menu it cascades from is id 1); a submenu of a submenu is
-/// the next id. Each level is its own overlay surface above the windows, cut from the shell's frame as id 1 is.
+/// the next id, within the range `chrome_ids` reserves (`FLYOUT_SLOTS` levels). Each level is its own overlay surface
+/// above the windows, cut from the shell's frame as id 1 is.
 #[cfg(feature = "desktop-wayland")]
-pub(super) const FLYOUT_CHROME_ID:u32=17;
+pub(super) const FLYOUT_CHROME_ID:u32=super::chrome_ids::FLYOUT_FIRST;
 /// The pointer's dealings with the cascading submenus (`NativeMenu`): a submenu waiting out `FLYOUT_OPEN_MS`, a row of
 /// a parent the pointer crosses on its way into the open submenu (it takes over only after `FLYOUT_SAFE_MS` at rest),
 /// and the pointer's last position (the apex of the safe triangle).
@@ -1728,7 +1729,7 @@ impl Shell {
         let g=self.ui.pt(super::desk::SHADOW_REACH_PT);
         let bar=self.desktop_bar_height();
         // the surface starts under the menu bar: the shadow margin above a panel must not cover the bar's items
-        [(4,self.cc_desk_rect()),(5,self.center_desk_rect())].into_iter().filter_map(|(id,r)|r.map(|r|(id,panel_overlay_rect(r,g)))).map(|(id,(x,y,w,h))|{let top=y.max(bar);(id,x,top,w,(y+h).saturating_sub(top))}).collect()
+        [(super::chrome_ids::CONTROL_CENTER,self.cc_desk_rect()),(super::chrome_ids::NOTIFICATION_CENTER,self.center_desk_rect())].into_iter().filter_map(|(id,r)|r.map(|r|(id,panel_overlay_rect(r,g)))).map(|(id,(x,y,w,h))|{let top=y.max(bar);(id,x,top,w,(y+h).saturating_sub(top))}).collect()
     }
     #[cfg(feature="desktop-wayland")]
     pub fn desktop_chrome_frames(&self,pixels:&[u32],width:usize,height:usize)->Vec<crate::bare::wayland::ChromeFrame> {
@@ -1740,7 +1741,7 @@ impl Shell {
         let surface_of=|p|popup_surface_rect(p,self.desktop_bar_height() as i32,self.ui.pt(super::desk::SHADOW_REACH_PT) as i32+2,self.ui.pt(2.) as i32,(width,height));
         let levels=self.menu_level_rects();
         let popup=levels.first().map(|&(_,p,_)|surface_of(p));
-        let flyouts:Vec<_>=levels.iter().skip(1).map(|&(_,p,_)|surface_of(p)).collect();
+        let flyouts:Vec<_>=levels.iter().skip(1).take(super::chrome_ids::FLYOUT_SLOTS as usize).map(|&(_,p,_)|surface_of(p)).collect();
         let mut frames=Vec::new();for (id,x,y,w,h) in std::iter::once((0,0,0,width,self.desktop_bar_height())).chain({let r=self.dock_surface_rect();std::iter::once((2,r.x.max(0) as usize,r.y.max(0) as usize,r.w.max(0) as usize,r.h.max(0) as usize))}).chain(popup.map(|(r,_)|(1,r.0,r.1,r.2,r.3))).chain(self.desk_panel_overlays()) {
             let w=w.min(width.saturating_sub(x));let h=h.min(height.saturating_sub(y));if w==0||h==0{continue;}let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}if id==2&&!self.dock_is_visible(){data.fill(0);}let input=match id {1=>popup.map(|(_,menu)|menu),2=>self.dock_input_rect(self.dock_surface_rect()),_=>None};let dock=if id==2{use crate::bare::wayland::{DockEdge,DockPlacement};use super::desktop_dock::Position;let m=self.desk_metrics();Some(match self.dock_preferences().position{Position::Bottom=>DockPlacement{edge:DockEdge::Bottom,reserve:m.dock_bottom},Position::Left=>DockPlacement{edge:DockEdge::Left,reserve:m.dock_left},Position::Right=>DockPlacement{edge:DockEdge::Right,reserve:m.dock_right}})}else{None};let shape=if id==1{self.stack_input_shape(x as i32,y as i32)}else{Vec::new()};frames.push(crate::bare::wayland::ChromeFrame{shape,dock,id,x:x as i32,y:y as i32,width:w,height:h,pixels:data,input});
         }
@@ -1775,7 +1776,7 @@ impl Shell {
                 let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
                 let mask=crop_mask(&mask,ow,w,h);
                 let mut image=Image{w,h,px:data};image.apply_mask(&mask);
-                frames.push(crate::bare::wayland::ChromeFrame{shape:Vec::new(),dock:None,id:3,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
+                frames.push(crate::bare::wayland::ChromeFrame{shape:Vec::new(),dock:None,id:super::chrome_ids::SEARCH,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
             }
         }
         // the assistant panel: id 6, an overlay surface like Search (its keyboard is exclusive while it is open)
@@ -1785,14 +1786,14 @@ impl Shell {
                 let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
                 let mask=crop_mask(&mask,ow,w,h);
                 let mut image=Image{w,h,px:data};image.apply_mask(&mask);
-                frames.push(crate::bare::wayland::ChromeFrame{shape:Vec::new(),dock:None,id:6,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
+                frames.push(crate::bare::wayland::ChromeFrame{shape:Vec::new(),dock:None,id:super::chrome_ids::ASSISTANT,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
             }
         }
         // Quick Look: id 7, an overlay surface above every window (its keys come from the shell's own keyboard reader)
         if let Some(((x,y,w,h),mask))=self.quick_look_overlay() {
             let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
             let mut image=Image{w,h,px:data};image.apply_mask(&mask);
-            frames.push(crate::bare::wayland::ChromeFrame{shape:Vec::new(),dock:None,id:7,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
+            frames.push(crate::bare::wayland::ChromeFrame{shape:Vec::new(),dock:None,id:super::chrome_ids::QUICK_LOOK,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
         }
         // The Cmd+Tab strip: id 13, an overlay surface above every window, listed only while it is open. It takes neither
         // the pointer (an empty input region, as the sweep's id 10) nor the keyboard (never exclusive): the modifier release
@@ -1800,7 +1801,7 @@ impl Shell {
         if let Some(((x,y,w,h),mask))=self.cmdtab_overlay() {
             let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
             let mut image=Image{w,h,px:data};image.apply_mask(&mask);
-            frames.push(crate::bare::wayland::ChromeFrame{shape:Vec::new(),dock:None,id:13,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:Some([0,0,0,0])});
+            frames.push(crate::bare::wayland::ChromeFrame{shape:Vec::new(),dock:None,id:super::chrome_ids::SWITCHER,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:Some([0,0,0,0])});
         }
         // The system menu's card (Force Quit, About, Log Out): an overlay surface above every window, like the file preview. It takes the
         // pointer over its whole card; its keys come from the shell's own keyboard reader.
@@ -1829,14 +1830,14 @@ impl Shell {
                 let mut image=Image{w,h,px:data};image.apply_mask(&mask);
                 // and the rest of the veil dims the desktop behind it, other clients' windows included (E2E6 6)
                 self.overview.grid.overlay_backdrop(&mut image.px);
-                frames.push(crate::bare::wayland::ChromeFrame{shape:Vec::new(),dock:None,id:8,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
+                frames.push(crate::bare::wayland::ChromeFrame{shape:Vec::new(),dock:None,id:super::chrome_ids::APP_GRID,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
             }
         }
         // Overview: id 9, an overlay surface above every window that takes the keyboard while it is open,
         // on the same rectangle as the Apps grid (the menu bar and the Dock stay their own surfaces). Listed only while
         // Overview is open or animating; the frame it ends in drops the surface. A desktop switch's sweep is id 10: the same
         // rectangle with an empty input region, so it takes neither the pointer nor the keyboard.
-        for (id,rect,input) in [(9,self.overview.overlay_rect(self),None),(10,self.overview.slide_overlay_rect(self),Some([0,0,0,0]))] {
+        for (id,rect,input) in [(super::chrome_ids::OVERVIEW,self.overview.overlay_rect(self),None),(super::chrome_ids::SWEEP,self.overview.slide_overlay_rect(self),Some([0,0,0,0]))] {
             if let Some((x,y,w,h))=rect {
                 let w=w.min(width.saturating_sub(x));let h=h.min(height.saturating_sub(y));
                 if w>0&&h>0 {
@@ -1852,7 +1853,7 @@ impl Shell {
         // behind them and left its veil on the wallpaper (MA6).
         // the announcement caption (CAPTION_CHROME_ID) and the screen reader's focus ring (FOCUS_RING_CHROME_ID): above every window, the menu bar and every other chrome surface (`chrome_z`),
         // taking neither the pointer nor the keyboard
-        for (id,layer) in [(11,&self.capture_layer),(12,&self.shot_layer),(MODAL_CHROME_ID,&self.modal_layer),(crate::bare::wayland::CAPTION_CHROME_ID,&self.a11y_layers[0]),(crate::bare::wayland::FOCUS_RING_CHROME_ID,&self.a11y_layers[1])] {
+        for (id,layer) in [(super::chrome_ids::CAPTURE,&self.capture_layer),(super::chrome_ids::SHOT,&self.shot_layer),(MODAL_CHROME_ID,&self.modal_layer),(crate::bare::wayland::CAPTION_CHROME_ID,&self.a11y_layers[0]),(crate::bare::wayland::FOCUS_RING_CHROME_ID,&self.a11y_layers[1])] {
             if let Some(l)=layer {
                 if l.image.w>0&&l.image.h>0 {frames.push(crate::bare::wayland::ChromeFrame{shape:Vec::new(),dock:None,id,x:l.x,y:l.y,width:l.image.w,height:l.image.h,pixels:l.image.px.clone(),input:l.input});}
             }
@@ -1864,7 +1865,7 @@ impl Shell {
             let top=(self.kb_top().max(0.0) as usize).min(height);
             if top<height&&width>0 {
                 let data=pixels[top*width..height*width].to_vec();
-                frames.push(crate::bare::wayland::ChromeFrame{shape:Vec::new(),dock:None,id:16,x:0,y:top as i32,width,height:height-top,pixels:data,input:None});
+                frames.push(crate::bare::wayland::ChromeFrame{shape:Vec::new(),dock:None,id:super::chrome_ids::KEYBOARD,x:0,y:top as i32,width,height:height-top,pixels:data,input:None});
             }
         }
         frames

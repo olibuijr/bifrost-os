@@ -30,10 +30,10 @@ const MENU_GAP_PT: f32 = 6.0;
 const MENU_R_PT: f32 = 10.0;
 /// The width of the answer buttons' column at the right edge of a ringing Clock alert's banner.
 const ANSWER_W_PT: f32 = 76.0;
-/// The chrome overlay surface of the banner (above every window; the flyout ids start at 17 and count up, the
-/// accessibility caption and focus ring are 41 and 42).
+/// The chrome overlay surface of the banner (above every window); its id is kept clear of the others in
+/// `shell::chrome_ids`.
 #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
-pub const BANNER_CHROME_ID: u32 = 40;
+pub const BANNER_CHROME_ID: u32 = crate::shell::chrome_ids::BANNER;
 
 /// A part of the desktop banner the pointer can be on.
 #[derive(Clone, Copy, Debug, PartialEq)]

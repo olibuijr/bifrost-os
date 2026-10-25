@@ -598,6 +598,12 @@ impl<D: Document> DocumentController<D> {
         self.alert.as_ref().map(|a| &a.alert)
     }
 
+    /// The document the waiting close confirmation is for, so an app with a window per document shows the alert as a
+    /// sheet on that document's window. `None` when no close is waiting.
+    pub fn alert_doc(&self) -> Option<DocId> {
+        self.alert.as_ref().map(|a| a.doc)
+    }
+
     /// The user pressed button `choice` (`alert::SAVE`, `CANCEL` or `DONT_SAVE`; the id of an `AlertAction`).
     pub fn answer_alert(&mut self, host: &dyn DocumentHost, choice: u32) -> Vec<Notice> {
         let Some(CloseAlert { doc, .. }) = self.alert.take() else { return Vec::new() };

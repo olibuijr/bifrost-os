@@ -279,6 +279,7 @@ impl TextEditApp {
             self.docs.set_active(d);
         }
         self.sync_titles(ctx);
+        self.sync_text_state(ctx);
     }
 
     /// The shell's titles of the document windows follow their documents (renamed, saved, edited).
@@ -299,8 +300,11 @@ impl TextEditApp {
         }
     }
 
-    /// The shell closed a document window: its document closes with it (an edited one stays open and gets a window
-    /// again, so nothing typed is lost).
+    /// The shell closed a document window: its document closes with it. An edited one is not closed: the document
+    /// controller raises the close confirmation (Don't Save, Cancel, Save) as File > Close does, `sync_windows` gives the
+    /// document its window back with the confirmation on it as a sheet, and the document (and that window) close only
+    /// when it is answered with Don't Save, or with Save once saved. Cancel keeps both. The shell has already taken the
+    /// window down when it says so, so the document comes back in a new window rather than staying in the old one.
     pub(crate) fn doc_window_closed(&mut self, ctx: &Ctx, window: WindowId) -> bool {
         if window.is_main() {
             return false;
@@ -323,6 +327,12 @@ impl TextEditApp {
             }
         }
         self.sync_windows(ctx);
+        // an edited document asks first: its new window comes forward with the confirmation on it
+        if let Some(d) = doc.filter(|d| self.docs.alert_doc() == Some(*d)) {
+            if let Some(w) = self.views.iter().find(|v| v.doc == Some(d)).map(|v| v.window) {
+                self.enter(w);
+            }
+        }
         true
     }
 
@@ -409,6 +419,44 @@ mod tests {
         assert_eq!(app.docs.len(), 1);
         assert_eq!(app.current, WindowId::MAIN);
         assert_eq!(app.docs.active(), Some(first));
+    }
+
+    /// The red button on an edited document window does not lose the document: the close confirmation comes up on the
+    /// document's new window, Cancel keeps it, Don't Save closes it and its window.
+    #[test]
+    fn the_red_button_on_an_edited_document_asks_before_closing() {
+        let ctx = window(1200, 780);
+        let mut app = TextEditApp::new();
+        app.configure(&ctx);
+        app.menu_action(&ctx, item::NEW);
+        let w2 = app.current;
+        let second = app.docs.active().unwrap();
+        app.window_event(&ctx, w2, Input::Key(KeyInput::Text("unsaved".into())));
+        assert!(app.docs.is_edited(second));
+        let _ = ctx.close_window(w2);
+        ctx.take_sent();
+        assert!(app.window_closed(&ctx, w2));
+        assert_eq!(app.docs.len(), 2, "the edited document stays open");
+        assert_eq!(app.docs.alert_doc(), Some(second), "the close confirmation waits for an answer");
+        let w3 = app.current;
+        assert!(!w3.is_main() && w3 != w2, "the document is back in a window of its own");
+        assert_eq!(app.current_doc, Some(second));
+        assert!(app.close_alert_here());
+        assert!(!app.type_into("x"), "typing does not reach the document behind the sheet");
+        // Cancel: the document and its window stay
+        use bifrost_app::document::alert;
+        assert!(app.window_event(&ctx, w3, Input::Key(KeyInput::Code(27))));
+        assert!(app.docs.alert_doc().is_none());
+        assert_eq!(app.docs.len(), 2);
+        assert!(!ctx.take_sent().iter().any(|m| matches!(m, ToShell::WindowClose { id } if *id == w3.0)));
+        // File > Close asks again; Don't Save closes the document and its window
+        app.window_input(&ctx, w3, bifrost_app::proto::WindowInput::MenuAction(item::CLOSE));
+        assert_eq!(app.docs.alert_doc(), Some(second));
+        assert_eq!(app.docs.len(), 2);
+        app.window_input(&ctx, w3, bifrost_app::proto::WindowInput::MenuAction(Action::CloseAnswer(alert::DONT_SAVE as u8).id().unwrap()));
+        assert_eq!(app.docs.len(), 1);
+        assert!(ctx.take_sent().iter().any(|m| matches!(m, ToShell::WindowClose { id } if *id == w3.0)), "its window closes");
+        assert_eq!(app.current, WindowId::MAIN);
     }
 
     /// The shell closing a clean document window closes its document.

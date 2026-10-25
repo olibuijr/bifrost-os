@@ -439,13 +439,35 @@ fn label_lines(ui: &Ui, text: &str, width: f32, wrap: bool) -> Vec<String> {
     let limit = if wrap { LABEL_LINES } else { 1 };
     if lines.len() > limit {
         // the rest of the text joins the last line, which `fit` then ends with an ellipsis
-        let tail = lines.split_off(limit - 1).join(" ");
+        let tail = text_after_lines(text, &lines[..limit - 1]);
+        lines.truncate(limit - 1);
         lines.push(tail);
     }
     if lines.is_empty() {
         lines.push(String::new());
     }
     lines.iter().map(|l| ui.fit(l, MAC_BODY_PT, width)).collect()
+}
+
+/// The text that follows the wrapped `lines` of `text`, taken from the text itself (white space collapsed as the wrap
+/// collapses it). The wrap breaks after hyphens, between ideographs and inside overlong words as well as at spaces, so its
+/// lines cannot be rejoined with spaces: each line is found in the text from where the previous one ended.
+fn text_after_lines(text: &str, lines: &[String]) -> String {
+    let norm = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut at = 0;
+    for line in lines {
+        match norm.get(at..).and_then(|rest| rest.find(line.as_str())) {
+            Some(off) => at += off + line.len(),
+            // not a piece of the text (cannot happen with `Ui::wrap`): skip as many bytes, on a character boundary
+            None => {
+                at = (at + line.len()).min(norm.len());
+                while !norm.is_char_boundary(at) {
+                    at += 1;
+                }
+            }
+        }
+    }
+    norm[at..].trim_start().to_string()
 }
 
 /// The width in px a row's trailing control takes from its label: the chevron, switch, check, detail button or network
@@ -2192,5 +2214,18 @@ mod tests {
         assert_eq!(page.item(0, 0).height_pt(), TILES_ROW_PT);
         let mut px = vec![0u32; 1200 * 1920];
         page.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut px, y0: 0 }, &ui, None, 1e9);
+    }
+
+    #[test]
+    fn the_ellipsis_tail_comes_from_the_text_not_from_lines_joined_with_spaces() {
+        let lines = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        // words: the separating space is dropped, not doubled
+        assert_eq!(text_after_lines("one two  three four", &lines(&["one two"])), "three four");
+        // a break after a hyphen and inside a long word puts no space into the tail
+        assert_eq!(text_after_lines("well-known name", &lines(&["well-"])), "known name");
+        assert_eq!(text_after_lines("abcdefghij", &lines(&["abcd", "efg"])), "hij");
+        // CJK breaks between characters
+        assert_eq!(text_after_lines("日本語の設定画面", &lines(&["日本", "語の"])), "設定画面");
+        assert_eq!(text_after_lines("short", &lines(&["short"])), "");
     }
 }
