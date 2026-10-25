@@ -4252,9 +4252,10 @@ impl Shell {
                 let (pw, ph) = presented_size(w, &m, app_frame);
                 if hidden[i] {
                     // a window in front covers it: its surface keeps the last pixels presented, and its cache is
-                    // dropped so that it repaints in full once it is uncovered. It keeps the size it is drawn at: a client
-                    // window drawn smaller than its frame (`presented_size`) is not told a size its pixels lack
-                    let (kw, kh) = (pw as usize, ph as usize);
+                    // dropped so that it repaints in full once it is uncovered. It keeps the size it was last presented
+                    // at: a frame without pixels never names a size its pixels lack (the presenter holds it to them too,
+                    // `hold_size_without_pixels`: a new size with the old pixels sliced past their end)
+                    let (kw, kh) = cached.as_ref().map_or((pw as usize, ph as usize), |c| (c.width, c.height));
                     self.desk.as_mut().unwrap().hidden_ids.push(id);
                     self.desk.as_mut().unwrap().frames.push(crate::bare::wayland::WindowFrame {
                         id, title: frame_title(id), x:w.r.x, y:w.r.y,
