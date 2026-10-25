@@ -102,6 +102,16 @@ pub struct WindowFrame { pub id:u32, pub title:&'static str, pub x:i32, pub y:i3
 const DEFAULT_MIN_SIZE:(i32,i32)=(320,220);
 /// The `set_min_size` a toplevel sends for `min`: the frame's own minimum, or the default when it has none.
 fn min_size_of(min:(i32,i32)) -> (i32,i32) { if min.0>0 && min.1>0 { min } else { DEFAULT_MIN_SIZE } }
+/// A frame that brings no pixels keeps the size of the pixels the window holds (`old`, the size of its last frame): the
+/// presenter keeps those pixels, and taking a new width or height without new pixels sliced past their end in the shm
+/// copy (a panic) and destroyed the GPU buffers of a covered window the shell sent at a smaller size. Its damage, sized
+/// for the size it asked, is dropped with that size (there is nothing new to show).
+fn hold_size_without_pixels(old:(usize,usize), frame:&mut WindowFrame) {
+    if frame.pixels.is_none() && (frame.width,frame.height)!=old {
+        (frame.width,frame.height)=old;
+        frame.damage=Damage::new(old.0,old.1);
+    }
+}
 /// What a shell window's toplevel reported. `Frame` is the window server's own frame of the toplevel (x, y, width,
 /// height in desktop px, `bifrost_window_level_v1` version 2): the window server places and moves toplevels, so this
 /// is where the window really is.
@@ -506,6 +516,7 @@ impl Display {
         let qh = self.queue.handle();
         for mut frame in frames {
             if let Some(w) = self.state.windows.get_mut(&frame.id) {
+                hold_size_without_pixels((w.frame.width,w.frame.height),&mut frame);
                 // full screen first: the window server keeps what a window held (a zoom, a tile) while it is full screen and
                 // gives it back, so the zoom flag changing around full screen is not a maximize request
                 let fs_changed = w.frame.fullscreen != frame.fullscreen;
@@ -1677,6 +1688,27 @@ fn window_buffer_count(count:usize, available:bool, dirty:bool) -> usize {
 #[cfg(test)]
 mod tests {
     use super::{dock_placement,DockEdge,DockPlacement,enter_hover,focus_on_configure,keep_refocus,min_size_of,takes_keyboard,unpressed_focus,WindowEvent,DEFAULT_MIN_SIZE,HAND_BACK_MS};
+    /// A frame without pixels never changes a window's size: the presenter keeps the old pixels, and a covered window
+    /// the shell sent at a smaller size made the shm copy slice past their end (a panic) and the GPU path drop its buffers.
+    #[test]
+    fn a_frame_without_pixels_keeps_the_size_of_the_pixels_held() {
+        let frame=|w:usize,h:usize,pixels:Option<std::sync::Arc<[u32]>>| super::WindowFrame {
+            id:1, title:"", x:0, y:0, width:w, height:h, pixels, damage:crate::gfx::Damage::new(w,h), maximized:false, floating:false,
+            title_height:30, fullscreen:false, origin:None, position:None, drag_height:30, no_drag:Vec::new(),
+            fx:bifrost_render::glass::Fx::IDENTITY, opaque:true, min_size:(0,0), input:None,
+        };
+        let mut f=frame(1200,890,None);
+        super::hold_size_without_pixels((1920,952),&mut f);
+        assert_eq!((f.width,f.height),(1920,952), "no pixels: the size of the pixels held");
+        assert_eq!(f.damage,crate::gfx::Damage::new(1920,952), "its damage is sized for the pixels held");
+        let mut f=frame(1920,952,None);
+        super::hold_size_without_pixels((1920,952),&mut f);
+        assert_eq!((f.width,f.height),(1920,952), "the same size: unchanged");
+        let px:std::sync::Arc<[u32]>=vec![0u32;1200*890].into();
+        let mut f=frame(1200,890,Some(px));
+        super::hold_size_without_pixels((1920,952),&mut f);
+        assert_eq!((f.width,f.height),(1200,890), "new pixels bring their own size");
+    }
     /// E2E13 3: a Light/Dark switch changes the look the material plates were drawn in, so every window with materials
     /// is repainted in full instead of keeping the old plate under its unchanged translucent sidebar.
     #[test]

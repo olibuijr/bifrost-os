@@ -2048,7 +2048,28 @@ fn edit_command_of(name: &str) -> Option<EditShortcut> {
     Some(EditShortcut { command, key, letter, mods })
 }
 
+/// The Configure a background app gets when its window on the desk has a body of `size` px and the app was last
+/// configured to `current`: the foreground's settings at that size, with no keyboard inset (the keyboard is over the app
+/// in front only). `None` when nothing changed, the app is not running or the size is empty.
+pub fn back_configure(fg: Configure, size: (u32, u32), running: bool, current: (usize, usize)) -> Option<Configure> {
+    let (w, h) = size;
+    (running && w > 0 && h > 0 && current != (w as usize, h as usize)).then_some(Configure { w, h, safe_bottom: 0.0, ..fg })
+}
+
 impl Shell {
+    /// The body size of the window on the desk of the background app in `slot` (`fg` is the app in front): none with no
+    /// desk, for the app in front, for an app with no main window on the desk, or for a window collapsed to its title bar
+    /// (which keeps the size its app had, as `desk_layout` does).
+    fn ext_back_size(&self, slot: usize, fg: Option<u8>) -> Option<(u32, u32)> {
+        let slot = u8::try_from(slot).ok().filter(|s| fg != Some(*s))?;
+        let app = super::AppId::External(slot);
+        if self.desk.as_ref()?.is_collapsed(app) {
+            return None;
+        }
+        let (w, h) = self.desk_app_size(app)?;
+        Some((u32::try_from(w).ok()?, u32::try_from(h).ok()?))
+    }
+
     pub(super) fn ext_cfg(&self) -> Configure {
         let (w, h) = self.ext_fg.and_then(|i| self.desk_app_size(super::AppId::External(i))).unwrap_or((self.w, self.h));
         Configure {
@@ -2567,6 +2588,10 @@ impl Shell {
         let mut kb = None;
         let mut traits = None;
         let cfg = self.ext_cfg();
+        // the body size of each background app's window on the desk: a window in the back is still on screen, so its app
+        // is configured to the frame the shell gives it (a restored session, an update relaunch) and draws at it now, not
+        // only once it comes to the front (0.10.39: Mail restored behind other windows drew at its launch size, black past it)
+        let back_sizes: Vec<Option<(u32, u32)>> = (0..self.ext.len()).map(|slot| self.ext_back_size(slot, fg)).collect();
         let appearance = appearance_flags();
         let japanese = super::kb_layouts::active() == super::kb_layouts::Layout::Japanese;
         // the newest clipboard text an app asked for, and whether it must stay off the disk (a secret)
@@ -2600,6 +2625,8 @@ impl Shell {
             h.sync_appearance(appearance);
             h.sync_input_source(japanese);
             if fg == Some(slot as u8) && h.running() && h.size() != (cfg.w as usize, cfg.h as usize) {
+                h.configure(cfg);
+            } else if let Some(cfg) = back_sizes.get(slot).copied().flatten().and_then(|size| back_configure(cfg, size, h.running(), h.size())) {
                 h.configure(cfg);
             }
             let p = h.pump();
@@ -2986,6 +3013,30 @@ mod tests {
         assert_eq!(next(&peer), None, "unchanged: nothing sent");
         host.sync_input_source(true);
         assert_eq!(next(&peer), Some(ToApp::InputSource { japanese: true }));
+    }
+
+    /// 0.10.39: Mail restored behind other windows at 2560x1309 was never configured past its launch size (only the app
+    /// in front was), so the shell showed black past its 1200x860 frame until it came to the front.
+    #[test]
+    fn a_background_app_is_configured_to_its_window_on_the_desk() {
+        let fg = Configure { w: 800, h: 600, scale: 2., safe_top: 0., safe_bottom: 120., dark: true, text_scale: 1., reduce_motion: false };
+        let cfg = back_configure(fg, (2560, 1274), true, (1200, 860)).expect("a new size is sent");
+        assert_eq!((cfg.w, cfg.h), (2560, 1274));
+        assert_eq!(cfg.safe_bottom, 0.0, "the keyboard inset is the app in front's");
+        assert_eq!((cfg.scale, cfg.dark), (2., true), "the rest follows the shell's settings");
+        assert_eq!(back_configure(fg, (2560, 1274), true, (2560, 1274)), None, "already that size: nothing sent");
+        assert_eq!(back_configure(fg, (2560, 1274), false, (1200, 860)), None, "not running");
+        assert_eq!(back_configure(fg, (0, 1274), true, (1200, 860)), None, "an empty body is no size");
+        // and a host sends it: the app sees the new size
+        let (channel, peer) = sys::socketpair_pair().unwrap();
+        let mut host = AppHost::with_channel("fixture", channel, None, fg);
+        host.configure(cfg);
+        assert_eq!(host.size(), (2560, 1274));
+        let got = match peer.recv(false).unwrap() {
+            sys::Recv::Packet(p, _) => ToApp::decode(&p).ok(),
+            _ => None,
+        };
+        assert!(matches!(got, Some(ToApp::Configure(c)) if (c.w, c.h) == (2560, 1274)), "{got:?}");
     }
 
     #[test]
