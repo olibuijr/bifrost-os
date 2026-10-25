@@ -1807,9 +1807,9 @@ mod tests {
     #[test]
     fn boot_state_posts_nothing() {
         let info = Info { battery: 9, online: true, ..Info::default() };
-        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/SFUI.ttf")).unwrap().into_boxed_slice());
-        let px: &'static [u32] = Box::leak(vec![0u32; 1200 * 1920].into_boxed_slice());
-        let mono: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/SFUIMono.ttf")).unwrap().into_boxed_slice());
+        let data: &'static [u8] = crate::test_support::sfui();
+        let px: &'static [u32] = crate::test_support::solid(1200, 1920, 0);
+        let mono: &'static [u8] = crate::test_support::sfui_mono();
         let sh = Shell::new(1200, 1920, crate::font::Font::parse(data).unwrap(), mono, crate::gfx::View { w: 1200, h: 1920, px }, |_, _| None, info);
         assert!(sh.notify.store().is_empty());
     }

@@ -2,9 +2,16 @@
     use crate::font::Font;
 
     pub fn ui() -> Ui {
-        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        let data: &'static [u8] = crate::test_support::sfui();
         let mut ui = Ui::new(Font::parse(data).unwrap(), 1200.0 / 768.0);
-        ui.symbols = crate::symbols::Symbols::load(concat!(env!("CARGO_MANIFEST_DIR"), "/assets"));
+        // what `Symbols::load` of the assets folder finds, from the shared copy: a fresh mapping per call is never unmapped
+        let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/assets");
+        let fonts = crate::symbols::FONT_FILES
+            .iter()
+            .filter(|f| std::path::Path::new(&format!("{dir}/{f}")).exists())
+            .filter_map(|f| Font::parse(crate::test_support::asset(*f)))
+            .collect();
+        ui.symbols = crate::symbols::Symbols::new(fonts);
         ui
     }
 
@@ -53,11 +60,12 @@
     }
 
     fn build(w: usize, h: usize, desktop: bool) -> Shell {
-        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/SFUI.ttf")).unwrap().into_boxed_slice());
-        let px: &'static [u32] = Box::leak(vec![rgba(20, 20, 30, 255); w * h].into_boxed_slice());
+        let data: &'static [u8] = crate::test_support::sfui();
+        // shared per size: the wallpaper is read only, and a fresh full-screen copy per shell was never freed
+        let px: &'static [u32] = crate::test_support::solid(w, h, rgba(20, 20, 30, 255));
         let wp = View { w, h, px };
         let info = Info { hour: 9, min: 41, wday: 2, mday: 6, mon: 0, battery: 80, brightness: 0.5, ..Info::default() };
-        let mono: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/SFUIMono.ttf")).unwrap().into_boxed_slice());
+        let mono: &'static [u8] = crate::test_support::sfui_mono();
         let mut sh = Shell::new(w as i32, h as i32, Font::parse(data).unwrap(), mono, wp, |_, _| None, info);
         // `Shell::new` starts in desktop mode; the default test shell is the bifrost presentation (no desk) that most
         // tests were written for. Tests of the desktop use `desktop_shell()`.
@@ -77,10 +85,10 @@
     fn the_menu_bar_text_turns_dark_over_a_light_wallpaper() {
         let mut sh = desktop_shell();
         let (w, h) = (sh.w as usize, sh.h as usize);
-        let light: &'static [u32] = Box::leak(vec![rgba(240, 236, 228, 255); w * h].into_boxed_slice());
+        let light: &'static [u32] = crate::test_support::solid(w, h, rgba(240, 236, 228, 255));
         sh.set_wallpaper(View { w, h, px: light });
         assert_eq!(sh.bar_ink().text, super::ui::BAR_TEXT_ON_LIGHT, "dark text on a light sky");
-        let dark: &'static [u32] = Box::leak(vec![rgba(20, 24, 30, 255); w * h].into_boxed_slice());
+        let dark: &'static [u32] = crate::test_support::solid(w, h, rgba(20, 24, 30, 255));
         sh.set_wallpaper(View { w, h, px: dark });
         assert_eq!(sh.bar_ink().text, super::ui::BAR_TEXT, "white text on a dark wallpaper");
     }
@@ -2416,7 +2424,7 @@
         fn set_wallpaper_rebuilds_the_dock_backdrop_once() {
         let mut sh = shell();
         let before = sh.dock_bg.clone().unwrap();
-        let px: &'static [u32] = Box::leak(vec![rgba(200, 40, 40, 255); 1200 * 1920].into_boxed_slice());
+        let px: &'static [u32] = crate::test_support::solid(1200, 1920, rgba(200, 40, 40, 255));
         sh.dirty = false;
         sh.set_wallpaper(View { w: 1200, h: 1920, px });
         assert!(sh.dirty);

@@ -13,7 +13,7 @@ use crate::shell::Event;
 use std::path::{Path, PathBuf};
 
 fn mono() -> &'static [u8] {
-    Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/SFUIMono.ttf")).unwrap().into_boxed_slice())
+    crate::test_support::sfui_mono()
 }
 
 /// A temp tree: home/{Notes.txt, Photos/, Clips/video.mp4, data.bin, pic.png} and a second root.
