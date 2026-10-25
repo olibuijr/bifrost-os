@@ -769,7 +769,7 @@ mod tests {
     }
 
     // Two pictures made for these tests from solid colours (8 x 6): a lossy red still, and a two-frame lossless
-    // animation (red for 200 ms, then blue for 350 ms, played three times, frames not blended).
+    // animation (red for 200 ms, not blended, then blue for 350 ms, alpha-blended over it; played three times).
     const LOSSY_RED_8X6: [u8; 72] = [
         82, 73, 70, 70, 64, 0, 0, 0, 87, 69, 66, 80, 86, 80, 56, 32, 52, 0, 0, 0, 48, 2, 0, 157,
         1, 42, 8, 0, 6, 0, 0, 192, 18, 37, 160, 2, 116, 186, 1, 248, 1, 248, 0, 4, 104, 0, 0, 254,
@@ -807,7 +807,14 @@ mod tests {
         assert_eq!(d.loop_count, Some(3));
         assert_eq!(d.props.len(), 2);
         assert_eq!(&d.frames[0].rgba8[..4], &[255, 0, 0, 255]);
-        assert_eq!(&d.frames[1].rgba8[..4], &[0, 0, 255, 255], "the second frame replaces the canvas");
+        // The second frame is alpha-blended (its ANMF flags are 0). The blend is libwebp's integer one, which the
+        // decoder follows: scale = 2^24 / alpha, so an opaque source can come out one level low (255 -> 254).
+        let second = &d.frames[1].rgba8[..4];
+        let want = [0u8, 0, 255, 255];
+        assert!(
+            second.iter().zip(want).all(|(got, want)| got.abs_diff(want) <= 1),
+            "the opaque second frame covers the canvas: {second:?}"
+        );
     }
 
     #[test]
