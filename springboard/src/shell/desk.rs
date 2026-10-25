@@ -2568,7 +2568,14 @@ impl Shell {
     pub(super) fn desk_bar_hidden(&self) -> bool {
         // a menu opened from the revealed bar keeps the bar while the pointer is down in the menu
         // a screen recording keeps the bar: its indicator must stay visible for the whole recording, even over a full-screen window
-        let full = self.desk.as_ref().is_some_and(|d| d.front_full()) && self.desktop_menu.is_none() && !self.recording_active();
+        self.desktop_menu.is_none() && !self.recording_active() && self.desk_bar_hidden_by_pointer()
+    }
+
+    /// The pointer rule alone of `desk_bar_hidden`: the front window is full screen and the pointer has not brought the
+    /// bar back at the top edge (nor stayed on the toolbar revealed under it since). The band under the bar
+    /// (`desk_reveal`) follows only this: a recording or an open menu keeps the bar but does not reveal the toolbar.
+    fn desk_bar_hidden_by_pointer(&self) -> bool {
+        let full = self.desk.as_ref().is_some_and(|d| d.front_full());
         // once the bar is back, the toolbar revealed under it keeps it while the pointer is on that toolbar
         let keep = if self.bar_latched { self.desk_full_band().map_or(0.0, |(_, b)| b as f32) } else { 0.0 };
         bar_hidden(full, self.pointer_y, self.desktop_bar_height() as f32, keep)
@@ -2591,7 +2598,8 @@ impl Shell {
             return None;
         }
         let (i, band) = self.desk_full_band()?;
-        if self.desk_bar_hidden() {
+        // the pointer brought the bar back: a bar kept by a recording or an open menu reveals no toolbar
+        if self.desk_bar_hidden_by_pointer() {
             return None;
         }
         Some((i, Reveal { top: self.desktop_bar_height() as i32, band }))
@@ -8036,6 +8044,35 @@ mod fullscreen_reveal_tests {
         sh.desktop_pointer(300.0, 2.0, false, 30.0);
         sh.desktop_pointer(-100.0, -100.0, false, 40.0);
         assert!(!sh.desk_bar_hidden() && sh.desk_reveal().is_some());
+    }
+
+    #[test]
+    fn a_bar_kept_by_an_open_menu_or_a_recording_reveals_no_toolbar_under_it() {
+        let mut sh = full_screen_settings();
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        // a Dock menu opened with the pointer far below the top: the bar comes back, the toolbar stays at the top
+        sh.desktop_pointer(300.0, (h / 2) as f32, false, 10.0);
+        sh.desktop_menu = Some(crate::shell::desktop_bar::Menu::Dock);
+        assert!(!sh.desk_bar_hidden(), "the open menu keeps the bar");
+        assert!(sh.desk_reveal().is_none(), "but the pointer did not reach the top edge: no band");
+        let px = vec![0u32; w * h];
+        assert!(sh.desktop_chrome_frames(&px, w, h).iter().all(|f| f.id != chrome_ids::REVEAL));
+        sh.desktop_menu = None;
+        assert!(sh.desk_bar_hidden());
+        // a screen recording keeps the bar for its indicator, again without the band (so app frames can draw the
+        // windows alone, `ext_windows_only_ok`)
+        let dir = crate::shell::photos::library::tests::scratch("reveal-recording");
+        let area = crate::shell::screenrec::Area { x: 0, y: 0, w: 4, h: 2 };
+        sh.rec = Some(crate::shell::screenrec::Session::start(dir.join("a.avi"), crate::shell::screenrec::Encoder::Avi, area, 10, 0.0).unwrap());
+        assert!(!sh.desk_bar_hidden(), "the recording keeps the bar");
+        assert!(sh.desk_reveal().is_none(), "but reveals no toolbar under it");
+        // the pointer rule still reveals it
+        sh.desktop_pointer(300.0, 2.0, false, 20.0);
+        assert!(sh.desk_reveal().is_some(), "the top edge reveals the toolbar, recording or not");
+        if let Some(r) = sh.rec.take() {
+            let _ = r.finish();
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
