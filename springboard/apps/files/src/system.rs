@@ -13,7 +13,6 @@ use bifrost_app::pasteboard_types::{self, Board, Item, FILE_URL, STRING, URL};
 use bifrost_app::proto::peek::PreviewItem;
 use bifrost_app::quick_look;
 use bifrost_app::quicksearch::{CSSearchableIndex, CSSearchableItem, CSSearchableItemAttributeSet};
-use bifrost_app::thumbnails::{self, ThumbKind};
 use bifrost_app::proto::GrantId;
 use bifrost_app::{Ctx, DocumentEvent};
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
@@ -29,8 +28,6 @@ const MAX_WAITING: usize = 32;
 const MAX_SHARE_ITEMS: usize = 8;
 /// The smallest change of the Dock progress bar that is sent.
 const DOCK_STEP: f32 = 0.01;
-/// Thumbnail requests whose replies are awaited; past this they are forgotten (their picture then still comes as an event).
-const MAX_THUMB_IDS: usize = 4096;
 
 /// A service call the app asked for on an event, sent by `SystemState::flush`.
 #[derive(Clone, Debug, PartialEq)]
@@ -49,8 +46,6 @@ pub(crate) enum Effect {
     DockProgress(Option<f32>),
     /// OpenWith: ask the launch service which apps open this file.
     OpenWithApps(PathBuf),
-    /// A picture of the file for a view: the thumbnails service, at `size` pt and `scale` pixels per point.
-    Thumbnail(PathBuf, u32, f32),
     /// A toolbar pull-down: the menu opens at (x, y) window points, under its button.
     PopUp(f32, f32, Vec<ContextItem>),
     /// Share: the shell's share menu for these files, under the button at (x, y, w, h) window points.
@@ -203,8 +198,6 @@ pub(crate) struct SystemState {
     waiting: Vec<(u32, Waiting)>,
     /// The paths the shell's preview panel shows for this app, while it is open.
     pub(crate) preview: Option<Vec<PathBuf>>,
-    /// Thumbnail requests whose reply is still wanted (their answers are matched by request id).
-    thumb_ids: std::collections::HashSet<u32>,
     /// The last progress fraction sent to the Dock tile; None when no bar is up.
     dock: Option<f32>,
     /// The names of the apps the shell would not open (the workspace answers in a closure; `tick` shows them).
@@ -241,14 +234,6 @@ impl SystemState {
                     let id = bifrost_app::launch_services::open_with(ctx, &file_name_of(&path));
                     self.wait(id, Waiting::OpenWith(path));
                 }
-                Effect::Thumbnail(path, size, scale) => {
-                    if let Some(p) = path.to_str() {
-                        if self.thumb_ids.len() >= MAX_THUMB_IDS {
-                            self.thumb_ids.clear();
-                        }
-                        self.thumb_ids.insert(thumbnails::request(ctx, p, size, scale, ThumbKind::Thumbnail));
-                    }
-                }
                 // the shell takes window pixels for both; the choice comes back as `Input::ContextAction`
                 Effect::PopUp(x, y, items) => ctx.context_menu(x * ctx.ui.s, y * ctx.ui.s, items),
                 Effect::Share(paths, (x, y, w, h)) => {
@@ -275,11 +260,6 @@ impl SystemState {
         let last = failed.pop();
         failed.clear();
         last
-    }
-
-    /// Takes the thumbnail request `request` when it is one of this app's; its reply is then a thumbnail answer.
-    pub(crate) fn take_thumb(&mut self, request: u32) -> bool {
-        self.thumb_ids.remove(&request)
     }
 
     fn wait(&mut self, request: u32, what: Waiting) {
@@ -453,24 +433,8 @@ impl Files {
         self.sys.flush(ctx);
     }
 
-    /// Sends the thumbnail asks the views made while painting (`ViewOpts::thumb`).
-    pub(crate) fn request_thumbnails(&mut self, ctx: &Ctx) {
-        let asks = self.vo.take_thumb_asks();
-        if asks.is_empty() {
-            return;
-        }
-        self.sys.effects.extend(asks.into_iter().map(|(path, size, scale)| Effect::Thumbnail(path, size, scale)));
-        self.flush_services(ctx);
-    }
-
     /// Handles a reply to a call this app made. Returns true when a frame is needed.
     pub(crate) fn service_answer(&mut self, request: u32, result: &Result<bifrost_core::json::Json, String>) -> bool {
-        if self.sys.take_thumb(request) {
-            return match result.as_ref().ok().and_then(thumbnails::reply) {
-                Some(reply) => self.thumb_answer(&reply),
-                None => false,
-            };
-        }
         let Some(what) = self.sys.answered(request) else {
             return false;
         };

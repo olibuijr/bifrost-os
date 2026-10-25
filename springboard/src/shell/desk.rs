@@ -4293,9 +4293,10 @@ impl Shell {
             }
             self.dock_tile_progress(s, i, r, t);
         }
-        // the hover label fades in and out (Reduce Motion: it just appears)
+        // the hover label fades in and out (Reduce Motion: it just appears); an open Dock menu or stack hides it, as the
+        // reference does, so it never shows through the stack (E2E8 7)
         let (label_slot, label_alpha) = self.dock_label_state(t);
-        if let Some(k) = label_slot.filter(|_| desk.grab.is_none()) {
+        if let Some(k) = label_slot.filter(|_| desk.grab.is_none() && !self.dock_label_hidden_by_menu()) {
             if let (Some(r), Some(&i)) = (rects.get(k), list.get(k)) {
                 let name = self.dock_label_text(i);
                 if !name.is_empty() && label_alpha > 0.0 {

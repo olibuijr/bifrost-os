@@ -54,7 +54,7 @@ const DETAIL_MAX_PT: f32 = 760.0;
 use super::icons::RED;
 /// The pref behind Display & Brightness › Interface Scale on a desktop: "auto" or a factor ("1.25").
 pub const DISPLAY_SCALE_PREF: &str = "display_scale";
-/// The pref behind Displays › Appearance: "light", "dark" or "auto" (default dark).
+/// The pref behind the Appearance pane: "light", "dark" or "auto" (default dark).
 pub const APPEARANCE_PREF: &str = "appearance_mode";
 pub const ACCENT_PREF: &str = "accent_color";
 /// The pref behind Developer › Performance HUD ("1" = on).

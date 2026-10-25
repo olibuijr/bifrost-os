@@ -674,7 +674,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-files"
-version = "1.34.1"
+version = "1.34.2"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -1033,7 +1033,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-textedit"
-version = "1.13.1"
+version = "1.13.2"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
