@@ -286,6 +286,14 @@ impl TextEditApp {
         if let Some(d) = self.current_doc {
             self.docs.set_active(d);
         }
+        // the last document closed: the main window goes too and the app keeps running with no window, as the reference
+        // does (E2E12 2: an empty, disabled window stayed). Activating the app reopens it with a new Untitled (`reopen`);
+        // a document made meanwhile (File > New, a file handed over) brings it back
+        if self.docs.is_empty() && self.current.is_main() && self.views.is_empty() {
+            ctx.close_main_window();
+        } else if !self.docs.is_empty() {
+            ctx.show_main_window();
+        }
         self.sync_titles(ctx);
         self.sync_text_state(ctx);
     }
@@ -505,6 +513,44 @@ mod tests {
         assert_eq!(app.docs.len(), 1);
         assert!(ctx.take_sent().iter().any(|m| matches!(m, ToShell::WindowClose { id } if *id == w3.0)), "its window closes");
         assert_eq!(app.current, WindowId::MAIN);
+    }
+
+    /// E2E12 2: closing the only document closes the main window too (`WindowClose` id 0) and leaves the app running
+    /// with no document, instead of an empty, disabled window; a configure meanwhile brings nothing back. Activating the
+    /// app (`reopen`) shows a new Untitled, and File > New with no window open asks for the main window back.
+    #[test]
+    fn closing_the_last_document_closes_the_main_window_and_a_reopen_shows_an_untitled() {
+        let ctx = window(1200, 780);
+        let mut app = TextEditApp::new();
+        app.configure(&ctx);
+        assert_eq!(app.docs.len(), 1);
+        ctx.take_sent();
+        app.window_input(&ctx, WindowId::MAIN, bifrost_app::proto::WindowInput::MenuAction(item::CLOSE));
+        assert!(app.docs.is_empty(), "the clean Untitled closes at once");
+        let sent = ctx.take_sent();
+        assert_eq!(sent.iter().filter(|m| matches!(m, ToShell::WindowClose { id: 0 })).count(), 1, "the main window is ordered out: {sent:?}");
+        assert!(!ctx.windows().main_shown());
+        // an appearance or scale change while no window is open makes no document
+        app.configure(&ctx);
+        assert!(app.docs.is_empty());
+        assert!(!ctx.take_sent().iter().any(|m| matches!(m, ToShell::WindowOpen { id: 0, .. })));
+        // the Dock, the app switcher or Search activates the app: a new Untitled in the main window
+        assert!(app.reopen(&ctx));
+        assert_eq!(app.docs.len(), 1);
+        assert_eq!(app.current, WindowId::MAIN);
+        assert_eq!(app.current_doc, app.docs.active());
+        assert_eq!(app.window_title(), "Untitled");
+        // closed again, then File > New with no window open: the document brings the main window back
+        app.window_input(&ctx, WindowId::MAIN, bifrost_app::proto::WindowInput::MenuAction(item::CLOSE));
+        assert!(app.docs.is_empty());
+        ctx.take_sent();
+        assert!(app.menu_action(&ctx, item::NEW));
+        assert_eq!(app.docs.len(), 1);
+        assert_eq!(app.current, WindowId::MAIN, "the new document takes the main window, not a second one");
+        let sent = ctx.take_sent();
+        assert!(sent.iter().any(|m| matches!(m, ToShell::WindowOpen { id: 0, .. })), "the main window is asked back: {sent:?}");
+        assert!(!sent.iter().any(|m| matches!(m, ToShell::WindowOpen { id, .. } if *id != 0)), "no second window opens");
+        assert!(ctx.windows().main_shown());
     }
 
     /// The shell closing a clean document window closes its document.

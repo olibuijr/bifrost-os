@@ -725,6 +725,10 @@ pub struct AppHost {
     /// desktop area): a document app moving a document into its main window keeps that document's frame. The desk
     /// applies it once (`take_main_move`).
     main_move: Option<(f32, f32)>,
+    /// The app ordered its main window out (`WindowClose` id 0, its last document closed) or asked for it back
+    /// (`WindowOpen` id 0): `Some(false)` and `Some(true)`, applied once by the desk (`take_main_order`). The app keeps
+    /// running either way; only activating it reopens a main window it ordered out (`ToApp::Reopen`).
+    main_order: Option<bool>,
     /// The window with key focus: 0 is the main window, otherwise an extra window's id. Keys, commands, menu items and
     /// text edits go to it (`input`); the desk sets it (`set_key_window`).
     pub key_window: u32,
@@ -866,6 +870,7 @@ impl AppHost {
             fallback: false,
             windows: WindowTable::new(),
             main_move: None,
+            main_order: None,
             key_window: 0,
             window_bufs: std::collections::BTreeMap::new(),
             early: std::collections::VecDeque::new(),
@@ -1449,6 +1454,11 @@ impl AppHost {
                 }
             }
             ToShell::InputAccessory(items) => self.accessory = items.into_iter().take(bifrost_proto::MAX_ACCESSORY_ITEMS).collect(),
+            // window 0 is the main window: the desk orders it back in on its next sync
+            ToShell::WindowOpen { id: 0, .. } => {
+                self.main_order = Some(true);
+                out.chrome();
+            }
             ToShell::WindowOpen { id, title, w, h, position, flags } => {
                 // no room for the window, or its id is taken: the app is told to drop it, so the two sides agree
                 if self.windows.open(&self.id, id, &title, w, h).is_err() {
@@ -1483,6 +1493,11 @@ impl AppHost {
                 if self.windows.set_collapsed(&self.id, window, collapsed) {
                     out.chrome();
                 }
+            }
+            // window 0 is the main window: the desk orders it out on its next sync and the app keeps running
+            ToShell::WindowClose { id: 0 } => {
+                self.main_order = Some(false);
+                out.chrome();
             }
             ToShell::WindowClose { id } => {
                 self.windows.close(&self.id, id);
@@ -1681,6 +1696,11 @@ impl AppHost {
     /// The position the app asked its main window to move to (`ToShell::WindowMove` with window 0), once.
     pub fn take_main_move(&mut self) -> Option<(f32, f32)> {
         self.main_move.take()
+    }
+
+    /// Whether the app asked for its main window to be ordered out (`Some(false)`) or back in (`Some(true)`), once.
+    pub fn take_main_order(&mut self) -> Option<bool> {
+        self.main_order.take()
     }
 
     pub fn window_dragged(&mut self, id: u32, x: f32, y: f32) -> bool {
@@ -3597,6 +3617,24 @@ mod window_table_tests {
         assert_eq!((one.title.as_str(), one.w, one.h), ("Ada L.", 320.0, 240.0));
         host.handle(ToShell::WindowClose { id: 2 }, Vec::new(), &mut out);
         assert_eq!(ids(&host), vec![1]);
+    }
+
+    /// E2E12 2: closing a document app's last document orders its main window out (`WindowClose` id 0) without touching
+    /// the extra-window table, and `WindowOpen` id 0 asks for it back; each is taken once.
+    #[test]
+    fn the_main_window_is_ordered_out_and_back_once_for_the_desk() {
+        let (channel, _peer) = sys::socketpair_pair().unwrap();
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
+        let mut out = Pumped::default();
+        host.handle(ToShell::WindowOpen { id: 1, title: "Second".into(), w: 300.0, h: 200.0, position: None, flags: 0 }, Vec::new(), &mut out);
+        host.handle(ToShell::WindowClose { id: 0 }, Vec::new(), &mut out);
+        assert!(out.chrome, "the desk is asked to apply it");
+        assert_eq!(host.windows.of_app("fixture").len(), 1, "the extra window is not closed");
+        assert_eq!(host.take_main_order(), Some(false));
+        assert_eq!(host.take_main_order(), None, "applied once");
+        host.handle(ToShell::WindowOpen { id: 0, title: String::new(), w: 0.0, h: 0.0, position: None, flags: 0 }, Vec::new(), &mut out);
+        assert_eq!(host.windows.of_app("fixture").len(), 1, "id 0 is not an extra window");
+        assert_eq!(host.take_main_order(), Some(true));
     }
 
     /// E2E11 5: a document app that moves a document into its main window asks for the main window to take that

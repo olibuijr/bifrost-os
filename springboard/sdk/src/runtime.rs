@@ -413,6 +413,28 @@ impl Ctx {
         Ok(closed)
     }
 
+    /// Orders the main window out (`NSWindow.orderOut`): a document app whose last document closed has no window, as on
+    /// the reference, and keeps running. The shell drops the main window from the desk and sends `ToApp::Reopen` (the
+    /// app's `reopen`) when the person activates the app again; `show_main_window` brings it back sooner. Nothing is
+    /// sent when it is already out.
+    pub fn close_main_window(&self) {
+        if !self.windows.borrow().main_shown() {
+            return;
+        }
+        self.windows.borrow_mut().set_main_shown(false);
+        self.send(ToShell::WindowClose { id: 0 });
+    }
+
+    /// Puts an ordered-out main window back on the desk (a document made while the app had no window: File > New, a
+    /// file handed over). Nothing is sent while it is shown.
+    pub fn show_main_window(&self) {
+        if self.windows.borrow().main_shown() {
+            return;
+        }
+        self.windows.borrow_mut().set_main_shown(true);
+        self.send(ToShell::WindowOpen { id: 0, title: String::new(), w: 0.0, h: 0.0, position: None, flags: 0 });
+    }
+
     /// Moves one of the app's windows to (x, y) points relative to the visible desktop area. The shell clamps it to the
     /// screen; the shell reports the position it settles on as `ToApp::WindowMoved` when the person drags it, and where
     /// it put a window opened without a position. The main window moves too (a document app that moves a document into
@@ -872,6 +894,13 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                 // the shell is done with one of a window's buffers
                 ToApp::WindowRelease { id, buf, generation: g } => {
                     release_window_buffer(&mut window_pixels, id, buf, g);
+                }
+                // activated with the main window closed: the shell has put it back on the desk
+                ToApp::Reopen => {
+                    windows.borrow_mut().set_main_shown(true);
+                    if let Some(c) = &ctx {
+                        need_frame |= app.reopen(c);
+                    }
                 }
                 ToApp::Resume => {
                     active = true;

@@ -128,6 +128,8 @@ pub struct AppWindows {
     windows: Vec<AppWindow>,
     limit: usize,
     next: u32,
+    /// The main window was ordered out (`Ctx::close_main_window`): the app runs with no main window on the desk.
+    main_out: bool,
 }
 
 impl Default for AppWindows {
@@ -140,7 +142,18 @@ impl AppWindows {
     /// A registry with the main window only, holding at most `limit` windows.
     pub fn new(limit: usize) -> Self {
         let main = AppWindow { id: WindowId::MAIN, title: String::new(), width: 0.0, height: 0.0, position: None, collapsed: false, title_double_click: false };
-        Self { windows: vec![main], limit: limit.max(1), next: 1 }
+        Self { windows: vec![main], limit: limit.max(1), next: 1, main_out: false }
+    }
+
+    /// Whether the main window is on the desk. It stays in the registry (its id keeps serving `draw` and `event`) while
+    /// it is ordered out, as an `NSWindow` that is closed but not released.
+    pub fn main_shown(&self) -> bool {
+        !self.main_out
+    }
+
+    /// Records that the main window was ordered out (`shown` false) or is back on the desk.
+    pub fn set_main_shown(&mut self, shown: bool) {
+        self.main_out = !shown;
     }
 
     /// The open windows, front to back. The first one is focused.
@@ -900,6 +913,24 @@ mod tests {
         assert_eq!((open.title.as_str(), open.width, open.height), ("Grace", 320.0, 240.0));
         assert_eq!(ctx.set_window_title(WindowId(9), "x"), Err(WindowError::Unknown(WindowId(9))));
         assert!(ctx.take_sent().is_empty(), "a refused change sends nothing");
+    }
+
+    /// E2E12 2: a document app with no document left orders its main window out (WindowClose 0) and brings it back
+    /// (WindowOpen 0) once; a second call in the same state sends nothing.
+    #[test]
+    fn the_main_window_is_ordered_out_and_back_once() {
+        let ctx = crate::runtime::test_ctx();
+        assert!(ctx.windows().main_shown());
+        ctx.close_main_window();
+        ctx.close_main_window();
+        assert!(!ctx.windows().main_shown());
+        assert!(ctx.windows().get(WindowId::MAIN).is_some(), "the main window stays in the registry");
+        assert_eq!(ctx.take_sent(), vec![ToShell::WindowClose { id: 0 }]);
+        ctx.show_main_window();
+        ctx.show_main_window();
+        assert!(ctx.windows().main_shown());
+        assert!(matches!(ctx.take_sent().as_slice(), [ToShell::WindowOpen { id: 0, .. }]));
+        assert_eq!(deliver_window(&mut Fake::default(), &ctx, &ToApp::Reopen, 0.0), None, "the run loop handles Reopen");
     }
 
     #[test]

@@ -2763,6 +2763,13 @@ impl Shell {
         };
         let existed = self.desk.as_ref().is_some_and(|d| d.index_of(app).is_some());
         let was_minimized = self.desk.as_ref().and_then(|d| d.index_of(app).map(|i| d.wins[i].minimized)).unwrap_or(false);
+        // a running app whose main window was closed (it ordered it out with its last document, or the traffic light
+        // closed it) gets the window back and is told (`ToApp::Reopen`), so a document app with no document shows a new
+        // one (E2E12 2). Only an activation does this: the app ordering its window out never reopens it.
+        let reopened = match app {
+            AppId::External(slot) if !existed => self.ext.get(slot as usize).and_then(Option::as_ref).is_some_and(|h| h.running()),
+            _ => false,
+        };
         if !existed {
             let (bw, bh) = (w, h - title_of(app, &m));
             self.with_size(bw, bh, |sh| sh.init_app(app, t));
@@ -2785,6 +2792,9 @@ impl Shell {
             self.desk_fx_start(app, FxCall::Open, t);
         } else if was_minimized {
             self.desk_fx_start(app, FxCall::Restore, t);
+        }
+        if let (true, AppId::External(slot)) = (reopened, app) {
+            self.ext_send(slot as usize, &bifrost_proto::ToApp::Reopen);
         }
         self.quicksearch.note_launch(app);
         // Opening an app on the desktop leaves its notifications in Notification Center, as on the reference: a click on
@@ -2977,6 +2987,39 @@ impl Shell {
         self.desk_refocus();
     }
 
+    /// The app in `slot` ordered its main window out (`ToShell::WindowClose` id 0: its last document closed): the main
+    /// desk window closes with the close effect and the app keeps running with no window, its extra windows (if any)
+    /// left as they are. Nothing reopens it until the person activates the app (`desk_open`, which sends `Reopen`) or
+    /// the app asks for it back (`desk_order_main_in`). A direct app's window is the window server's: nothing here.
+    pub(super) fn desk_order_main_out(&mut self, slot: u8) {
+        let app = AppId::External(slot);
+        if !self.desk.as_ref().is_some_and(|d| d.index_of(app).is_some()) {
+            return;
+        }
+        let t = self.last_input;
+        self.desk_fx_start(app, FxCall::Close, t);
+        #[cfg(feature = "desktop-wayland")]
+        self.desk_keep_ghost(app);
+        if let Some(d) = &mut self.desk {
+            if let Some(i) = d.index_of(app) {
+                d.close(i);
+                self.heap_trim_due = true;
+            }
+        }
+        self.desk_refocus();
+        self.dirty = true;
+    }
+
+    /// The app in `slot` asked for its ordered-out main window back (`ToShell::WindowOpen` id 0: a document made while it
+    /// had no window). It opens as an activation would, while the app is running and has no main desk window.
+    pub(super) fn desk_order_main_in(&mut self, slot: u8, t: f64) {
+        let app = AppId::External(slot);
+        let running = self.ext.get(slot as usize).and_then(Option::as_ref).is_some_and(|h| h.running());
+        if running && self.desk.as_ref().is_some_and(|d| d.index_of(app).is_none()) {
+            self.desk_open(app, t);
+        }
+    }
+
     /// Quits the installed SDK app in `slot`: its desk windows go and the app is sent `Quit`, so it saves its state and exits
     /// (`AppHost::begin_quit` kills it after the grace period). The Dock's Quit and Cmd+Q use it. A direct app's window is the
     /// window server's, so `desk_close_app` already quits it; an app on the shared-memory route only loses its desk window there
@@ -3129,10 +3172,14 @@ impl Shell {
         // the placement and collapse the table asks for (`WindowMove`, `WindowCollapse`), on every window the desk shows
         let mut asks = Vec::new();
         let mut main_moves = Vec::new();
+        let mut main_orders = Vec::new();
         for (slot, host) in self.ext.iter_mut().enumerate() {
             let Some(h) = host else { continue };
             if let Some(p) = h.take_main_move() {
                 main_moves.push((slot as u8, p));
+            }
+            if let Some(shown) = h.take_main_order() {
+                main_orders.push((slot as u8, shown));
             }
             let ids: Vec<u32> = h.windows.of_app(&h.id).iter().map(|w| w.id).collect();
             for id in ids {
@@ -3151,6 +3198,16 @@ impl Shell {
             let app = AppId::External(slot);
             let collapsed = self.desk.as_ref().is_some_and(|d| d.is_collapsed(app));
             changed |= self.ext_window_place(app, Some(p), collapsed);
+        }
+        // the main window ordered out (its app's last document closed) or back in (E2E12 2)
+        for (slot, shown) in main_orders {
+            if shown {
+                let t = self.last_input;
+                self.desk_order_main_in(slot, t);
+            } else {
+                self.desk_order_main_out(slot);
+            }
+            changed = true;
         }
         if changed {
             self.desk_refocus();
@@ -5246,6 +5303,53 @@ mod tests {
         let d = sh.desk.as_ref().unwrap();
         assert_eq!(d.wins.iter().map(|w| w.app).collect::<Vec<_>>(), vec![AppId::Terminal, AppId::Settings, second, main]);
         assert_eq!(sh.screen, crate::shell::Screen::App(main));
+    }
+
+    /// E2E12 2: an app that orders its main window out (its last document closed) loses the main desk window and keeps
+    /// running, with its other windows left alone; the desk never opens it again by itself. Activating the app reopens
+    /// the window and tells the app (`Reopen`); an app asking for the window back gets it the same way.
+    #[test]
+    fn a_main_window_the_app_ordered_out_stays_closed_until_the_app_is_activated() {
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.anim = None;
+        let (mine, peer) = bifrost_proto::sys::socketpair_pair().unwrap();
+        let cfg = bifrost_proto::Configure { w: 100, h: 100, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
+        sh.ext.push(Some(apphost::AppHost::with_channel("fixture", mine, None, cfg)));
+        let slot = (sh.ext.len() - 1) as u8;
+        let reopens = || {
+            let mut n = 0;
+            while let Ok(bifrost_proto::sys::Recv::Packet(p, _)) = peer.recv(false) {
+                n += usize::from(bifrost_proto::ToApp::decode(&p) == Ok(bifrost_proto::ToApp::Reopen));
+            }
+            n
+        };
+        let (main, other) = (AppId::External(slot), AppId::Terminal);
+        let m = sh.desk_metrics();
+        {
+            let d = sh.desk.as_mut().unwrap();
+            d.wins.clear();
+            d.open(&m, other, (900, 600));
+            d.open(&m, main, (600, 400));
+        }
+        sh.desk_order_main_out(slot);
+        assert!(sh.desk.as_ref().unwrap().index_of(main).is_none(), "the main window is off the desk");
+        assert!(sh.desk.as_ref().unwrap().index_of(other).is_some(), "other windows stay");
+        assert!(sh.ext[slot as usize].as_ref().is_some_and(|h| h.running()), "the app keeps running");
+        sh.desk_sync_extra_windows();
+        assert!(sh.desk.as_ref().unwrap().index_of(main).is_none(), "nothing reopens it on its own");
+        assert_eq!(reopens(), 0);
+        // without the window server the shell opens the main window itself (a direct app's window comes from the app)
+        #[cfg(not(feature = "desktop-wayland"))]
+        {
+            sh.desk_open(main, 1.0);
+            assert!(sh.desk.as_ref().unwrap().index_of(main).is_some(), "activating the app reopens its main window");
+            assert_eq!(reopens(), 1, "and the app is told");
+            sh.desk_open(main, 2.0);
+            assert_eq!(reopens(), 0, "an app whose main window is open is only activated");
+            sh.desk_order_main_out(slot);
+            sh.desk_order_main_in(slot, 3.0);
+            assert!(sh.desk.as_ref().unwrap().index_of(main).is_some(), "the app's request brings it back");
+        }
     }
 
     /// E2E10: opening an app whose main window is closed (only a second window is shown) reopens the main window
