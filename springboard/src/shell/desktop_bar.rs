@@ -1587,10 +1587,14 @@ impl Shell {
     }
     /// Close or minimize the front window (the File menu and Ctrl+W / Ctrl+M).
     pub(super) fn desk_window_close_or_minimize(&mut self,minimize:bool)->Vec<Effect> {
-        let mut effects=Vec::new();
+        if let Some(id)=self.foreign_active(){return vec![Effect::ForeignWindowAction(id,minimize)];}
         // the active app with no window has nothing to close or minimize: the window under it is another app's
-        if let Some(id)=self.foreign_active(){effects.push(Effect::ForeignWindowAction(id,minimize));}else if self.desk_windowless_front().is_some(){}else if let Some(app)=self.desk.as_ref().and_then(|d|d.front()).map(|w|w.app){if minimize {let t=self.last_input;if let Some(i)=self.desk.as_ref().and_then(|d|d.index_of(app)){self.desk_minimize_window(i,t);}else{self.desk_refocus();}}else{self.desk_close_app(app);}}
-        effects
+        if self.desk_windowless_front().is_some(){return Vec::new();}
+        let Some(app)=self.desk.as_ref().and_then(|d|d.front()).map(|w|w.app) else {return Vec::new()};
+        if !minimize {self.desk_close_app(app);return Vec::new();}
+        let t=self.last_input;
+        match self.desk.as_ref().and_then(|d|d.index_of(app)) {Some(i)=>self.desk_minimize_window(i,t),None=>self.desk_refocus()}
+        Vec::new()
     }
     /// Quits the front app (Cmd+Q and the App menu's Quit); `quit_step` decides what that means for the window in front.
     pub(super) fn desk_quit_front(&mut self)->Vec<Effect> {
