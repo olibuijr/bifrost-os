@@ -1999,15 +1999,15 @@ impl Dispatch<foreign_handle::ZwlrForeignToplevelHandleV1, ()> for State {
     }
 }
 
-/// A window's material rects as blur-region rectangles in surface pixels (x, y, w, h): the materials are
-/// window-local and the surface starts `margin` px before the content (the shadow margin). The window's screen
-/// position is the compositor's, so it does not enter the region.
 /// What the presenter's material plates and blur looks depend on beyond the window's pixels: the scheme position
 /// (`Kind::style`, `Kind::inactive`) and Reduce Transparency.
 fn material_look() -> u64 {
     ((bifrost_render::appearance::scheme().to_bits() as u64) << 1) | bifrost_render::appearance::reduce_transparency() as u64
 }
 
+/// A window's material rects as blur-region rectangles in surface pixels (x, y, w, h): the materials are
+/// window-local and the surface starts `margin` px before the content (the shadow margin). The window's screen
+/// position is the compositor's, so it does not enter the region.
 fn blur_rects(materials:&[Glass], margin:i32) -> Vec<[i32;4]> {
     materials.iter().filter(|g|g.w>0.0&&g.h>0.0)
         .map(|g|[g.x.floor() as i32+margin,g.y.floor() as i32+margin,(g.w.ceil() as i32).max(1),(g.h.ceil() as i32).max(1)]).collect()
