@@ -672,6 +672,38 @@ impl TextArea {
         self.lead_at(c).map_or(c, |r| r.end)
     }
 
+    /// A range about to be typed or pasted over that starts at or inside a heading's hidden marker (Shift+Cmd+Left from
+    /// the end, a triple-click, a whole-line selection): the part after the marker, so the line keeps its heading style.
+    /// Backspace at the start of an empty heading is the explicit way to take the marker away, as on the reference.
+    fn keep_lead(&self, r: Range<usize>) -> Range<usize> {
+        match self.leads.iter().find(|l| l.start <= r.start && r.start < l.end) {
+            Some(l) => l.end..r.end.max(l.end),
+            None => r,
+        }
+    }
+
+    /// The selection as typing or pasting replaces it (`keep_lead`).
+    fn selection_to_replace(&self) -> Option<Range<usize>> {
+        self.selection().map(|r| self.keep_lead(r))
+    }
+
+    /// The selection as a delete removes it: the heading's marker stays (`keep_lead`), unless the selection holds
+    /// nothing but the marker, which then goes as Backspace at an empty heading's start takes it.
+    fn selection_to_delete(&self) -> Option<Range<usize>> {
+        self.selection().map(|r| self.delete_keeping_lead(r))
+    }
+
+    /// `r` as a delete removes it (a selection, or Cmd+Backspace to the line start): `keep_lead`, or all of `r` when
+    /// that would leave nothing to delete.
+    fn delete_keeping_lead(&self, r: Range<usize>) -> Range<usize> {
+        let kept = self.keep_lead(r.clone());
+        if kept.is_empty() {
+            r
+        } else {
+            kept
+        }
+    }
+
     /// True when char `c` is a hidden emphasis marker.
     fn concealed_at(&self, c: usize) -> bool {
         self.concealed.iter().any(|r| r.contains(&c))
@@ -1040,7 +1072,7 @@ impl TextArea {
         let head = self.caret;
         let byte = self.byte_at(head);
         let delete = |ta: &mut TextArea, range: Range<usize>| {
-            let range = ta.selection().unwrap_or(range);
+            let range = ta.selection_to_delete().unwrap_or_else(|| ta.delete_keeping_lead(range));
             if range.is_empty() {
                 return false;
             }
@@ -1173,7 +1205,7 @@ impl TextArea {
         let (range, replaced) = match self.marked.take() {
             Some(m) => m,
             None => {
-                let r = self.selection().unwrap_or(self.caret..self.caret);
+                let r = self.selection_to_replace().unwrap_or(self.caret..self.caret);
                 let replaced = self.slice(r.clone());
                 (r, replaced)
             }
@@ -1258,7 +1290,7 @@ impl TextArea {
     pub fn replace_selection(&mut self, ui: &Ui, s: &str, t: f64) {
         self.commit_marked(ui, t);
         let at = self.past_lead(self.caret);
-        let range = self.selection().unwrap_or(at..at);
+        let range = self.selection_to_replace().unwrap_or(at..at);
         self.replace_range(ui, range, s, t, false);
     }
 
@@ -1371,7 +1403,7 @@ impl TextArea {
         match out {
             Out::Text(s) => {
                 let at = self.past_lead(self.caret);
-                let range = self.selection().unwrap_or(at..at);
+                let range = self.selection_to_replace().unwrap_or(at..at);
                 self.replace_range(ui, range, s, t, true);
                 true
             }
@@ -1379,14 +1411,15 @@ impl TextArea {
                 if self.markdown && self.selection().is_none() && self.continue_list(ui, t) {
                     return true;
                 }
-                // Return at a heading's first visible char opens a line above it: the heading keeps its marker
-                let at = self.lead_at(self.caret).map_or(self.caret, |r| r.start);
-                let range = self.selection().unwrap_or(at..at);
+                // Return at a heading's first visible char opens a line above it: the heading keeps its marker. An empty
+                // heading (nothing after its marker) has its first visible char at its end: the new line goes below it.
+                let at = self.lead_at(self.caret).map_or(self.caret, |r| if self.paragraph_of(r.end).end == r.end { r.end } else { r.start });
+                let range = self.selection_to_replace().unwrap_or(at..at);
                 self.replace_range(ui, range, "\n", t, false);
                 true
             }
             Out::Backspace => {
-                let range = match self.selection() {
+                let range = match self.selection_to_delete() {
                     Some(r) => r,
                     None => match self.back_range() {
                         Some(r) => r,
@@ -1423,7 +1456,7 @@ impl TextArea {
                 }
                 false
             }
-            Out::Named("Cut") => match self.selection() {
+            Out::Named("Cut") => match self.selection_to_delete() {
                 Some(r) => {
                     super::clipboard::set_text(&self.selected_text());
                     self.replace_range(ui, r, "", t, false);
@@ -2164,6 +2197,68 @@ mod tests {
         let mut plain = area(&ui, 500.0);
         plain.set_text(&ui, "Note\n## two");
         assert!(plain.leads.is_empty() && plain.lines[1].adv.iter().all(|a| *a > 0.0));
+    }
+
+    /// E2E13: a selection that takes in a heading's hidden marker (Shift+Cmd+Left from the end, a triple-click, a whole
+    /// line) and is typed over keeps the line a heading; Backspace at an empty heading's start still ends it.
+    #[test]
+    fn typing_over_a_selection_from_a_heading_start_keeps_the_heading() {
+        let ui = ui();
+        // "Note\n" is chars 0..5, "## two" 5..11 (its marker 5..8)
+        let mut ta = md_area(&ui, "Note\n## two\nbody");
+        ta.set_caret(11);
+        ta.key_combo(&ui, combo(bifrost_ui::keys::Key::Left, true, false, true), 1.0);
+        assert_eq!(ta.selection().map(|r| r.start), Some(5), "Shift+Cmd+Left selects from before the marker");
+        assert!(ta.edit(&ui, &Out::Text("X".into()), 1.0));
+        assert_eq!(ta.text(), "Note\n## X\nbody", "the marker stays");
+        assert_eq!(ta.lines[1].block, Block::Heading);
+        // a paragraph selection (as a triple-click makes) pasted over
+        let mut ta = md_area(&ui, "Note\n## two\nbody");
+        ta.select(5..11);
+        ta.replace_selection(&ui, "Y", 2.0);
+        assert_eq!(ta.text(), "Note\n## Y\nbody");
+        // a selection starting inside the marker, deleted: the heading stays, now empty
+        let mut ta = md_area(&ui, "Note\n## two\nbody");
+        ta.select(6..11);
+        assert!(ta.edit(&ui, &Out::Backspace, 3.0));
+        assert_eq!(ta.text(), "Note\n## \nbody");
+        assert_eq!(ta.leads, vec![5..8]);
+        // Cmd+Backspace to the line start keeps the heading too
+        let mut cmd = md_area(&ui, "Note\n## two\nbody");
+        cmd.set_caret(11);
+        cmd.key_combo(&ui, combo(bifrost_ui::keys::Key::Delete, false, false, true), 3.5);
+        assert_eq!(cmd.text(), "Note\n## \nbody");
+        // and Backspace at the empty heading's start is the way to end it
+        ta.set_caret(8);
+        assert!(ta.edit(&ui, &Out::Backspace, 4.0));
+        assert_eq!(ta.text(), "Note\n\nbody");
+        // a selection that starts on the line before takes the marker with the newline, as any join does
+        let mut ta = md_area(&ui, "Note\n## two");
+        ta.select(4..8);
+        assert!(ta.edit(&ui, &Out::Text("Z".into()), 5.0));
+        assert_eq!(ta.text(), "NoteZtwo");
+    }
+
+    /// E2E13: Return at the end of an empty heading (`## ` and nothing after it) puts the new line below the heading,
+    /// not above it; a heading with text still opens the line above when Return is at its first char.
+    #[test]
+    fn return_in_an_empty_heading_opens_the_line_below() {
+        let ui = ui();
+        let mut ta = md_area(&ui, "Note\n## ");
+        assert_eq!(ta.leads, vec![5..8]);
+        ta.set_caret(8);
+        assert!(ta.edit(&ui, &Out::Enter, 1.0));
+        assert_eq!(ta.text(), "Note\n## \n");
+        assert_eq!(ta.caret(), 9, "the caret is on the new line");
+        // the same with a line after the empty heading
+        let mut ta = md_area(&ui, "Note\n## \nbody");
+        ta.set_caret(8);
+        assert!(ta.edit(&ui, &Out::Enter, 2.0));
+        assert_eq!(ta.text(), "Note\n## \n\nbody");
+        let mut ta = md_area(&ui, "Note\n## two");
+        ta.set_caret(8);
+        assert!(ta.edit(&ui, &Out::Enter, 3.0));
+        assert_eq!(ta.text(), "Note\n\n## two");
     }
 
     #[test]
