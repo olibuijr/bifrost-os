@@ -875,15 +875,43 @@ impl Desk {
     /// Brings window `i` to the front (and shows it); returns its new index. A hidden app comes back whole: raising one
     /// of its windows (the Dock, Cmd+Tab, the Window menu) shows every window Hide put away, as activating a hidden app does.
     pub fn raise(&mut self, i: usize) -> usize {
-        let parent = self.wins[i].app.parent();
-        if self.hidden.iter().any(|a| a.parent() == parent) {
-            self.unhide(|a| a.parent() == parent);
-        }
+        let app = self.wins[i].app;
+        let parent = app.parent();
+        let i = if self.hidden.iter().any(|a| a.parent() == parent) {
+            self.show_hidden_app(parent);
+            self.index_of(app).unwrap_or(i)
+        } else {
+            i
+        };
         let mut w = self.wins.remove(i);
         w.minimized = false;
         let at = self.band_top(w.app);
         self.wins.insert(at, w);
         at
+    }
+
+    /// A hidden app comes back whole (E2E N2): every window Hide put away is shown, and the app's shown windows come
+    /// forward over the other apps' in the order they had among themselves, so the one in front when the app was hidden
+    /// (a Mail viewer over its main window) is in front again. Returns the index of the app's front window.
+    fn show_hidden_app(&mut self, parent: AppId) -> Option<usize> {
+        self.unhide(|a| a.parent() == parent);
+        let mine: Vec<AppId> = self.wins.iter().filter(|w| !w.minimized && w.app.parent() == parent).map(|w| w.app).collect();
+        let mut front = None;
+        for app in mine {
+            if let Some(i) = self.index_of(app) {
+                let mut w = self.wins.remove(i);
+                w.minimized = false;
+                let at = self.band_top(w.app);
+                self.wins.insert(at, w);
+            }
+        }
+        // the band order may put a floating window of the app above a normal one: the front is the topmost of the app
+        for (i, w) in self.wins.iter().enumerate() {
+            if !w.minimized && w.app.parent() == parent {
+                front = Some(i);
+            }
+        }
+        front
     }
 
     /// Hide (Cmd+H, the App menu's Hide): every shown window of the app `parent` goes away at once, with no minimize
@@ -1148,6 +1176,13 @@ impl Desk {
     /// Opens (or raises) the window for `app`; `size` is the wanted outer size.
     pub fn open(&mut self, m: &Metrics, app: AppId, size: (i32, i32)) -> usize {
         if let Some(i) = self.index_of(app) {
+            // opening a hidden app (the Dock, Cmd+Tab, Spotlight) activates it: its windows come back in the order Hide
+            // left them, the one that was in front in front, not the main window over its viewer (E2E N2)
+            if app == app.parent() && self.hidden.iter().any(|a| a.parent() == app) {
+                if let Some(front) = self.show_hidden_app(app) {
+                    return front;
+                }
+            }
             return self.raise(i);
         }
         let a = Self::area(m);
@@ -1186,6 +1221,10 @@ impl Desk {
         win.r = Rect { x, y, w, h };
         win.restore = win.r;
         win.maximized = false;
+        // the window was put somewhere on purpose (a restored session): its toplevel maps there, not at the window
+        // server's cascade, so the frame the shell keeps is the one on screen and a later raise moves nothing (E2E N7)
+        let app = win.app;
+        self.placed.insert(app);
     }
 
     /// The space a full-screen window takes: the whole screen, under the menu bar and over the Dock.
@@ -1492,6 +1531,21 @@ pub(super) fn window_cycle_next(prev: Option<(Vec<AppId>, usize)>, stack: &[AppI
 /// Whether the release of a Dock press at (`x`, `y`) opens the pressed icon: the icon as it was hit at the press
 /// (`pressed`) decides, so a row that re-centred under a still pointer cannot drop the click or move it to a neighbour
 /// (W2-23); the slot's current rect counts too while it still holds the same entry (`now`, `now_entry`).
+/// The press areas of the Dock's tiles (`rects`, laid out along the Dock's axis, `vertical` for a side Dock): each
+/// icon grown along the axis by half the gap between two icons, so a press between two tiles opens the nearer one.
+/// The pointer resting in that gap magnifies both neighbours alike, and a press there opened nothing (E2E N5: the Files
+/// icon "did nothing" twice). The wider gap at a divider keeps a dead strip in its middle.
+pub(super) fn dock_press_rects(rects: &[Rect], vertical: bool) -> Vec<Rect> {
+    let gap = rects
+        .windows(2)
+        .map(|p| if vertical { p[1].y - (p[0].y + p[0].h) } else { p[1].x - (p[0].x + p[0].w) })
+        .filter(|g| *g > 0)
+        .min()
+        .unwrap_or(0);
+    let half = (gap + 1) / 2;
+    rects.iter().map(|r| if vertical { Rect { y: r.y - half, h: r.h + 2 * half, ..*r } } else { Rect { x: r.x - half, w: r.w + 2 * half, ..*r } }).collect()
+}
+
 pub(super) fn dock_release_hits(pressed: Rect, now: Option<Rect>, now_entry: Option<usize>, entry: usize, x: f32, y: f32) -> bool {
     pressed.contains(x, y) || (now_entry == Some(entry) && now.is_some_and(|r| r.contains(x, y)))
 }
@@ -2876,8 +2930,10 @@ impl Shell {
         if changed {
             self.desk_refocus();
             self.dirty = true;
-        } else if !self.is_locked() {
-            // the front window decides the screen on every tick; only a different answer is something to draw
+        } else if !self.is_locked() && self.overview.grid.bar_front().is_none() {
+            // the front window decides the screen on every tick; only a different answer is something to draw. Under the
+            // Apps grid every window is hidden, and the screen stays the app that was in front, whose menus the bar
+            // keeps (Lead (a)); the grid's close refocuses
             let screen = match self.desk.as_ref().and_then(|d| d.front()).map(|w| w.app) {
                 Some(app) => Screen::App(app.parent()),
                 None => Screen::Home,
@@ -3031,21 +3087,22 @@ impl Shell {
         let m = self.desk_metrics();
         let (list, bar0, icons) = self.desk_dock(&m);
         let (dock_bar, icons) = self.dock_live(bar0, &icons, t / 1000.0);
+        let press = dock_press_rects(&icons, self.dock_preferences().position != super::desktop_dock::Position::Bottom);
         match ev {
             Event::Down(x, y) => {
                 self.desk.as_mut()?.grab = None;
                 let wheel = self.desk_wheel_press(t);
                 // the dock sits over the windows
-                if let Some(k) = icons.iter().position(|r| self.dock_is_visible()&&r.contains(x, y)) {
+                if let Some(k) = press.iter().position(|r| self.dock_is_visible()&&r.contains(x, y)) {
                     // the wheel over the Dock opens nothing
                     if wheel {
                         return Some(vec![]);
                     }
-                    self.desk.as_mut()?.grab = Some(Grab::DockDrag{from:k,entry:list[k],rect:icons[k],x,y,at_x:x,at_y:y,moved:false});
+                    self.desk.as_mut()?.grab = Some(Grab::DockDrag{from:k,entry:list[k],rect:press[k],x,y,at_x:x,at_y:y,moved:false});
                     self.desk.as_mut()?.dock_drop = None;
                     // an app that already has a window comes forward on the press, not after the release
                     if let Some(a) = apps().get(list[k]).map(|a| Self::dock_app(a.id)) {
-                        if self.desk.as_ref()?.index_of(a).is_some() { self.desk_open(a, t); }
+                        if self.desk.as_ref()?.index_of(a).is_some() && !self.desk_activate_shown_app(a) { self.desk_open(a, t); }
                     }
                     self.dirty = true;
                     return Some(vec![]);
@@ -3214,7 +3271,7 @@ impl Shell {
                     },
                     Some(Grab::DockDrag{from:k,entry,rect,..}) => {
                         // the icon latched at the press decides: the row may have re-centred since (W2-23)
-                        if dock_release_hits(rect, icons.get(k).copied(), list.get(k).copied(), entry, x, y) {
+                        if dock_release_hits(rect, press.get(k).copied(), list.get(k).copied(), entry, x, y) {
                             if entry == DOCK_TRASH {
                                 // the account's Trash as Files keeps it; the shell runs as root, so not $HOME, and Files creates it
                                 let trash=crate::files::trash::dir(&super::dock_stack::home_dir());
@@ -3294,8 +3351,33 @@ impl Shell {
         let app = if app == AppId::Files {
             apphost::slot_of("is.olibuijr.files.desktop").map(|i| AppId::External(i as u8)).unwrap_or(AppId::AppStore)
         } else { app };
+        if self.desk_activate_shown_app(app) {
+            return;
+        }
         // Golden Gate: clicking the frontmost app's icon does nothing; minimizing is the yellow light or Cmd+M
         self.desk_open(app, t);
+    }
+
+    /// The Dock activates an app that shows a window besides its main one: the app's shown windows come forward in the
+    /// order they have among themselves, so its front window (a Mail viewer over the main window) stays in front and
+    /// keeps the keyboard, as activating an app does (E2E N2). False leaves the click to `desk_open` (an app that is
+    /// hidden, not running, or that shows its main window alone).
+    pub(super) fn desk_activate_shown_app(&mut self, app: AppId) -> bool {
+        let Some(d) = self.desk.as_mut() else { return false };
+        if app != app.parent() || d.hidden.iter().any(|a| a.parent() == app) {
+            return false;
+        }
+        if !d.wins.iter().any(|w| !w.minimized && w.app != app && w.app.parent() == app) {
+            return false;
+        }
+        d.bring_all_to_front(app);
+        d.raise_front = true;
+        if !self.is_locked() {
+            self.screen = Screen::App(app);
+        }
+        self.fullscreen = false;
+        self.dirty = true;
+        true
     }
 
     /// The window app a dock icon stands for (the Files icon opens the installed Files app).
@@ -4657,6 +4739,85 @@ mod tests {
         d.raise(i);
         assert!(!d.any_hidden(), "the extra window came back too");
         assert!(d.hidden.is_empty());
+    }
+
+    /// E2E N2: after Cmd+H the Dock shows Mail again with its viewer over the main window, as it was when hidden, so the
+    /// viewer keeps the keyboard and Cmd+W closes it; the Window menu choosing the main window still brings that one up.
+    #[test]
+    fn a_hidden_app_comes_back_with_its_front_window_in_front() {
+        let m = metrics();
+        let mut d = Desk::new();
+        let (main, viewer) = (AppId::External(3), AppId::ExternalWindow(3, 2));
+        d.open(&m, main, (900, 600));
+        d.open(&m, viewer, (500, 400));
+        d.open(&m, AppId::Terminal, (900, 600));
+        assert!(d.hide_app(main));
+        let i = d.open(&m, main, (900, 600));
+        assert_eq!(d.wins[i].app, viewer, "the window that was in front comes back in front");
+        assert_eq!(d.front().map(|w| w.app), Some(viewer));
+        assert_eq!(d.wins.iter().map(|w| w.app).collect::<Vec<_>>(), vec![AppId::Terminal, main, viewer], "over the other apps, in their own order");
+        assert!(d.hidden.is_empty() && !d.any_hidden());
+        assert!(d.hide_app(main));
+        let i = d.index_of(main).unwrap();
+        let at = d.raise(i);
+        assert_eq!(d.wins[at].app, main, "a raise of one window of a hidden app brings that window up");
+        assert_eq!(d.wins.iter().map(|w| w.app).collect::<Vec<_>>(), vec![AppId::Terminal, viewer, main]);
+    }
+
+    /// E2E N7: a window the restored session put somewhere maps there, so the frame the shell keeps is the one on
+    /// screen and the window server never cascades it later (a Dock raise moved Terminal from 768,352 to 880,465).
+    #[test]
+    fn a_window_placed_on_purpose_maps_where_it_was_placed() {
+        let m = metrics();
+        let mut d = Desk::new();
+        let i = d.open(&m, AppId::Terminal, (900, 600));
+        assert!(!d.placed.contains(&AppId::Terminal), "a new window is cascaded by the window server");
+        let a = Desk::area(&m);
+        d.place(&m, i, Rect { x: a.x + 100, y: a.y + 50, w: 900, h: 600 });
+        assert_eq!(origin_hint(&d.placed, AppId::Terminal, d.wins[i].r.x, d.wins[i].r.y), Some((a.x + 100, a.y + 50)));
+        let i = d.raise(i);
+        assert_eq!((d.wins[i].r.x, d.wins[i].r.y), (a.x + 100, a.y + 50), "a raise moves nothing");
+    }
+
+    /// E2E N2: the Dock activating an app whose viewer is in front keeps the viewer in front (it does not raise the
+    /// main window over it); an app showing only its main window goes the usual open path.
+    #[test]
+    fn the_dock_activates_an_app_with_its_front_window_in_front() {
+        let mut sh = crate::shell::tests::desktop_shell();
+        let m = sh.desk_metrics();
+        let (main, viewer) = (AppId::External(3), AppId::ExternalWindow(3, 2));
+        {
+            let d = sh.desk.as_mut().unwrap();
+            d.wins.clear();
+            d.open(&m, main, (900, 600));
+            d.open(&m, viewer, (500, 400));
+            d.open(&m, AppId::Terminal, (900, 600));
+        }
+        assert!(sh.desk_activate_shown_app(main));
+        let d = sh.desk.as_ref().unwrap();
+        assert_eq!(d.wins.iter().map(|w| w.app).collect::<Vec<_>>(), vec![AppId::Terminal, main, viewer]);
+        assert!(sh.take_raise_front(), "the window server raises and focuses the viewer");
+        assert!(!sh.desk_activate_shown_app(AppId::Terminal), "one window: the open path");
+        assert!(!sh.desk_activate_shown_app(viewer), "only an app (its main id) is activated");
+    }
+
+    /// E2E N5: a press in the gap between two Dock icons (where the pointer magnifies both alike) opens the nearer one;
+    /// the wider gap at a divider keeps a dead strip in its middle.
+    #[test]
+    fn a_dock_press_between_two_icons_opens_the_nearer_one() {
+        let row: Vec<Rect> = (0..3).map(|i| Rect { x: 100 + i * 58, y: 700, w: 48, h: 48 }).collect();
+        let press = dock_press_rects(&row, false);
+        let hit = |press: &[Rect], x: f32, y: f32| press.iter().position(|r| r.contains(x, y));
+        assert_eq!(hit(&press, 120.0, 720.0), Some(0));
+        assert_eq!(hit(&press, 150.0, 720.0), Some(0), "just past the first icon");
+        assert_eq!(hit(&press, 154.0, 720.0), Some(1), "just before the second");
+        assert_eq!(hit(&press, 154.0, 760.0), None, "below the row is not the Dock's icons");
+        let divided = vec![Rect { x: 100, y: 700, w: 48, h: 48 }, Rect { x: 158, y: 700, w: 48, h: 48 }, Rect { x: 240, y: 700, w: 48, h: 48 }];
+        assert_eq!(hit(&dock_press_rects(&divided, false), 223.0, 720.0), None, "the divider's middle opens nothing");
+        let side = dock_press_rects(&[Rect { x: 10, y: 100, w: 48, h: 48 }, Rect { x: 10, y: 158, w: 48, h: 48 }], true);
+        assert_eq!(hit(&side, 30.0, 152.0), Some(0));
+        assert_eq!(hit(&side, 30.0, 153.0), Some(1));
+        assert!(dock_press_rects(&[], false).is_empty());
     }
 
     #[test]

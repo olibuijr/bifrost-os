@@ -913,7 +913,8 @@ impl Shell {
     /// Power, volume and wake stay with the shell.
     pub fn hw_key(&mut self, code: u16, down: bool, t: f64) -> bool {
         const KEEP: [u16; 4] = [114, 115, 116, 143];
-        if !down || !self.screen_on || self.anim.is_some() || KEEP.contains(&code) || self.card_alert_up() {
+        // the Apps grid keeps the screen of the app in front (its menus stay in the bar), but the typing is the grid's
+        if !down || !self.screen_on || self.anim.is_some() || KEEP.contains(&code) || self.card_alert_up() || self.overview.grid.visible() {
             return false;
         }
         // Space in an open capture session turns the selection into a window pick and back
@@ -948,6 +949,11 @@ impl Shell {
         }
         // an alert holds the keyboard and Secure Keyboard Entry keeps the shell's keys out of the Terminal: neither is for Overview
         if self.card_alert_up() || self.secure_entry_up() {
+            return false;
+        }
+        // a menu-bar menu open over Overview or the grid is in front of them: Esc, Return and the arrows are the menu's
+        // (`hw_menu_key`), so the first Esc closes the menu and the grid stays (Lead (a))
+        if self.desktop_menu.is_some() && matches!(code, KEY_ESC | KEY_ENTER | KEY_UP | KEY_LEFT | KEY_RIGHT | KEY_DOWN) {
             return false;
         }
         // the Apps grid takes only its navigation keys: letters go on to `hw_type`, which types them into its search field
