@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.10.34 — 2026-10-25
+
+Fixes from the 0.10.33 end-to-end pass on Midget.
+
+- Look Up opens next to the selection: apps report their caret in window points (the SDK text controls do it for every rebuilt app), and the shell places the popover at it, in the app's front window too.
+- Spotlight finds the built-in Terminal and Viewer by their common names (terminal, preview), shows Mail results with decoded subjects, and a dictionary hit opens Dictionary on that word even when Dictionary was not running.
+- Opening a running app brings all of its windows forward in their order; an app whose main window was closed opens it again.
+- The Services menu lists Look Up in Dictionary once.
+- Extra app windows can be full-size, so a second document window has one title row.
+- Ships with TextEdit 1.13.3 (the save alert is a sheet under the title bar with a blue default button and the whole document name; the Window menu shows Edited; plain text has no format bar; Look Up opens at the caret), Notes 1.24.5 (Look Up and Services use the note's selection) and Dictionary 0.6.5 (first match shown while typing, sidebar clipped below the title area, a word from Spotlight or Services shown on a cold start).
+
 ## 0.10.33 — 2026-10-25
 
 Fixes from the 0.10.32 end-to-end pass on Midget.

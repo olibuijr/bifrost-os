@@ -5191,6 +5191,7 @@ mod tests {
     #[test]
     fn opening_a_running_app_brings_all_of_its_windows_forward() {
         let mut sh = crate::shell::tests::desktop_shell();
+        sh.screen = crate::shell::Screen::Home;
         let m = sh.desk_metrics();
         let (main, second) = (AppId::External(3), AppId::ExternalWindow(3, 1));
         {
