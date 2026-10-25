@@ -700,7 +700,14 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
         if control_ready || control.as_ref().is_some_and(|c| c.has_pending()) {
             if let Some(c) = control.as_mut() {
                 let ctx_ref = ctx.as_ref();
-                c.service(&mut |method, params| serve_rpc(&mut app, ctx_ref, method, params, &data_dir));
+                // an intent or app method served here may change what the window shows (a look-up opens the word),
+                // and nothing else asks for that frame: schedule one, as an input event that changed the app does
+                let mut changed = false;
+                c.service(&mut |method, params| {
+                    changed |= rpc_may_change_ui(method);
+                    serve_rpc(&mut app, ctx_ref, method, params, &data_dir)
+                });
+                need_frame |= changed;
             }
         }
         if !chan_ready && !have_ctx {
@@ -1660,6 +1667,25 @@ fn serve_rpc<A: App>(
             Some(r) => r,
             None => app.rpc(ctx, data_dir, method, params),
         },
+    }
+}
+
+/// Whether a control-socket call may change what the app draws: everything but the runtime's read-only queries
+/// (`app.info`, `app.methods`, `intent.list`, `entity.query`), which the shell polls and which never touch app state.
+fn rpc_may_change_ui(method: &str) -> bool {
+    !matches!(method, "app.info" | "app.methods" | "intent.list" | "entity.query")
+}
+
+#[cfg(test)]
+mod control_frame_tests {
+    #[test]
+    fn a_served_intent_schedules_a_frame_but_the_read_only_queries_do_not() {
+        assert!(super::rpc_may_change_ui("intent.look-up"));
+        assert!(super::rpc_may_change_ui("service.look-up"));
+        assert!(super::rpc_may_change_ui("ae.settings.openPane"));
+        for read in ["app.info", "app.methods", "intent.list", "entity.query"] {
+            assert!(!super::rpc_may_change_ui(read), "{read}");
+        }
     }
 }
 
