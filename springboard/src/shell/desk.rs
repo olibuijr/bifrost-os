@@ -487,6 +487,10 @@ pub struct Desk {
     /// windows brought forward together (Bring All to Front, a hidden app shown, the Apps grid closing): the window
     /// server is told to stack them in the shell's order over other clients' windows (`Shell::take_wayland_restack`)
     pub(super) restack: Vec<AppId>,
+    /// the lock took the windows' toplevels down while one of the shell's windows was in front: when the unlock ends
+    /// they come back in the shell's order over other clients' windows (`Shell::desk_restack_after_unlock`), not in the
+    /// order the window server maps them again (E2E13 2)
+    pub(super) restack_on_unlock: bool,
     #[cfg(feature = "desktop-wayland")]
     window_cache: std::collections::HashMap<u32, CachedWindow>,
     /// the windows the last desktop frame did not draw because windows in front cover them completely: they keep no cache
@@ -2833,6 +2837,29 @@ impl Shell {
             d.raise_front = true;
         }
         self.desk_refocus();
+    }
+
+    /// A lock begins (`sleep_screen`): when no other client's window is in front, the shell's windows are restacked in
+    /// its order once the unlock ends. A lock while already locked keeps what the first one saw.
+    pub(super) fn desk_note_lock(&mut self) {
+        if self.is_locked() {
+            return;
+        }
+        let foreign = self.foreign_front_window().is_some();
+        if let Some(d) = self.desk.as_mut() {
+            d.restack_on_unlock = !foreign;
+        }
+    }
+
+    /// The unlock ended (the lock or login window is gone): the windows' toplevels map again in whatever order they draw,
+    /// so the window server is told every shown window, bottom first, as the Apps grid does when it closes (E2E13 2).
+    pub(super) fn desk_restack_after_unlock(&mut self) {
+        if let Some(d) = self.desk.as_mut() {
+            if std::mem::take(&mut d.restack_on_unlock) {
+                let shown: Vec<AppId> = d.wins.iter().filter(|w| !w.minimized).map(|w| w.app).collect();
+                d.note_restack(&shown);
+            }
+        }
     }
 
     pub(super) fn desk_refocus(&mut self) {
@@ -5426,6 +5453,61 @@ mod tests {
             sh.desk_open(main, 0.0);
             assert!(sh.desk.as_ref().unwrap().index_of(main).is_some(), "the main window is open again");
         }
+    }
+
+    /// E2E13 2: the lock takes the windows' toplevels down and they map again in the order they draw, so when the unlock
+    /// ends the window server is told every shown window, bottom first, and the stacking matches the shell's again.
+    #[test]
+    fn the_unlock_restacks_the_shown_windows_in_the_shells_order() {
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.anim = None;
+        let m = sh.desk_metrics();
+        {
+            let d = sh.desk.as_mut().unwrap();
+            d.wins.clear();
+            d.open(&m, AppId::Terminal, (900, 600));
+            d.open(&m, AppId::Photos, (900, 600));
+            d.open(&m, AppId::Settings, (900, 600));
+            let p = d.index_of(AppId::Photos).unwrap();
+            d.wins[p].minimized = true;
+        }
+        sh.screen = Screen::App(AppId::Settings);
+        sh.take_wayland_restack();
+        sh.lock_screen();
+        assert!(sh.is_locked());
+        assert!(sh.take_wayland_restack().is_empty(), "nothing is restacked under the lock");
+        // a second lock while locked does not forget what the first saw
+        sh.lock_screen();
+        sh.anim = Some((crate::shell::Anim::Unlock { from: 0.0, to: 1.0 }, 1000.0));
+        sh.tick(6_000.0);
+        assert!(!sh.is_locked(), "the unlock ended");
+        let want: Vec<u32> = [AppId::Terminal, AppId::Settings].into_iter().filter_map(win_id).collect();
+        assert_eq!(want.len(), 2);
+        assert_eq!(sh.take_wayland_restack(), want, "the shown windows, bottom first; the minimized one stays in the Dock");
+        sh.anim = Some((crate::shell::Anim::Unlock { from: 0.0, to: 1.0 }, 7_000.0));
+        sh.tick(12_000.0);
+        assert!(sh.take_wayland_restack().is_empty(), "told once per lock");
+    }
+
+    /// When another client's window was in front as the lock came, the shell's windows are not lifted over it at the
+    /// unlock (as the Apps grid leaves them when it closes).
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn the_unlock_leaves_another_clients_front_window_in_front() {
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.anim = None;
+        let m = sh.desk_metrics();
+        {
+            let d = sh.desk.as_mut().unwrap();
+            d.wins.clear();
+            d.open(&m, AppId::Terminal, (900, 600));
+            d.native_windows.push(crate::bare::wayland::ForeignWindow { id: 40, title: "Film".into(), app_id: "x.film".into(), active: true, maximized: false, minimized: false });
+        }
+        sh.take_wayland_restack();
+        sh.lock_screen();
+        sh.anim = Some((crate::shell::Anim::Unlock { from: 0.0, to: 1.0 }, 1000.0));
+        sh.tick(6_000.0);
+        assert!(sh.take_wayland_restack().is_empty());
     }
 
     /// E2E5 3: the window server raises only the window it is asked to activate, so a Dock click on an app showing a
