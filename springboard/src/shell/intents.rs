@@ -1,7 +1,8 @@
 //! App Intents in the shell (`AppShortcut` in Search). Apps declare intents in `manifest.toml` as `[[intent]]`
 //! tables (SDK: `bifrost_app::intents`); the shell reads them without launching the app, lists the runnable ones
 //! in Search's "Shortcuts" section, and runs one by launching the app and calling `intent.<id>` on its control
-//! socket (`$XDG_RUNTIME_DIR/bifrost/apps/<app id>.sock`, JSON-RPC 2.0, one request per connection).
+//! socket (`control.sock` in the app's data directory, `bifrost_core::app_control_socket`; JSON-RPC 2.0, one request per
+//! connection).
 
 use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;
@@ -78,14 +79,10 @@ fn json_string(s: &str) -> String {
     out
 }
 
-/// The control socket of a running app.
+/// The control socket of a running app: `control.sock` in its data directory (`<root>/appdata/<app id>`), where the
+/// SDK runtime binds it. The sandbox binds the data directory at its own path, so the shell sees the same socket.
 pub fn socket_path(app_id: &str) -> PathBuf {
-    let base = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from).unwrap_or_else(|| {
-        use std::os::unix::fs::MetadataExt;
-        let uid = std::fs::metadata("/proc/self").map(|m| m.uid()).unwrap_or(0);
-        PathBuf::from(format!("/run/user/{uid}"))
-    });
-    base.join("bifrost/apps").join(format!("{app_id}.sock"))
+    bifrost_core::app_control_socket::socket_for(&super::apphost::root(), app_id)
 }
 
 /// What an RPC reply says: `Ok(dialog)` for a result, `Err(message)` for an error object.
@@ -243,6 +240,18 @@ mod tests {
         h.join().unwrap();
         let _ = std::fs::remove_dir_all(&dir);
     }
+
+    #[test]
+    fn the_shell_dials_the_control_socket_in_the_app_data_directory() {
+        // the sandboxed app has no host runtime directory: it binds `control.sock` in BIFROST_DATA, which the launcher
+        // sets to `<root>/appdata/<id>` and binds at that same path
+        let id = "is.olibuijr.dictionary.desktop";
+        let data = super::super::apphost::root().join("appdata").join(id);
+        assert_eq!(socket_path(id), data.join("control.sock"));
+        assert_eq!(socket_path(id), bifrost_core::app_control_socket::socket_path(None, &data), "the SDK runtime's rule");
+        assert!(!socket_path(id).to_string_lossy().contains("bifrost/apps"));
+    }
+
     #[test]
     fn only_apps_that_declare_the_visual_search_intent_are_asked() {
         use super::super::apphost::{Installed, Manifest};

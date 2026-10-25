@@ -75,19 +75,13 @@ fn an_empty_running_list_attaches_to_nothing() {
 
 #[test]
 fn the_control_socket_is_the_explicit_path_when_one_is_given() {
-    let p = socket_path("is.example.notes", Some(Path::new("/run/custom/notes.sock")), Some(Path::new("/run/user/1000")), Path::new("/data"));
+    let p = socket_path(Some(Path::new("/run/custom/notes.sock")), Path::new("/data"));
     assert_eq!(p, PathBuf::from("/run/custom/notes.sock"));
 }
 
 #[test]
-fn the_control_socket_is_per_app_under_the_runtime_directory() {
-    let p = socket_path("is.example.notes", None, Some(Path::new("/run/user/1000")), Path::new("/data"));
-    assert_eq!(p, PathBuf::from("/run/user/1000/bifrost/apps/is.example.notes.sock"));
-}
-
-#[test]
-fn the_control_socket_falls_back_to_the_data_directory() {
-    let p = socket_path("is.example.notes", None, None, Path::new("/home/u/notes"));
+fn the_control_socket_is_in_the_data_directory() {
+    let p = socket_path(None, Path::new("/home/u/notes"));
     assert_eq!(p, PathBuf::from("/home/u/notes/control.sock"));
 }
 

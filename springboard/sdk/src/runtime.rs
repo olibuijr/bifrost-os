@@ -645,7 +645,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
     // the behind-window materials the shell last got (`ToShell::Materials`)
     let mut materials_seen: Vec<crate::proto::Material> = Vec::new();
     let mut materials: Vec<crate::proto::Material> = Vec::new();
-    let mut control = control_endpoint(&app.id(), &data_dir);
+    let mut control = control_endpoint(&data_dir);
     let docs = std::rc::Rc::new(RefCell::new(DocState::default()));
     let windows = std::rc::Rc::new(RefCell::new(crate::app_windows::AppWindows::default()));
     let key_window_id: std::rc::Rc<std::cell::Cell<u32>> = Default::default();
@@ -1612,12 +1612,12 @@ thread_local! {
     static STATS: std::cell::RefCell<Stats> = std::cell::RefCell::new(Stats::default());
 }
 
-/// Where the app's control socket lives: `BIFROST_CONTROL`, else `$XDG_RUNTIME_DIR/bifrost/apps/<id>.sock`,
-/// else `control.sock` in the app's data directory (no XDG runtime directory is assumed).
-fn control_endpoint(app_id: &str, data_dir: &std::path::Path) -> Option<crate::control::Control> {
+/// Where the app's control socket lives: `BIFROST_CONTROL`, else `control.sock` in the app's data directory, the path
+/// the shell dials (`bifrost_core::app_control_socket`). `$XDG_RUNTIME_DIR` is not used: inside the sandbox `/run` is
+/// private, so a socket there is invisible to the shell.
+fn control_endpoint(data_dir: &std::path::Path) -> Option<crate::control::Control> {
     let explicit = std::env::var_os("BIFROST_CONTROL").map(PathBuf::from);
-    let runtime = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from);
-    let path = crate::script_target::socket_path(app_id, explicit.as_deref(), runtime.as_deref(), data_dir);
+    let path = crate::script_target::socket_path(explicit.as_deref(), data_dir);
     match crate::control::Control::bind(&path) {
         Ok(c) => Some(c),
         Err(e) => {

@@ -11,7 +11,7 @@ that the app's scripting calls travel over.
   `socket_path`. `attach` is pure: the caller passes the running-app list. A zero process id and an empty identifier or
   URL are invalid, and a locator that matches nothing is `NotRunning`.
 - `socket_path` is the rule the SDK runtime uses to bind an app's control socket (`runtime.rs`, `control_endpoint`):
-  an explicit path, else `$XDG_RUNTIME_DIR/bifrost/apps/<id>.sock`, else `control.sock` in the data directory.
+  an explicit path, else `control.sock` in the data directory (`bifrost_core::app_control_socket`, which the shell dials too).
 - Tests: `springboard/sdk/tests/parity_sdk-complete-29.rs`.
 
 ## What still needs the lab machine or the shell

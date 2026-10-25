@@ -1959,7 +1959,7 @@ Adopting it in an app (three steps):
 
 The shell parses `[[intent]]` (`apphost::Manifest::intents`, `shell/intents.rs`). Spotlight's "Shortcuts" section lists
 intents with `shortcut = true` and no required parameter, matched on title and app name without launching the app.
-Choosing one opens the app, then calls `intent.<id>` on `$XDG_RUNTIME_DIR/bifrost/apps/<app id>.sock`, retrying for up to
+Choosing one opens the app, then calls `intent.<id>` on `appdata/<app id>/control.sock` (`bifrost_core::app_control_socket`), retrying for up to
 8 s while the app starts.
 
 Gaps (Apple behaviour not matched yet):
