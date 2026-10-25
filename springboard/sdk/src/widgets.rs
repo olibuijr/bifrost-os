@@ -570,10 +570,28 @@ const SIDEBAR_DOT_PT: f32 = 12.0;
 /// grey semibold text, rows with an accent glyph (`with_symbol`), the selection as a neutral plate under a bold
 /// label (Files, Notes, Reminders), counts on the right. `pressed` is the row id being pressed.
 pub fn source_list(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, list: &SourceList, scroll: f32, pressed: Option<u32>) {
+    source_list_in(s, ui, bounds, list, scroll, pressed, None);
+}
+
+/// `source_list` whose rows are drawn only inside `rows` (points), while the column's material still fills all of
+/// `bounds`: a full-size window's sidebar keeps its material under the traffic lights' band but a scrolled row never
+/// draws there (`NSScrollView`'s content insets under a unified toolbar). One pass, one Sidebar accessibility group.
+pub fn source_list_in(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, list: &SourceList, scroll: f32, pressed: Option<u32>, rows: Option<Rect>) {
     let (bx, by, bw, bh) = (ui.pt(bounds.x) as usize, ui.pt(bounds.y) as usize, ui.pt(bounds.w).ceil() as usize, ui.pt(bounds.h).ceil() as usize);
     if !window_material(s, ui, bounds, 0.0, Material::Sidebar, State::default()) {
         s.fill_rect(RectF::new((bx) as f32, (by) as f32, (bw) as f32, (bh) as f32), SIDEBAR_BG.now());
     }
+    if let Some(r) = rows {
+        s.push_clip(RectF::new(ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h)), 0.0);
+    }
+    source_list_rows(s, ui, bounds, list, scroll, pressed);
+    if rows.is_some() {
+        s.pop_clip();
+    }
+}
+
+/// The rows of `source_list` (its Sidebar accessibility group) over the material already drawn.
+fn source_list_rows(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, list: &SourceList, scroll: f32, pressed: Option<u32>) {
     // labels on the material blend vibrantly; a selected or pressed row's plate is opaque, so its text is plain
     bifrost_ui::ax::begin_group(bifrost_ui::Role::List, "Sidebar", bounds);
     let vibrant = vibrant_text();
@@ -1616,6 +1634,27 @@ mod tests {
         let group = nodes.iter().find(|n| n.role == bifrost_ui::Role::SegmentedControl).expect("the control").id;
         let kids: Vec<(&str, &str)> = nodes.iter().filter(|n| bifrost_ui::ax::parent_of(&links, n.id) == Some(group)).map(|n| (n.label.as_str(), n.value.as_str())).collect();
         assert_eq!(kids, vec![("Day", ""), ("Week", "selected"), ("Month", "")]);
+    }
+
+    /// E2E10: a sidebar whose rows are clipped below the traffic lights' band is drawn in one pass and is one Sidebar
+    /// element holding its rows (Dictionary drew an empty list for the band first, a second Sidebar element).
+    #[test]
+    fn a_source_list_clipped_below_the_band_is_one_sidebar_element() {
+        use bifrost_ui::sidebar::{SidebarItem, SourceList};
+        let ui = test_ui();
+        let (w, h) = (200usize, 300usize);
+        let mut px = vec![0u32; w * h];
+        let list = SourceList::new(vec![SidebarItem::row(0, "orange"), SidebarItem::row(1, "orbit")], 28.0, 22.0);
+        let bounds = Rect { x: 0.0, y: 0.0, w: 200.0, h: 300.0 };
+        let rows = Rect { y: 52.0, h: 248.0, ..bounds };
+        bifrost_ui::ax::begin_frame();
+        source_list_in(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, &ui, bounds, &list, 0.0, None, Some(rows));
+        let links = bifrost_ui::ax::take_links();
+        let nodes = bifrost_ui::ax::take_frame();
+        let sidebars: Vec<u64> = nodes.iter().filter(|n| n.role == bifrost_ui::Role::List && n.label == "Sidebar").map(|n| n.id).collect();
+        assert_eq!(sidebars.len(), 1, "one Sidebar element");
+        let kids: Vec<&str> = nodes.iter().filter(|n| bifrost_ui::ax::parent_of(&links, n.id) == Some(sidebars[0])).map(|n| n.label.as_str()).collect();
+        assert_eq!(kids, vec!["orange", "orbit"]);
     }
 
     fn test_ui() -> Ui {

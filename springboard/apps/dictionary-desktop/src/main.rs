@@ -1244,13 +1244,9 @@ impl App for DictionaryApp {
                 }
             }
             // the band under the traffic lights keeps the sidebar's material, but the rows are clipped below it, so a
-            // scrolled row never draws under the traffic lights (the material is written, not blended, so the second
-            // pass over the rows' area leaves it as the first)
-            widgets::source_list(canvas, ui, regions.sidebar, &SourceList::new(Vec::new(), ROW_H, SIDEBAR_HEADER_H), 0.0, None);
+            // scrolled row never draws under the traffic lights; one pass, one Sidebar accessibility group
             let rows = sidebar_rows(regions.sidebar, bar_h);
-            canvas.push_clip(RectF::new(ui.pt(rows.x), ui.pt(rows.y), ui.pt(rows.w), ui.pt(rows.h)), 0.0);
-            widgets::source_list(canvas, ui, regions.sidebar, &list, self.sidebar_scroll(), None);
-            canvas.pop_clip();
+            widgets::source_list_in(canvas, ui, regions.sidebar, &list, self.sidebar_scroll(), None, Some(rows));
             canvas.fill_rect(RectF::new(ui.pt(regions.sidebar.w) - 1.0, 0.0, 1.0, ch as f32), SEPARATOR_C.now());
         }
 
