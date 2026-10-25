@@ -1518,7 +1518,18 @@ impl MailWindow {
     /// File > Open Message: the open message goes into a viewer window of its own.
     fn new_viewer(&mut self) {
         if let Some(uid) = self.mail.open {
-            self.viewer_requests.push(uid);
+            self.open_viewer(uid);
+        }
+    }
+
+    /// Asks for a viewer window on `uid` and marks the message read, as opening a message in its own window does in the
+    /// reference, also after Mark as Unread on the message the reader already shows. The row changes at once; the
+    /// server is told in the background.
+    fn open_viewer(&mut self, uid: u32) {
+        self.viewer_requests.push(uid);
+        if self.mail.flags_of(uid).is_some_and(|f| !f.contains(Flag::Seen)) {
+            self.mail.mark_seen_locally(uid);
+            self.change_message(uid, Change::Flag { flag: Flag::Seen, on: true });
         }
     }
 
@@ -3378,7 +3389,7 @@ impl MailWindow {
                 self.last_tap = Some(uid);
                 if double {
                     self.clicks = ClickCounter::default();
-                    self.viewer_requests.push(uid);
+                    self.open_viewer(uid);
                 } else {
                     self.open_message(uid);
                 }
