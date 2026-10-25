@@ -469,6 +469,8 @@ fn run() -> std::io::Result<()> {
     let mut power_key = PowerKey::default();
     let mut hw_keys = springboard::shell::hwkeys::HwKeys::default();
     hw_keys.set_layout(springboard::installer::keymaps::configured_layout());
+    // type-select, menu key equivalents and synthesized character events read keys on the same layout
+    springboard::shell::evkeys::set_layout(springboard::installer::keymaps::configured_layout());
     // a lone Cmd press is the Home key of a tablet only; on the desktop it does nothing
     hw_keys.set_desktop(bifrost_ui::form_factor::FormFactor::current().is_desktop());
     // the input source the hardware layout last followed; the configured layout holds until it changes
@@ -1180,7 +1182,9 @@ fn run() -> std::io::Result<()> {
                     if source != seen_source {
                         seen_source = source;
                         bifrost_ui::compose_method::set_japanese_source(source == springboard::shell::kb_layouts::Layout::Japanese);
-                        hw_keys.set_layout(springboard::installer::keymaps::layout_index(source.keymap()).unwrap_or(0));
+                        let layout = springboard::installer::keymaps::layout_index(source.keymap()).unwrap_or(0);
+                        hw_keys.set_layout(layout);
+                        springboard::shell::evkeys::set_layout(layout);
                         // a layout switch drops a pending dead key
                         dead = None;
                         springboard::shell::fcitx_bridge::follow(source);

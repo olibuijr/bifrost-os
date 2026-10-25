@@ -2334,7 +2334,7 @@ impl Shell {
         match self.ext_fg.and_then(|n| self.ext.get_mut(n as usize)) {
             Some(Some(h)) => {
                 // a key equivalent of the app's own menu is a menu action, not a key (`performKeyEquivalent:`)
-                if let Some(id) = super::evkeys::char_for(key as u16, false).and_then(|c| super::desktop_bar::app_menu_chord(&h.app_menus, c, mods)) {
+                if let Some(id) = super::evkeys::chord_char_for(key as u16).and_then(|c| super::desktop_bar::app_menu_chord(&h.app_menus, c, mods)) {
                     h.input(WindowInput::MenuAction(id));
                     return true;
                 }
