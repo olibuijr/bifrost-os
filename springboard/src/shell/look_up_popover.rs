@@ -10,13 +10,15 @@
 use super::quicksearch::{self, dict, Hit};
 use super::{apphost, Drawn, Effect, Event, Shell};
 use crate::gfx::Surface;
-use crate::shell::ui::{Ui, Weight};
+use crate::shell::ui::{Ui, Weight, CARD_BG, LABEL, LINK, SECONDARY, SEPARATOR_C, WHITE};
 use bifrost_ui::look_up::{LookUp, Row, HITS_SHOWN};
 use bifrost_ui::services_menu::{Selection, DICTIONARY_APP};
 use bifrost_ui::suggested_actions::{self, Route, ALL_KINDS};
 
 /// The Calendar app, which an Add to Calendar suggestion opens.
 const CALENDAR_APP: &str = "is.olibuijr.calendar.desktop";
+/// The popover's overlay surface on the desktop (`desktop_chrome_frames`): the menus' and panels' rank (`chrome_z`).
+pub const CHROME_ID: u32 = 43;
 /// The most selection text the suggestions look through, in characters.
 const SELECTION_SCAN_MAX: usize = 4000;
 /// The most suggested actions the model gathers (the popover lists `look_up::SUGGESTIONS_SHOWN` of them).
@@ -35,11 +37,6 @@ const TEXT_PT: f32 = 13.0;
 const LINE_PT: f32 = 17.0;
 /// an action row (Search, Open in Dictionary)
 const ACTION_PT: f32 = 30.0;
-const GREY: u32 = 0xFF98989D;
-const WHITE: u32 = 0xFFFFFFFF;
-const LINK: u32 = 0xFF0A84FF;
-const CARD: u32 = 0xFF2C2C2E;
-const DIVIDER: u32 = 0xFF48484A;
 
 /// What a tap asks the shell to do.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -56,7 +53,9 @@ pub enum Outcome {
     Suggest(Route),
 }
 
-/// The popover on screen: its content and where it opens (px). It drops below `anchor`, centred on its x.
+/// The popover on screen: its content and where it opens (px). It drops below `anchor`, centred on its x. On the desktop
+/// it is drawn into the shell's frame and shown through an overlay surface of its own above the app windows
+/// (`desktop_chrome_frames`, [`CHROME_ID`]), as Search and the menus are: the shell's frame lies under every window.
 pub struct Popover {
     pub look: LookUp,
     pub anchor: (f32, f32),
@@ -123,6 +122,12 @@ impl Popover {
         Frame { x, y, w: pw, h: ph, bands }
     }
 
+    /// The box on a `w` x `h` px screen (x, y, w, h in px).
+    pub fn rect(&self, ui: &Ui, w: i32, h: i32) -> (f32, f32, f32, f32) {
+        let f = self.frame(ui, w, h);
+        (f.x, f.y, f.w, f.h)
+    }
+
     /// What a tap at (`px`, `py`) does.
     pub fn tap(&self, ui: &Ui, w: i32, h: i32, px: f32, py: f32) -> Outcome {
         let f = self.frame(ui, w, h);
@@ -145,18 +150,18 @@ impl Popover {
 
     pub fn draw(&self, s: &mut Surface<'_>, ui: &Ui, w: i32, h: i32) {
         let f = self.frame(ui, w, h);
-        s.fill_rrect(f.x, f.y, f.w, f.h, ui.pt(RADIUS_PT), CARD);
+        s.fill_rrect(f.x, f.y, f.w, f.h, ui.pt(RADIUS_PT), CARD_BG.now());
         for b in &f.bands {
             let (x, y, bw, bh) = band_rect(&f, ui, b);
             match &b.row {
                 Row::Heading(title) => {
-                    let t = ui.text(title, HEAD_SIZE, Weight::Semibold, GREY);
-                    s.blit(&t, x as i32, (y + ui.pt(4.0)) as i32, 255, 255);
+                    let t = ui.text(title, HEAD_SIZE, Weight::Semibold, WHITE);
+                    s.blit_colored(&t, x as i32, (y + ui.pt(4.0)) as i32, SECONDARY, 255);
                 }
                 Row::Text(_) => {
                     for (i, line) in b.lines.iter().enumerate() {
                         let t = ui.text(line, TEXT_PT, Weight::Regular, WHITE);
-                        s.blit(&t, x as i32, (y + ui.pt(LINE_PT * i as f32)) as i32, 255, 255);
+                        s.blit_colored(&t, x as i32, (y + ui.pt(LINE_PT * i as f32)) as i32, LABEL.now(), 255);
                     }
                 }
                 Row::Search { .. } | Row::OpenInDictionary { .. } | Row::Suggest { .. } => {
@@ -166,9 +171,11 @@ impl Popover {
                         Row::Suggest { title, item, .. } => suggestion_label(title, item),
                         _ => String::new(),
                     };
-                    s.fill_rect(x.max(0.0) as usize, y.max(0.0) as usize, bw.max(0.0) as usize, 1, DIVIDER);
-                    let t = ui.text(&ui.fit(&label, TEXT_PT, bw), TEXT_PT, Weight::Regular, LINK);
-                    s.blit(&t, x as i32, (y + (bh - t.h as f32) / 2.0) as i32, 255, 255);
+                    s.fill_rect(x.max(0.0) as usize, y.max(0.0) as usize, bw.max(0.0) as usize, 1, SEPARATOR_C.now());
+                    // text is rendered white and tinted on the way in, with the named colours in the surface's channel
+                    // order: a literal ARGB value here drew the links orange
+                    let t = ui.text(&ui.fit(&label, TEXT_PT, bw), TEXT_PT, Weight::Regular, WHITE);
+                    s.blit_colored(&t, x as i32, (y + (bh - t.h as f32) / 2.0) as i32, LINK, 255);
                 }
             }
         }
@@ -212,6 +219,12 @@ fn suggestion_source(term: &str, selection: Option<Selection>) -> String {
     }
 }
 
+/// The point the popover drops from: the bottom centre of the caret rectangle `(x, y, w, h)` of a window whose content
+/// starts at `body` (px).
+fn caret_anchor(body: (f32, f32), (cx, cy, cw, ch): (f32, f32, f32, f32)) -> (f32, f32) {
+    (body.0 + cx + cw / 2.0, body.1 + cy + ch)
+}
+
 /// The text a quick search result is listed by. A Terminal or Show in Folder result has no title to list.
 fn title_of(hit: &Hit) -> Option<String> {
     Some(match hit {
@@ -228,15 +241,46 @@ fn title_of(hit: &Hit) -> Option<String> {
 }
 
 impl Shell {
-    /// Opens the Look Up popover for `term`. It drops below the menu bar, centred: the shell does not know where the
-    /// focused app's selection is.
-    pub(super) fn open_look_up(&mut self, term: String) {
-        let anchor = (self.w as f32 / 2.0, self.desktop_bar_height() as f32);
-        let source = suggestion_source(&term, super::services_route::selection());
+    /// Opens the Look Up popover for `term`, taken from `selection` when the front window's selection gave it (its
+    /// links, addresses and dates become suggested actions). It drops below the selection when the front app reported
+    /// where its caret is (`look_up_anchor`), else below the menu bar, centred.
+    pub(super) fn open_look_up(&mut self, term: String, selection: Option<Selection>) {
+        let anchor = self.look_up_anchor();
+        let source = suggestion_source(&term, selection);
         let look = content(&term).with_suggestions(suggestions_for(&source));
         self.look_up = Some(Popover::new(look, anchor));
         self.drawn = Drawn::Nothing;
         self.dirty = true;
+    }
+
+    /// Where the popover opens (px): under the caret of the external app in front, which sits at the selection it
+    /// reported (`ToShell::CaretRect`, in its window below the title bar), else under the menu bar's centre.
+    fn look_up_anchor(&self) -> (f32, f32) {
+        let caret = || {
+            let slot = self.front_ext_slot()?;
+            let (cx, cy, cw, ch) = self.ext.get(slot as usize)?.as_ref()?.caret_rect?;
+            let win = self.desk.as_ref()?.wins.iter().find(|w| w.app == super::AppId::External(slot))?;
+            let body = win.body(&self.desk_metrics());
+            Some(caret_anchor((body.x as f32, body.y as f32), (cx, cy, cw, ch)))
+        };
+        caret().unwrap_or((self.w as f32 / 2.0, self.desktop_bar_height() as f32))
+    }
+
+    /// The popover's box on the screen in px, clipped to it: its overlay surface and a region the GPU presenter keeps.
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+    pub(super) fn look_up_rect(&self) -> Option<(usize, usize, usize, usize)> {
+        let (x, y, w, h) = self.look_up.as_ref()?.rect(&self.ui, self.w, self.h);
+        let (x, y) = (x.max(0.0) as usize, y.max(0.0) as usize);
+        let w = (w.max(0.0) as usize).min((self.w.max(0) as usize).saturating_sub(x));
+        let h = (h.max(0.0) as usize).min((self.h.max(0) as usize).saturating_sub(y));
+        (w > 0 && h > 0).then_some((x, y, w, h))
+    }
+
+    /// The popover as an overlay surface above the windows: its box and the alpha mask of its rounded corners.
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+    pub(super) fn look_up_overlay(&self) -> Option<((usize, usize, usize, usize), Vec<u8>)> {
+        let (x, y, w, h) = self.look_up_rect()?;
+        Some(((x, y, w, h), crate::gfx::rrect_mask(w, h, self.ui.pt(RADIUS_PT))))
     }
 
     /// The dictionaries came in while the popover waited for them: its definition is filled in. True when it changed.
@@ -414,6 +458,77 @@ mod tests {
         assert_eq!(suggestion_source("cat", None), "cat");
         assert_eq!(suggestion_label("Copy Link", "https://x.is"), "Copy Link: https://x.is");
         assert!(suggestions_for("a plain word").is_empty());
+    }
+
+    /// The share of `px` (a `w` px wide frame) inside `(x, y, w, h)` that is clearly blue and clearly orange.
+    fn blue_and_orange(px: &[u32], stride: usize, (x, y, w, h): (usize, usize, usize, usize)) -> (usize, usize) {
+        let (mut blue, mut orange) = (0, 0);
+        for row in y..y + h {
+            for c in &px[row * stride + x..row * stride + x + w] {
+                let (r, b) = (c & 255, (c >> 16) & 255);
+                if b > r + 80 {
+                    blue += 1;
+                } else if r > b + 80 {
+                    orange += 1;
+                }
+            }
+        }
+        (blue, orange)
+    }
+
+    /// E2E8 3: the action rows are drawn in the named link colour (systemBlue), in the surface's channel order; a literal
+    /// ARGB value drew them orange.
+    #[test]
+    fn the_action_rows_are_link_blue_not_orange() {
+        let ui = crate::shell::tests::ui();
+        let p = Popover::new(look(), (300.0, 0.0));
+        let (w, h) = (600usize, 900usize);
+        let mut px = vec![0u32; w * h];
+        p.draw(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, &ui, w as i32, h as i32);
+        let f = p.frame(&ui, w as i32, h as i32);
+        for row in [Row::Search { query: "cat".into() }, Row::OpenInDictionary { word: "cat".into() }] {
+            let b = f.bands.iter().find(|b| b.row == row).expect("action row");
+            let (x, y, bw, bh) = band_rect(&f, &ui, b);
+            // below the divider at the band's top
+            let (blue, orange) = blue_and_orange(&px, w, (x as usize, y as usize + 2, bw as usize, bh as usize - 2));
+            assert!(blue > 0, "{row:?}: the label is drawn in blue");
+            assert_eq!(orange, 0, "{row:?}: nothing of it is orange");
+        }
+        assert_eq!(LINK, crate::shell::ui::TINT, "the link colour is systemBlue");
+    }
+
+    #[test]
+    fn the_popover_drops_from_the_bottom_centre_of_the_caret() {
+        assert_eq!(caret_anchor((100.0, 50.0), (20.0, 30.0, 2.0, 16.0)), (121.0, 96.0));
+    }
+
+    /// E2E8 2: on the desktop the popover is an overlay surface above the app windows (a menu's rank), on its own box,
+    /// listed only while it is up; drawn only into the shell's frame it lay under the windows.
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn the_popover_is_an_overlay_above_the_windows_only_while_it_is_up() {
+        let _lock = crate::test_support::global_lock();
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.screen = crate::shell::Screen::Home;
+        sh.anim = None;
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let mut px = vec![0u32; w * h];
+        sh.dirty = true;
+        sh.draw(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 500.0);
+        assert!(sh.desktop_chrome_frames(&px, w, h).iter().all(|f| f.id != CHROME_ID), "no popover, no overlay");
+        sh.look_up = Some(Popover::new(look(), (sh.w as f32 / 2.0, sh.desktop_bar_height() as f32)));
+        sh.dirty = true;
+        sh.draw(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 1000.0);
+        let frames = sh.desktop_chrome_frames(&px, w, h);
+        let f = frames.iter().find(|f| f.id == CHROME_ID).expect("the popover is a surface above the windows");
+        assert_eq!(Some((f.x as usize, f.y as usize, f.width, f.height)), sh.look_up_rect(), "on the popover's own box");
+        assert_eq!(crate::bare::wayland::chrome_z(CHROME_ID), crate::bare::wayland::chrome_rank::PANEL, "over the windows, with the menus");
+        let (blue, _) = blue_and_orange(&f.pixels, f.width, (0, 0, f.width, f.height));
+        assert!(blue > 0, "the surface carries the popover's link rows");
+        assert!(sh.look_up_escape());
+        sh.dirty = true;
+        sh.draw(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 2000.0);
+        assert!(sh.desktop_chrome_frames(&px, w, h).iter().all(|f| f.id != CHROME_ID), "closed: the overlay is dropped");
     }
 
     #[test]

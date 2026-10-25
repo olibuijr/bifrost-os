@@ -515,6 +515,29 @@ pub struct TextState {
     pub marked: Option<(u32, u32)>,
 }
 
+impl TextState {
+    /// The selected text: the bytes between `anchor` and `cursor`. Empty when nothing is selected, or when an offset
+    /// is out of range or splits a character.
+    pub fn selected_text(&self) -> &str {
+        let (a, b) = (self.anchor.min(self.cursor) as usize, self.anchor.max(self.cursor) as usize);
+        self.text.get(a..b).unwrap_or("")
+    }
+
+    /// The word the caret is in or touches (letters and digits, with apostrophes and hyphens inside the word), as
+    /// Look Up takes it when nothing is selected. Empty when the caret touches no word, or `cursor` is out of range
+    /// or splits a character.
+    pub fn word_at_cursor(&self) -> &str {
+        let c = self.cursor as usize;
+        if !self.text.is_char_boundary(c) {
+            return "";
+        }
+        let inner = |ch: char| ch.is_alphanumeric() || matches!(ch, '\'' | '\u{2019}' | '-' | '_');
+        let start = self.text[..c].char_indices().rev().take_while(|&(_, ch)| inner(ch)).last().map_or(c, |(i, _)| i);
+        let end = self.text[c..].char_indices().find(|&(_, ch)| !inner(ch)).map_or(self.text.len(), |(i, _)| c + i);
+        self.text[start..end].trim_matches(|ch: char| !ch.is_alphanumeric())
+    }
+}
+
 pub const MAX_SURROUNDING: usize = 4000;
 
 pub const MAX_DOC_FILTERS: usize = 16;
@@ -695,6 +718,10 @@ pub enum ToApp {
     ServiceReply { request: u32, ok: bool, body: String },
     /// An event a system service pushes to the app (JSON `body`). Tag 0x1d3.
     ServiceEvent { service: String, event: String, body: String },
+    /// The shell asks for the selected text of the app's focused view (`NSServicesMenuRequestor`
+    /// `writeSelectionToPasteboard:`), for Look Up and the Services menu. Answered with `ToShell::SelectionReply`
+    /// carrying the same `request`. Tag 0x1d4.
+    SelectionRequest { request: u32 },
     /// A dragging session moves over the app's window (`NativeDraggingDestination`); `x`, `y` are window-local points.
     /// `items` are sent with `Entered` and `Perform`. For `Perform` the files of the items arrive first as `DocBatch`
     /// and `DocGranted` with `request == session`. Answer `Entered` and `Updated` with `ToShell::DragReply`.
@@ -1065,6 +1092,9 @@ pub enum ToShell {
     /// Calls `method` on the shell's named system service with JSON `body` (`springboard/src/shell/services/`);
     /// answered with `ToApp::ServiceReply` carrying the same `request`. Tag 0x1d2.
     ServiceCall { request: u32, service: String, method: String, body: String },
+    /// The answer to `ToApp::SelectionRequest` `request`: the selected text of the focused view, empty when nothing is
+    /// selected. At most `MAX_SURROUNDING` characters. Tag 0x1d4.
+    SelectionReply { request: u32, text: String },
     /// `beginDraggingSession`: the shell tracks the pointer until it is released. `session` should have bit 31 set.
     DragBegin { session: u32, allowed: u8, items: Vec<DragItem>, preview: DragPreview },
     /// `registerForDraggedTypes`: the UTTypes the window accepts (conformance counts); empty accepts none.
@@ -1920,7 +1950,7 @@ impl ToApp {
             m @ ToApp::Touches(_) => touch::encode_app(m, &mut b),
             m @ ToApp::Pointer(_) => pointer::encode_app(m, &mut b),
             m @ (ToApp::WorkspaceReply { .. } | ToApp::WorkspaceEvent { .. }) => workspace::encode_app(m, &mut b),
-            m @ (ToApp::NotificationAction { .. } | ToApp::NotificationStatus { .. } | ToApp::NotificationList { .. } | ToApp::NotificationSettings { .. } | ToApp::NotificationAuthorized { .. } | ToApp::NotificationWillPresent { .. } | ToApp::ShareDone { .. } | ToApp::DistNotify { .. } | ToApp::ServiceReply { .. } | ToApp::ServiceEvent { .. } | ToApp::DragDest { .. } | ToApp::DragEnded { .. }) => rich::encode_app(m, &mut b),
+            m @ (ToApp::NotificationAction { .. } | ToApp::NotificationStatus { .. } | ToApp::NotificationList { .. } | ToApp::NotificationSettings { .. } | ToApp::NotificationAuthorized { .. } | ToApp::NotificationWillPresent { .. } | ToApp::ShareDone { .. } | ToApp::DistNotify { .. } | ToApp::ServiceReply { .. } | ToApp::ServiceEvent { .. } | ToApp::SelectionRequest { .. } | ToApp::DragDest { .. } | ToApp::DragEnded { .. }) => rich::encode_app(m, &mut b),
         }
         b
     }
@@ -2260,7 +2290,7 @@ impl ToShell {
             m @ ToShell::AxActions(_) => axaction::encode_shell(m, &mut b),
             m @ ToShell::GuidedAccessRequest { .. } => guided::encode_shell(m, &mut b),
             m @ ToShell::PointerInterest { .. } => pointer::encode_shell(m, &mut b),
-            m @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::NotifySettings { .. } | ToShell::NotifyAuthorize { .. } | ToShell::NotifyPresentDelegate { .. } | ToShell::NotifyPresentReply { .. } | ToShell::NotifySchedule { .. } | ToShell::Share { .. } | ToShell::DistPost { .. } | ToShell::ServiceCall { .. } | ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich::encode_shell(m, &mut b),
+            m @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::NotifySettings { .. } | ToShell::NotifyAuthorize { .. } | ToShell::NotifyPresentDelegate { .. } | ToShell::NotifyPresentReply { .. } | ToShell::NotifySchedule { .. } | ToShell::Share { .. } | ToShell::DistPost { .. } | ToShell::ServiceCall { .. } | ToShell::SelectionReply { .. } | ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich::encode_shell(m, &mut b),
             ToShell::ControlsTree(list) => {
                 u32_(&mut b, tag::CONTROLS_TREE);
                 let n = list.len().min(MAX_NODE_EXT);
@@ -2853,6 +2883,43 @@ mod tests {
         let event = ToApp::ServiceEvent { service: "now-playing".into(), event: "command".into(), body: "{}".into() };
         assert_eq!(tag_of(&event.encode()), 0x1d3);
         assert_eq!(ToApp::decode(&event.encode()), Ok(event));
+
+        let ask = ToApp::SelectionRequest { request: 9 };
+        assert_eq!(tag_of(&ask.encode()), 0x1d4);
+        assert_eq!(ToApp::decode(&ask.encode()), Ok(ask));
+
+        let answer = ToShell::SelectionReply { request: 9, text: "second".into() };
+        assert_eq!(tag_of(&answer.encode()), 0x1d4);
+        assert_eq!(ToShell::decode(&answer.encode()), Ok(answer));
+    }
+
+    #[test]
+    fn text_state_gives_the_selection_and_the_word_at_the_caret() {
+        let t = |cursor: u32, anchor: u32| TextState { text: "the second line, isn't it".into(), cursor, anchor, marked: None };
+        assert_eq!(t(10, 4).selected_text(), "second", "the anchor may come after the caret");
+        assert_eq!(t(4, 10).selected_text(), "second");
+        assert_eq!(t(4, 4).selected_text(), "", "a caret selects nothing");
+        assert_eq!(t(40, 4).selected_text(), "", "out of range");
+        assert_eq!(t(6, 6).word_at_cursor(), "second", "inside a word");
+        assert_eq!(t(4, 4).word_at_cursor(), "second", "at its start");
+        assert_eq!(t(10, 10).word_at_cursor(), "second", "at its end, before the space");
+        assert_eq!(t(15, 15).word_at_cursor(), "line", "punctuation is not part of the word");
+        assert_eq!(t(19, 19).word_at_cursor(), "isn't", "an apostrophe inside a word is");
+        assert_eq!(t(99, 99).word_at_cursor(), "");
+        let blank = TextState { text: "a  b".into(), cursor: 2, anchor: 2, marked: None };
+        assert_eq!(blank.word_at_cursor(), "", "between two spaces");
+        let wide = TextState { text: "þú ert".into(), cursor: 1, anchor: 1, marked: None };
+        assert_eq!(wide.word_at_cursor(), "", "inside a character");
+        let wide = TextState { text: "þú ert".into(), cursor: 2, anchor: 2, marked: None };
+        assert_eq!(wide.word_at_cursor(), "þú");
+    }
+
+    /// A selection longer than `MAX_SURROUNDING` characters is cut on the way out, so the reply always decodes.
+    #[test]
+    fn a_long_selection_reply_is_cut_and_still_decodes() {
+        let long = ToShell::SelectionReply { request: 1, text: "é".repeat(MAX_SURROUNDING + 10) };
+        let Ok(ToShell::SelectionReply { request: 1, text }) = ToShell::decode(&long.encode()) else { panic!("decodes") };
+        assert_eq!(text.chars().count(), MAX_SURROUNDING);
     }
 
     #[test]

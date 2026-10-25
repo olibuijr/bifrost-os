@@ -1999,7 +1999,18 @@ method = "open_images"
 - `title` is the menu row; `send_types` are the types of the selection the service takes (any one matches);
   `return_types` is non-empty when the service answers with a text value; `method` names the control call
   `service.<method>` (`[a-z0-9_-]`).
-- The selection's types come from the pasteboard (`bifrost_ui::app_services::selection_types`): every file selection
+- The selection is the front window's, never the clipboard (E2E8; the reference's services act on the front app's
+  selection through `NSServicesMenuRequestor` `writeSelectionToPasteboard:`). Running a service or Look Up
+  (Ctrl+Cmd+D) sends the front app `ToApp::SelectionRequest { request }` (tag 0x1d4); the SDK answers
+  `ToShell::SelectionReply { request, text }` with `App::selected_text` when the app gives one (an app that draws its
+  own text, such as TextEdit), else the selection of the focused field it last reported (`Ctx::text_state`, sent by
+  `ViewApp` and the text kit). A blank answer, or none within `services_route::SELECTION_WAIT_MS` (250 ms; an app
+  built before the request never answers), falls back to that field's selection and then the word at its caret
+  (`TextState::word_at_cursor`). The Services submenu lists its rows from what the shell already holds
+  (`Shell::front_selection`: the built-in Terminal's selection, or the front app's reported field), so the menu never
+  waits on an app. A file selection reaches the file services only when an app reports one: the shell no longer reads
+  file URLs off the pasteboard.
+- The selection's types (`bifrost_ui::app_services::selection_types`): every file selection
   carries `public.file-url`, plus `public.image` and `public.pdf` when a file has that extension; text carries
   `public.utf8-plain-text`, plus `bifrost.file-path-text` (the shell's own type, not an Apple UTI) when the text is one
   absolute path to a file. The App menu lists the built-in services, then every installed app's matching service in
@@ -2013,8 +2024,12 @@ method = "open_images"
   Open Selected File (`service.open_selected_file`); the latter opens a named file as an untitled document, since the
   document controller only opens files through a panel grant.
 - Decisions and gaps:
-  - The shell reads the selection from the pasteboard, which apps fill on copy and selection. It does not ask the
-    frontmost app for its selection types over the control socket: that call would block the menu on the UI thread.
+  - The selection is asked of the front app over the app channel, never the control socket, and the shell never
+    blocks on it: the service runs when the answer arrives (`Shell::selection_reply`) or the wait runs out
+    (`selection_tick`). The reply carries text only (up to `MAX_SURROUNDING` characters); files are a gap.
+  - The Look Up popover is an overlay surface of its own above the app windows (`look_up_popover::CHROME_ID`, the
+    menus' rank) and drops from the caret the front app reported (`ToShell::CaretRect`), else from under the menu
+    bar. A click on an app window outside it does not close it yet (Escape does).
   - The frontmost app's own services are listed too (the reference model lists every provider).
   - The returned text is put on the pasteboard; the shell does not type it into the frontmost app.
   - A service whose app is not running gets the call after the app opens (retried for 8 seconds).

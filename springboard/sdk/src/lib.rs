@@ -862,6 +862,14 @@ pub trait App {
     fn text_input(&mut self, _ctx: &Ctx, _ev: crate::proto::ToApp) -> bool {
         false
     }
+    /// `NSServicesMenuRequestor` `writeSelectionToPasteboard:`: the text selected in the focused view, which Look Up
+    /// (Ctrl+Cmd+D) and the Services menu act on (`ToApp::SelectionRequest`). `None` lets the SDK answer with the
+    /// selection of the focused text field it last reported (`Ctx::text_state`, which `ViewApp` and the text kit send),
+    /// so an app whose text lives in SDK text fields needs nothing here. An app that draws its own text (an editor, a
+    /// reader) returns its selection; `Some("")` says nothing is selected.
+    fn selected_text(&mut self, _ctx: &Ctx) -> Option<String> {
+        None
+    }
     /// IME and keyboard composition for `window`, the key window (`NSTextInputClient` of the window's first
     /// responder): `SetMarkedText`, `UnmarkText`, `DeleteSurrounding` and `AccentHold`, as `text_input` takes them. The
     /// shell sends them to the window that has the keys, so marked text (an input method's candidate, a held letter's

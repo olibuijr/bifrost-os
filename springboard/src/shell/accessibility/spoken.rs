@@ -10,11 +10,7 @@ use bifrost_proto::TextState;
 /// The selected text of a field: the bytes between the anchor and the caret, both UTF-8 offsets into `text`
 /// (`TextState`). Empty when nothing is selected, or when an offset is out of range or splits a character.
 pub fn selected_text(t: &TextState) -> String {
-    let (a, b) = (t.anchor.min(t.cursor) as usize, t.anchor.max(t.cursor) as usize);
-    if a == b {
-        return String::new();
-    }
-    t.text.get(a..b).unwrap_or("").to_string()
+    t.selected_text().to_string()
 }
 
 impl Shell {

@@ -2621,7 +2621,7 @@ impl Shell {
             Hit::Definition { word, .. } => {
                 if std::mem::take(&mut self.quicksearch.space_preview) {
                     // Space: the whole definition in the Look Up popover
-                    self.open_look_up(word);
+                    self.open_look_up(word, None);
                 } else {
                     self.run_intent(bifrost_ui::services_menu::DICTIONARY_APP, "look-up", "word", &word, t);
                 }

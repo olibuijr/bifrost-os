@@ -191,6 +191,18 @@ pub struct Ctx {
 }
 
 thread_local! {
+    /// The focused field's state as last reported (`Ctx::text_state`): the answer to a `SelectionRequest` when the app
+    /// does not give its own (`App::selected_text`).
+    static LAST_TEXT_STATE: RefCell<crate::proto::TextState> = RefCell::new(Default::default());
+}
+
+/// The answer to `ToApp::SelectionRequest`: the app's own selection when it gives one, else the selected text of the
+/// focused field it last reported.
+pub(crate) fn selection_reply<A: App>(app: &mut A, ctx: &Ctx) -> String {
+    app.selected_text(ctx).unwrap_or_else(|| LAST_TEXT_STATE.with(|t| t.borrow().selected_text().to_string()))
+}
+
+thread_local! {
     static SUDDEN: RefCell<crate::process_info::SuddenTermination> = RefCell::new(Default::default());
     static ACTIVITIES: RefCell<crate::process_info::ActivityTracker> = RefCell::new(Default::default());
 }
@@ -296,6 +308,7 @@ impl Ctx {
     }
     /// Report the focused field's surrounding text, selection and marked range (`NativeTextInput`), for predictive text.
     pub fn text_state(&self, state: crate::proto::TextState) {
+        LAST_TEXT_STATE.with(|t| *t.borrow_mut() = state.clone());
         self.send(ToShell::TextState(state));
     }
     /// Report the caret rectangle in window points (`firstRectForCharacterRange:`) so the candidate window or the
@@ -979,6 +992,12 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                         need_frame = true;
                     } else {
                         crate::service::keep(request, result);
+                    }
+                }
+                ToApp::SelectionRequest { request } => {
+                    if let Some(c) = &ctx {
+                        let text = selection_reply(&mut app, c);
+                        c.send_to_shell(ToShell::SelectionReply { request, text });
                     }
                 }
                 ToApp::ServiceEvent { service, event, body } => {
@@ -2195,5 +2214,50 @@ mod publish_tests {
         assert_eq!(clipboard_changed(&mut rev, &mut seen), None, "same text as already known");
         crate::kit::clipboard::set_text("");
         assert_eq!(clipboard_changed(&mut rev, &mut seen).as_deref(), Some(""), "a cleared clipboard is reported as empty text");
+    }
+}
+
+#[cfg(test)]
+mod selection_request_tests {
+    use super::*;
+    use crate::proto::TextState;
+
+    /// An app with no text fields of its own, or one that draws its own text and says what is selected in it.
+    struct Editor {
+        own: Option<String>,
+    }
+
+    impl App for Editor {
+        fn id(&self) -> &str {
+            "is.test.editor"
+        }
+        fn draw(&mut self, _ctx: &Ctx, _s: &mut Surface, _t: f64) -> Damage {
+            Damage::new(1, 1)
+        }
+        fn selected_text(&mut self, _ctx: &Ctx) -> Option<String> {
+            self.own.clone()
+        }
+    }
+
+    fn test_ctx() -> Ctx {
+        use crate::kit::{Font, Ui};
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        let cfg = Configure { w: 100, h: 100, scale: 1.0, safe_top: 0.0, safe_bottom: 0.0, dark: true, text_scale: 1.0, reduce_motion: false };
+        Ctx::testing(Ui::new(Font::parse(data).unwrap(), 1.0), cfg)
+    }
+
+    /// E2E8 1: the shell's `SelectionRequest` is answered with the selection of the focused text field the app last
+    /// reported (what `ViewApp` and the text kit send), or with the app's own selection when it gives one.
+    #[test]
+    fn a_selection_request_is_answered_from_the_focused_field_or_the_apps_own_selection() {
+        let ctx = test_ctx();
+        ctx.text_state(TextState { text: "the second line".into(), cursor: 10, anchor: 4, marked: None });
+        let _ = ctx.take_sent();
+        assert_eq!(selection_reply(&mut Editor { own: None }, &ctx), "second", "the field the SDK reported");
+        assert_eq!(selection_reply(&mut Editor { own: Some("own words".into()) }, &ctx), "own words", "the app's own selection wins");
+        assert_eq!(selection_reply(&mut Editor { own: Some(String::new()) }, &ctx), "", "the app says nothing is selected");
+        // the focus left text: nothing selected
+        ctx.text_state(TextState::default());
+        assert_eq!(selection_reply(&mut Editor { own: None }, &ctx), "");
     }
 }
