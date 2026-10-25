@@ -804,7 +804,7 @@ pub(crate) mod tests {
 
     pub(crate) fn today() -> (Ui, Today) {
         let ui = crate::shell::tests::ui();
-        let mono: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/SFUIMono.ttf")).unwrap().into_boxed_slice());
+        let mono: &'static [u8] = crate::test_support::sfui_mono();
         let mut t = Today::new(&ui, W, H, mono);
         let missing = concat!(env!("CARGO_MANIFEST_DIR"), "/target/test-today-missing");
         t.set_dirs(missing, missing);
