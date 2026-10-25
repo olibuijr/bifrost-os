@@ -39,6 +39,12 @@ pub const SHEET_PAD_PT: f32 = 20.0;
 pub const SHEET_RADIUS_PT: f32 = 10.0;
 /// Alert sheet width in points.
 pub const ALERT_W_PT: f32 = 260.0;
+/// An alert sheet stacks its buttons, full width, as the Golden Gate alert sheet does (reference
+/// `goldengate_refimages/27-Golden-Gate-Mail-Warning.png`, measured at 2x): 28 pt capsules 6 pt apart, inset 16 pt
+/// from the panel's sides and bottom, the default button on top and Cancel at the bottom.
+pub const ALERT_BUTTON_H_PT: f32 = 28.0;
+pub const ALERT_BUTTON_GAP_PT: f32 = 6.0;
+pub const ALERT_BUTTON_INSET_PT: f32 = 16.0;
 const CHARS_PER_LINE: usize = 34;
 /// The alert title (headline, semibold) fits fewer characters on a line than the message.
 const TITLE_CHARS_PER_LINE: usize = 28;
@@ -84,6 +90,35 @@ pub fn alert_height(title_lines: usize, message_lines: usize) -> f32 {
     SHEET_PAD_PT * 2.0 + title_h + msg_h + 16.0 + BUTTON_H_PT
 }
 
+/// The panel height of an alert sheet with `buttons` stacked buttons (`alert_height` holds one 22 pt row and the
+/// bottom padding; the stack and its 16 pt inset replace them). No buttons: `alert_height`.
+pub fn alert_sheet_height(title_lines: usize, message_lines: usize, buttons: usize) -> f32 {
+    let text = alert_height(title_lines, message_lines);
+    if buttons == 0 {
+        return text;
+    }
+    text - SHEET_PAD_PT - BUTTON_H_PT + ALERT_BUTTON_INSET_PT + stacked_buttons_h(buttons)
+}
+
+/// The height of `n` stacked alert buttons and the gaps between them.
+pub fn stacked_buttons_h(n: usize) -> f32 {
+    n as f32 * ALERT_BUTTON_H_PT + n.saturating_sub(1) as f32 * ALERT_BUTTON_GAP_PT
+}
+
+/// What a sheet's panel is drawn as (`widgets::sheet`): the clip, which starts at the title bar's bottom edge (the
+/// sheet slides out from under the title bar and its top edge is attached to it, with no gap), and the rounded body,
+/// which reaches `SHEET_RADIUS_PT` above the clip so its top corners are cut off square and only the bottom corners
+/// are rounded. `None` while nothing of the panel is below the title bar.
+pub fn attached_body(panel: Rect, parent: Rect, titlebar_h: f32) -> Option<(Rect, Rect)> {
+    let top = panel.y.max(parent.y + titlebar_h);
+    if panel.bottom() <= top || panel.w <= 0.0 {
+        return None;
+    }
+    let clip = Rect { x: panel.x, y: top, w: panel.w, h: panel.bottom() - top };
+    let body = Rect { x: panel.x, y: panel.y - SHEET_RADIUS_PT, w: panel.w, h: panel.h + SHEET_RADIUS_PT };
+    Some((clip, body))
+}
+
 /// How many measured alert heights are kept (one per alert text and width; an app shows one or two at a time).
 const MEASURED_KEEP: usize = 8;
 
@@ -93,7 +128,7 @@ thread_local! {
 }
 
 /// The renderer wrapped an alert of `title` and `message` at panel width `width_pt` with real glyph widths and needs
-/// `height_pt` (`alert_height` of its line counts). From then on `Sheet::alert` and `Sheet::layout` size that alert
+/// `height_pt` (`alert_sheet_height` of its line counts and buttons). From then on `Sheet::alert` and `Sheet::layout` size that alert
 /// to it, so the panel, the drawn text and the button hit areas always agree, also for a sheet built again each frame.
 pub fn record_alert_height(title: &str, message: &str, width_pt: f32, height_pt: f32) {
     MEASURED.with(|m| {
@@ -133,7 +168,8 @@ pub struct SheetLayout {
     /// The dimmed, blocking area: the whole parent window.
     pub scrim: Rect,
     pub panel: Rect,
-    /// Buttons right-aligned in a row; the first button is the rightmost.
+    /// A free-form sheet's buttons right-aligned in a row, the first button the rightmost. An alert's buttons stacked
+    /// full width from top to bottom: the default button, the others in order, then Cancel (`stacked_order`).
     pub buttons: Vec<(u32, Rect)>,
 }
 
@@ -159,7 +195,7 @@ impl Sheet {
     /// estimate from character counts (`wrapped_lines`); `layout` and `hit` always use the measured height.
     pub fn alert(title: &str, message: &str, buttons: Vec<SheetButton>) -> Self {
         let message_lines = if message.is_empty() { 0 } else { wrapped_lines(message, CHARS_PER_LINE) };
-        let estimate = alert_height(wrapped_lines(title, TITLE_CHARS_PER_LINE), message_lines);
+        let estimate = alert_sheet_height(wrapped_lines(title, TITLE_CHARS_PER_LINE), message_lines, buttons.len());
         let h = measured_alert_height(title, message, ALERT_W_PT).unwrap_or(estimate);
         Sheet { title: title.to_string(), message: message.to_string(), buttons, size: (ALERT_W_PT, h), alert: true }
     }
@@ -200,6 +236,20 @@ impl Sheet {
         let h = self.height().min((parent.h - titlebar_h).max(0.0));
         let rest_y = parent.y + titlebar_h;
         let panel = Rect { x: parent.x + (parent.w - w) / 2.0, y: rest_y - h * (1.0 - p), w, h };
+        if self.alert {
+            let order = stacked_order(&self.buttons);
+            let bw = (w - ALERT_BUTTON_INSET_PT * 2.0).max(0.0);
+            let mut y = panel.bottom() - ALERT_BUTTON_INSET_PT - stacked_buttons_h(order.len());
+            let buttons = order
+                .into_iter()
+                .map(|b| {
+                    let r = Rect { x: panel.x + ALERT_BUTTON_INSET_PT, y, w: bw, h: ALERT_BUTTON_H_PT };
+                    y += ALERT_BUTTON_H_PT + ALERT_BUTTON_GAP_PT;
+                    (b.id, r)
+                })
+                .collect();
+            return SheetLayout { scrim: parent, panel, buttons };
+        }
         let mut x = panel.right() - SHEET_PAD_PT;
         let y = panel.bottom() - SHEET_PAD_PT - BUTTON_H_PT;
         let mut buttons = Vec::new();
@@ -226,6 +276,18 @@ impl Sheet {
             Hit::Blocked
         }
     }
+}
+
+/// An alert's buttons from top to bottom: the default button, the others in their order, Cancel last.
+pub fn stacked_order(buttons: &[SheetButton]) -> Vec<&SheetButton> {
+    let rank = |b: &SheetButton| match b.role {
+        ButtonRole::Default => 0,
+        ButtonRole::Cancel => 2,
+        _ => 1,
+    };
+    let mut order: Vec<&SheetButton> = buttons.iter().collect();
+    order.sort_by_key(|b| rank(*b));
+    order
 }
 
 /// Segmented control metrics, in points (regular size).
@@ -338,7 +400,7 @@ mod tests {
         let l = s.layout(parent, 28.0, 1.0);
         let (id, r) = l.buttons[0];
         assert_eq!(id, 1);
-        assert!(l.buttons[1].1.right() < r.x, "second button sits to the left of the first");
+        assert_eq!(l.buttons[1].1.y, r.bottom() + ALERT_BUTTON_GAP_PT, "an alert's second button sits below the first");
         assert_eq!(s.hit(parent, 28.0, 1.0, r.x + 2.0, r.y + 2.0), Hit::Button(1));
         assert_eq!(s.hit(parent, 28.0, 1.0, 10.0, 300.0), Hit::Blocked);
         assert_eq!(s.hit(parent, 28.0, 1.0, l.panel.x + 5.0, l.panel.y + 5.0), Hit::Panel);
@@ -376,13 +438,13 @@ mod tests {
         let (title, message) = ("Wide", "WWWW MMMM WWWW MMMM WWWW MMMM WWWW");
         let parent = Rect { x: 0.0, y: 0.0, w: 800.0, h: 600.0 };
         let estimated = Sheet::alert(title, message, buttons());
-        assert_eq!(estimated.size.1, alert_height(1, 1), "34 characters are one line by count");
+        assert_eq!(estimated.size.1, alert_sheet_height(1, 1, 1), "34 characters are one line by count");
         // the renderer wrapped the message to three lines with real glyph widths
-        let measured = alert_height(1, 3);
+        let measured = alert_sheet_height(1, 3, 1);
         record_alert_height(title, message, ALERT_W_PT, measured);
         let l = estimated.layout(parent, 28.0, 1.0);
         assert_eq!(l.panel.h, measured, "a sheet built before the measurement takes it too");
-        assert_eq!(l.buttons[0].1.y, l.panel.bottom() - SHEET_PAD_PT - BUTTON_H_PT);
+        assert_eq!(l.buttons[0].1.y, l.panel.bottom() - ALERT_BUTTON_INSET_PT - ALERT_BUTTON_H_PT);
         assert_eq!(estimated.hit(parent, 28.0, 1.0, l.buttons[0].1.x + 2.0, l.buttons[0].1.y + 2.0), Hit::Button(1));
         let rebuilt = Sheet::alert(title, message, buttons());
         assert_eq!(rebuilt.size.1, measured, "a sheet built again each frame starts from the measurement");
@@ -391,6 +453,43 @@ mod tests {
         assert_eq!(measured_alert_height(title, message, 400.0), None);
         let free = Sheet::new(title, (300.0, 120.0), buttons());
         assert_eq!(free.height(), 120.0);
+    }
+
+    /// E2E11: the save alert floated with rounded top corners and a gap under the title bar, its buttons in a row.
+    #[test]
+    fn an_alert_sheet_is_attached_to_the_title_bar_with_full_width_stacked_buttons() {
+        let s = Sheet::alert(
+            "Do you want to save the changes?",
+            "Your changes will be lost if you don\u{2019}t save them.",
+            vec![SheetButton::new(1, "Save", ButtonRole::Default), SheetButton::new(2, "Cancel", ButtonRole::Cancel), SheetButton::new(3, "Don\u{2019}t Save", ButtonRole::Destructive)],
+        );
+        let parent = Rect { x: 40.0, y: 30.0, w: 700.0, h: 500.0 };
+        let bar = 52.0;
+        let l = s.layout(parent, bar, 1.0);
+        assert_eq!(l.panel.y, parent.y + bar, "the sheet's top is the title bar's bottom: no gap");
+        let (clip, body) = attached_body(l.panel, parent, bar).expect("a shown sheet is drawn");
+        assert_eq!(clip.y, parent.y + bar, "nothing is drawn over the title bar");
+        assert_eq!((clip.x, clip.w, clip.bottom()), (l.panel.x, l.panel.w, l.panel.bottom()));
+        assert!(body.y + SHEET_RADIUS_PT <= clip.y, "the rounding lies above the clip, so the top corners are square");
+        assert_eq!(body.bottom(), l.panel.bottom(), "the bottom corners stay rounded");
+        // Save on top, Don't Save, Cancel at the bottom, each as wide as the panel less its insets
+        let ids: Vec<u32> = l.buttons.iter().map(|(id, _)| *id).collect();
+        assert_eq!(ids, [1, 3, 2]);
+        for (_, r) in &l.buttons {
+            assert_eq!((r.x, r.w, r.h), (l.panel.x + ALERT_BUTTON_INSET_PT, l.panel.w - ALERT_BUTTON_INSET_PT * 2.0, ALERT_BUTTON_H_PT));
+        }
+        assert_eq!(l.buttons[2].1.bottom(), l.panel.bottom() - ALERT_BUTTON_INSET_PT);
+        assert_eq!(l.buttons[1].1.y - l.buttons[0].1.bottom(), ALERT_BUTTON_GAP_PT);
+        // sliding in, only what is below the title bar is drawn; fully up, nothing
+        let half = s.layout(parent, bar, 0.5);
+        let (clip, _) = attached_body(half.panel, parent, bar).unwrap();
+        assert_eq!(clip.y, parent.y + bar);
+        assert!(clip.h < half.panel.h);
+        assert_eq!(attached_body(s.layout(parent, bar, 0.0).panel, parent, bar), None);
+        // a free-form sheet keeps its row of buttons
+        let free = Sheet::new("t", (300.0, 120.0), vec![SheetButton::new(1, "OK", ButtonRole::Default), SheetButton::new(2, "Cancel", ButtonRole::Cancel)]);
+        let fl = free.layout(parent, bar, 1.0);
+        assert!(fl.buttons[1].1.right() < fl.buttons[0].1.x);
     }
 
     #[test]

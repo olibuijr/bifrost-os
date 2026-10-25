@@ -414,9 +414,16 @@ impl Ctx {
     }
 
     /// Moves one of the app's windows to (x, y) points relative to the visible desktop area. The shell clamps it to the
-    /// screen; the shell reports the position it settles on as `ToApp::WindowMoved` when the person drags it.
+    /// screen; the shell reports the position it settles on as `ToApp::WindowMoved` when the person drags it, and where
+    /// it put a window opened without a position. The main window moves too (a document app that moves a document into
+    /// its main window puts the main window where that document's window was); the shell keeps no position for it in
+    /// the registry. A position that is not a number is refused.
     pub fn move_window(&self, id: crate::app_windows::WindowId, x: f32, y: f32) -> Result<(), crate::app_windows::WindowError> {
-        self.windows.borrow_mut().set_position(id, x, y)?;
+        if !id.is_main() {
+            self.windows.borrow_mut().set_position(id, x, y)?;
+        } else if !(x.is_finite() && y.is_finite()) {
+            return Err(crate::app_windows::WindowError::Unknown(id));
+        }
         self.send(ToShell::WindowMove { window: id.0, x, y });
         Ok(())
     }

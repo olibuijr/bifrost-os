@@ -1,7 +1,8 @@
 //! App control endpoint (tasks/app-control.md): one JSON-RPC 2.0 request per
 //! connection, newline-terminated, on an owner-only Unix socket. The SDK
 //! serves it from the app's main loop, so handlers run on the thread that owns
-//! the app state. Only the owning UID may connect (SO_PEERCRED).
+//! the app state. Only the owning UID and root (the shell runs as root and sends intents; root can do anything to the
+//! app anyway) may connect (SO_PEERCRED).
 
 use bifrost_core::json::{self, Json};
 use std::ffi::c_void;
@@ -330,14 +331,20 @@ extern "C" {
 const SOL_SOCKET: i32 = 1;
 const SO_PEERCRED: i32 = 17;
 
-/// True when the connecting process runs as this app's UID.
+/// True when the connecting process runs as this app's UID or as root. The shell runs as root and the app drops to
+/// the account's UID, so the shell's intents arrive from uid 0; any other user is refused.
 fn peer_is_owner(stream: &UnixStream) -> bool {
     let mut cred = Ucred { pid: 0, uid: u32::MAX, gid: 0 };
     let mut len = std::mem::size_of::<Ucred>() as u32;
     let rc = unsafe {
         getsockopt(stream.as_raw_fd(), SOL_SOCKET, SO_PEERCRED, &mut cred as *mut Ucred as *mut c_void, &mut len)
     };
-    rc == 0 && cred.uid == unsafe { geteuid() }
+    rc == 0 && peer_uid_allowed(cred.uid, unsafe { geteuid() })
+}
+
+/// The peer rule: the app's own UID or root, nothing else.
+fn peer_uid_allowed(peer: u32, own: u32) -> bool {
+    peer == own || peer == 0
 }
 
 #[cfg(test)]
@@ -350,6 +357,16 @@ mod tests {
             "fail" => Err(RpcError::new(INVALID_PARAMS, "bad")),
             _ => Err(RpcError::new(METHOD_NOT_FOUND, format!("no {method}"))),
         }
+    }
+
+    #[test]
+    fn admits_the_owner_and_root_only() {
+        assert!(peer_uid_allowed(1000, 1000));
+        assert!(peer_uid_allowed(0, 1000), "the shell runs as root");
+        assert!(peer_uid_allowed(0, 0));
+        assert!(!peer_uid_allowed(1001, 1000), "a foreign uid is refused");
+        assert!(!peer_uid_allowed(u32::MAX, 1000), "a failed lookup is refused");
+        assert!(!peer_uid_allowed(1000, 0), "a root app admits only root");
     }
 
     #[test]

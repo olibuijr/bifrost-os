@@ -1632,8 +1632,9 @@ impl AppStore {
         if self.scroll.animating() {
             return Some(t);
         }
-        // a failed icon is fetched again when its retry is due, without waiting for input to tick the store
-        let retry = self.icon_failed.values().map(|at| (at + ICON_RETRY_MS).max(t)).reduce(f64::min);
+        // a failed icon is fetched again when its retry is due, without waiting for input to tick the store; one whose
+        // retry is in flight waits for the reply instead, so the loop does not spin until it arrives
+        let retry = self.icon_failed.iter().filter(|(id, _)| !self.icon_pending.contains(*id)).map(|(_, at)| (at + ICON_RETRY_MS).max(t)).reduce(f64::min);
         let progress = (!self.jobs.is_empty()).then(|| (self.progress_at + PROGRESS_MS).max(t));
         match (progress, retry) {
             (Some(a), Some(b)) => Some(a.min(b)),
@@ -2466,6 +2467,16 @@ mod tests {
         assert_eq!(s.next_wake(0.0), None);
         s.icon_failed.insert("is.o.calc".into(), 1_000.0);
         assert_eq!(s.next_wake(2_000.0), Some(1_000.0 + ICON_RETRY_MS));
+    }
+
+    #[test]
+    fn an_icon_whose_retry_is_in_flight_does_not_wake_the_store() {
+        let mut s = store();
+        s.icon_failed.insert("is.o.calc".into(), 1_000.0);
+        s.icon_pending.insert("is.o.calc".into());
+        assert_eq!(s.next_wake(1_000.0 + ICON_RETRY_MS + 5_000.0), None, "the pending request's reply wakes it instead");
+        s.icon_failed.insert("is.o.chess".into(), 3_000.0);
+        assert_eq!(s.next_wake(4_000.0), Some(3_000.0 + ICON_RETRY_MS), "another failed icon still schedules its retry");
     }
 
     fn store() -> AppStore {

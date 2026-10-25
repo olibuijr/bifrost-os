@@ -3,13 +3,17 @@
 // Local: one JSON-RPC request per connection on the app's Unix socket. Framing matches
 // springboard/sdk/src/control.rs: one newline-terminated request, one reply line, then close.
 //
-// Remote (e.g. midget): the apps' sockets are owned by the installed account, and the owner
-// check (SO_PEERCRED) rejects root. So the remote side runs a small stdlib-only relay over ssh,
-// as that account, and the same JSON-RPC happens on the remote host. Node built-ins only.
+// Where a socket lives is the rule of bifrost_core::app_control_socket and tools/app-control.py:
+// $BIFROST_CONTROL when set, else <root>/appdata/<id>/control.sock, root being $BIFROST_SHELL_DIR
+// or /var/lib/springboard.
+//
+// Remote (e.g. midget): the apps' sockets admit the installed account and root (SO_PEERCRED).
+// The remote side runs a small stdlib-only relay over ssh, as that account, and the same
+// JSON-RPC happens on the remote host. Node built-ins only.
 
 import { spawn } from "node:child_process";
 import { createConnection } from "node:net";
-import { readdir } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 
 export const TIMEOUT_MS = 2000;
@@ -39,7 +43,7 @@ export interface AppInfo {
 }
 
 export interface RunningApp {
-	/** App id from the socket file name or data directory. */
+	/** App id from its data directory's name. */
 	id: string;
 	/** Present when the app answered app.info. */
 	info?: AppInfo;
@@ -50,18 +54,22 @@ export interface RunningApp {
 /** Where to reach apps: this machine (default) or an ssh host such as `midget`. */
 export interface Target {
 	host?: string;
-	/** Local socket directory override (tests). */
+	/** Local app data root override (`<root>/<id>/control.sock`; tests). */
 	dir?: string;
 }
 
-export function socketDir(env: NodeJS.ProcessEnv = process.env, uid: number = process.getuid?.() ?? 1000): string {
-	const base = env.XDG_RUNTIME_DIR || `/run/user/${uid}`;
-	return join(base, "bifrost", "apps");
+export const SOCKET_NAME = "control.sock";
+
+/** The apps' data root: `<$BIFROST_SHELL_DIR or /var/lib/springboard>/appdata`; each app's socket is in `<id>/`. */
+export function socketDir(env: NodeJS.ProcessEnv = process.env): string {
+	return join(env.BIFROST_SHELL_DIR || "/var/lib/springboard", "appdata");
 }
 
-export function socketPath(app: string, dir: string = socketDir()): string {
+/** The control socket of `app`: `$BIFROST_CONTROL` when set, else `control.sock` in its data directory under `dir`. */
+export function socketPath(app: string, dir: string = socketDir(), env: NodeJS.ProcessEnv = process.env): string {
 	checkAppId(app);
-	return join(dir, `${app}.sock`);
+	if (env.BIFROST_CONTROL) return env.BIFROST_CONTROL;
+	return join(dir, app, SOCKET_NAME);
 }
 
 function checkAppId(app: string): void {
@@ -150,13 +158,11 @@ def drop_to_account():
     os.setuid(p.pw_uid)
 
 def candidates():
-    # Sandboxed SDK apps have no XDG_RUNTIME_DIR, so the SDK serves control.sock in its data directory.
+    # The SDK serves control.sock in the app's data directory: <root>/appdata/<id>/control.sock
+    root = os.environ.get("BIFROST_SHELL_DIR") or "/var/lib/springboard"
     found = {}
-    for path in sorted(glob.glob("/var/lib/springboard/appdata/*/control.sock")):
+    for path in sorted(glob.glob(os.path.join(root, "appdata", "*", "control.sock"))):
         found.setdefault(os.path.basename(os.path.dirname(path)), path)
-    runtime = os.environ.get("XDG_RUNTIME_DIR") or "/run/bifrost/user"
-    for path in sorted(glob.glob(os.path.join(runtime, "bifrost", "apps", "*.sock"))):
-        found.setdefault(os.path.basename(path)[:-5], path)
     return {k: v for k, v in found.items() if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", k)}
 
 def rpc(path, method, params):
@@ -297,12 +303,20 @@ async function listLocalApps(dir: string): Promise<RunningApp[]> {
 		if ((e as NodeJS.ErrnoException).code === "ENOENT") return [];
 		throw e;
 	}
-	const sockets = names.filter((n) => n.endsWith(".sock") && APP_ID.test(n.slice(0, -5)));
+	// every app data directory that holds a control.sock; one without a socket is an app that is not serving
+	const ids: string[] = [];
+	for (const name of names.filter((n) => APP_ID.test(n)).sort()) {
+		try {
+			await stat(join(dir, name, SOCKET_NAME));
+			ids.push(name);
+		} catch {
+			// no socket in this data directory
+		}
+	}
 	return Promise.all(
-		sockets.sort().map(async (name): Promise<RunningApp> => {
-			const id = name.slice(0, -5);
+		ids.map(async (id): Promise<RunningApp> => {
 			try {
-				const info = (await rpc(join(dir, name), "app.info")) as AppInfo;
+				const info = (await rpc(join(dir, id, SOCKET_NAME), "app.info")) as AppInfo;
 				return { id, info };
 			} catch (e) {
 				return { id, error: (e as Error).message };

@@ -110,6 +110,10 @@ impl TextDocument {
             text.load(rtf::plain_cells(&decoded));
             false
         };
+        if !rich {
+            // a plain document has one font, the plain text font Make Plain Text switches to
+            text.use_plain_font();
+        }
         Ok(TextDocument { text, rich, read_only: false, encoding, properties, code })
     }
 
@@ -215,6 +219,7 @@ mod tests {
         assert_eq!(plain.text.text(), "hello\nworld");
         let out = plain.write(PLAIN_TYPE).unwrap();
         assert_eq!(out, b"hello\nworld".to_vec());
+        assert!(plain.text.cells().iter().all(|c| c.style.font == crate::text::PLAIN_FONT), "a plain file opens in the plain text font");
 
         let rich = TextDocument::read(b"{\\rtf1\\ansi \\b bold\\b0  text}", RTF_TYPE).unwrap();
         assert!(rich.rich);

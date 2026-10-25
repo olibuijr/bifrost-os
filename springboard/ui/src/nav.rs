@@ -401,8 +401,8 @@ impl Alert {
 
     /// The alert as a document-modal sheet (`NativeAlert.beginSheetModal(for:)`): it hangs from its window's title bar
     /// (`sheet::Sheet::layout`), its title and message wrap instead of being cut, the default button is filled with the
-    /// accent and answers Return, the cancel button answers Escape. Buttons keep [`Alert::button_order`] (the sheet lists
-    /// them right to left). A destructive action stays destructive, so it is never the accent-filled Return button.
+    /// accent and answers Return, the cancel button answers Escape. Buttons keep [`Alert::button_order`] reversed; the
+    /// sheet stacks them full width, the default on top and Cancel last (`sheet::stacked_order`). A destructive action stays destructive, so it is never the accent-filled Return button.
     pub fn sheet(&self) -> crate::sheet::Sheet {
         use crate::sheet::{ButtonRole, Sheet, SheetButton};
         let default = self.default_action().map(|a| a.id);
