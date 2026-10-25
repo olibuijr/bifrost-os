@@ -4,6 +4,9 @@
 
 - The Window menu lists a hosted app's main window by the title the app gave it (`DocumentState`), as Mail's window by its mailbox ("Inbox"), instead of always by the app's name.
 
+||||||| 4641c82c4
+- Text with a line break, tab or other control character in a one-line label (a notification banner's subtitle and body, a folded mail subject) shows a space there instead of the missing-glyph box, on the CPU and GPU text paths.
+
 ## 0.10.27 — 2026-10-24
 
 Fixes from the second 0.10.25 end-to-end pass on Midget.

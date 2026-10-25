@@ -19,6 +19,19 @@ pub fn is_default_ignorable(c: char) -> bool {
         | 0x1BCA0..=0x1BCA3 | 0x1D173..=0x1D17A | 0xE0000..=0xE0FFF)
 }
 
+/// How a character enters a one-line run. Line and paragraph breaks and the other whitespace controls (tab, CR, LF,
+/// NEL, U+2028/2029) lay out as a space, the way a single-line label shows text that holds a break; any other control
+/// character takes no room. Fonts give none of them a visible glyph (the UI font has no cmap entry for tab, CR or LF),
+/// so without this a mail subject or notification body with a newline drew the `.notdef` box between its words.
+/// Every other character passes unchanged.
+pub fn run_char(c: char) -> Option<char> {
+    match c {
+        '\t' | '\n' | '\u{b}' | '\u{c}' | '\r' | '\u{85}' | '\u{2028}' | '\u{2029}' => Some(' '),
+        c if c.is_control() => None,
+        c => Some(c),
+    }
+}
+
 /// One glyph placed by the shaper: advance and offsets in font units (offset y is up).
 struct PlacedGlyph {
     gid: u16,
@@ -835,6 +848,14 @@ impl Font<'_> {
 
     fn shape_run(&self, text: &str, norm: &[f32], features: &Features) -> Vec<PlacedGlyph> {
         let layout = self.ot.get_or_init(|| OtLayout::from_sfnt(self.data));
+        // control characters become spaces or leave the run before anything else sees them (`run_char`)
+        let controls: String;
+        let text = if text.chars().any(char::is_control) {
+            controls = text.chars().filter_map(run_char).collect();
+            controls.as_str()
+        } else {
+            text
+        };
         if layout.is_trivial() {
             return text
                 .chars()
@@ -1411,6 +1432,45 @@ mod run_cache_tests {
         }
         for c in ['a', ' ', '-', '\u{a0}', '\u{2010}', '\u{25cf}'] {
             assert!(!is_default_ignorable(c), "{:04X} is visible", c as u32);
+        }
+    }
+
+    #[test]
+    fn a_newline_or_tab_lays_out_as_a_space_and_draws_no_box() {
+        let data = sf();
+        let f = Font::parse(&data).unwrap();
+        let st = Style { px: 20.0, embolden: 0.0, color: 0xffff_ffff, shadow: false };
+        // a notification body "subtitle\nbody" and a folded mail subject draw like their one-line form
+        let plain = f.render("Reddit u/someone replied", &st);
+        for broken in ["Reddit\nu/someone replied", "Reddit\tu/someone replied", "Reddit\u{2028}u/someone replied"] {
+            assert_eq!(f.measure(broken, 20.0), f.measure("Reddit u/someone replied", 20.0), "{broken:?}");
+            let img = f.render(broken, &st);
+            assert_eq!((img.w, img.h), (plain.w, plain.h), "{broken:?}");
+            assert_eq!(img.px, plain.px, "{broken:?} draws no missing-glyph box");
+        }
+        assert_eq!(f.measure("a\u{7}\u{1b}b", 20.0), f.measure("ab", 20.0), "other controls take no room");
+        assert_eq!(run_char('\r'), Some(' '));
+        assert_eq!(run_char('\u{0}'), None);
+        assert_eq!(run_char('|'), Some('|'));
+    }
+
+    #[test]
+    fn a_vertical_line_is_a_thin_stroke_at_body_size() {
+        let data = sf();
+        let f = Font::parse(&data).unwrap();
+        assert_ne!(f.glyph('|'), 0, "the UI font has the vertical line");
+        // body text (13 pt) at the 1.5625 panel scale, regular and semibold
+        let px = crate::ui::MAC_BODY_PT * 1.5625;
+        for wght in [400.0, 590.0] {
+            let st = Style { px, embolden: 0.0, color: 0xffff_ffff, shadow: false };
+            let img = f.render_var("|", &st, &[(*b"wght", wght)]);
+            let inked = |x: usize| (0..img.h).filter(|&y| (img.px[y * img.w + x] >> 24) > 128).count();
+            let cols: Vec<usize> = (0..img.w).filter(|&x| inked(x) > 0).collect();
+            let tall = cols.iter().map(|&x| inked(x)).max().unwrap_or(0);
+            assert!(cols.len() <= 3, "wght {wght}: a stroke, not a box: {} inked columns", cols.len());
+            assert!(tall as f32 >= px * 0.9, "wght {wght}: it spans ascender to descender: {tall} rows at {px} px");
+            let notdef = f.render_glyph_var(0, &st, &[(*b"wght", wght)]);
+            assert_ne!(img.px, notdef.px, "wght {wght}: not the missing-glyph box");
         }
     }
 
