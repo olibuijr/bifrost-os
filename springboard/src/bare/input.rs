@@ -913,7 +913,7 @@ impl InputSet {
 
 /// The hardware button keys `InputSet::buttons` reads itself under a compositor (which drops its own copy of them).
 pub fn is_button_key(code: u16) -> bool {
-    matches!(code, KEY_POWER | KEY_VOLUMEUP | KEY_VOLUMEDOWN)
+    matches!(code, KEY_POWER | KEY_VOLUMEUP | KEY_VOLUMEDOWN | KEY_WAKEUP)
 }
 
 /// Whether a decoded event from the device `fd` reaches the shell. Keys go through the seat's merge (a key held
