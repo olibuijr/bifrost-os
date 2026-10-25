@@ -1951,7 +1951,7 @@ impl Shell {
     #[cfg(feature = "desktop-wayland")]
     pub fn wayland_window_event(&mut self, ev: crate::bare::wayland::WindowEvent) {
         use crate::bare::wayland::WindowEvent;
-        let id = match ev { WindowEvent::Focus(id) | WindowEvent::Close(id) | WindowEvent::Resize(id,_,_) | WindowEvent::Maximized(id,_) | WindowEvent::Frame(id,..) | WindowEvent::Fullscreen(id,_) => id };
+        let id = match ev { WindowEvent::Focus(id) | WindowEvent::HandBack(id) | WindowEvent::Close(id) | WindowEvent::Resize(id,_,_) | WindowEvent::Maximized(id,_) | WindowEvent::Frame(id,..) | WindowEvent::Fullscreen(id,_) => id };
         // every event is reported for every toplevel of the shell, an app's extra windows (flagged ids) included
         let app = frame_app(id);
         let Some(app) = app else { return };
@@ -1961,9 +1961,10 @@ impl Shell {
             // lift the window over the lock (Lock Screen from the System menu closes the menu in the same turn); an extra window
             // focuses the app that opened it, because the routing sites match the parent (`desk_refocus` does the same)
             // the app just launched above it (no frame yet, so no toplevel) stays the front app: the focus the window
-            // server hands back as Spotlight or the Apps grid closes went to the window it still knows in front (E2E6 1)
-            WindowEvent::Focus(_) if self.desk_launching_above(i) => {},
-            WindowEvent::Focus(_) => { self.desk.as_mut().unwrap().raise(i); if !self.is_locked() { self.screen = Screen::App(app.parent()); } self.dirty = true; },
+            // server hands back as Spotlight or the Apps grid closes went to the window it still knows in front (E2E6 1).
+            // Only that hand-back: a press on the window below (a `Focus`) is the person's choice and raises it
+            WindowEvent::HandBack(_) if self.desk_launching_above(i) => {},
+            WindowEvent::Focus(_) | WindowEvent::HandBack(_) => { self.desk.as_mut().unwrap().raise(i); if !self.is_locked() { self.screen = Screen::App(app.parent()); } self.dirty = true; },
             WindowEvent::Close(_) => self.desk_close_app(app),
             // a full-screen window keeps the zoom it goes back to (`set_full_screen`): the window server's maximize state
             // while it is full screen is not a zoom or an un-zoom of it (W3-6)

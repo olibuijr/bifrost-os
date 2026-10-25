@@ -977,10 +977,33 @@
     /// exclusive keyboard away) does not put that window over it. Once the app is gone, the hand-back raises as before.
     /// Returns the front app and the screen after the hand-back.
     #[cfg(feature="desktop-wayland")]
+    #[allow(dead_code)]
     pub(super) fn hand_back_after_launch(sh:&mut Shell)->(Option<AppId>,Screen){
+        let id=desk::win_id(AppId::Settings).unwrap();
+        sh.wayland_window_event(crate::bare::wayland::WindowEvent::HandBack(id));
+        (sh.desk.as_ref().unwrap().front().map(|w|w.app),sh.screen)
+    }
+
+    /// A press on Settings (the window under the launching app) while the app has drawn nothing yet: the window layer
+    /// reports a press as a `Focus`, never a hand-back. Returns the front app and the screen after it.
+    #[cfg(feature="desktop-wayland")]
+    #[allow(dead_code)]
+    pub(super) fn press_below_launch(sh:&mut Shell)->(Option<AppId>,Screen){
         let id=desk::win_id(AppId::Settings).unwrap();
         sh.wayland_window_event(crate::bare::wayland::WindowEvent::Focus(id));
         (sh.desk.as_ref().unwrap().front().map(|w|w.app),sh.screen)
+    }
+
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn a_click_on_the_window_below_a_launching_app_still_raises_it() {
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        let _peer=fixture_app(&mut sh);
+        sh.desk_open(AppId::Settings,0.);
+        sh.desk_open(AppId::External(0),1.);
+        assert!(sh.desk_window_launching(AppId::External(0)),"the app has drawn nothing yet");
+        assert_eq!(hand_back_after_launch(&mut sh),(Some(AppId::External(0)),Screen::App(AppId::External(0))),"the hand-back is ignored");
+        assert_eq!(press_below_launch(&mut sh),(Some(AppId::Settings),Screen::App(AppId::Settings)),"the person's click raises Settings");
     }
 
     #[cfg(feature="desktop-wayland")]

@@ -98,7 +98,10 @@ fn min_size_of(min:(i32,i32)) -> (i32,i32) { if min.0>0 && min.1>0 { min } else 
 /// What a shell window's toplevel reported. `Frame` is the window server's own frame of the toplevel (x, y, width,
 /// height in desktop px, `bifrost_window_level_v1` version 2): the window server places and moves toplevels, so this
 /// is where the window really is.
-pub enum WindowEvent { Focus(u32), Resize(u32,i32,i32), Close(u32), Maximized(u32,bool), Frame(u32,i32,i32,i32,i32),
+/// `Focus` is a focus the shell follows (a press on the window, or a focus the window server gave it); `HandBack` is a
+/// focus no press on the window came with, read within `HAND_BACK_MS` of a keyboard-taking chrome layer (Search, the
+/// Apps grid) closing: the window server handing the keyboard back to the window it knows in front (E2E6 1).
+pub enum WindowEvent { Focus(u32), HandBack(u32), Resize(u32,i32,i32), Close(u32), Maximized(u32,bool), Frame(u32,i32,i32,i32,i32),
     /// The window server's full-screen state of the toplevel, when it differs from what the shell last asked for (the
     /// window server's own keys, or a refusal).
     Fullscreen(u32,bool) }
@@ -189,6 +192,9 @@ struct State {
     /// entered). The front window takes the keyboard back once the events read with it are handled, unless a press on
     /// the entered window came with them (the person clicked it: E2E N2)
     refocus:Option<(u32,u32)>,
+    /// When (`sys::now_ms`) the last chrome layer that takes the keyboard (`takes_keyboard`) closed: a focus without a
+    /// press read shortly after it is a hand-back (`unpressed_focus`)
+    exclusive_closed:Option<f64>,
     /// windows the shell brought forward together (`restack`), ranked in the window server with the next `windows` call
     /// that lists them, each with the number of `windows` calls it has waited (`unsent_restack`), and the last rank sent
     /// (`set_stack_rank` ranks only grow)
@@ -774,7 +780,8 @@ fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_
         let top_reserved=frames.iter().find(|f|f.id==0).map_or(0,|f|f.height as i32+f.y.max(0));
         let ids:Vec<_>=frames.iter().map(|f|f.id).collect();
         let removed:Vec<_>=self.state.chrome.keys().filter(|id|!ids.contains(id)).copied().collect();
-        for id in removed {let w=self.state.chrome.remove(&id).unwrap();w.layer.destroy();w.surface.destroy();for slot in w.slots {slot.buffer.destroy();}
+        for id in removed {if takes_keyboard(id) {self.state.exclusive_closed=Some(super::sys::now_ms());}
+            let w=self.state.chrome.remove(&id).unwrap();w.layer.destroy();w.surface.destroy();for slot in w.slots {slot.buffer.destroy();}
             if let Some(slots)=self.state.gpu_slots.remove(&id) {for s in slots {s.buffer.destroy();}}
             if let Some(g)=&mut self.gpu {g.p.destroy_surface(id);}}
         let qh=self.queue.handle();
@@ -799,11 +806,7 @@ fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_
                 let l=self.state.layer.as_ref().unwrap().get_layer_surface(&s,None,if frame.id==0 {layer::Layer::Top}else{layer::Layer::Overlay},chrome_namespace(frame.id),&qh,frame.id);
                 l.set_size(frame.width as u32,frame.height as u32);Self::place_chrome(&l,&frame,screen,top_reserved);
                 if frame.input.is_some() {Self::set_chrome_input(self.state.compositor.as_ref(),&s,frame.input,&qh);}
-                // id 3 is Search, id 6 the assistant panel, id 8 the Apps grid, id 9 Overview and id 11 the screenshot session
-                // (Space and Escape are its keys), id 15 the system sheets and alerts, id 14 the Force Quit, About and Log Out card (Esc, Return and the arrows are its
-                // keys; without this they would reach the app in front, which is the hung one): they take the keyboard from the
-                // window in front while open; id 13, the Cmd+Tab strip, never does
-                l.set_keyboard_interactivity(if frame.id==3 || frame.id==6 || frame.id==8 || frame.id==9 || frame.id==11 || frame.id==14 || frame.id==15 {surface::KeyboardInteractivity::Exclusive} else {surface::KeyboardInteractivity::None});s.commit();
+                l.set_keyboard_interactivity(if takes_keyboard(frame.id) {surface::KeyboardInteractivity::Exclusive} else {surface::KeyboardInteractivity::None});s.commit();
                 let mut pending=Damage::new(frame.width,frame.height);pending.all();
                 self.state.chrome.insert(frame.id,ChromeWindow{surface:s,layer:l,slots:vec![],configured:false,frame,pending});
             }
@@ -1383,7 +1386,7 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for State {
                 if let Some(id)=s.windows.iter().find(|(_,w)|w.surface==surface).map(|(&id,_)|id) {
                     let fresh=s.windows.get_mut(&id).is_some_and(|w|std::mem::take(&mut w.fresh));
                     if follows_keyboard_enter(fresh,id,s.focused) {
-                        s.focused=Some(id);s.window_events.push(WindowEvent::Focus(id));
+                        s.focused=Some(id);s.window_events.push(unpressed_focus(id,s.exclusive_closed,super::sys::now_ms()));
                     } else if let Some(front)=s.focused.filter(|f|s.windows.contains_key(f)) {
                         // the window server focused a window it just mapped (one that came back from Overview or a
                         // minimize behind the front): the front window the shell raised gets the keyboard back, after the
@@ -1436,7 +1439,7 @@ impl Dispatch<xdg_surface::XdgSurface,u32> for State {
         // Overview or a minimize) and that the window server activated as it mapped must not lift itself over the
         // front one (W4-1, W4-5)
         let front=s.focused;
-        if let xdg_surface::Event::Configure {serial} = e {obj.ack_configure(serial); if let Some(w)=s.windows.get_mut(id) {let focus=follows_keyboard_enter(w.fresh,*id,front)&&focus_on_configure(!w.configured,w.act,w.act_seen);w.configured=true;w.act_seen=w.act;if focus {s.window_events.push(WindowEvent::Focus(*id));}} }
+        if let xdg_surface::Event::Configure {serial} = e {obj.ack_configure(serial); if let Some(w)=s.windows.get_mut(id) {let focus=follows_keyboard_enter(w.fresh,*id,front)&&focus_on_configure(!w.configured,w.act,w.act_seen);w.configured=true;w.act_seen=w.act;if focus {s.window_events.push(unpressed_focus(*id,s.exclusive_closed,super::sys::now_ms()));}} }
     }
 }
 impl Dispatch<xdg_toplevel::XdgToplevel,u32> for State {
@@ -1574,8 +1577,6 @@ fn focus_on_configure(first:bool,activated:bool,was_activated:bool)->bool { firs
 /// (Overview, a minimize, a window covered until now), not a choice of the person: following it lifted that window over
 /// the one the Dock, Overview or the Window menu had just brought forward (W4-1, W4-5).
 fn follows_keyboard_enter(fresh:bool,id:u32,front:Option<u32>)->bool { !fresh || front.map_or(true,|f|f==id) }
-/// The keyboard hand-back still owed after a press on window `pressed`: none when the press is on the fresh window that
-/// just took the keyboard (the person chose it), else the one owed before.
 /// Where the surface the pointer is on sits on the screen: a window's frame origin or a chrome surface's, else 0,0.
 fn target_offset(s:&State)->(f32,f32) {
     s.target.and_then(|id| s.windows.get(&id)).map(|w| (w.frame.x as f32,w.frame.y as f32)).or_else(||s.chrome_target.and_then(|id|s.chrome.get(&id)).map(|w|(w.frame.x as f32,w.frame.y as f32))).unwrap_or((0.0,0.0))
@@ -1585,7 +1586,24 @@ fn target_offset(s:&State)->(f32,f32) {
 fn enter_hover(pressed:bool,xy:(f32,f32),offset:(f32,f32),t:f64)->Option<Event> {
     (!pressed).then(||Event::Hover{x:xy.0+offset.0,y:xy.1+offset.1,t})
 }
+/// The keyboard hand-back still owed after a press on window `pressed`: none when the press is on the fresh window that
+/// just took the keyboard (the person chose it), else the one owed before.
 fn keep_refocus(refocus:Option<(u32,u32)>,pressed:u32)->Option<(u32,u32)> { refocus.filter(|(_,entered)|*entered!=pressed) }
+/// Whether chrome surface `id` takes the keyboard from the window in front while it is open: id 3 is Search, id 6 the
+/// assistant panel, id 8 the Apps grid, id 9 Overview and id 11 the screenshot session (Space and Escape are its keys),
+/// id 15 the system sheets and alerts, id 14 the Force Quit, About and Log Out card (Esc, Return and the arrows are its
+/// keys; without this they would reach the app in front, which is the hung one); id 13, the Cmd+Tab strip, never does.
+fn takes_keyboard(id:u32)->bool { matches!(id,3|6|8|9|11|14|15) }
+/// How long after a keyboard-taking chrome layer closed a focus without a press counts as the window server's hand-back
+/// of the keyboard (ms): the hand-back arrives within a round trip of the layer's destruction; a later focus is the
+/// window server's own (a window mapped, a menu closed) and is followed as before.
+const HAND_BACK_MS:f64=1000.0;
+/// The event for a focus of window `id` that no press on it came with (a keyboard enter, an activating configure), read
+/// at `now`, the last keyboard-taking layer having closed at `closed`: a `HandBack` within `HAND_BACK_MS` of it, else a
+/// `Focus`. A press on a window always reports `Focus` (the person chose it).
+fn unpressed_focus(id:u32,closed:Option<f64>,now:f64)->WindowEvent {
+    if closed.is_some_and(|c|now>=c && now-c<=HAND_BACK_MS) { WindowEvent::HandBack(id) } else { WindowEvent::Focus(id) }
+}
 /// The `set_stack_rank` requests for the windows `want` the shell brought forward: each of them that `ids` (the shell's
 /// windows, bottom first) lists gets the next rank in that order, so the bottom one has the lowest. `last` is the last
 /// rank sent and grows with each; 0 is never sent (it means no rank).
@@ -1622,7 +1640,7 @@ fn window_buffer_count(count:usize, available:bool, dirty:bool) -> usize {
 }
 #[cfg(test)]
 mod tests {
-    use super::{dock_placement,DockEdge,DockPlacement,enter_hover,focus_on_configure,keep_refocus,min_size_of,DEFAULT_MIN_SIZE};
+    use super::{dock_placement,DockEdge,DockPlacement,enter_hover,focus_on_configure,keep_refocus,min_size_of,takes_keyboard,unpressed_focus,WindowEvent,DEFAULT_MIN_SIZE,HAND_BACK_MS};
     /// E2E6 4: an absolute pointer arrives on a surface with an Enter alone; it is a hover at the screen point it landed
     /// on (the Dock magnifies and labels the icon under it), and nothing while a button is held.
     #[test]
@@ -1713,6 +1731,17 @@ mod tests {
         assert_eq!(keep_refocus(Some((front, viewer)), viewer), None, "the person clicked the window: no hand-back");
         assert_eq!(keep_refocus(Some((front, viewer)), other), Some((front, viewer)), "a press on another window keeps it owed");
         assert_eq!(keep_refocus(None, viewer), None);
+    }
+    /// E2E6 1 follow-up: a focus without a press shortly after Search or the Apps grid closed is the keyboard hand-back;
+    /// before any such layer closed, or once the hand-back window is over, it is a plain focus.
+    #[test]
+    fn a_focus_without_a_press_just_after_a_keyboard_layer_closed_is_a_hand_back() {
+        assert!(takes_keyboard(3) && takes_keyboard(8), "Search and the Apps grid take the keyboard");
+        assert!(!takes_keyboard(13) && !takes_keyboard(0), "the Cmd+Tab strip and the menu bar do not");
+        assert!(matches!(unpressed_focus(5, Some(1000.0), 1040.0), WindowEvent::HandBack(5)));
+        assert!(matches!(unpressed_focus(5, Some(1000.0), 1000.0 + HAND_BACK_MS + 1.0), WindowEvent::Focus(5)), "too late: the window server's own focus");
+        assert!(matches!(unpressed_focus(5, None, 1040.0), WindowEvent::Focus(5)), "no layer closed");
+        assert!(matches!(unpressed_focus(5, Some(2000.0), 1040.0), WindowEvent::Focus(5)), "a layer closed after it was read");
     }
     /// W4-1/W4-5: the window server focuses every window it maps; a window that maps behind the front one (back from
     /// Overview or a minimize) must not take the front from the window the shell just raised.
