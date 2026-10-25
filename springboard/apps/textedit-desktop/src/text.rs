@@ -376,6 +376,9 @@ struct Snapshot {
     kind: Kind,
     /// The font new text takes (`Text::default_font`): Make Plain Text changes it, so Undo puts the rich one back.
     default_font: u8,
+    /// The entry is Make Plain Text: undoing it makes the document rich text again and redoing it plain again (the
+    /// document mode lives in `TextDocument::rich`, which asks `undo_makes_rich` / `redo_makes_plain`).
+    plain_switch: bool,
 }
 
 /// Where the document is in its edit history. `position` is the undo depth, `epoch` changes when a new edit
@@ -633,7 +636,7 @@ impl Text {
             self.epoch += 1;
             self.redo.clear();
         }
-        self.undo.push(Snapshot { cells: self.cells.clone(), anchor: self.anchor, head: self.head, kind, default_font: self.default_font });
+        self.undo.push(Snapshot { cells: self.cells.clone(), anchor: self.anchor, head: self.head, kind, default_font: self.default_font, plain_switch: false });
         if self.undo.len() > UNDO_LIMIT {
             self.undo.remove(0);
         }
@@ -851,6 +854,9 @@ impl Text {
     /// undo entry. Attachments are dropped (the caller asks first).
     pub fn make_plain(&mut self) {
         self.record(Kind::Formatting);
+        if let Some(entry) = self.undo.last_mut() {
+            entry.plain_switch = true;
+        }
         self.cells.retain(|c| c.ch != OBJECT);
         let plain = Style { font: PLAIN_FONT, ..Style::default() };
         for c in &mut self.cells {
@@ -1154,16 +1160,26 @@ impl Text {
         self.redo.last().map(|s| s.kind.name())
     }
 
+    /// Whether Undo would take back Make Plain Text (so the document becomes rich text again).
+    pub fn undo_makes_rich(&self) -> bool {
+        self.undo.last().is_some_and(|s| s.plain_switch)
+    }
+
+    /// Whether Redo would apply Make Plain Text again (so the document becomes plain text again).
+    pub fn redo_makes_plain(&self) -> bool {
+        self.redo.last().is_some_and(|s| s.plain_switch)
+    }
+
     pub fn undo(&mut self) -> bool {
         let Some(snap) = self.undo.pop() else { return false };
-        self.redo.push(Snapshot { cells: self.cells.clone(), anchor: self.anchor, head: self.head, kind: snap.kind, default_font: self.default_font });
+        self.redo.push(Snapshot { cells: self.cells.clone(), anchor: self.anchor, head: self.head, kind: snap.kind, default_font: self.default_font, plain_switch: snap.plain_switch });
         self.restore(snap);
         true
     }
 
     pub fn redo(&mut self) -> bool {
         let Some(snap) = self.redo.pop() else { return false };
-        self.undo.push(Snapshot { cells: self.cells.clone(), anchor: self.anchor, head: self.head, kind: snap.kind, default_font: self.default_font });
+        self.undo.push(Snapshot { cells: self.cells.clone(), anchor: self.anchor, head: self.head, kind: snap.kind, default_font: self.default_font, plain_switch: snap.plain_switch });
         self.restore(snap);
         true
     }

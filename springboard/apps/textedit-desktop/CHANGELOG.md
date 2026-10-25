@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.13.5
+
+- Undo of Make Plain Text makes the document rich text again: the format bar, the ruler and the formatting commands come back with the fonts. Redo makes it plain text again.
+- The Make Plain Text confirmation is an alert sheet attached under the title bar, like the save confirmation, with OK (the default) stacked above Cancel.
+- Closing the main window's document now draws the other document where its window was: the system moves the window on screen, not only in its records (with the matching system update).
+
 ## 1.13.4
 
 - Format > Make Plain Text asks first, as the reference does: "Convert this document to plain text?", with OK and Cancel (it used to convert at once unless the document had attachments).

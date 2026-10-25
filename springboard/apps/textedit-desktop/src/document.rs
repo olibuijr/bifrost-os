@@ -60,6 +60,31 @@ impl TextDocument {
         self.rich = rich;
     }
 
+    /// Edit > Undo. Undoing Make Plain Text brings back the rich text and the rich text mode with it (format bar,
+    /// ruler, formatting commands), not only the styles.
+    pub fn undo(&mut self) -> bool {
+        let makes_rich = self.text.undo_makes_rich();
+        if !self.text.undo() {
+            return false;
+        }
+        if makes_rich {
+            self.rich = true;
+        }
+        true
+    }
+
+    /// Edit > Redo. Redoing Make Plain Text makes the document plain text again.
+    pub fn redo(&mut self) -> bool {
+        let makes_plain = self.text.redo_makes_plain();
+        if !self.text.redo() {
+            return false;
+        }
+        if makes_plain {
+            self.rich = false;
+        }
+        true
+    }
+
     /// Reads a file. The bytes decide: a package, an RTF header or an HTML prologue means rich text, anything else is
     /// plain text in whatever encoding it turns out to be. With `markup_as_code` an RTF or HTML file opens as plain text
     /// showing its markup.
@@ -272,6 +297,23 @@ mod tests {
         assert!(!doc.text.cells()[0].style.bold);
         doc.set_rich(true);
         assert!(doc.rich);
+    }
+
+    #[test]
+    fn undoing_make_plain_text_restores_rich_text_mode_and_redo_makes_it_plain_again() {
+        let mut doc = TextDocument::read(b"{\\rtf1 \\b x}", RTF_TYPE).unwrap();
+        doc.set_rich(false);
+        assert!(!doc.rich);
+        assert!(doc.undo());
+        assert!(doc.rich, "Undo brings the document back to rich text, not only its styles");
+        assert!(doc.text.cells()[0].style.bold);
+        assert!(doc.redo());
+        assert!(!doc.rich, "Redo makes it plain text again");
+        assert!(!doc.text.cells()[0].style.bold);
+        // an ordinary edit's undo leaves the mode alone
+        doc.text.insert("y", crate::text::Kind::Typing);
+        assert!(doc.undo());
+        assert!(!doc.rich);
     }
 
     #[test]
