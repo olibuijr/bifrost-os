@@ -417,7 +417,8 @@ fn a_fetch_needs_known_keys_and_a_known_method() {
     let id = "is.example.sdk-tests-03.keys";
     answer_prompt(id, Choice::All).unwrap();
     assert!(answer(id, "fetch", &keys(&[]), &[]).is_err(), "an empty key list is an error");
-    assert_eq!(answer(id, "fetch", &keys(&["nickname"]), &[]).err(), Some("no contact field nickname".to_string()));
+    assert!(answer(id, "fetch", &keys(&["nickname"]), &[]).is_ok(), "nickname is a known field");
+    assert_eq!(answer(id, "fetch", &keys(&["shoe_size"]), &[]).err(), Some("no contact field shoe_size".to_string()));
     assert_eq!(answer(id, "sing", &Json::Null, &[]).err(), Some("contacts has no method sing".to_string()));
     assert!(answer(id, "save", &Json::Null, &[]).is_err(), "a save goes through the shell that stores the book");
 }

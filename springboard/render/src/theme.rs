@@ -285,7 +285,9 @@ mod tests {
     fn a_colour_table_overrides_the_named_colours() {
         let t = Theme::parse("[colors]\nTINT = \"#ff8800\"\nSYSTEM_RED = \"#11223344\"\n");
         assert_eq!(t.colour("TINT"), Some(pack(255, 136, 0, 255)));
-        assert_eq!(t.colour("SYSTEM_RED"), Some(pack(0x11, 0x22, 0x33, 0x44)));
+        // eight hex digits are straight alpha in the file and premultiplied in the table, like the built-in constants
+        assert_eq!(t.colour("SYSTEM_RED"), Some(crate::gfx::rgba(0x11, 0x22, 0x33, 0x44)));
+        assert_ne!(t.colour("SYSTEM_RED"), Some(ui::SYSTEM_RED), "the file's value replaces the built-in one");
         assert_eq!(t.colour("SYSTEM_GREEN"), Some(ui::SYSTEM_GREEN), "a colour the file leaves out keeps its value");
     }
 

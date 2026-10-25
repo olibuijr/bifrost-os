@@ -1566,10 +1566,17 @@ mod tests {
         answer_prompt(id, Choice::All).unwrap();
         let note_only = obj(&[("add", Json::Arr(vec![obj(&[("note", text("only a note"))])]))]);
         assert!(apply_save(id, &note_only, &book()).is_err());
-        let unknown = obj(&[("add", Json::Arr(vec![obj(&[("nickname", text("Ada"))])]))]);
-        assert!(apply_save(id, &unknown, &book()).is_err());
+        let unknown = obj(&[("add", Json::Arr(vec![obj(&[("given_name", text("Ada")), ("shoe_size", text("38"))])]))]);
+        assert_eq!(apply_save(id, &unknown, &book()).err(), Some("no contact field shoe_size".to_string()));
+        // the book keeps one address per contact, so a second one is refused rather than cut
+        let two_addresses = obj(&[("add", Json::Arr(vec![obj(&[("given_name", text("Ada")), ("address", texts(&["1 Main St", "2 High St"]))])]))]);
+        assert!(apply_save(id, &two_addresses, &book()).is_err());
+        // phones after the first are kept in the sidecar, not refused
         let two_phones = obj(&[("add", Json::Arr(vec![obj(&[("given_name", text("Ada")), ("phones", texts(&["1", "2"]))])]))]);
-        assert!(apply_save(id, &two_phones, &book()).is_err());
+        let (_, next, more) = apply_save_with(id, &two_phones, &book(), &Book::new()).unwrap();
+        let added = next.last().unwrap();
+        assert_eq!(added.phone, "1");
+        assert_eq!(more[&added.id].phones.iter().map(|p| p.value.as_str()).collect::<Vec<_>>(), vec!["2"]);
     }
 
     #[test]
@@ -1585,7 +1592,8 @@ mod tests {
         answer_prompt(id, Choice::All).unwrap();
         assert!(answer(id, "fetch", &Json::Null, &book()).is_err());
         assert!(answer(id, "fetch", &keys(&[]), &book()).is_err());
-        assert!(answer(id, "fetch", &keys(&["nickname"]), &book()).is_err());
+        assert!(answer(id, "fetch", &keys(&["nickname"]), &book()).is_ok(), "nickname is a known field");
+        assert_eq!(answer(id, "fetch", &keys(&["shoe_size"]), &book()).err(), Some("no contact field shoe_size".to_string()));
     }
 
     #[test]
