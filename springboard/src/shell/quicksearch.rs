@@ -781,6 +781,9 @@ struct Table {
     /// app's aliases, `apps::search_aliases`), never by the fuzzy matcher's initials or scattered letters, so "wi" does
     /// not find the browser through "web internet" and "se" does not find Term through "shell". Empty: none.
     prefixes: Vec<String>,
+    /// Per row (same index): the digits of its phone number (`phone_digits`), which a query of digits alone finds
+    /// anywhere inside, as a number is searched by any part of it ("1234" finds 555 1234). Empty: none.
+    phones: Vec<String>,
     /// Rows match only when the query is contiguous in their text or starts one of its words, never by scattered
     /// letters: every section but Applications and Deildu. The Settings panes' text carries many keyword aliases, so
     /// "lantern" does not find "Display & Brightness" through letters spread over them, and "aapl" does not find the
@@ -797,6 +800,17 @@ fn strict_match(q: &str, text: &str) -> bool {
         && text.char_indices().any(|(i, _)| text[i..].starts_with(q) && text[..i].chars().next_back().is_none_or(|c| !c.is_alphanumeric()))
 }
 
+/// The digits of a phone number, its spaces, `+`, `-` and other punctuation dropped.
+fn phone_digits(s: &str) -> String {
+    s.chars().filter(char::is_ascii_digit).collect()
+}
+
+/// The digits of a query made only of digits, spaces, `+` and `-` (with at least one digit): a phone number search.
+fn phone_query(q: &str) -> Option<String> {
+    let q = q.trim();
+    (q.chars().any(|c| c.is_ascii_digit()) && q.chars().all(|c| c.is_ascii_digit() || matches!(c, ' ' | '+' | '-'))).then(|| phone_digits(q))
+}
+
 impl search_rank::Source for Table {
     fn name(&self) -> &'static str {
         self.name
@@ -805,12 +819,14 @@ impl search_rank::Source for Table {
     fn search(&self, query: &str) -> Vec<search_rank::Item> {
         let m = fuzzy::Matcher::new(query);
         let q = fuzzy::fold(query.trim());
+        let digits = phone_query(query);
         self.rows
             .iter()
             .enumerate()
             .filter(|(i, (_, folded))| {
                 let hit = if self.strict { strict_match(&q, folded) } else { m.rank_folded(folded).is_some() };
                 hit || self.prefixes.get(*i).is_some_and(|p| starts_a_word(p, &q))
+                    || digits.as_deref().is_some_and(|d| self.phones.get(*i).is_some_and(|p| !p.is_empty() && p.contains(d)))
             })
             .map(|(_, (item, _))| item.clone())
             .collect()
@@ -856,6 +872,7 @@ fn build_tables(c: &Corpus) -> (Vec<Table>, BTreeMap<String, Hit>) {
         .collect();
     let city_rows = CITIES.iter().map(|city| table_row(&mut hits, format!("city:{}", city.name), city.name, String::new(), search_rank::Kind::Other, Hit::City(city.name), fuzzy::fold(city.name))).collect();
     let deildu_rows = c.deildu.iter().zip(c.deildu_folded).map(|(title, f)| table_row(&mut hits, format!("deildu:{title}"), title, String::new(), search_rank::Kind::Other, Hit::Deildu(title.clone()), f.clone())).collect();
+    let contact_phones = c.contacts.iter().map(|contact| phone_digits(&contact.phone)).collect();
     let contact_rows = c
         .contacts
         .iter()
@@ -885,14 +902,14 @@ fn build_tables(c: &Corpus) -> (Vec<Table>, BTreeMap<String, Hit>) {
     // Shortcuts, Files and Calendar need a prefix, a word start or a contiguous run, so "aapl" does not list
     // "Set Wallpaper to ..." in Shortcuts (E2E12 1)
     let tables = vec![
-        Table { name: "Applications", rows: apps_rows, prefixes: app_prefixes, strict: false },
-        Table { name: "Settings", rows: settings_rows, prefixes: Vec::new(), strict: true },
-        Table { name: "Clock", rows: city_rows, prefixes: Vec::new(), strict: true },
-        Table { name: "Deildu", rows: deildu_rows, prefixes: Vec::new(), strict: false },
-        Table { name: "Contacts", rows: contact_rows, prefixes: Vec::new(), strict: true },
-        Table { name: "Shortcuts", rows: shortcut_rows, prefixes: Vec::new(), strict: true },
-        Table { name: "Files", rows: file_rows, prefixes: Vec::new(), strict: true },
-        Table { name: "Calendar", rows: event_rows, prefixes: Vec::new(), strict: true },
+        Table { name: "Applications", rows: apps_rows, prefixes: app_prefixes, phones: Vec::new(), strict: false },
+        Table { name: "Settings", rows: settings_rows, prefixes: Vec::new(), phones: Vec::new(), strict: true },
+        Table { name: "Clock", rows: city_rows, prefixes: Vec::new(), phones: Vec::new(), strict: true },
+        Table { name: "Deildu", rows: deildu_rows, prefixes: Vec::new(), phones: Vec::new(), strict: false },
+        Table { name: "Contacts", rows: contact_rows, prefixes: Vec::new(), phones: contact_phones, strict: true },
+        Table { name: "Shortcuts", rows: shortcut_rows, prefixes: Vec::new(), phones: Vec::new(), strict: true },
+        Table { name: "Files", rows: file_rows, prefixes: Vec::new(), phones: Vec::new(), strict: true },
+        Table { name: "Calendar", rows: event_rows, prefixes: Vec::new(), phones: Vec::new(), strict: true },
     ];
     (tables, hits)
 }
@@ -3604,6 +3621,25 @@ mod tests {
         assert!(!results_with_contacts("private-only-value", &[], &people).iter().flat_map(|g| &g.hits).any(|hit| matches!(hit, Hit::Contact { .. })));
     }
 
+    /// Strict sections match only at word starts, which cost Contacts the search by any part of a phone number: a query
+    /// of digits alone (spaces, `+` and `-` aside) finds a contact whose number holds those digits anywhere.
+    #[test]
+    fn a_contact_is_found_by_any_run_of_digits_of_its_phone_number() {
+        use super::super::contactstore::Contact;
+        let people = vec![Contact { id: 11, name: "Ada King".into(), phone: "+354 555-1234".into(), ..Contact::default() }];
+        let found = |q: &str| results_with_contacts(q, &[], &people).iter().flat_map(|g| &g.hits).any(|hit| matches!(hit, Hit::Contact { id: 11, .. }));
+        assert!(found("1234"), "a run inside the number");
+        assert!(found("5551"), "a run over the punctuation");
+        assert!(found("555 12"), "spaces in the query are ignored");
+        assert_eq!(phone_query("+354-555"), Some("354555".into()), "+ and - are ignored too");
+        assert!(found("3545551234"));
+        assert!(!found("4321"), "the digits must be contiguous");
+        assert!(!found("ing"), "letters still need a word start");
+        assert_eq!(phone_query("12 3"), Some("123".into()));
+        assert_eq!(phone_query("+-"), None);
+        assert_eq!(phone_query("a1"), None);
+    }
+
     #[test]
     fn a_contact_is_found_by_company_but_not_by_address_or_notes() {
         use super::super::contactstore::Contact;
@@ -3887,7 +3923,7 @@ mod file_actions_tests {
         let mut hits = BTreeMap::new();
         let title = "Set Wallpaper to Gullfoss Canyon";
         let row = table_row(&mut hits, "w".into(), title, String::new(), search_rank::Kind::Settings, Hit::Terminal(String::new()), fuzzy::fold(title));
-        let shortcuts = Table { name: "Shortcuts", rows: vec![row], prefixes: Vec::new(), strict: true };
+        let shortcuts = Table { name: "Shortcuts", rows: vec![row], prefixes: Vec::new(), phones: Vec::new(), strict: true };
         use search_rank::Source;
         assert!(shortcuts.search("AAPL").is_empty(), "scattered letters do not find a shortcut");
         assert_eq!(shortcuts.search("wallp").len(), 1, "a word start does");
@@ -3895,7 +3931,7 @@ mod file_actions_tests {
         let mut hits = BTreeMap::new();
         let title = "Open Passwords";
         let row = table_row(&mut hits, "p".into(), title, String::new(), search_rank::Kind::Settings, Hit::Terminal(String::new()), fuzzy::fold(title));
-        let shortcuts = Table { name: "Shortcuts", rows: vec![row], prefixes: Vec::new(), strict: true };
+        let shortcuts = Table { name: "Shortcuts", rows: vec![row], prefixes: Vec::new(), phones: Vec::new(), strict: true };
         assert!(shortcuts.search("words").is_empty(), "a run inside a word does not find a shortcut (E2E13 4)");
         assert_eq!(shortcuts.search("passw").len(), 1, "a word start does");
         assert_eq!(shortcuts.search("open").len(), 1, "a prefix does");
