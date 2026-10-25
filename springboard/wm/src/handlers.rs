@@ -503,6 +503,9 @@ impl WlrLayerShellHandler for WmState {
     fn new_layer_surface(&mut self, surface: WlrLayerSurface, output: Option<WlOutput>, _layer: Layer, namespace: String) {
         let output = output.as_ref().and_then(Output::from_resource).or_else(|| self.output());
         let Some(output) = output else { return };
+        // only the privileged shell names a z rank in its namespace (`scene::layer_namespace`)
+        let privileged = surface.wl_surface().client().is_some_and(|c| crate::privileged::is_privileged(&c));
+        let namespace = crate::scene::layer_namespace(namespace, privileged);
         let mapped = layer_map_for_output(&output).map_layer(&LayerSurface::new(surface, namespace));
         if let Err(e) = mapped {
             eprintln!("bifrost-wm: layer surface refused: {e}");

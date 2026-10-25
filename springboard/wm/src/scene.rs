@@ -136,18 +136,59 @@ fn surface_key(surface: &WlSurface) -> u64 {
     h.finish()
 }
 
-/// The surfaces of one layer in the order the layer map lists them (the order they mapped), bottom first: the newest
-/// is on top. That is the order the pointer finds them in (`WmState::layer_surface_under` walks the same list from the
-/// end), so what is drawn on top is what takes the press. The list used to be read the other way round, which drew an
-/// older surface over a newer one: a menu opened over the Apps grid sat under the grid's surface, which covered its
-/// rows with the menu's own glass (E2E5 4), while the press still reached the menu.
-pub fn layers_bottom_first<T>(mapped: impl Iterator<Item = T>) -> Vec<T> {
-    mapped.collect()
+/// The z rank of a layer surface whose namespace names none: other clients' surfaces, and the shell's menus, popups
+/// and panels. Within one layer the ranks order the surfaces before the order they mapped does.
+pub const LAYER_Z_DEFAULT: u32 = 100;
+
+/// The namespace suffix a privileged client (the shell) names a layer surface's z rank with: `<namespace>.z<rank>`,
+/// for example `bifrost-desktop-chrome.z300` for the screen reader's focus ring. The shell keeps its policy in
+/// `src/bare/wayland.rs` (`chrome_z`): the Dock under the full-screen veils (the Apps grid, Overview), those under the
+/// menus and panels (the default rank), those under the banners, and the accessibility captions and focus ring over
+/// everything.
+pub const LAYER_Z_SUFFIX: &str = ".z";
+
+/// The rank digits after the last `LAYER_Z_SUFFIX` of `namespace`, and the namespace before it.
+fn split_layer_z(namespace: &str) -> Option<(&str, u32)> {
+    let (base, n) = namespace.rsplit_once(LAYER_Z_SUFFIX)?;
+    if n.is_empty() || !n.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    Some((base, n.parse().ok()?))
 }
 
-/// The surfaces of one layer, bottom first (`layers_bottom_first`).
+/// The z rank a layer surface's `namespace` names (`LAYER_Z_SUFFIX`), or `LAYER_Z_DEFAULT`.
+pub fn layer_z(namespace: &str) -> u32 {
+    split_layer_z(namespace).map_or(LAYER_Z_DEFAULT, |(_, z)| z)
+}
+
+/// The namespace a client's layer surface is mapped with: a client that is not privileged cannot name a z rank (it
+/// could put a surface over the shell's focus ring), so its rank suffix is dropped and it gets the default rank.
+pub fn layer_namespace(namespace: String, privileged: bool) -> String {
+    match split_layer_z(&namespace) {
+        Some((base, _)) if !privileged => base.to_string(),
+        _ => namespace,
+    }
+}
+
+/// The surfaces of one layer bottom first: by z rank (`z`, for a layer surface `layer_z` of its namespace), then in
+/// the order the layer map lists them (the order they mapped), the newest on top within a rank. Drawing and the
+/// pointer use this one order (`WmState::layer_surface_under` walks it from the end), so what is drawn on top is what
+/// takes the press. Map order alone put a menu over the Apps grid (E2E5 4) but also every overlay mapped later over the
+/// Dock and the accessibility captions and focus ring, which the shell creates early; the ranks keep those in place.
+pub fn layers_bottom_first<T>(mapped: impl Iterator<Item = T>, z: impl Fn(&T) -> u32) -> Vec<T> {
+    let mut ls: Vec<T> = mapped.collect();
+    ls.sort_by_key(|l| z(l)); // stable: map order within a rank
+    ls
+}
+
+/// The layer surfaces of `layer` on `map`, bottom first (`layers_bottom_first`).
+pub fn layer_surfaces_bottom_first(map: &smithay::desktop::LayerMap, layer: Layer) -> Vec<&smithay::desktop::LayerSurface> {
+    layers_bottom_first(map.layers_on(layer), |l| layer_z(l.namespace()))
+}
+
+/// The surfaces of one layer, bottom first (`layer_surfaces_bottom_first`).
 fn layer_items(renderer: &mut GlesRenderer, map: &smithay::desktop::LayerMap, layer: Layer, scale: Scale<f64>, (dark, reduce): (bool, bool), out: &mut Vec<Item>) {
-    for l in layers_bottom_first(map.layers_on(layer)) {
+    for l in layer_surfaces_bottom_first(map, layer) {
         let Some(geo) = map.layer_geometry(l) else { continue };
         let loc: Point<i32, Physical> = geo.loc.to_physical_precise_round(scale);
         let elements = render_elements_from_surface_tree(renderer, l.wl_surface(), loc, scale, 1.0, Kind::Unspecified)
@@ -246,16 +287,46 @@ mod tests {
     use super::*;
     use crate::material_kind::{recipe, Blending, MaterialKind, MaterialState};
 
-    /// E2E5 4: layer surfaces are drawn in the order they mapped, the newest on top, which is the order the pointer
-    /// hit-tests in reversed: a menu opened over the Apps grid is drawn over the grid, as it already took the press.
+    /// E2E5 4: within a z rank, layer surfaces are drawn in the order they mapped, the newest on top, and the pointer
+    /// hit-tests the same list from the end: a menu opened over another surface of its rank is drawn over it, as it
+    /// already took the press.
     #[test]
-    fn the_newest_layer_surface_is_drawn_on_top_where_the_pointer_finds_it() {
-        // the layer map lists the surfaces in the order they mapped: the dock, the grid, then a menu over the grid
-        let mapped = ["dock", "grid", "menu"];
-        let drawn = layers_bottom_first(mapped.iter().copied());
-        assert_eq!(drawn.last(), Some(&"menu"), "the menu is drawn over the grid");
-        let hit_order: Vec<&str> = mapped.iter().rev().copied().collect();
+    fn the_newest_layer_surface_of_a_rank_is_drawn_on_top_where_the_pointer_finds_it() {
+        let mapped = [("control center", 100), ("menu", 100)];
+        let drawn = layers_bottom_first(mapped.iter().copied(), |l| l.1);
+        assert_eq!(drawn.last().map(|l| l.0), Some("menu"), "map order within a rank");
+        let hit_order: Vec<_> = drawn.iter().rev().copied().collect();
         assert_eq!(hit_order.first(), drawn.last(), "the surface drawn on top is the one the pointer tries first");
+    }
+
+    /// E2E6: the ranks order the layer surfaces before map order does. The shell's persistent chrome maps early (the
+    /// Dock, the accessibility focus ring), yet the focus ring stays over a menu opened later, the menu over the Apps
+    /// grid whichever mapped first, and the Dock under the grid opened later. The namespaces are the ones the shell
+    /// sends (`chrome_z` in src/bare/wayland.rs: Dock 10, grid 20, menus 100, banners 200, focus ring 300).
+    #[test]
+    fn ranks_order_layer_surfaces_before_map_order() {
+        let ns = |z: u32| format!("bifrost-desktop-chrome{LAYER_Z_SUFFIX}{z}");
+        let (dock, grid, menu, ring) = (ns(10), ns(20), ns(100), ns(300));
+        let at = |drawn: &Vec<&String>, n: &String| drawn.iter().position(|d| *d == n).unwrap();
+        // the Dock and the focus ring map first, then a menu, then the grid
+        let mapped = [&dock, &ring, &menu, &grid];
+        let drawn = layers_bottom_first(mapped.iter().copied(), |n| layer_z(n));
+        assert!(at(&drawn, &ring) > at(&drawn, &menu), "the focus ring is over an open menu");
+        assert!(at(&drawn, &menu) > at(&drawn, &grid), "the menu is over the grid");
+        assert!(at(&drawn, &dock) < at(&drawn, &grid), "the Dock is under the grid");
+        assert_eq!(drawn.last(), Some(&&ring), "the pointer tries the focus ring's surface first");
+    }
+
+    #[test]
+    fn a_namespace_names_its_rank_and_only_the_privileged_shell_keeps_one() {
+        assert_eq!(layer_z("bifrost-desktop-chrome.z300"), 300);
+        assert_eq!(layer_z("panel"), LAYER_Z_DEFAULT);
+        assert_eq!(layer_z("panel.z"), LAYER_Z_DEFAULT);
+        assert_eq!(layer_z("panel.zoom"), LAYER_Z_DEFAULT);
+        assert_eq!(layer_namespace("bifrost-desktop-chrome.z300".into(), true), "bifrost-desktop-chrome.z300");
+        assert_eq!(layer_namespace("other.z999".into(), false), "other", "another client cannot rank itself over the shell");
+        assert_eq!(layer_namespace("panel.zoom".into(), false), "panel.zoom");
+        assert_eq!(layer_z(&layer_namespace("other.z999".into(), false)), LAYER_Z_DEFAULT);
     }
 
     fn rect(x: i32, y: i32, w: i32, h: i32) -> Rectangle<i32, Logical> {

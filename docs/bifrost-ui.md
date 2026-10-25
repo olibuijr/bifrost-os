@@ -1528,9 +1528,16 @@ Float on Top, the floating CPU window of Activity Monitor). Ours, end to end:
   a set of its windows forward (the grid closing, a hidden app shown, Bring All to Front) it ranks them bottom first.
   A mapped window goes over its band at once, one still to map goes there when it maps, under the shown windows with a
   higher rank (`Wm::map_ranked`), and neither takes the focus: the whole set returns in the shell's order over the
-  other client's window, whatever order the toplevels map in (E2E5 1, 3). Layer surfaces are drawn in the order they
-  mapped, the newest on top, the order the pointer hit-tests them in (a menu opened over the Apps grid is drawn over
-  it, E2E5 4).
+  other client's window, whatever order the toplevels map in (E2E5 1, 3). A window the shell ranks before its
+  toplevel exists keeps its request for a later `windows` call (up to 120 calls and 32 requests), and a rank change
+  updates the foreign-toplevel list order. Layer surfaces are drawn and hit-tested in one order: by z rank, then the
+  order they mapped, the newest on top within a rank (`scene::layer_surfaces_bottom_first`). The privileged shell names
+  a surface's rank in its namespace (`bifrost-desktop-chrome.z<rank>`; other clients' suffixes are dropped and they get
+  the default 100); its policy is `chrome_z` in `src/bare/wayland.rs`: the system sheets and alerts (5) under the Dock
+  (10), as a modal panel is under the Dock in Golden Gate, the Dock under the Apps grid, Overview and the sweep (20),
+  those under the menus, popups and panels (100), those under the notification banner (200),
+  and the accessibility caption and focus ring (300, ids 41 and 42) over everything. A menu opened over the grid is
+  drawn over it (E2E5 4), and a menu or the grid opened later no longer covers the focus ring or comes under the Dock.
 - Window model: `springboard/wm/src/wm.rs` `Level` (`Normal`, `Floating`). The stack is sorted by level: a floating
   window is above every normal window, a raised or re-levelled window goes to the top of its own band, and raising a
   normal window does not pass a floating one. Hit testing uses the same order. The key window is the one last raised
