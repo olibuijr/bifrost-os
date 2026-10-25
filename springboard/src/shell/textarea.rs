@@ -558,6 +558,13 @@ impl TextArea {
                 self.line_h(ui, pt)
             };
             let mut styles = if self.markdown { self.char_styles(para, chars.len(), block, prefix, indent, weight) } else { vec![] };
+            // a checkbox marker after a heading marker is not drawn (and the caret steps over it): the line is a heading
+            if self.markdown {
+                let stray = md::stray_check(para);
+                for st in styles.iter_mut().take(stray.end).skip(stray.start) {
+                    st.2 = 7;
+                }
+            }
             // the hidden emphasis markers, before the formulas and the title marker take kind 7 too
             if display.is_none() {
                 for (i, st) in styles.iter().enumerate().filter(|(_, st)| st.2 == 7) {
@@ -2186,6 +2193,21 @@ mod tests {
         // the marker only hides on the first line
         let later = md_area(&ui, "Note\n# Heading");
         assert!(later.lines[1].adv[0] > 0.0);
+    }
+
+    /// E2E11 11: a heading line that also carries a checkbox marker draws as the heading alone, never the raw marker.
+    #[test]
+    fn a_checkbox_marker_after_a_heading_marker_is_not_drawn() {
+        let ui = ui();
+        let ta = md_area(&ui, "Note\n## - [ ] Item two\n## Item two");
+        let (stray, plain) = (&ta.lines[1], &ta.lines[2]);
+        assert_eq!(stray.block, Block::Heading, "a heading, not a checklist item");
+        assert!(stray.pt == plain.pt && stray.weight == plain.weight);
+        assert!(stray.adv[3..9].iter().all(|&d| d == 0.0), "the checkbox marker takes no room");
+        assert!(stray.adv[0] > 0.0, "the heading marker shows as on any heading");
+        assert_eq!(stray.x_at(stray.range.start + 9), plain.x_at(plain.range.start + 3), "the text starts where a plain heading's does");
+        assert!(stray.segs.iter().any(|g| g.kind == 7 && g.a == 3 && g.b == 9), "the checkbox marker is not drawn");
+        assert_eq!(ta.checkbox_at(stray.x_at(stray.range.start + 3), stray.y + stray.h / 2.0), None, "nothing to tick");
     }
 
     #[test]
