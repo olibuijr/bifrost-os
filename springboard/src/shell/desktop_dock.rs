@@ -249,11 +249,14 @@ impl Shell {
   #[cfg(feature="desktop-wayland")] if entry>apps().len(){return d.linux_apps.get(entry-apps().len()-1).is_some_and(|a|!a.windows.is_empty());}
   false
  }
- /// Whether the app of built-in or installed entry `entry` (an index into `apps()`) itself has a window.
+ /// Whether the app of built-in or installed entry `entry` (an index into `apps()`) itself has a window, or is an SDK app
+ /// still running after it ordered its main window out (Cmd+W on its last document).
  pub(super) fn dock_entry_running(&self,entry:usize)->bool{
   let Some(d)=self.desk.as_ref()else{return false;};
   let Some(app)=apps().get(entry)else{return false;};
-  #[allow(unused_mut)] let mut running=d.index_of(app.id).is_some();
+  let mut running=d.index_of(app.id).is_some();
+  // the app keeps its tile and running dot with no window (E2E13 1); a click reopens its window (`desk_open`)
+  if let AppId::External(slot)=app.id{running|=self.ext.get(slot as usize).and_then(Option::as_ref).is_some_and(|h|h.running()&&h.main_ordered_out);}
   #[cfg(feature="desktop-wayland")] if let AppId::External(slot)=app.id{running|=self.foreign_running(slot as usize)||super::apphost::installed().get(slot as usize).is_some_and(|p|!p.manifest.wayland_app_id.is_empty()&&d.native_windows.iter().any(|w|w.app_id==p.manifest.wayland_app_id));}
   running
  }
