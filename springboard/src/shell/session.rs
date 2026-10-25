@@ -178,9 +178,11 @@ pub struct Relaunch {
 
 /// Whether an app whose package was updated while it ran is quit and reopened now: when it is not the app in front, or
 /// when it is but the login restore started it and the person has not used the desktop since. The app in front that the
-/// person is using keeps running until they switch away, so a relaunch never happens under their hands.
-pub fn relaunch_now(front: bool, restored_untouched: bool) -> bool {
-    !front || restored_untouched
+/// person is using keeps running until they switch away, so a relaunch never happens under their hands. An app with
+/// unsaved changes (`edited`, its document's "Edited" state) is never quit for an update: it waits until the document is
+/// saved or closed, so the relaunch cannot lose work or stop on a "Save changes?" sheet.
+pub fn relaunch_now(front: bool, restored_untouched: bool, edited: bool) -> bool {
+    !edited && (!front || restored_untouched)
 }
 
 /// The stable id of a built-in or installed app (what `apps()` calls its icon name), or `None` for an unknown app.
@@ -325,7 +327,7 @@ impl Shell {
                 if self.session.relaunch.iter().any(|r| r.slot == slot) || !h.is_outdated(&app.exec_path()) {
                     return None;
                 }
-                relaunch_now(front == Some(slot), untouched && self.session.restored_slots.contains(&slot)).then_some(slot)
+                relaunch_now(front == Some(slot), untouched && self.session.restored_slots.contains(&slot), h.doc_edited).then_some(slot)
             })
             .collect();
         for slot in due {
@@ -389,9 +391,16 @@ mod tests {
 
     #[test]
     fn an_updated_app_relaunches_unless_the_person_is_using_it() {
-        assert!(relaunch_now(false, false), "in the background: quit and reopened now");
-        assert!(relaunch_now(true, true), "in front, but only the login restore opened it");
-        assert!(!relaunch_now(true, false), "in front and in use: waits until the person switches away");
+        assert!(relaunch_now(false, false, false), "in the background: quit and reopened now");
+        assert!(relaunch_now(true, true, false), "in front, but only the login restore opened it");
+        assert!(!relaunch_now(true, false, false), "in front and in use: waits until the person switches away");
+    }
+
+    #[test]
+    fn an_updated_app_with_unsaved_changes_waits_until_they_are_saved() {
+        for (front, untouched) in [(false, false), (true, true), (true, false)] {
+            assert!(!relaunch_now(front, untouched, true), "edited document: never quit for an update ({front}, {untouched})");
+        }
     }
 
     #[test]

@@ -1016,9 +1016,12 @@ impl AppHost {
     /// True when the installed binary is no longer the one this process runs (the app was updated while open), so
     /// opening it again must start the new version instead of focusing the old process.
     /// `installed` is the registry's path (`apps/<id>/current/<exec>`, the same before and after an update), so it is
-    /// compared with `current` resolved: the process keeps the version folder it was started from.
+    /// compared with `current` resolved: the process keeps the version folder it was started from. Only a path that
+    /// resolves counts: while an update flips `current` the link can dangle for a moment (or name a half-installed
+    /// folder without the binary yet), and that must not make the running app look outdated and get a missing or
+    /// partial package launched.
     pub fn is_outdated(&self, installed: &Path) -> bool {
-        !self.exec.as_os_str().is_empty() && self.exec != resolved(installed)
+        !self.exec.as_os_str().is_empty() && std::fs::canonicalize(installed).is_ok_and(|now| self.exec != now)
     }
 
     pub fn size(&self) -> (usize, usize) {
@@ -3207,15 +3210,42 @@ mod tests {
 
     #[test]
     fn a_host_is_outdated_only_when_it_runs_a_different_binary_than_the_installed_one() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("1.7.0")).unwrap();
+        std::fs::write(dir.path().join("1.7.0/bin"), b"").unwrap();
+        let new = std::fs::canonicalize(dir.path().join("1.7.0/bin")).unwrap();
         let (channel, _peer) = sys::socketpair_pair().unwrap();
         let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
         let mut host = AppHost::with_channel("fixture", channel, None, cfg);
-        let new = Path::new("/var/lib/springboard/apps/x/1.7.0/bin");
-        assert!(!host.is_outdated(new), "a test host has no binary of record, so it is never outdated");
-        host.exec = PathBuf::from("/var/lib/springboard/apps/x/1.6.0/bin");
-        assert!(host.is_outdated(new), "the installed version moved on");
-        host.exec = new.to_path_buf();
-        assert!(!host.is_outdated(new), "same binary: just focus it");
+        assert!(!host.is_outdated(&new), "a test host has no binary of record, so it is never outdated");
+        host.exec = dir.path().join("1.6.0/bin");
+        assert!(host.is_outdated(&new), "the installed version moved on");
+        host.exec = new.clone();
+        assert!(!host.is_outdated(&new), "same binary: just focus it");
+    }
+
+    #[test]
+    fn a_dangling_current_during_the_flip_is_not_an_update() {
+        // the update replaces `current` (remove, then link) or links it before the binary is in place: while the
+        // installed path does not resolve, the running version stays the one of record and nothing is launched
+        let dir = tempfile::tempdir().unwrap();
+        let app = dir.path().join("apps/x");
+        std::fs::create_dir_all(app.join("1.0.0")).unwrap();
+        std::fs::write(app.join("1.0.0/bin"), b"").unwrap();
+        std::os::unix::fs::symlink("1.0.0", app.join("current")).unwrap();
+        let installed = app.join("current/bin");
+        let (channel, _peer) = sys::socketpair_pair().unwrap();
+        let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
+        let mut host = AppHost::with_channel("x", channel, None, cfg);
+        host.exec = resolved(&installed);
+        std::fs::remove_file(app.join("current")).unwrap();
+        assert!(!host.is_outdated(&installed), "no current link at all: not outdated");
+        std::os::unix::fs::symlink("1.1.0", app.join("current")).unwrap();
+        assert!(!host.is_outdated(&installed), "current names a folder not there yet: not outdated");
+        std::fs::create_dir_all(app.join("1.1.0")).unwrap();
+        assert!(!host.is_outdated(&installed), "the folder is there but the binary is not: still not outdated");
+        std::fs::write(app.join("1.1.0/bin"), b"").unwrap();
+        assert!(host.is_outdated(&installed), "the new binary is in place: now it is");
     }
 
     #[test]
