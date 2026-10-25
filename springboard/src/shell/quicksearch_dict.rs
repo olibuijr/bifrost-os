@@ -9,7 +9,7 @@
 
 use bifrost_ui::stardict::Library;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 /// The longest preview of a definition shown on the row (characters, before an ellipsis).
@@ -100,6 +100,8 @@ enum Load {
 static LIBRARY: Mutex<Load> = Mutex::new(Load::Idle);
 /// Set by the loader when the library lands; taken by the panel to search again.
 static FRESH: AtomicBool = AtomicBool::new(false);
+/// How many times the library was read from disk (once per run; the tests check a second open does not read again).
+static LOADS: AtomicUsize = AtomicUsize::new(0);
 /// The last term looked up and its answer, so the frames of one query do not read the data file again.
 static LAST: Mutex<Option<(String, Option<Definition>)>> = Mutex::new(None);
 
@@ -112,6 +114,7 @@ pub fn preload(data_dir: PathBuf) {
     *state = Load::Loading;
     drop(state);
     crate::bare::sys::spawn_named("quicksearch-dictionary", move || {
+        LOADS.fetch_add(1, Ordering::Relaxed);
         // tests never read the host's dictionaries, so a word typed in a test gets the same rows on every machine
         #[cfg(test)]
         let library = Library::load(&[data_dir.join("dictionaries")], std::path::Path::new("/nonexistent/words"));
@@ -131,6 +134,18 @@ pub fn install(library: Library) {
 /// True once after the library landed: the panel searches again so a definition can show.
 pub fn take_fresh() -> bool {
     FRESH.swap(false, Ordering::AcqRel)
+}
+
+/// How many times the library was read from disk this run.
+pub fn loads() -> usize {
+    LOADS.load(Ordering::Relaxed)
+}
+
+/// The whole first definition of `term` for the Look Up popover, from the library Search reads: `None` while it is
+/// still loading (call `preload` first), `Some(None)` when no installed dictionary defines the word.
+pub fn definition(term: &str) -> Option<Option<String>> {
+    let lib = library()?;
+    Some(lib.lookup(term).into_iter().next().map(|hit| hit.text))
 }
 
 /// The library when it has loaded.
@@ -211,6 +226,28 @@ mod tests {
         fs::write(dir.join("test.idx"), &idx).unwrap();
         fs::write(dir.join("test.dict"), text).unwrap();
         fs::write(dir.join("test.ifo"), format!("StarDict's dict ifo file\nversion=2.4.2\nbookname=Test Dictionary\nwordcount=1\nidxfilesize={}\nsametypesequence=m\n", idx.len())).unwrap();
+    }
+
+    #[test]
+    fn the_library_is_read_once_however_often_it_is_asked_for() {
+        let dir = scratch("once");
+        fs::create_dir_all(dir.join("dictionaries")).unwrap();
+        one_word(&dir.join("dictionaries"), "n. the atmosphere");
+        let before = loads();
+        preload(dir.clone());
+        // a second open while it loads, and after, starts no second read
+        preload(dir.clone());
+        let start = std::time::Instant::now();
+        while definition("weather").is_none() && start.elapsed() < std::time::Duration::from_secs(10) {
+            std::thread::yield_now();
+        }
+        assert!(definition("weather").is_some(), "the library came in");
+        preload(dir.clone());
+        assert!(loads() - before <= 1, "read {} times", loads() - before);
+        let after = loads();
+        preload(dir.clone());
+        assert_eq!(loads(), after);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

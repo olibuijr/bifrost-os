@@ -2403,6 +2403,8 @@ impl Shell {
             due.add(Some(t + auto_flip_in_secs(unix + offset as i64) as f64 * 1000.0));
         }
         if self.bell.pending() { due.add(Some(t)); }
+        // the Look Up popover fills its definition in when the dictionaries finish loading
+        if self.look_up_waiting() { due.add(Some(t + 50.0)); }
         if let Some(end) = self.bell.flash_end(t) { due.add(Some(end.min(t + 33.0))); }
         if let Some(when)=self.desk.as_ref().and_then(|d|d.dock_hide_at){due.add(Some(when));}
         // a submenu opens when its hover delay is over, a row in the safe triangle takes over after its rest
@@ -4137,6 +4139,8 @@ impl Shell {
         self.desktop_menu_autoscroll(t);
         #[cfg(feature = "desktop-wayland")]
         self.desktop_menu_flyout_tick(t);
+        // the dictionaries the Look Up popover waits for came in
+        self.look_up_tick();
         // an item's picture in the open Downloads stack finished drawing: the stack redraws with it
         #[cfg(feature = "desktop-wayland")]
         if self.stack_thumbs_tick() {

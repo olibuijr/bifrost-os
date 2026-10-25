@@ -7,13 +7,12 @@
 //! `bifrost_ui::suggested_actions` finds them and says what each action does (`Route`), and a tap on one runs that
 //! route here: copy to the clipboard, open the link in the browser, start a mail, or add an event to the calendar.
 
-use super::quicksearch::{self, Hit};
+use super::quicksearch::{self, dict, Hit};
 use super::{apphost, Drawn, Effect, Event, Shell};
 use crate::gfx::Surface;
 use crate::shell::ui::{Ui, Weight};
 use bifrost_ui::look_up::{LookUp, Row, HITS_SHOWN};
 use bifrost_ui::services_menu::{Selection, DICTIONARY_APP};
-use bifrost_ui::stardict;
 use bifrost_ui::suggested_actions::{self, Route, ALL_KINDS};
 
 /// The Calendar app, which an Add to Calendar suggestion opens.
@@ -189,16 +188,20 @@ fn suggestions_for(text: &str) -> Vec<suggested_actions::Offer> {
 }
 
 /// The popover's content for `term`: the first definition the installed dictionaries give, and the quick search hits.
+/// The dictionaries are the library Search holds (`quicksearch_dict`), read once per run on a worker thread: this
+/// starts that read when it has not run yet, and until it is in the popover says it is looking the word up
+/// (`look_up_tick` fills the definition in), so a large dictionary never stalls the shell.
 fn content(term: &str) -> LookUp {
-    let library = stardict::load_library(&apphost::root().join("appdata").join(DICTIONARY_APP));
-    let definition = library.lookup(term).into_iter().next().map(|hit| hit.text);
+    dict::preload(apphost::root().join("appdata").join(DICTIONARY_APP));
+    let definition = dict::definition(term);
+    let loading = definition.is_none();
     let hits: Vec<String> = quicksearch::results(term, &[])
         .iter()
         .flat_map(|g| g.hits.iter())
         .filter_map(title_of)
         .take(HITS_SHOWN)
         .collect();
-    LookUp::new(term, definition, hits)
+    LookUp::new(term, definition.flatten(), hits).with_loading(loading)
 }
 
 /// The text the suggestions look through: the whole text selection when there is one, else the term itself.
@@ -234,6 +237,22 @@ impl Shell {
         self.look_up = Some(Popover::new(look, anchor));
         self.drawn = Drawn::Nothing;
         self.dirty = true;
+    }
+
+    /// The dictionaries came in while the popover waited for them: its definition is filled in. True when it changed.
+    pub(super) fn look_up_tick(&mut self) -> bool {
+        let Some(p) = self.look_up.as_mut().filter(|p| p.look.loading) else { return false };
+        let Some(definition) = dict::definition(&p.look.term) else { return false };
+        p.look.definition = definition;
+        p.look.loading = false;
+        self.drawn = Drawn::Nothing;
+        self.dirty = true;
+        true
+    }
+
+    /// True while the popover waits for the dictionaries (the shell wakes to fill the definition in).
+    pub(super) fn look_up_waiting(&self) -> bool {
+        self.look_up.as_ref().is_some_and(|p| p.look.loading)
     }
 
     /// Escape closes the popover. False when none is up, so Escape goes on to its other uses.
