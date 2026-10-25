@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Settings rows whose label is cut to two lines keep the text as written in the last line: no spaces appear inside Chinese, Japanese or Korean labels or inside a word broken at a hyphen.
+
 ## 0.10.32 — 2026-10-25
 
 Fixes from the 0.10.31 end-to-end pass on Midget, and every BifrOSt app rebuilt.
