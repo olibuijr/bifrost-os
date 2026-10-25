@@ -66,7 +66,10 @@ fn status_icon_lift(battery:bool,ethernet:bool)->f32 {if battery{0.}else if ethe
     /// the open or save panel (`docpanel`): drawn and hit-tested by the panel, not as rows
     Document,
     /// the window menu under a window's green button (`desk::Desk::arrange`): Fill, Centre, Move & Resize, Full Screen
-    Arrange}
+    Arrange,
+    /// the Dock's open Downloads stack (`dock_stack`): a fan or a grid of the folder's newest items, drawn and
+    /// hit-tested by the stack, not as rows
+    Stack}
 #[cfg(feature = "desktop-wayland")]
 #[derive(Clone)] pub(super) enum Action {Submenu(Menu),Window(super::utility_window::Kind),Script(u8),Foreign(u32),Settings(&'static str),Desktop,Arrange(super::AppId,super::desk::Arrange),Close,Quit,Minimize,Zoom,ShowAll,Open(super::AppId),Context(u8,u32),QuickAction(u8,u8),AppMenu(u8,u32),Dock(super::desktop_dock::Change),DockMenu(u8,u32),Shortcut(u16),Command(bifrost_proto::Command),Term(super::hwkeys::TermKey),Wifi(bool),Scan,Select(String),Power(String),Lock,Sleep,Halt(super::power_menu::PowerAction),StatusItem(u8,u32,u32),Tile(super::desk::Tile),RestoreSize,CycleWindow,Print,InputSource(u8),InputMethod(String),Recent(u8),ClearRecent,CharacterViewer,KeyboardViewer,OnScreenKeyboard,Media(bifrost_ui::media_session::RemoteCommand),Bluetooth(crate::bare::bluetooth::Cmd),Portal(String),RecordStop,Service(u8),Photo(super::photos::commands::PhotoCommand),PhotoEditWith(String),GameModeOff,LowPowerMode(bool),HelpItem(Menu,usize),HelpTopic(String,Option<String>),Help(String),About,AppSettings(u8),Hide,HideOthers,UnhideAll}
 // Only the desktop-wayland bar reads these fields; other builds never build the menu.
@@ -882,7 +885,7 @@ impl Shell {
     }
     fn own_menu_rows(&self,menu:Menu)->Vec<Row> {
         match menu {
-            Menu::Document=>Vec::new(),
+            Menu::Document|Menu::Stack=>Vec::new(),
             Menu::Image=>self.photo_image_rows(),
             // each enabled source, the active one checked; picking one makes it the source (`kb_layouts::set_active`)
             Menu::Scripts=>super::scripts_menu::folder().map(|d|super::scripts_menu::list(&d).iter().enumerate().map(|(i,n)|Row::action(super::scripts_menu::title(n),Action::Script(i as u8))).collect()).unwrap_or_default(),
@@ -1019,7 +1022,7 @@ impl Shell {
     /// The rectangle (px) of the first menu level, `menu`: under its bar item, under the green button, at the pointer
     /// for a context menu, or the Dock's menu and the open or save panel.
     fn root_popup_rect(&self,menu:Menu)->Option<(usize,usize,usize,usize)> {
-        if menu==Menu::Dock{return self.dock_popup_rect();}if menu==Menu::Arrange{
+        if menu==Menu::Dock{return self.dock_popup_rect();}if menu==Menu::Stack{return self.stack_popup_rect();}if menu==Menu::Arrange{
             // under the green button, kept on the screen like a context menu (the size is the drawn rows')
             let a=self.desk.as_ref()?.arrange?;let rows=self.menu_rows(menu);let width=self.menu_width(&rows);
             let area=super::desk::Desk::area(&self.desk_metrics());
@@ -1138,6 +1141,8 @@ impl Shell {
     }
     fn draw_menu_level(&self,s:&mut Surface,menu:Menu,(x,y,w,h):(usize,usize,usize,usize),sel:Option<usize>) {
         if menu==Menu::Document{self.draw_doc_dim(s);}
+        // the stack's fan has no panel: its items float over the desktop; its grid is drawn on the menu material below
+        if menu==Menu::Stack&&self.stack_layout().is_some_and(|l|l.style==super::dock_stack::Style::Fan){self.draw_stack_popover(s);return;}
         if bifrost_render::glass::gpu()&&bifrost_render::appearance::reduce_transparency() {
             let r=self.ui.pt(MENU_RADIUS_PT);
             s.fill_rect(x,y,w,h,0);super::desk::soft_shadow(s,&self.ui,x as f32,y as f32,w as f32,h as f32,r);s.fill_rrect(x as f32,y as f32,w as f32,h as f32,r,MENU_SOLID.now());
@@ -1153,6 +1158,7 @@ impl Shell {
         }
         self.draw_popup_edge(s,x,y,w,h);
         if menu==Menu::Document{self.draw_doc_panel(s,x,y,w,h);return;}
+        if menu==Menu::Stack{self.draw_stack_popover(s);return;}
         let rows=self.menu_rows(menu);let (spans,_)=menu_spans(&rows);
         // a menu taller than its room shows the rows between its scroll arrows, moved up by the offset
         let sc=self.menu_scroll_for(menu,&rows);
@@ -1198,6 +1204,16 @@ impl Shell {
         if self.desktop_menu==Some(Menu::Document) {
             if let (Event::Up(x,y),Some((left,top,_,_)))=(event,self.desktop_popup_rect()) {self.doc_click(x-left as f32,y-top as f32,t);}
             return Some(vec![]);
+        }
+        // the open Downloads stack: a press outside closes it (and is used up, so a press on its Dock icon closes it
+        // rather than opening it again); a release on an item opens it, on Open in Files opens the folder
+        if self.desktop_menu==Some(Menu::Stack) {
+            let inside=|sh:&Self,x:f32,y:f32|sh.desktop_popup_rect().is_some_and(|(l,t,w,h)|x>=l as f32&&x<(l+w) as f32&&y>=t as f32&&y<(t+h) as f32);
+            match event {
+                Event::Down(x,y)=>{if !inside(self,x,y){self.desktop_menu=None;self.dirty=true;}return Some(vec![]);},
+                Event::Up(x,y)=>{if inside(self,x,y){self.stack_click(x,y,t);}return Some(vec![]);},
+                _=>{},
+            }
         }
         match event {
             // Golden Gate: the clock opens Notification Center (notifications and widgets), as on Golden Gate
@@ -1259,7 +1275,7 @@ impl Shell {
     }
     /// The wheel over an open menu scrolls it (when it is taller than its room) and is used up there.
     pub(super) fn desktop_menu_wheel(&mut self,x:f32,y:f32,dy:f32)->bool {
-        let Some(deepest)=self.desktop_menu else{return false;};if matches!(deepest,Menu::Dock|Menu::Document){return false;}
+        let Some(deepest)=self.desktop_menu else{return false;};if matches!(deepest,Menu::Dock|Menu::Document|Menu::Stack){return false;}
         // the wheel over any open level is the menus'; it scrolls the level under the pointer
         let Some((_,menu,_))=self.menu_level_at(x,y) else{return false;};
         if !dy.is_finite() {return true;}
@@ -1292,6 +1308,8 @@ impl Shell {
     pub(super) fn desktop_menu_key(&mut self,code:u16,t:f64)->Option<Vec<Effect>> {
         let menu=self.desktop_menu?;if !self.desk_active()||self.is_locked(){return None;}
         if menu==Menu::Document{self.doc_key(code,t);return Some(vec![]);}
+        // the open stack has no rows to move through: Esc closes it, other keys wait
+        if menu==Menu::Stack{if code==1{self.desktop_menu=None;self.dirty=true;}return Some(vec![]);}
         if menu==Menu::Help {if let Some(fx)=self.help_key(code) {return Some(fx);}}
         let mut bar=vec![Menu::System,Menu::App];bar.extend(bar_after_app(self.app_menus(),self.photos_front()));
         self.dirty=true;
@@ -1327,7 +1345,7 @@ impl Shell {
     /// `FLYOUT_OPEN_MS` (`desktop_menu_flyout_tick`). Moving onto another row of a parent closes its submenu, unless the
     /// pointer heads for the submenu (`in_safe_triangle`): then that row takes over only after a rest of `FLYOUT_SAFE_MS`.
     pub(super) fn desktop_menu_hover_at(&mut self,x:f32,y:f32,t:f64) {
-        let Some(menu)=self.desktop_menu else{return;};if matches!(menu,Menu::Dock|Menu::Document){return;}
+        let Some(menu)=self.desktop_menu else{return;};if matches!(menu,Menu::Dock|Menu::Document|Menu::Stack){return;}
         // the pointer left a surface: each menu level is a surface of its own, and the window server sends a Leave when
         // the pointer crosses from a menu onto the submenu beside it, before the first motion there. A Leave is no move
         // away from the menus (the green-button menu's W3-5); the next real motion says where the pointer is.

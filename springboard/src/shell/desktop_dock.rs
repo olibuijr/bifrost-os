@@ -65,7 +65,7 @@ impl Shell {
    let (_,live)=self.dock_live(bar,&rects,now);
    let in_zone=self.dock_is_visible()&&(inside||zone.contains(x,y)||self.dock_press(&live).iter().any(|r|r.contains(x,y)));
    let magnify=in_zone&&p.magnification;
-   let menu=self.desktop_menu==Some(Menu::Dock);
+   let menu=matches!(self.desktop_menu,Some(Menu::Dock|Menu::Stack));
    let cur=self.dock_mag_amount(now);
    let d=self.desk.as_mut().unwrap();
    if magnify!=d.dock_ptr.is_some(){d.dock_mag=Some(Anim{from:cur,to:if magnify{1.}else{0.},start:now,kind:Kind::DockMagnify,curve:Curve::EaseOut});self.dirty=true;}
@@ -84,7 +84,7 @@ impl Shell {
  }
  pub fn desktop_pointer(&mut self,x:f32,y:f32,context:bool,t:f64){if self.modal_layer.is_some(){return;}if !context{self.pointer_hover(x,y);self.hover_speech_at(x,y,t);self.note_pointer_y(y);self.notify_hover(x,y,t);}#[cfg(feature="desktop-wayland")] if !context&&self.desk_active()&&!self.is_locked(){self.arrange_hover(x,y,t);self.desktop_menu_hover_at(x,y,t);}if !context&&self.desk_active()&&!self.is_locked(){let m=self.desk_metrics();let d=self.desk.as_mut().unwrap();let over=match d.pick(&m,x,y){Some((i,super::desk::Hit::Light(_)))=>Some(d.wins[i].app),_=>None};if d.lights_hover!=over{d.lights_hover=over;self.dirty=true;}}if self.dock_pointer(if context{Pointer::Context(x,y)}else{Pointer::Hover(x,y)},t).is_some(){return;}if context&&self.desk_active()&&!self.is_locked(){let m=self.desk_metrics();if let Some((i,super::desk::Hit::Content))=self.desk.as_ref().unwrap().pick(&m,x,y){let w=self.desk.as_ref().unwrap().wins[i];let b=w.body(&m);if let AppId::External(slot)=w.app {if let Some(Some(host))=self.ext.get_mut(slot as usize){host.send(&bifrost_proto::ToApp::Context{x:x-b.x as f32,y:y-b.y as f32});}}}}}
  pub(super) fn dock_tick(&mut self,t:f64){
-  let now=t/1000.;let menu_open=self.desktop_menu==Some(Menu::Dock);
+  let now=t/1000.;let menu_open=matches!(self.desktop_menu,Some(Menu::Dock|Menu::Stack));
   // the Downloads stack re-lists its folder every few seconds (never per frame)
   let stack_changed=self.desk.as_mut().is_some_and(|d|d.stack_refresh(now));if stack_changed{self.dirty=true;}
   let keep_flags:Vec<bool>=self.desk.as_ref().map(|d|d.dock_bounce.iter().map(|&(i,start)|{let el=now-start;el<BOUNCE_MAX_S&&(!self.dock_item_running(i)||el<motion::duration(Kind::DockBounce) as f64)}).collect()).unwrap_or_default();

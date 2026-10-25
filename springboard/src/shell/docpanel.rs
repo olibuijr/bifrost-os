@@ -2844,6 +2844,25 @@ impl super::Shell {
         true
     }
 
+    /// Opens the file at `path` (in the account's home) read-only in the installed app `key`: the app comes up and gets
+    /// a grant and the descriptor as an inbound document, as a file dropped on it does. False when `key` is not an
+    /// installed app or the file cannot be granted (the Dock's stack then shows the file in Files).
+    #[cfg(feature = "desktop-wayland")]
+    pub(super) fn open_path_with(&mut self, key: &str, path: &Path, t: f64) -> bool {
+        use super::apps::{apps, AppId};
+        let Some(AppId::External(slot)) = apps().iter().find(|a| a.icon == key).map(|a| a.id) else { return false };
+        let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+        let Some(broker) = self.doc_broker() else { return false };
+        let Ok(rel) = path.strip_prefix(broker.opener.home()).map(Path::to_path_buf) else { return false };
+        let Ok(file) = broker.opener.open_any(&rel, DocMode::Read) else { return false };
+        let size = file.metadata().map_or(0, |m| m.len());
+        let Ok(grant) = broker.grants.add(key, &rel, DocMode::Read, &file) else { return false };
+        self.desk_open_or_start(AppId::External(slot), t);
+        let request = self.app_share.next_inbound();
+        self.doc_send(slot, ToApp::DocGranted { request, grant, mode: DocMode::Read, name, size }, Some(file));
+        true
+    }
+
     /// Image > Edit With for the photo open in the viewer.
     #[cfg(feature = "desktop-wayland")]
     pub(super) fn photo_edit_with_viewed(&mut self, key: &str, t: f64) {
