@@ -67,13 +67,36 @@ pub struct Tables<'a> {
     base: usize,
 }
 
+/// How many faces the file holds: the collection's count for a `ttcf` file, else 1.
+pub fn collection_len(data: &[u8]) -> usize {
+    if data.starts_with(b"ttcf") {
+        u32_at(data, 8).unwrap_or(0) as usize
+    } else {
+        1
+    }
+}
+
+/// Offset of face `index`'s table directory: its collection entry for a `ttcf` file, 0 for index 0 of any other
+/// file. None for an index past the end.
+pub fn face_offset(data: &[u8], index: usize) -> Option<usize> {
+    if data.starts_with(b"ttcf") {
+        if index >= collection_len(data) {
+            return None;
+        }
+        return u32_at(data, 12 + 4 * index).map(|o| o as usize);
+    }
+    (index == 0).then_some(0)
+}
+
 impl<'a> Tables<'a> {
     /// Reads the table directory. A collection file opens its first font.
     pub fn new(data: &'a [u8]) -> Option<Self> {
-        let mut base = 0;
-        if data.get(0..4)? == b"ttcf" {
-            base = u32_at(data, 12)? as usize;
-        }
+        Self::face(data, 0)
+    }
+
+    /// Reads the table directory of face `index` (0 for a single-font file).
+    pub fn face(data: &'a [u8], index: usize) -> Option<Self> {
+        let base = face_offset(data, index)?;
         let tag = data.get(base..base + 4)?;
         if !(tag == [0, 1, 0, 0] || tag == b"OTTO" || tag == b"true" || tag == b"typ1") {
             return None;
@@ -176,7 +199,12 @@ pub struct FaceInfo {
 impl FaceInfo {
     /// Reads the face. Needs head, hhea and maxp; everything else falls back to a neutral value.
     pub fn parse(data: &[u8]) -> Option<FaceInfo> {
-        let t = Tables::new(data)?;
+        Self::parse_face(data, 0)
+    }
+
+    /// Reads face `index` of a collection (0 for a single-font file).
+    pub fn parse_face(data: &[u8], index: usize) -> Option<FaceInfo> {
+        let t = Tables::face(data, index)?;
         let head = t.table(b"head")?;
         let hhea = t.table(b"hhea")?;
         let maxp = t.table(b"maxp")?;

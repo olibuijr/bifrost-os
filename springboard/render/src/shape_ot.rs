@@ -421,10 +421,15 @@ impl<'a> OtLayout<'a> {
 
     /// From a font file's table directory.
     pub fn from_sfnt(data: &'a [u8]) -> OtLayout<'a> {
-        let n = u16_at(data, 4).unwrap_or(0) as usize;
+        Self::from_sfnt_at(data, 0)
+    }
+
+    /// From the table directory at `base` (a collection face's entry; table offsets are file-relative).
+    pub fn from_sfnt_at(data: &'a [u8], base: usize) -> OtLayout<'a> {
+        let n = u16_at(data, base + 4).unwrap_or(0) as usize;
         let table = |t: &[u8; 4]| -> Option<&'a [u8]> {
             (0..n).find_map(|i| {
-                let rec = 12 + 16 * i;
+                let rec = base + 12 + 16 * i;
                 if data.get(rec..rec + 4)? != t {
                     return None;
                 }

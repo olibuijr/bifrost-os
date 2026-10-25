@@ -569,6 +569,9 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
             return;
         }
     };
+    // characters the system font lacks (Chinese, Japanese and Korean text, other scripts, symbols) draw from the
+    // shell's font library and the script fonts the packages install, as in the shell; loaded on first need
+    bifrost_render::fontfallback::install_with_system_lazy(&bifrost_render::fontprefs::library(shell_dir), &bifrost_render::fontfallback::system_lang());
     let mut symbols = Some(bifrost_render::symbols::Symbols::load(shell_dir));
     let mut ctx: Option<Ctx> = None;
     let mut pending_activity: Vec<crate::quicksearch::UserActivity> = Vec::new();

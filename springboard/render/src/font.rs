@@ -76,6 +76,9 @@ pub type Var = ([u8; 4], f32);
 
 pub struct Font<'a> {
     data: &'a [u8],
+    /// offset of this face's table directory: 0 for a single font, the face's entry for a collection (`ttcf`);
+    /// table offsets stay file-relative either way
+    base: usize,
     /// CFF outlines (OpenType `OTTO`); otherwise glyf/loca are used
     cff: Option<Cff<'a>>,
     axes: Vec<Axis>,
@@ -169,11 +172,18 @@ impl Affine {
 }
 
 impl<'a> Font<'a> {
+    /// Parses a font file. A collection (`.ttc`/`.otc`) opens its first face; `parse_face` picks another.
     pub fn parse(data: &'a [u8]) -> Option<Self> {
-        let tables = u16_at(data, 4)? as usize;
+        Self::parse_face(data, 0)
+    }
+
+    /// Parses face `index` of a collection, or the font itself (index 0) for a single-font file.
+    pub fn parse_face(data: &'a [u8], index: usize) -> Option<Self> {
+        let base = crate::fontinfo::face_offset(data, index)?;
+        let tables = u16_at(data, base + 4)? as usize;
         let table = |tag: &[u8; 4]| -> Option<&'a [u8]> {
             (0..tables).find_map(|i| {
-                let rec = 12 + 16 * i;
+                let rec = base + 12 + 16 * i;
                 if data.get(rec..rec + 4)? != tag {
                     return None;
                 }
@@ -184,7 +194,7 @@ impl<'a> Font<'a> {
         };
         let find = |tag: &[u8; 4]| -> Option<usize> {
             (0..tables).find_map(|i| {
-                let rec = 12 + 16 * i;
+                let rec = base + 12 + 16 * i;
                 (data.get(rec..rec + 4)? == tag).then(|| u32_at(data, rec + 8).map(|o| o as usize)).flatten()
             })
         };
@@ -229,6 +239,7 @@ impl<'a> Font<'a> {
             underline_position: post_field(8),
             underline_thickness: post_field(10),
             data,
+            base,
             cff,
             gvar: table(b"gvar").filter(|_| !axes.is_empty()).and_then(Gvar::parse),
             avar: table(b"avar"),
@@ -799,7 +810,7 @@ impl Font<'_> {
     /// Identity of the loaded font file (address and length of its bytes): rendered text cached under one face
     /// is never served for another.
     pub(crate) fn ident(&self) -> (usize, usize) {
-        (self.data.as_ptr() as usize, self.data.len())
+        (self.data.as_ptr() as usize + self.base, self.data.len())
     }
 
     pub fn measure(&self, text: &str, px: f32) -> f32 {
@@ -847,7 +858,7 @@ impl Font<'_> {
     }
 
     fn shape_run(&self, text: &str, norm: &[f32], features: &Features) -> Vec<PlacedGlyph> {
-        let layout = self.ot.get_or_init(|| OtLayout::from_sfnt(self.data));
+        let layout = self.ot.get_or_init(|| OtLayout::from_sfnt_at(self.data, self.base));
         // control characters become spaces or leave the run before anything else sees them (`run_char`)
         let controls: String;
         // U+2028/2029 are separators, not `is_control`, so the test is whether `run_char` changes anything
