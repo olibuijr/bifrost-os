@@ -729,6 +729,10 @@ pub struct AppHost {
     /// (`WindowOpen` id 0): `Some(false)` and `Some(true)`, applied once by the desk (`take_main_order`). The app keeps
     /// running either way; only activating it reopens a main window it ordered out (`ToApp::Reopen`).
     main_order: Option<bool>,
+    /// The main window is out because the app itself ordered it out (`WindowClose` id 0) and has not ordered it back in
+    /// since. Only then does activating the app send `ToApp::Reopen`: the first activation of an app started in the
+    /// background, or of a direct app that fell back to shared memory, is a plain first show. The desk keeps it.
+    pub main_ordered_out: bool,
     /// The window with key focus: 0 is the main window, otherwise an extra window's id. Keys, commands, menu items and
     /// text edits go to it (`input`); the desk sets it (`set_key_window`).
     pub key_window: u32,
@@ -871,6 +875,7 @@ impl AppHost {
             windows: WindowTable::new(),
             main_move: None,
             main_order: None,
+            main_ordered_out: false,
             key_window: 0,
             window_bufs: std::collections::BTreeMap::new(),
             early: std::collections::VecDeque::new(),

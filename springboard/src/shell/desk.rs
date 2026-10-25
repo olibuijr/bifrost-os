@@ -2763,11 +2763,18 @@ impl Shell {
         };
         let existed = self.desk.as_ref().is_some_and(|d| d.index_of(app).is_some());
         let was_minimized = self.desk.as_ref().and_then(|d| d.index_of(app).map(|i| d.wins[i].minimized)).unwrap_or(false);
-        // a running app whose main window was closed (it ordered it out with its last document, or the traffic light
-        // closed it) gets the window back and is told (`ToApp::Reopen`), so a document app with no document shows a new
-        // one (E2E12 2). Only an activation does this: the app ordering its window out never reopens it.
+        // a running app that ordered its main window out itself (its last document closed: `WindowClose` id 0) gets the
+        // window back and is told (`ToApp::Reopen`), so a document app with no document shows a new one (E2E12 2). Only
+        // an activation does this: the app ordering its window out never reopens it. The first show of an app started in
+        // the background (a login item, a notification or share target) or of a direct app that fell back to shared
+        // memory is not a reopen: the app made its window and expects no `Reopen`.
         let reopened = match app {
-            AppId::External(slot) if !existed => self.ext.get(slot as usize).and_then(Option::as_ref).is_some_and(|h| h.running()),
+            AppId::External(slot) if !existed => self
+                .ext
+                .get_mut(slot as usize)
+                .and_then(Option::as_mut)
+                .filter(|h| h.running())
+                .is_some_and(|h| std::mem::take(&mut h.main_ordered_out)),
             _ => false,
         };
         if !existed {
@@ -2993,6 +3000,10 @@ impl Shell {
     /// the app asks for it back (`desk_order_main_in`). A direct app's window is the window server's: nothing here.
     pub(super) fn desk_order_main_out(&mut self, slot: u8) {
         let app = AppId::External(slot);
+        // the next activation reopens the window and sends `Reopen`, whether or not the desk showed it yet
+        if let Some(h) = self.ext.get_mut(slot as usize).and_then(Option::as_mut) {
+            h.main_ordered_out = true;
+        }
         if !self.desk.as_ref().is_some_and(|d| d.index_of(app).is_some()) {
             return;
         }
@@ -3014,6 +3025,10 @@ impl Shell {
     /// had no window). It opens as an activation would, while the app is running and has no main desk window.
     pub(super) fn desk_order_main_in(&mut self, slot: u8, t: f64) {
         let app = AppId::External(slot);
+        // the app ordered it in itself: it already has what the window shows, so this is no reopen (no `Reopen`)
+        if let Some(h) = self.ext.get_mut(slot as usize).and_then(Option::as_mut) {
+            h.main_ordered_out = false;
+        }
         let running = self.ext.get(slot as usize).and_then(Option::as_ref).is_some_and(|h| h.running());
         if running && self.desk.as_ref().is_some_and(|d| d.index_of(app).is_none()) {
             self.desk_open(app, t);
@@ -5307,7 +5322,7 @@ mod tests {
 
     /// E2E12 2: an app that orders its main window out (its last document closed) loses the main desk window and keeps
     /// running, with its other windows left alone; the desk never opens it again by itself. Activating the app reopens
-    /// the window and tells the app (`Reopen`); an app asking for the window back gets it the same way.
+    /// the window and tells the app (`Reopen`); an app asking for the window back gets it without a `Reopen`.
     #[test]
     fn a_main_window_the_app_ordered_out_stays_closed_until_the_app_is_activated() {
         let mut sh = crate::shell::tests::desktop_shell();
@@ -5338,18 +5353,51 @@ mod tests {
         sh.desk_sync_extra_windows();
         assert!(sh.desk.as_ref().unwrap().index_of(main).is_none(), "nothing reopens it on its own");
         assert_eq!(reopens(), 0);
-        // without the window server the shell opens the main window itself (a direct app's window comes from the app)
-        #[cfg(not(feature = "desktop-wayland"))]
-        {
-            sh.desk_open(main, 1.0);
-            assert!(sh.desk.as_ref().unwrap().index_of(main).is_some(), "activating the app reopens its main window");
-            assert_eq!(reopens(), 1, "and the app is told");
-            sh.desk_open(main, 2.0);
-            assert_eq!(reopens(), 0, "an app whose main window is open is only activated");
-            sh.desk_order_main_out(slot);
-            sh.desk_order_main_in(slot, 3.0);
-            assert!(sh.desk.as_ref().unwrap().index_of(main).is_some(), "the app's request brings it back");
-        }
+        // the shared-memory route (the production path on Midget, built with desktop-wayland too): the shell opens the
+        // main window itself
+        sh.desk_open(main, 1.0);
+        assert!(sh.desk.as_ref().unwrap().index_of(main).is_some(), "activating the app reopens its main window");
+        assert_eq!(reopens(), 1, "and the app is told");
+        sh.desk_open(main, 2.0);
+        assert_eq!(reopens(), 0, "an app whose main window is open is only activated");
+        sh.desk_order_main_out(slot);
+        sh.desk_order_main_in(slot, 3.0);
+        assert!(sh.desk.as_ref().unwrap().index_of(main).is_some(), "the app's request brings it back");
+        assert_eq!(reopens(), 0, "an app that ordered its window back in is not told to reopen");
+        assert!(!sh.ext[slot as usize].as_ref().unwrap().main_ordered_out);
+        // ordered out again: the next activation reopens it and tells the app once; the flag is spent after that
+        sh.desk_order_main_out(slot);
+        sh.desk_open(main, 4.0);
+        assert_eq!(reopens(), 1);
+        sh.desk.as_mut().unwrap().wins.retain(|w| w.app != main);
+        sh.desk_open(main, 5.0);
+        assert_eq!(reopens(), 0, "a window closed by the desk, not ordered out by the app, is no reopen");
+    }
+
+    /// E2E13: an app started in the background (a login item, a notification or share target) or a direct app that fell
+    /// back to shared memory is running with no main desk window it ordered out: its first activation shows the window
+    /// it made and sends no `Reopen`, which a document app would answer with a second, empty document.
+    #[test]
+    fn the_first_activation_of_a_background_app_is_no_reopen() {
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.anim = None;
+        let (mine, peer) = bifrost_proto::sys::socketpair_pair().unwrap();
+        let cfg = bifrost_proto::Configure { w: 100, h: 100, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
+        sh.ext.push(Some(apphost::AppHost::with_channel("fixture", mine, None, cfg)));
+        let slot = (sh.ext.len() - 1) as u8;
+        let reopens = || {
+            let mut n = 0;
+            while let Ok(bifrost_proto::sys::Recv::Packet(p, _)) = peer.recv(false) {
+                n += usize::from(bifrost_proto::ToApp::decode(&p) == Ok(bifrost_proto::ToApp::Reopen));
+            }
+            n
+        };
+        let main = AppId::External(slot);
+        sh.desk.as_mut().unwrap().wins.clear();
+        assert!(sh.ext[slot as usize].as_ref().is_some_and(|h| h.running() && !h.main_ordered_out));
+        sh.desk_open(main, 1.0);
+        assert!(sh.desk.as_ref().unwrap().index_of(main).is_some(), "the first activation shows the main window");
+        assert_eq!(reopens(), 0, "and sends no Reopen");
     }
 
     /// E2E10: opening an app whose main window is closed (only a second window is shown) reopens the main window
