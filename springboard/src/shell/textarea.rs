@@ -223,6 +223,10 @@ pub struct TextArea {
     /// Markdown mode: the char ranges of the hidden emphasis markers. They take no width, and the caret steps, the
     /// deletes and the clicks pass over them as the reference's rich text has no such characters (`layout` keeps it)
     concealed: Vec<Range<usize>>,
+    /// Markdown mode: the hidden block markers at the start of heading paragraphs (`## `, `### `, a `# ` after the
+    /// first line), also in `concealed`. A caret anywhere from a marker's start to its end is at the heading's first
+    /// visible char: typing goes in after the marker, so the line stays a heading (`past_lead`, `settle`)
+    leads: Vec<Range<usize>>,
 }
 
 /// What a finger down on the text is doing.
@@ -300,7 +304,7 @@ impl TextArea {
     /// Wraps at `w` px; the first paragraph is set at `title_pt` bold, the
     /// rest at `body_pt` regular. `tint` colours the caret and selection.
     pub fn new(ui: &Ui, w: f32, body_pt: f32, title_pt: f32, color: u32, tint: u32) -> Self {
-        let mut ta = TextArea { text: String::new(), caret: 0, anchor: None, w, body_pt, title_pt, color, tint, lines: vec![], history: UndoManager::new(UNDO_DEPTH), typing: None, focused: false, blink_from: 0.0, markdown: false, images: HashMap::new(), highlights: vec![], current_hl: None, touch: None, last_tap: None, detect_links: false, links: vec![], hidden: vec![], pointer: false, clicks: Default::default(), drag: None, marked: None, concealed: vec![] };
+        let mut ta = TextArea { text: String::new(), caret: 0, anchor: None, w, body_pt, title_pt, color, tint, lines: vec![], history: UndoManager::new(UNDO_DEPTH), typing: None, focused: false, blink_from: 0.0, markdown: false, images: HashMap::new(), highlights: vec![], current_hl: None, touch: None, last_tap: None, detect_links: false, links: vec![], hidden: vec![], pointer: false, clicks: Default::default(), drag: None, marked: None, concealed: vec![], leads: vec![] };
         ta.layout(ui);
         ta
     }
@@ -513,6 +517,7 @@ impl TextArea {
             self.lines.drain(..).filter(|l| l.img.is_some() || l.simgs.iter().any(Option::is_some)).map(|mut l| (l.key(), (l.img.take(), std::mem::take(&mut l.simgs)))).collect();
         let mut lines = vec![];
         let mut concealed: Vec<Range<usize>> = vec![];
+        let mut leads: Vec<Range<usize>> = vec![];
         let (mut y, mut start) = (0.0, 0);
         let paragraphs: Vec<&str> = self.text.split('\n').collect();
         let last = paragraphs.len() - 1;
@@ -558,12 +563,14 @@ impl TextArea {
                 self.line_h(ui, pt)
             };
             let mut styles = if self.markdown { self.char_styles(para, chars.len(), block, prefix, indent, weight) } else { vec![] };
-            // a checkbox marker after a heading marker is not drawn (and the caret steps over it): the line is a heading
-            if self.markdown {
-                let stray = md::stray_check(para);
-                for st in styles.iter_mut().take(stray.end).skip(stray.start) {
-                    st.2 = 7;
-                }
+            // a heading's marker (`## `, with a checkbox marker after it as older notes wrote it) is not drawn, as the
+            // title's `# ` is not: the line already has the heading style, and the caret steps over the marker
+            let lead = if self.markdown && pi > 0 { md::heading_marker(para) } else { 0 };
+            for st in styles.iter_mut().take(lead) {
+                st.2 = 7;
+            }
+            if lead > 0 && display.is_none() {
+                leads.push(start..start + lead);
             }
             // the hidden emphasis markers, before the formulas and the title marker take kind 7 too
             if display.is_none() {
@@ -651,6 +658,18 @@ impl TextArea {
         }
         self.lines = lines;
         self.concealed = concealed;
+        self.leads = leads;
+    }
+
+    /// The hidden heading marker that boundary `c` is in or at either end of.
+    fn lead_at(&self, c: usize) -> Option<Range<usize>> {
+        self.leads.iter().find(|r| r.start <= c && c <= r.end).cloned()
+    }
+
+    /// Boundary `c` moved past a hidden heading marker it is inside of (or at the start of): the heading's first visible
+    /// char, where typing keeps the line a heading.
+    fn past_lead(&self, c: usize) -> usize {
+        self.lead_at(c).map_or(c, |r| r.end)
     }
 
     /// True when char `c` is a hidden emphasis marker.
@@ -661,7 +680,11 @@ impl TextArea {
     /// The boundary `c` taken back over the hidden markers before it: the first of the boundaries that sit at the same
     /// place on screen, where a click puts the caret. Typing there takes the style of the char before it.
     fn settle(&self, mut c: usize) -> usize {
-        while c > 0 && self.concealed_at(c - 1) {
+        // inside a heading's hidden marker: its end, never in front of it (typing there would end the heading)
+        if let Some(r) = self.lead_at(c) {
+            return r.end;
+        }
+        while c > 0 && self.concealed_at(c - 1) && !self.leads.iter().any(|r| r.end == c) {
             c -= 1;
         }
         c
@@ -670,6 +693,8 @@ impl TextArea {
     /// The Left arrow from boundary `c`: one visible char back, over hidden markers.
     fn step_left(&self, c: usize) -> usize {
         let c = self.settle(c);
+        // at a heading's first visible char the step goes over its hidden marker to the end of the line before
+        let c = self.leads.iter().find(|r| r.end == c).map_or(c, |r| r.start);
         if c == 0 {
             return 0;
         }
@@ -683,7 +708,7 @@ impl TextArea {
         while to < n && to > 0 && self.concealed_at(to - 1) {
             to = super::edit::next_boundary(&self.text, to);
         }
-        to
+        self.past_lead(to)
     }
 
     /// A delete of the visible chars `r`: when they are all the text of one styled run (`md::spans`), its pair of hidden
@@ -715,6 +740,10 @@ impl TextArea {
 
     /// Backspace with nothing selected: the visible char before the caret (hidden markers are passed over).
     fn back_range(&self) -> Option<Range<usize>> {
+        // at a heading's first visible char Backspace takes its hidden marker away: the line becomes body text
+        if let Some(r) = self.lead_at(self.caret) {
+            return Some(r);
+        }
         let b = self.settle(self.caret);
         (b > 0).then(|| self.with_empty_pair(super::edit::prev_boundary(&self.text, b)..b))
     }
@@ -768,7 +797,7 @@ impl TextArea {
         if last == l.range.end && last < self.len() && best.0 == last && l.text.ends_with(' ') {
             return last;
         }
-        best.0
+        self.past_lead(best.0)
     }
 
     /// Focuses and moves the caret to the boundary nearest the tap.
@@ -1228,7 +1257,8 @@ impl TextArea {
     /// Replaces the selection (or inserts at the caret) with `s`.
     pub fn replace_selection(&mut self, ui: &Ui, s: &str, t: f64) {
         self.commit_marked(ui, t);
-        let range = self.selection().unwrap_or(self.caret..self.caret);
+        let at = self.past_lead(self.caret);
+        let range = self.selection().unwrap_or(at..at);
         self.replace_range(ui, range, s, t, false);
     }
 
@@ -1340,7 +1370,8 @@ impl TextArea {
         self.blink_from = t;
         match out {
             Out::Text(s) => {
-                let range = self.selection().unwrap_or(self.caret..self.caret);
+                let at = self.past_lead(self.caret);
+                let range = self.selection().unwrap_or(at..at);
                 self.replace_range(ui, range, s, t, true);
                 true
             }
@@ -1348,7 +1379,9 @@ impl TextArea {
                 if self.markdown && self.selection().is_none() && self.continue_list(ui, t) {
                     return true;
                 }
-                let range = self.selection().unwrap_or(self.caret..self.caret);
+                // Return at a heading's first visible char opens a line above it: the heading keeps its marker
+                let at = self.lead_at(self.caret).map_or(self.caret, |r| r.start);
+                let range = self.selection().unwrap_or(at..at);
                 self.replace_range(ui, range, "\n", t, false);
                 true
             }
@@ -2089,6 +2122,50 @@ mod tests {
         assert!(plain.concealed.is_empty() && plain.lines[1].adv.iter().all(|a| *a > 0.0));
     }
 
+    /// E2E12 finding 3: the `##` of a heading line was drawn in grey; the reference's headings show no marker.
+    #[test]
+    fn heading_markers_are_hidden_and_typing_stays_in_the_heading() {
+        let ui = ui();
+        // "Note\n" is chars 0..5, "## two" 5..11 (its marker 5..8), "\n" 11, "body" 12..16
+        let mut ta = md_area(&ui, "Note\n## two\nbody");
+        let l = &ta.lines[1];
+        assert_eq!(l.block, Block::Heading);
+        assert!(l.adv[..3].iter().all(|&d| d == 0.0) && l.adv[3] > 0.0, "the marker takes no width");
+        assert!(l.segs.iter().any(|g| g.kind == 7 && g.a == 0 && g.b == 3), "and is not drawn");
+        assert_eq!(ta.leads, vec![5..8]);
+        assert!(ta.concealed.contains(&(5..8)));
+        // a click at the heading's left edge puts the caret after the marker
+        let (x, y) = (ta.lines[1].x_at(5), ta.lines[1].y + 2.0);
+        assert_eq!(ta.position_at(x, y), 8);
+        // typing at the line start (Cmd+Left puts the caret before the marker) goes into the heading
+        ta.set_caret(5);
+        assert!(ta.edit(&ui, &Out::Text("A ".into()), 1.0));
+        assert_eq!(ta.text(), "Note\n## A two\nbody");
+        // the arrows step over the hidden marker: Left from the heading's first char goes to the end of "Note"
+        ta.set_caret(8);
+        ta.key_combo(&ui, combo(bifrost_ui::keys::Key::Left, false, false, false), 2.0);
+        assert_eq!(ta.caret(), 4);
+        ta.key_combo(&ui, combo(bifrost_ui::keys::Key::Right, false, false, false), 2.0);
+        assert_eq!(ta.caret(), 8, "and Right comes back to after the marker");
+        // Return at the heading's first char opens a line above it; the heading keeps its marker
+        assert!(ta.edit(&ui, &Out::Enter, 3.0));
+        assert_eq!(ta.text(), "Note\n\n## A two\nbody");
+        // Backspace at the heading's first char takes the marker away: the line becomes body text
+        let mut ta = md_area(&ui, "Note\n## two");
+        ta.set_caret(8);
+        assert!(ta.edit(&ui, &Out::Backspace, 4.0));
+        assert_eq!(ta.text(), "Note\ntwo");
+        assert!(ta.leads.is_empty());
+        // emphasis right after the marker: the caret settles at the heading's first char, not before the marker
+        let ta = md_area(&ui, "Note\n## **b**");
+        assert_eq!(ta.settle(10), 8);
+        assert_eq!(ta.settle(7), 8);
+        // plain mode hides nothing
+        let mut plain = area(&ui, 500.0);
+        plain.set_text(&ui, "Note\n## two");
+        assert!(plain.leads.is_empty() && plain.lines[1].adv.iter().all(|a| *a > 0.0));
+    }
+
     #[test]
     fn deleting_between_two_runs_keeps_their_markers() {
         // the space between two runs is not the text of an empty pair: only it goes
@@ -2190,9 +2267,10 @@ mod tests {
         assert!(b.pt == a.pt && b.weight == a.weight, "the first line has the title style either way");
         assert_eq!(b.segs[0].kind, 7, "the marker is not drawn");
         assert!(a.segs.iter().all(|g| g.kind != 7));
-        // the marker only hides on the first line
+        // on a later line `# ` is a heading's marker, hidden as every heading marker is (E2E12 finding 3)
         let later = md_area(&ui, "Note\n# Heading");
-        assert!(later.lines[1].adv[0] > 0.0);
+        assert!(later.lines[1].adv[..2].iter().all(|&d| d == 0.0));
+        assert_eq!(later.leads, vec![5..7]);
     }
 
     /// E2E11 11: a heading line that also carries a checkbox marker draws as the heading alone, never the raw marker.
@@ -2204,9 +2282,9 @@ mod tests {
         assert_eq!(stray.block, Block::Heading, "a heading, not a checklist item");
         assert!(stray.pt == plain.pt && stray.weight == plain.weight);
         assert!(stray.adv[3..9].iter().all(|&d| d == 0.0), "the checkbox marker takes no room");
-        assert!(stray.adv[0] > 0.0, "the heading marker shows as on any heading");
+        assert!(stray.adv[..3].iter().all(|&d| d == 0.0), "the heading marker is hidden as on any heading");
         assert_eq!(stray.x_at(stray.range.start + 9), plain.x_at(plain.range.start + 3), "the text starts where a plain heading's does");
-        assert!(stray.segs.iter().any(|g| g.kind == 7 && g.a == 3 && g.b == 9), "the checkbox marker is not drawn");
+        assert!(stray.segs.iter().any(|g| g.kind == 7 && g.a == 0 && g.b == 9), "the whole marker is not drawn");
         assert_eq!(ta.checkbox_at(stray.x_at(stray.range.start + 3), stray.y + stray.h / 2.0), None, "nothing to tick");
     }
 

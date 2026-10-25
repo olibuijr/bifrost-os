@@ -103,7 +103,7 @@ fn disclosure(s: &mut Surface, x: f32, y: f32, size: f32, folded: bool, color: u
     }
 }
 use bifrost_app::kit::ui::{SPACE_XS};
-use bifrost_app::controls::sheet::{ButtonRole, Hit, Sheet, SheetButton};
+use bifrost_app::controls::sheet::{Hit, Sheet};
 
 /// Picker sheet header height and thumbnail decode size (pt).
 const PICK_HEAD_PT: f32 = 52.0;
@@ -590,6 +590,14 @@ pub struct Notes {
 /// The buttons of the Delete Permanently alert.
 const ERASE_DELETE: u32 = 1;
 const ERASE_CANCEL: u32 = 2;
+const ERASE_TITLE: &str = "Are you sure you want to delete this note?";
+const ERASE_MESSAGE: &str = "This note will be deleted immediately. You can\u{2019}t undo this action.";
+
+/// The Delete Permanently confirmation as the kit's alert: Delete is destructive, so it is never the Return button.
+fn erase_alert() -> bifrost_app::controls::nav::Alert {
+    use bifrost_app::controls::nav::{Alert, AlertStyle};
+    Alert::new(ERASE_TITLE, ERASE_MESSAGE).action(ERASE_DELETE, "Delete", AlertStyle::Destructive).action(ERASE_CANCEL, "Cancel", AlertStyle::Cancel)
+}
 
 /// Every note on disk (root, folders and the bin after purging the expired),
 /// where each lives, and the folder names.
@@ -2281,11 +2289,12 @@ impl Notes {
         self.rebuild(ui, t);
     }
 
-    /// The Delete Permanently alert while it is up.
+    /// The Delete Permanently alert while it is up: the kit's alert (E2E12 finding 6), shown as TextEdit's
+    /// confirmations are, a document-modal sheet hanging from the title bar with a bold question, the informative text
+    /// under it and full-width stacked buttons (Delete, destructive, on top; Cancel under it).
     fn erase_sheet(&self) -> Option<Sheet> {
         self.erase_ask.as_ref()?;
-        let buttons = vec![SheetButton::new(ERASE_DELETE, "Delete", ButtonRole::Destructive), SheetButton::new(ERASE_CANCEL, "Cancel", ButtonRole::Cancel)];
-        Some(Sheet::alert("This note will be deleted immediately. You can\u{2019}t undo this action.", "", buttons))
+        Some(erase_alert().sheet())
     }
 
     /// The window in points (the alert's parent) and the height of its title bar, which the alert hangs from.
@@ -5901,8 +5910,19 @@ mod tests {
         assert!(n.chord(&ui, 14, bifrost_app::proto::CHORD_META, 400.0), "Cmd+Backspace");
         // it asks first, as the reference does: the note cannot come back
         let sheet = n.erase_sheet().expect("the alert is up");
-        assert_eq!(sheet.title, "This note will be deleted immediately. You can\u{2019}t undo this action.");
-        assert!(sheet.buttons.iter().any(|b| b.title == "Delete" && b.role == ButtonRole::Destructive));
+        assert!(sheet.alert, "the kit's alert sheet, not a popover");
+        assert_eq!((sheet.title.as_str(), sheet.message.as_str()), (ERASE_TITLE, ERASE_MESSAGE));
+        assert!(sheet.buttons.iter().any(|b| b.title == "Delete" && b.role == bifrost_app::controls::sheet::ButtonRole::Destructive));
+        assert_eq!(sheet.cancel_button(), Some(ERASE_CANCEL));
+        // E2E12 finding 6: attached under the title bar, full-width buttons stacked, Delete on top and Cancel under it
+        let (parent, bar) = n.sheet_parent(&ui);
+        let placed = sheet.layout(parent, bar, 1.0);
+        assert_eq!(placed.panel.y, bar, "hangs from the title bar");
+        assert!((placed.panel.x + placed.panel.w / 2.0 - parent.w / 2.0).abs() < 0.5, "centred in the window");
+        let ids: Vec<u32> = placed.buttons.iter().map(|(id, _)| *id).collect();
+        assert_eq!(ids, vec![ERASE_DELETE, ERASE_CANCEL]);
+        let (del, cancel) = (placed.buttons[0].1, placed.buttons[1].1);
+        assert!(cancel.y > del.y && cancel.x == del.x && cancel.w == del.w, "stacked, not side by side");
         assert!(dir.join(folders::TRASH).join("1.md").exists(), "nothing erased yet");
         n.key(&ui, Out::Enter, 410.0);
         assert!(n.erase_sheet().is_some(), "Return does not answer the destructive Delete");

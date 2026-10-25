@@ -54,7 +54,7 @@ fn summary(folder: Option<&str>, n: &store::Note) -> Json {
     Json::Obj(vec![
         ("id".into(), Json::Str(n.id.clone())),
         ("title".into(), Json::Str(n.plain_title())),
-        ("snippet".into(), Json::Str(springboard::shell::md::strip_inline(n.snippet()))),
+        ("snippet".into(), Json::Str(springboard::shell::md::plain_line(n.snippet()))),
         ("folder".into(), folder.map_or(Json::Null, |f| Json::Str(f.to_string()))),
         ("modified".into(), Json::Num(n.modified as f64)),
     ])

@@ -118,6 +118,24 @@ pub fn stray_check(line: &str) -> Range<usize> {
     marker.min(info.prefix)..info.prefix
 }
 
+/// The number of leading chars of a heading line (`# `, `## `, `### `, with a checkbox marker after it) that are its
+/// marker: the editor does not draw them, as the reference's headings carry their style without marker characters.
+/// 0 for any other line.
+pub fn heading_marker(line: &str) -> usize {
+    let info = classify(line);
+    match info.block {
+        Block::Title | Block::Heading | Block::Subheading => info.prefix,
+        _ => 0,
+    }
+}
+
+/// One line as the note list's snippet shows it: its block marker (heading, list, checklist, quote, code indent) and
+/// its emphasis markers taken out, so `## - [ ] Item` and `> **said**` read `Item` and `said`.
+pub fn plain_line(line: &str) -> String {
+    let content: String = line.chars().skip(classify(line).prefix).collect();
+    strip_inline(&content)
+}
+
 /// Inline emphasis of a span.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Style {
@@ -562,6 +580,25 @@ mod tests {
         assert_eq!(to_plain(line), "Item two");
         assert_eq!(set_block(line, Block::Body), "Item two", "the style change drops the whole marker");
         assert_eq!(set_block(line, Block::Check(false)), "- [ ] Item two");
+    }
+
+    #[test]
+    fn heading_markers_are_hidden_and_snippets_drop_block_markers() {
+        // E2E12 finding 3: the editor drew the `##` of every heading in grey and the list snippet showed it raw
+        assert_eq!(heading_marker("## heading two"), 3);
+        assert_eq!(heading_marker("# Title"), 2);
+        assert_eq!(heading_marker("### Sub"), 4);
+        assert_eq!(heading_marker("## - [ ] item"), 9, "a stray checkbox marker is part of the heading's marker");
+        assert_eq!(heading_marker("- [ ] item"), 0);
+        assert_eq!(heading_marker("#hashtag"), 0);
+        assert_eq!(plain_line("## heading two"), "heading two");
+        assert_eq!(plain_line("## - [ ] item"), "item");
+        assert_eq!(plain_line("- [x] done"), "done");
+        assert_eq!(plain_line("- milk"), "milk");
+        assert_eq!(plain_line("3. third"), "third");
+        assert_eq!(plain_line("> **said**"), "said");
+        assert_eq!(plain_line("\u{2013} dash"), "dash");
+        assert_eq!(plain_line("plain *it*"), "plain it");
     }
 
     #[test]

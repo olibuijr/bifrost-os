@@ -56,7 +56,7 @@ impl Note {
     /// Row snippet: checklist progress when the note has a checklist.
     pub fn row_snippet(&self) -> String {
         match self.checklist() {
-            (_, 0) => md::strip_inline(self.snippet()),
+            (_, 0) => md::plain_line(self.snippet()),
             (d, t) => format!("{d} of {t} done"),
         }
     }
@@ -545,6 +545,11 @@ mod tests {
         assert_eq!(bold.plain_title(), "E2E bold test");
         assert_eq!(bold.row_snippet(), "plain line");
         assert_eq!(note("9", "Shopping", 0).plain_title(), "Shopping");
+        // E2E12 finding 3: the list snippet shows a heading or quote line without its block marker, as the editor does
+        assert_eq!(note("10", "# Plan\n## heading two", 0).row_snippet(), "heading two");
+        assert_eq!(note("11", "# Plan\n## - [ ] item", 0).row_snippet(), "item");
+        assert_eq!(note("12", "Plan\n> **quoted**", 0).row_snippet(), "quoted");
+        assert_eq!(note("13", "Plan\n- milk", 0).row_snippet(), "milk");
     }
 
     #[test]
