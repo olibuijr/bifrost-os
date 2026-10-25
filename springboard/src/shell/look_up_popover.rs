@@ -18,7 +18,7 @@ use bifrost_ui::suggested_actions::{self, Route, ALL_KINDS};
 /// The Calendar app, which an Add to Calendar suggestion opens.
 const CALENDAR_APP: &str = "is.olibuijr.calendar.desktop";
 /// The popover's overlay surface on the desktop (`desktop_chrome_frames`): the menus' and panels' rank (`chrome_z`).
-pub const CHROME_ID: u32 = 43;
+pub const CHROME_ID: u32 = super::chrome_ids::LOOK_UP;
 /// The most selection text the suggestions look through, in characters.
 const SELECTION_SCAN_MAX: usize = 4000;
 /// The most suggested actions the model gathers (the popover lists `look_up::SUGGESTIONS_SHOWN` of them).

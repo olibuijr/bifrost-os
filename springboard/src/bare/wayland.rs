@@ -23,10 +23,10 @@ struct Lock { obj:lock::ExtSessionLockV1, surface:wl_surface::WlSurface, role:lo
 
 
 /// The chrome surface of the accessibility announcement caption (live captions): above every window and every other
-/// chrome surface (`chrome_z`). It was id 17, which the first cascading submenu also uses (`FLYOUT_CHROME_ID`).
-pub const CAPTION_CHROME_ID:u32=41;
+/// chrome surface (`chrome_z`). Every chrome id is in `shell::chrome_ids`, which keeps them apart from the submenus' range.
+pub const CAPTION_CHROME_ID:u32=crate::shell::chrome_ids::CAPTION;
 /// The chrome surface of the screen reader's focus ring: over everything, an open menu included (`chrome_z`).
-pub const FOCUS_RING_CHROME_ID:u32=42;
+pub const FOCUS_RING_CHROME_ID:u32=crate::shell::chrome_ids::FOCUS_RING;
 /// The shell's z policy for its chrome surfaces on the Overlay layer, lowest first. The window server draws and
 /// hit-tests the surfaces of a layer by this rank, then in the order they mapped (newest on top) within a rank
 /// (bifrost-wm `scene::layer_surfaces_bottom_first`), so persistent chrome created early keeps its place under or over
@@ -48,12 +48,13 @@ pub mod chrome_rank {
 }
 /// The z rank of chrome surface `id` (`chrome_rank`).
 pub fn chrome_z(id:u32)->u32 {
+    use crate::shell::chrome_ids as c;
     match id {
-        15=>chrome_rank::MODAL,
-        2=>chrome_rank::DOCK,
-        8|9|10=>chrome_rank::VEIL,
-        crate::shell::notify::desk_banner::BANNER_CHROME_ID=>chrome_rank::BANNER,
-        CAPTION_CHROME_ID|FOCUS_RING_CHROME_ID=>chrome_rank::ACCESSIBILITY,
+        c::MODAL=>chrome_rank::MODAL,
+        c::DOCK=>chrome_rank::DOCK,
+        c::APP_GRID|c::OVERVIEW|c::SWEEP=>chrome_rank::VEIL,
+        c::BANNER=>chrome_rank::BANNER,
+        c::CAPTION|c::FOCUS_RING=>chrome_rank::ACCESSIBILITY,
         _=>chrome_rank::PANEL,
     }
 }
@@ -1606,7 +1607,10 @@ fn keep_refocus(refocus:Option<(u32,u32)>,pressed:u32)->Option<(u32,u32)> { refo
 /// assistant panel, id 8 the Apps grid, id 9 Overview and id 11 the screenshot session (Space and Escape are its keys),
 /// id 15 the system sheets and alerts, id 14 the Force Quit, About and Log Out card (Esc, Return and the arrows are its
 /// keys; without this they would reach the app in front, which is the hung one); id 13, the Cmd+Tab strip, never does.
-fn takes_keyboard(id:u32)->bool { matches!(id,3|6|8|9|11|14|15) }
+fn takes_keyboard(id:u32)->bool {
+    use crate::shell::chrome_ids as c;
+    matches!(id,c::SEARCH|c::ASSISTANT|c::APP_GRID|c::OVERVIEW|c::CAPTURE|c::UTILITY|c::MODAL)
+}
 /// How long after a keyboard-taking chrome layer closed a focus without a press counts as the window server's hand-back
 /// of the keyboard (ms): the hand-back arrives within a round trip of the layer's destruction; a later focus is the
 /// window server's own (a window mapped, a menu closed) and is followed as before.
@@ -1699,10 +1703,12 @@ mod tests {
     #[test]
     fn chrome_surfaces_rank_dock_under_grid_under_menus_under_focus_ring() {
         use super::{chrome_z,chrome_namespace,CAPTION_CHROME_ID,FOCUS_RING_CHROME_ID};
-        let (dock,grid,menu,flyout)=(chrome_z(2),chrome_z(8),chrome_z(1),chrome_z(17));
+        use crate::shell::chrome_ids as c;
+        let (dock,grid,menu,flyout)=(chrome_z(c::DOCK),chrome_z(c::APP_GRID),chrome_z(c::POPUP),chrome_z(c::FLYOUT_FIRST));
         assert!(dock<grid,"the Dock is under the grid");
         assert!(grid<menu&&grid<flyout,"a menu and its submenus are over the grid");
-        assert!(chrome_z(15)<dock,"a full-screen sheet does not cover the Dock");
+        assert!(chrome_z(c::MODAL)<dock,"a full-screen sheet does not cover the Dock");
+        assert_eq!(chrome_z(c::FLYOUT_END-1),chrome_z(c::POPUP),"the deepest submenu ranks with the menus");
         let banner=chrome_z(crate::shell::notify::desk_banner::BANNER_CHROME_ID);
         assert!(menu<banner&&banner<chrome_z(FOCUS_RING_CHROME_ID));
         assert_eq!(chrome_z(CAPTION_CHROME_ID),chrome_z(FOCUS_RING_CHROME_ID));
