@@ -57,6 +57,33 @@ const SHOTS_PT: f32 = 276.0;
 fn icon_due(failed_at: Option<f64>, t: f64) -> bool {
     failed_at.is_none_or(|at| t - at >= ICON_RETRY_MS)
 }
+
+/// Where the store keeps an app's icon once it has loaded: `<root>/icon-cache/<id>.png`, so a fetch that fails
+/// later (no network yet, a slow server) still shows the real icon instead of a letter tile.
+fn icon_cache_path(root: &std::path::Path, id: &str) -> PathBuf {
+    let safe: String = id.chars().map(|c| if c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_') { c } else { '_' }).collect();
+    root.join("icon-cache").join(format!("{safe}.png"))
+}
+
+/// An app's icon: the installed copy first, then the catalogue's (written to `cache` when it decodes), then the
+/// cached copy. Each source must decode before it counts, so a damaged installed icon or a failed download falls
+/// through to the next one rather than leaving the letter placeholder.
+fn load_icon(local: Option<&std::path::Path>, fetch: impl FnOnce() -> Option<Vec<u8>>, cache: &std::path::Path) -> Option<Image> {
+    let decode = |b: &[u8]| crate::cg::imageio::decode(b);
+    if let Some(img) = local.filter(|p| p.is_file()).and_then(|p| std::fs::read(p).ok()).and_then(|b| decode(&b)) {
+        return Some(img);
+    }
+    if let Some(bytes) = fetch() {
+        if let Some(img) = decode(&bytes) {
+            if let Some(dir) = cache.parent() {
+                let _ = std::fs::create_dir_all(dir);
+            }
+            let _ = std::fs::write(cache, &bytes);
+            return Some(img);
+        }
+    }
+    std::fs::read(cache).ok().and_then(|b| decode(&b))
+}
 /// Height of one line of release notes under an update row.
 const NOTE_LINE: f32 = 18.0;
 const TODAY_HEAD: f32 = 127.0;
@@ -855,16 +882,15 @@ impl AppStore {
                 continue;
             }
             let local = self.installed.iter().find(|i| i.id == id).map(|i| i.icon_path.clone());
+            // the catalogue's URL for this id (an installed app's own row carries none)
+            let url = if icon.is_empty() { self.catalog.iter().find(|a| a.id == id).map(|a| a.icon.clone()).unwrap_or_default() } else { icon };
+            let cache = icon_cache_path(&self.root, &id);
             self.icon_pending.insert(id.clone());
             if let Some(p) = &self.pool {
                 p.spawn(move || {
                     crate::gfx::affinity::background_thread();
-                    let bytes = match local.filter(|p| p.is_file()) {
-                        Some(p) => std::fs::read(p).ok(),
-                        None if !icon.is_empty() => net::get(&net::absolute(&icon), 1_000_000).ok(),
-                        None => None,
-                    };
-                    Done::Icon { id, image: bytes.and_then(|b| crate::cg::imageio::decode(&b)) }
+                    let fetch = || (!url.is_empty()).then(|| net::get(&net::absolute(&url), 1_000_000).ok()).flatten();
+                    Done::Icon { image: load_icon(local.as_deref(), fetch, &cache), id }
                 });
             }
         }
@@ -1606,7 +1632,13 @@ impl AppStore {
         if self.scroll.animating() {
             return Some(t);
         }
-        (!self.jobs.is_empty()).then(|| (self.progress_at + PROGRESS_MS).max(t))
+        // a failed icon is fetched again when its retry is due, without waiting for input to tick the store
+        let retry = self.icon_failed.values().map(|at| (at + ICON_RETRY_MS).max(t)).reduce(f64::min);
+        let progress = (!self.jobs.is_empty()).then(|| (self.progress_at + PROGRESS_MS).max(t));
+        match (progress, retry) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        }
     }
 
     // ---- drawing ----
@@ -2405,6 +2437,35 @@ mod tests {
         assert!(icon_due(None, 0.0));
         assert!(!icon_due(Some(1_000.0), 1_000.0 + ICON_RETRY_MS - 1.0));
         assert!(icon_due(Some(1_000.0), 1_000.0 + ICON_RETRY_MS));
+    }
+
+    /// E2E10 finding 10: Discover's Essential apps drew F and R tiles for Files and Remote.
+    #[test]
+    fn an_icon_falls_back_from_a_damaged_install_to_the_catalogue_then_to_the_cache() {
+        let png: &[u8] = include_bytes!("../../../apps/files/icon.png");
+        let dir = std::env::temp_dir().join(format!("apps-store-icons-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let cache = icon_cache_path(&dir, "is.o/files");
+        assert_eq!(cache, dir.join("icon-cache").join("is.o_files.png"), "an id cannot leave the cache folder");
+        let broken = dir.join("icon.png");
+        std::fs::write(&broken, b"not a png").unwrap();
+        assert!(load_icon(Some(broken.as_path()), || Some(png.to_vec()), &cache).is_some(), "a damaged installed icon falls through to the catalogue's");
+        assert_eq!(std::fs::read(&cache).unwrap(), png, "the loaded icon is kept");
+        assert!(load_icon(None, || None, &cache).is_some(), "with the network down the cached icon is shown");
+        assert!(load_icon(None, || Some(b"junk".to_vec()), &cache).is_some(), "an undecodable download does not replace it");
+        assert_eq!(std::fs::read(&cache).unwrap(), png);
+        std::fs::remove_file(&cache).unwrap();
+        assert!(load_icon(Some(broken.as_path()), || None, &cache).is_none(), "nothing that decodes: the placeholder");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_failed_icon_wakes_the_store_when_its_retry_is_due() {
+        let mut s = store();
+        assert_eq!(s.next_wake(0.0), None);
+        s.icon_failed.insert("is.o.calc".into(), 1_000.0);
+        assert_eq!(s.next_wake(2_000.0), Some(1_000.0 + ICON_RETRY_MS));
     }
 
     fn store() -> AppStore {
