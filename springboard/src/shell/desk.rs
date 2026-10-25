@@ -1534,9 +1534,18 @@ pub(super) fn window_cycle_next(prev: Option<(Vec<AppId>, usize)>, stack: &[AppI
     Some((order, next))
 }
 
-/// Whether the release of a Dock press at (`x`, `y`) opens the pressed icon: the icon as it was hit at the press
-/// (`pressed`) decides, so a row that re-centred under a still pointer cannot drop the click or move it to a neighbour
-/// (W2-23); the slot's current rect counts too while it still holds the same entry (`now`, `now_entry`).
+/// The toplevels of the app `app_id` to activate, in order, among the window server's (`id`, app id, active): every
+/// one of the app's, the one reported active last, so activating them in turn leaves the app's front window in front.
+/// An empty id matches nothing (a window without an app id is no app's).
+#[cfg(any(feature = "desktop-wayland", test))]
+pub(super) fn direct_activation_order<'a>(windows: impl IntoIterator<Item = (u32, &'a str, bool)>, app_id: &str) -> Vec<u32> {
+    if app_id.is_empty() {
+        return Vec::new();
+    }
+    let mine: Vec<(u32, bool)> = windows.into_iter().filter(|(_, id, _)| *id == app_id).map(|(w, _, active)| (w, active)).collect();
+    mine.iter().filter(|(_, a)| !a).chain(mine.iter().filter(|(_, a)| *a)).map(|(w, _)| *w).collect()
+}
+
 /// The press areas of the Dock's tiles (`rects`, laid out along the Dock's axis, `vertical` for a side Dock): each
 /// icon grown along the axis by half the gap between two icons, so a press between two tiles opens the nearer one.
 /// The pointer resting in that gap magnifies both neighbours alike, and a press there opened nothing (E2E N5: the Files
@@ -1552,6 +1561,9 @@ pub(super) fn dock_press_rects(rects: &[Rect], vertical: bool) -> Vec<Rect> {
     rects.iter().map(|r| if vertical { Rect { y: r.y - half, h: r.h + 2 * half, ..*r } } else { Rect { x: r.x - half, w: r.w + 2 * half, ..*r } }).collect()
 }
 
+/// Whether the release of a Dock press at (`x`, `y`) opens the pressed icon: the icon as it was hit at the press
+/// (`pressed`) decides, so a row that re-centred under a still pointer cannot drop the click or move it to a neighbour
+/// (W2-23); the slot's current rect counts too while it still holds the same entry (`now`, `now_entry`).
 pub(super) fn dock_release_hits(pressed: Rect, now: Option<Rect>, now_entry: Option<usize>, entry: usize, x: f32, y: f32) -> bool {
     pressed.contains(x, y) || (now_entry == Some(entry) && now.is_some_and(|r| r.contains(x, y)))
 }
@@ -2074,14 +2086,31 @@ impl Shell {
     /// (the app is on the shared-memory path, or the launch decision is not the direct one).
     #[cfg(feature = "desktop-wayland")]
     fn desk_direct_open(&mut self, slot: usize) -> bool {
+        self.desk_direct_activate(slot, false)
+    }
+
+    /// `desk_direct_open`'s work: starts the direct app in `slot` if needed (restarting an outdated process, `ext_open`)
+    /// and asks the window server to activate its toplevel, or with `all` every toplevel it shows, the one it reports
+    /// active last so the app's front window stays in front (the Dock activating an app with extra windows, E2E N2).
+    #[cfg(feature = "desktop-wayland")]
+    fn desk_direct_activate(&mut self, slot: usize, all: bool) -> bool {
         if apphost::launch_route() != apphost::Route::Direct { return false; }
         self.ext_open(slot);
         if let Some(h) = self.ext.get(slot).and_then(Option::as_ref) {
             if h.route() == apphost::Route::Shm { return false; }
         }
         let id = apphost::installed().get(slot).map(|a| a.manifest.id.clone()).unwrap_or_default();
-        let toplevel = self.desk.as_ref().and_then(|d| apphost::foreign_window_of(d.native_windows.iter().map(|w| (w.id, w.app_id.as_str())), &id));
-        if let (Some(toplevel), Some(d)) = (toplevel, self.desk.as_mut()) { d.foreign_brought_back(toplevel); d.activate.push(toplevel); }
+        let toplevels: Vec<u32> = match self.desk.as_ref() {
+            Some(d) if all => direct_activation_order(d.native_windows.iter().map(|w| (w.id, w.app_id.as_str(), w.active)), &id),
+            Some(d) => apphost::foreign_window_of(d.native_windows.iter().map(|w| (w.id, w.app_id.as_str())), &id).into_iter().collect(),
+            None => Vec::new(),
+        };
+        if let Some(d) = self.desk.as_mut() {
+            for toplevel in toplevels {
+                d.foreign_brought_back(toplevel);
+                d.activate.push(toplevel);
+            }
+        }
         self.dirty = true;
         true
     }
@@ -3093,7 +3122,7 @@ impl Shell {
         let m = self.desk_metrics();
         let (list, bar0, icons) = self.desk_dock(&m);
         let (dock_bar, icons) = self.dock_live(bar0, &icons, t / 1000.0);
-        let press = dock_press_rects(&icons, self.dock_preferences().position != super::desktop_dock::Position::Bottom);
+        let press = self.dock_press(&icons);
         match ev {
             Event::Down(x, y) => {
                 self.desk.as_mut()?.grab = None;
@@ -3108,7 +3137,7 @@ impl Shell {
                     self.desk.as_mut()?.dock_drop = None;
                     // an app that already has a window comes forward on the press, not after the release
                     if let Some(a) = apps().get(list[k]).map(|a| Self::dock_app(a.id)) {
-                        if self.desk.as_ref()?.index_of(a).is_some() && !self.desk_activate_shown_app(a) { self.desk_open(a, t); }
+                        if self.desk.as_ref()?.index_of(a).is_some() && !self.desk_activate_shown_app(a, t) { self.desk_open(a, t); }
                     }
                     self.dirty = true;
                     return Some(vec![]);
@@ -3357,7 +3386,7 @@ impl Shell {
         let app = if app == AppId::Files {
             apphost::slot_of("is.olibuijr.files.desktop").map(|i| AppId::External(i as u8)).unwrap_or(AppId::AppStore)
         } else { app };
-        if self.desk_activate_shown_app(app) {
+        if self.desk_activate_shown_app(app, t) {
             return;
         }
         // Golden Gate: clicking the frontmost app's icon does nothing; minimizing is the yellow light or Cmd+M
@@ -3367,17 +3396,33 @@ impl Shell {
     /// The Dock activates an app that shows a window besides its main one: the app's shown windows come forward in the
     /// order they have among themselves, so its front window (a Mail viewer over the main window) stays in front and
     /// keeps the keyboard, as activating an app does (E2E N2). False leaves the click to `desk_open` (an app that is
-    /// hidden, not running, or that shows its main window alone).
-    pub(super) fn desk_activate_shown_app(&mut self, app: AppId) -> bool {
-        let Some(d) = self.desk.as_mut() else { return false };
-        if app != app.parent() || d.hidden.iter().any(|a| a.parent() == app) {
-            return false;
+    /// hidden, not running, or that shows its main window alone). Everything else an open does still happens: the Screen
+    /// Time launch check, the Recent Items entry and, for a direct app, the restart of an outdated process and the
+    /// activation of its toplevels (`desk_direct_open`), only the shell's stacking is this one's.
+    pub(super) fn desk_activate_shown_app(&mut self, app: AppId, t: f64) -> bool {
+        {
+            let Some(d) = self.desk.as_ref() else { return false };
+            if app != app.parent() || d.hidden.iter().any(|a| a.parent() == app) {
+                return false;
+            }
+            if !d.wins.iter().any(|w| !w.minimized && w.app != app && w.app.parent() == app) {
+                return false;
+            }
         }
-        if !d.wins.iter().any(|w| !w.minimized && w.app != app && w.app.parent() == app) {
-            return false;
+        let blocked = self.st_launch_check(app, t);
+        self.recent_note(app);
+        if let Some(d) = self.desk.as_mut() {
+            d.bring_all_to_front(app);
+            d.raise_front = true;
         }
-        d.bring_all_to_front(app);
-        d.raise_front = true;
+        #[cfg(feature = "desktop-wayland")]
+        if let AppId::External(slot) = app {
+            if !blocked {
+                self.desk_direct_activate(slot as usize, true);
+            }
+        }
+        #[cfg(not(feature = "desktop-wayland"))]
+        let _ = blocked;
         if !self.is_locked() {
             self.screen = Screen::App(app);
         }
@@ -4823,12 +4868,37 @@ mod tests {
             d.open(&m, viewer, (500, 400));
             d.open(&m, AppId::Terminal, (900, 600));
         }
-        assert!(sh.desk_activate_shown_app(main));
+        assert!(sh.desk_activate_shown_app(main, 0.0));
         let d = sh.desk.as_ref().unwrap();
         assert_eq!(d.wins.iter().map(|w| w.app).collect::<Vec<_>>(), vec![AppId::Terminal, main, viewer]);
         assert!(sh.take_raise_front(), "the window server raises and focuses the viewer");
-        assert!(!sh.desk_activate_shown_app(AppId::Terminal), "one window: the open path");
-        assert!(!sh.desk_activate_shown_app(viewer), "only an app (its main id) is activated");
+        assert!(!sh.desk_activate_shown_app(AppId::Terminal, 0.0), "one window: the open path");
+        assert!(!sh.desk_activate_shown_app(viewer, 0.0), "only an app (its main id) is activated");
+    }
+
+    /// The Dock activating an app with extra windows still counts as opening it: it is in Recent Items, as every open is.
+    #[test]
+    fn activating_an_app_with_extra_windows_notes_it_in_recent_items() {
+        let mut sh = crate::shell::tests::desktop_shell();
+        let m = sh.desk_metrics();
+        let (main, viewer) = (AppId::External(3), AppId::ExternalWindow(3, 2));
+        {
+            let d = sh.desk.as_mut().unwrap();
+            d.wins.clear();
+            d.open(&m, main, (900, 600));
+            d.open(&m, viewer, (500, 400));
+        }
+        assert!(sh.desk_activate_shown_app(main, 0.0));
+        let newest = sh.recent_list.entries().first().map(|e| e.key.clone());
+        assert_eq!(newest, Some(super::super::recent_items::key(main)), "the newest Recent Items entry is the app activated");
+    }
+
+    #[test]
+    fn a_direct_app_activated_from_the_dock_raises_all_its_toplevels_front_last() {
+        let windows = [(7, "x.mail", false), (8, "x.other", true), (9, "x.mail", true), (10, "x.mail", false)];
+        assert_eq!(direct_activation_order(windows, "x.mail"), vec![7, 10, 9], "the active one last, so it ends in front");
+        assert_eq!(direct_activation_order(windows, "x.none"), Vec::<u32>::new());
+        assert_eq!(direct_activation_order([(1, "", false)], ""), Vec::<u32>::new(), "an empty id is no app's");
     }
 
     /// E2E N5: a press in the gap between two Dock icons (where the pointer magnifies both alike) opens the nearer one;
