@@ -1657,6 +1657,31 @@ mod tests {
         assert_eq!(kids, vec!["orange", "orbit"]);
     }
 
+    /// E2E11: under the rows clip an unselected row's vibrant label still has ink (Dictionary 0.6.5 showed only the
+    /// selected row: the keep-alpha blend ran on an empty scratch and vanished).
+    #[test]
+    fn a_vibrant_source_list_draws_its_unselected_rows_inside_the_rows_clip() {
+        let ui = test_ui();
+        let (w, h) = (200usize, 200usize);
+        let mut px = vec![pack(9, 9, 9, 255); w * h];
+        set_vibrancy(true, true);
+        let mut list = SourceList::new(vec![SidebarItem::row(0, "orange"), SidebarItem::row(1, "orbit"), SidebarItem::row(2, "ordeal")], 28.0, 22.0);
+        list.set_selected(Some(0));
+        let bounds = Rect { x: 0.0, y: 0.0, w: 200.0, h: 200.0 };
+        let rows = Rect { y: 52.0, h: 148.0, ..bounds };
+        source_list_in(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, &ui, bounds, &list, -60.0, None, Some(rows));
+        let _ = take_frame_materials();
+        set_vibrancy(false, false);
+        let tint = Material::Sidebar.tint();
+        for i in [1usize, 2] {
+            let r = list.item_rect(i, bounds, -60.0);
+            assert!(r.y >= rows.y && r.bottom() <= rows.bottom(), "row {i} is inside the clip: {r:?}");
+            let ink = (r.y as usize..r.bottom() as usize).flat_map(|y| (0..w).map(move |x| y * w + x)).filter(|&k| (px[k] & 255) > (tint & 255) + 40).count();
+            assert!(ink > 10, "row {i} has ink under the clip ({ink} px)");
+            assert!((r.y as usize..r.bottom() as usize).all(|y| (0..w).all(|x| px[y * w + x] >> 24 == tint >> 24)), "row {i} keeps the material alpha");
+        }
+    }
+
     fn test_ui() -> Ui {
         let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/SFUI.ttf")).unwrap().into_boxed_slice());
         Ui::new(crate::kit::Font::parse(data).unwrap(), 1.0)
