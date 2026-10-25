@@ -85,9 +85,9 @@ enum Target {
     Smart(Smart),
     /// Recently Deleted: opens the page of kept reminders.
     Deleted,
-    /// Restores one kept reminder (by its id) from the Recently Deleted page.
+    /// Restores one kept reminder (by its store row) from the Recently Deleted page.
     Restore(u64),
-    /// Selects one kept reminder (by its id) on the Recently Deleted page (`purge.rs`).
+    /// Selects one kept reminder (by its store row) on the Recently Deleted page (`purge.rs`).
     KeptRow(u64),
     List(u64),
     ListInfo(u64),
@@ -345,11 +345,15 @@ pub struct Reminders {
     image_request: bool,
     wall: Wall,
     data: Data,
-    /// The Recently Deleted page: the kept reminders, while the page is open.
-    deleted: Option<Vec<Reminder>>,
+    /// The Recently Deleted page: the kept reminders with their store rows, while the page is open.
+    deleted: Option<Vec<archive::Kept>>,
     /// How many reminders the recently deleted store holds (the sidebar count).
     kept_count: usize,
-    /// The kept reminder selected on the Recently Deleted page, and the purge alert while it is up (`purge.rs`).
+    /// The lowest id a new reminder may take: past every kept reminder's id, so a new reminder never reuses the id of
+    /// one in Recently Deleted (E2E N3). It only rises.
+    id_floor: u64,
+    /// The store row of the kept reminder selected on the Recently Deleted page, and the purge alert while it is up
+    /// (`purge.rs`).
     kept_selected: Option<u64>,
     purge_ask: Option<Purge>,
     /// The menu the shell shows is the Recently Deleted menu (`purge.rs`), not a list's.
@@ -492,9 +496,12 @@ impl Reminders {
             ..Options::default()
         };
         let collapsed: HashSet<u64> = settings.collapsed.iter().copied().collect();
-        let kept_count = archive::kept(&archive::path_beside(&path)).map_or(0, |kept| kept.len());
+        let kept_now = archive::kept(&archive::path_beside(&path)).unwrap_or_default();
+        let kept_count = kept_now.len();
+        let id_floor = kept_now.iter().map(|r| r.id.saturating_add(1)).max().unwrap_or(0);
         let mut app = Self {
             kept_count,
+            id_floor,
             deleted: None,
             kept_selected: None,
             purge_ask: None,
@@ -1102,7 +1109,7 @@ impl Reminders {
         let mut next = self.data.clone();
         let list = self.opts.default_list.filter(|id| next.lists.iter().any(|l| l.id == *id)).or_else(|| next.lists.first().map(|l| l.id));
         let Some(list) = list else { return Err("there is no list".into()) };
-        let Some(id) = next.next_item_id() else { return Err("no reminder id is left".into()) };
+        let Some(id) = self.fresh_item_id(&next) else { return Err("no reminder id is left".into()) };
         let mut r = Reminder::new(id, title);
         r.list = list;
         r.due = q.due;
@@ -1191,7 +1198,7 @@ impl Reminders {
             None => self.opts.default_list.filter(|id| next.lists.iter().any(|l| l.id == *id)).or_else(|| next.lists.first().map(|l| l.id)),
         };
         let Some(list) = list else { return Err("there is no list".into()) };
-        let Some(id) = next.next_item_id() else { return Err("no reminder id is left".into()) };
+        let Some(id) = self.fresh_item_id(&next) else { return Err("no reminder id is left".into()) };
         let mut r = Reminder::new(id, title);
         r.list = list;
         r.created = Some(self.wall.unix);
@@ -1486,11 +1493,11 @@ impl Reminders {
                 }
                 // a kept row's Restore link restores it; the rest of the row selects it
                 if let Some(kept) = &self.deleted {
-                    for (i, reminder) in kept.iter().enumerate() {
+                    for (i, k) in kept.iter().enumerate() {
                         let rect = self.deleted_row_rect(ui, i);
                         if within(x, y, rect) {
                             let link = x >= rect.0 + rect.2 - ui.pt(purge::RESTORE_W);
-                            return Some(if link { Target::Restore(reminder.id) } else { Target::KeptRow(reminder.id) });
+                            return Some(if link { Target::Restore(k.row) } else { Target::KeptRow(k.row) });
                         }
                     }
                     return None;
@@ -1651,6 +1658,8 @@ impl Reminders {
         }
         self.undo = None;
         if self.commit(next) {
+            // the undo of a delete takes its reminders back out of Recently Deleted, the redo keeps them again (E2E N4)
+            self.refresh_kept();
             self.rebuild(ui);
         }
         true
@@ -1680,9 +1689,26 @@ impl Reminders {
         self.title_hint = hint;
         self.title_max = max;
     }
+    /// Reads the recently deleted store again: the sidebar count, the id floor and, while it is open, the page.
+    fn refresh_kept(&mut self) {
+        let kept = archive::kept_rows(&archive::path_beside(&self.path)).unwrap_or_default();
+        self.kept_count = kept.len();
+        if let Some(floor) = kept.iter().map(|k| k.reminder.id.saturating_add(1)).max() {
+            self.id_floor = self.id_floor.max(floor);
+        }
+        if self.deleted.is_some() {
+            self.deleted = Some(kept);
+        }
+    }
+
+    /// The id for a new reminder in `data`: past every reminder on the list and every kept one.
+    fn fresh_item_id(&self, data: &Data) -> Option<u64> {
+        data.next_item_id().map(|id| id.max(self.id_floor))
+    }
+
     /// Recently Deleted: shows the reminders kept in the archive store.
     fn open_deleted(&mut self, ui: &Ui) {
-        self.deleted = Some(archive::kept(&archive::path_beside(&self.path)).unwrap_or_default());
+        self.deleted = Some(archive::kept_rows(&archive::path_beside(&self.path)).unwrap_or_default());
         self.kept_selected = None;
         self.selected = None;
         self.screen = Screen::Items;
@@ -1693,10 +1719,10 @@ impl Reminders {
     }
 
     /// Puts a kept reminder back into the reminders, in the same list when that list still exists (else the default
-    /// list), and takes it out of the store only once the reminders file has been written.
-    fn restore_deleted(&mut self, ui: &Ui, id: u64) {
+    /// list), and takes it out of the store only once the reminders file has been written. `row` is its store row.
+    fn restore_deleted(&mut self, ui: &Ui, row: u64) {
         let path = archive::path_beside(&self.path);
-        let Some(mut reminder) = self.deleted.as_ref().and_then(|kept| kept.iter().find(|r| r.id == id).cloned()) else {
+        let Some(mut reminder) = self.deleted.as_ref().and_then(|kept| kept.iter().find(|k| k.row == row).map(|k| k.reminder.clone())) else {
             return;
         };
         let mut next = self.data.clone();
@@ -1707,16 +1733,15 @@ impl Reminders {
             reminder.parent = None;
         }
         if next.items.iter().any(|r| r.id == reminder.id) {
-            let Some(fresh) = next.next_item_id() else { return };
+            let Some(fresh) = self.fresh_item_id(&next) else { return };
             reminder.id = fresh;
         }
         next.items.push(reminder);
         if !self.commit_named(next, "Restore Reminder") {
             return;
         }
-        let _ = archive::take(&path, id);
-        self.deleted = Some(archive::kept(&path).unwrap_or_default());
-        self.kept_count = self.deleted.as_ref().map_or(0, |kept| kept.len());
+        let _ = archive::take(&path, row);
+        self.refresh_kept();
         self.rebuild(ui);
     }
 
@@ -1956,13 +1981,26 @@ impl Reminders {
         }
         // kept in the recently deleted store too, so the deletion survives a restart; a store that cannot be
         // written does not undo the deletion
-        let kept_path = crate::archive::path_beside(&self.path);
-        let _ = crate::archive::keep(&kept_path, &removed.iter().map(|(_, r)| r.clone()).collect::<Vec<_>>());
-        self.kept_count = crate::archive::kept(&kept_path).map_or(0, |kept| kept.len());
+        let kept_path = archive::path_beside(&self.path);
+        let kept: Vec<Reminder> = removed.iter().map(|(_, r)| r.clone()).collect();
+        let _ = archive::keep(&kept_path, &kept);
+        self.refresh_kept();
         let label = format!("Deleted \"{}\"", title.unwrap_or_default());
-        self.history.register(&label, restore_items(removed), move |d| {
-            model::remove_with_children(&mut d.items, id);
-        });
+        // the undo puts the reminders back and takes them out of Recently Deleted; the redo deletes and keeps them
+        // again (E2E N4)
+        let restore = restore_items(removed);
+        let undo_path = kept_path.clone();
+        self.history.register(
+            &label,
+            move |d| {
+                restore(d);
+                let _ = archive::take_back(&undo_path, &kept);
+            },
+            move |d| {
+                let again: Vec<Reminder> = model::remove_with_children(&mut d.items, id).into_iter().map(|(_, r)| r).collect();
+                let _ = archive::keep(&kept_path, &again);
+            },
+        );
         self.show_undo(label, t);
         true
     }
@@ -1971,7 +2009,7 @@ impl Reminders {
     fn duplicate_item(&mut self, ui: &Ui, id: u64, t: f64) {
         let mut next = self.data.clone();
         let Some(at) = next.items.iter().position(|r| r.id == id) else { return };
-        let Some(new_id) = next.next_item_id() else { return };
+        let Some(new_id) = self.fresh_item_id(&next) else { return };
         let mut copy = next.items[at].clone();
         copy.id = new_id;
         copy.completed = false;
@@ -2008,7 +2046,7 @@ impl Reminders {
         }
         // on Recently Deleted the arrows move through the kept reminders, never the list hidden under the page
         if let Some(kept) = &self.deleted {
-            let ids: Vec<u64> = kept.iter().map(|r| r.id).collect();
+            let ids: Vec<u64> = kept.iter().map(|k| k.row).collect();
             let at = self.kept_selected.and_then(|id| ids.iter().position(|&i| i == id));
             match out {
                 Out::Named("Down") => self.kept_selected = ids.get(at.map_or(0, |i| (i + 1).min(ids.len().saturating_sub(1)))).copied(),
@@ -2127,7 +2165,7 @@ impl Reminders {
                 next.items[pos] = d;
             }
             None => {
-                let Some(new_id) = next.next_item_id() else { return };
+                let Some(new_id) = self.fresh_item_id(&next) else { return };
                 d.id = new_id;
                 next.items.push(d);
             }

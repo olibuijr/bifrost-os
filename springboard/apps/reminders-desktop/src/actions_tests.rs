@@ -59,12 +59,13 @@ fn a_deleted_reminder_waits_in_recently_deleted_and_restores_from_there() {
     assert!(app.data.items.is_empty());
     assert_eq!(app.kept_count, 1, "the sidebar count sees the kept reminder");
     app.activate(&ui, Target::Deleted, 20.0);
-    let kept: Vec<String> = app.deleted.clone().expect("the page is open").into_iter().map(|r| r.title).collect();
+    let kept: Vec<String> = app.deleted.clone().expect("the page is open").into_iter().map(|k| k.reminder.title).collect();
     assert_eq!(kept, vec!["Buy milk".to_string()]);
+    let row = app.deleted.as_ref().unwrap()[0].row;
     // the page draws with its row and restore link
     let mut buf = vec![0u32; 1200 * 1920];
     app.draw(&mut bifrost_app::kit::Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, &ui, 30.0);
-    app.activate(&ui, Target::Restore(id), 40.0);
+    app.activate(&ui, Target::Restore(row), 40.0);
     assert_eq!(titles(&app), vec!["Buy milk".to_string()]);
     assert!(app.deleted.as_ref().expect("still on the page").is_empty());
     assert_eq!(app.kept_count, 0);
@@ -1375,7 +1376,7 @@ fn recently_deleted_deletes_permanently_and_deletes_all_after_asking() {
     }
     assert_eq!(app.kept_count, 3);
     app.activate(&ui, Target::Deleted, 50.0);
-    let kept: Vec<u64> = app.deleted.as_ref().unwrap().iter().map(|r| r.id).collect();
+    let kept: Vec<u64> = app.deleted.as_ref().unwrap().iter().map(|k| k.row).collect();
     assert_eq!(app.kept_selected(), None, "the page opens with nothing selected");
     assert!(!app.chord(&ui, 14, CHORD_META, 51.0), "nothing selected, nothing asked");
 
@@ -1394,7 +1395,7 @@ fn recently_deleted_deletes_permanently_and_deletes_all_after_asking() {
     assert!(app.chord(&ui, 14, CHORD_META, 56.0));
     app.activate(&ui, Target::PurgeConfirm, 57.0);
     assert_eq!(app.kept_count, 2);
-    let left: Vec<u64> = app.deleted.as_ref().unwrap().iter().map(|r| r.id).collect();
+    let left: Vec<u64> = app.deleted.as_ref().unwrap().iter().map(|k| k.row).collect();
     assert_eq!(left, kept[1..].to_vec());
     assert_eq!(app.kept_selected(), None);
 
@@ -1418,5 +1419,69 @@ fn recently_deleted_deletes_permanently_and_deletes_all_after_asking() {
     assert_eq!(app.kept_count, 0);
     assert!(app.deleted.as_ref().unwrap().is_empty());
     assert!(archive::kept(&archive::path_beside(&path)).unwrap().is_empty(), "gone from the store for good");
+    cleanup(&path);
+}
+
+#[test]
+fn delete_permanently_names_and_removes_the_chosen_kept_reminder_when_ids_repeat() {
+    // E2E N3: delete the only reminder, add another, delete it too; the second row's Delete Permanently acts on it
+    let (mut app, ui, path) = app("purge-same-id");
+    let store = archive::path_beside(&path);
+    // a store from before the fix, where a deleted reminder 1 is already kept
+    archive::keep(&store, &[model::Reminder::new(1, "E2E test list")]).unwrap();
+    app.refresh_kept();
+    add(&mut app, &ui, "E2E rem", 0.0);
+    let id = id_of(&app, "E2E rem");
+    assert_ne!(id, 1, "a new reminder does not take the id of a kept one");
+    app.selected = Some(id);
+    assert!(app.delete_selected(&ui, 10.0));
+    app.activate(&ui, Target::Deleted, 20.0);
+    let rows: Vec<(u64, String)> = app.deleted.as_ref().unwrap().iter().map(|k| (k.row, k.reminder.title.clone())).collect();
+    assert_eq!(rows.iter().map(|(_, t)| t.as_str()).collect::<Vec<_>>(), ["E2E test list", "E2E rem"]);
+    app.activate(&ui, Target::KeptRow(rows[1].0), 21.0);
+    assert!(app.purge_selected());
+    let sheet = app.purge_sheet().expect("the alert is up");
+    assert!(format!("{sheet:?}").contains("E2E rem") && !format!("{sheet:?}").contains("E2E test list"), "the alert names the chosen row");
+    app.activate(&ui, Target::PurgeConfirm, 22.0);
+    let left: Vec<String> = archive::kept(&store).unwrap().into_iter().map(|r| r.title).collect();
+    assert_eq!(left, ["E2E test list"]);
+    cleanup(&path);
+}
+
+#[test]
+fn reminders_sharing_an_id_in_the_store_are_purged_by_their_row() {
+    let (mut app, ui, path) = app("purge-dup-rows");
+    let store = archive::path_beside(&path);
+    archive::keep(&store, &[model::Reminder::new(1, "First")]).unwrap();
+    archive::keep(&store, &[model::Reminder::new(1, "Second")]).unwrap();
+    app.activate(&ui, Target::Deleted, 10.0);
+    let second = app.deleted.as_ref().unwrap()[1].row;
+    app.activate(&ui, Target::KeptRow(second), 11.0);
+    assert_eq!(app.kept_selected(), Some(second));
+    assert!(app.purge_selected());
+    app.activate(&ui, Target::PurgeConfirm, 12.0);
+    let left: Vec<String> = app.deleted.as_ref().unwrap().iter().map(|k| k.reminder.title.clone()).collect();
+    assert_eq!(left, ["First"]);
+    cleanup(&path);
+}
+
+#[test]
+fn undo_of_a_delete_takes_the_reminder_back_out_of_recently_deleted() {
+    // E2E N4: the Undo strip puts the reminder back and its Recently Deleted row goes; redo keeps it again
+    let (mut app, ui, path) = app("undo-delete-archive");
+    let store = archive::path_beside(&path);
+    add(&mut app, &ui, "E2E rem2", 0.0);
+    app.selected = Some(id_of(&app, "E2E rem2"));
+    assert!(app.delete_selected(&ui, 10.0));
+    assert_eq!(app.kept_count, 1);
+    app.activate(&ui, Target::Undo, 11.0);
+    assert_eq!(titles(&app), ["E2E rem2"]);
+    assert_eq!(app.kept_count, 0, "the sidebar count drops");
+    assert!(archive::kept(&store).unwrap().is_empty(), "the row leaves the store");
+    assert!(app.step_history(&ui, true), "redo");
+    assert!(app.data.items.is_empty());
+    assert_eq!(app.kept_count, 1, "the redo keeps it again");
+    assert!(app.step_history(&ui, false), "undo again");
+    assert_eq!(app.kept_count, 0);
     cleanup(&path);
 }

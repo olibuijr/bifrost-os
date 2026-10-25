@@ -243,13 +243,13 @@ impl Reminders {
             self.center(s, ui, "No Recently Deleted Reminders", MAC_TITLE3_PT, Weight::Semibold, LABEL_2.now(), wpx / 2.0, top + ui.pt(EMPTY_TOP_PT));
             return;
         }
-        for (i, reminder) in kept.iter().enumerate() {
+        for (i, archive::Kept { row, reminder }) in kept.iter().enumerate() {
             let (x, y, w, h) = self.deleted_row_rect(ui, i);
             if y + h > bottom {
                 break;
             }
             // the selected kept reminder (Delete Permanently acts on it, `purge.rs`)
-            if self.kept_selected == Some(reminder.id) {
+            if self.kept_selected == Some(*row) {
                 s.fill_rrect(x, y, w, h, 0.0, bifrost_app::kit::ui::SELECTION_INACTIVE.now());
             }
             s.fill_rrect(x, y + h - 1.0, w, 1.0, 0.0, SEPARATOR_C.now());
