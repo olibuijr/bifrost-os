@@ -372,6 +372,9 @@ impl Shell {
   }
   self.dock_linux_name(entry)
  }
+ /// True while a Dock context menu or the Downloads stack is open: the hover label is not drawn then, as in the
+ /// reference (the stack's popover covered all but the tail of "Downloads", E2E8 7).
+ pub(super) fn dock_label_hidden_by_menu(&self)->bool{matches!(self.desktop_menu,Some(Menu::Dock|Menu::Stack))}
  /// The hover label's slot and opacity at `t` ms: fading in for the hovered slot, out for the one just left.
  pub(super) fn dock_label_state(&self,t:f64)->(Option<usize>,f32){
   let Some(d)=self.desk.as_ref()else{return(None,0.);};
@@ -431,6 +434,15 @@ fn dock_reveal(d:&mut super::desk::Desk,now:f64){
   assert_eq!(sh.dock_label_text(apps().len()),"Applications");
   assert_eq!(sh.dock_label_text(super::super::desk::DOCK_TRASH),"Trash");
   assert_eq!(sh.dock_label_text(0),apps()[0].name);
+ }
+ /// E2E8 7: the Downloads label must not show through the open stack, nor over a Dock context menu.
+ #[test]
+ fn an_open_stack_or_dock_menu_hides_the_hover_label(){
+  let mut sh=desktop(2560,1440);
+  assert!(!sh.dock_label_hidden_by_menu());
+  sh.desktop_menu=Some(Menu::Stack);assert!(sh.dock_label_hidden_by_menu());
+  sh.desktop_menu=Some(Menu::Dock);assert!(sh.dock_label_hidden_by_menu());
+  sh.desktop_menu=None;assert!(!sh.dock_label_hidden_by_menu());
  }
  fn desktop(w:i32,h:i32)->Shell{
   let mut sh=crate::shell::tests::desktop_shell();sh.w=w;sh.h=h;
