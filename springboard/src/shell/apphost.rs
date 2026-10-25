@@ -890,6 +890,12 @@ impl AppHost {
         self.status == Status::Running
     }
 
+    /// The caret rectangle the app reported (`ToShell::CaretRect`, window points) in px of its window: the points
+    /// times the scale the app was configured at. The candidate window and Look Up's popover are placed from it.
+    pub fn caret_px(&self) -> Option<(f32, f32, f32, f32)> {
+        self.caret_rect.map(|r| caret_points_to_px(r, self.frame_scale))
+    }
+
     /// True once per host when the app is gone but the shell was not told by `pump` (a failed send, a stall kill, a
     /// `kill`, a quit that finished elsewhere): the caller removes its windows. An incompatible app is stopped on
     /// purpose and keeps its window (it says why), so it never reports.
@@ -2851,9 +2857,22 @@ fn exit_status_soon(c: &mut std::process::Child) -> std::io::Result<Option<std::
     c.try_wait()
 }
 
+/// A caret rectangle in window points as px at `scale` (points to pixels); a scale that is not positive counts as 1.
+pub fn caret_points_to_px((x, y, w, h): (f32, f32, f32, f32), scale: f32) -> (f32, f32, f32, f32) {
+    let s = if scale.is_finite() && scale > 0.0 { scale } else { 1.0 };
+    (x * s, y * s, w * s, h * s)
+}
 
 #[cfg(test)]
 mod tests {
+    /// E2E10: an app reports its caret in window points; Look Up and the candidate window place themselves in px.
+    #[test]
+    fn a_caret_rect_in_points_becomes_px_at_the_apps_scale() {
+        assert_eq!(super::caret_points_to_px((100.0, 40.0, 2.0, 16.0), 1.5625), (156.25, 62.5, 3.125, 25.0));
+        assert_eq!(super::caret_points_to_px((10.0, 20.0, 1.0, 17.0), 1.0), (10.0, 20.0, 1.0, 17.0));
+        assert_eq!(super::caret_points_to_px((10.0, 20.0, 1.0, 17.0), 0.0), (10.0, 20.0, 1.0, 17.0), "no scale yet");
+    }
+
     #[test]
     fn audio_unit_tables_declare_the_processors_an_app_ships() {
         let m = Manifest::parse("id = \"a.synth\"\nname = \"Synth\"\nexec = \"x\"\n\n[[audio_unit]]\nname = \"Pad\"\nkind = \"aumu\"\nsub_kind = \"pads\"\nmanufacturer = \"Exmp\"\noutputs = [2]\n\n[[audio_unit]]\nname = \"Broken\"\nkind = \"aufx\"\n").unwrap();

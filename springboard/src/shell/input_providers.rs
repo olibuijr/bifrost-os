@@ -330,7 +330,7 @@ impl Shell {
             return None;
         }
         let view = self.input_providers.app_candidate_view(slot)?;
-        let (cx, cy, cw, ch) = self.ext.get(slot as usize)?.as_ref()?.caret_rect?;
+        let (cx, cy, cw, ch) = self.ext.get(slot as usize)?.as_ref()?.caret_px()?;
         let win = self.desk.as_ref()?.wins.iter().find(|w| w.app == AppId::External(slot))?;
         let body = win.body(&self.desk_metrics());
         Some((view, Some((body.x as f32 + cx, body.y as f32 + cy, cw, ch))))

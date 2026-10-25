@@ -1023,11 +1023,19 @@ impl<S: Responder> Window<S> {
         std::mem::take(&mut self.sent)
     }
 
-    /// The first responder's `NativeTextInputClient` state, when it edits text.
+    /// The first responder's `NativeTextInputClient` state, when it edits text. Its caret rectangle is in window points:
+    /// a field inside a scroll view reports where it is drawn, its content position less the scrolled offset.
     pub fn text_input_info(&self) -> Option<TextInputInfo> {
         let id = self.first?;
         let mut p = Vec::new();
-        path_to(self.root(), id, &mut p).then(|| at(self.root(), &p).text_input_info()).flatten()
+        if !path_to(self.root(), id, &mut p) {
+            return None;
+        }
+        let mut info = at(self.root(), &p).text_input_info()?;
+        let (ox, oy) = path_offset(self.root(), &p);
+        info.caret.0 -= ox;
+        info.caret.1 -= oy;
+        Some(info)
     }
     /// Offers an IME event to the first responder; queued change actions are sent. True when handled.
     pub fn apply_text_input(&mut self, ev: &crate::proto::ToApp, state: &mut S) -> bool {

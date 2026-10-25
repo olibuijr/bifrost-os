@@ -254,11 +254,12 @@ impl Shell {
     }
 
     /// Where the popover opens (px): under the caret of the external app in front, which sits at the selection it
-    /// reported (`ToShell::CaretRect`, in its window below the title bar), else under the menu bar's centre.
+    /// reported (`ToShell::CaretRect`, window points below the title bar, as px at the app's scale), else under the
+    /// menu bar's centre.
     fn look_up_anchor(&self) -> (f32, f32) {
         let caret = || {
             let slot = self.front_ext_slot()?;
-            let (cx, cy, cw, ch) = self.ext.get(slot as usize)?.as_ref()?.caret_rect?;
+            let (cx, cy, cw, ch) = self.ext.get(slot as usize)?.as_ref()?.caret_px()?;
             let win = self.desk.as_ref()?.wins.iter().find(|w| w.app == super::AppId::External(slot))?;
             let body = win.body(&self.desk_metrics());
             Some(caret_anchor((body.x as f32, body.y as f32), (cx, cy, cw, ch)))
