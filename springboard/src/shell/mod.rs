@@ -4064,6 +4064,9 @@ impl Shell {
         let (unix, offset) = self.wall_now(t);
         let hour = ((unix + offset as i64).rem_euclid(86_400) / 3600) as u32;
         bifrost_render::appearance::set_light(mode.is_light(hour), t);
+        // the window server draws every window's materials (sidebars, title bars) in the scheme this file names: a
+        // switch is written at once, so they turn with the apps' own pixels (E2E13 finding 3)
+        bifrost_render::appearance::sync_display_file(bifrost_render::appearance::DISPLAY_FILE);
         #[cfg(feature = "desktop-wayland")]
         {
             let light = bifrost_render::appearance::target_is_light();

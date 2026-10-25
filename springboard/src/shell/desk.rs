@@ -332,6 +332,16 @@ impl LinuxDockApp {
 struct CachedWindow {
     width:usize, height:usize, pixels:std::sync::Arc<[u32]>,
     focused:bool, maximized:bool, hover:bool, drawn:f64,
+    /// the look the pixels were drawn in (`window_look`): a Light/Dark switch, its fade or a new accent redraws the
+    /// window at once instead of after the once-a-second refresh or the next hover (E2E13 finding 3)
+    look:u64,
+}
+
+/// The appearance a window's cached pixels depend on: the scheme position (0 dark .. 1 light, moving during the fade)
+/// and the accent colour.
+#[allow(dead_code)]
+fn window_look() -> u64 {
+    ((bifrost_render::appearance::scheme().to_bits() as u64) << 32) | bifrost_render::appearance::accent().to_wire() as u64
 }
 
 /// Two title-bar presses this close (ms) are a double-click, which zooms the window as Golden Gate does. The gap is
@@ -4020,13 +4030,14 @@ impl Shell {
                 let focused = Some(i) == front;
                 let hover = self.desk.as_ref().unwrap().lights_hover == Some(w.app);
                 let mut cached = self.desk.as_mut().unwrap().window_cache.remove(&id);
+                let look = window_look();
                 let unchanged = cached.as_ref().is_some_and(|c|
-                    c.width == w.r.w as usize && c.height == w.r.h as usize && c.focused == focused && c.maximized == w.maximized && c.hover == hover);
+                    c.width == w.r.w as usize && c.height == w.r.h as usize && c.focused == focused && c.maximized == w.maximized && c.hover == hover && c.look == look);
                 // only the key state moved (Cmd-Tab, a click on a back window): a full-size app's window is its body plus
                 // the lights over it, so the body is copied again from the app's last frame (dimmed when it lost focus)
                 // instead of drawing the whole window afresh (a 31 ms frame on the lab PC, round 75)
                 let refocus = !unchanged && w.is_full_size() && matches!(w.app, AppId::External(_)) && cached.as_ref().is_some_and(|c|
-                    c.width == w.r.w as usize && c.height == w.r.h as usize && c.focused != focused && c.maximized == w.maximized && c.hover == hover);
+                    c.width == w.r.w as usize && c.height == w.r.h as usize && c.focused != focused && c.maximized == w.maximized && c.hover == hover && c.look == look);
                 if self.keyboard.shown() || self.keyboard.animating() {
                     self.desk.as_mut().unwrap().body_cache.remove(&w.app);
                 }
@@ -4154,7 +4165,7 @@ impl Shell {
                 // last change Settings reported): its body is reused and only the frame, dim and lights are drawn
                 // (bringing another window forward cost a 31 ms frame on the lab PC, round 75)
                 let quiet_body = !matches!(w.app, AppId::External(_)) && cached.as_ref().is_some_and(|c|
-                    c.width == w.r.w as usize && c.height == w.r.h as usize && c.focused != focused && c.maximized == w.maximized
+                    c.width == w.r.w as usize && c.height == w.r.h as usize && c.focused != focused && c.maximized == w.maximized && c.look == look
                     && c.drawn > self.last_input && c.drawn > self.settings_changed && t - c.drawn < 1000.)
                     && (w.app != AppId::Settings || self.settings.as_ref().is_some_and(|st| st.next_wake(t).map_or(true, |x| x > t)));
                 self.desk.as_mut().unwrap().reuse_body = quiet_body.then_some(w.app);
@@ -4173,7 +4184,7 @@ impl Shell {
                 let damage = crate::gfx::Damage::between(previous, &image.px, image.w, image.h);
                 let pixels:std::sync::Arc<[u32]> = if damage.is_empty() {cached.unwrap().pixels} else {std::sync::Arc::from(&image.px[..])};
                 self.desk.as_mut().unwrap().window_cache.insert(id,CachedWindow {
-                    width:image.w,height:image.h,pixels:pixels.clone(),focused,maximized:w.maximized,hover,drawn:t,
+                    width:image.w,height:image.h,pixels:pixels.clone(),focused,maximized:w.maximized,hover,drawn:t,look,
                 });
                 let pixels = (!damage.is_empty()).then_some(pixels);
                 let desk = self.desk.as_mut().unwrap();
@@ -6818,6 +6829,17 @@ mod material_rect_tests {
         let g = expand_material((0.0, 28.0, 120.0, 272.0, 0.0, Kind::Sidebar, None), (400.0, 300.0), false, 10.0);
         assert_eq!((g.x, g.y, g.w, g.h), (0.0, 18.0, 130.0, 282.0));
         assert_eq!(g.r, 10.0);
+    }
+    #[test]
+    fn a_light_dark_switch_changes_the_cached_window_look() {
+        let _lock = crate::test_support::global_lock();
+        bifrost_render::appearance::jump_to(false);
+        let dark = window_look();
+        bifrost_render::appearance::jump_to(true);
+        let light = window_look();
+        bifrost_render::appearance::jump_to(false);
+        assert_ne!(dark, light, "a window cached in Dark is not reused in Light (E2E13 finding 3)");
+        assert_eq!(window_look(), dark, "the same look reuses the cache");
     }
     #[test]
     fn a_maximized_window_keeps_the_declared_rect() {
