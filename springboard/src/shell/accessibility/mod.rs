@@ -230,8 +230,9 @@ impl AccessibilitySettings {
             increase_contrast: self.increase_contrast, reduce_transparency: self.reduce_transparency,
             button_shapes: self.button_shapes,
         });
-        // The window server polls this value (docs/window-server.md); the directory exists only on the device.
-        let _ = bifrost_render::appearance::display_options().write_to(bifrost_render::appearance::DISPLAY_FILE);
+        // The window server polls this value (docs/window-server.md); the directory exists only on the device. The
+        // file also carries the Light/Dark scheme its materials follow (`appearance_tick` rewrites it on a switch).
+        let _ = bifrost_render::appearance::write_display_file(bifrost_render::appearance::DISPLAY_FILE);
     }
 }
 

@@ -176,7 +176,8 @@ pub struct WmState {
     pub hidden: Vec<Window>,
     /// Frames of toplevels destroyed while minimized, for the toplevel their client creates again (`wm::ParkedFrames`).
     pub parked: crate::wm::ParkedFrames<smithay::reexports::wayland_server::backend::ClientId>,
-    /// The appearance materials follow: Dark unless `BIFROST_WM_APPEARANCE=light`.
+    /// The appearance materials follow: the shell's `dark=` line in its display file (`display_options::apply_scheme`),
+    /// Dark until it is read unless `BIFROST_WM_APPEARANCE=light`.
     pub material_dark: bool,
     pub lock_state: smithay::wayland::session_lock::SessionLockManagerState,
     /// A session lock is held: only `lock_surface` is drawn and takes input.

@@ -209,6 +209,10 @@ struct State {
     /// (`set_stack_rank` ranks only grow)
     restack:Vec<(u32,u16)>, stack_rank:u32,
     wm:Option<xdg_wm_base::XdgWmBase>, seat:Option<wl_seat::WlSeat>, windows:HashMap<u32,Window>, materials:HashMap<u32,Vec<Glass>>, scale:f32, window_events:Vec<WindowEvent>, target:Option<u32>,
+    /// the look (`material_look`) the windows' material plates were last drawn in: a Light/Dark step repaints every
+    /// window that has materials in full, since the plate under an unchanged translucent sidebar is drawn only where
+    /// the window has damage (E2E13 finding 3)
+    mat_look:Option<u64>,
     compositor: Option<wl_compositor::WlCompositor>, shm: Option<wl_shm::WlShm>,
     layer: Option<layer::ZwlrLayerShellV1>, surface: Option<wl_surface::WlSurface>,
     chrome:HashMap<u32,ChromeWindow>, chrome_target:Option<u32>, chrome_configured:bool,
@@ -600,6 +604,12 @@ impl Display {
     fn render_windows(&mut self) -> io::Result<()> {
         let qh = self.queue.handle();
         if let Some(g)=&mut self.gpu {
+            let look=material_look();
+            if self.state.mat_look.replace(look)!=Some(look) {
+                for (id,w) in self.state.windows.iter_mut() {
+                    if self.state.materials.contains_key(id) {w.pending.all();}
+                }
+            }
             // occlusion: a window that no visible pixel can show is not drawn; its pending damage waits for it
             let order:Vec<u32>=self.state.z.iter().copied().filter(|id|self.state.windows.get(id).is_some_and(|w|w.configured)).collect();
             let state_scale=self.state.scale;
@@ -1667,6 +1677,19 @@ fn window_buffer_count(count:usize, available:bool, dirty:bool) -> usize {
 #[cfg(test)]
 mod tests {
     use super::{dock_placement,DockEdge,DockPlacement,enter_hover,focus_on_configure,keep_refocus,min_size_of,takes_keyboard,unpressed_focus,WindowEvent,DEFAULT_MIN_SIZE,HAND_BACK_MS};
+    /// E2E13 3: a Light/Dark switch changes the look the material plates were drawn in, so every window with materials
+    /// is repainted in full instead of keeping the old plate under its unchanged translucent sidebar.
+    #[test]
+    fn a_scheme_switch_changes_the_material_look() {
+        let _lock=crate::test_support::global_lock();
+        bifrost_render::appearance::jump_to(false);
+        let dark=super::material_look();
+        bifrost_render::appearance::jump_to(true);
+        let light=super::material_look();
+        bifrost_render::appearance::jump_to(false);
+        assert_ne!(dark,light);
+        assert_eq!(super::material_look(),dark);
+    }
     /// E2E6 4: an absolute pointer arrives on a surface with an Enter alone; it is a hover at the screen point it landed
     /// on (the Dock magnifies and labels the icon under it), and nothing while a button is held.
     #[test]
@@ -1979,6 +2002,12 @@ impl Dispatch<foreign_handle::ZwlrForeignToplevelHandleV1, ()> for State {
 /// A window's material rects as blur-region rectangles in surface pixels (x, y, w, h): the materials are
 /// window-local and the surface starts `margin` px before the content (the shadow margin). The window's screen
 /// position is the compositor's, so it does not enter the region.
+/// What the presenter's material plates and blur looks depend on beyond the window's pixels: the scheme position
+/// (`Kind::style`, `Kind::inactive`) and Reduce Transparency.
+fn material_look() -> u64 {
+    ((bifrost_render::appearance::scheme().to_bits() as u64) << 1) | bifrost_render::appearance::reduce_transparency() as u64
+}
+
 fn blur_rects(materials:&[Glass], margin:i32) -> Vec<[i32;4]> {
     materials.iter().filter(|g|g.w>0.0&&g.h>0.0)
         .map(|g|[g.x.floor() as i32+margin,g.y.floor() as i32+margin,(g.w.ceil() as i32).max(1),(g.h.ceil() as i32).max(1)]).collect()

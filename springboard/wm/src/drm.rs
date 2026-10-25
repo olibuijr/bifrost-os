@@ -677,6 +677,9 @@ impl Drm {
         self.step_white_point(state);
         // Reduce Transparency and Increase Contrast from the shell's file: a change repaints every material
         if state.display.poll(std::time::Instant::now()) {
+            // ...and the Light/Dark scheme: every window's sidebar and title-bar plates follow a switch at once
+            let o = state.display.now;
+            crate::display_options::apply_scheme(&mut state.material_dark, &o);
             state.dirty = true;
         }
         if !should_render(self.paused, self.pending) {

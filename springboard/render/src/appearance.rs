@@ -303,6 +303,35 @@ pub fn jump_to(light: bool) {
     }
 }
 
+/// The window server's copy of `DISPLAY_FILE`: the display options and `dark=0|1`, the scheme the fade is heading for.
+/// The window server draws the plates and tints of every window's materials (sidebars, title bars) itself, so without
+/// this line a Light/Dark switch reached the apps' own pixels but left their materials in the old scheme (E2E13
+/// finding 3).
+pub fn display_file_text() -> String {
+    format!("{}dark={}\n", display_options().to_text(), !target_is_light() as u8)
+}
+
+/// The scheme last written by `write_display_file`: 0 never, 1 dark, 2 light.
+static FILE_SCHEME: AtomicU32 = AtomicU32::new(0);
+
+/// Writes `display_file_text` to `path` atomically (temp file, rename). A missing directory (off the device) is an error.
+pub fn write_display_file(path: &str) -> std::io::Result<()> {
+    FILE_SCHEME.store(1 + target_is_light() as u32, Relaxed);
+    let tmp = format!("{path}.tmp");
+    std::fs::write(&tmp, display_file_text())?;
+    std::fs::rename(&tmp, path)
+}
+
+/// Writes the file when the scheme heads somewhere other than what was last written (the shell calls it every tick);
+/// false when nothing needed writing. A failed write is not retried until the scheme changes again.
+pub fn sync_display_file(path: &str) -> bool {
+    if FILE_SCHEME.load(Relaxed) == 1 + target_is_light() as u32 {
+        return false;
+    }
+    let _ = write_display_file(path);
+    true
+}
+
 /// Linear mix of two premultiplied ARGB colours (`pack` order) at `p` (0 = `dark`, 1 = `light`).
 pub fn mix(dark: u32, light: u32, p: f32) -> u32 {
     let p = p.clamp(0.0, 1.0);
@@ -638,6 +667,25 @@ mod scheme_tests {
         assert!(tick(2140.0));
         assert!(scheme() > 0.0 && scheme() < 1.0);
         jump_to(false);
+    }
+
+    #[test]
+    fn the_window_server_file_carries_the_scheme_and_is_rewritten_when_it_changes() {
+        let _g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let dir = std::env::temp_dir().join(format!("bifrost-appearance-file-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("accessibility");
+        let path = path.to_str().unwrap();
+        jump_to(true);
+        assert!(display_file_text().ends_with("dark=0\n"), "light heads the file to dark=0");
+        write_display_file(path).unwrap();
+        assert!(!sync_display_file(path), "unchanged: not written again");
+        jump_to(false);
+        assert!(sync_display_file(path), "a switch to dark is written at once");
+        let text = std::fs::read_to_string(path).unwrap();
+        assert!(text.contains("dark=1\n") && text.contains("reduce_transparency="), "{text}");
+        assert!(!sync_display_file(path));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
