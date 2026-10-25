@@ -501,8 +501,10 @@ pub struct Geometry {
     /// Where the body (the page) starts and ends; the find bar sits above it when it is open.
     pub body_top: f32,
     pub body_bottom: f32,
-    /// The format bar, the ruler (zero height when the document is plain text) and the find bar's top edge.
+    /// The format bar, the ruler (both zero height when the document is plain text) and the find bar's top edge.
     pub format_top: f32,
+    /// The format bar's height: `FORMAT_H` for rich text, 0 for plain text, which has no formatting to show (E2E9 11).
+    pub format_h: f32,
     pub ruler_top: f32,
     pub ruler_h: f32,
     pub find_top: f32,
@@ -518,14 +520,16 @@ pub struct Geometry {
 
 #[cfg_attr(not(test), allow(dead_code))]
 pub fn geometry(width: f32, height: f32, find_open: bool, ruler: bool) -> Geometry {
-    geometry_with(width, height, find_open, ruler, false)
+    geometry_with(width, height, find_open, ruler, false, true)
 }
 
-/// The regions, with the text column as wide as the window (`wrap_to_window`) instead of the readable width.
-pub fn geometry_with(width: f32, height: f32, find_open: bool, ruler: bool, wrap_to_window: bool) -> Geometry {
+/// The regions, with the text column as wide as the window (`wrap_to_window`) instead of the readable width. `format`:
+/// the format bar shows (a rich text document); a plain text document has none, as the reference editor shows it.
+pub fn geometry_with(width: f32, height: f32, find_open: bool, ruler: bool, wrap_to_window: bool, format: bool) -> Geometry {
     let bar = UNIFIED_BAR_PT;
     let format_top = bar;
-    let ruler_top = format_top + FORMAT_H;
+    let format_h = if format { FORMAT_H } else { 0.0 };
+    let ruler_top = format_top + format_h;
     let ruler_h = if ruler { RULER_H } else { 0.0 };
     let find_top = ruler_top + ruler_h;
     let body_top = find_top + if find_open { FIND_H } else { 0.0 };
@@ -540,6 +544,7 @@ pub fn geometry_with(width: f32, height: f32, find_open: bool, ruler: bool, wrap
         body_top,
         body_bottom,
         format_top,
+        format_h,
         ruler_top,
         ruler_h,
         find_top,
@@ -864,26 +869,6 @@ pub fn spacing_buttons(ui: &Ui, l: &PanelLayout) -> Vec<Button> {
 /// The buttons of the Make Plain Text confirmation: Remove Attachments is the default.
 pub fn plain_buttons(ui: &Ui, l: &PanelLayout) -> Vec<Button> {
     sheet_buttons(ui, l, &[("Cancel", Action::PlainCancel, false), ("Remove Attachments", Action::PlainDone, true)])
-}
-
-/// The close confirmation's buttons, in the Golden Gate order: Don't Save, Cancel, then Save (the default).
-pub fn close_alert_buttons(ui: &Ui, l: &PanelLayout) -> Vec<Button> {
-    use bifrost_app::document::alert;
-    sheet_buttons(
-        ui,
-        l,
-        &[
-            ("Don\u{2019}t Save", Action::CloseAnswer(alert::DONT_SAVE as u8), false),
-            ("Cancel", Action::CloseAnswer(alert::CANCEL as u8), false),
-            ("Save", Action::CloseAnswer(alert::SAVE as u8), true),
-        ],
-    )
-}
-
-/// A confirmation whose title and message name things from elsewhere (a document's name): each cut to the panel's width.
-pub fn draw_alert(c: &mut dyn Canvas, ui: &Ui, l: &PanelLayout, title: &str, message: &str, buttons: &[Button]) {
-    let w = ui.pt(l.right - l.labels_x);
-    draw_confirm(c, ui, l, &ui.fit(title, MAC_BODY_PT, w), &ui.fit(message, MAC_BODY_PT, w), buttons);
 }
 
 /// The confirmation sheet: its title, a one-line message in the first row, and its buttons.
@@ -1397,6 +1382,9 @@ mod tests {
     fn a_closed_find_bar_takes_no_room() {
         assert_eq!(geometry(800.0, 600.0, false, false).body_top, UNIFIED_BAR_PT + FORMAT_H);
         assert_eq!(geometry(800.0, 600.0, false, true).body_top, UNIFIED_BAR_PT + FORMAT_H + RULER_H);
+        // E2E9 11: plain text has no format bar, the page starts under the title row
+        let plain = geometry_with(800.0, 600.0, false, false, false, false);
+        assert_eq!((plain.format_h, plain.ruler_top, plain.body_top), (0.0, UNIFIED_BAR_PT, UNIFIED_BAR_PT));
     }
 
     #[test]

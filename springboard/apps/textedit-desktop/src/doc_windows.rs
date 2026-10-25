@@ -458,8 +458,13 @@ mod tests {
         assert_eq!(app.current_doc, Some(second));
         assert!(app.close_alert_here());
         assert!(!app.type_into("x"), "typing does not reach the document behind the sheet");
-        // Cancel: the document and its window stay
         use bifrost_app::document::alert;
+        // E2E9 6: the kit's alert sheet, hanging from the title bar, the whole name in its title, Save the default
+        let sheet = app.close_sheet().expect("the confirmation is a sheet on this window");
+        assert!(sheet.title.contains("Untitled 2"), "the name is not cut: {}", sheet.title);
+        assert_eq!(sheet.default_button(), Some(alert::SAVE));
+        assert_eq!(sheet.cancel_button(), Some(alert::CANCEL));
+        // Cancel: the document and its window stay
         assert!(app.window_event(&ctx, w3, Input::Key(KeyInput::Code(27))));
         assert!(app.docs.alert_doc().is_none());
         assert_eq!(app.docs.len(), 2);

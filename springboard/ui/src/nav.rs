@@ -398,6 +398,31 @@ impl Alert {
         order.extend(default);
         order
     }
+
+    /// The alert as a document-modal sheet (`NativeAlert.beginSheetModal(for:)`): it hangs from its window's title bar
+    /// (`sheet::Sheet::layout`), its title and message wrap instead of being cut, the default button is filled with the
+    /// accent and answers Return, the cancel button answers Escape. Buttons keep [`Alert::button_order`] (the sheet lists
+    /// them right to left). A destructive action stays destructive, so it is never the accent-filled Return button.
+    pub fn sheet(&self) -> crate::sheet::Sheet {
+        use crate::sheet::{ButtonRole, Sheet, SheetButton};
+        let default = self.default_action().map(|a| a.id);
+        let buttons = self
+            .button_order()
+            .into_iter()
+            .rev()
+            .map(|i| {
+                let a = &self.actions[i];
+                let role = match a.style {
+                    AlertStyle::Cancel => ButtonRole::Cancel,
+                    AlertStyle::Destructive => ButtonRole::Destructive,
+                    AlertStyle::Default if Some(a.id) == default => ButtonRole::Default,
+                    AlertStyle::Default => ButtonRole::Normal,
+                };
+                SheetButton::new(a.id, &a.label, role)
+            })
+            .collect();
+        Sheet::alert(&self.title, &self.message, buttons)
+    }
 }
 
 #[cfg(test)]
@@ -547,6 +572,29 @@ mod tests {
         let l = Toolbar::new(vec![it]).layout(Rect { x: 10.0, y: 5.0, w: 200.0, h: 30.0 }, 50.0, 8.0);
         assert_eq!(l.menu_anchor(7, 4.0), Some((10.0, 39.0)));
         assert_eq!(l.menu_anchor(8, 4.0), None);
+    }
+
+    #[test]
+    /// E2E9 6: a document's close confirmation is a sheet whose Save is the accent-filled Return button, rightmost, with
+    /// Cancel for Escape and Don't Save at the left.
+    #[test]
+    fn an_alert_becomes_a_sheet_with_the_default_rightmost() {
+        use crate::keys::Key;
+        use crate::sheet::ButtonRole;
+        let a = Alert::new("Do you want to save the changes made to the document \u{201c}Untitled\u{201d}?", "Your changes will be lost if you don\u{2019}t save them.")
+            .action(1, "Save", AlertStyle::Default)
+            .action(2, "Cancel", AlertStyle::Cancel)
+            .action(3, "Don\u{2019}t Save", AlertStyle::Destructive);
+        let sheet = a.sheet();
+        assert!(sheet.alert, "sized from its wrapped text");
+        assert_eq!(sheet.title, a.title, "the whole title, never cut");
+        let roles: Vec<(u32, ButtonRole)> = sheet.buttons.iter().map(|b| (b.id, b.role)).collect();
+        assert_eq!(roles, vec![(1, ButtonRole::Default), (2, ButtonRole::Cancel), (3, ButtonRole::Destructive)], "first is rightmost");
+        assert_eq!(sheet.key(Key::Return).0, Some(1));
+        assert_eq!(sheet.key(Key::Escape).0, Some(2));
+        // it hangs from the title bar of its window
+        let parent = Rect { x: 0.0, y: 0.0, w: 800.0, h: 600.0 };
+        assert_eq!(sheet.layout(parent, 52.0, 1.0).panel.y, 52.0);
     }
 
     #[test]
