@@ -800,16 +800,34 @@ fn dictionary_group(query: &str) -> Option<(Group, bool)> {
     dict::lookup(query).map(|(d, explicit)| (Group { title: "Dictionary", hits: vec![Hit::Definition { word: d.word, dictionary: d.dictionary, preview: d.preview }] }, explicit))
 }
 
-/// Whether the definition group `g` is for the query's own word (an exact headword) while the Top Hit `top` only
-/// matched loosely (its title neither starts with the query nor has a word that does): the headword ranks first then.
+/// Whether the definition group `g` is for the query's own word (an exact headword) while the Top Hit `top` was
+/// matched only by scattered letters: the headword ranks first then. A Top Hit found by an alias (an app's
+/// `search_aliases`, a Settings pane's keywords), a prefix, a word start or a contiguous run of its title keeps its
+/// place, so "terminal" stays the Term app and "preview" the Viewer.
 fn headword_beats_top(query: &str, g: &Group, top: Option<&Group>) -> bool {
     let q = fuzzy::fold(query.trim());
     let exact = g.hits.iter().any(|h| matches!(h, Hit::Definition { word, dictionary, .. } if !dictionary.is_empty() && fuzzy::fold(word) == q));
     let Some(top_hit) = top.and_then(|t| t.hits.first()) else { return false };
+    exact && !top_matched_well(&q, top_hit)
+}
+
+/// Whether the folded query `q` matches `hit` better than by scattered letters: its title by prefix, word start or a
+/// contiguous run, or one of its aliases (an app's aliases as word prefixes, a Settings pane's keywords strictly).
+fn top_matched_well(q: &str, hit: &Hit) -> bool {
+    if q.is_empty() {
+        return false;
+    }
+    let m = fuzzy::Matcher::new(q);
     let name_of = |app: AppId| apps().iter().find(|a| a.id == app).map_or(String::new(), |a| a.name.to_string());
-    let (title, _) = row_text(top_hit, name_of, (0, 0));
-    let strong = fuzzy::Matcher::new(query).rank(&title).is_some_and(|r| r.kind != fuzzy::Kind::Subsequence);
-    exact && !strong
+    let (title, _) = row_text(hit, name_of, (0, 0));
+    if strict_match(&m, q, &fuzzy::fold(&title)) {
+        return true;
+    }
+    match hit {
+        Hit::App(id) => apps().iter().find(|a| a.id == *id).is_some_and(|a| starts_a_word(&fuzzy::fold(super::apps::search_aliases(a.icon)), q)),
+        Hit::Settings(page) => fixed().aliases.iter().any(|(h, k)| *h == Hit::Settings(*page) && strict_match(&m, q, k)),
+        _ => false,
+    }
 }
 
 /// The groups in display order: the calculator answer, the Top Hit, the sections, the Documents, the files, and the
@@ -3656,6 +3674,11 @@ mod file_actions_tests {
         assert!(!headword_beats_top("lant", &def("lantern", "WordNet"), Some(&top(Hit::Settings("Display & Brightness")))));
         assert!(!headword_beats_top("lantern", &def("lantern", ""), Some(&top(Hit::Settings("Display & Brightness")))));
         assert!(!headword_beats_top("lantern", &def("lantern", "WordNet"), None), "with no top hit the order stays");
+        // a top hit found by an alias keeps its place: "terminal" is Term, "preview" is the Viewer
+        assert!(!headword_beats_top("terminal", &def("terminal", "WordNet"), Some(&top(Hit::App(AppId::Terminal)))));
+        assert!(!headword_beats_top("Terminal", &def("terminal", "WordNet"), Some(&top(Hit::App(AppId::Terminal)))), "case is ignored");
+        // a contiguous run inside the title is strong too
+        assert!(!headword_beats_top("isco", &def("isco", "WordNet"), Some(&top(Hit::City("San Francisco")))));
     }
 }
 
