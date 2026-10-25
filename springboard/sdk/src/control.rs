@@ -341,8 +341,14 @@ fn peer_is_owner(stream: &UnixStream) -> bool {
     let rc = unsafe {
         getsockopt(stream.as_raw_fd(), SOL_SOCKET, SO_PEERCRED, &mut cred as *mut Ucred as *mut c_void, &mut len)
     };
-    let initial = std::fs::read_to_string("/proc/self/uid_map").is_ok_and(|m| is_initial_uid_map(&m));
-    rc == 0 && peer_uid_allowed(cred.uid, unsafe { geteuid() }, initial)
+    rc == 0 && peer_uid_allowed(cred.uid, unsafe { geteuid() }, in_initial_user_namespace())
+}
+
+/// Whether this process runs in the initial user namespace. A process's user namespace and its uid map are fixed
+/// once the app runs, so `/proc/self/uid_map` is read once, on the first connection.
+fn in_initial_user_namespace() -> bool {
+    static INITIAL: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *INITIAL.get_or_init(|| std::fs::read_to_string("/proc/self/uid_map").is_ok_and(|m| is_initial_uid_map(&m)))
 }
 
 /// True for the initial user namespace's uid map: the whole range mapped onto itself (`0 0 4294967295`).
