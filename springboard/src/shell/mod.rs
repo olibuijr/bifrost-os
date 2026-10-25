@@ -960,6 +960,10 @@ pub struct Shell {
     share_svc: Option<crate::net::share::Service>,
     share_prompt: Option<share::prompt::Prompt>,
     look_up: Option<look_up_popover::Popover>,
+    /// the `SelectionRequest` Look Up or a service waits on from the front app (`services_route::with_selection`), and
+    /// the last request number sent
+    selection_ask: Option<services_route::SelectionAsk>,
+    selection_request: u32,
     /// the Look Up in Visual Search panel and the search it waits for (`visual_search_panel`)
     visual_search: Option<visual_search_panel::Session>,
     /// a photo being decoded for the panel, with the search to run on it (`visual_search_panel`)
@@ -1405,6 +1409,8 @@ impl Shell {
             share_svc: None,
             share_prompt: None,
             look_up: None,
+            selection_ask: None,
+            selection_request: 0,
             visual_search: None,
             visual_search_load: None,
             share_rows: 0,
@@ -2405,6 +2411,8 @@ impl Shell {
         if self.bell.pending() { due.add(Some(t)); }
         // the Look Up popover fills its definition in when the dictionaries finish loading
         if self.look_up_waiting() { due.add(Some(t + 50.0)); }
+        // a service waits on the front app's selection until its deadline, then takes the word at the caret
+        if let Some(at) = self.selection_deadline() { due.add(Some(at)); }
         if let Some(end) = self.bell.flash_end(t) { due.add(Some(end.min(t + 33.0))); }
         if let Some(when)=self.desk.as_ref().and_then(|d|d.dock_hide_at){due.add(Some(when));}
         // a submenu opens when its hover delay is over, a row in the safe triangle takes over after its rest
@@ -4141,6 +4149,8 @@ impl Shell {
         self.desktop_menu_flyout_tick(t);
         // the dictionaries the Look Up popover waits for came in
         self.look_up_tick();
+        // the front app did not say what it has selected in time (`services_route::with_selection`)
+        self.selection_tick(t);
         // an item's picture in the open Downloads stack finished drawing: the stack redraws with it
         #[cfg(feature = "desktop-wayland")]
         if self.stack_thumbs_tick() {

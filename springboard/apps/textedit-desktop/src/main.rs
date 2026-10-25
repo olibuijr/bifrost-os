@@ -2508,6 +2508,11 @@ impl App for TextEditApp {
         "is.olibuijr.textedit.desktop"
     }
 
+    /// Look Up and the Services menu act on the document's selection (the text is drawn here, not in an SDK field).
+    fn selected_text(&mut self, _ctx: &Ctx) -> Option<String> {
+        Some(active_doc(&self.docs).and_then(|doc| doc.text.selected_text()).unwrap_or_default())
+    }
+
     fn configure(&mut self, ctx: &Ctx) {
         // the learned words and the settings are read once the app has its preferences
         self.spelling.load(ctx);

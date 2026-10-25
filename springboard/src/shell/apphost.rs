@@ -2047,6 +2047,7 @@ impl Shell {
                 };
                 self.ext_send(slot as usize, &bifrost_proto::ToApp::ServiceReply { request, ok, body });
             }
+            ToShell::SelectionReply { request, text } => self.selection_reply(slot, request, &text, t),
             ToShell::DistPost { name, user_info } => {
                 let m = bifrost_proto::ToApp::DistNotify { name, user_info };
                 for other in 0..self.ext.len() {
@@ -2665,6 +2666,8 @@ impl Shell {
                     r @ (ToShell::QuickSearchIndex(_) | ToShell::QuickSearchDelete { .. }) => rich_msgs.push((slot as u8, r)),
                     r @ ToShell::DistPost { .. } => rich_msgs.push((slot as u8, r)),
                     r @ ToShell::ServiceCall { .. } => rich_msgs.push((slot as u8, r)),
+                    // the answer to a SelectionRequest (Look Up, Services); `selection_reply` drops one it did not ask for
+                    r @ ToShell::SelectionReply { .. } => rich_msgs.push((slot as u8, r)),
                     r @ (ToShell::Preview { .. } | ToShell::PreviewClose) => rich_msgs.push((slot as u8, r)),
                     r @ (ToShell::WorkspaceRequest { .. } | ToShell::WorkspaceSubscribe { .. }) => rich_msgs.push((slot as u8, r)),
                     r @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::NotifySettings { .. } | ToShell::NotifyAuthorize { .. } | ToShell::NotifySchedule { .. }) => rich_msgs.push((slot as u8, r)),

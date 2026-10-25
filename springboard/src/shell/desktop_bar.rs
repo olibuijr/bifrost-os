@@ -903,7 +903,7 @@ impl Shell {
             Menu::Arrange=>self.arrange_rows(),
             Menu::Dock=>{use super::desktop_dock::{Change,Position};let p=self.dock_preferences();let d=self.desk.as_ref().unwrap();let mut rows=Vec::new();if let Some(index)=d.dock_menu_target{let name=super::apps().get(index).map(|a|a.name).unwrap_or("Application");rows.push(Row::label(name));rows.push(Row::action("Open / Show",Action::Dock(Change::Open(index))));let pinned=self.dock_app_key(index).is_some_and(|key|p.pinned.contains(&key));rows.push(Row::action(if pinned{"Remove from Dock"}else{"Keep in Dock"},Action::Dock(Change::Pin(index))));rows.push(Row::action("Quit",Action::Dock(Change::Quit(index))));if let Some(AppId::External(slot))=super::apps().get(index).map(|a|a.id){if let Some(Some(host))=self.ext.get(slot as usize){for (id,title) in host.windows.menu_items(&host.id){if let Ok(n)=u16::try_from(id){rows.push(Row::action(title,Action::Open(AppId::ExternalWindow(slot,n))));}}if !host.windows.of_app(&host.id).is_empty(){rows.push(Row::separator());}let quick=self.quick_actions_for(slot as usize);for (i,item) in quick.iter().enumerate(){rows.push(Row::action(item.title.clone(),Action::QuickAction(slot,i as u8)));}if !quick.is_empty(){rows.push(Row::separator());}for item in &host.dock_menu{rows.push(if item.enabled{Row::action(item.title.clone(),Action::DockMenu(slot,item.id))}else{Row::label(item.title.clone())});}if !host.dock_menu.is_empty(){rows.push(Row::separator());}}}}rows.push(Row::label("Dock"));for (label,position) in [("Bottom",Position::Bottom),("Left",Position::Left),("Right",Position::Right)] {rows.push(Row::action(format!("{} {}",if p.position==position{"✓"}else{" "},label),Action::Dock(Change::Position(position))));}rows.push(Row::action(format!("{} Automatically hide and show",if p.autohide{"✓"}else{" "}),Action::Dock(Change::Autohide)));rows.push(Row::action("Smaller Icons",Action::Dock(Change::Size(-8.))));rows.push(Row::action("Larger Icons",Action::Dock(Change::Size(8.))));rows},
             Menu::App=>self.application_menu_rows(),
-            Menu::Services=>services_rows(super::services_route::menu_entries()),
+            Menu::Services=>services_rows(super::services_route::menu_entries(self.front_selection())),
             // About This Computer, the settings and the store, Recent Items (a submenu), Force Quit, the power rows, then Lock Screen
             // and Log Out with the account's name (Golden Gate's system menu)
             Menu::System=>{use super::power_menu::PowerAction;use super::utility_window::Kind;let user=self.fit_chrome(super::utility_window::user_name(),13.,self.ui.pt(180.));vec![Row::action("About This Computer",Action::Window(Kind::About)),Row::separator(),Row::action("System Settings…",Action::Settings("")),Row::action("App Store…",Action::Open(AppId::AppStore)),Row::separator(),Row::action("Recent Items",Action::Submenu(Menu::Recent)),Row::separator(),Row::action("Force Quit…",Action::Window(Kind::ForceQuit)).key("alt+cmd+escape"),Row::separator(),Row::action("Sleep",Action::Sleep),Row::action("Restart…",Action::Halt(PowerAction::Restart)),Row::action("Shut Down…",Action::Halt(PowerAction::Off)),Row::separator(),Row::action("Lock Screen",Action::Lock).key("ctrl+cmd+q"),Row::action(format!("Log Out {user}…"),Action::Window(Kind::LogOut)).key("shift+cmd+q")]},
@@ -1067,6 +1067,8 @@ impl Shell {
         if let Some((x,y,w,h))=self.cmdtab_rect(){v.push((x as i32,y as i32,w as i32,h as i32));}
         // the system menu's card (Force Quit, About, Log Out) is an overlay surface above the windows as well
         if let Some((x,y,w,h))=self.utility_rect(){v.push((x as i32,y as i32,w as i32,h as i32));}
+        // and the Look Up popover
+        if let Some((x,y,w,h))=self.look_up_rect(){v.push((x as i32,y as i32,w as i32,h as i32));}
         // a tablet's on-screen keyboard, from its resting top to the bottom edge: drawn here while it slides, and its
         // rows cleared again on the frame after it is gone
         if self.desk_keyboard_visible(){let top=self.kb_top().max(0.) as i32;v.push((0,top,self.w,self.h-top));}
@@ -1806,6 +1808,14 @@ impl Shell {
             let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
             let mut image=Image{w,h,px:data};image.apply_mask(&mask);
             frames.push(crate::bare::wayland::ChromeFrame{shape:Vec::new(),dock:None,id:super::utility_window::CHROME_ID,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
+        }
+        // The Look Up popover: an overlay surface above every window, like a menu (its rank is the panels', `chrome_z`).
+        // Drawn only into the shell's frame it lay under the app windows and only its top line showed (E2E8 2). It takes
+        // the pointer over its card; its keys (Escape) come from the shell's own keyboard reader.
+        if let Some(((x,y,w,h),mask))=self.look_up_overlay() {
+            let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
+            let mut image=Image{w,h,px:data};image.apply_mask(&mask);
+            frames.push(crate::bare::wayland::ChromeFrame{shape:Vec::new(),dock:None,id:super::look_up_popover::CHROME_ID,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
         }
         // The Apps grid: id 8, an overlay surface above every window that takes the keyboard while it is
         // open. It spans the veil only, so the menu bar and the Dock stay their own surfaces and stay usable. It is
