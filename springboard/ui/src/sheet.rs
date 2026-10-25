@@ -47,8 +47,9 @@ pub const ALERT_TITLE_LINE_PT: f32 = 17.0;
 pub const ALERT_MESSAGE_LINE_PT: f32 = 15.0;
 
 /// How many lines `text` takes when word-wrapped at `per_line` characters: each `\n` starts a paragraph (an empty
-/// one is a line), a word longer than a line is broken across lines. The renderer wraps with real glyph widths, so
-/// the budget per line is conservative and the panel is tall enough for every line: alert text is never truncated.
+/// one is a line), a word longer than a line is broken across lines. Only the first estimate of an alert's height:
+/// wide glyphs wrap to more lines than a character count says, so the renderer measures the real wrap and records it
+/// (`record_alert_height`), and the alert is sized from that measurement from then on.
 pub fn wrapped_lines(text: &str, per_line: usize) -> usize {
     let per_line = per_line.max(1);
     text.split('\n')
@@ -72,6 +73,49 @@ pub fn wrapped_lines(text: &str, per_line: usize) -> usize {
             lines
         })
         .sum()
+}
+
+/// The panel height of an alert whose title takes `title_lines` lines and whose message `message_lines` lines (0 for
+/// no message). The renderer draws the title from the top padding at `ALERT_TITLE_LINE_PT` a line, the message 26 pt
+/// below the title's first line at `ALERT_MESSAGE_LINE_PT` a line, and keeps 16 pt above the buttons.
+pub fn alert_height(title_lines: usize, message_lines: usize) -> f32 {
+    let title_h = 18.0 + title_lines.saturating_sub(1) as f32 * ALERT_TITLE_LINE_PT;
+    let msg_h = if message_lines == 0 { 0.0 } else { message_lines as f32 * ALERT_MESSAGE_LINE_PT + 8.0 };
+    SHEET_PAD_PT * 2.0 + title_h + msg_h + 16.0 + BUTTON_H_PT
+}
+
+/// How many measured alert heights are kept (one per alert text and width; an app shows one or two at a time).
+const MEASURED_KEEP: usize = 8;
+
+thread_local! {
+    /// Alert heights the renderer measured (`record_alert_height`): title, message, width bits, height.
+    static MEASURED: std::cell::RefCell<Vec<(String, String, u32, f32)>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// The renderer wrapped an alert of `title` and `message` at panel width `width_pt` with real glyph widths and needs
+/// `height_pt` (`alert_height` of its line counts). From then on `Sheet::alert` and `Sheet::layout` size that alert
+/// to it, so the panel, the drawn text and the button hit areas always agree, also for a sheet built again each frame.
+pub fn record_alert_height(title: &str, message: &str, width_pt: f32, height_pt: f32) {
+    MEASURED.with(|m| {
+        let mut m = m.borrow_mut();
+        let bits = width_pt.to_bits();
+        if let Some(i) = m.iter().position(|(t, msg, w, _)| *w == bits && t == title && msg == message) {
+            let mut entry = m.remove(i);
+            entry.3 = height_pt;
+            m.push(entry);
+        } else {
+            if m.len() >= MEASURED_KEEP {
+                m.remove(0);
+            }
+            m.push((title.to_string(), message.to_string(), bits, height_pt));
+        }
+    });
+}
+
+/// The height `record_alert_height` recorded for this alert text at `width_pt`, if it was drawn.
+pub fn measured_alert_height(title: &str, message: &str, width_pt: f32) -> Option<f32> {
+    let bits = width_pt.to_bits();
+    MEASURED.with(|m| m.borrow().iter().rev().find(|(t, msg, w, _)| *w == bits && t == title && msg == message).map(|e| e.3))
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -110,13 +154,24 @@ impl Sheet {
     }
 
     /// An alert sheet: title, informative text and buttons; height follows the text. Both the title and the message
-    /// wrap (`wrapped_lines`): a long title such as a whole sentence is never cut off.
+    /// wrap: a long title such as a whole sentence is never cut off. The height is the one the renderer measured for
+    /// this text with real glyph widths (`record_alert_height`) once the alert has been drawn, and until then an
+    /// estimate from character counts (`wrapped_lines`); `layout` and `hit` always use the measured height.
     pub fn alert(title: &str, message: &str, buttons: Vec<SheetButton>) -> Self {
-        let lines = wrapped_lines(message, CHARS_PER_LINE);
-        let msg_h = if message.is_empty() { 0.0 } else { lines as f32 * ALERT_MESSAGE_LINE_PT + 8.0 };
-        let title_h = 18.0 + (wrapped_lines(title, TITLE_CHARS_PER_LINE) - 1) as f32 * ALERT_TITLE_LINE_PT;
-        let h = SHEET_PAD_PT * 2.0 + title_h + msg_h + 16.0 + BUTTON_H_PT;
+        let message_lines = if message.is_empty() { 0 } else { wrapped_lines(message, CHARS_PER_LINE) };
+        let estimate = alert_height(wrapped_lines(title, TITLE_CHARS_PER_LINE), message_lines);
+        let h = measured_alert_height(title, message, ALERT_W_PT).unwrap_or(estimate);
         Sheet { title: title.to_string(), message: message.to_string(), buttons, size: (ALERT_W_PT, h), alert: true }
+    }
+
+    /// The panel height before it is clamped to the parent: for an alert the renderer measured, that measurement (so
+    /// the buttons are hit where they were drawn), else `size.1`.
+    pub fn height(&self) -> f32 {
+        if self.alert {
+            measured_alert_height(&self.title, &self.message, self.size.0).unwrap_or(self.size.1)
+        } else {
+            self.size.1
+        }
     }
 
     pub fn default_button(&self) -> Option<u32> {
@@ -142,7 +197,7 @@ impl Sheet {
     pub fn layout(&self, parent: Rect, titlebar_h: f32, progress: f32) -> SheetLayout {
         let p = progress.clamp(0.0, 1.0);
         let w = self.size.0.min(parent.w);
-        let h = self.size.1.min((parent.h - titlebar_h).max(0.0));
+        let h = self.height().min((parent.h - titlebar_h).max(0.0));
         let rest_y = parent.y + titlebar_h;
         let panel = Rect { x: parent.x + (parent.w - w) / 2.0, y: rest_y - h * (1.0 - p), w, h };
         let mut x = panel.right() - SHEET_PAD_PT;
@@ -313,6 +368,29 @@ mod tests {
         let n = wrapped_lines(&long.title, TITLE_CHARS_PER_LINE);
         assert!(n >= 3, "the sentence takes {n} lines");
         assert_eq!(long.size.1 - short.size.1, (n - 1) as f32 * ALERT_TITLE_LINE_PT);
+    }
+
+    #[test]
+    fn a_measured_alert_height_sizes_the_panel_and_moves_the_buttons_with_it() {
+        let buttons = || vec![SheetButton::new(1, "OK", ButtonRole::Default)];
+        let (title, message) = ("Wide", "WWWW MMMM WWWW MMMM WWWW MMMM WWWW");
+        let parent = Rect { x: 0.0, y: 0.0, w: 800.0, h: 600.0 };
+        let estimated = Sheet::alert(title, message, buttons());
+        assert_eq!(estimated.size.1, alert_height(1, 1), "34 characters are one line by count");
+        // the renderer wrapped the message to three lines with real glyph widths
+        let measured = alert_height(1, 3);
+        record_alert_height(title, message, ALERT_W_PT, measured);
+        let l = estimated.layout(parent, 28.0, 1.0);
+        assert_eq!(l.panel.h, measured, "a sheet built before the measurement takes it too");
+        assert_eq!(l.buttons[0].1.y, l.panel.bottom() - SHEET_PAD_PT - BUTTON_H_PT);
+        assert_eq!(estimated.hit(parent, 28.0, 1.0, l.buttons[0].1.x + 2.0, l.buttons[0].1.y + 2.0), Hit::Button(1));
+        let rebuilt = Sheet::alert(title, message, buttons());
+        assert_eq!(rebuilt.size.1, measured, "a sheet built again each frame starts from the measurement");
+        assert_eq!(rebuilt.layout(parent, 28.0, 1.0), l);
+        // another width is another measurement; free-form sheets keep their own size
+        assert_eq!(measured_alert_height(title, message, 400.0), None);
+        let free = Sheet::new(title, (300.0, 120.0), buttons());
+        assert_eq!(free.height(), 120.0);
     }
 
     #[test]
