@@ -1657,8 +1657,10 @@
         let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
         sh.desk_open(AppId::Files,0.);
         let m=sh.desk_metrics();
-        let r=sh.desk.as_ref().unwrap().wins[0].r;
-        let (x,y)=((r.x+m.light_x+m.light/2) as f32,(r.y+m.title/2) as f32);
+        // the centre of the drawn close light: a full-size window (the App Store here) has them over its sidebar
+        let w=sh.desk.as_ref().unwrap().wins[0];
+        let (r,lr)=(w.r,w.light_rect(&m,0));
+        let (x,y)=((lr.x+lr.w/2) as f32,(lr.y+lr.h/2) as f32);
         sh.desktop_pointer(x,y,false,1.);
         assert_eq!(sh.desk.as_ref().unwrap().lights_hover,Some(sh.desk.as_ref().unwrap().wins[0].app));
         sh.desktop_pointer(x,(r.y+m.title+40) as f32,false,2.);

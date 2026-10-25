@@ -766,7 +766,7 @@ impl Win {
         Rect { x: self.r.x, y: self.r.y + t, w: self.r.w, h: (self.r.h - t).max(1) }
     }
 
-    fn light_rect(&self, m: &Metrics, i: usize) -> Rect {
+    pub(super) fn light_rect(&self, m: &Metrics, i: usize) -> Rect {
         if full_size(self.app) {
             use bifrost_ui::prefs_layout::Frame;
             let d = (14.0 * m.pt).round() as i32;
