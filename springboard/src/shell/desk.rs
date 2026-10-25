@@ -704,16 +704,29 @@ pub fn full_size(app: AppId) -> bool {
 /// The unified title and toolbar row of a full-size app window, in points (`bifrost_app::layout::UNIFIED_BAR_PT`).
 pub const UNIFIED_BAR_PT: f32 = 52.0;
 
+/// Whether frame `r` is a tile of the work area `a`: as tall or as wide as the work area (a half, the Fill frame,
+/// `remembered_size`), or within 3 % of one of the tiles on both sides (a quarter, the Centre). The window server sizes
+/// a tile; the shell keeps no flag for one, as the frame comes back from it (`desk_tile_window`).
+#[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+fn tiled_frame(a: Rect, r: Rect) -> bool {
+    use Tile::*;
+    let near = |t: Rect| (t.w - r.w).abs() * 100 <= a.w * 3 && (t.h - r.h).abs() * 100 <= a.h * 3;
+    !remembered_size(a, (r.w, r.h)) || [TopLeft, TopRight, BottomLeft, BottomRight, Center].into_iter().any(|t| near(tile_rect(a, t)))
+}
+
 /// The size (px) window `w` of a client app is drawn and presented at when the app's newest frame is `frame` px: the
 /// window's own frame, or, while that frame is smaller than the window's body (the app was configured to a larger size and
 /// has not drawn at it yet), only what the frame covers plus the title bar, as a compositor keeps a surface at its last
 /// buffer's size until the client commits a new one. The window never paints its own black past the app's pixels
 /// (0.10.39: Mail restored at 2560x1309 drew at 1200x860; the rest of the window was black over the wallpaper). A
-/// full-screen window, a window with no frame yet and a frame that covers the body keep the window's frame.
+/// full-screen window, a window with no frame yet and a frame that covers the body keep the window's frame, and so do a
+/// zoomed (maximized) and a tiled window (`tiled_frame`): xdg-shell forbids
+/// a maximized surface committing smaller than the size it was configured to, and the window server sized a tile.
 #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
 pub fn presented_size(w: &Win, m: &Metrics, frame: Option<(usize, usize)>) -> (i32, i32) {
     let whole = (w.r.w.max(1), w.r.h.max(1));
-    let Some((fw, fh)) = frame.filter(|&(fw, fh)| fw > 0 && fh > 0 && !w.full) else { return whole };
+    let held = w.full || w.maximized || tiled_frame(Desk::area(m), w.r);
+    let Some((fw, fh)) = frame.filter(|&(fw, fh)| fw > 0 && fh > 0 && !held) else { return whole };
     let b = w.body(m);
     let top = (b.y - w.r.y).max(0);
     let fw = i32::try_from(fw).unwrap_or(i32::MAX);
@@ -5330,18 +5343,35 @@ mod tests {
     #[test]
     fn a_client_window_is_presented_at_the_size_its_frame_covers() {
         let m = metrics();
-        let r = Rect { x: 0, y: 28, w: 1920, h: 952 };
+        let r = Rect { x: 100, y: 100, w: 1600, h: 900 };
         for full_size in [false, true] {
             let w = Win { app: AppId::External(18), r, maximized: false, minimized: false, full: false, restore: r, full_size };
             let top = w.title_h(&m);
             let b = w.body(&m);
             assert_eq!(presented_size(&w, &m, Some((1200, 860))), (1200, top + 860), "the frame and the title bar ({full_size})");
-            assert_eq!(presented_size(&w, &m, Some((b.w as usize, b.h as usize))), (1920, 952), "a frame at the body size: the whole window");
-            assert_eq!(presented_size(&w, &m, Some((2000, 1000))), (1920, 952), "a larger frame is clipped to the window, not grown");
-            assert_eq!(presented_size(&w, &m, Some((2000, 400))), (1920, top + 400), "only the side the frame falls short on shrinks");
-            assert_eq!(presented_size(&w, &m, None), (1920, 952), "no frame yet: the window's frame");
+            assert_eq!(presented_size(&w, &m, Some((b.w as usize, b.h as usize))), (1600, 900), "a frame at the body size: the whole window");
+            assert_eq!(presented_size(&w, &m, Some((2000, 1000))), (1600, 900), "a larger frame is clipped to the window, not grown");
+            assert_eq!(presented_size(&w, &m, Some((2000, 400))), (1600, top + 400), "only the side the frame falls short on shrinks");
+            assert_eq!(presented_size(&w, &m, None), (1600, 900), "no frame yet: the window's frame");
             let full = Win { full: true, r: Desk::screen_rect(&m), ..w };
             assert_eq!(presented_size(&full, &m, Some((1200, 860))), (1920, 1080), "a full-screen window keeps the screen");
+        }
+    }
+
+    /// xdg-shell forbids a maximized surface committing smaller than its configured size, and the window server sized a
+    /// tile: a zoomed or a tiled window keeps its whole frame while the app's frame is smaller.
+    #[test]
+    fn a_zoomed_or_tiled_window_is_presented_at_its_whole_frame() {
+        let m = metrics();
+        let a = Desk::area(&m);
+        let r = Rect { x: 100, y: 100, w: 1200, h: 800 };
+        let w = Win { app: AppId::External(18), r, maximized: false, minimized: false, full: false, restore: r, full_size: false };
+        assert_eq!(presented_size(&w, &m, Some((600, 400))), (600, w.title_h(&m) + 400), "a normal window: what its frame covers");
+        let zoomed = Win { maximized: true, r: a, ..w };
+        assert_eq!(presented_size(&zoomed, &m, Some((600, 400))), (a.w, a.h), "zoomed: the whole frame");
+        for tile in [Tile::Left, Tile::Right, Tile::Top, Tile::Bottom, Tile::TopLeft, Tile::BottomRight, Tile::Center, Tile::Fill] {
+            let tiled = Win { r: tile_rect(a, tile), ..w };
+            assert_eq!(presented_size(&tiled, &m, Some((300, 200))), (tiled.r.w, tiled.r.h), "tiled {tile:?}: the whole frame");
         }
     }
 
@@ -5352,7 +5382,7 @@ mod tests {
     #[test]
     fn a_window_cached_at_its_presented_size_is_reused() {
         let m = metrics();
-        let r = Rect { x: 0, y: 28, w: 1920, h: 952 };
+        let r = Rect { x: 100, y: 100, w: 1600, h: 900 };
         let w = Win { app: AppId::External(18), r, maximized: false, minimized: false, full: false, restore: r, full_size: false };
         let presented = presented_size(&w, &m, Some((1200, 860)));
         assert_ne!(presented, (r.w, r.h));
@@ -5362,7 +5392,8 @@ mod tests {
         };
         assert!(cached.sized(presented), "the next frame at the same app frame reuses the cache");
         assert!(!cached.sized((r.w, r.h)), "the window's own frame is not the size the pixels were presented at");
-        assert!(!cached.sized(presented_size(&w, &m, Some((1920, 952 - w.title_h(&m) as usize)))), "the app drew at the window's size: drawn afresh");
+        let b = w.body(&m);
+        assert!(!cached.sized(presented_size(&w, &m, Some((b.w as usize, b.h as usize)))), "the app drew at the window's size: drawn afresh");
     }
 
     #[test]
