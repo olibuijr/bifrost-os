@@ -2713,8 +2713,9 @@ impl Shell {
             return;
         }
         // activating an app that shows windows besides its main one (from Search, Cmd+Tab, a menu or the Dock) brings
-        // all of them forward in their own order, not only the main window (E2E9 5)
-        if self.desk_activate_shown_app(app, t) {
+        // all of them forward in their own order, not only the main window (E2E9 5). Only while its main window is
+        // open: a closed (or minimized) main window is reopened below, as before.
+        if self.desk_main_window_shown(app) && self.desk_activate_shown_app(app, t) {
             self.quicksearch.note_launch(app);
             return;
         }
@@ -3545,6 +3546,12 @@ impl Shell {
         self.dirty=true;
         true
     }
+    /// True when `app`'s main window is on the desk and not minimized: `desk_open` then only activates the app's shown
+    /// windows; otherwise it reopens (or restores) the main window.
+    fn desk_main_window_shown(&self, app: AppId) -> bool {
+        self.desk.as_ref().is_some_and(|d| d.wins.iter().any(|w| w.app == app && !w.minimized))
+    }
+
     /// A dock icon: open it, bring it forward, or hide it when it already has the focus.
     fn desk_dock_tap(&mut self, app: AppId, t: f64) {
         #[cfg(feature = "desktop-wayland")]
@@ -5161,6 +5168,34 @@ mod tests {
         let d = sh.desk.as_ref().unwrap();
         assert_eq!(d.wins.iter().map(|w| w.app).collect::<Vec<_>>(), vec![AppId::Terminal, AppId::Settings, second, main]);
         assert_eq!(sh.screen, crate::shell::Screen::App(main));
+    }
+
+    /// E2E10: opening an app whose main window is closed (only a second window is shown) reopens the main window
+    /// instead of only activating the second one; a minimized main window is restored the same way.
+    #[test]
+    fn opening_an_app_with_its_main_window_closed_reopens_it() {
+        let mut sh = crate::shell::tests::desktop_shell();
+        let m = sh.desk_metrics();
+        let (main, second) = (AppId::External(3), AppId::ExternalWindow(3, 1));
+        {
+            let d = sh.desk.as_mut().unwrap();
+            d.wins.clear();
+            d.open(&m, second, (500, 400));
+            d.open(&m, AppId::Terminal, (900, 600));
+        }
+        assert!(!sh.desk_main_window_shown(main), "only the second window is open");
+        sh.desk.as_mut().unwrap().open(&m, main, (900, 600));
+        assert!(sh.desk_main_window_shown(main));
+        let i = sh.desk.as_ref().unwrap().index_of(main).unwrap();
+        sh.desk.as_mut().unwrap().wins[i].minimized = true;
+        assert!(!sh.desk_main_window_shown(main), "a minimized main window is restored by the open path");
+        sh.desk.as_mut().unwrap().wins.retain(|w| w.app != main);
+        // without the window server the shell opens the main window itself (a direct app's window comes from the app)
+        #[cfg(not(feature = "desktop-wayland"))]
+        {
+            sh.desk_open(main, 0.0);
+            assert!(sh.desk.as_ref().unwrap().index_of(main).is_some(), "the main window is open again");
+        }
     }
 
     /// E2E5 3: the window server raises only the window it is asked to activate, so a Dock click on an app showing a
