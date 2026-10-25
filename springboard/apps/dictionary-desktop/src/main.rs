@@ -218,6 +218,12 @@ fn sidebar_rows(sidebar: Rect, bar_h: f32) -> Rect {
     Rect { x: sidebar.x, y: sidebar.y + band, w: sidebar.w, h: sidebar.h - band }
 }
 
+/// How far the sidebar's rows scroll: their height past the rows region under the band (`sidebar_rows`), so at the
+/// end the last row sits on the column's bottom edge, and a list that fits does not scroll at all.
+fn sidebar_scroll_max(list: &SourceList, sidebar: Rect, bar_h: f32) -> f32 {
+    (list.content_height() - sidebar_rows(sidebar, bar_h).h).max(0.0)
+}
+
 /// Pointer position in points: input is in pixels, and the layout is in points.
 fn to_points(ctx: &Ctx, x: f32, y: f32) -> (f32, f32) {
     let scale = ctx.ui.pt(1.0).max(0.001);
@@ -798,6 +804,22 @@ impl DictionaryApp {
         }
     }
 
+    /// Moves the sidebar's selection one row in `delta`'s direction (the first row when nothing is selected, no
+    /// wrapping) and shows that word, scrolling its row into view. False without a sidebar or at either end.
+    fn step_sidebar(&mut self, delta: isize) -> bool {
+        if self.sidebar.w <= 0.0 || self.suggestions.is_empty() {
+            return false;
+        }
+        let mut list = self.source_list();
+        if !list.step(delta) {
+            return false;
+        }
+        match list.selected().and_then(|id| self.suggestions.get(id as usize).cloned()) {
+            Some(word) => self.look_up(&word),
+            None => false,
+        }
+    }
+
     fn key(&mut self, key: &KeyInput) -> bool {
         if let Some((i, buf)) = &mut self.rename {
             match key {
@@ -860,6 +882,8 @@ impl DictionaryApp {
                 let word = self.shown.as_ref().map(|s| s.word.clone()).unwrap_or_else(|| self.query.clone());
                 self.look_up(&word)
             }
+            // Up and Down move the sidebar's selection and show that word (`NSTableView`'s arrow keys)
+            KeyInput::Code(code @ (38 | 40)) => self.step_sidebar(if *code == 38 { -1 } else { 1 }),
             KeyInput::Code(1 | 27) => {
                 if self.query.is_empty() && self.shown.is_none() {
                     return false;
@@ -1235,8 +1259,8 @@ impl App for DictionaryApp {
         if regions.sidebar.w > 0.0 {
             let list = self.source_list();
             // the rows scroll in the column under the bar band; a new word on screen brings its row into view
-            let rows_h = (regions.sidebar.h - bar_h).max(0.0);
-            self.side_scroll.set_max(list.content_height() - rows_h);
+            let rows_h = sidebar_rows(regions.sidebar, bar_h).h;
+            self.side_scroll.set_max(sidebar_scroll_max(&list, regions.sidebar, bar_h));
             if std::mem::take(&mut self.reveal_selection) {
                 let to = list.scroll_to_selected(rows_h, self.side_scroll.offset());
                 if to != self.side_scroll.offset() {
@@ -1537,6 +1561,35 @@ mod window_tests {
         app.shown = Some(Shown { word: "word30".into(), hits: Vec::new() });
         let to = app.source_list().scroll_to_selected(rows_h, app.side_scroll.offset());
         assert!(to + rows_h >= ROW_H * 31.0 && to <= ROW_H * 30.0);
+    }
+
+    /// E2E11: Up and Down move the sidebar's selection and show the word; the rows scroll no further than their end.
+    #[test]
+    fn arrow_keys_move_the_sidebar_selection_and_the_rows_stop_at_their_end() {
+        let mut app = DictionaryApp::new();
+        app.suggestions = vec!["comp".into(), "compact".into(), "company".into()];
+        app.sidebar = Rect { x: 0.0, y: 0.0, w: 200.0, h: 600.0 };
+        assert!(app.key(&KeyInput::Code(40)), "Down with nothing selected selects the first row");
+        assert_eq!(app.shown.as_ref().map(|s| s.word.as_str()), Some("comp"));
+        assert!(app.key(&KeyInput::Code(40)));
+        assert!(app.key(&KeyInput::Code(40)));
+        assert_eq!(app.shown.as_ref().map(|s| s.word.as_str()), Some("company"));
+        assert_eq!(app.source_list().selected(), Some(2));
+        assert!(app.reveal_selection, "the new row is scrolled into view");
+        assert!(!app.key(&KeyInput::Code(40)), "Down on the last row stays there");
+        assert!(app.key(&KeyInput::Code(38)));
+        assert_eq!(app.shown.as_ref().map(|s| s.word.as_str()), Some("compact"));
+        assert_eq!(app.suggestions.len(), 3, "the matches stay listed");
+        let bar = bifrost_app::layout::UNIFIED_BAR_PT;
+        assert_eq!(sidebar_scroll_max(&app.source_list(), app.sidebar, bar), 0.0, "three rows fit: no scrolling");
+        app.suggestions = (0..60).map(|i| format!("w{i}")).collect();
+        let list = app.source_list();
+        let max = sidebar_scroll_max(&list, app.sidebar, bar);
+        let rows = sidebar_rows(app.sidebar, bar);
+        let last = list.item_rect(59, app.sidebar, max - bar);
+        assert!((last.bottom() - rows.bottom()).abs() < 0.01, "at the end the last row sits on the bottom edge: {last:?} {rows:?}");
+        app.sidebar = Rect::default();
+        assert!(!app.key(&KeyInput::Code(38)), "no sidebar: the arrows do nothing");
     }
 
     /// E2E9 2: a look-up that starts the app arrives before the dictionaries are loaded; the word waits and is shown then.

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.6
+
+- The sidebar lists every match again: the rows that are not selected were invisible under the rows clip (their vibrant text blended into nothing), so only the selected word showed.
+- Up and Down move the sidebar's selection and show that word, scrolling its row into view.
+- The sidebar's rows scroll no further than their end; a list that fits the column does not scroll.
+
 ## 0.6.5
 
 - Typing a word selects the first match in the sidebar and shows its entry at once, as the reference does; Return chooses it. The search field keeps what was typed.
