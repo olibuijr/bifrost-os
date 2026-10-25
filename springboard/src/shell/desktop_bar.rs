@@ -1309,6 +1309,14 @@ impl Shell {
         let selectable:Vec<bool>=self.menu_rows(menu).iter().map(|r|r.action.is_some()).collect();
         step_index(&selectable,self.menu_row_of(menu),dir)
     }
+    /// A shortcut opens another surface (`Shortcut::opens_surface`: Search, the switcher, a card): the open menu-bar
+    /// menu, context menu, Dock menu or Downloads stack closes first, as in the reference, so it neither stays on
+    /// screen over the new surface nor keeps taking the keys meant for it. An app's open or save panel
+    /// (`Menu::Document`) stays: its app still waits for the answer.
+    pub(super) fn desktop_menu_dismiss(&mut self) {
+        if self.desktop_menu.is_none()||self.desktop_menu==Some(Menu::Document) {return;}
+        self.desktop_menu=None;self.desktop_menu_row=None;self.desktop_flyout=Flyout::default();self.help_reset();self.desktop_menu_scroll=MenuScrollState::default();self.dirty=true;
+    }
     /// Keys while a bar menu is open: Up/Down move, Left/Right switch menus, Return chooses, Esc closes. None when no menu is open.
     pub(super) fn desktop_menu_key(&mut self,code:u16,t:f64)->Option<Vec<Effect>> {
         let menu=self.desktop_menu?;if !self.desk_active()||self.is_locked(){return None;}

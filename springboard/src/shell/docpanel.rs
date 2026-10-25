@@ -1795,7 +1795,7 @@ impl super::Shell {
     /// colour, or a white page with a folded corner and a band in its kind's colour (`FileKind`) that carries the
     /// extension (`thumb_service::badge_for`) when the icon is large enough to read it. `bg` is what the page's cut
     /// corner shows; a row that cannot be chosen is drawn in grey.
-    fn draw_file_icon(&self, s: &mut crate::gfx::Surface, e: &Entry, x: f32, y: f32, side: f32, bg: u32) {
+    pub(super) fn draw_file_icon(&self, s: &mut crate::gfx::Surface, e: &Entry, x: f32, y: f32, side: f32, bg: u32) {
         use super::ui::{Weight, MAC_CAPTION2_PT, SECONDARY, SEPARATOR_C, WHITE};
         let kind = FileKind::of(e);
         let tint = if e.enabled { kind.tint().now() } else { SECONDARY };
