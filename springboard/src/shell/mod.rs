@@ -3558,6 +3558,11 @@ impl Shell {
     /// window hides (`desk::bar_hidden`). The bar comes and goes as the pointer enters or leaves its band, so crossing the
     /// band repaints.
     pub(super) fn note_pointer_y(&mut self, y: f32) {
+        // the window server's pointer-leave hover comes at (-100, -100): it is no position, so it neither brings the bar
+        // back nor latches it (a later move into the revealed band would otherwise keep a bar the top edge never showed)
+        if y < 0.0 {
+            return;
+        }
         let band = self.desktop_bar_height() as f32;
         // over a full-screen window the bar, once back, stays while the pointer is on the toolbar revealed under it
         let keep = self.desk_full_band().map_or(0.0, |(_, b)| b as f32);

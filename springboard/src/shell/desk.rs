@@ -8022,6 +8022,23 @@ mod fullscreen_reveal_tests {
     }
 
     #[test]
+    fn the_pointer_leaving_the_screen_does_not_latch_the_bar_for_a_later_move_into_the_band() {
+        let mut sh = full_screen_settings();
+        let bar = sh.desktop_bar_height() as f32;
+        let band = sh.desk_full_band().unwrap().1 as f32;
+        // the window server's pointer-leave hover
+        sh.desktop_pointer(-100.0, -100.0, false, 10.0);
+        assert!(sh.desk_bar_hidden() && sh.desk_reveal().is_none(), "leaving is not the top edge");
+        // back onto the toolbar's rows without reaching the top edge: the bar stays hidden
+        sh.desktop_pointer(300.0, bar + band / 2.0, false, 20.0);
+        assert!(sh.desk_bar_hidden() && sh.desk_reveal().is_none(), "only the top edge brings the bar back");
+        // a leave while the bar is shown leaves it as it was
+        sh.desktop_pointer(300.0, 2.0, false, 30.0);
+        sh.desktop_pointer(-100.0, -100.0, false, 40.0);
+        assert!(!sh.desk_bar_hidden() && sh.desk_reveal().is_some());
+    }
+
+    #[test]
     fn the_revealed_toolbar_is_a_surface_of_its_own_under_the_bar_and_goes_with_it() {
         let mut sh = full_screen_settings();
         sh.desktop_pointer(300.0, 2.0, false, 10.0);
