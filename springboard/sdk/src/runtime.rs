@@ -823,6 +823,10 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                         first_frame = true;
                     }
                     need_frame = true;
+                    // a background window is still on screen on the desktop: the shell configures it to the frame it
+                    // gives it (a restored session), and it draws at that size now, even while suspended, instead of
+                    // showing its old size (black past it) until it comes to the front (0.10.39)
+                    repaint_suspended |= !active;
                 }
                 ToApp::Context{x,y}=>{if let Some(ctx)=&ctx {need_frame|=app.event(ctx,Input::Context{x,y});}},
                 ToApp::MenuAction(id)=>{if let Some(ctx)=&ctx {need_frame|=app.menu_action(ctx,id);}},
