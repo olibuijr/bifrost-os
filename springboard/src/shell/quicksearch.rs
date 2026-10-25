@@ -91,6 +91,42 @@ fn shortcut_runs() -> std::sync::MutexGuard<'static, (usize, Vec<ShortcutRun>)> 
     SHORTCUT_RUNS.lock().unwrap_or_else(|e| e.into_inner())
 }
 
+/// One shortcut run counted in `SHORTCUT_RUNS` from before its thread starts until the thread ends, however it ends: a
+/// panic in the app's intent call unwinds through the drop, and a thread that could not be started drops its closure
+/// (and the guard in it) at once. A count that never dropped kept `next_wake` polling every 50 ms forever.
+struct ShortcutRunGuard;
+
+impl ShortcutRunGuard {
+    fn new() -> ShortcutRunGuard {
+        shortcut_runs().0 += 1;
+        ShortcutRunGuard
+    }
+}
+
+impl Drop for ShortcutRunGuard {
+    fn drop(&mut self) {
+        let mut g = shortcut_runs();
+        g.0 = g.0.saturating_sub(1);
+    }
+}
+
+/// Runs `f` on a thread of its own, counted as a shortcut run while it is out (`ShortcutRunGuard`). False when the
+/// thread could not be started (the count is back where it was).
+fn spawn_shortcut_run(f: impl FnOnce() + Send + 'static) -> bool {
+    let guard = ShortcutRunGuard::new();
+    let started = std::thread::Builder::new().name("intent-retry".into()).spawn(move || {
+        let _guard = guard;
+        f();
+    });
+    match started {
+        Ok(_) => true,
+        Err(e) => {
+            bifrost_core::log::shell_logger("quicksearch").error(format!("shortcut run thread: {e}"));
+            false
+        }
+    }
+}
+
 /// True while a shortcut run from Search is out or its result is not shown yet: the shell polls for it.
 pub(super) fn shortcut_runs_pending() -> bool {
     let g = shortcut_runs();
@@ -2832,16 +2868,14 @@ impl Shell {
                     self.open(AppId::External(n as u8), t);
                     // the app may still be starting: retry the connection for a few seconds, off the UI thread; the
                     // result comes back as a banner with the shortcut's name (E2E12 5)
-                    shortcut_runs().0 += 1;
-                    crate::bare::sys::spawn_named("intent-retry", move || {
+                    // counted while it is out, also when the intent call panics (`ShortcutRunGuard`)
+                    spawn_shortcut_run(move || {
                         let outcome = super::intents::run(&app_id, &intent, std::time::Duration::from_secs(8));
                         match &outcome {
                             Ok(_) => bifrost_core::log::shell_logger("quicksearch").info(format!("shortcut {intent} of {app_id} ran")),
                             Err(e) => bifrost_core::log::shell_logger("quicksearch").error(format!("shortcut {intent} of {app_id}: {e}")),
                         }
-                        let mut g = shortcut_runs();
-                        g.0 = g.0.saturating_sub(1);
-                        g.1.push(ShortcutRun { slot: n as u8, title, outcome });
+                        shortcut_runs().1.push(ShortcutRun { slot: n as u8, title, outcome });
                     });
                 }
             }
@@ -2953,6 +2987,33 @@ impl Shell {
 
 #[cfg(test)]
 mod tests {
+    /// E2E13: a shortcut run whose intent call panics still lowers the in-flight count, so the shell stops polling.
+    #[test]
+    fn a_panicking_shortcut_run_is_no_longer_counted() {
+        let (tx, rx) = std::sync::mpsc::channel::<()>();
+        let before = super::shortcut_runs().0;
+        assert!(super::spawn_shortcut_run(move || {
+            rx.recv().ok();
+            panic!("the intent call panicked");
+        }));
+        assert!(super::shortcut_runs().0 > before, "counted while it is out");
+        tx.send(()).unwrap();
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while super::shortcut_runs().0 > before && std::time::Instant::now() < until {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert_eq!(super::shortcut_runs().0, before, "the panic unwound through the guard");
+        // a run that finishes normally is uncounted the same way
+        let (tx, rx) = std::sync::mpsc::channel::<()>();
+        assert!(super::spawn_shortcut_run(move || tx.send(()).unwrap()));
+        rx.recv().unwrap();
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while super::shortcut_runs().0 > before && std::time::Instant::now() < until {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert_eq!(super::shortcut_runs().0, before);
+    }
+
     use super::super::tests::{settle, shell, swipe, unlock};
     use super::super::{AppId, Effect, Event, Screen, Shell, WifiAction};
     use super::*;
