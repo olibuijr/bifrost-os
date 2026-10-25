@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.24.7
+
+- A heading line that also carries a checkbox marker (`## - [ ] Item two`, as older versions wrote a checklist item turned into a heading) shows as the heading "Item two": a paragraph has one style, the heading wins, and the checkbox marker is no longer drawn as text. Changing its style, exporting and copying as plain text drop the marker too.
+
 ## 1.24.6
 
 - Rebuilt with the current SDK and renderer: shell actions such as Look Up and Services reach the app, and vibrant text draws inside clipped areas.

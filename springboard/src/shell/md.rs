@@ -53,14 +53,17 @@ pub fn classify(line: &str) -> LineInfo {
     let rest = &chars[indent..];
     let starts = |p: &str| rest.len() >= p.chars().count() && rest.iter().zip(p.chars()).all(|(a, b)| *a == b);
     let info = |block, len: usize, ind: usize| LineInfo { block, prefix: ind + len, indent: ind };
+    // a line has one paragraph style: a checkbox marker after a heading marker (`## - [ ] Item`, as a checklist line
+    // turned into a heading used to be written) belongs to the heading's marker, not its text (`stray_check`)
+    let heading = |block, len: usize| info(block, len + check_marker_len(&rest[len..]), 0);
     if starts("### ") {
-        return info(Block::Subheading, 4, 0);
+        return heading(Block::Subheading, 4);
     }
     if starts("## ") {
-        return info(Block::Heading, 3, 0);
+        return heading(Block::Heading, 3);
     }
     if starts("# ") {
-        return info(Block::Title, 2, 0);
+        return heading(Block::Title, 2);
     }
     if starts("> ") && indent == 0 {
         return info(Block::Quote, 2, 0);
@@ -90,6 +93,30 @@ pub fn classify(line: &str) -> LineInfo {
 
 /// Leading spaces that make a line monostyled.
 const MONO_INDENT: usize = 4;
+
+/// The length of a checkbox marker (`- [ ] `, `- [x] `, `- [X] `) at the start of `rest`, else 0.
+fn check_marker_len(rest: &[char]) -> usize {
+    let is = |p: &str| rest.len() >= 6 && rest.iter().zip(p.chars()).all(|(a, b)| *a == b);
+    if is("- [ ] ") || is("- [x] ") || is("- [X] ") {
+        6
+    } else {
+        0
+    }
+}
+
+/// The chars of a checkbox marker that follows a heading marker (`## - [ ] Item two`): the line is a heading (the
+/// first marker decides, and the reference keeps a paragraph in one style, so a heading is never also a checklist
+/// item), and this part of its marker is not drawn at all, so the heading reads "Item two". Empty for any other line.
+pub fn stray_check(line: &str) -> Range<usize> {
+    let info = classify(line);
+    let marker = match info.block {
+        Block::Title => 2,
+        Block::Heading => 3,
+        Block::Subheading => 4,
+        _ => return 0..0,
+    };
+    marker.min(info.prefix)..info.prefix
+}
 
 /// Inline emphasis of a span.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -518,6 +545,24 @@ pub fn to_plain(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// E2E11 11: `## - [ ] Item two` drew as a heading with the raw checkbox marker in it.
+    #[test]
+    fn a_heading_is_never_also_a_checklist_item() {
+        let line = "## - [ ] Item two";
+        assert_eq!(classify(line), LineInfo { block: Block::Heading, prefix: 9, indent: 0 }, "the heading wins, the checkbox is marker");
+        assert_eq!(stray_check(line), 3..9, "the checkbox part of the marker is hidden");
+        assert_eq!(stray_check("# - [x] Done"), 2..8);
+        assert_eq!(stray_check("### - [X] Sub"), 4..10);
+        assert_eq!(stray_check("## Plain heading"), 3..3, "nothing hidden in a plain heading");
+        assert_eq!(stray_check("- [ ] item"), 0..0, "a checklist item keeps its checkbox");
+        assert_eq!(stray_check("## 1. Introduction").len(), 0, "a numbered heading keeps its number");
+        assert_eq!(toggle_check(line), None, "no checkbox to tick on a heading");
+        assert_eq!(continue_list(line), Continue::None, "Enter after a heading starts body text");
+        assert_eq!(to_plain(line), "Item two");
+        assert_eq!(set_block(line, Block::Body), "Item two", "the style change drops the whole marker");
+        assert_eq!(set_block(line, Block::Check(false)), "- [ ] Item two");
+    }
 
     #[test]
     fn classifies_block_styles() {

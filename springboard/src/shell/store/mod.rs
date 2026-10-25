@@ -65,24 +65,29 @@ fn icon_cache_path(root: &std::path::Path, id: &str) -> PathBuf {
     root.join("icon-cache").join(format!("{safe}.png"))
 }
 
-/// An app's icon: the installed copy first, then the catalogue's (written to `cache` when it decodes), then the
-/// cached copy. Each source must decode before it counts, so a damaged installed icon or a failed download falls
-/// through to the next one rather than leaving the letter placeholder.
-fn load_icon(local: Option<&std::path::Path>, fetch: impl FnOnce() -> Option<Vec<u8>>, cache: &std::path::Path) -> Option<Image> {
+/// An app's icon from disk: the installed copy first, then the copy cached from an earlier download. Read on the
+/// store's own thread before anything is fetched, so the first frame after opening shows the real icons instead of
+/// letter tiles while the network catches up (E2E11 9). Each source must decode before it counts, so a damaged
+/// installed icon falls through to the cache.
+fn local_icon(local: Option<&std::path::Path>, cache: &std::path::Path) -> Option<Image> {
     let decode = |b: &[u8]| crate::cg::imageio::decode(b);
-    if let Some(img) = local.filter(|p| p.is_file()).and_then(|p| std::fs::read(p).ok()).and_then(|b| decode(&b)) {
-        return Some(img);
+    local
+        .filter(|p| p.is_file())
+        .and_then(|p| std::fs::read(p).ok())
+        .and_then(|b| decode(&b))
+        .or_else(|| std::fs::read(cache).ok().and_then(|b| decode(&b)))
+}
+
+/// An icon that is on disk nowhere: the catalogue's download, written to `cache` once it decodes so the next
+/// opening paints it at once. An undecodable or failed download leaves the cache alone.
+fn fetch_icon(fetch: impl FnOnce() -> Option<Vec<u8>>, cache: &std::path::Path) -> Option<Image> {
+    let bytes = fetch()?;
+    let img = crate::cg::imageio::decode(&bytes)?;
+    if let Some(dir) = cache.parent() {
+        let _ = std::fs::create_dir_all(dir);
     }
-    if let Some(bytes) = fetch() {
-        if let Some(img) = decode(&bytes) {
-            if let Some(dir) = cache.parent() {
-                let _ = std::fs::create_dir_all(dir);
-            }
-            let _ = std::fs::write(cache, &bytes);
-            return Some(img);
-        }
-    }
-    std::fs::read(cache).ok().and_then(|b| decode(&b))
+    let _ = std::fs::write(cache, &bytes);
+    Some(img)
 }
 /// Height of one line of release notes under an update row.
 const NOTE_LINE: f32 = 18.0;
@@ -885,12 +890,25 @@ impl AppStore {
             // the catalogue's URL for this id (an installed app's own row carries none)
             let url = if icon.is_empty() { self.catalog.iter().find(|a| a.id == id).map(|a| a.icon.clone()).unwrap_or_default() } else { icon };
             let cache = icon_cache_path(&self.root, &id);
+            // the installed or cached icon is painted from the first frame; the network is asked only when neither is on disk
+            if let Some(img) = local_icon(local.as_deref(), &cache) {
+                self.icon_failed.remove(&id);
+                self.icon_px.retain(|(i, _), _| *i != id);
+                self.icons.insert(id, Some(img));
+                self.dirty = true;
+                continue;
+            }
+            if url.is_empty() {
+                // nothing to download: wait for the retry like a failed fetch rather than asking every tick
+                self.icon_failed.insert(id, t);
+                continue;
+            }
             self.icon_pending.insert(id.clone());
             if let Some(p) = &self.pool {
                 p.spawn(move || {
                     crate::gfx::affinity::background_thread();
-                    let fetch = || (!url.is_empty()).then(|| net::get(&net::absolute(&url), 1_000_000).ok()).flatten();
-                    Done::Icon { image: load_icon(local.as_deref(), fetch, &cache), id }
+                    let fetch = || net::get(&net::absolute(&url), 1_000_000).ok();
+                    Done::Icon { image: fetch_icon(fetch, &cache), id }
                 });
             }
         }
@@ -2440,9 +2458,10 @@ mod tests {
         assert!(icon_due(Some(1_000.0), 1_000.0 + ICON_RETRY_MS));
     }
 
-    /// E2E10 finding 10: Discover's Essential apps drew F and R tiles for Files and Remote.
+    /// E2E10 finding 10 and E2E11 9: Discover's Essential apps drew F and R tiles for Files and Remote, first for
+    /// good, then for seconds while a download ran although the icon was on disk.
     #[test]
-    fn an_icon_falls_back_from_a_damaged_install_to_the_catalogue_then_to_the_cache() {
+    fn an_icon_comes_from_the_install_then_the_cache_and_the_network_only_when_neither_has_it() {
         let png: &[u8] = include_bytes!("../../../apps/files/icon.png");
         let dir = std::env::temp_dir().join(format!("apps-store-icons-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -2451,13 +2470,40 @@ mod tests {
         assert_eq!(cache, dir.join("icon-cache").join("is.o_files.png"), "an id cannot leave the cache folder");
         let broken = dir.join("icon.png");
         std::fs::write(&broken, b"not a png").unwrap();
-        assert!(load_icon(Some(broken.as_path()), || Some(png.to_vec()), &cache).is_some(), "a damaged installed icon falls through to the catalogue's");
-        assert_eq!(std::fs::read(&cache).unwrap(), png, "the loaded icon is kept");
-        assert!(load_icon(None, || None, &cache).is_some(), "with the network down the cached icon is shown");
-        assert!(load_icon(None, || Some(b"junk".to_vec()), &cache).is_some(), "an undecodable download does not replace it");
-        assert_eq!(std::fs::read(&cache).unwrap(), png);
+        assert!(local_icon(Some(broken.as_path()), &cache).is_none(), "a damaged install and no cache: fetch it");
+        assert!(fetch_icon(|| Some(png.to_vec()), &cache).is_some(), "the catalogue's icon is used");
+        assert_eq!(std::fs::read(&cache).unwrap(), png, "the downloaded icon is kept");
+        assert!(local_icon(Some(broken.as_path()), &cache).is_some(), "a damaged installed icon falls through to the cache");
+        assert!(local_icon(None, &cache).is_some(), "the cached icon is shown without the network");
+        assert!(fetch_icon(|| Some(b"junk".to_vec()), &cache).is_none(), "an undecodable download is no icon");
+        assert_eq!(std::fs::read(&cache).unwrap(), png, "and does not replace the cached one");
+        assert!(fetch_icon(|| None, &cache).is_none(), "a failed download is no icon");
+        let good = dir.join("installed.png");
+        std::fs::write(&good, png).unwrap();
         std::fs::remove_file(&cache).unwrap();
-        assert!(load_icon(Some(broken.as_path()), || None, &cache).is_none(), "nothing that decodes: the placeholder");
+        assert!(local_icon(Some(good.as_path()), &cache).is_some(), "an installed icon needs no cache");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// E2E11 9: an icon already on disk is in place on the first tick, before any download; an app with no icon
+    /// anywhere waits for the retry instead of being asked for again every tick.
+    #[test]
+    fn a_cached_icon_is_ready_on_the_first_tick_without_a_download() {
+        let png: &[u8] = include_bytes!("../../../apps/files/icon.png");
+        let mut s = store();
+        let dir = std::env::temp_dir().join(format!("apps-store-first-tick-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        s.root = dir.clone();
+        s.installed.clear();
+        let cache = icon_cache_path(&dir, "is.o.calc");
+        std::fs::create_dir_all(cache.parent().unwrap()).unwrap();
+        std::fs::write(&cache, png).unwrap();
+        s.fetching = true; // no catalogue refresh in this test
+        s.maintain(0.0);
+        assert!(matches!(s.icons.get("is.o.calc"), Some(Some(_))), "the cached icon is painted at once");
+        assert!(!s.icon_pending.contains("is.o.calc"), "and nothing is downloaded for it");
+        assert!(s.icons.get("is.o.chess").is_none() && !s.icon_pending.contains("is.o.chess"));
+        assert_eq!(s.icon_failed.get("is.o.chess"), Some(&0.0), "no icon on disk and no URL: retried later");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

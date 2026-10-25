@@ -238,6 +238,14 @@ impl TextField {
         self.future.clear();
         self.last = Edit::None;
     }
+    /// Replaces the text programmatically (the reference field's string value setter): the caret goes to the end,
+    /// nothing is selected and the history is forgotten, as a field shows a word chosen elsewhere. Control
+    /// characters are dropped, as typing drops them.
+    pub fn set_text(&mut self, text: &str) {
+        self.clear();
+        self.text = text.chars().filter(|c| !c.is_control()).collect();
+        self.end();
+    }
     fn snapshot(&self) -> Snapshot {
         Snapshot { text: self.text.clone(), caret: self.caret, anchor: self.anchor }
     }
@@ -426,6 +434,18 @@ mod tests {
         f.home();
         f.delete();
         assert_eq!(&*f, "ewtext");
+    }
+    #[test]
+    fn set_text_puts_the_caret_at_the_end_and_is_not_undoable() {
+        let mut f = TextField::new();
+        typed(&mut f, "ab");
+        f.set_text("lan\ntern");
+        assert_eq!((&*f, f.caret()), ("lantern", 7));
+        assert!(f.selection().is_empty());
+        assert!(!f.can_undo(), "a programmatic value is not an edit");
+        f.command(Command::SelectAll, "");
+        f.push_str("c");
+        assert_eq!(&*f, "c", "typing after Select All replaces the text");
     }
     #[test]
     fn select_sets_a_clamped_character_aligned_range_and_typing_replaces_it() {
