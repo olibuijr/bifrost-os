@@ -623,8 +623,12 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
         let have_ctx = ctx.is_some();
         // wait: forever when idle, 0 when a frame is due, else until the app's next wake
         let free = slots.as_ref().is_some_and(|s| s.iter().any(|b| !b.held));
-        let timeout = if !have_ctx || !active {
+        // a suspended app that asked to (`App::ticks_in_background`) still wakes for its descriptor and its timer
+        let background = have_ctx && !active && app.ticks_in_background();
+        let timeout = if !have_ctx {
             None
+        } else if !active {
+            if background { app.next_wake(t).map(|w| (w - t).clamp(0.0, i32::MAX as f64).ceil() as i32) } else { None }
         } else if need_frame && free {
             Some(0)
         } else if need_frame {
@@ -643,7 +647,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
             _ => timeout,
         };
         // the app's own descriptor (`App::wake_fd`, a web view engine for example) wakes the loop for `tick`
-        let app_fd = if active { app.wake_fd() } else { None };
+        let app_fd = if active || background { app.wake_fd() } else { None };
         let (chan_ready, ready) = chan.wait_many(&[control.as_ref().map_or(-1, |c| c.fd()), app_fd.unwrap_or(-1), crate::dispatch::main_fd()], timeout);
         let control_ready = ready[0];
         // main-queue work (`DispatchQueue::main().async_`) runs here, before anything draws
@@ -1055,9 +1059,11 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
             need_frame |= app.continue_activity(c, activity);
         }
         let t = now_ms();
-        if active && app.tick(c, t) {
+        if (active || app.ticks_in_background()) && app.tick(c, t) {
             need_frame = true;
             busy = true;
+            // the background window is still on screen on the desktop: show what changed
+            repaint_suspended |= !active;
         }
         flush_restorable(&app, c, false);
         let frame_due = (active || repaint_suspended) && need_frame;

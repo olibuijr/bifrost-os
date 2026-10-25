@@ -566,6 +566,11 @@ impl App for Files {
     fn wake_fd(&self) -> Option<i32> {
         self.watch.as_ref().and_then(|w| w.fd())
     }
+    /// A background Files window stays on screen: it follows the open folder (files added, removed or renamed by
+    /// another app or a shell) instead of showing the listing it had when it lost focus.
+    fn ticks_in_background(&self) -> bool {
+        true
+    }
     fn draw(&mut self, ctx: &Ctx, s: &mut Surface, _: f64) -> Damage {
         self.render(&ctx.ui,s)
     }

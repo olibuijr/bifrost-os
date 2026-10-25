@@ -945,7 +945,8 @@ pub trait App {
     fn restore_state(&mut self, _ctx: &Ctx, _state: &RestorableState) -> bool {
         false
     }
-    /// Called every loop turn while in the foreground; true when a frame is needed.
+    /// Called every loop turn while in the foreground (and in the background with `ticks_in_background`); true when a
+    /// frame is needed.
     fn tick(&mut self, _ctx: &Ctx, _t: f64) -> bool {
         false
     }
@@ -957,6 +958,13 @@ pub trait App {
     /// `webview::WebProcessPool::fd`); when it becomes readable, `tick` runs.
     fn wake_fd(&self) -> Option<i32> {
         None
+    }
+    /// True when `wake_fd`, `next_wake` and `tick` keep running while the app is in the background (suspended).
+    /// A background window stays on screen on the desktop, so an app whose window shows outside state (a folder
+    /// listing that follows the disk) opts in: a `tick` that returns true repaints the background window once.
+    /// Off by default, so a background app costs nothing.
+    fn ticks_in_background(&self) -> bool {
+        false
     }
     /// True when `draw` paints every pixel each frame: the runtime then skips bringing the buffer
     /// up to date with the previous frame first (a full-screen copy).
