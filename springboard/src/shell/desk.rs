@@ -181,11 +181,13 @@ pub fn origin_hint(placed: &std::collections::HashSet<AppId>, app: AppId, x: i32
 /// The top-left corner (px) of a window of `size` cascaded from `from`, another window of the same app
 /// (`window_flags::CASCADE`, AppKit's `cascadeTopLeftFromPoint:`), kept inside the work area `a`. From the main window
 /// (`from_main`) it goes beside the main window's trailing edge when it fits there, and otherwise over the main window's
-/// trailing side one `step` down, so the leading columns (a sidebar, a message list) stay in view. From another
+/// trailing side one `step` down, so the leading columns (a sidebar, a message list) stay in view. A window about as
+/// wide as the main window (less than a `step` narrower) has no trailing side to sit on: that put a second document
+/// straight over the first, one step down (E2E11 5), so it cascades one `step` down and right instead. From another
 /// cascaded window it goes one `step` down and right, as each new document window does.
 pub fn cascade_origin(a: Rect, from: Rect, from_main: bool, size: (i32, i32), step: i32) -> (i32, i32) {
     let (w, h) = size;
-    let (x, y) = if !from_main {
+    let (x, y) = if !from_main || from.w - w < step {
         (from.x + step, from.y + step)
     } else if from.x + from.w + w <= a.x + a.w {
         (from.x + from.w, from.y)
@@ -5090,6 +5092,19 @@ mod tests {
         let corner = Rect { x: 1800, y: 900, w: 560, h: 640 };
         let (cx, cy) = cascade_origin(a, corner, false, (560, 640), step);
         assert!(cx + 560 <= a.x + a.w && cy + 640 <= a.y + a.h, "kept inside the work area: {cx},{cy}");
+    }
+
+    /// E2E11 5: a second document window as large as the main window (Cmd+N in a text editor) cascades one title bar
+    /// down and right of it, not straight below it, whether or not it would fit beside it.
+    #[test]
+    fn a_document_window_as_wide_as_the_main_window_cascades_down_and_right() {
+        let a = Rect { x: 0, y: 28, w: 1920, h: 952 };
+        let step = 30;
+        let main = Rect { x: 400, y: 200, w: 900, h: 600 };
+        assert_eq!(cascade_origin(a, main, true, (900, 600), step), (430, 230), "down and right by one title bar");
+        assert_eq!(cascade_origin(a, main, true, (890, 600), step), (430, 230), "a few px narrower is the same size");
+        let narrow = Rect { x: 100, y: 100, w: 600, h: 500 };
+        assert_eq!(cascade_origin(a, narrow, true, (600, 500), step), (130, 130), "it fits beside, but cascades as a document");
     }
 
     #[test]
