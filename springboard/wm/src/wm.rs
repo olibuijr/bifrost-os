@@ -409,9 +409,99 @@ fn resized(start: Rect, e: Edges, dx: i32, dy: i32) -> Rect {
     Rect::new(x, y, w, h)
 }
 
+/// How many parked frames the window server keeps (`ParkedFrames`): enough for every window Show Desktop puts aside.
+pub const PARKED_MAX: usize = 32;
+
+/// The frames of toplevels that went away while they were minimized, by their client (`K`) and app id. A client may
+/// destroy the toplevel of a window it is told is hidden and create it again when it is shown (Show Desktop's toggle
+/// back, a Dock click): the new toplevel would otherwise be cascaded as a new window, and with every other window still
+/// aside the cascade put it in the centre, about 84 px (three cascade steps) up and left of where it was (E2E5, a
+/// native app on Midget 0.10.27). The next toplevel of the same client and app id that maps without an origin of its
+/// own (`bifrost_window_level_v1.set_origin`) takes the parked frame's origin, once.
+#[derive(Debug, Clone)]
+pub struct ParkedFrames<K> {
+    frames: Vec<(K, String, Rect)>,
+}
+
+impl<K> Default for ParkedFrames<K> {
+    fn default() -> Self { ParkedFrames { frames: Vec::new() } }
+}
+
+impl<K: PartialEq> ParkedFrames<K> {
+    /// Remembers `rect` for the next window of `client` with `app_id`; a window without an app id is no app's and is not
+    /// parked. A newer frame of the same client and app replaces the older; the oldest go past `PARKED_MAX`.
+    pub fn park(&mut self, client: K, app_id: &str, rect: Rect) {
+        if app_id.is_empty() {
+            return;
+        }
+        self.frames.retain(|(k, a, _)| !(*k == client && a == app_id));
+        self.frames.push((client, app_id.to_string(), rect));
+        if self.frames.len() > PARKED_MAX {
+            let extra = self.frames.len() - PARKED_MAX;
+            self.frames.drain(..extra);
+        }
+    }
+
+    /// The parked frame of `client`'s window with `app_id`, taken out (the newest when the client parked several).
+    pub fn take(&mut self, client: &K, app_id: &str) -> Option<Rect> {
+        if app_id.is_empty() {
+            return None;
+        }
+        let i = self.frames.iter().rposition(|(k, a, _)| k == client && a == app_id)?;
+        Some(self.frames.remove(i).2)
+    }
+
+    /// The client is gone: its parked frames go too.
+    pub fn forget_client(&mut self, client: &K) {
+        self.frames.retain(|(k, _, _)| k != client);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_window_recreated_after_a_minimize_takes_its_parked_frame_once() {
+        let mut parked = ParkedFrames::<u32>::default();
+        let r = Rect::new(744, 361, 800, 600);
+        parked.park(1, "ai.storyteller.filmcraft", r);
+        assert_eq!(parked.take(&2, "ai.storyteller.filmcraft"), None, "another client's window of the same app");
+        assert_eq!(parked.take(&1, "other.app"), None, "another app of the same client");
+        assert_eq!(parked.take(&1, "ai.storyteller.filmcraft"), Some(r));
+        assert_eq!(parked.take(&1, "ai.storyteller.filmcraft"), None, "taken once");
+        parked.park(1, "", r);
+        assert_eq!(parked.take(&1, ""), None, "a window without an app id is not parked");
+        parked.park(1, "a", Rect::new(0, 0, 1, 1));
+        parked.park(1, "a", r);
+        assert_eq!(parked.take(&1, "a"), Some(r), "the newer frame replaces the older");
+        assert_eq!(parked.take(&1, "a"), None);
+        for i in 0..PARKED_MAX as i32 + 4 {
+            parked.park(9, &format!("app{i}"), Rect::new(i, 0, 10, 10));
+        }
+        assert_eq!(parked.take(&9, "app0"), None, "the oldest go past the cap");
+        assert_eq!(parked.take(&9, &format!("app{}", PARKED_MAX as i32 + 3)).map(|r| r.x), Some(PARKED_MAX as i32 + 3));
+        parked.forget_client(&9);
+        assert_eq!(parked.take(&9, "app10"), None, "a client that left takes its frames along");
+    }
+
+    #[test]
+    fn a_parked_origin_maps_the_window_where_it_was_not_at_the_cascade() {
+        let mut wm = Wm::new(AREA);
+        wm.map(1, 800, 600);
+        wm.map(2, 800, 600);
+        let r = wm.map(3, 800, 600);
+        assert_ne!(r, wm.rect(1).unwrap(), "cascaded");
+        for id in [1, 2, 3] {
+            wm.minimize(id);
+        }
+        wm.unmap(3);
+        // the client made a new toplevel for the same window while the others are still aside
+        let back = wm.map_at(4, 800, 600, Some((r.x, r.y)));
+        assert_eq!(back, r, "where it was, not centred");
+        let fresh = Wm::new(AREA).map(5, 800, 600);
+        assert_ne!(fresh, r, "without the parked origin it would have been centred");
+    }
 
     const AREA: Rect = Rect::new(0, 28, 1920, 1052); // 1920x1080 output under a 28 px menu bar
 

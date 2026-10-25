@@ -63,7 +63,7 @@ impl Shell {
    let edge=match p.position{Position::Bottom=>y>=self.h as f32-self.ui.pt(4.),Position::Left=>x<=self.ui.pt(4.),Position::Right=>x>=self.w as f32-self.ui.pt(4.)};
    let inside=bar.contains(x,y);
    let (_,live)=self.dock_live(bar,&rects,now);
-   let in_zone=self.dock_is_visible()&&(inside||zone.contains(x,y)||live.iter().any(|r|r.contains(x,y)));
+   let in_zone=self.dock_is_visible()&&(inside||zone.contains(x,y)||self.dock_press(&live).iter().any(|r|r.contains(x,y)));
    let magnify=in_zone&&p.magnification;
    let menu=self.desktop_menu==Some(Menu::Dock);
    let cur=self.dock_mag_amount(now);
@@ -72,14 +72,14 @@ impl Shell {
    let moved=d.dock_ptr!=magnify.then_some((x,y));d.dock_ptr=magnify.then_some((x,y));if moved&&magnify{self.dirty=true;}
    // the hovered icon comes from the layout centred on this pointer, the one drawn and pressed next (W2-23): the
    // layout of the previous pointer put the label, and a quick press, on a neighbour
-   let hov=if in_zone{self.dock_live(bar,&rects,now).1.iter().position(|r|r.contains(x,y))}else{None};
+   let hov=if in_zone{self.dock_press(&self.dock_live(bar,&rects,now).1).iter().position(|r|r.contains(x,y))}else{None};
    let d=self.desk.as_mut().unwrap();
    if d.dock_hover!=hov{d.dock_label_last=d.dock_hover;d.dock_label_ms=t;d.dock_hover=hov;self.dirty=true;}
    if edge||in_zone||menu {d.dock_hide_at=None;dock_reveal(d,now);if !d.dock_visible{self.dirty=true;}}
    else if d.dock_autohides()&&d.dock_hide_at.is_none(){d.dock_hide_at=Some(t+550.);}
    return Some(vec![]);
   }
-  if let Pointer::Context(x,y)=event {let m=self.desk_metrics();let (list,bar,rects)=self.desk_dock(&m);let (bar,slid)=self.dock_slid(bar,&rects,t/1000.);let rects=self.dock_magnified(&slid,t/1000.);let plate=dock_plate(bar,&slid,&rects,self.dock_preferences().position!=Position::Bottom);if self.dock_is_visible()&&(plate.contains(x,y)||rects.iter().any(|r|r.contains(x,y))){let target=rects.iter().position(|r|r.contains(x,y)).map(|i|list[i]).filter(|i|*i!=apps().len()&&*i!=super::desk::DOCK_TRASH&&*i!=DOCK_STACK&&dock_min_index(*i).is_none());let d=self.desk.as_mut().unwrap();d.dock_menu_target=target;d.dock_menu_anchor=(x,y);self.desktop_menu=Some(Menu::Dock);self.dirty=true;return Some(vec![]);}}
+  if let Pointer::Context(x,y)=event {let m=self.desk_metrics();let (list,bar,rects)=self.desk_dock(&m);let (bar,slid)=self.dock_slid(bar,&rects,t/1000.);let rects=self.dock_magnified(&slid,t/1000.);let plate=dock_plate(bar,&slid,&rects,self.dock_preferences().position!=Position::Bottom);let press=self.dock_press(&rects);if self.dock_is_visible()&&(plate.contains(x,y)||press.iter().any(|r|r.contains(x,y))){let target=press.iter().position(|r|r.contains(x,y)).map(|i|list[i]).filter(|i|*i!=apps().len()&&*i!=super::desk::DOCK_TRASH&&*i!=DOCK_STACK&&dock_min_index(*i).is_none());let d=self.desk.as_mut().unwrap();d.dock_menu_target=target;d.dock_menu_anchor=(x,y);self.desktop_menu=Some(Menu::Dock);self.dirty=true;return Some(vec![]);}}
   None
  }
  pub fn desktop_pointer(&mut self,x:f32,y:f32,context:bool,t:f64){if self.modal_layer.is_some(){return;}if !context{self.pointer_hover(x,y);self.hover_speech_at(x,y,t);self.note_pointer_y(y);self.notify_hover(x,y,t);}#[cfg(feature="desktop-wayland")] if !context&&self.desk_active()&&!self.is_locked(){self.arrange_hover(x,y,t);self.desktop_menu_hover_at(x,y,t);}if !context&&self.desk_active()&&!self.is_locked(){let m=self.desk_metrics();let d=self.desk.as_mut().unwrap();let over=match d.pick(&m,x,y){Some((i,super::desk::Hit::Light(_)))=>Some(d.wins[i].app),_=>None};if d.lights_hover!=over{d.lights_hover=over;self.dirty=true;}}if self.dock_pointer(if context{Pointer::Context(x,y)}else{Pointer::Hover(x,y)},t).is_some(){return;}if context&&self.desk_active()&&!self.is_locked(){let m=self.desk_metrics();if let Some((i,super::desk::Hit::Content))=self.desk.as_ref().unwrap().pick(&m,x,y){let w=self.desk.as_ref().unwrap().wins[i];let b=w.body(&m);if let AppId::External(slot)=w.app {if let Some(Some(host))=self.ext.get_mut(slot as usize){host.send(&bifrost_proto::ToApp::Context{x:x-b.x as f32,y:y-b.y as f32});}}}}}
@@ -278,6 +278,10 @@ impl Shell {
   let sh=|r:&Rect|Rect{x:r.x+dx,y:r.y+dy,..*r};
   (sh(&bar),rects.iter().map(sh).collect())
  }
+ /// The press areas of the icon slots `live` (as `dock_live` gives them): each grown along the Dock's axis by half the
+ /// gap to its neighbour (`desk::dock_press_rects`). Press, release, the hovered icon (its label) and the context menu
+ /// all hit-test these, so the icon a pointer in the gap magnifies and names is the one a click opens (E2E N5).
+ pub(super) fn dock_press(&self,live:&[Rect])->Vec<Rect>{super::desk::dock_press_rects(live,self.dock_preferences().position!=Position::Bottom)}
  /// Icon slots as drawn and hit-tested now: slid, then magnified around the pointer.
  pub(super) fn dock_live(&self,bar:Rect,rects:&[Rect],now:f64)->(Rect,Vec<Rect>){let (bar,slid)=self.dock_slid(bar,rects,now);let live=self.dock_magnified(&slid,now);(bar,live)}
  pub(super) fn dock_magnified(&self,rects:&[Rect],now:f64)->Vec<Rect>{
@@ -414,6 +418,22 @@ fn dock_reveal(d:&mut super::desk::Desk,now:f64){
    sh.dock_pointer(Pointer::Context(x,y),1300.);
    assert_eq!(sh.desk.as_ref().unwrap().dock_menu_target,Some(list[k]),"the drawn icon, not its neighbour");
   }
+ }
+
+ /// E2E N5: the gap between two icons belongs to the nearer one for the hovered label and the context menu too, as it
+ /// does for press and release, so the icon named under the pointer is the one a click or a right-click acts on.
+ #[test]
+ fn the_gap_next_to_an_icon_names_it_and_takes_its_context_menu(){
+  let mut sh=desktop(1280,800);
+  {let p=&mut sh.desk.as_mut().unwrap().dock_preferences;p.position=Position::Bottom;p.magnification=false;}
+  let m=sh.desk_metrics();let(list,_,rest)=sh.desk_dock(&m);let k=1;
+  let gap=rest[k+1].x-(rest[k].x+rest[k].w);assert!(gap>=2,"icons sit apart: {gap}");
+  let(x,y)=((rest[k].x+rest[k].w) as f32+0.5,(rest[k].y+rest[k].h/2) as f32);
+  assert!(!rest[k].contains(x,y)&&!rest[k+1].contains(x,y),"the point is in the gap");
+  sh.desktop_pointer(x,y,false,1000.);
+  assert_eq!(sh.desk.as_ref().unwrap().dock_hover,Some(k),"the label names the nearer icon");
+  sh.dock_pointer(Pointer::Context(x,y),1000.);
+  assert_eq!(sh.desk.as_ref().unwrap().dock_menu_target,Some(list[k]),"its context menu, not the Dock's own");
  }
 
  #[test]
