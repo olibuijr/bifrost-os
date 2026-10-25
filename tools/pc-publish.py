@@ -96,9 +96,12 @@ DEFAULT_GNUPGHOME = os.path.join(REPO, "out/lab/gnupg")
 
 
 def run(cmd, **kw):
+    t = time.time()
     r = subprocess.run(cmd, **kw)
     if r.returncode:
         sys.exit(f"failed: {' '.join(map(str, cmd))}")
+    # per-step timings, to see where a publish spends its time (owner, 2026-10-25: faster iterations)
+    print(f"pc-publish: {time.time() - t:.1f}s  {' '.join(map(str, cmd[:6]))}", file=sys.stderr)
     return r
 
 
@@ -303,7 +306,9 @@ def main():
     # the 8079 mirror must hold every package the new springboard-shell depends on, or Midget's update 404s and rolls back
     if not a.skip_mirror_sync:
         try:
+            ts = time.time()
             pc_mirror.sync()
+            print(f"pc-publish: {time.time() - ts:.1f}s  mirror sync", file=sys.stderr)
         except Exception as e:  # offline titan: the check below still decides
             print(f"pc-mirror: sync failed ({e}); checking what is there", file=sys.stderr)
     pc_mirror.check()

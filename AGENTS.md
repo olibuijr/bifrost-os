@@ -69,7 +69,8 @@ Apple HIG and the Bifrost checklist are the design authority; cite the section (
 - Commit each finished change with a conventional message. If you are on `main`, create a feature branch first.
 - Do not push, merge or deploy unless asked.
 - Agent teams (owner, 2026-10-13): Haiku 5.5 agents only code and commit; they never build, test, run
-  tools/check-names.py or touch Midget. The lead reviews and merges, asks the owner before every build, runs one build
+  tools/check-names.py or touch Midget. Exception (owner, 2026-10-25): agents may run `tools/agent-check.sh`
+  (cargo check only, memory-limited, one at a time) before committing. The lead reviews and merges, asks the owner before every build, runs one build
   at a time, and never builds while agents run.
 - **Parity status** (owner rule, 2026-10-11): parity with the reference SDKs is tracked with the `bifrost-parity-matrix`
   skill and `bifrost pc parity`. A change that adds or completes a capability updates its rows in
