@@ -721,6 +721,10 @@ pub struct AppHost {
     fallback: bool,
     /// The extra windows the app has open, front to back (`ToShell::WindowOpen` and friends). The desk draws each one.
     pub windows: WindowTable,
+    /// Where the app asked its main window to go (`ToShell::WindowMove` with window 0, points relative to the visible
+    /// desktop area): a document app moving a document into its main window keeps that document's frame. The desk
+    /// applies it once (`take_main_move`).
+    main_move: Option<(f32, f32)>,
     /// The window with key focus: 0 is the main window, otherwise an extra window's id. Keys, commands, menu items and
     /// text edits go to it (`input`); the desk sets it (`set_key_window`).
     pub key_window: u32,
@@ -861,6 +865,7 @@ impl AppHost {
             frame_scale: cfg.scale,
             fallback: false,
             windows: WindowTable::new(),
+            main_move: None,
             key_window: 0,
             window_bufs: std::collections::BTreeMap::new(),
             early: std::collections::VecDeque::new(),
@@ -1461,6 +1466,13 @@ impl AppHost {
                 }
                 out.chrome();
             }
+            // window 0 is the main window: the desk moves it on its next sync, as it does an extra window
+            ToShell::WindowMove { window: 0, x, y } => {
+                if x.is_finite() && y.is_finite() {
+                    self.main_move = Some((x, y));
+                    out.chrome();
+                }
+            }
             ToShell::WindowMove { window, x, y } => {
                 // an unknown window is ignored; the desk applies the position on its next sync
                 if self.windows.request_position(&self.id, window, x, y) {
@@ -1666,6 +1678,11 @@ impl AppHost {
 
     /// The person dragged window `id` to (x, y) points (the shell's clamped position): the table keeps it and the app is
     /// told (`WindowMoved`). False when the window is not open.
+    /// The position the app asked its main window to move to (`ToShell::WindowMove` with window 0), once.
+    pub fn take_main_move(&mut self) -> Option<(f32, f32)> {
+        self.main_move.take()
+    }
+
     pub fn window_dragged(&mut self, id: u32, x: f32, y: f32) -> bool {
         if !self.windows.note_position(&self.id, id, x, y) {
             return false;
@@ -3580,6 +3597,23 @@ mod window_table_tests {
         assert_eq!((one.title.as_str(), one.w, one.h), ("Ada L.", 320.0, 240.0));
         host.handle(ToShell::WindowClose { id: 2 }, Vec::new(), &mut out);
         assert_eq!(ids(&host), vec![1]);
+    }
+
+    /// E2E11 5: a document app that moves a document into its main window asks for the main window to take that
+    /// document's frame (`WindowMove` with window 0); the desk takes the position once. A position that is not a number
+    /// is refused.
+    #[test]
+    fn a_main_window_move_is_kept_once_for_the_desk() {
+        let (channel, _peer) = sys::socketpair_pair().unwrap();
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
+        let mut out = Pumped::default();
+        host.handle(ToShell::WindowMove { window: 0, x: f32::NAN, y: 10.0 }, Vec::new(), &mut out);
+        assert_eq!(host.take_main_move(), None);
+        host.handle(ToShell::WindowMove { window: 0, x: 120.0, y: 64.0 }, Vec::new(), &mut out);
+        assert!(out.chrome, "the desk is asked to apply it");
+        assert_eq!(host.take_main_move(), Some((120.0, 64.0)));
+        assert_eq!(host.take_main_move(), None, "applied once");
+        assert!(host.windows.of_app("fixture").is_empty(), "the main window is not an extra window");
     }
 
     /// The state an app sends again unchanged is free: it asks the shell for no frame at all. Pixels alone ask for a

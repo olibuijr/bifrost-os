@@ -844,7 +844,12 @@ mod tests {
         let plain = ctx.open_window(WindowSpec::new("Plain", 10.0, 10.0)).unwrap();
         assert_eq!(deliver_window(&mut app, &ctx, &ToApp::WindowTitleDoubleClick { window: plain.0 }, 0.0), Some(false));
         assert_eq!(app.log, vec!["moved 1 30 60".to_string(), "double 1".to_string()]);
-        assert_eq!(ctx.move_window(WindowId::MAIN, 1.0, 1.0), Err(WindowError::MainWindow));
+        // the main window moves through the shell (it has no position in the registry)
+        ctx.take_sent();
+        assert_eq!(ctx.move_window(WindowId::MAIN, 1.0, 2.0), Ok(()));
+        assert_eq!(ctx.take_sent(), vec![ToShell::WindowMove { window: 0, x: 1.0, y: 2.0 }]);
+        assert!(ctx.move_window(WindowId::MAIN, f32::NAN, 2.0).is_err());
+        assert!(ctx.take_sent().is_empty());
     }
 
     #[test]

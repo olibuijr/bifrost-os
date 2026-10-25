@@ -3051,7 +3051,7 @@ impl Shell {
                 .collect();
             let (open, close) = h.windows.desk_changes(&h.id, &shown);
             if !open.is_empty() || !close.is_empty() {
-                let sizes: Vec<(u32, f32, f32, bool)> = h.windows.of_app(&h.id).iter().map(|x| (x.id, x.w, x.h, x.cascade)).collect();
+                let sizes: Vec<(u32, f32, f32, bool, bool)> = h.windows.of_app(&h.id).iter().map(|x| (x.id, x.w, x.h, x.cascade, x.position.is_some())).collect();
                 plan.push((slot as u8, open, close, sizes));
             }
         }
@@ -3081,7 +3081,7 @@ impl Shell {
             for id in open {
                 let Ok(id16) = u16::try_from(id) else { continue };
                 // the table's size is in points; the desk window is outer px (body plus title bar)
-                let (w, h, cascade) = sizes.iter().find(|s| s.0 == id).map_or((480.0, 560.0, false), |s| (s.1, s.2, s.3));
+                let (w, h, cascade, positioned) = sizes.iter().find(|s| s.0 == id).map_or((480.0, 560.0, false, false), |s| (s.1, s.2, s.3, s.4));
                 let app = AppId::ExternalWindow(slot, id16);
                 let own_title_row = full.contains(&(slot, id16));
                 let size = extra_window_px(app, own_title_row, (w, h), k, &m);
@@ -3114,12 +3114,21 @@ impl Shell {
                         h.windows.set_cascade(&h.id, id, false);
                     }
                 }
+                // a window the app gave no position: the app is told where the desk put it (`WindowMoved`), so it knows
+                // each window's frame (a document app moving a document into its main window keeps that frame)
+                if !positioned {
+                    self.ext_window_dropped(app);
+                }
             }
         }
         // the placement and collapse the table asks for (`WindowMove`, `WindowCollapse`), on every window the desk shows
         let mut asks = Vec::new();
+        let mut main_moves = Vec::new();
         for (slot, host) in self.ext.iter_mut().enumerate() {
             let Some(h) = host else { continue };
+            if let Some(p) = h.take_main_move() {
+                main_moves.push((slot as u8, p));
+            }
             let ids: Vec<u32> = h.windows.of_app(&h.id).iter().map(|w| w.id).collect();
             for id in ids {
                 let pending = h.windows.take_pending_move(&h.id, id);
@@ -3131,6 +3140,12 @@ impl Shell {
             if let Ok(id16) = u16::try_from(id) {
                 changed |= self.ext_window_place(AppId::ExternalWindow(slot, id16), pending, collapsed);
             }
+        }
+        // the main window moves where its app asked (`WindowMove` with window 0); its collapse is the desk's own
+        for (slot, p) in main_moves {
+            let app = AppId::External(slot);
+            let collapsed = self.desk.as_ref().is_some_and(|d| d.is_collapsed(app));
+            changed |= self.ext_window_place(app, Some(p), collapsed);
         }
         if changed {
             self.desk_refocus();
@@ -3170,6 +3185,9 @@ impl Shell {
             let win_w = d.wins[i].r.w as f32 / k;
             if let Some((cx, cy)) = super::app_window_table::clamp_to_screen(x, y, a.w as f32 / k, a.h as f32 / k, win_w) {
                 d.move_to(&m, i, a.x + (cx * k).round() as i32, a.y + (cy * k).round() as i32);
+                // put there on purpose: its toplevel maps there (`bifrost_window_level_v1` `set_origin`), not at the
+                // window server's cascade
+                d.placed.insert(app);
             }
         }
         if d.is_collapsed(app) != collapsed {

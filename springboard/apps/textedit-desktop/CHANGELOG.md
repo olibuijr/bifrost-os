@@ -6,6 +6,8 @@
 - A converted document takes the fixed-pitch plain text font instead of keeping Helvetica.
 - Undo of Make Plain Text also restores the rich text default font, so text typed afterwards is no longer in the plain font.
 - A plain text file opened from disk uses the plain text font too, so every plain document has one font.
+- The save confirmation is a sheet attached to the window's title bar, with full-width stacked buttons.
+- Closing the main window's document keeps the other document where its window was: the main window moves there instead of the document jumping into the main window's frame.
 
 ## 1.13.3
 

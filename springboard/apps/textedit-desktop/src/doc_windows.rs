@@ -247,7 +247,9 @@ impl TextEditApp {
         for window in closed {
             let _ = ctx.close_window(window);
         }
-        // the main window cannot close: with its document gone it takes over another window's
+        // the main window cannot close: with its document gone it takes over another window's, and goes where that
+        // window was, so the document keeps its frame and the window that closes is the one whose document closed
+        // (E2E11 5: the document jumped into the main window's frame). The shell told the app where it put the window.
         if self.current.is_main() && self.current_doc.is_none() {
             if let Some(i) = self.views.iter().position(|v| !v.window.is_main()) {
                 let mut v = self.views.remove(i);
@@ -255,6 +257,10 @@ impl TextEditApp {
                 swap_state(self, &mut v);
                 self.size = size;
                 self.current_doc = v.doc;
+                let frame = ctx.windows().get(v.window).and_then(|w| w.position);
+                if let Some((x, y)) = frame {
+                    let _ = ctx.move_window(WindowId::MAIN, x, y);
+                }
                 let _ = ctx.close_window(v.window);
             }
         }
@@ -434,6 +440,28 @@ mod tests {
         assert_eq!(app.docs.len(), 1);
         assert_eq!(app.current, WindowId::MAIN);
         assert_eq!(app.docs.active(), Some(first));
+    }
+
+    /// E2E11 5: closing the main window's document hands it the other window's document and moves the main window to
+    /// where that window was, so the document stays put; only the window of the closed document goes away.
+    #[test]
+    fn closing_the_main_document_keeps_the_other_document_where_its_window_was() {
+        let ctx = window(1200, 780);
+        let mut app = TextEditApp::new();
+        app.configure(&ctx);
+        app.menu_action(&ctx, item::NEW);
+        let w2 = app.current;
+        let second = app.docs.active().unwrap();
+        // where the shell put the second window (it reports a window opened without a position)
+        ctx.move_window(w2, 340.0, 96.0).unwrap();
+        ctx.take_sent();
+        app.window_input(&ctx, WindowId::MAIN, bifrost_app::proto::WindowInput::MenuAction(item::CLOSE));
+        let sent = ctx.take_sent();
+        assert!(sent.iter().any(|m| matches!(m, ToShell::WindowMove { window: 0, x, y } if (*x, *y) == (340.0, 96.0))), "the main window goes where the document was: {sent:?}");
+        assert!(sent.iter().any(|m| matches!(m, ToShell::WindowClose { id } if *id == w2.0)), "the second window closes");
+        assert_eq!(app.current, WindowId::MAIN);
+        assert_eq!(app.current_doc, Some(second));
+        assert_eq!(app.docs.len(), 1);
     }
 
     /// The red button on an edited document window does not lose the document: the close confirmation comes up on the
