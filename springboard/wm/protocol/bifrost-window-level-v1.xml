@@ -4,7 +4,7 @@
     Copyright 2026 BifrOSt. Private protocol of the BifrOSt window server (docs/bifrost-ui.md, "Window level").
   </copyright>
 
-  <interface name="bifrost_window_level_manager_v1" version="8">
+  <interface name="bifrost_window_level_manager_v1" version="9">
     <description summary="stacking level of a toplevel">
       Lets the shell put a toplevel on the floating level. A floating window stays above the normal windows of the
       desktop and is raised only within its own band; menus, panels and the menu bar are not affected. The level
@@ -33,6 +33,10 @@
       Since version 8 the shell can give its toplevels a stacking order (`set_stack_rank`): when it brings a set of its
       windows forward (the Apps grid closing, a hidden app shown again, Bring All to Front), they stack in its order
       above the windows of other clients, whether they are mapped already or map later in any order.
+
+      Since version 9 the shell can move a toplevel that is already mapped (`set_position`): an app asked to put its
+      window somewhere (a document app moving its main window to the frame of the document it takes over), which
+      `set_origin` cannot do because it applies on the next map only.
     </description>
 
     <request name="destroy" type="destructor"/>
@@ -60,7 +64,7 @@
         The top-left corner (x, y), in logical desktop pixels, of the frame the toplevel of `surface` takes when it
         maps: the window server skips its cascade and fits the frame inside the usable area. Like the level it belongs
         to the surface and applies on the next map only; a toplevel that is already mapped is not moved (the shell
-        uses `tile` for that).
+        uses `set_position` or `tile` for that).
       </description>
       <arg name="surface" type="object" interface="wl_surface"/>
       <arg name="x" type="int"/>
@@ -112,6 +116,20 @@
       </description>
       <arg name="surface" type="object" interface="wl_surface"/>
       <arg name="rank" type="uint"/>
+    </request>
+
+    <request name="set_position" since="9">
+      <description summary="move the toplevel of a surface">
+        Moves the mapped toplevel of `surface` so the top-left corner of its frame is at (x, y), in logical desktop
+        pixels; the window server keeps part of it on the usable area as a drag does, leaves its size, its place in the
+        stacking order and the keyboard focus as they are, and reports the new frame in a `frame` event. A tiled or
+        maximized toplevel leaves its tile; a full-screen toplevel is not moved. For a toplevel that has not mapped yet
+        it acts as `set_origin`. Only the privileged client (the shell) may move its windows; the request of any other
+        client is ignored.
+      </description>
+      <arg name="surface" type="object" interface="wl_surface"/>
+      <arg name="x" type="int"/>
+      <arg name="y" type="int"/>
     </request>
 
     <event name="frame" since="2">

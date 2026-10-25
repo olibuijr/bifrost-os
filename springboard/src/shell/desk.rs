@@ -466,6 +466,9 @@ pub struct Desk {
     /// (Overview, a minimize) its toplevel is destroyed, and the new toplevel must map where the window was, not at the
     /// window server's cascade
     pub(super) placed: std::collections::HashSet<AppId>,
+    /// the windows the shell moved where their app asked (`WindowMove`) since their last frame went out: the next frame
+    /// asks the window server to move the mapped toplevel there (`set_position`), once (E2E11 3)
+    pub(super) moved: std::collections::HashSet<AppId>,
     /// the input shape of each borderless window (window px, `alpha_shape` of its last frame): the window server gives
     /// it the pointer only there, and `pick` hits it only there
     pub(super) shapes: std::collections::HashMap<AppId, std::sync::Arc<[[i32; 4]]>>,
@@ -1444,6 +1447,7 @@ impl Desk {
         self.closed_origins.insert(w.app, (r.x, r.y));
         // the toplevel is gone; `open` asks the next one to map where this one was (`closed_origins`)
         self.placed.remove(&w.app);
+        self.moved.remove(&w.app);
         self.shapes.remove(&w.app);
         self.release_app_buffers(w.app);
         self.collapsed.remove(&w.app);
@@ -1758,7 +1762,7 @@ impl Shell {
             let Some(id)=win_id(w.app) else{return false};
             // a covered window has no cache entry by design (see `hidden_ids`); anything else without one needs a full draw
             if !desk.window_cache.contains_key(&id) && !desk.hidden_ids.contains(&id) {return false;}
-            frames.push(crate::bare::wayland::WindowFrame {id,title:frame_title(id),x:w.r.x,y:w.r.y,width:w.r.w as usize,height:w.r.h as usize,pixels:None,damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize),maximized:w.maximized,fullscreen:w.full,title_height,drag_height:0,no_drag:Vec::new(),floating:false,fx:bifrost_render::glass::Fx::IDENTITY,opaque:!matches!(w.app,AppId::External(_)),origin:None,min_size:(0,0),input:None});
+            frames.push(crate::bare::wayland::WindowFrame {id,title:frame_title(id),x:w.r.x,y:w.r.y,width:w.r.w as usize,height:w.r.h as usize,pixels:None,damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize),maximized:w.maximized,fullscreen:w.full,title_height,drag_height:0,no_drag:Vec::new(),floating:false,fx:bifrost_render::glass::Fx::IDENTITY,opaque:!matches!(w.app,AppId::External(_)),origin:None,position:None,min_size:(0,0),input:None});
             let controls=match w.app {AppId::External(slot)=>ext.get(slot as usize).and_then(Option::as_ref).map_or(&[][..],|h|&h.controls[..]),_=>&[][..]};
             let (dh,nd)=drag_zone(w,&m,controls);
             if let Some(f)=frames.last_mut(){f.drag_height=dh;f.no_drag=nd;}
@@ -1868,6 +1872,7 @@ impl Shell {
                     f.input = Some(d.shapes.get(&a).cloned().unwrap_or_else(|| std::sync::Arc::from(Vec::new())));
                 }
                 f.origin = frame_app(f.id).and_then(|a| origin_hint(&d.placed, a, f.x, f.y));
+                f.position = frame_app(f.id).filter(|a| d.moved.remove(a)).map(|_| (f.x, f.y));
                 // the toplevel advertises the app's own minimum (outer px, as its window geometry), not a fixed one
                 f.min_size = frame_app(f.id).map_or((0, 0), |a| { let (w, h, _, _) = size_range(a, &m); (w, h) });
             }
@@ -3186,8 +3191,10 @@ impl Shell {
             if let Some((cx, cy)) = super::app_window_table::clamp_to_screen(x, y, a.w as f32 / k, a.h as f32 / k, win_w) {
                 d.move_to(&m, i, a.x + (cx * k).round() as i32, a.y + (cy * k).round() as i32);
                 // put there on purpose: its toplevel maps there (`bifrost_window_level_v1` `set_origin`), not at the
-                // window server's cascade
+                // window server's cascade, and a toplevel already mapped is moved there (`set_position`, E2E11 3: a
+                // document app's main window taking over a closed document's frame stayed at its old place on screen)
                 d.placed.insert(app);
+                d.moved.insert(app);
             }
         }
         if d.is_collapsed(app) != collapsed {
@@ -3914,7 +3921,7 @@ impl Shell {
                         id, title: frame_title(id), x:w.r.x, y:w.r.y,
                         width:w.r.w as usize, height:w.r.h as usize, pixels:None,
                         damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize), maximized:w.maximized, fullscreen:w.full, title_height:m.title,
-                        drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None, min_size:(0,0),input:None,
+                        drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None,position:None, min_size:(0,0),input:None,
                     });
                     continue;
                 }
@@ -3923,7 +3930,7 @@ impl Shell {
                         id, title: frame_title(id), x:w.r.x, y:w.r.y,
                         width:w.r.w as usize, height:w.r.h as usize, pixels:None,
                         damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize), maximized:w.maximized, fullscreen:w.full, title_height:m.title,
-                        drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None, min_size:(0,0),input:None,
+                        drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None,position:None, min_size:(0,0),input:None,
                     });
                     self.desk.as_mut().unwrap().window_cache.insert(id,cached.unwrap());
                     continue;
@@ -3947,7 +3954,7 @@ impl Shell {
                             desk.frames.push(crate::bare::wayland::WindowFrame {
                                 id, title: frame_title(id), x:w.r.x, y:w.r.y, width:cw, height:ch, pixels:None,
                                 damage:crate::gfx::Damage::new(cw,ch), maximized:w.maximized, fullscreen:w.full, title_height:m.title,
-                                drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None, min_size:(0,0),input:None,
+                                drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None,position:None, min_size:(0,0),input:None,
                             });
                             continue;
                         }
@@ -4001,7 +4008,7 @@ impl Shell {
                         let desk=self.desk.as_mut().unwrap();
                         desk.body_cache.remove(&w.app);
                         desk.window_cache.insert(id,retained);
-                        desk.frames.push(crate::bare::wayland::WindowFrame{id,title:frame_title(id),x:w.r.x,y:w.r.y,width,height,pixels:outgoing,damage,maximized:w.maximized,fullscreen:w.full,title_height:m.title,drag_height,no_drag,fx:bifrost_render::glass::Fx::IDENTITY,opaque,floating:false,origin:None,min_size:(0,0),input:None});
+                        desk.frames.push(crate::bare::wayland::WindowFrame{id,title:frame_title(id),x:w.r.x,y:w.r.y,width,height,pixels:outgoing,damage,maximized:w.maximized,fullscreen:w.full,title_height:m.title,drag_height,no_drag,fx:bifrost_render::glass::Fx::IDENTITY,opaque,floating:false,origin:None,position:None,min_size:(0,0),input:None});
                         continue;
                     }
                 }
@@ -4036,7 +4043,7 @@ impl Shell {
                 desk.frames.push(crate::bare::wayland::WindowFrame {
                     id, title: frame_title(id), x:w.r.x, y:w.r.y,
                     width:w.r.w as usize, height:w.r.h as usize, pixels, damage, maximized:w.maximized, fullscreen:w.full, title_height:m.title,
-                    drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None, min_size:(0,0),input:None,
+                    drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque, floating:false, origin:None,position:None, min_size:(0,0),input:None,
                 });
                 continue;
             }
@@ -5640,7 +5647,7 @@ mod tests {
         assert_eq!((rect(&sh, placed).x, rect(&sh, placed).y), (1065, 524), "the shell follows the reported frame");
         let frames: Vec<_> = [placed, fresh].iter().map(|&app| {
             let r = rect(&sh, app);
-            crate::bare::wayland::WindowFrame { id: win_id(app).unwrap(), title: "", x: r.x, y: r.y, width: r.w as usize, height: r.h as usize, pixels: None, damage: crate::gfx::Damage::new(1, 1), maximized: false, fullscreen: false, title_height: 0, drag_height: 0, no_drag: Vec::new(), floating: false, fx: bifrost_render::glass::Fx::IDENTITY, opaque: true, origin: None, min_size: (0, 0), input: None }
+            crate::bare::wayland::WindowFrame { id: win_id(app).unwrap(), title: "", x: r.x, y: r.y, width: r.w as usize, height: r.h as usize, pixels: None, damage: crate::gfx::Damage::new(1, 1), maximized: false, fullscreen: false, title_height: 0, drag_height: 0, no_drag: Vec::new(), floating: false, fx: bifrost_render::glass::Fx::IDENTITY, opaque: true, origin: None, position: None, min_size: (0, 0), input: None }
         }).collect();
         sh.desk.as_mut().unwrap().frames = frames;
         let out = sh.take_wayland_windows();
@@ -5657,6 +5664,34 @@ mod tests {
         let i = d.index_of(placed).unwrap();
         d.close(i);
         assert!(!d.placed.contains(&placed));
+    }
+
+    /// E2E11 3: an app moving its mapped window (`WindowMove`) makes the next frame ask the window server to move the
+    /// toplevel there (`set_position`), once; a frame after that asks nothing, so a later drag is never pulled back.
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn a_window_its_app_moved_asks_the_window_server_to_move_its_toplevel_once() {
+        let mut sh = crate::shell::tests::desktop_shell();
+        let m = sh.desk_metrics();
+        let app = AppId::Settings;
+        {
+            let d = sh.desk.as_mut().unwrap();
+            d.wins.clear();
+            d.open(&m, app, (600, 400));
+        }
+        let id = win_id(app).unwrap();
+        // the window server mapped it and said where
+        sh.wayland_window_event(crate::bare::wayland::WindowEvent::Frame(id, 300, 200, 600, 400));
+        assert!(sh.ext_window_place(app, Some((140.0, 120.0)), false));
+        let r = sh.desk.as_ref().unwrap().wins.iter().find(|w| w.app == app).map(|w| w.r).unwrap();
+        let frame = |r: Rect| crate::bare::wayland::WindowFrame { id, title: "", x: r.x, y: r.y, width: r.w as usize, height: r.h as usize, pixels: None, damage: crate::gfx::Damage::new(1, 1), maximized: false, fullscreen: false, title_height: 0, drag_height: 0, no_drag: Vec::new(), floating: false, fx: bifrost_render::glass::Fx::IDENTITY, opaque: true, origin: None, position: None, min_size: (0, 0), input: None };
+        sh.desk.as_mut().unwrap().frames = vec![frame(r)];
+        let out = sh.take_wayland_windows();
+        assert_eq!(out[0].position, Some((r.x, r.y)), "the mapped toplevel moves where the shell put the window");
+        assert_ne!((r.x, r.y), (300, 200));
+        sh.desk.as_mut().unwrap().frames = vec![frame(r)];
+        let out = sh.take_wayland_windows();
+        assert_eq!(out[0].position, None, "asked once");
     }
 
     #[test]

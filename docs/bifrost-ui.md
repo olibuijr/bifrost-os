@@ -1532,7 +1532,13 @@ Float on Top, the floating CPU window of Activity Monitor). Ours, end to end:
   higher rank (`Wm::map_ranked`), and neither takes the focus: the whole set returns in the shell's order over the
   other client's window, whatever order the toplevels map in (E2E5 1, 3). A window the shell ranks before its
   toplevel exists keeps its request for a later `windows` call (up to 120 calls and 32 requests), and a rank change
-  updates the foreign-toplevel list order. Layer surfaces are drawn and hit-tested in one order: by z rank, then the
+  updates the foreign-toplevel list order.
+  Version 9 adds `set_position(surface, x, y)`, privileged only: the shell moves one of its mapped toplevels where the
+  app asked its window to go (`WindowMove`, `Wm::move_to`: kept on screen as a drag keeps it, a tile or maximize is
+  left, the stack and the focus stay; a toplevel not mapped yet maps there as with `set_origin`). `set_origin` applies
+  on the next map only, so a document app that moved its main window to the frame of the document it took over was
+  drawn at the old place while the shell kept the new one (E2E11 3). The desk asks once per move (`Desk::moved`), so a
+  later drag is never pulled back. Layer surfaces are drawn and hit-tested in one order: by z rank, then the
   order they mapped, the newest on top within a rank (`scene::layer_surfaces_bottom_first`). The privileged shell names
   a surface's rank in its namespace (`bifrost-desktop-chrome.z<rank>`; other clients' suffixes are dropped and they get
   the default 100); its policy is `chrome_z` in `src/bare/wayland.rs`: the system sheets and alerts (5) under the Dock

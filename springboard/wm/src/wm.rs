@@ -266,6 +266,20 @@ impl Wm {
         Some(Grab::Resize { id, edges, x, y, start })
     }
 
+    /// Moves `id` so its frame's top-left corner is at (`x`, `y`) (`bifrost_window_level_v1` `set_position`: the shell
+    /// puts a window where its app asked). The stacking order stays; the frame is kept on screen the way a drag keeps
+    /// it, and a tiled or maximized window leaves its tile and takes its size from before (as a drag does). `None` for a
+    /// window that is unknown or full screen.
+    pub fn move_to(&mut self, id: WindowId, x: i32, y: i32) -> Option<Rect> {
+        let area = self.area;
+        let w = self.get_mut(id)?;
+        if w.full.is_some() { return None; }
+        w.tiled = None;
+        let (cw, ch) = w.restore.take().map_or((w.rect.w, w.rect.h), |old| (old.w, old.h));
+        w.rect = keep_on_screen(Rect::new(x, y, cw, ch), area);
+        Some(w.rect)
+    }
+
     /// Applies the pointer at (`x`, `y`) to a grab; returns the window's new frame.
     pub fn motion(&mut self, grab: &Grab, x: i32, y: i32) -> Option<Rect> {
         let area = self.area;
@@ -729,6 +743,30 @@ mod tests {
         let r = wm.map(1, 800, 600);
         assert_eq!(wm.toggle_maximize(1), Some(AREA));
         assert_eq!(wm.toggle_maximize(1), Some(r));
+    }
+
+    /// E2E11 3: the shell moves a mapped window where its app asked (`set_position`), without restacking it.
+    #[test]
+    fn a_mapped_window_moves_where_the_shell_asks_and_keeps_its_place_in_the_stack() {
+        let mut wm = Wm::new(AREA);
+        let r1 = wm.map(1, 800, 600);
+        wm.map(2, 800, 600);
+        let moved = wm.move_to(1, AREA.x + 38, AREA.y + 38).unwrap();
+        assert_eq!((moved.x, moved.y, moved.w, moved.h), (AREA.x + 38, AREA.y + 38, r1.w, r1.h));
+        assert_eq!(wm.rect(1), Some(moved));
+        assert_eq!(wm.stack(), vec![1, 2], "the order is unchanged");
+        // kept on screen as a drag keeps it
+        let off = wm.move_to(1, AREA.x - 10_000, AREA.y - 10_000).unwrap();
+        assert!(off.x + off.w >= AREA.x && off.y >= AREA.y);
+        // a maximized window leaves the maximize and takes its old size
+        wm.toggle_maximize(2);
+        let back = wm.move_to(2, AREA.x + 50, AREA.y + 50).unwrap();
+        assert_eq!((back.w, back.h), (800, 600));
+        assert!(!wm.is_maximized(2));
+        // a full-screen window stays
+        wm.enter_full_screen(1);
+        assert_eq!(wm.move_to(1, AREA.x, AREA.y), None);
+        assert_eq!(wm.move_to(9, 0, 0), None, "unknown");
     }
 
     #[test]

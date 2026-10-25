@@ -78,6 +78,10 @@ pub struct WindowFrame { pub id:u32, pub title:&'static str, pub x:i32, pub y:i3
     /// window server placed before and whose toplevel was destroyed while it was hidden. None lets the window server
     /// place it (cascade). Used only when the toplevel is created.
     pub origin:Option<(i32,i32)>,
+    /// Where the window server moves the toplevel now (`bifrost_window_level_v1` `set_position`), once: the app asked
+    /// its window to go there (`WindowMove`) while the toplevel was mapped, which `origin` cannot do (E2E11 3). None
+    /// leaves the toplevel where the window server has it.
+    pub position:Option<(i32,i32)>,
     /// A press above `drag_height` (window px) moves the window, unless it lands in one of `no_drag` (x, y, w, h):
     /// the traffic lights and an app's toolbar controls in a full-size-content window.
     pub drag_height:i32, pub no_drag:Vec<[i32;4]>,
@@ -509,6 +513,11 @@ impl Display {
                 if (w.frame.x,w.frame.y)!=(frame.x,frame.y) && self.state.materials.contains_key(&frame.id) { w.pending=Damage::new(frame.width,frame.height); w.pending.all(); }
                 // the app's minimum can change with the scale or the screen (a minimum never exceeds the screen)
                 if min_size_of(w.frame.min_size)!=min_size_of(frame.min_size) { let (mw,mh)=min_size_of(frame.min_size); w.top.set_min_size(mw,mh); }
+                // the app moved its mapped window (`WindowMove`): the window server moves the toplevel and reports the
+                // frame back, so the shell's rectangle and the pixels on screen agree (E2E11 3)
+                if let (Some((px,py)),Some(mgr))=(frame.position,self.state.level_mgr.as_ref()) {
+                    if mgr.version()>=super::window_level_client::POSITION_SINCE { mgr.set_position(&w.surface,px,py); }
+                }
                 let pixels = frame.pixels.take().or_else(||w.frame.pixels.take());
                 let shape_changed = w.frame.input != frame.input;
                 w.frame = frame;
@@ -520,7 +529,7 @@ impl Display {
                 let top = xdg.get_toplevel(&qh,frame.id); top.set_title(frame.title.to_string()); top.set_app_id(format!("is.olibuijr.bifrost.{}",frame.id));
                 let (mw,mh)=min_size_of(frame.min_size); top.set_min_size(mw,mh);
                 // a window coming back from Overview or a minimize maps where it was, not at the cascade
-                if let (Some((ox,oy)),Some(mgr))=(frame.origin,self.state.level_mgr.as_ref()) {
+                if let (Some((ox,oy)),Some(mgr))=(frame.origin.or(frame.position),self.state.level_mgr.as_ref()) {
                     if mgr.version()>=super::window_level_client::ORIGIN_SINCE { mgr.set_origin(&surface,ox,oy); }
                 }
                 if frame.input.is_some() { Self::set_window_input(self.state.compositor.as_ref(),&surface,0,frame.width,frame.height,frame.input.as_deref(),&qh); }

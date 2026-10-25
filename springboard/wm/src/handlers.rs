@@ -495,6 +495,24 @@ impl WmState {
         let Some(id) = self.window_for_surface(surface).as_ref().and_then(WmState::known_id) else { return };
         self.place_window(id, placement);
     }
+
+    /// Moves the mapped toplevel of `surface` to (`x`, `y`) (`bifrost_window_level_v1` `set_position`) without
+    /// restacking or activating anything; its owner hears the new frame. False when the surface has no mapped toplevel
+    /// (it maps there instead, from the origin the request also keeps) or the toplevel is full screen.
+    pub fn move_surface(&mut self, surface: &WlSurface, x: i32, y: i32) -> bool {
+        let Some(window) = self.window_for_surface(surface) else { return false };
+        let Some(id) = WmState::known_id(&window) else { return false };
+        let Some(rect) = self.wm.move_to(id, x, y) else { return false };
+        // a maximized window that left its maximize takes its old size: the client is configured to it
+        let sized = window.geometry().size;
+        if (sized.w, sized.h) != (rect.w, rect.h) {
+            self.configure_frame(&window, id);
+        } else {
+            self.place(&window, (rect.x, rect.y));
+        }
+        self.dirty = true;
+        true
+    }
 }
 
 impl WlrLayerShellHandler for WmState {
