@@ -655,7 +655,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-dictionary"
-version = "0.6.6"
+version = "0.6.7"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -874,7 +874,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-notes"
-version = "1.24.6"
+version = "1.24.7"
 dependencies = [
  "bifrost-app",
  "bifrost-core",

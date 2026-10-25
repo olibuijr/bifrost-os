@@ -17,7 +17,7 @@ use bifrost_app::kit::{Damage, Scroller};
 use bifrost_app::widgets;
 use bifrost_app::app_windows::{WindowId, WindowSpec};
 use bifrost_app::services::ServiceCall;
-use bifrost_app::{App, AppMenu, AppMenuItem, Command, ContextItem, Ctx, Input, KeyInput, TouchKind};
+use bifrost_app::{App, AppMenu, AppMenuItem, Command, Commands, ContextItem, Ctx, Input, KeyInput, TouchKind};
 use bifrost_core::json::Json;
 use bifrost_ui::stardict::{load_library, Hit, Library};
 use std::collections::HashMap;
@@ -162,7 +162,9 @@ struct DictionaryApp {
     library: Option<Library>,
     /// Where the app's own dictionaries are kept, shown in the empty state.
     folder: String,
-    query: String,
+    /// The toolbar's search field: its text, caret and selection, so Select All, the arrows and the clipboard
+    /// commands edit it as the reference field editor does.
+    query: TextField,
     /// The lookup on screen. `None` while the query is being typed: the suggestions show instead.
     shown: Option<Shown>,
     suggestions: Vec<String>,
@@ -235,7 +237,7 @@ impl DictionaryApp {
         DictionaryApp {
             library: None,
             folder: String::new(),
-            query: String::new(),
+            query: TextField::new(),
             shown: None,
             suggestions: Vec::new(),
             scroll: Scroller::new(),
@@ -493,7 +495,7 @@ impl DictionaryApp {
                 self.scope = None;
             }
         }
-        self.query = word.to_string();
+        self.query.set_text(word);
         // the sidebar keeps the search's matches when the word is one of them (a tap on a row, Back to a listed word);
         // a word from elsewhere (a link, another app, the history) lists the headwords that match it, selected
         if !self.suggestions.iter().any(|w| w.eq_ignore_ascii_case(word)) {
@@ -820,6 +822,35 @@ impl DictionaryApp {
         }
     }
 
+    /// The search field has the keys: no settings page, find bar or rename takes them.
+    fn field_has_keys(&self) -> bool {
+        !self.settings && self.find.is_none() && self.rename.is_none()
+    }
+
+    /// The Edit commands this lookup takes: the search field's own (Select All, Cut, Copy, Paste, Undo, Redo, each
+    /// enabled only while it can act) while it has the keys, and Copy of the definition on screen.
+    fn edit_commands(&self, clipboard: bool) -> Commands {
+        let answer = self.shown.as_ref().is_some_and(|s| !s.hits.is_empty());
+        if !self.field_has_keys() {
+            return Commands::default().with(Command::Copy, answer);
+        }
+        let field = self.query.commands(clipboard);
+        field.with(Command::Copy, field.supports(Command::Copy) || answer)
+    }
+
+    /// Select All, Cut, Undo or Redo in the search field while it has the keys: whether a frame is needed, and the
+    /// text Cut takes for the pasteboard. A change to the text lists the matches again, as typing does.
+    fn field_command(&mut self, c: Command) -> (bool, Option<String>) {
+        if !self.field_has_keys() || matches!(c, Command::Copy | Command::Paste) {
+            return (false, None);
+        }
+        let before = self.query.to_string();
+        let out = self.query.command(c, "");
+        // Select All only moves the selection
+        let redraw = if *self.query == before { true } else { self.edited() };
+        (redraw, out)
+    }
+
     fn key(&mut self, key: &KeyInput) -> bool {
         if let Some((i, buf)) = &mut self.rename {
             match key {
@@ -866,20 +897,40 @@ impl DictionaryApp {
         }
         match key {
             KeyInput::Text(text) => {
-                for c in text.chars().filter(|c| !c.is_control()) {
-                    self.query.push(c);
-                }
-                self.edited()
+                let before = self.query.to_string();
+                self.query.push_str(text);
+                &*self.query != before && self.edited()
             }
-            KeyInput::Code(8) => {
-                if self.query.pop().is_none() {
-                    return false;
+            // Backspace and Delete remove the selection, else the character before or after the caret
+            KeyInput::Code(code @ (8 | 46)) => {
+                let before = self.query.to_string();
+                if *code == 8 {
+                    self.query.pop();
+                } else {
+                    self.query.delete();
                 }
-                self.edited()
+                &*self.query != before && self.edited()
+            }
+            // Left, Right, Home and End move the caret in the field (a selection collapses to its edge)
+            KeyInput::Code(37) => {
+                self.query.move_caret(false);
+                true
+            }
+            KeyInput::Code(39) => {
+                self.query.move_caret(true);
+                true
+            }
+            KeyInput::Code(36) => {
+                self.query.home();
+                true
+            }
+            KeyInput::Code(35) => {
+                self.query.end();
+                true
             }
             // Return chooses the word on screen (the first match while typing), else looks the typed text up
             KeyInput::Code(13) => {
-                let word = self.shown.as_ref().map(|s| s.word.clone()).unwrap_or_else(|| self.query.clone());
+                let word = self.shown.as_ref().map(|s| s.word.clone()).unwrap_or_else(|| self.query.to_string());
                 self.look_up(&word)
             }
             // Up and Down move the sidebar's selection and show that word (`NSTableView`'s arrow keys)
@@ -1055,15 +1106,28 @@ impl App for DictionaryApp {
                 }
                 None => false,
             },
+            // Copy takes the field's selection when there is one, else the definition on screen
+            Input::Command(Command::Copy) if self.field_has_keys() && !self.query.selection().is_empty() => {
+                ctx.set_pasteboard_string(self.query.selected_text());
+                false
+            }
             Input::Command(Command::Copy) => {
                 self.copy_definition(ctx);
                 false
+            }
+            Input::Command(c @ (Command::SelectAll | Command::Cut | Command::Undo | Command::Redo)) => {
+                let (redraw, cut) = self.field_command(c);
+                if let Some(cut) = cut.filter(|t| !t.is_empty()) {
+                    ctx.set_pasteboard_string(&cut);
+                }
+                redraw
             }
             // the toolbar's text size pull-down
             Input::ContextAction(id @ (MENU_BIGGER | MENU_SMALLER | MENU_ACTUAL_SIZE)) => self.menu_action(ctx, id),
             Input::Command(Command::Paste) => {
                 let text = ctx.pasteboard_string().unwrap_or_default();
                 let line = text.lines().next().unwrap_or("").to_string();
+                // the pasted line replaces the selection, as typing does
                 self.query.push_str(&line);
                 self.edited()
             }
@@ -1073,6 +1137,17 @@ impl App for DictionaryApp {
 
     fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
         self.menu()
+    }
+
+    /// The Edit commands of the key window's lookup: the keyboard sends Cmd+A, Cmd+X, Cmd+C, Cmd+V, Cmd+Z and
+    /// Shift+Cmd+Z as commands only when the app says it takes them.
+    fn commands(&self, ctx: &Ctx) -> Commands {
+        let clipboard = ctx.pasteboard_string().is_some_and(|t| !t.is_empty());
+        let key = ctx.key_window();
+        match self.windows.iter().find(|e| !key.is_main() && e.id == key) {
+            Some(e) => e.app.edit_commands(clipboard),
+            None => self.edit_commands(clipboard),
+        }
     }
 
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
@@ -1321,9 +1396,7 @@ impl App for DictionaryApp {
         // the search field: typing always goes to it while no find or settings page has the keys
         let s = regions.search;
         if s.w > 0.0 {
-            let mut field = TextField::new();
-            field.push_str(&self.query);
-            widgets::search_field(canvas, ui, &field, s, "Search", !self.settings && self.find.is_none());
+            widgets::search_field(canvas, ui, &self.query, s, "Search", self.field_has_keys());
             if let Some(c) = bifrost_app::controls::search::layout(s, !self.query.is_empty()).clear {
                 self.hot.push(Hot { x: c.x, y: c.y, w: c.w, h: c.h, act: Act::ClearSearch });
             }
@@ -1607,7 +1680,7 @@ mod window_tests {
         assert!(app.show_pending());
         assert!(!app.settings);
         assert_eq!(app.shown.as_ref().map(|s| s.word.as_str()), Some("terminal"));
-        assert_eq!(app.query, "terminal", "the search field shows the word");
+        assert_eq!(&*app.query, "terminal", "the search field shows the word");
         assert!(app.pending_word.is_none() && !app.show_pending(), "shown once");
         assert!(!app.show_or_queue("   ") && app.pending_word.is_none(), "a blank word is not kept");
         // a running app shows a later word at once
@@ -1620,29 +1693,29 @@ mod window_tests {
     fn typing_selects_and_shows_the_first_match() {
         let mut app = DictionaryApp::new();
         app.sidebar = Rect { x: 0.0, y: 0.0, w: 200.0, h: 600.0 };
-        app.query = "comp".into();
+        app.query.set_text("comp");
         app.suggestions = vec!["comp".into(), "compact".into(), "computer".into()];
         app.preview_first();
         assert_eq!(app.shown.as_ref().map(|s| s.word.as_str()), Some("comp"));
         assert_eq!(app.source_list().selected(), Some(0), "the first row is selected");
-        assert_eq!(app.query, "comp", "the field keeps what was typed");
+        assert_eq!(&*app.query, "comp", "the field keeps what was typed");
         assert_eq!(app.history.current(), None, "typing records nothing");
         app.suggestions = vec!["compact".into(), "computer".into()];
-        app.query = "compa".into();
+        app.query.set_text("compa");
         app.preview_first();
         assert!(app.key(&KeyInput::Code(13)));
         assert_eq!(app.history.current(), Some("compact"), "Return chooses the word on screen");
         // a blank query, no matches or no sidebar show nothing
         let mut narrow = DictionaryApp::new();
-        narrow.query = "comp".into();
+        narrow.query.set_text("comp");
         narrow.suggestions = vec!["comp".into()];
         narrow.preview_first();
         assert!(narrow.shown.is_none(), "a window without a sidebar lists the matches instead");
         narrow.sidebar = Rect { x: 0.0, y: 0.0, w: 200.0, h: 600.0 };
-        narrow.query = "  ".into();
+        narrow.query.set_text("  ");
         narrow.preview_first();
         assert!(narrow.shown.is_none());
-        narrow.query = "zzz".into();
+        narrow.query.set_text("zzz");
         narrow.suggestions.clear();
         narrow.preview_first();
         assert!(narrow.shown.is_none());
@@ -1661,9 +1734,41 @@ mod window_tests {
     }
 
     #[test]
+    fn select_all_in_the_search_field_lets_typing_replace_the_word() {
+        let mut app = DictionaryApp::new();
+        app.query.set_text("lantern jaw");
+        assert!(app.edit_commands(false).supports(Command::SelectAll), "the field offers Select All while it has text");
+        assert!(!app.edit_commands(false).supports(Command::Cut), "nothing selected: no Cut");
+        assert_eq!(app.field_command(Command::SelectAll), (true, None));
+        assert_eq!(app.query.selected_text(), "lantern jaw");
+        assert!(app.edit_commands(false).supports(Command::Cut) && app.edit_commands(false).supports(Command::Copy));
+        assert!(app.key(&KeyInput::Text("comp".into())));
+        assert_eq!(&*app.query, "comp", "typing after Cmd+A replaces the text instead of appending");
+        // the caret keys move inside the field; Backspace removes the character before the caret
+        assert!(app.key(&KeyInput::Code(37)));
+        assert!(app.key(&KeyInput::Code(8)));
+        assert_eq!(&*app.query, "cop");
+        assert!(app.key(&KeyInput::Code(36)));
+        assert!(app.key(&KeyInput::Code(46)));
+        assert_eq!(&*app.query, "op");
+        assert!(app.key(&KeyInput::Code(35)));
+        assert!(!app.key(&KeyInput::Code(46)), "Delete at the end changes nothing");
+        // Cut takes the selection for the pasteboard, Undo brings it back
+        app.field_command(Command::SelectAll);
+        assert_eq!(app.field_command(Command::Cut), (true, Some("op".to_string())));
+        assert!(app.query.is_empty());
+        app.field_command(Command::Undo);
+        assert_eq!(&*app.query, "op");
+        // the find bar or the settings page has the keys: the field takes no commands
+        app.settings = true;
+        assert_eq!(app.field_command(Command::SelectAll), (false, None));
+        assert!(!app.edit_commands(true).supports(Command::SelectAll) && !app.edit_commands(true).supports(Command::Paste));
+    }
+
+    #[test]
     fn the_search_fields_clear_button_empties_the_query() {
         let mut app = DictionaryApp::new();
-        app.query = "comp".into();
+        app.query.set_text("comp");
         assert!(app.perform(Act::ClearSearch));
         assert!(app.query.is_empty() && app.shown.is_none());
         assert!(!app.perform(Act::TextSize(10.0, 20.0)), "the text size pull-down opens from `touch`, with the context");
