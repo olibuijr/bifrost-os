@@ -150,8 +150,9 @@ fn run_at(path: &std::path::Path, line: &str, wait: Duration) -> Result<Option<S
 
 fn exchange_at(path: &std::path::Path, line: &str, wait: Duration) -> Result<String, String> {
     let deadline = Instant::now() + wait;
+    let dial_as = super::screenshot::account_owner();
     let mut stream = loop {
-        match UnixStream::connect(path) {
+        match dial(path, dial_as) {
             Ok(s) => break s,
             Err(e) if Instant::now() >= deadline => return Err(format!("{}: {e}", path.display())),
             Err(_) => std::thread::sleep(Duration::from_millis(100)),
@@ -163,6 +164,106 @@ fn exchange_at(path: &std::path::Path, line: &str, wait: Duration) -> Result<Str
     let mut reply = String::new();
     stream.read_to_string(&mut reply).map_err(|e| e.to_string())?;
     Ok(reply)
+}
+
+/// Connects to an app's control socket. `as_account` is the installed account's `(uid, gid)` when the shell runs as
+/// root ([`super::screenshot::account_owner`]): apps run in a user namespace that maps only the account's uid, so a
+/// connection made as root reaches the app as the overflow uid and the SDK's peer check (own uid) refuses it. The
+/// connect then runs on a short-lived thread that takes the account's credentials, because `SO_PEERCRED` records the
+/// credentials of the task that calls `connect`. Without an account, or when the shell is not root, the socket is
+/// dialled directly as the process's own user.
+fn dial(path: &std::path::Path, as_account: Option<(u32, u32)>) -> std::io::Result<UnixStream> {
+    match as_account {
+        #[cfg(target_os = "linux")]
+        Some((uid, gid)) => account_dial::connect_as(path, uid, gid),
+        _ => UnixStream::connect(path),
+    }
+}
+
+/// The account-credential connect: one thread whose own credentials (not the process's) become the account's.
+#[cfg(target_os = "linux")]
+mod account_dial {
+    use std::io;
+    use std::os::unix::net::UnixStream;
+    use std::path::Path;
+
+    #[cfg(target_arch = "x86_64")]
+    mod nr {
+        pub const SETGROUPS: i64 = 116;
+        pub const SETRESUID: i64 = 117;
+        pub const SETRESGID: i64 = 119;
+    }
+    #[cfg(target_arch = "aarch64")]
+    mod nr {
+        pub const SETGROUPS: i64 = 159;
+        pub const SETRESUID: i64 = 147;
+        pub const SETRESGID: i64 = 149;
+    }
+
+    extern "C" {
+        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+        fn syscall(n: i64, ...) -> i64;
+        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+        fn geteuid() -> u32;
+        fn prctl(option: i32, arg2: usize, arg3: usize, arg4: usize, arg5: usize) -> i32;
+    }
+    const PR_GET_DUMPABLE: i32 = 3;
+    const PR_SET_DUMPABLE: i32 = 4;
+
+    /// Switches the calling thread, and only it, to `uid`/`gid` (real, effective and saved, plus the supplementary
+    /// groups when it may set them). The raw syscalls are used on purpose: the libc wrappers apply a change to every
+    /// thread of the process, which would drop the whole shell's privileges.
+    #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+    pub(super) fn become_thread(uid: u32, gid: u32) -> io::Result<()> {
+        // SAFETY: plain credential syscalls on the calling thread; `groups` lives across the call.
+        unsafe {
+            if geteuid() == 0 {
+                let groups = [gid];
+                if syscall(nr::SETGROUPS, 1i64, groups.as_ptr()) != 0 {
+                    return Err(io::Error::last_os_error());
+                }
+            }
+            // The group first: once the uid is dropped the thread may no longer change it.
+            if syscall(nr::SETRESGID, gid as i64, gid as i64, gid as i64) != 0 {
+                return Err(io::Error::last_os_error());
+            }
+            if syscall(nr::SETRESUID, uid as i64, uid as i64, uid as i64) != 0 {
+                return Err(io::Error::last_os_error());
+            }
+        }
+        Ok(())
+    }
+
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    pub(super) fn become_thread(_uid: u32, _gid: u32) -> io::Result<()> {
+        Err(io::Error::new(io::ErrorKind::Unsupported, "per-thread credentials are not wired for this architecture"))
+    }
+
+    /// Connects to `path` as `uid`/`gid` from a dedicated thread that ends right after, so the shell's other threads
+    /// keep their credentials. The returned stream belongs to the process and is used as usual. A credential change
+    /// resets the process's dumpable flag (the kernel does it on the shared mm), so it is put back afterwards and the
+    /// shell keeps its core dumps.
+    pub fn connect_as(path: &Path, uid: u32, gid: u32) -> io::Result<UnixStream> {
+        // SAFETY: PR_GET_DUMPABLE takes no pointers.
+        let dumpable = unsafe { prctl(PR_GET_DUMPABLE, 0, 0, 0, 0) };
+        let path = path.to_path_buf();
+        let joined = std::thread::Builder::new()
+            .name("app-dial".into())
+            .spawn(move || {
+                become_thread(uid, gid)?;
+                UnixStream::connect(&path)
+            })?
+            .join();
+        if dumpable >= 0 {
+            // SAFETY: PR_GET_DUMPABLE and PR_SET_DUMPABLE take plain integers.
+            unsafe {
+                if prctl(PR_GET_DUMPABLE, 0, 0, 0, 0) != dumpable {
+                    prctl(PR_SET_DUMPABLE, dumpable as usize, 0, 0, 0);
+                }
+            }
+        }
+        joined.map_err(|_| io::Error::other("the dial thread panicked"))?
+    }
 }
 
 #[cfg(test)]
@@ -239,6 +340,81 @@ mod tests {
         assert_eq!(run_at(&sock, &request_line("go"), Duration::from_secs(1)), Ok(Some("Went".into())));
         h.join().unwrap();
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The uid the kernel recorded for the connecting end of `s`.
+    #[cfg(target_os = "linux")]
+    fn peer_uid(s: &std::os::unix::net::UnixStream) -> u32 {
+        use std::os::fd::AsRawFd;
+        #[repr(C)]
+        struct Ucred {
+            pid: i32,
+            uid: u32,
+            gid: u32,
+        }
+        extern "C" {
+            fn getsockopt(fd: i32, level: i32, name: i32, val: *mut std::ffi::c_void, len: *mut u32) -> i32;
+        }
+        let mut cred = Ucred { pid: 0, uid: u32::MAX, gid: 0 };
+        let mut len = std::mem::size_of::<Ucred>() as u32;
+        // SAFETY: cred is a live ucred of the length passed; SOL_SOCKET = 1, SO_PEERCRED = 17.
+        assert_eq!(unsafe { getsockopt(s.as_raw_fd(), 1, 17, &mut cred as *mut Ucred as *mut std::ffi::c_void, &mut len) }, 0);
+        cred.uid
+    }
+
+    #[cfg(target_os = "linux")]
+    extern "C" {
+        fn geteuid() -> u32;
+        fn getegid() -> u32;
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn the_account_dial_connects_from_its_own_thread_and_leaves_the_caller_alone() {
+        // without root the dial can only take the credentials it already has; the connection is made from the dial
+        // thread, the app sees those credentials, and the calling thread (and the process) keep theirs
+        let dir = std::env::temp_dir().join(format!("bifrost-intents-dial-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let sock = dir.join("d.sock");
+        let _ = std::fs::remove_file(&sock);
+        let l = std::os::unix::net::UnixListener::bind(&sock).unwrap();
+        let (uid, gid) = unsafe { (geteuid(), getegid()) };
+        let h = std::thread::spawn(move || {
+            let (mut s, _) = l.accept().unwrap();
+            let seen = peer_uid(&s);
+            let mut req = String::new();
+            std::io::BufRead::read_line(&mut std::io::BufReader::new(&s), &mut req).unwrap();
+            s.write_all(b"{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"value\":null,\"dialog\":\"Dialled\"}}\n").unwrap();
+            seen
+        });
+        let mut s = dial(&sock, Some((uid, gid))).unwrap();
+        s.write_all(request_line("go").as_bytes()).unwrap();
+        let _ = s.shutdown(std::net::Shutdown::Write);
+        let mut reply = String::new();
+        s.read_to_string(&mut reply).unwrap();
+        assert_eq!(parse_reply(&reply), Ok(Some("Dialled".into())));
+        assert_eq!(h.join().unwrap(), uid, "SO_PEERCRED carries the dial thread's uid");
+        assert_eq!(unsafe { (geteuid(), getegid()) }, (uid, gid), "the caller's credentials are untouched");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn the_account_dial_cannot_take_a_foreign_uid_without_privilege() {
+        // proves the credential switch really runs: a non-root dial thread may not become another user, so the dial
+        // fails with EPERM instead of quietly connecting as itself (skipped as root, where the switch succeeds)
+        if unsafe { geteuid() } == 0 {
+            return;
+        }
+        let (uid, gid) = unsafe { (geteuid(), getegid()) };
+        let err = dial(std::path::Path::new("/nonexistent/bifrost-dial.sock"), Some((uid + 1, gid))).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::PermissionDenied, "{err}");
+        assert_eq!(unsafe { geteuid() }, uid);
+    }
+
+    #[test]
+    fn without_an_account_the_socket_is_dialled_directly() {
+        assert!(dial(std::path::Path::new("/nonexistent/bifrost-dial.sock"), None).is_err());
     }
 
     #[test]
