@@ -265,6 +265,9 @@ pub struct Win {
     pub full: bool,
     /// the rectangle to go back to when un-maximized or left full screen
     restore: Rect,
+    /// an extra window whose app asked for full-size content (`window_flags::FULL_SIZE`, kept in its app host's window
+    /// table): it has no shell title row and draws its own, as a second document window of an editor does (E2E9 4)
+    pub full_size: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -655,31 +658,9 @@ pub fn full_size(app: AppId) -> bool {
         AppId::Photos => photos_full_size(),
         AppId::External(slot) => apphost::installed().get(slot as usize).is_some_and(|a| a.manifest.full_size_content()),
         // an extra window keeps its title bar unless its app asked for full-size content (`window_flags::FULL_SIZE`):
-        // then the app draws its own title row, as a second document window of an editor does (E2E9 4)
-        AppId::ExternalWindow(slot, id) => full_size_extra(slot, id),
+        // that is per window (`Win::full_size`, from the app host's window table), so ask the window (`Win::is_full_size`)
         _ => false,
     }
-}
-
-/// The extra windows (slot, app window id) whose app asked for full-size content (`window_flags::FULL_SIZE`). The desk
-/// rebuilds it from the app hosts' window tables on every sync, before it opens a window, so [`full_size`] answers for
-/// an `AppId` alone wherever the desk asks (title height, lights, hit testing, drawing). The desk and its app hosts live
-/// on the shell's thread, so the set is that thread's.
-thread_local! {
-    static FULL_SIZE_EXTRA: std::cell::RefCell<Vec<(u8, u16)>> = const { std::cell::RefCell::new(Vec::new()) };
-}
-
-/// Replaces the set of full-size extra windows (the desk syncs every tick; an unchanged set is left alone).
-fn note_full_size_extra(now: Vec<(u8, u16)>) {
-    FULL_SIZE_EXTRA.with(|g| {
-        if *g.borrow() != now {
-            *g.borrow_mut() = now;
-        }
-    });
-}
-
-fn full_size_extra(slot: u8, id: u16) -> bool {
-    FULL_SIZE_EXTRA.with(|g| g.borrow().contains(&(slot, id)))
 }
 
 /// The unified title and toolbar row of a full-size app window, in points (`bifrost_app::layout::UNIFIED_BAR_PT`).
@@ -705,10 +686,10 @@ pub fn drag_zone(w: &Win, m: &Metrics, controls: &[bifrost_proto::Node]) -> (i32
         AppId::Settings => Some(settings_toolbar_controls(w, m)),
         AppId::AppStore => Some(super::store::toolbar_controls(w.r.w, m.pt, super::store::back_control_pt())),
         // and Photos: the toolbar's title, search capsule and buttons it last drew
-        AppId::Photos if full_size(w.app) => Some(super::photos::sidebar::toolbar_controls()),
+        AppId::Photos if w.is_full_size() => Some(super::photos::sidebar::toolbar_controls()),
         _ => None,
     };
-    zone_of(w, m, own.as_deref().unwrap_or(controls), full_size(w.app))
+    zone_of(w, m, own.as_deref().unwrap_or(controls), w.is_full_size())
 }
 
 /// The Settings window's toolbar controls as semantic nodes in window points, laid out by `prefs_layout::Frame` as the
@@ -800,10 +781,12 @@ pub fn outer_px(app: AppId, m: &Metrics, (w, h): (f32, f32)) -> (i32, i32) {
 }
 
 /// The outer px size of an extra window from the size its app asked for in points: never under the window minimum, so
-/// an app cannot open a window with no width (a zero-width toplevel is a protocol error for the window server).
-fn extra_window_px(app: AppId, (w, h): (f32, f32), k: f32, m: &Metrics) -> (i32, i32) {
+/// an app cannot open a window with no width (a zero-width toplevel is a protocol error for the window server). A
+/// `full_size` window (`window_flags::FULL_SIZE`) has no shell title bar to add.
+fn extra_window_px(app: AppId, own_title_row: bool, (w, h): (f32, f32), k: f32, m: &Metrics) -> (i32, i32) {
     let (min_w, min_h, _, _) = size_range(app, m);
-    (((w * k) as i32).max(min_w), ((h * k) as i32 + title_of(app, m)).max(min_h))
+    let title = if own_title_row { 0 } else { title_of(app, m) };
+    (((w * k) as i32).max(min_w), ((h * k) as i32 + title).max(min_h - title_of(app, m) + title))
 }
 
 /// The outer size range (px) a window of `app` may be resized within: `(min_w, min_h, max_w, max_h)`.
@@ -834,14 +817,25 @@ pub fn title_of(app: AppId, m: &Metrics) -> i32 {
 }
 
 impl Win {
+    /// True for a full-size window: its app's content runs to the top edge under the traffic lights (no shell title
+    /// bar). An app's kind decides it (`full_size`), or for an extra window the flag its app opened it with.
+    pub fn is_full_size(&self) -> bool {
+        self.full_size || full_size(self.app)
+    }
+
+    /// Height of this window's shell title bar in px (0 for a full-size window).
+    pub fn title_h(&self, m: &Metrics) -> i32 {
+        if self.is_full_size() { 0 } else { m.title }
+    }
+
     pub fn body(&self, m: &Metrics) -> Rect {
         // a full-screen window has no title bar: the app is the whole window
-        let t = if self.full { 0 } else { title_of(self.app, m) };
+        let t = if self.full { 0 } else { self.title_h(m) };
         Rect { x: self.r.x, y: self.r.y + t, w: self.r.w, h: (self.r.h - t).max(1) }
     }
 
     pub(super) fn light_rect(&self, m: &Metrics, i: usize) -> Rect {
-        if full_size(self.app) {
+        if self.is_full_size() {
             use bifrost_ui::prefs_layout::Frame;
             let d = (14.0 * m.pt).round() as i32;
             let (cx, cy) = Frame::traffic_light(i);
@@ -883,7 +877,7 @@ impl Win {
         if !self.r.contains(x, y) {
             return None;
         }
-        if full_size(self.app) {
+        if self.is_full_size() {
             let pt = m.pt;
             for (i, l) in [Light::Close, Light::Minimize, Light::Zoom].into_iter().enumerate() {
                 let lr = self.light_rect(m, i);
@@ -1299,7 +1293,7 @@ impl Desk {
         let y = y.clamp(a.y, (a.y + a.h - h).max(a.y));
         let r = Rect { x, y, w, h };
         let at = self.band_top(app);
-        self.wins.insert(at, Win { app, r, maximized: false, minimized: false, full: false, restore: r });
+        self.wins.insert(at, Win { app, r, maximized: false, minimized: false, full: false, restore: r, full_size: false });
         at
     }
 
@@ -1469,7 +1463,7 @@ impl Desk {
         let app = self.wins[i].app;
         if on {
             if !self.is_collapsed(app) {
-                let title = title_of(app, m).max(1);
+                let title = self.wins[i].title_h(m).max(1);
                 self.collapsed.insert(app, self.wins[i].r.h);
                 self.wins[i].r.h = title;
             }
@@ -1794,7 +1788,7 @@ impl Shell {
         let mut out = Vec::new();
         for w in desk.wins.iter().filter(|w| !w.minimized) {
             let Some(id) = apps().iter().position(|a| a.id == w.app).map(|i| i as u32 + 1) else { continue };
-            let top = title_of(w.app, &m) as f32;
+            let top = w.title_h(&m) as f32;
             let mut rects: Vec<(f32, f32, f32, f32, f32, bifrost_render::glass::Kind, Option<bool>, Option<bifrost_render::glass::Detail>)> = Vec::new();
             if vibrant {
                 match w.app {
@@ -3031,8 +3025,9 @@ impl Shell {
         }
         let Some(d) = self.desk.as_ref() else { return };
         let k = self.ui.pt(1.0) as f32;
-        // which extra windows draw their own title row, known before any of them opens (their size and chrome follow it)
-        let mut full = Vec::new();
+        // which extra windows draw their own title row (the app host's window table), known before any of them opens:
+        // their size and chrome follow it, and each desk window keeps it (`Win::full_size`)
+        let mut full: Vec<(u8, u16)> = Vec::new();
         for (slot, host) in self.ext.iter().enumerate() {
             let Some(h) = host else { continue };
             for x in h.windows.of_app(&h.id) {
@@ -3041,7 +3036,6 @@ impl Shell {
                 }
             }
         }
-        note_full_size_extra(full);
         let mut plan = Vec::new();
         for (slot, host) in self.ext.iter().enumerate() {
             let Some(h) = host else { continue };
@@ -3063,6 +3057,16 @@ impl Shell {
         let floating = self.floating_apps();
         if let Some(d) = self.desk.as_mut() {
             changed |= d.sync_levels(floating);
+            // a flag the table changed reaches the window already on the desk
+            for w in d.wins.iter_mut() {
+                if let AppId::ExternalWindow(s, id) = w.app {
+                    let on = full.contains(&(s, id));
+                    if w.full_size != on {
+                        w.full_size = on;
+                        changed = true;
+                    }
+                }
+            }
         }
         changed |= !plan.is_empty();
         let m = self.desk_metrics();
@@ -3077,9 +3081,11 @@ impl Shell {
                 // the table's size is in points; the desk window is outer px (body plus title bar)
                 let (w, h, cascade) = sizes.iter().find(|s| s.0 == id).map_or((480.0, 560.0, false), |s| (s.1, s.2, s.3));
                 let app = AppId::ExternalWindow(slot, id16);
-                let size = extra_window_px(app, (w, h), k, &m);
+                let own_title_row = full.contains(&(slot, id16));
+                let size = extra_window_px(app, own_title_row, (w, h), k, &m);
                 if let Some(d) = self.desk.as_mut() {
                     let i = d.open(&m, app, size);
+                    d.wins[i].full_size = own_title_row;
                     if cascade {
                         // from the app's newest other extra window, else from its main window (AppKit's cascade)
                         let newest = d.wins.iter().filter_map(|o| match o.app {
@@ -3329,7 +3335,7 @@ impl Shell {
                         let controls = self.ext.get(slot as usize).and_then(Option::as_ref).map_or(&[][..], |h| &h.controls[..]);
                         let (_, holes) = drag_zone(&w, &m, controls);
                         let (lx, ly) = ((x - w.r.x as f32) as i32, (y - w.r.y as f32) as i32);
-                        if full_size(app) && holes.iter().skip(1).any(|r| lx >= r[0] && lx < r[0] + r[2] && ly >= r[1] && ly < r[1] + r[3]) {
+                        if w.is_full_size() && holes.iter().skip(1).any(|r| lx >= r[0] && lx < r[0] + r[2] && ly >= r[1] && ly < r[1] + r[3]) {
                             hit = Hit::Content;
                         }
                     }
@@ -3673,7 +3679,7 @@ impl Shell {
     pub(super) fn desk_cover_rect(&self, app: AppId) -> Option<(i32, i32, i32, i32)> {
         let d = self.desk.as_ref()?;
         let w = d.wins.iter().find(|w| w.app == app && !w.minimized)?;
-        let top = title_of(app, &self.desk_metrics());
+        let top = w.title_h(&self.desk_metrics());
         let h = w.r.h - top;
         (h > 0 && w.r.w > 0).then_some((w.r.x, w.r.y + top, w.r.w, h))
     }
@@ -3681,7 +3687,7 @@ impl Shell {
     /// Draws the Time Limit cover over its window's body. The frame, title bar and lights are drawn
     /// before this, so the window can still be moved or closed. Clipped to the surface.
     fn desk_cover(&mut self, s: &mut Surface, w: &Win, m: &Metrics, t: f64) {
-        let top = title_of(w.app, m);
+        let top = w.title_h(m);
         let (cw, ch) = (w.r.w, w.r.h - top);
         let Some(sh) = self.shield.as_mut() else { return };
         if sh.app != w.app || cw <= 0 || ch <= 0 { return; }
@@ -3854,7 +3860,7 @@ impl Shell {
                 // only the key state moved (Cmd-Tab, a click on a back window): a full-size app's window is its body plus
                 // the lights over it, so the body is copied again from the app's last frame (dimmed when it lost focus)
                 // instead of drawing the whole window afresh (a 31 ms frame on the lab PC, round 75)
-                let refocus = !unchanged && full_size(w.app) && matches!(w.app, AppId::External(_)) && cached.as_ref().is_some_and(|c|
+                let refocus = !unchanged && w.is_full_size() && matches!(w.app, AppId::External(_)) && cached.as_ref().is_some_and(|c|
                     c.width == w.r.w as usize && c.height == w.r.h as usize && c.focused != focused && c.maximized == w.maximized && c.hover == hover);
                 if self.keyboard.shown() || self.keyboard.animating() {
                     self.desk.as_mut().unwrap().body_cache.remove(&w.app);
@@ -3903,7 +3909,7 @@ impl Shell {
                     continue;
                 }
                 if let AppId::External(slot)=w.app {
-                    let width=w.r.w as usize; let height=w.r.h as usize; let top=title_of(w.app,&m) as usize;
+                    let width=w.r.w as usize; let height=w.r.h as usize; let top=w.title_h(&m) as usize;
                     let body_h=height.saturating_sub(top);
                     let mapped=self.ext.get(slot as usize).and_then(Option::as_ref).filter(|h|h.running()).and_then(|h|h.frame()).map(|(_,w,h)|(w,h));
                     // on a key-state change the app's last frame may still be a few pixels larger than the window (the
@@ -3953,7 +3959,7 @@ impl Shell {
                             if let Some(src)=src { edge=restore_window_edge(pixels,width,height,top,src,dim,corner,window_rim_color()); }
                             for r in &edge {damage.add(r.0,r.1,r.2,r.3);}
                         }
-                        if full_size(w.app) && !bare {
+                        if w.is_full_size() && !bare {
                             // the lights sit over the app: repaint them where the app just drew under them
                             let mut local=*w; local.r.x=0; local.r.y=0;
                             let mut surf=Surface{w:width,h:height,stride:width,px:&mut pixels[..],y0:0};
@@ -4111,7 +4117,7 @@ impl Shell {
                 self.with_size(b.w, b.h, |sh| sh.draw_app_body(&mut sub, app, t));
             }
         }
-        if full_size(w.app) && rad > 0.0 { copy_rect_rounded(s, &buf, bw, bh, b.x, b.y, rad); } else { copy_rect(s, &buf, bw, bh, b.x, b.y); }
+        if w.is_full_size() && rad > 0.0 { copy_rect_rounded(s, &buf, bw, bh, b.x, b.y, rad); } else { copy_rect(s, &buf, bw, bh, b.x, b.y); }
         if !focused && !bare { dim_rect(s.px, s.stride, b.x.max(0) as usize, (b.y.max(0) as usize).saturating_sub(s.y0), ((b.x + b.w).max(0) as usize).min(s.w), ((b.y + b.h).max(0) as usize).saturating_sub(s.y0).min(s.h), BACKGROUND_DIM); }
         #[cfg(feature = "desktop-wayland")]
         if persistent || builtin { self.desk.as_mut().unwrap().body_cache.insert(w.app,buf); }
@@ -4123,7 +4129,7 @@ impl Shell {
         if w.full || bare { return; }
         // hairline under the title bar and around the window
         if !w.maximized { window_rim(s, r.x as f32, r.y as f32, r.w as f32, r.h as f32, rad); }
-        if !full_size(w.app) { s.fill_rect(r.x.max(0) as usize, (r.y + m.title - 1).max(0) as usize, r.w.max(0) as usize, 1, super::ui::SEPARATOR_C.now()); }
+        if !w.is_full_size() { s.fill_rect(r.x.max(0) as usize, (r.y + m.title - 1).max(0) as usize, r.w.max(0) as usize, 1, super::ui::SEPARATOR_C.now()); }
         // traffic lights
         let (doc_title, doc_edited): (&str, bool) = match w.app { AppId::External(slot) => self.ext.get(slot as usize).and_then(Option::as_ref).map_or(("", false), |h| (h.doc_title.as_str(), h.doc_edited)), _ => ("", false) };
         for (i, c) in [SYSTEM_RED, SYSTEM_YELLOW, SYSTEM_GREEN].into_iter().enumerate() {
@@ -4140,7 +4146,7 @@ impl Shell {
             }
         }
         // title
-        if full_size(w.app) { return; }
+        if w.is_full_size() { return; }
         // an extra window carries the title its app gave it in the window table; the catalogue knows only whole apps
         let table_title: String = match w.app {
             AppId::ExternalWindow(slot, id) => self.ext.get(slot as usize).and_then(Option::as_ref).and_then(|h| h.windows.of_app(&h.id).iter().find(|x| x.id == u32::from(id)).map(|x| x.title.clone())).unwrap_or_default(),
@@ -4584,7 +4590,7 @@ mod tests {
     fn a_full_size_app_drags_from_its_empty_toolbar_band_but_not_its_controls_or_lights() {
         let m = Metrics { pt: 1.5, ..metrics() };
         let r = Rect { x: 100, y: 50, w: 900, h: 600 };
-        let w = Win { app: AppId::External(3), r, maximized: false, minimized: false, full: false, restore: r };
+        let w = Win { app: AppId::External(3), r, maximized: false, minimized: false, full: false, restore: r, full_size: false };
         let node = |x: f32, y: f32| bifrost_proto::Node { id: 1, role: bifrost_proto::Role::Button, label: "Back".into(), value: String::new(), bounds: bifrost_ui::Rect { x, y, w: 64.0, h: 32.0 }, enabled: true };
         let (band, holes) = zone_of(&w, &m, &[node(220.0, 10.0), node(220.0, 300.0)], true);
         assert_eq!(band, (UNIFIED_BAR_PT * 1.5).round() as i32, "the unified bar is the drag band");
@@ -4609,7 +4615,7 @@ mod tests {
         use bifrost_ui::prefs_layout::m as pm;
         let m = Metrics { pt: 1.5, ..metrics() };
         let r = Rect { x: 100, y: 50, w: (740.0 * 1.5) as i32, h: (690.0 * 1.5) as i32 };
-        let w = Win { app: AppId::Settings, r, maximized: false, minimized: false, full: false, restore: r };
+        let w = Win { app: AppId::Settings, r, maximized: false, minimized: false, full: false, restore: r, full_size: false };
         let (band, holes) = drag_zone(&w, &m, &[]);
         assert_eq!(band, (UNIFIED_BAR_PT * 1.5).round() as i32, "Settings has the full-size toolbar band, not the title-bar one");
         let px = |v: f32| (v * 1.5) as i32;
@@ -4643,18 +4649,49 @@ mod tests {
     fn a_full_size_extra_window_has_no_shell_title_row() {
         let m = Metrics { pt: 1.5, ..metrics() };
         let (doc, plain) = (AppId::ExternalWindow(3, 2), AppId::ExternalWindow(3, 4));
-        note_full_size_extra(vec![(3, 2)]);
-        assert!(full_size(doc));
-        assert!(!full_size(plain), "a window that did not ask keeps its title bar");
-        assert_eq!(title_of(doc, &m), 0);
-        assert_eq!(title_of(plain, &m), m.title);
+        assert!(!full_size(doc) && !full_size(plain), "an extra window's id alone does not say: the window does");
         let r = Rect { x: 100, y: 50, w: 900, h: 700 };
-        let w = Win { app: doc, r, maximized: false, minimized: false, full: false, restore: r };
+        let w = Win { app: doc, r, maximized: false, minimized: false, full: false, restore: r, full_size: true };
+        let p = Win { app: plain, full_size: false, ..w };
+        assert!(w.is_full_size());
+        assert!(!p.is_full_size(), "a window that did not ask keeps its title bar");
+        assert_eq!(w.title_h(&m), 0);
+        assert_eq!(p.title_h(&m), m.title);
         assert_eq!(w.body(&m), r, "the app draws the whole window, its own title row included");
-        assert_eq!(extra_window_px(doc, (600.0, 400.0), 1.5, &m).1, 600, "no title bar is added to the asked height");
-        assert_eq!(extra_window_px(plain, (600.0, 400.0), 1.5, &m).1, 600 + m.title);
-        note_full_size_extra(Vec::new());
-        assert!(!full_size(doc), "the set follows the app hosts' tables");
+        assert_eq!(extra_window_px(doc, true, (600.0, 400.0), 1.5, &m).1, 600, "no title bar is added to the asked height");
+        assert_eq!(extra_window_px(plain, false, (600.0, 400.0), 1.5, &m).1, 600 + m.title);
+    }
+
+    /// E2E10: a full-size extra window takes its flag from its app host's window table when the desk opens it, so its
+    /// unified title band (no shell title bar) is hit right away, before any later sync; a plain one keeps the title bar.
+    #[test]
+    fn a_full_size_extra_window_hits_its_title_band_right_after_it_opens() {
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.anim = None;
+        let (mine, _theirs) = bifrost_proto::sys::socketpair_pair().unwrap();
+        let cfg = bifrost_proto::Configure { w: 100, h: 100, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
+        let mut host = apphost::AppHost::with_channel("fixture", mine, None, cfg);
+        host.windows.open("fixture", 2, "Untitled 2", 600.0, 400.0).unwrap();
+        assert!(host.windows.set_full_size("fixture", 2, true));
+        host.windows.open("fixture", 4, "Plain", 300.0, 200.0).unwrap();
+        sh.ext.push(Some(host));
+        let slot = (sh.ext.len() - 1) as u8;
+        let (doc, plain) = (AppId::ExternalWindow(slot, 2), AppId::ExternalWindow(slot, 4));
+        sh.desk.as_mut().unwrap().wins.clear();
+        sh.desk_sync_extra_windows();
+        let m = sh.desk_metrics();
+        let d = sh.desk.as_ref().unwrap();
+        let w = d.wins[d.index_of(doc).expect("the desk opened the document window")];
+        let p = d.wins[d.index_of(plain).expect("and the plain one")];
+        assert!(w.full_size && w.is_full_size() && !p.is_full_size());
+        assert_eq!(w.title_h(&m), 0, "no shell title row");
+        // below the shell's title bar height but inside the unified band (52 pt), past the traffic lights
+        let (x, y) = ((w.r.x + w.r.w / 2) as f32, w.r.y as f32 + m.title as f32 + 2.0);
+        assert!(y < w.r.y as f32 + UNIFIED_BAR_PT * m.pt);
+        assert_eq!(w.hit(&m, x, y), Some(Hit::Title), "the unified band moves the window");
+        assert_eq!(w.hit(&m, x, w.r.y as f32 + UNIFIED_BAR_PT * m.pt + 4.0), Some(Hit::Content));
+        let (px_, py) = ((p.r.x + p.r.w / 2) as f32, p.r.y as f32 + m.title as f32 + 2.0);
+        assert_eq!(p.hit(&m, px_, py), Some(Hit::Content), "a titled window's body starts under its title bar");
     }
 
     #[test]
@@ -4664,7 +4701,7 @@ mod tests {
         let m = Metrics { pt: 1.5, ..metrics() };
         assert_eq!(title_of(AppId::AppStore, &m), 0, "no title bar above the sidebar");
         let r = Rect { x: 100, y: 50, w: 1500, h: 1000 };
-        let w = Win { app: AppId::AppStore, r, maximized: false, minimized: false, full: false, restore: r };
+        let w = Win { app: AppId::AppStore, r, maximized: false, minimized: false, full: false, restore: r, full_size: false };
         assert_eq!(w.body(&m), r, "the store draws the whole window");
         let px = |v: f32| (v * 1.5) as i32;
         let side = ((200.0 * 1.5) as i32).min(r.w / 3);
@@ -4704,7 +4741,7 @@ mod tests {
         use bifrost_proto::Role;
         let m = Metrics { pt: 1.5, ..metrics() };
         let r = Rect { x: 100, y: 50, w: 900, h: 600 };
-        let w = Win { app: AppId::External(3), r, maximized: false, minimized: false, full: false, restore: r };
+        let w = Win { app: AppId::External(3), r, maximized: false, minimized: false, full: false, restore: r, full_size: false };
         // what the kit publishes for a unified toolbar: the "Toolbar" and "Sidebar" containers, the title labels, two
         // buttons and a search field, in points
         let nodes = [
@@ -4735,7 +4772,7 @@ mod tests {
     fn a_store_app_with_a_full_size_manifest_gets_the_52_pt_band() {
         let m = Metrics { pt: 2.0, ..metrics() };
         let r = Rect { x: 0, y: 0, w: 1200, h: 800 };
-        let w = Win { app: AppId::External(18), r, maximized: false, minimized: false, full: false, restore: r };
+        let w = Win { app: AppId::External(18), r, maximized: false, minimized: false, full: false, restore: r, full_size: false };
         // `drag_zone` asks `full_size`, which is true for an installed app whose manifest says `window = "full-size"`
         // (the shipped Notes and Mail manifests do); `zone_of` is what it computes for such a window
         for path in ["apps/notes-desktop/manifest.toml", "apps/mail-desktop/manifest.toml"] {
@@ -4796,9 +4833,9 @@ mod tests {
     fn an_extra_window_is_never_opened_under_the_window_minimum() {
         let m = metrics();
         let app = AppId::ExternalWindow(0, 4);
-        assert_eq!(extra_window_px(app, (0.1, 0.1), 1.0, &m), (m.min_w, m.min_h + m.title));
-        assert_eq!(extra_window_px(app, (f32::NAN, -5.0), 1.0, &m), (m.min_w, m.min_h + m.title));
-        assert_eq!(extra_window_px(app, (600.0, 400.0), 1.5, &m), (900, 600 + m.title));
+        assert_eq!(extra_window_px(app, false, (0.1, 0.1), 1.0, &m), (m.min_w, m.min_h + m.title));
+        assert_eq!(extra_window_px(app, false, (f32::NAN, -5.0), 1.0, &m), (m.min_w, m.min_h + m.title));
+        assert_eq!(extra_window_px(app, false, (600.0, 400.0), 1.5, &m), (900, 600 + m.title));
     }
 
     #[test]
@@ -5622,7 +5659,7 @@ mod tests {
     #[test]
     fn hits_find_lights_title_content_and_edges() {
         let m = metrics();
-        let w = Win { app: AppId::Files, r: Rect { x: 100, y: 100, w: 600, h: 400 }, maximized: false, minimized: false, full: false, restore: Rect { x: 0, y: 0, w: 1, h: 1 } };
+        let w = Win { app: AppId::Files, r: Rect { x: 100, y: 100, w: 600, h: 400 }, maximized: false, minimized: false, full: false, restore: Rect { x: 0, y: 0, w: 1, h: 1 }, full_size: false };
         assert_eq!(w.hit(&m, 118.0, 115.0), Some(Hit::Light(Light::Close)));
         assert_eq!(w.hit(&m, 138.0, 115.0), Some(Hit::Light(Light::Minimize)));
         assert_eq!(w.hit(&m, 158.0, 115.0), Some(Hit::Light(Light::Zoom)));
@@ -5636,7 +5673,7 @@ mod tests {
     #[test]
     fn a_maximized_window_has_no_resize_edges() {
         let m = metrics();
-        let w = Win { app: AppId::Settings, r: Desk::area(&m), maximized: true, minimized: false, full: false, restore: Rect { x: 0, y: 0, w: 1, h: 1 } };
+        let w = Win { app: AppId::Settings, r: Desk::area(&m), maximized: true, minimized: false, full: false, restore: Rect { x: 0, y: 0, w: 1, h: 1 }, full_size: false };
         assert_eq!(w.hit(&m, 1.0, 600.0), Some(Hit::Content));
     }
 
