@@ -152,6 +152,9 @@ struct State {
     /// entered). The front window takes the keyboard back once the events read with it are handled, unless a press on
     /// the entered window came with them (the person clicked it: E2E N2)
     refocus:Option<(u32,u32)>,
+    /// windows the shell brought forward together (`restack`), ranked in the window server with the next `windows` call,
+    /// and the last rank sent (`set_stack_rank` ranks only grow)
+    restack:Vec<u32>, stack_rank:u32,
     wm:Option<xdg_wm_base::XdgWmBase>, seat:Option<wl_seat::WlSeat>, windows:HashMap<u32,Window>, materials:HashMap<u32,Vec<Glass>>, scale:f32, window_events:Vec<WindowEvent>, target:Option<u32>,
     compositor: Option<wl_compositor::WlCompositor>, shm: Option<wl_shm::WlShm>,
     layer: Option<layer::ZwlrLayerShellV1>, surface: Option<wl_surface::WlSurface>,
@@ -486,6 +489,17 @@ impl Display {
                 }
             }
         }
+        // bifrost_window_level_v1 set_stack_rank: windows the shell brought forward together stack in its order over other
+        // clients' windows, the ones mapped already at once and the new ones when they map, in whatever order (E2E5 1, 3).
+        // Sent before the new toplevels' first buffers, so the rank is there when they map.
+        if !ids.is_empty() && !self.state.restack.is_empty() {
+            let want=std::mem::take(&mut self.state.restack);
+            if let Some(mgr)=self.state.level_mgr.as_ref().filter(|m|m.version()>=super::window_level_client::STACK_RANK_SINCE) {
+                for (id,rank) in stack_ranks(&ids,&want,&mut self.state.stack_rank) {
+                    if let Some(w)=self.state.windows.get(&id) { mgr.set_stack_rank(&w.surface,rank); }
+                }
+            }
+        }
         if let Some(id)=activate { request_activation(&self.state,&qh,id); }
         // an explicit open or focus: xdg-activation needs a fresh input serial that control-socket and dock opens
         // lack, and a native client may hold focus; wlroots compositors always obey a foreign-toplevel activate
@@ -501,6 +515,9 @@ impl Display {
     }
     /// Raises the front window over every client with the next `windows` call.
     pub fn raise_front(&mut self) {self.state.raise_front=true;}
+    /// The shell brought windows `ids` forward together (the Apps grid closing, a hidden app shown, Bring All to Front):
+    /// with the next `windows` call that lists windows they are ranked in the window server, in the shell's order.
+    pub fn restack(&mut self, ids:Vec<u32>) {for id in ids {if !self.state.restack.contains(&id) {self.state.restack.push(id);}}}
     /// The UI scale (px per pt) for window shadows and corner radii; until set it is derived from the title height.
     pub fn set_scale(&mut self, s:f32) {self.state.scale=s;}
     /// Golden Gate vibrancy: the window-local rects (px, with corner radius) of a window's translucent sidebar
@@ -1511,6 +1528,12 @@ fn follows_keyboard_enter(fresh:bool,id:u32,front:Option<u32>)->bool { !fresh ||
 /// The keyboard hand-back still owed after a press on window `pressed`: none when the press is on the fresh window that
 /// just took the keyboard (the person chose it), else the one owed before.
 fn keep_refocus(refocus:Option<(u32,u32)>,pressed:u32)->Option<(u32,u32)> { refocus.filter(|(_,entered)|*entered!=pressed) }
+/// The `set_stack_rank` requests for the windows `want` the shell brought forward: each of them that `ids` (the shell's
+/// windows, bottom first) lists gets the next rank in that order, so the bottom one has the lowest. `last` is the last
+/// rank sent and grows with each; 0 is never sent (it means no rank).
+fn stack_ranks(ids:&[u32],want:&[u32],last:&mut u32)->Vec<(u32,u32)> {
+    ids.iter().filter(|id|want.contains(id)).map(|&id|{*last=last.wrapping_add(1).max(1);(id,*last)}).collect()
+}
 /// Asks the window server to activate (raise and focus) the shell's window `id`, with the shell's last input serial.
 fn request_activation(s:&State,qh:&QueueHandle<State>,id:u32) {
     if let (Some(activation),Some(seat),Some(surface))=(s.activation.as_ref(),s.seat.as_ref(),s.surface.as_ref()) {
@@ -1528,6 +1551,17 @@ fn window_buffer_count(count:usize, available:bool, dirty:bool) -> usize {
 #[cfg(test)]
 mod tests {
     use super::{dock_placement,DockEdge,DockPlacement,focus_on_configure,keep_refocus,min_size_of,DEFAULT_MIN_SIZE};
+    /// E2E5 1, 3: the windows the shell brought forward are ranked in its stacking order (bottom first), whatever order
+    /// it named them in; windows it did not name get none, and the ranks keep growing from one set to the next.
+    #[test]
+    fn windows_brought_forward_are_ranked_bottom_first_and_ranks_grow() {
+        let mut last=0;
+        assert_eq!(super::stack_ranks(&[4,7,2,9],&[9,2,4],&mut last),vec![(4,1),(2,2),(9,3)]);
+        assert_eq!(super::stack_ranks(&[4,7],&[7],&mut last),vec![(7,4)],"a later set outranks the earlier one");
+        assert!(super::stack_ranks(&[4],&[5],&mut last).is_empty(),"a window not listed now gets nothing");
+        let mut wrap=u32::MAX;
+        assert_eq!(super::stack_ranks(&[1],&[1],&mut wrap),vec![(1,1)],"0 is no rank and is never sent");
+    }
     /// N11: a glass shape that went away is owed to a chrome surface under it, in the surface's own pixels and clipped
     /// to it; a shape elsewhere owes it nothing.
     #[test]

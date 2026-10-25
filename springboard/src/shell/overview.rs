@@ -511,6 +511,24 @@ impl Overview {
         self.open || self.slide.is_some() || self.grid.visible()
     }
 
+    /// While Overview is open, its leave animation included (the windows come back only when it ends, in `finish`): the
+    /// app whose menus the bar keeps, as under the Apps grid (`AppGrid::bar_foreign`). Overview hides the shell's windows
+    /// and the window server then activates another client's window, which must not take the bar (E2E5 5: the bar read
+    /// FilmCraft with App Store in front). `Some(Some(id))` is the other client's window that had the focus when Overview
+    /// opened, `Some(None)` none had (see `bar_front`); `None` when Overview is not up and the bar follows the live windows.
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+    pub(super) fn bar_foreign(&self) -> Option<Option<u32>> {
+        self.open.then_some(self.foreign_before)
+    }
+
+    /// While Overview is open: the shell window that was in front when it opened.
+    pub(super) fn bar_front(&self) -> Option<AppId> {
+        if !self.open {
+            return None;
+        }
+        self.front_before
+    }
+
     /// The overlay surface Overview is exported as on the window server (x, y, w, h px): the veil between the menu
     /// bar and the Dock, above every window. Listed only while Overview is open, which includes its enter and leave
     /// animations (`open` turns false in `finish`, the frame the windows come back), so closing removes the surface.
@@ -646,6 +664,7 @@ impl Overview {
     fn finish(&mut self, sh: &mut Shell, t: f64) {
         self.open = false;
         self.closing = None;
+        let mut shown = Vec::new();
         if let Some(d) = sh.desk.as_mut() {
             for (app, min) in std::mem::take(&mut self.saved) {
                 if let Some(w) = d.wins.iter_mut().find(|w| w.app == app) {
@@ -653,15 +672,32 @@ impl Overview {
                 }
             }
             self.spaces.apply(&mut d.wins);
+            shown = d.wins.iter().filter(|w| !w.minimized).map(|w| w.app).collect();
         }
+        // the windows' toplevels map again: when a shell window takes the focus they come back in the shell's order over
+        // the window the window server activated meanwhile, as when the Apps grid closes (E2E5 1)
+        let restack = |sh: &mut Shell| {
+            if let Some(d) = sh.desk.as_mut() {
+                d.note_restack(&shown);
+            }
+        };
         let before = (self.foreign_before.take(), self.front_before.take());
         match (self.chosen_foreign.take(), self.chosen.take()) {
             (Some(id), _) => sh.desk_activate_foreign(id),
-            (None, Some(app)) => sh.desk_open(app, t),
+            (None, Some(app)) => {
+                restack(sh);
+                sh.desk_open(app, t)
+            }
             (None, None) => match leave_focus(before, &sh.mission_foreign_windows(), |app| sh.desk.as_ref().is_some_and(|d| d.index_of(app).is_some_and(|i| !d.wins[i].minimized))) {
                 Focus::Foreign(id) => sh.desk_activate_foreign(id),
-                Focus::App(app) => sh.desk_open(app, t),
-                Focus::Refocus => sh.desk_refocus(),
+                Focus::App(app) => {
+                    restack(sh);
+                    sh.desk_open(app, t)
+                }
+                Focus::Refocus => {
+                    restack(sh);
+                    sh.desk_refocus()
+                }
             },
         }
         self.sources.clear();
@@ -1355,6 +1391,19 @@ impl Shell {
         }
         self.overview = ov;
         self.dirty = true;
+    }
+
+    /// The shell window whose app keeps the menu bar while the Apps grid or Overview hides the windows (`bar_front` of
+    /// either); None when neither is up and the bar follows the live windows.
+    pub(super) fn bar_held_front(&self) -> Option<AppId> {
+        self.overview.grid.bar_front().or_else(|| self.overview.bar_front())
+    }
+
+    /// The other client's window whose app keeps the menu bar while the Apps grid or Overview hides the windows
+    /// (`bar_foreign` of either): `Some(None)` is none (a shell window keeps it), `None` neither is up.
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+    pub(super) fn bar_held_foreign(&self) -> Option<Option<u32>> {
+        self.overview.grid.bar_foreign().or_else(|| self.overview.bar_foreign())
     }
 
     /// Opens the launcher when it is closed (the game controller's Home button); unlike `appgrid_toggle` it never closes it.

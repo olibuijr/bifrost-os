@@ -1523,6 +1523,14 @@ Float on Top, the floating CPU window of Activity Monitor). Ours, end to end:
   client's window (a native app's) by its foreign toplevel handle, so the Window menu's arrange commands and the
   Ctrl+Cmd arrows (which the window server forwards as `tile left|right|fill|center` control lines) act on the
   window the menu bar stands for, as in Golden Gate (E2E N2). The Window menu lists only the front app's windows.
+  Version 8 adds `set_stack_rank(surface, rank)`, privileged only: the shell destroys the toplevels of windows it hides
+  (the Apps grid, Overview, Hide) and the window server activates another client's window meanwhile, so when it brings
+  a set of its windows forward (the grid closing, a hidden app shown, Bring All to Front) it ranks them bottom first.
+  A mapped window goes over its band at once, one still to map goes there when it maps, under the shown windows with a
+  higher rank (`Wm::map_ranked`), and neither takes the focus: the whole set returns in the shell's order over the
+  other client's window, whatever order the toplevels map in (E2E5 1, 3). Layer surfaces are drawn in the order they
+  mapped, the newest on top, the order the pointer hit-tests them in (a menu opened over the Apps grid is drawn over
+  it, E2E5 4).
 - Window model: `springboard/wm/src/wm.rs` `Level` (`Normal`, `Floating`). The stack is sorted by level: a floating
   window is above every normal window, a raised or re-levelled window goes to the top of its own band, and raising a
   normal window does not pass a floating one. Hit testing uses the same order. The key window is the one last raised

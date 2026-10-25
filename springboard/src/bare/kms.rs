@@ -944,6 +944,9 @@ impl Display {
     }
     #[cfg(feature = "desktop-wayland")]
     pub fn wayland_raise_front(&mut self) { if let Some(w)=&mut self.wayland { w.raise_front(); } }
+    /// The shell brought windows `ids` forward together: the window server stacks them in its order (`Wayland::restack`).
+    #[cfg(feature = "desktop-wayland")]
+    pub fn wayland_restack(&mut self, ids: Vec<u32>) { if ids.is_empty() { return; } if let Some(w)=&mut self.wayland { w.restack(ids); } }
     #[cfg(feature = "desktop-wayland")]
     pub fn wayland_activate_foreign(&mut self,id:u32) -> io::Result<()> {
         if let Some(w)=&mut self.wayland { w.activate_foreign(id)?; } Ok(())

@@ -136,11 +136,18 @@ fn surface_key(surface: &WlSurface) -> u64 {
     h.finish()
 }
 
-/// The surfaces of one layer, bottom first (the map lists them top first).
+/// The surfaces of one layer in the order the layer map lists them (the order they mapped), bottom first: the newest
+/// is on top. That is the order the pointer finds them in (`WmState::layer_surface_under` walks the same list from the
+/// end), so what is drawn on top is what takes the press. The list used to be read the other way round, which drew an
+/// older surface over a newer one: a menu opened over the Apps grid sat under the grid's surface, which covered its
+/// rows with the menu's own glass (E2E5 4), while the press still reached the menu.
+pub fn layers_bottom_first<T>(mapped: impl Iterator<Item = T>) -> Vec<T> {
+    mapped.collect()
+}
+
+/// The surfaces of one layer, bottom first (`layers_bottom_first`).
 fn layer_items(renderer: &mut GlesRenderer, map: &smithay::desktop::LayerMap, layer: Layer, scale: Scale<f64>, (dark, reduce): (bool, bool), out: &mut Vec<Item>) {
-    let mut ls: Vec<_> = map.layers_on(layer).collect();
-    ls.reverse();
-    for l in ls {
+    for l in layers_bottom_first(map.layers_on(layer)) {
         let Some(geo) = map.layer_geometry(l) else { continue };
         let loc: Point<i32, Physical> = geo.loc.to_physical_precise_round(scale);
         let elements = render_elements_from_surface_tree(renderer, l.wl_surface(), loc, scale, 1.0, Kind::Unspecified)
@@ -238,6 +245,18 @@ pub fn build(renderer: &mut GlesRenderer, state: &WmState, output: &Output, glas
 mod tests {
     use super::*;
     use crate::material_kind::{recipe, Blending, MaterialKind, MaterialState};
+
+    /// E2E5 4: layer surfaces are drawn in the order they mapped, the newest on top, which is the order the pointer
+    /// hit-tests in reversed: a menu opened over the Apps grid is drawn over the grid, as it already took the press.
+    #[test]
+    fn the_newest_layer_surface_is_drawn_on_top_where_the_pointer_finds_it() {
+        // the layer map lists the surfaces in the order they mapped: the dock, the grid, then a menu over the grid
+        let mapped = ["dock", "grid", "menu"];
+        let drawn = layers_bottom_first(mapped.iter().copied());
+        assert_eq!(drawn.last(), Some(&"menu"), "the menu is drawn over the grid");
+        let hit_order: Vec<&str> = mapped.iter().rev().copied().collect();
+        assert_eq!(hit_order.first(), drawn.last(), "the surface drawn on top is the one the pointer tries first");
+    }
 
     fn rect(x: i32, y: i32, w: i32, h: i32) -> Rectangle<i32, Logical> {
         Rectangle::new((x, y).into(), (w, h).into())
