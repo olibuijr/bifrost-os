@@ -338,10 +338,11 @@ struct CachedWindow {
 }
 
 /// The appearance a window's cached pixels depend on: the scheme position (0 dark .. 1 light, moving during the fade)
-/// and the accent colour.
+/// and the accent colour. The position is quantised (`appearance::scheme_step`): keyed on the raw value every window
+/// was redrawn in full on every frame of the 280 ms fade; now a quiet window redraws a few times and on the end value.
 #[allow(dead_code)]
 fn window_look() -> u64 {
-    ((bifrost_render::appearance::scheme().to_bits() as u64) << 32) | bifrost_render::appearance::accent().to_wire() as u64
+    ((bifrost_render::appearance::scheme_step() as u64) << 32) | bifrost_render::appearance::accent().to_wire() as u64
 }
 
 /// Two title-bar presses this close (ms) are a double-click, which zooms the window as Golden Gate does. The gap is

@@ -2000,9 +2000,11 @@ impl Dispatch<foreign_handle::ZwlrForeignToplevelHandleV1, ()> for State {
 }
 
 /// What the presenter's material plates and blur looks depend on beyond the window's pixels: the scheme position
-/// (`Kind::style`, `Kind::inactive`) and Reduce Transparency.
+/// (`Kind::style`, `Kind::inactive`) and Reduce Transparency. The position is quantised (`appearance::scheme_step`):
+/// keyed on the raw value every window with materials was repainted in full on every frame of the fade; now a quiet
+/// window's plate steps a few times through the fade and lands on the end scheme.
 fn material_look() -> u64 {
-    ((bifrost_render::appearance::scheme().to_bits() as u64) << 1) | bifrost_render::appearance::reduce_transparency() as u64
+    ((bifrost_render::appearance::scheme_step() as u64) << 1) | bifrost_render::appearance::reduce_transparency() as u64
 }
 
 /// A window's material rects as blur-region rectangles in surface pixels (x, y, w, h): the materials are
