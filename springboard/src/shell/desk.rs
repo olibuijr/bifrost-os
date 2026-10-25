@@ -335,8 +335,28 @@ fn double_click_ms() -> f64 {
     crate::bare::pointer_prefs::get().double_click_ms as f64
 }
 
+/// How long (ms) the app the shell opened stays the front app against the window server's own focus changes
+/// (`Desk::front_intent`): long enough for a fresh process to draw its first frame and for its toplevel to map, short
+/// enough that a window the window server focuses later (a dialog, an app's own activation) is followed again.
+pub(super) const FRONT_INTENT_MS: f64 = 3000.0;
+
+/// The app the shell is bringing to the front (Spotlight, the Apps grid, the Dock, `open-app`): opened at `since`
+/// (shell ms). While it stands (`Shell::desk_front_intent`) a focus the window server gives another window on its own
+/// (a hand-back as Spotlight's exclusive keyboard goes, a keyboard enter, an activating configure) is not followed, and
+/// the shell asks the window server again to activate the app's window once it is mapped (E2E6 Spotlight).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct FrontIntent {
+    pub app: AppId,
+    pub since: f64,
+}
+
 #[derive(Default)]
 pub struct Desk {
+    /// the app the shell is bringing to the front, until it is in front for good (`FrontIntent`)
+    pub(super) front_intent: Option<FrontIntent>,
+    /// the window server's toplevel list changed since the front intent last looked at it (`Shell::desk_intent_tick`)
+    #[cfg(feature = "desktop-wayland")]
+    pub(super) intent_check: bool,
     /// back to front; the floating windows (`floating`) are the last ones
     pub wins: Vec<Win>,
     /// the apps whose windows float (their host asked for `ToShell::WindowLevel`), as of the last `sync_levels`
@@ -1892,6 +1912,7 @@ impl Shell {
         let Some(desk)=self.desk.as_mut() else { return; };
         if desk.foreign_snapshot==windows {return;}
         desk.foreign_snapshot=windows.clone();
+        desk.intent_check=true;
         // a toplevel put aside that closed or is shown again (the Dock, the app itself) is no longer aside
         desk.prune_foreign_aside(&windows);
         for (slot, app) in apphost::installed().iter().enumerate() {
@@ -1951,20 +1972,47 @@ impl Shell {
     #[cfg(feature = "desktop-wayland")]
     pub fn wayland_window_event(&mut self, ev: crate::bare::wayland::WindowEvent) {
         use crate::bare::wayland::WindowEvent;
-        let id = match ev { WindowEvent::Focus(id) | WindowEvent::HandBack(id) | WindowEvent::Close(id) | WindowEvent::Resize(id,_,_) | WindowEvent::Maximized(id,_) | WindowEvent::Frame(id,..) | WindowEvent::Fullscreen(id,_) => id };
+        let id = match ev { WindowEvent::Focus(id) | WindowEvent::ServerFocus(id) | WindowEvent::HandBack(id) | WindowEvent::Close(id) | WindowEvent::Resize(id,_,_) | WindowEvent::Maximized(id,_) | WindowEvent::Frame(id,..) | WindowEvent::Fullscreen(id,_) => id };
         // every event is reported for every toplevel of the shell, an app's extra windows (flagged ids) included
         let app = frame_app(id);
         let Some(app) = app else { return };
         let Some(i) = self.desk.as_ref().and_then(|d| d.index_of(app)) else { return };
+        let trace = |what: &str| crate::bare::focus_trace::log(format_args!("event window={id} app={app:?}: {what}"));
         match ev {
+            // a press is the person's choice: it ends any front intent and raises the window
+            WindowEvent::Focus(_) => {
+                if let Some(intent) = self.desk.as_mut().and_then(|d| d.front_intent.take()) { trace(&format!("press ends the front intent of {:?}", intent.app)); }
+                trace("press: raised");
+                self.desk.as_mut().unwrap().raise(i); if !self.is_locked() { self.screen = Screen::App(app.parent()); } self.dirty = true;
+            },
+            // The app the shell is bringing to the front (Spotlight, the Apps grid, the Dock) stays in front against the
+            // window server's own focus of another window: the keyboard it hands back to the window it knows in front as
+            // the exclusive layer goes (Settings over a Calculator that drew its first frame but has no toplevel yet), the
+            // topmost toplevel it picks (Mail while Calendar starts), or a late keyboard enter of the window that was in
+            // front (Weather over Settings). Raising that window here put it over the app just opened in the shell's own
+            // stack, so the app's toplevel then mapped behind it without the keyboard (E2E6 Spotlight). Once the intended
+            // window is drawn the window server is asked to activate it again.
+            WindowEvent::ServerFocus(_) | WindowEvent::HandBack(_) if self.desk_front_intent().is_some_and(|want| want.parent() != app.parent()) => {
+                let want = self.desk_front_intent().unwrap_or(app);
+                let front = self.desk.as_ref().and_then(|d| d.front()).map_or(want, |w| w.app);
+                let drawn = !self.desk_window_unmapped(front);
+                // the next frame's `windows` call activates the front window again: the keyboard went elsewhere
+                if drawn { self.desk.as_mut().unwrap().raise_front = true; }
+                self.dirty = true;
+                let kind = if matches!(ev, WindowEvent::HandBack(_)) { "hand-back" } else { "window server focus" };
+                trace(&format!("{kind} ignored: {want:?} is being brought to the front ({})", if drawn { "activated again" } else { "activated when it maps" }));
+            },
             // the compositor hands focus back to a window when a menu or sheet closes; on a locked screen that must not
             // lift the window over the lock (Lock Screen from the System menu closes the menu in the same turn); an extra window
             // focuses the app that opened it, because the routing sites match the parent (`desk_refocus` does the same)
             // the app just launched above it (no frame yet, so no toplevel) stays the front app: the focus the window
             // server hands back as Spotlight or the Apps grid closes went to the window it still knows in front (E2E6 1).
             // Only that hand-back: a press on the window below (a `Focus`) is the person's choice and raises it
-            WindowEvent::HandBack(_) if self.desk_launching_above(i) => {},
-            WindowEvent::Focus(_) | WindowEvent::HandBack(_) => { self.desk.as_mut().unwrap().raise(i); if !self.is_locked() { self.screen = Screen::App(app.parent()); } self.dirty = true; },
+            WindowEvent::HandBack(_) if self.desk_launching_above(i) => trace("hand-back ignored: the app above it is launching"),
+            WindowEvent::ServerFocus(_) | WindowEvent::HandBack(_) => {
+                trace(if matches!(ev, WindowEvent::HandBack(_)) { "hand-back: raised" } else { "window server focus: raised" });
+                self.desk.as_mut().unwrap().raise(i); if !self.is_locked() { self.screen = Screen::App(app.parent()); } self.dirty = true;
+            },
             WindowEvent::Close(_) => self.desk_close_app(app),
             // a full-screen window keeps the zoom it goes back to (`set_full_screen`): the window server's maximize state
             // while it is full screen is not a zoom or an un-zoom of it (W3-6)
@@ -2690,6 +2738,12 @@ impl Shell {
             }
         }
         let i = self.desk.as_mut().unwrap().open(&m, app, (w, h));
+        // the app opened is the front app until it is in front for good (`FrontIntent`), whatever the window server
+        // focuses meanwhile on its own
+        if let Some(d) = self.desk.as_mut() {
+            d.front_intent = Some(FrontIntent { app, since: t });
+            crate::bare::focus_trace::log(format_args!("intent app={app:?} at={t:.0}: opened"));
+        }
         if !existed {
             self.desk_layout(i);
             self.desk_fx_start(app, FxCall::Open, t);
@@ -3031,7 +3085,10 @@ impl Shell {
             // the front window decides the screen on every tick; only a different answer is something to draw. Under the
             // Apps grid every window is hidden, and the screen stays the app that was in front, whose menus the bar
             // keeps (Lead (a)); the grid's close refocuses
-            let screen = match self.desk.as_ref().and_then(|d| d.front()).map(|w| w.app) {
+            // the app being brought to the front is the screen while the intent stands, whatever the window server's
+            // focus did meanwhile (`desk_front_intent`)
+            let front = self.desk_front_intent().or_else(|| self.desk.as_ref().and_then(|d| d.front()).map(|w| w.app));
+            let screen = match front {
                 Some(app) => Screen::App(app.parent()),
                 None => Screen::Home,
             };
@@ -3632,6 +3689,48 @@ impl Shell {
         let Some(d) = self.desk.as_ref() else { return false };
         let mut above = d.wins.iter().skip(i + 1).filter(|w| !w.minimized).peekable();
         above.peek().is_some() && above.all(|w| self.desk_window_launching(w.app))
+    }
+
+    /// The app the shell is bringing to the front (`Desk::front_intent`) while the intent stands: its window (or one of
+    /// its extra windows) is still the shell's front window. Anything else that put another window in front (a press,
+    /// another open, a close) ended it.
+    pub(super) fn desk_front_intent(&self) -> Option<AppId> {
+        let d = self.desk.as_ref()?;
+        let intent = d.front_intent?;
+        (d.front().map(|w| w.app.parent()) == Some(intent.app.parent())).then_some(intent.app)
+    }
+
+    /// Per tick: ends the front intent once it no longer stands or after `FRONT_INTENT_MS`; while it stands and the
+    /// window server's toplevel list changed, a drawn front window of the app that the list does not show active is
+    /// activated again (`raise_front`: xdg-activation and the foreign-toplevel activate with the next frame).
+    pub(super) fn desk_intent_tick(&mut self, t: f64) {
+        let Some(intent) = self.desk.as_ref().and_then(|d| d.front_intent) else { return };
+        let ended = if self.desk_front_intent().is_none() {
+            Some("another window is in front")
+        } else if t - intent.since > FRONT_INTENT_MS {
+            Some("the bound ran out")
+        } else {
+            None
+        };
+        if let Some(why) = ended {
+            if let Some(d) = self.desk.as_mut() { d.front_intent = None; }
+            crate::bare::focus_trace::log(format_args!("intent app={:?} ends: {why}", intent.app));
+            return;
+        }
+        #[cfg(feature = "desktop-wayland")]
+        {
+            let Some(front) = self.desk.as_ref().and_then(|d| d.front()).map(|w| w.app) else { return };
+            if self.desk_window_unmapped(front) { return; }
+            let Some(id) = win_id(front) else { return };
+            let app_id = format!("is.olibuijr.bifrost.{id}");
+            let Some(d) = self.desk.as_mut() else { return };
+            if !std::mem::take(&mut d.intent_check) { return; }
+            if let Some(toplevel) = d.foreign_snapshot.iter().find(|w| w.app_id == app_id && !w.active).map(|w| w.id) {
+                crate::bare::focus_trace::log(format_args!("intent app={:?} window={id} (toplevel {toplevel}) is mapped but not active: activated again", intent.app));
+                d.raise_front = true;
+                self.dirty = true;
+            }
+        }
     }
 
     /// Recomputes `Desk::unmapped` from the app hosts; a window that just gained its first frame is repainted.
@@ -6828,5 +6927,143 @@ mod launch_front_tests {
         let i = sh.desk.as_ref().unwrap().index_of(AppId::Settings).unwrap();
         assert!(!sh.desk_launching_above(i), "the built-in above draws its own content");
         assert_eq!(hand_back_after_launch(&mut sh), (Some(AppId::Settings), Screen::App(AppId::Settings)));
+    }
+}
+
+/// E2E6 Spotlight: whatever Spotlight, the Apps grid, the Dock or `open-app` opens is the front window and keeps the
+/// keyboard, whatever focus the window server gives other windows on its own while the app maps (`FrontIntent`).
+#[cfg(all(test, feature = "desktop-wayland"))]
+mod spotlight_front_tests {
+    use super::{win_id, FRONT_INTENT_MS};
+    use crate::bare::wayland::WindowEvent;
+    use crate::shell::tests::{desktop_shell, fixture_app};
+    use crate::shell::{AppId, Screen, Shell};
+
+    fn front(sh: &Shell) -> (Option<AppId>, Screen) {
+        (sh.desk.as_ref().unwrap().front().map(|w| w.app), sh.screen)
+    }
+
+    fn id(app: AppId) -> u32 {
+        win_id(app).unwrap()
+    }
+
+    /// Settings in front, Calculator launched: the window server's own focus of Settings (its keyboard enter or an
+    /// activating configure, not only the hand-back as Spotlight goes) does not lift Settings over the launch.
+    #[test]
+    fn a_launch_over_a_built_in_stays_in_front_through_the_window_servers_focus() {
+        let mut sh = desktop_shell();
+        sh.screen = Screen::Home;
+        sh.anim = None;
+        let _peer = fixture_app(&mut sh);
+        sh.desk_open(AppId::Settings, 0.0);
+        sh.desk_open(AppId::External(0), 10.0);
+        let want = (Some(AppId::External(0)), Screen::App(AppId::External(0)));
+        sh.wayland_window_event(WindowEvent::HandBack(id(AppId::Settings)));
+        assert_eq!(front(&sh), want, "the hand-back as Spotlight's keyboard goes");
+        sh.wayland_window_event(WindowEvent::ServerFocus(id(AppId::Settings)));
+        assert_eq!(front(&sh), want, "a later keyboard enter of the window that was in front");
+        sh.desk_intent_tick(10.0 + FRONT_INTENT_MS / 2.0);
+        assert_eq!(sh.desk_front_intent(), Some(AppId::External(0)), "the intent holds within its bound");
+        sh.desk_intent_tick(10.0 + FRONT_INTENT_MS + 1.0);
+        assert_eq!(sh.desk_front_intent(), None, "and ends after it");
+        sh.wayland_window_event(WindowEvent::ServerFocus(id(AppId::Settings)));
+        assert_eq!(front(&sh), (Some(AppId::Settings), Screen::App(AppId::Settings)), "the window server's later focus is followed again");
+    }
+
+    /// Weather (an external app's window) in front, Settings opened from Spotlight: the keyboard the window server hands
+    /// back to Weather does not put Weather over Settings, and Settings, drawn already, is activated again.
+    #[test]
+    fn a_built_in_opened_over_an_external_app_stays_in_front_and_is_activated_again() {
+        let mut sh = desktop_shell();
+        sh.screen = Screen::Home;
+        sh.anim = None;
+        let _peer = fixture_app(&mut sh);
+        let m = sh.desk_metrics();
+        let weather = AppId::ExternalWindow(0, 3);
+        sh.desk.as_mut().unwrap().open(&m, AppId::Settings, (900, 700));
+        sh.desk.as_mut().unwrap().open(&m, weather, (600, 400));
+        sh.screen = Screen::App(AppId::External(0));
+        sh.desk_open(AppId::Settings, 5.0);
+        assert!(sh.take_raise_front(), "the open asks for the activation");
+        let want = (Some(AppId::Settings), Screen::App(AppId::Settings));
+        sh.wayland_window_event(WindowEvent::HandBack(id(weather)));
+        assert_eq!(front(&sh), want);
+        assert!(sh.take_raise_front(), "the keyboard went to Weather: Settings is activated again");
+        sh.wayland_window_event(WindowEvent::ServerFocus(id(weather)));
+        assert_eq!(front(&sh), want);
+        assert!(sh.take_raise_front(), "each focus the window server gives elsewhere asks again");
+        sh.wayland_window_event(WindowEvent::ServerFocus(id(AppId::Settings)));
+        assert_eq!(front(&sh), want, "the focus of the intended window itself is followed");
+        assert!(!sh.take_raise_front(), "and asks for nothing more");
+    }
+
+    /// Weather in front, Calendar launched: Mail, a third app's window the window server picks as its next toplevel
+    /// while Calendar has none yet, does not come to the front, nor does Weather after it.
+    #[test]
+    fn a_launch_over_an_external_app_ignores_the_window_servers_next_toplevel() {
+        let mut sh = desktop_shell();
+        sh.screen = Screen::Home;
+        sh.anim = None;
+        let _weather_peer = fixture_app(&mut sh);
+        let _calendar_peer = fixture_app(&mut sh);
+        let m = sh.desk_metrics();
+        let (mail, weather) = (AppId::Terminal, AppId::ExternalWindow(0, 3));
+        sh.desk.as_mut().unwrap().open(&m, mail, (900, 600));
+        sh.desk.as_mut().unwrap().open(&m, weather, (600, 400));
+        sh.desk_open(AppId::External(1), 20.0);
+        let want = (Some(AppId::External(1)), Screen::App(AppId::External(1)));
+        sh.wayland_window_event(WindowEvent::ServerFocus(id(mail)));
+        assert_eq!(front(&sh), want, "the window server's topmost pick");
+        sh.wayland_window_event(WindowEvent::HandBack(id(weather)));
+        assert_eq!(front(&sh), want, "the hand-back to the window that was in front");
+        let d = sh.desk.as_ref().unwrap();
+        assert_eq!(d.wins.iter().rev().nth(1).map(|w| w.app), Some(weather), "the stack below is left as it was");
+    }
+
+    /// The per-tick refocus never takes the screen from the app being brought to the front, and a press (the person's
+    /// choice) ends the intent at once.
+    #[test]
+    fn the_per_tick_refocus_keeps_the_intended_app_and_a_press_ends_it() {
+        let mut sh = desktop_shell();
+        sh.screen = Screen::Home;
+        sh.anim = None;
+        let _peer = fixture_app(&mut sh);
+        sh.desk_open(AppId::Settings, 0.0);
+        sh.desk_open(AppId::External(0), 1.0);
+        sh.screen = Screen::App(AppId::Settings);
+        sh.desk_sync_extra_windows();
+        assert_eq!(sh.screen, Screen::App(AppId::External(0)), "the tick puts the intended app back");
+        sh.wayland_window_event(WindowEvent::ServerFocus(id(AppId::Settings)));
+        sh.desk_intent_tick(2.0);
+        sh.desk_sync_extra_windows();
+        assert_eq!(front(&sh), (Some(AppId::External(0)), Screen::App(AppId::External(0))));
+        sh.wayland_window_event(WindowEvent::Focus(id(AppId::Settings)));
+        assert_eq!(front(&sh), (Some(AppId::Settings), Screen::App(AppId::Settings)), "a press raises the window below");
+        assert_eq!(sh.desk_front_intent(), None);
+        assert!(sh.desk.as_ref().unwrap().front_intent.is_none());
+    }
+
+    /// The window server reports the intended window's toplevel but another one active: the shell asks again, once per
+    /// report, and stops once it is active.
+    #[test]
+    fn an_inactive_intended_toplevel_is_activated_again() {
+        let mut sh = desktop_shell();
+        sh.screen = Screen::Home;
+        sh.anim = None;
+        sh.desk_open(AppId::Settings, 0.0);
+        sh.take_raise_front();
+        let toplevel = |active| crate::bare::wayland::ForeignWindow { id: 40, title: "Settings".into(), app_id: format!("is.olibuijr.bifrost.{}", id(AppId::Settings)), active, maximized: false, minimized: false };
+        let d = sh.desk.as_mut().unwrap();
+        d.foreign_snapshot = vec![toplevel(false)];
+        d.intent_check = true;
+        sh.desk_intent_tick(100.0);
+        assert!(sh.take_raise_front(), "mapped but not active: activated again");
+        sh.desk_intent_tick(110.0);
+        assert!(!sh.take_raise_front(), "once per report");
+        let d = sh.desk.as_mut().unwrap();
+        d.foreign_snapshot = vec![toplevel(true)];
+        d.intent_check = true;
+        sh.desk_intent_tick(120.0);
+        assert!(!sh.take_raise_front(), "active: nothing to ask");
     }
 }
