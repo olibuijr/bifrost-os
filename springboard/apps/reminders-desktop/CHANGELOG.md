@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.6
+
+- The Recently Deleted tile shows its whole name: a name too wide for the tile wraps onto two lines instead of ending in an ellipsis.
+
 ## 1.20.5
 
 - Rebuilt with the current SDK: the app redraws after an action from the shell (Look Up, Services, Spotlight) and accepts the shell's account-credential connections.

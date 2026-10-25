@@ -487,20 +487,27 @@ fn smart_list_tiles_can_be_hidden_and_a_pinned_list_gets_a_tile() {
 }
 
 #[test]
-fn a_tile_name_stays_on_one_line_that_fits_the_tile() {
+fn a_tile_name_fits_the_tile_whole() {
     use bifrost_app::kit::ui::{Weight, MAC_BODY_PT, MAC_SUBHEAD_PT, SPACE_M};
     let (app, ui, path) = app("tile-labels");
     let room = ui.pt(app.tile_rect(&ui, 0).w) - ui.pt(2.0 * SPACE_M);
-    let (line, pt) = Reminders::tile_label(&ui, "Recently Deleted", room);
-    assert!(ui.measure(&line, pt, Weight::Semibold) <= room, "{line:?} at {pt} pt is wider than the tile");
+    // E2E13 8: "Recently Deleted" was cut to "Recently Dele..."; it shows whole, on one line or wrapped onto two
+    let (lines, pt) = Reminders::tile_label(&ui, "Recently Deleted", room);
+    assert!(lines.len() <= 2 && lines.iter().all(|l| ui.measure(l, pt, Weight::Semibold) <= room), "{lines:?} at {pt} pt is wider than the tile");
+    assert_eq!(lines.join(" "), "Recently Deleted", "no ellipsis");
     assert!(pt >= MAC_SUBHEAD_PT && pt <= MAC_BODY_PT);
-    assert_eq!(Reminders::tile_label(&ui, "Today", room), ("Today".to_string(), MAC_BODY_PT));
-    assert_eq!(Reminders::tile_label(&ui, "Scheduled", room), ("Scheduled".to_string(), MAC_BODY_PT));
-    // a name too long for the smallest style is cut with an ellipsis, still one line inside the tile
-    let (cut, pt) = Reminders::tile_label(&ui, "A very long smart list name that never fits", room);
+    assert_eq!(Reminders::tile_label(&ui, "Today", room), (vec!["Today".to_string()], MAC_BODY_PT));
+    assert_eq!(Reminders::tile_label(&ui, "Scheduled", room), (vec!["Scheduled".to_string()], MAC_BODY_PT));
+    // a narrow tile wraps the name at its space
+    let narrow = ui.measure("Recently", MAC_SUBHEAD_PT, Weight::Semibold) + 1.0;
+    let (lines, pt) = Reminders::tile_label(&ui, "Recently Deleted", narrow.max(ui.measure("Deleted", MAC_SUBHEAD_PT, Weight::Semibold) + 1.0));
+    assert_eq!(lines, ["Recently", "Deleted"], "two lines at {pt} pt");
+    // a name too long for two lines of the smallest style is cut with an ellipsis on one line inside the tile
+    let (cut, pt) = Reminders::tile_label(&ui, "Averyveryverylongsmartlistname that never fits", room);
     assert_eq!(pt, MAC_SUBHEAD_PT);
-    assert!(cut.ends_with('\u{2026}') && !cut.contains('\n'));
-    assert!(ui.measure(&cut, pt, Weight::Semibold) <= room);
+    assert_eq!(cut.len(), 1);
+    assert!(cut[0].ends_with('\u{2026}'));
+    assert!(ui.measure(&cut[0], pt, Weight::Semibold) <= room);
     cleanup(&path);
 }
 

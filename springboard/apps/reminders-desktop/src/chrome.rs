@@ -400,13 +400,25 @@ impl Reminders {
         self.data.lists.get((id - LIST_ROW) as usize).map(|l| Target::List(l.id))
     }
 
-    /// A tile name on one line no wider than `max_px`, as the reference tiles draw it: at body size when it fits,
-    /// otherwise shrunk a text style at a time (callout, then subhead), and only below that cut with an ellipsis.
-    /// Returns the line and the point size to draw it at.
-    pub(super) fn tile_label(ui: &Ui, label: &str, max_px: f32) -> (String, f32) {
-        for pt in [MAC_BODY_PT, MAC_CALLOUT_PT, MAC_SUBHEAD_PT] {
-            if ui.measure(label, pt, Weight::Semibold) <= max_px {
-                return (label.to_string(), pt);
+    /// A tile name in lines no wider than `max_px`, as the reference tiles draw it: one line at body size when it
+    /// fits, else at callout size, else wrapped at a space onto two lines (callout, then subhead), so "Recently
+    /// Deleted" shows whole in a narrow sidebar (E2E13 8); only a name that fits none of these is cut with an ellipsis
+    /// on one subhead line. Returns the lines (top first) and the point size to draw them at.
+    pub(super) fn tile_label(ui: &Ui, label: &str, max_px: f32) -> (Vec<String>, f32) {
+        let fits = |text: &str, pt: f32| ui.measure(text, pt, Weight::Semibold) <= max_px;
+        for pt in [MAC_BODY_PT, MAC_CALLOUT_PT] {
+            if fits(label, pt) {
+                return (vec![label.to_string()], pt);
+            }
+        }
+        for pt in [MAC_CALLOUT_PT, MAC_SUBHEAD_PT] {
+            if fits(label, pt) {
+                return (vec![label.to_string()], pt);
+            }
+            // the longest first line that fits, the rest on the second
+            let wrapped = label.match_indices(' ').rev().map(|(i, _)| (label[..i].trim_end(), label[i + 1..].trim_start())).find(|(a, b)| !a.is_empty() && !b.is_empty() && fits(a, pt) && fits(b, pt));
+            if let Some((a, b)) = wrapped {
+                return (vec![a.to_string(), b.to_string()], pt);
             }
         }
         let pt = MAC_SUBHEAD_PT;
@@ -414,11 +426,11 @@ impl Reminders {
         while !chars.is_empty() {
             chars.pop();
             let cut: String = chars.iter().collect::<String>().trim_end().to_string() + "\u{2026}";
-            if ui.measure(&cut, pt, Weight::Semibold) <= max_px {
-                return (cut, pt);
+            if fits(&cut, pt) {
+                return (vec![cut], pt);
             }
         }
-        (String::new(), pt)
+        (vec![String::new()], pt)
     }
 
     /// The sidebar: the smart-list tiles in their colours (count top right, name bottom left, the selected one
@@ -443,11 +455,15 @@ impl Reminders {
                 Tile::List(id) => self.list_glyph(s, ui, id, glyph_at, colour),
             }
             self.right(s, ui, &count.to_string(), MAC_TITLE2_PT, Weight::Bold, WHITE, x + w - ui.pt(SPACE_M), y + ui.pt(SPACE_S));
-            // the name sits on one line at the tile's bottom left; one wider than the tile (Recently Deleted in a
-            // narrow sidebar) is drawn a text style smaller, its bottom kept where the body-size line ends
-            let (line, pt) = Self::tile_label(ui, &label, w - ui.pt(2.0 * SPACE_M));
-            let line_y = y + h - ui.pt(SPACE_XL + 2.0) + ui.pt(MAC_BODY_PT - pt);
-            self.text(s, ui, &line, pt, Weight::Semibold, WHITE, x + ui.pt(SPACE_M), line_y);
+            // the name sits at the tile's bottom left; one wider than the tile (Recently Deleted in a narrow sidebar)
+            // is drawn a text style smaller or on two lines, its last line's bottom kept where the body-size line ends
+            let (lines, pt) = Self::tile_label(ui, &label, w - ui.pt(2.0 * SPACE_M));
+            let last_y = y + h - ui.pt(SPACE_XL + 2.0) + ui.pt(MAC_BODY_PT - pt);
+            let leading = ui.pt(pt + SPACE_XXS);
+            for (n, line) in lines.iter().enumerate() {
+                let line_y = last_y - leading * (lines.len() - 1 - n) as f32;
+                self.text(s, ui, line, pt, Weight::Semibold, WHITE, x + ui.pt(SPACE_M), line_y);
+            }
         }
         widgets::source_list(s, ui, self.lists_bounds(ui), &self.lists_source(), 0.0, None);
         // the tiles' column above My Lists keeps the sidebar colour (source_list painted only its bounds)
