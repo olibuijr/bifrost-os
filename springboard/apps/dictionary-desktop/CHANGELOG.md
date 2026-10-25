@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.5
+
+- Typing a word selects the first match in the sidebar and shows its entry at once, as the reference does; Return chooses it. The search field keeps what was typed.
+- The sidebar's rows are clipped below the traffic lights' band, so a scrolled list no longer draws under them.
+- The subtitle under the title reads "151,378 words" instead of a dictionary count that was cut off.
+- A word asked for while Dictionary is not running (a Spotlight dictionary hit, Open in Dictionary, the Services menu) is shown once the app has started, instead of an empty search. The app also takes a word or a `dict:` URL as its launch argument.
+
 ## 0.6.4
 
 - The window follows the Golden Gate Dictionary: a sidebar of the matching headwords under the traffic lights (the word on screen selected), a top bar with the title and how many were found, Back and Forward and a text size pull-down in the kit toolbar, and the kit search field at the top right. The Back and Forward buttons no longer sit under the traffic lights.

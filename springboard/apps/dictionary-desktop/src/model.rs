@@ -128,6 +128,35 @@ pub fn word_from_url(url: &str) -> Option<String> {
     (!word.is_empty()).then(|| word.to_string())
 }
 
+/// A count with thousands separators: 151378 is "151,378".
+pub fn grouped(n: usize) -> String {
+    let digits = n.to_string();
+    let mut out = String::with_capacity(digits.len() + digits.len() / 3);
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i) % 3 == 0 {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
+}
+
+/// The top bar's subtitle while nothing is searched: how many words the installed dictionaries have ("151,378 words").
+/// Short, so it fits the title column of a narrow window; how many dictionaries there are is in Settings.
+pub fn idle_subtitle(words: usize) -> String {
+    format!("{} word{}", grouped(words), if words == 1 { "" } else { "s" })
+}
+
+/// The word the app was started with: the first argument that is not a flag, either a `dict:` or `x-dictionary:` URL
+/// or the word itself. Another app or the shell can start Dictionary on a word this way.
+pub fn launch_word<I: IntoIterator<Item = String>>(args: I) -> Option<String> {
+    let arg = args.into_iter().find(|a| !a.starts_with('-'))?;
+    word_from_url(&arg).or_else(|| {
+        let w = arg.trim();
+        (!w.is_empty() && !w.contains(':') && !w.contains('/')).then(|| w.to_string())
+    })
+}
+
 /// The most characters of a selection the Services menu looks up.
 pub const SERVICE_WORD_MAX: usize = 80;
 
@@ -627,6 +656,29 @@ pub mod layout {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn counts_are_grouped_by_thousands_and_the_idle_subtitle_is_short() {
+        assert_eq!(grouped(0), "0");
+        assert_eq!(grouped(999), "999");
+        assert_eq!(grouped(1000), "1,000");
+        assert_eq!(grouped(151378), "151,378");
+        assert_eq!(grouped(1234567), "1,234,567");
+        assert_eq!(idle_subtitle(151378), "151,378 words");
+        assert_eq!(idle_subtitle(1), "1 word");
+    }
+
+    #[test]
+    fn the_launch_word_is_the_first_argument_that_is_not_a_flag() {
+        let args = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(launch_word(args(&[])), None);
+        assert_eq!(launch_word(args(&["terminal"])), Some("terminal".to_string()));
+        assert_eq!(launch_word(args(&["--verbose", "dict://serendipity"])), Some("serendipity".to_string()));
+        assert_eq!(launch_word(args(&["x-dictionary:r:orange"])), Some("orange".to_string()));
+        assert_eq!(launch_word(args(&["  "])), None, "a blank argument is no word");
+        assert_eq!(launch_word(args(&["/home/me/file.txt"])), None, "a path is not a word");
+        assert_eq!(launch_word(args(&["https://example.org"])), None, "another scheme is not a word");
+    }
 
     fn inside(inner: bifrost_ui::Rect, outer: bifrost_ui::Rect) -> bool {
         inner.x >= outer.x - 0.01 && inner.y >= outer.y - 0.01 && inner.x + inner.w <= outer.x + outer.w + 0.01 && inner.y + inner.h <= outer.y + outer.h + 0.01
