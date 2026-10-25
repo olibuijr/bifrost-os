@@ -38,8 +38,24 @@ struct NotesApp {
     widget: Option<Vec<String>>,
     /// the menu bar extra with New Quick Note, made once the window is configured
     quick: Option<StatusItem>,
+    /// the open note's text state and caret (window points) last told to the shell (`sync_text`)
+    text_published: Option<TextReport>,
     /// Internet Accounts: the Exchange account whose Notes service is on is read and written in the background
     exchange: bifrost_app::exchange_notes::Sync,
+}
+
+/// What the main window last told the shell of the open note: its text state and caret rectangle in window points.
+type TextReport = (bifrost_app::proto::TextState, (f32, f32, f32, f32));
+
+/// The open note's text report (`Notes::text_report`, px) in window points at `ui`'s scale, while the main window has
+/// the keys; `None` when no note is edited there.
+fn text_report_pt(n: &notes::Notes, ctx: &Ctx) -> Option<TextReport> {
+    if !ctx.key_window().is_main() {
+        return None;
+    }
+    let (state, (x, y, w, h)) = n.text_report(&ctx.ui)?;
+    let s = if ctx.ui.s > 0.0 { ctx.ui.s } else { 1.0 };
+    Some((state, (x / s, y / s, w / s, h / s)))
 }
 
 /// The list view as a restoration key: `all`, `trash` or `folder:<name>`.
@@ -74,6 +90,31 @@ const SPOT_DOMAIN: &str = "notes";
 const INDEX_EVERY_MS: f64 = 3000.0;
 
 impl NotesApp {
+    /// Tells the shell about the open note's text and caret when they changed (`ctx.text_state`, `ctx.caret_rect`), so
+    /// Look Up and the Services menu find the selection or the word at the caret and Look Up opens under it. Once no
+    /// note is edited in the main window (the list, a field, a note window with the keys) it reports an empty state.
+    fn sync_text(&mut self, ctx: &Ctx) {
+        let Some(n) = &self.notes else { return };
+        let now = text_report_pt(n, ctx);
+        if now == self.text_published {
+            return;
+        }
+        match &now {
+            Some((state, (x, y, w, h))) => {
+                let last = self.text_published.as_ref();
+                if last.map(|p| &p.0) != Some(state) {
+                    ctx.text_state(state.clone());
+                }
+                // an empty state also clears the shell's caret rectangle: send it again after one
+                if last.map(|p| p.1) != Some((*x, *y, *w, *h)) || *state == bifrost_app::proto::TextState::default() {
+                    ctx.caret_rect(*x, *y, *w, *h);
+                }
+            }
+            None => ctx.text_state(bifrost_app::proto::TextState::default()),
+        }
+        self.text_published = now;
+    }
+
     /// `invalidateRestorableState()` when the view or the open note changed since the last look.
     fn track_restorable(&mut self, ctx: &Ctx) {
         let Some(n) = &self.notes else { return };
@@ -494,6 +535,17 @@ impl App for NotesApp {
             return n.window_undo_titles(key);
         }
         n.undo_titles()
+    }
+
+    /// Look Up and the Services menu act on the selection of the window that has the keys, as plain text; with nothing
+    /// selected the shell takes the word at the caret from the reported text state.
+    fn selected_text(&mut self, ctx: &Ctx) -> Option<String> {
+        self.notes.as_ref()?.look_up_selection(ctx.key_window())
+    }
+
+    /// Where the open note's caret is (window points), sent before the selection so Look Up opens under it.
+    fn selection_rect(&mut self, ctx: &Ctx) -> Option<(f32, f32, f32, f32)> {
+        text_report_pt(self.notes.as_ref()?, ctx).map(|(_, rect)| rect)
     }
 
     /// An input method's composition in the main window: the search field or the open note's editor.
@@ -921,6 +973,7 @@ impl App for NotesApp {
         let redraw = n.tick(&ctx.ui, t) || exchanged;
         let requested = n.take_window_request();
         self.track_restorable(ctx);
+        self.sync_text(ctx);
         let opened = requested.is_some_and(|id| self.open_note_window(ctx, &id));
         redraw || opened
     }
@@ -960,6 +1013,7 @@ impl App for NotesApp {
         if let Some(n) = &mut self.notes {
             n.draw_window(s, &ctx.ui, window, ctx.key_window() == window, t);
         }
+        self.sync_text(ctx);
         let mut d = Damage::new(s.w, s.h);
         d.all();
         d
@@ -1032,6 +1086,7 @@ impl App for NotesApp {
         if let Some(n) = &mut self.notes {
             n.draw(s, &ctx.ui, t);
         }
+        self.sync_text(ctx);
         let mut d = Damage::new(s.w, s.h);
         d.all();
         d
@@ -1040,5 +1095,5 @@ impl App for NotesApp {
 
 
 fn main() {
-    bifrost_app::run(NotesApp { notes: None, last_wall: 0.0, export: None, import: None, indexed: Default::default(), next_index: 0.0, restorable: None, widget: None, quick: None, exchange: bifrost_app::exchange_notes::Sync::new() });
+    bifrost_app::run(NotesApp { notes: None, last_wall: 0.0, export: None, import: None, indexed: Default::default(), next_index: 0.0, restorable: None, widget: None, quick: None, text_published: None, exchange: bifrost_app::exchange_notes::Sync::new() });
 }

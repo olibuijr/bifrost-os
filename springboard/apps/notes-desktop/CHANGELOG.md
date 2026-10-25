@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.24.5
+
+- Look Up (Ctrl+Cmd+D) and the Services menu work in a note: Notes answers the shell's request for the selection with the selected text (plain, without Markdown markers) of the note or note window that has the keys, and reports the open note's text and caret, so with only a caret in a word Look Up defines that word.
+- The Look Up popover opens just below the caret or selection in the note instead of under the menu bar at the centre of the screen.
+
 ## 1.24.4
 
 - Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.

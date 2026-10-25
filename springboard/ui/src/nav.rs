@@ -574,7 +574,6 @@ mod tests {
         assert_eq!(l.menu_anchor(8, 4.0), None);
     }
 
-    #[test]
     /// E2E9 6: a document's close confirmation is a sheet whose Save is the accent-filled Return button, rightmost, with
     /// Cancel for Escape and Don't Save at the left.
     #[test]

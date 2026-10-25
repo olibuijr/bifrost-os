@@ -86,6 +86,14 @@ pub fn menu_for(selection: &Selection) -> Vec<Service> {
     Service::ALL.iter().copied().filter(|s| s.accepts(selection)).collect()
 }
 
+/// True when an app's service titled `title` is one of the built-in services already listed in `shown` (the Dictionary
+/// app registers "Look Up in Dictionary", which the desktop offers itself): the menu lists it once, as the built-in row.
+/// Titles compare ignoring case and surrounding spaces.
+pub fn duplicates_built_in(title: &str, shown: &[Service]) -> bool {
+    let title = title.trim();
+    shown.iter().any(|s| s.title().eq_ignore_ascii_case(title))
+}
+
 /// Where `service` sends `selection`, or None when the service does not take it.
 pub fn route(service: Service, selection: &Selection) -> Option<Route> {
     if !service.accepts(selection) {
@@ -150,6 +158,16 @@ mod tests {
     #[test]
     fn plain_text_gets_the_text_services_in_menu_order() {
         assert_eq!(menu_for(&text("hello")), vec![Service::LookUp, Service::NewNoteWithSelection, Service::MakeStickyNote, Service::SearchWith]);
+    }
+
+    /// E2E9 9: the Dictionary app's "Look Up in Dictionary" is the built-in row, so the menu lists it once.
+    #[test]
+    fn an_app_service_named_like_a_listed_built_in_one_is_a_duplicate() {
+        let shown = menu_for(&text("hello"));
+        assert!(duplicates_built_in("Look Up in Dictionary", &shown));
+        assert!(duplicates_built_in(" look up in dictionary ", &shown));
+        assert!(!duplicates_built_in("Open Images in Viewer", &shown));
+        assert!(!duplicates_built_in("Look Up in Dictionary", &[]), "a built-in that does not take the selection is not listed");
     }
 
     #[test]

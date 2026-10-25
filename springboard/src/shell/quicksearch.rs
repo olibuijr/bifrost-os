@@ -640,6 +640,10 @@ const SYNC_DEADLINE: std::time::Duration = std::time::Duration::from_millis(300)
 struct Table {
     name: &'static str,
     rows: Vec<(search_rank::Item, String)>,
+    /// Per row (same index): folded other names the row is found by only when the query starts one of their words (an
+    /// app's aliases, `apps::search_aliases`), never by the fuzzy matcher's initials or scattered letters, so "wi" does
+    /// not find the browser through "web internet" and "se" does not find Term through "shell". Empty: none.
+    prefixes: Vec<String>,
 }
 
 impl search_rank::Source for Table {
@@ -649,8 +653,20 @@ impl search_rank::Source for Table {
 
     fn search(&self, query: &str) -> Vec<search_rank::Item> {
         let m = fuzzy::Matcher::new(query);
-        self.rows.iter().filter(|(_, folded)| m.rank_folded(folded).is_some()).map(|(item, _)| item.clone()).collect()
+        let q = fuzzy::fold(query.trim());
+        self.rows
+            .iter()
+            .enumerate()
+            .filter(|(i, (_, folded))| m.rank_folded(folded).is_some() || self.prefixes.get(*i).is_some_and(|p| starts_a_word(p, &q)))
+            .map(|(_, (item, _))| item.clone())
+            .collect()
     }
+}
+
+/// Whether `q` (folded) is the start of a word of `words` (folded, space separated), running on over later words
+/// ("font b" starts "font book").
+fn starts_a_word(words: &str, q: &str) -> bool {
+    !q.is_empty() && (words.starts_with(q) || words.match_indices(' ').any(|(i, _)| words[i + 1..].starts_with(q)))
 }
 
 /// One row of a section: its item, and the hit it opens (kept under the item's id).
@@ -664,7 +680,16 @@ fn table_row(hits: &mut BTreeMap<String, Hit>, key: String, title: &str, text: S
 fn build_tables(c: &Corpus) -> (Vec<Table>, BTreeMap<String, Hit>) {
     let mut hits: BTreeMap<String, Hit> = BTreeMap::new();
     let fx = fixed();
-    let apps_rows = apps().iter().map(|a| table_row(&mut hits, app_usage_key(a.id), a.name, String::new(), search_rank::Kind::App, Hit::App(a.id), fuzzy::fold(a.name))).collect();
+    // an app is found by its name (fuzzy) and by its aliases ("terminal" for Term, "preview" for Viewer) as word prefixes
+    let mut app_prefixes = Vec::new();
+    let apps_rows = apps()
+        .iter()
+        .map(|a| {
+            let aliases = super::apps::search_aliases(a.icon);
+            app_prefixes.push(fuzzy::fold(aliases));
+            table_row(&mut hits, app_usage_key(a.id), a.name, aliases.to_string(), search_rank::Kind::App, Hit::App(a.id), fuzzy::fold(a.name))
+        })
+        .collect();
     let settings_rows = settings::PAGES
         .iter()
         .map(|&page| {
@@ -703,14 +728,14 @@ fn build_tables(c: &Corpus) -> (Vec<Table>, BTreeMap<String, Hit>) {
         })
         .collect();
     let tables = vec![
-        Table { name: "Applications", rows: apps_rows },
-        Table { name: "Settings", rows: settings_rows },
-        Table { name: "Clock", rows: city_rows },
-        Table { name: "Deildu", rows: deildu_rows },
-        Table { name: "Contacts", rows: contact_rows },
-        Table { name: "Shortcuts", rows: shortcut_rows },
-        Table { name: "Files", rows: file_rows },
-        Table { name: "Calendar", rows: event_rows },
+        Table { name: "Applications", rows: apps_rows, prefixes: app_prefixes },
+        Table { name: "Settings", rows: settings_rows, prefixes: Vec::new() },
+        Table { name: "Clock", rows: city_rows, prefixes: Vec::new() },
+        Table { name: "Deildu", rows: deildu_rows, prefixes: Vec::new() },
+        Table { name: "Contacts", rows: contact_rows, prefixes: Vec::new() },
+        Table { name: "Shortcuts", rows: shortcut_rows, prefixes: Vec::new() },
+        Table { name: "Files", rows: file_rows, prefixes: Vec::new() },
+        Table { name: "Calendar", rows: event_rows, prefixes: Vec::new() },
     ];
     (tables, hits)
 }
@@ -2812,6 +2837,30 @@ mod tests {
         assert_eq!(p.moved(114.0, 112.0, 10.0), Pull::Page, "more sideways than down pages");
         assert_eq!(p.moved(100.0, 88.0, 10.0), Pull::Page, "upwards is never a pull");
         assert_eq!(p.moved(-20.0, 100.0, 10.0), Pull::Page);
+    }
+
+    /// E2E9 1: "terminal" finds the built-in Terminal (named "Term" in the Dock) as an Application, and it is the
+    /// Top Hit, so Return raises it instead of opening the word in Dictionary.
+    #[test]
+    fn the_built_in_terminal_is_found_by_its_common_name() {
+        let g = results("terminal", &[]);
+        assert_eq!(g[0], Group { title: "Top Hit", hits: vec![Hit::App(AppId::Terminal)] });
+        assert!(results("term", &[]).iter().any(|g| g.hits.contains(&Hit::App(AppId::Terminal))), "its own name still finds it");
+        assert!(results("shell", &[]).iter().any(|g| g.hits.contains(&Hit::App(AppId::Terminal))), "a whole alias finds it");
+    }
+
+    /// E2E10: an alias is found only when the query starts one of its words, never by initials or scattered letters:
+    /// "wi" is Wi-Fi, not the browser's "web internet", and "se" does not list Term through "shell".
+    #[test]
+    fn an_app_alias_matches_only_as_a_word_prefix() {
+        assert!(starts_a_word("terminal shell command line", "sh"));
+        assert!(starts_a_word("terminal shell command line", "command l"), "running on into the next word");
+        assert!(starts_a_word("font book", "font b"));
+        assert!(!starts_a_word("web internet", "wi"), "initials do not count");
+        assert!(!starts_a_word("terminal shell command line", "se"), "scattered letters do not count");
+        assert!(!starts_a_word("web internet", ""));
+        assert_eq!(results("wi", &[])[0].hits, vec![Hit::Settings("Wi-Fi")]);
+        assert!(!results("se", &[]).iter().any(|g| g.hits.contains(&Hit::App(AppId::Terminal))), "Term is not an \"se\" match");
     }
 
     #[test]
