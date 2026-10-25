@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.10.35 — 2026-10-25
+
+Fixes from the 0.10.34 end-to-end pass on Midget, and every BifrOSt app rebuilt.
+
+- Shell actions reach apps again: Spotlight dictionary hits, Look Up's Open in Dictionary and Services. The shell and the apps share one rule for an app's control socket (in the app's data folder, as the sandbox binds it), and apps accept the shell (root) as well as their own account.
+- Spotlight: Settings panes need a real match (no more panes found by scattered letters), an exact dictionary word outranks a loose match but not an app found by its common name, and body matches show the text around the match.
+- Cmd+Tab switches between apps (one entry per app, most recent first) and brings all of an app's windows forward. New document windows cascade down and to the right.
+- Alerts are sheets attached under the window's title bar, with full-width stacked buttons.
+- Vibrant text draws inside clipped areas (Dictionary's sidebar shows every match).
+- The App Store shows real app icons and no longer wakes on every pass while an icon retry is pending. Settings > Appearance footers sit under their rows.
+- Ships with TextEdit 1.13.4 (Make Plain Text asks first, uses the plain-text font and undoes cleanly; plain files open in the plain font; closing the main document keeps the other window where it was) and Dictionary 0.6.6 (arrow keys move through the matches); the other apps are rebuilt.
+
 ## 0.10.34 — 2026-10-25
 
 Fixes from the 0.10.33 end-to-end pass on Midget.
