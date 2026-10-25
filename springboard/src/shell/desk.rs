@@ -308,7 +308,9 @@ enum Grab {
     /// release opens the icon that was pressed even when the row re-centres in between (W2-23)
     DockDrag{from:usize,entry:usize,rect:Rect,x:f32,y:f32,at_x:f32,at_y:f32,moved:bool},
     /// the touch belongs to this window's app until it lifts
-    Content(AppId),
+    /// `dy` px come off the y of every event: a press on the toolbar revealed under the menu bar over a full-screen window
+    /// (`reveal_hit`) reaches the app at the row the band shows, and the drag it starts keeps that mapping until it lifts
+    Content(AppId, f32),
 }
 
 #[cfg(feature = "desktop-wayland")]
@@ -695,12 +697,67 @@ pub const UNIFIED_BAR_PT: f32 = 52.0;
 /// Where a press moves window `w` instead of reaching the app: above `drag_height` (window px), except in the
 /// rectangles returned (window px). A full-size app's empty toolbar band drags; its traffic lights and the controls
 /// it publishes (`App::controls`) do not, as the native toolkit lets the empty part of a unified toolbar move the window.
-/// A full-screen window covers the menu bar; the bar comes back only while the pointer is in its band at the top.
-pub fn bar_hidden(full: bool, pointer_y: Option<f32>, bar_h: f32) -> bool {
-    full && pointer_y.map_or(true, |y| y >= bar_h)
+/// A full-screen window covers the menu bar; the bar comes back while the pointer is in its band at the top. Once it is
+/// back, `keep` px more below the bar keep it (the window's title bar or toolbar revealed under it, `reveal_band`), so the
+/// pointer can go down from the bar to that toolbar without both sliding away under it.
+pub fn bar_hidden(full: bool, pointer_y: Option<f32>, bar_h: f32, keep: f32) -> bool {
+    full && pointer_y.map_or(true, |y| y >= bar_h + keep.max(0.0))
+}
+
+/// The menu bar shown over a full-screen window, with the window's title bar or toolbar revealed directly under it, as
+/// the reference shows full screen: `top` is the bar's height in px, where the band starts, and `band` the band's height.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Reveal {
+    pub top: i32,
+    pub band: i32,
+}
+
+/// What a point in the revealed band of a full-screen window is (`reveal_hit`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum RevealHit {
+    /// a traffic light, shown in the revealed band (the window hides them while the bar is hidden)
+    Light(Light),
+    /// the app's toolbar, at this y in the window (px): the band shows the window's top rows moved down by `Reveal::top`
+    App(f32),
+    /// the title strip the shell draws for a titled window: it covers content, so the press goes nowhere
+    Bar,
+}
+
+/// The height of the band a full-screen window reveals under the menu bar, in px: a full-size window's unified toolbar
+/// (`UNIFIED_BAR_PT`), or a titled window's title bar.
+pub fn reveal_band(w: &Win, m: &Metrics) -> i32 {
+    if w.is_full_size() { (UNIFIED_BAR_PT * m.pt).round() as i32 } else { m.title }
+}
+
+/// Full-screen window `w` as its revealed band lays it out: the window's title bar or toolbar at `rv.top`, `rv.band` tall,
+/// as a zoomed window with no edges, so `Win::hit` and `Win::light_rect` place the traffic lights in the band.
+pub fn revealed_win(w: &Win, rv: Reveal) -> Win {
+    let mut b = *w;
+    b.full = false;
+    b.maximized = true;
+    b.r = Rect { x: w.r.x, y: rv.top, w: w.r.w, h: rv.band };
+    b
+}
+
+/// What is at screen point (`x`, `y`) of the band full-screen window `w` reveals under the menu bar, or `None` outside the
+/// band. The band is the window's top `rv.band` rows drawn `rv.top` px lower, so a point on it is the app's `rv.top` higher.
+pub fn reveal_hit(w: &Win, m: &Metrics, rv: Reveal, x: f32, y: f32) -> Option<RevealHit> {
+    if rv.band <= 0 || y < rv.top as f32 || y >= (rv.top + rv.band) as f32 || x < w.r.x as f32 || x >= (w.r.x + w.r.w) as f32 {
+        return None;
+    }
+    Some(match revealed_win(w, rv).hit(m, x, y) {
+        Some(Hit::Light(l)) => RevealHit::Light(l),
+        _ if w.is_full_size() => RevealHit::App(y - rv.top as f32 + w.r.y as f32),
+        _ => RevealHit::Bar,
+    })
 }
 
 pub fn drag_zone(w: &Win, m: &Metrics, controls: &[bifrost_proto::Node]) -> (i32, Vec<[i32; 4]>) {
+    // a full-screen window does not move: no press on its toolbar (or on the band revealed under the menu bar, which the
+    // window server sees at the window's own rows) starts a window server move
+    if w.full {
+        return (0, Vec::new());
+    }
     // a borderless window has no title band: every press is the app's (a sticky note moves itself)
     if borderless(w.app) {
         return (0, Vec::new());
@@ -1767,6 +1824,9 @@ impl Shell {
             && self.desk_active() && self.desk_drawn && !self.is_locked() && self.anim.is_none()
             && self.desktop_menu.is_none() && !self.cc_active() && !self.center_active() && !self.overlay_visible() && !self.quick_look.is_visible() && !self.utility_up()
             && !self.overview_active() && !self.desk_animating(t)
+            // the band revealed under the menu bar copies the full-screen window's toolbar into the shell's frame: new
+            // pixels from the app must redraw it too (`draw_desk_reveal`)
+            && self.desk_reveal().is_none()
     }
 
     #[cfg(not(feature = "desktop-wayland"))]
@@ -2509,7 +2569,40 @@ impl Shell {
         // a menu opened from the revealed bar keeps the bar while the pointer is down in the menu
         // a screen recording keeps the bar: its indicator must stay visible for the whole recording, even over a full-screen window
         let full = self.desk.as_ref().is_some_and(|d| d.front_full()) && self.desktop_menu.is_none() && !self.recording_active();
-        bar_hidden(full, self.pointer_y, self.desktop_bar_height() as f32)
+        // once the bar is back, the toolbar revealed under it keeps it while the pointer is on that toolbar
+        let keep = if self.bar_latched { self.desk_full_band().map_or(0.0, |(_, b)| b as f32) } else { 0.0 };
+        bar_hidden(full, self.pointer_y, self.desktop_bar_height() as f32, keep)
+    }
+
+    /// The front window when it is full screen: its index and the height of the band it reveals under the menu bar
+    /// (`reveal_band`).
+    pub(super) fn desk_full_band(&self) -> Option<(usize, i32)> {
+        let d = self.desk.as_ref()?;
+        let i = d.wins.iter().rposition(|w| !w.minimized)?;
+        let w = d.wins.get(i).filter(|w| w.full)?;
+        Some((i, reveal_band(w, &self.desk_metrics())))
+    }
+
+    /// The menu bar is shown over a full-screen front window: that window's index and the band its title bar or toolbar
+    /// takes directly under the bar (`Reveal`). The window does not reflow: the band is its top rows drawn lower, over
+    /// its content, with the traffic lights in it (`draw_desk_reveal`). `None` while the bar is hidden.
+    pub(super) fn desk_reveal(&self) -> Option<(usize, Reveal)> {
+        if !self.desk_active() || self.is_locked() {
+            return None;
+        }
+        let (i, band) = self.desk_full_band()?;
+        if self.desk_bar_hidden() {
+            return None;
+        }
+        Some((i, Reveal { top: self.desktop_bar_height() as i32, band }))
+    }
+
+    /// What screen point (`x`, `y`) is in the band revealed under the menu bar over a full-screen window (`reveal_hit`),
+    /// with the window's index; `None` outside the band or while the bar is hidden.
+    pub(super) fn desk_reveal_at(&self, x: f32, y: f32) -> Option<(usize, RevealHit)> {
+        let (i, rv) = self.desk_reveal()?;
+        let w = self.desk.as_ref()?.wins.get(i)?;
+        reveal_hit(w, &self.desk_metrics(), rv, x, y).map(|h| (i, h))
     }
 
     /// Full screen for an app's window: the green button, or the app's own request (`ToShell::SetFullScreen`). The app
@@ -3514,7 +3607,18 @@ impl Shell {
                     self.dirty = true;
                     return Some(vec![]);
                 }
-                let picked = self.desk.as_ref()?.pick(&m, x, y);
+                // over a full-screen window with the menu bar back, the band under the bar shows the window's toolbar (or
+                // title bar) and its traffic lights (`reveal_hit`): a press there is on those, at the row the band shows
+                let revealed = self.desk_reveal_at(x, y);
+                if matches!(revealed, Some((_, RevealHit::Bar))) {
+                    return Some(vec![]);
+                }
+                let dy = match revealed { Some((_, RevealHit::App(ly))) => y - ly, _ => 0.0 };
+                let picked = match revealed {
+                    Some((i, RevealHit::Light(l))) => Some((i, Hit::Light(l))),
+                    Some((i, RevealHit::App(_))) => Some((i, Hit::Content)),
+                    _ => self.desk.as_ref()?.pick(&m, x, y),
+                };
                 let Some((i, hit)) = picked else { return Some(vec![]) };
                 let i = {
                     let d = self.desk.as_mut()?;
@@ -3569,9 +3673,9 @@ impl Shell {
                     Hit::Title => Grab::Move { dx: x - w.r.x as f32, dy: y - w.r.y as f32, app },
                     Hit::Edge(edges) => Grab::Resize { edges, start: w.r, x, y, app },
                     Hit::Content => {
-                        self.desk.as_mut()?.grab = Some(Grab::Content(app));
+                        self.desk.as_mut()?.grab = Some(Grab::Content(app, dy));
                         let b = w.body(&m);
-                        let fx = self.with_size(b.w, b.h, |sh| sh.app_touch_single(app, Event::Down(x - b.x as f32, y - b.y as f32), t));
+                        let fx = self.with_size(b.w, b.h, |sh| sh.app_touch_single(app, Event::Down(x - b.x as f32, y - dy - b.y as f32), t));
                         return Some(fx);
                     }
                 };
@@ -3595,11 +3699,11 @@ impl Shell {
                         self.desk_layout(i);
                         Some(vec![])
                     }
-                    Grab::Content(app) => {
+                    Grab::Content(app, dy) => {
                         let d = self.desk.as_ref()?;
                         let w = *d.wins.get(d.index_of(app)?)?;
                         let b = w.body(&m);
-                        let fx = self.with_size(b.w, b.h, |sh| sh.app_touch_single(w.app, Event::Move(x - b.x as f32, y - b.y as f32), t));
+                        let fx = self.with_size(b.w, b.h, |sh| sh.app_touch_single(w.app, Event::Move(x - b.x as f32, y - dy - b.y as f32), t));
                         Some(fx)
                     }
                     Grab::DockDrag{from,entry,rect,x:x0,y:y0,..}=>{
@@ -3625,24 +3729,30 @@ impl Shell {
                 let grab = self.desk.as_mut()?.grab.take();
                 self.dirty = true;
                 match grab {
-                    Some(Grab::Content(app)) => {
+                    Some(Grab::Content(app, dy)) => {
                         let d = self.desk.as_ref()?;
                         let w = *d.wins.get(d.index_of(app)?)?;
                         let b = w.body(&m);
-                        let fx = self.with_size(b.w, b.h, |sh| sh.app_touch_single(w.app, Event::Up(x - b.x as f32, y - b.y as f32), t));
+                        let fx = self.with_size(b.w, b.h, |sh| sh.app_touch_single(w.app, Event::Up(x - b.x as f32, y - dy - b.y as f32), t));
                         Some(fx)
                     }
                     Some(Grab::Light(app, l)) => {
                         let i = self.desk.as_ref()?.index_of(app)?;
                         let w = *self.desk.as_ref()?.wins.get(i)?;
-                        if w.hit(&m, x, y) == Some(Hit::Light(l)) {
+                        // a full-screen window's lights are in the band revealed under the menu bar (`reveal_hit`)
+                        let on_light = w.hit(&m, x, y) == Some(Hit::Light(l))
+                            || self.desk_reveal_at(x, y).is_some_and(|(ri, h)| ri == i && h == RevealHit::Light(l));
+                        if on_light {
                             match l {
                                 Light::Close => self.desk_close_app(w.app),
+                                // a full-screen window does not minimize (its yellow light is dimmed, as the reference's is)
+                                Light::Minimize if w.full => {}
                                 Light::Minimize => {
                                     self.desk_minimize_window(i, t);
                                 }
-                                Light::Zoom if matches!(w.app, AppId::External(_)) => {
-                                    // the green button of an app window takes it full screen (its own space)
+                                // the green button of an app window takes it full screen (its own space); in full screen any
+                                // window's green button takes it back
+                                Light::Zoom if w.full || matches!(w.app, AppId::External(_)) => {
                                     self.desk_set_full_screen(w.app, !w.full);
                                 }
                                 Light::Zoom => {
@@ -4161,8 +4271,9 @@ impl Shell {
                             if let Some(src)=src { edge=restore_window_edge(pixels,width,height,top,src,dim,corner,window_rim_color()); }
                             for r in &edge {damage.add(r.0,r.1,r.2,r.3);}
                         }
-                        if w.is_full_size() && !bare {
-                            // the lights sit over the app: repaint them where the app just drew under them
+                        if w.is_full_size() && !bare && !w.full {
+                            // the lights sit over the app: repaint them where the app just drew under them (a full-screen
+                            // window hides them; the band revealed under the menu bar shows them, `draw_desk_reveal`)
                             let mut local=*w; local.r.x=0; local.r.y=0;
                             let mut surf=Surface{w:width,h:height,stride:width,px:&mut pixels[..],y0:0};
                             for (k,c) in [SYSTEM_RED, SYSTEM_YELLOW, SYSTEM_GREEN].into_iter().enumerate() {
@@ -4270,6 +4381,59 @@ impl Shell {
         self.draw_cmdtab(s);
         // Developer > Performance HUD: the desktop branch never reached `draw_assistive`, so it never showed
         self.draw_perf(s);
+    }
+
+    /// The band a full-screen window reveals under the menu bar while the bar is shown over it (`desk_reveal`), as the
+    /// reference's full screen slides the title bar and toolbar down with the bar: a full-size window's toolbar (its top
+    /// rows as last presented, `window_cache`) or a titled window's title bar, at `Reveal::top`, with the traffic lights.
+    /// The window itself does not move or reflow; the band covers the top of its content. It is drawn into the shell's
+    /// frame and shown above the window by its own chrome surface (`chrome_ids::REVEAL`).
+    #[cfg(feature = "desktop-wayland")]
+    pub(super) fn draw_desk_reveal(&self, s: &mut Surface) {
+        let Some((i, rv)) = self.desk_reveal() else { return };
+        let Some(d) = self.desk.as_ref() else { return };
+        let Some(w) = d.wins.get(i).copied() else { return };
+        let m = self.desk_metrics();
+        let b = revealed_win(&w, rv);
+        let (x0, width, band) = (b.r.x.max(0) as usize, b.r.w.max(0) as usize, rv.band.max(0) as usize);
+        let frame = super::ui::WINDOW_FRAME_FOCUSED.now();
+        if w.is_full_size() {
+            let cached = win_id(w.app).and_then(|id| d.window_cache.get(&id)).filter(|c| c.width == w.r.w.max(0) as usize && c.height >= band);
+            let top = b.r.y.max(0) as usize;
+            // without the window server the windows are drawn into this frame: the toolbar's rows are moved down in place
+            // (bottom row first, as the band overlaps them), before the bar is drawn over the top rows
+            let in_frame = std::env::var_os("SPRINGBOARD_WAYLAND").is_none() && s.y0 == 0 && s.h >= top + band && x0 < s.w;
+            match cached {
+                Some(c) => copy_rect(s, &c.pixels[..c.width * band], c.width, band, b.r.x, b.r.y),
+                None if in_frame => {
+                    let n = width.min(s.w - x0);
+                    for row in (0..band).rev() {
+                        let (from, to) = (row * s.stride + x0, (top + row) * s.stride + x0);
+                        s.px.copy_within(from..from + n, to);
+                    }
+                }
+                None => s.fill_rect(x0, top, width, band, frame),
+            }
+        } else {
+            s.fill_rect(x0, b.r.y.max(0) as usize, width, band, frame);
+            s.fill_rect(x0, (b.r.y + rv.band - 1).max(0) as usize, width, 1, SEPARATOR_C.now());
+            let doc = match w.app {
+                AppId::External(slot) => self.ext.get(slot as usize).and_then(Option::as_ref).map(|h| h.doc_title.clone()).filter(|t| !t.is_empty()),
+                _ => None,
+            };
+            let name = doc.unwrap_or_else(|| apps().iter().find(|a| a.id == w.app.parent()).map_or(String::new(), |a| a.name.to_string()));
+            self.label(&name, MAC_BODY_PT, Weight::Semibold, LABEL.now(), |im| s.blit(im, b.r.x + (b.r.w - im.w as i32) / 2, b.r.y + (rv.band - im.h as i32) / 2, 255, 255));
+        }
+        let hover = d.lights_hover == Some(w.app);
+        for (k, c) in [SYSTEM_RED, SYSTEM_YELLOW, SYSTEM_GREEN].into_iter().enumerate() {
+            let lr = b.light_rect_px(&m, k);
+            // a full-screen window does not minimize: its yellow light is dimmed, as the reference's is
+            let off = k == 1;
+            draw_light(s, &lr, if off { TRAFFIC_INACTIVE_C.now() } else { c }, !off, self.ui.pt(1.));
+            if hover && !off {
+                draw_light_glyph(s, &lr, k, true, self.ui.pt(1.));
+            }
+        }
     }
 
     /// `shadow` is false for a window-local image: the presenter draws the shadow around it.
@@ -6064,10 +6228,62 @@ mod tests {
 
     #[test]
     fn the_menu_bar_comes_back_only_at_the_top_edge() {
-        assert!(!bar_hidden(false, None, 24.0), "an ordinary window never hides it");
-        assert!(bar_hidden(true, None, 24.0), "no pointer seen yet: hidden");
-        assert!(bar_hidden(true, Some(400.0), 24.0));
-        assert!(!bar_hidden(true, Some(3.0), 24.0), "pointer at the top: shown");
+        assert!(!bar_hidden(false, None, 24.0, 0.0), "an ordinary window never hides it");
+        assert!(bar_hidden(true, None, 24.0, 0.0), "no pointer seen yet: hidden");
+        assert!(bar_hidden(true, Some(400.0), 24.0, 0.0));
+        assert!(!bar_hidden(true, Some(3.0), 24.0, 0.0), "pointer at the top: shown");
+        assert!(bar_hidden(true, Some(30.0), 24.0, 0.0), "under the bar with nothing revealed: hidden");
+        assert!(!bar_hidden(true, Some(30.0), 24.0, 52.0), "on the revealed toolbar: kept");
+        assert!(bar_hidden(true, Some(76.0), 24.0, 52.0), "below the revealed toolbar: hidden");
+    }
+
+    /// The reference's full screen: with the menu bar back, the window's toolbar sits directly under it (never under the
+    /// bar), its traffic lights are in that band, and a press on the band reaches the app at the toolbar row it shows.
+    #[test]
+    fn the_band_revealed_under_the_menu_bar_maps_to_the_toolbar_and_shows_the_lights() {
+        for (sw, sh, pt) in [(2560, 1440, 1.5625f32), (1920, 1080, 1.0), (3840, 2160, 2.0)] {
+            let m = metrics_for(sw, sh, pt);
+            let mut d = Desk::new();
+            d.open(&m, AppId::ExternalWindow(0, 4), (m.w / 3, m.h / 3));
+            d.wins[0].full_size = true;
+            assert!(d.set_full_screen(&m, 0, true));
+            let w = d.wins[0];
+            let rv = Reveal { top: m.menubar, band: reveal_band(&w, &m) };
+            assert_eq!(rv.band, (UNIFIED_BAR_PT * m.pt).round() as i32, "the unified toolbar's height");
+            // the menu bar's own band is not the window's, nor is the content under the band
+            assert_eq!(reveal_hit(&w, &m, rv, (m.w / 2) as f32, (m.menubar - 1) as f32), None);
+            assert_eq!(reveal_hit(&w, &m, rv, (m.w / 2) as f32, (m.menubar + rv.band) as f32), None);
+            // a point in the band is the app's at the toolbar row the band shows
+            let (x, y) = ((m.w / 2) as f32, (m.menubar + rv.band / 2) as f32);
+            assert_eq!(reveal_hit(&w, &m, rv, x, y), Some(RevealHit::App(y - m.menubar as f32)));
+            // the lights are in the band, below the bar
+            let b = revealed_win(&w, rv);
+            for (k, l) in [Light::Close, Light::Minimize, Light::Zoom].into_iter().enumerate() {
+                let lr = b.light_rect(&m, k);
+                assert!(lr.y >= m.menubar && lr.y + lr.h <= m.menubar + rv.band, "{sw}x{sh}: light {k} is inside the band");
+                let (cx, cy) = ((lr.x + lr.w / 2) as f32, (lr.y + lr.h / 2) as f32);
+                assert_eq!(reveal_hit(&w, &m, rv, cx, cy), Some(RevealHit::Light(l)));
+            }
+            // a full-screen window never starts a window server move
+            assert_eq!(drag_zone(&w, &m, &[]), (0, Vec::new()));
+        }
+    }
+
+    /// A titled window in full screen reveals its title bar under the menu bar: the lights are there, and the rest of the
+    /// strip covers content, so a press on it reaches nothing.
+    #[test]
+    fn a_titled_full_screen_window_reveals_its_title_bar_with_the_lights() {
+        let m = metrics_for(1920, 1080, 1.0);
+        let mut d = Desk::new();
+        d.open(&m, AppId::ExternalWindow(0, 4), (600, 400));
+        assert!(d.set_full_screen(&m, 0, true));
+        let w = d.wins[0];
+        assert!(!w.is_full_size());
+        let rv = Reveal { top: m.menubar, band: reveal_band(&w, &m) };
+        assert_eq!(rv.band, m.title);
+        let lr = revealed_win(&w, rv).light_rect(&m, 0);
+        assert_eq!(reveal_hit(&w, &m, rv, (lr.x + lr.w / 2) as f32, (lr.y + lr.h / 2) as f32), Some(RevealHit::Light(Light::Close)));
+        assert_eq!(reveal_hit(&w, &m, rv, (m.w / 2) as f32, (m.menubar + m.title / 2) as f32), Some(RevealHit::Bar));
     }
 
     #[test]
@@ -6381,7 +6597,7 @@ mod tests {
         assert!(d.dock_grab_magnifies());
         d.grab = Some(Grab::DockDrag { from: 1, entry: 3, rect: r, x: 0.0, y: 0.0, at_x: 40.0, at_y: 0.0, moved: true });
         assert!(!d.dock_grab_magnifies());
-        d.grab = Some(Grab::Content(AppId::Settings));
+        d.grab = Some(Grab::Content(AppId::Settings, 0.0));
         assert!(!d.dock_grab_magnifies());
     }
 
@@ -7762,5 +7978,83 @@ mod spotlight_front_tests {
         d.intent_check = true;
         sh.desk_intent_tick(120.0);
         assert!(!sh.take_raise_front(), "active: nothing to ask");
+    }
+}
+
+/// Full screen as the reference shows it: the menu bar slides in at the top edge with the window's toolbar directly
+/// under it (never under the bar), the traffic lights in that band, and both go again once the pointer leaves them.
+#[cfg(all(test, feature = "desktop-wayland"))]
+mod fullscreen_reveal_tests {
+    use super::{reveal_band, revealed_win, win_id, Grab, Light, Reveal, UNIFIED_BAR_PT};
+    use crate::bare::wayland::WindowEvent;
+    use crate::shell::tests::desktop_shell;
+    use crate::shell::{chrome_ids, AppId, Event, Screen, Shell};
+
+    fn full_screen_settings() -> Shell {
+        let mut sh = desktop_shell();
+        sh.screen = Screen::Home;
+        sh.anim = None;
+        sh.desk_open(AppId::Settings, 0.0);
+        sh.wayland_window_event(WindowEvent::Fullscreen(win_id(AppId::Settings).unwrap(), true));
+        assert!(sh.desk.as_ref().unwrap().front_full());
+        sh
+    }
+
+    #[test]
+    fn the_toolbar_comes_down_with_the_menu_bar_and_keeps_it_while_the_pointer_is_on_it() {
+        let mut sh = full_screen_settings();
+        let bar = sh.desktop_bar_height() as f32;
+        assert!(sh.desk_reveal().is_none(), "bar hidden: the toolbar is at the top with no lights");
+        sh.desktop_pointer(300.0, 2.0, false, 10.0);
+        let (i, rv) = sh.desk_reveal().expect("the bar is back, with the toolbar under it");
+        let m = sh.desk_metrics();
+        assert_eq!(rv, Reveal { top: bar as i32, band: (UNIFIED_BAR_PT * m.pt).round() as i32 }, "directly under the bar");
+        assert_eq!(rv.band, reveal_band(&sh.desk.as_ref().unwrap().wins[i], &m));
+        // down from the bar onto the revealed toolbar: both stay
+        sh.desktop_pointer(300.0, bar + rv.band as f32 / 2.0, false, 20.0);
+        assert!(!sh.desk_bar_hidden() && sh.desk_reveal().is_some(), "on the toolbar the bar stays");
+        // past the toolbar: both go
+        sh.desktop_pointer(300.0, bar + rv.band as f32 + 40.0, false, 30.0);
+        assert!(sh.desk_bar_hidden() && sh.desk_reveal().is_none());
+        // up from below onto the toolbar's rows: only the top edge brings the bar back
+        sh.desktop_pointer(300.0, bar + rv.band as f32 / 2.0, false, 40.0);
+        assert!(sh.desk_bar_hidden() && sh.desk_reveal().is_none());
+    }
+
+    #[test]
+    fn the_revealed_toolbar_is_a_surface_of_its_own_under_the_bar_and_goes_with_it() {
+        let mut sh = full_screen_settings();
+        sh.desktop_pointer(300.0, 2.0, false, 10.0);
+        let (_, rv) = sh.desk_reveal().unwrap();
+        let covered = sh.desk_regions_now().unwrap().iter().any(|&(x, y, w, h)| x <= 0 && y <= rv.top && x + w >= sh.w && y + h >= rv.top + rv.band);
+        assert!(covered, "the band is redrawn with the bar");
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let px = vec![0u32; w * h];
+        let f = sh.desktop_chrome_frames(&px, w, h).into_iter().find(|f| f.id == chrome_ids::REVEAL).expect("a surface for the band");
+        assert_eq!((f.x, f.y, f.width, f.height), (0, rv.top, w, rv.band as usize));
+        sh.desktop_pointer(300.0, (h / 2) as f32, false, 20.0);
+        assert!(sh.desktop_chrome_frames(&px, w, h).iter().all(|f| f.id != chrome_ids::REVEAL), "no band once the bar hides");
+    }
+
+    #[test]
+    fn a_press_on_the_revealed_toolbar_reaches_the_app_at_the_row_it_shows_and_the_green_light_leaves_full_screen() {
+        let mut sh = full_screen_settings();
+        sh.desktop_pointer(300.0, 2.0, false, 10.0);
+        let (i, rv) = sh.desk_reveal().unwrap();
+        let m = sh.desk_metrics();
+        let w = sh.desk.as_ref().unwrap().wins[i];
+        let (x, y) = ((m.w / 2) as f32, (rv.top + rv.band / 2) as f32);
+        sh.event(Event::Down(x, y), 100.0);
+        let dy = match sh.desk.as_ref().unwrap().grab { Some(Grab::Content(AppId::Settings, dy)) => dy, _ => panic!("the press is the app's") };
+        assert_eq!(dy, rv.top as f32, "at the toolbar row the band shows, the bar's height up");
+        sh.event(Event::Up(x, y), 110.0);
+        let lr = revealed_win(&w, rv).light_rect(&m, 2);
+        assert!(lr.y >= rv.top, "the lights are below the bar");
+        let (gx, gy) = ((lr.x + lr.w / 2) as f32, (lr.y + lr.h / 2) as f32);
+        sh.desktop_pointer(gx, gy, false, 200.0);
+        sh.event(Event::Down(gx, gy), 210.0);
+        assert!(matches!(sh.desk.as_ref().unwrap().grab, Some(Grab::Light(AppId::Settings, Light::Zoom))));
+        sh.event(Event::Up(gx, gy), 220.0);
+        assert!(!sh.desk.as_ref().unwrap().wins[i].full, "the green light takes the window out of full screen");
     }
 }

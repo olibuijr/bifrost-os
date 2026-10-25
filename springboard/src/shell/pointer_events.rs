@@ -13,7 +13,7 @@
 use bifrost_ui::pointer_event::{from_gesture, PointerEvent};
 use bifrost_ui::wheel::Phase;
 
-use super::desk::Hit;
+use super::desk::{Hit, RevealHit};
 use super::{AppId, Shell};
 
 /// The event as window `window` takes it: the main window (0) in surface pixels as given, an extra window divided by
@@ -32,7 +32,16 @@ impl Shell {
         }
         let desk = self.desk.as_ref()?;
         let m = self.desk_metrics();
-        let (i, hit) = desk.pick(&m, x, y)?;
+        // the toolbar revealed under the menu bar over a full-screen window is the app's at the row it shows; its traffic
+        // lights and a titled window's strip are the shell's (`desk::reveal_hit`)
+        let (i, hit, y) = match self.desk_reveal_at(x, y) {
+            Some((i, RevealHit::App(ly))) => (i, Hit::Content, ly),
+            Some(_) => return None,
+            None => {
+                let (i, hit) = desk.pick(&m, x, y)?;
+                (i, hit, y)
+            }
+        };
         if hit != Hit::Content {
             return None;
         }
