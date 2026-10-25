@@ -149,6 +149,10 @@ pub fn is_break(ch: char) -> bool {
     ch == LINE_BREAK || ch == PAGE_BREAK
 }
 
+/// The family Format > Make Plain Text sets: Courier, the fixed-pitch base family (drawn by an installed fixed-pitch
+/// family, `stand_in`), as the reference's plain text font is a fixed-pitch one.
+pub const PLAIN_FONT: u8 = 2;
+
 /// The point size of new text.
 pub const DEFAULT_SIZE: f32 = 12.0;
 /// The sizes Bigger and Smaller step through.
@@ -830,15 +834,19 @@ impl Text {
         f(&mut self.typing);
     }
 
-    /// Makes the document plain text: every character and paragraph loses its formatting. One undo entry.
-    /// Attachments are dropped (the caller asks first when `has_attachments`).
+    /// Makes the document plain text: every character and paragraph loses its formatting and takes the plain text
+    /// font (`PLAIN_FONT`), as the reference switches a converted document to its fixed-pitch plain text font. One
+    /// undo entry. Attachments are dropped (the caller asks first).
     pub fn make_plain(&mut self) {
         self.record(Kind::Formatting);
         self.cells.retain(|c| c.ch != OBJECT);
+        let plain = Style { font: PLAIN_FONT, ..Style::default() };
         for c in &mut self.cells {
-            c.style = Style::default();
+            c.style = plain;
         }
-        self.typing = Style::default();
+        self.typing = plain;
+        // text typed into the emptied document later takes the plain font too, not the rich text default
+        self.default_font = PLAIN_FONT;
         self.anchor = self.anchor.min(self.cells.len());
         self.head = self.head.min(self.cells.len());
     }

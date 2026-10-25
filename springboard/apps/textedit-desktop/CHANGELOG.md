@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.13.4
+
+- Format > Make Plain Text asks first, as the reference does: "Convert this document to plain text?", with OK and Cancel (it used to convert at once unless the document had attachments).
+- A converted document takes the fixed-pitch plain text font instead of keeping Helvetica.
+
 ## 1.13.3
 
 - A second document window shows one title row, like the first: it opens with full-size content, so the system draws no title bar over the window's own.

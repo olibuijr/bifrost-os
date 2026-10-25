@@ -1078,8 +1078,9 @@ impl TextEditApp {
                 true
             }
             Action::MakePlain => {
-                // attachments are dropped only after the confirmation sheet says so
-                if doc.rich && doc.text.has_attachments() {
+                // a rich document with anything in it is converted only after the confirmation sheet says so (its
+                // styles and attachments are lost), as the reference asks "Convert this document to plain text?"
+                if doc.rich && !doc.text.cells().is_empty() {
                     self.plain_sheet = true;
                     return true;
                 }
@@ -3135,7 +3136,8 @@ impl TextEditApp {
         if self.plain_sheet {
             let layout = properties::layout_rows(geom.width, geom.body_top, 1);
             let buttons = view::plain_buttons(ui, &layout);
-            view::draw_confirm(canvas, ui, &layout, "Make Plain Text", "Attachments will be removed from the document.", &buttons);
+            let attachments = active_doc(&self.docs).is_some_and(|d| d.text.has_attachments());
+            view::draw_confirm(canvas, ui, &layout, view::PLAIN_TITLE, view::plain_message(attachments), &buttons);
         }
         // the close confirmation of this window's document, over everything else in the window
         if let Some(sheet) = self.close_sheet() {
@@ -3904,6 +3906,25 @@ mod tests {
         assert_eq!(format.dropped_items(), 0);
         let out = bifrost_app::proto::app_menu_packets(&[app.file_menu(), app.text_menu(), format.clone(), app.view_menu(), app.preferences_menu()]);
         assert!(out.dropped.is_empty(), "{:?}", out.dropped);
+    }
+
+    /// E2E10 finding 7: Make Plain Text converted at once and left the text in Helvetica.
+    #[test]
+    fn make_plain_text_asks_first_and_switches_to_the_plain_text_font() {
+        let ctx = window(1200, 780);
+        let mut app = app_with_text("Hello", 0..0);
+        assert!(active_doc(&app.docs).unwrap().rich);
+        assert!(app.perform(&ctx, Action::MakePlain));
+        assert!(app.plain_sheet, "a rich document with text asks before converting");
+        assert!(active_doc(&app.docs).unwrap().rich, "nothing changes until the sheet is answered");
+        assert!(app.perform(&ctx, Action::PlainCancel));
+        assert!(!app.plain_sheet && active_doc(&app.docs).unwrap().rich, "Cancel keeps the rich text");
+        app.perform(&ctx, Action::MakePlain);
+        assert!(app.perform(&ctx, Action::PlainDone));
+        let doc = active_doc(&app.docs).unwrap();
+        assert!(!doc.rich && !app.plain_sheet);
+        assert!(doc.text.cells().iter().all(|c| c.style.font == text::PLAIN_FONT), "the text takes the plain text font");
+        assert_eq!(view::PLAIN_TITLE, "Convert this document to plain text?");
     }
 
     /// Preferences > Default Font lists every family a document can use, and choosing one keeps it.

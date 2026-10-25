@@ -866,9 +866,21 @@ pub fn spacing_buttons(ui: &Ui, l: &PanelLayout) -> Vec<Button> {
 }
 
 /// The Select Line panel's buttons.
-/// The buttons of the Make Plain Text confirmation: Remove Attachments is the default.
+/// The Make Plain Text confirmation's question, as the reference asks it.
+pub const PLAIN_TITLE: &str = "Convert this document to plain text?";
+
+/// What converting loses: the text styles, and the attachments when the document has any.
+pub fn plain_message(attachments: bool) -> &'static str {
+    if attachments {
+        "Text styles and attachments will be lost."
+    } else {
+        "Text styles such as fonts and colours will be lost."
+    }
+}
+
+/// The buttons of the Make Plain Text confirmation: OK (convert) is the default.
 pub fn plain_buttons(ui: &Ui, l: &PanelLayout) -> Vec<Button> {
-    sheet_buttons(ui, l, &[("Cancel", Action::PlainCancel, false), ("Remove Attachments", Action::PlainDone, true)])
+    sheet_buttons(ui, l, &[("Cancel", Action::PlainCancel, false), ("OK", Action::PlainDone, true)])
 }
 
 /// The confirmation sheet: its title, a one-line message in the first row, and its buttons.
