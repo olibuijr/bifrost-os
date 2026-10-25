@@ -514,58 +514,18 @@ impl Ui {
         self.font.fit_var(text, self.pt(pt), max_px, &vars(pt, weight))
     }
 
-    /// Greedy word wrap of `text` into lines no wider than `max_px`.
+    /// Greedy line wrap of `text` into lines no wider than `max_px`, at the line break opportunities of
+    /// [`crate::textbreak::wrap_paragraph`]: after spaces, between ideographs, kana and hangul (never before closing
+    /// or after opening punctuation), and between characters of a run wider than the line as a last resort. White
+    /// space, newlines included, collapses to single spaces.
     pub fn wrap(&self, text: &str, pt: f32, weight: Weight, max_px: f32) -> Vec<String> {
-        let mut lines = vec![];
-        let mut line = String::new();
-        for word in text.split_whitespace() {
-            let candidate = if line.is_empty() { word.to_string() } else { format!("{line} {word}") };
-            if !line.is_empty() && self.measure(&candidate, pt, weight) > max_px {
-                lines.push(std::mem::take(&mut line));
-                line = word.to_string();
-            } else {
-                line = candidate;
-            }
-        }
-        if !line.is_empty() {
-            lines.push(line);
-        }
-        lines
+        crate::textbreak::wrap_paragraph(text, max_px, &|s: &str| self.measure(s, pt, weight))
     }
 
-    /// Word wrap for text that comes from outside (device names, crash reasons, app names): like [`Ui::wrap`], but a
-    /// word wider than `max_px` is broken across lines, and at most `max_lines` lines are returned, the last one
-    /// ending in an ellipsis when text was dropped.
+    /// Line wrap for text that comes from outside (device names, crash reasons, app names): [`Ui::wrap`], with at most
+    /// `max_lines` lines returned, the last one ending in an ellipsis when text was dropped.
     pub fn wrap_capped(&self, text: &str, pt: f32, weight: Weight, max_px: f32, max_lines: usize) -> Vec<String> {
-        let mut lines: Vec<String> = vec![];
-        let mut line = String::new();
-        for word in text.split_whitespace() {
-            if self.measure(word, pt, weight) > max_px {
-                // break the over-wide word into chunks that each fit; the last chunk carries on as the current line
-                if !line.is_empty() {
-                    lines.push(std::mem::take(&mut line));
-                }
-                for c in word.chars() {
-                    let mut next = line.clone();
-                    next.push(c);
-                    if !line.is_empty() && self.measure(&next, pt, weight) > max_px {
-                        lines.push(std::mem::replace(&mut line, c.to_string()));
-                    } else {
-                        line = next;
-                    }
-                }
-                continue;
-            }
-            let candidate = if line.is_empty() { word.to_string() } else { format!("{line} {word}") };
-            if !line.is_empty() && self.measure(&candidate, pt, weight) > max_px {
-                lines.push(std::mem::replace(&mut line, word.to_string()));
-            } else {
-                line = candidate;
-            }
-        }
-        if !line.is_empty() {
-            lines.push(line);
-        }
+        let mut lines = self.wrap(text, pt, weight, max_px);
         if lines.len() > max_lines {
             lines.truncate(max_lines);
             if let Some(last) = lines.last_mut() {
@@ -971,15 +931,30 @@ mod tests {
     }
 
     #[test]
-    fn wrap_breaks_on_words_and_keeps_long_words() {
+    fn wrap_breaks_on_words_and_splits_long_words() {
         let ui = ui();
         let text = "Known networks will be joined automatically. If no known networks are available, you will be notified.";
         let lines = ui.wrap(text, 13.0, Weight::Regular, ui.pt(300.0));
         assert!(lines.len() >= 3, "{lines:?}");
         assert!(lines.iter().all(|l| ui.measure(l, 13.0, Weight::Regular) <= ui.pt(300.0)));
         assert_eq!(lines.join(" "), text);
-        assert_eq!(ui.wrap("supercalifragilistic", 13.0, Weight::Regular, 10.0), vec!["supercalifragilistic"]);
         assert!(ui.wrap("   ", 13.0, Weight::Regular, 100.0).is_empty());
+        // a word wider than the line breaks at the width as a last resort
+        let long = ui.wrap("supercalifragilistic", 13.0, Weight::Regular, ui.pt(40.0));
+        assert!(long.len() >= 2 && long.iter().all(|l| ui.measure(l, 13.0, Weight::Regular) <= ui.pt(40.0)), "{long:?}");
+        assert_eq!(long.concat(), "supercalifragilistic");
+    }
+
+    #[test]
+    fn wrap_breaks_cjk_text_between_characters() {
+        let ui = ui();
+        let max = ui.pt(120.0);
+        let text = "不想再收到我们的邮件？请在这里取消订阅（或点击「回复」）。";
+        let lines = ui.wrap(text, 13.0, Weight::Regular, max);
+        assert!(lines.len() >= 2, "{lines:?}");
+        assert!(lines.iter().all(|l| ui.measure(l, 13.0, Weight::Regular) <= max), "{lines:?}");
+        assert_eq!(lines.concat(), text);
+        assert!(lines.iter().all(|l| !l.starts_with('。') && !l.starts_with('？') && !l.ends_with('「')), "{lines:?}");
     }
 
     #[test]

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.17.8
+
+- Message bodies, subjects and compose fields wrap with the kit's line breaking: Chinese, Japanese and Korean text
+  breaks between characters (never before closing punctuation such as 、。」） nor after opening punctuation such as
+  「（), and a word or link wider than the pane breaks at the edge. An all-CJK paragraph ran past the reading pane
+  and was clipped.
+
 ## 0.17.7
 
 - Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.

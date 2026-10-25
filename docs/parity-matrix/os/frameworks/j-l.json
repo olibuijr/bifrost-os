@@ -1380,7 +1380,7 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/core/src/spellcheck.rs, springboard/sdk/src/spellcheck.rs, springboard/ui/src/lexical_tags.rs, springboard/ui/src/stardict.rs, springboard/ui/src/textbreak.rs",
+   "bifrost": "springboard/core/src/spellcheck.rs, springboard/sdk/src/spellcheck.rs, springboard/ui/src/lexical_tags.rs, springboard/ui/src/stardict.rs, springboard/render/src/textbreak.rs",
    "status": "parity",
    "note": "Language data assets (the index shows System/Library/LinguisticData with Latn and Cyrl data and RequiredAssets_* bundles per language) that feed spelling, tokenising and lexical tagging. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
