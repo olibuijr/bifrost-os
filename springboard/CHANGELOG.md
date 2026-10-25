@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.10.39 — 2026-10-25
+
+- Full screen: when the pointer reaches the top edge, the menu bar slides in and the window's toolbar appears directly below it with its traffic lights (green leaves full screen), instead of the menu bar covering the toolbar. Clicks on the revealed toolbar reach the app. Windows from other toolkits are unchanged.
+- Typing: a keyboard that reports each key on two interfaces (such as some gaming keyboards) no longer types every letter twice. The window server merges all keyboards into one seat keyboard, and the shell reads only the hardware button keys itself under the window server.
+
 ## 0.10.38 — 2026-10-25
 
 Fixes from the 0.10.37 end-to-end pass on Midget.
