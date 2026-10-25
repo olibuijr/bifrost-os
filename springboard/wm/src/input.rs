@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use smithay::{
     backend::input::{
-        Axis, AxisSource, ButtonState, Event, GestureBeginEvent, GestureEndEvent, GesturePinchUpdateEvent,
+        Axis, AxisSource, ButtonState, Device as _, Event, GestureBeginEvent, GestureEndEvent, GesturePinchUpdateEvent,
         GestureSwipeUpdateEvent, InputBackend, InputEvent, KeyState, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent,
         PointerMotionEvent,
     },
@@ -343,7 +343,10 @@ impl WmState {
         let seat = self.seat.clone();
         self.idle_notifier_state.notify_activity(&seat);
         match event {
-            InputEvent::Keyboard { event } => self.key(event.key_code(), event.state(), event.time_msec()),
+            InputEvent::Keyboard { event } => {
+                let device = event.device().id();
+                self.device_key(&device, event.key_code(), event.state(), event.time_msec())
+            }
             InputEvent::PointerMotion { event } => {
                 // real pointer motion shows the pointer image again after a touch (touch.rs)
                 self.last_input_touch = false;
@@ -492,6 +495,24 @@ impl WmState {
         update_constraint_focus(&pointer, None);
         pointer.motion(self, None, &MotionEvent { location: pos, serial: SERIAL_COUNTER.next_serial(), time });
         pointer.frame(self);
+    }
+
+    /// A key from one keyboard device. The devices are one seat keyboard: a press of a key another device already
+    /// holds (a keyboard that sends each key on its boot and NKRO interfaces) is not delivered again, and the release
+    /// goes out when the last device holding the key lets go. Clients repeat from the single press.
+    pub fn device_key(&mut self, device: &str, code: Keycode, state: KeyState, time: u32) {
+        if self.seat_keys.feed(device, code.raw(), state == KeyState::Pressed) {
+            self.key(code, state, time);
+        }
+    }
+
+    /// A keyboard device went away (unplugged, or the session paused): the keys only it held are released, so no key
+    /// or modifier stays stuck down on the seat.
+    pub fn keyboard_device_removed(&mut self, device: &str) {
+        let time = self.start.elapsed().as_millis() as u32;
+        for code in self.seat_keys.remove_device(device) {
+            self.key(Keycode::new(code), KeyState::Released, time);
+        }
     }
 
     pub fn key(&mut self, code: Keycode, state: KeyState, time: u32) {

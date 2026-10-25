@@ -289,6 +289,8 @@ pub fn run(socket: Option<&str>, command: &[String]) -> Result<(), Box<dyn Error
                 }
             }
             InputEvent::DeviceRemoved { device } => {
+                // its held keys are released on the seat keyboard (input.rs, `device_key`)
+                state.keyboard_device_removed(&smithay::backend::input::Device::id(&device));
                 if device.has_capability(smithay::reexports::input::DeviceCapability::Touch) {
                     state.touch_device_removed();
                 }

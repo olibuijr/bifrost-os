@@ -635,6 +635,7 @@ pub mod responder;
 pub mod undo;
 pub mod text;
 pub mod keys;
+pub mod seat_keys;
 pub mod terminal_keys;
 pub mod anim;
 pub mod angle;

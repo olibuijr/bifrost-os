@@ -201,6 +201,9 @@ pub struct WmState {
     pub seat: Seat<WmState>,
     /// Pointer gestures that are running (begin and end paired per kind; see `input.rs`).
     pub gestures: crate::input::GestureGate,
+    /// The pressed keys per keyboard device (libinput id), merged into the seat's one keyboard: a key that a
+    /// keyboard reports on two interfaces is pressed once and released when the last of them lets go (`input.rs`).
+    pub seat_keys: bifrost_ui::seat_keys::SeatKeys<String>,
     /// The fingers on the touchscreen and the one that drives an emulated pointer (`touch.rs`).
     pub contacts: crate::touch::Contacts,
     /// Touchscreens announced by the backend; the seat has the touch capability while there is one.
@@ -317,6 +320,7 @@ impl WmState {
             seat_state,
             seat,
             gestures: Default::default(),
+            seat_keys: Default::default(),
             contacts: Default::default(),
             touch_devices: Default::default(),
             last_input_touch: false,
