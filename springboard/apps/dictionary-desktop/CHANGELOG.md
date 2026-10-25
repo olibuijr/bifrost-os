@@ -6,6 +6,7 @@
 - The entry shows the headword large, with its pronunciation when the dictionary gives one, the part of speech in grey and the senses as plain text. Only the terms of cross-reference lines (Synonyms, See also, Compare) that a dictionary defines are links, not every word of the definition.
 - A window narrower than 560 pt has no sidebar and lists the matches in the content column; File > New Window opens at 720 by 560 pt.
 - Cross-reference links stay on their terms when a line breaks after a hyphen, between Chinese, Japanese or Korean characters, or inside a long word.
+- Choosing a word in the sidebar keeps the list of matches for the search. The sidebar scrolls with the wheel and by dragging when the matches do not fit, and keeps the selected word in view.
 
 ## 0.6.3
 
