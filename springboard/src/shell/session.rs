@@ -162,6 +162,25 @@ pub struct Runtime {
     pub frozen: bool,
     /// the next time the layout may be written (ms)
     pub next_at: f64,
+    /// when the login restore ran (shell ms), and the installed apps (slots) it launched
+    pub restored_at: f64,
+    pub restored_slots: Vec<u8>,
+    /// apps quit because their package was updated while they ran, waiting for the old process to go to be reopened
+    pub relaunch: Vec<Relaunch>,
+}
+
+/// An app quit to be reopened at its new version: its slot and its main window as it was.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Relaunch {
+    pub slot: u8,
+    pub frame: Option<WindowRec>,
+}
+
+/// Whether an app whose package was updated while it ran is quit and reopened now: when it is not the app in front, or
+/// when it is but the login restore started it and the person has not used the desktop since. The app in front that the
+/// person is using keeps running until they switch away, so a relaunch never happens under their hands.
+pub fn relaunch_now(front: bool, restored_untouched: bool) -> bool {
+    !front || restored_untouched
 }
 
 /// The stable id of a built-in or installed app (what `apps()` calls its icon name), or `None` for an unknown app.
@@ -207,10 +226,14 @@ impl Shell {
             return;
         }
         self.session.restoring = true;
+        self.session.restored_at = t;
         let m = self.desk_metrics();
         let mut placed = Vec::new();
         for rec in &plan {
             let Some(app) = app_of(&rec.app) else { continue };
+            if let AppId::External(slot) = app {
+                self.session.restored_slots.push(slot);
+            }
             self.desk_open(app, t);
             let Some(i) = self.desk.as_ref().and_then(|d| d.index_of(app)) else { continue };
             let (x, y, w, h) = rec.to_px((m.w, m.h));
@@ -261,6 +284,95 @@ impl Shell {
         }
     }
 
+    /// Apps updated while they ran start again at the new version. The login restore can start an app before the
+    /// background update of its package lands (the check runs while the old version is already open), and an App Store
+    /// update can replace a running app's package; the process keeps the old binary either way. Each such app is quit
+    /// (`Quit`, so it saves its state) once [`relaunch_now`] allows it, and reopened at the new version with its windows
+    /// restored, as apps updated during an OS update come back after login. Runs about once a second (`ota_tick`).
+    pub(super) fn app_update_relaunch(&mut self, t: f64) {
+        if self.desk.is_none() || self.is_locked() {
+            return;
+        }
+        let registered = super::apphost::installed();
+        // the apps quit earlier whose old process is gone are reopened
+        let mut i = 0;
+        while i < self.session.relaunch.len() {
+            let slot = self.session.relaunch[i].slot;
+            let id = registered.get(slot as usize).map(|a| a.manifest.id.as_str()).unwrap_or_default();
+            // the person opened it again meanwhile: nothing left to do
+            let reopened = self.ext.get(slot as usize).and_then(Option::as_ref).is_some_and(|h| h.running());
+            let quitting = self.dying.iter().any(|h| h.id == id && h.running());
+            if quitting && !reopened {
+                i += 1;
+                continue;
+            }
+            let r = self.session.relaunch.remove(i);
+            if reopened || registered.get(slot as usize).is_none_or(|a| a.is_removed()) {
+                continue;
+            }
+            self.relaunch_reopen(r, t);
+        }
+        let front = self.ext_fg;
+        let untouched = self.last_input <= self.session.restored_at;
+        let due: Vec<u8> = self
+            .ext
+            .iter()
+            .enumerate()
+            .filter_map(|(slot, h)| {
+                let h = h.as_ref().filter(|h| h.running())?;
+                let app = registered.get(slot).filter(|a| !a.is_removed())?;
+                let slot = u8::try_from(slot).ok()?;
+                if self.session.relaunch.iter().any(|r| r.slot == slot) || !h.is_outdated(&app.exec_path()) {
+                    return None;
+                }
+                relaunch_now(front == Some(slot), untouched && self.session.restored_slots.contains(&slot)).then_some(slot)
+            })
+            .collect();
+        for slot in due {
+            let app = AppId::External(slot);
+            let m = self.desk_metrics();
+            let frame = self
+                .desk
+                .as_ref()
+                .and_then(|d| d.index_of(app).map(|i| &d.wins[i]))
+                .map(|w| WindowRec::from_px(&key_of(app).unwrap_or_default(), (w.r.x, w.r.y, w.r.w, w.r.h), (m.w, m.h), w.maximized, w.minimized));
+            let id = registered.get(slot as usize).map(|a| a.manifest.id.as_str()).unwrap_or_default();
+            bifrost_core::log::shell_logger("session").info(format!("{id} was updated while it ran: relaunching it at the new version"));
+            self.session.relaunch.push(Relaunch { slot, frame });
+            self.desk_quit_app(slot);
+        }
+    }
+
+    /// Opens an app quit by [`Shell::app_update_relaunch`] again, telling it to restore its state, with its main window
+    /// where it was; the app in front before stays in front.
+    fn relaunch_reopen(&mut self, r: Relaunch, t: f64) {
+        let app = AppId::External(r.slot);
+        let before = self.desk.as_ref().and_then(|d| d.front()).map(|w| w.app).filter(|a| a.parent() != app);
+        self.session.restoring = true;
+        self.desk_open(app, t);
+        self.session.restoring = false;
+        let m = self.desk_metrics();
+        if let (Some(rec), Some(i)) = (r.frame, self.desk.as_ref().and_then(|d| d.index_of(app))) {
+            let (x, y, w, h) = rec.to_px((m.w, m.h));
+            if let Some(d) = self.desk.as_mut() {
+                d.place(&m, i, super::desk::Rect { x, y, w, h });
+                if rec.maximized && !d.wins[i].maximized {
+                    d.toggle_zoom(&m, i);
+                }
+                d.wins[i].minimized = rec.minimized;
+            }
+            self.desk_layout(i);
+        }
+        if let Some(front) = before {
+            if let Some(d) = self.desk.as_mut() {
+                if let Some(k) = d.index_of(front) {
+                    d.raise(k);
+                }
+            }
+        }
+        self.desk_refocus();
+    }
+
     /// True when an app launched now should restore its own state.
     pub(super) fn session_restore_flag(&self) -> bool {
         restore_flag(self.prefs.get_bool(CLOSE_ON_QUIT_PREF, false), self.session.restoring)
@@ -273,6 +385,13 @@ mod tests {
 
     fn rec(app: &str, x: i32) -> WindowRec {
         WindowRec { app: app.into(), x, y: 500, w: 6000, h: 5000, maximized: false, minimized: false, desktop: 0 }
+    }
+
+    #[test]
+    fn an_updated_app_relaunches_unless_the_person_is_using_it() {
+        assert!(relaunch_now(false, false), "in the background: quit and reopened now");
+        assert!(relaunch_now(true, true), "in front, but only the login restore opened it");
+        assert!(!relaunch_now(true, false), "in front and in use: waits until the person switches away");
     }
 
     #[test]

@@ -492,7 +492,14 @@ fn remember_incompatible(id: &str, exec: &Path) {
 
 /// True when this exact binary was already found incompatible with the shell's SDK protocol.
 pub(super) fn is_known_incompatible(id: &str, exec: &Path) -> bool {
-    INCOMPATIBLE.lock().map(|g| g.iter().any(|(i, e)| i == id && e == exec)).unwrap_or(false)
+    let exec = resolved(exec);
+    INCOMPATIBLE.lock().map(|g| g.iter().any(|(i, e)| i == id && *e == exec)).unwrap_or(false)
+}
+
+/// A binary's path with the package's `current` symlink resolved to its version folder (`apps/<id>/1.2.0/bin`), so two
+/// versions have two paths; a path that cannot be resolved (gone, or a test fixture) is kept as it is.
+pub(super) fn resolved(exec: &Path) -> PathBuf {
+    std::fs::canonicalize(exec).unwrap_or_else(|_| exec.to_path_buf())
 }
 
 /// Whether an app's request to open a web link goes through: the app must be in front, and the previous link it opened
@@ -780,7 +787,8 @@ impl AppHost {
         let mut h = AppHost::with_channel(id, mine, Some(child), cfg);
         crate::shell::services::metric_reports::note_launch(id);
         crate::shell::services::metric_reports::note_foreground(id);
-        h.exec = exec.to_path_buf();
+        // the version folder this process runs from: `current` moves on when the app is updated, this does not
+        h.exec = resolved(exec);
         h.route = route;
         h.send(&ToApp::Configure(cfg));
         Ok(h)
@@ -1007,8 +1015,10 @@ impl AppHost {
 
     /// True when the installed binary is no longer the one this process runs (the app was updated while open), so
     /// opening it again must start the new version instead of focusing the old process.
+    /// `installed` is the registry's path (`apps/<id>/current/<exec>`, the same before and after an update), so it is
+    /// compared with `current` resolved: the process keeps the version folder it was started from.
     pub fn is_outdated(&self, installed: &Path) -> bool {
-        !self.exec.as_os_str().is_empty() && self.exec != installed
+        !self.exec.as_os_str().is_empty() && self.exec != resolved(installed)
     }
 
     pub fn size(&self) -> (usize, usize) {
@@ -3206,6 +3216,27 @@ mod tests {
         assert!(host.is_outdated(new), "the installed version moved on");
         host.exec = new.to_path_buf();
         assert!(!host.is_outdated(new), "same binary: just focus it");
+    }
+
+    #[test]
+    fn an_update_that_flips_current_makes_the_running_host_outdated() {
+        // the registry names `current/<exec>` before and after an update; the host keeps the version folder it started from
+        let dir = tempfile::tempdir().unwrap();
+        let app = dir.path().join("apps/x");
+        for v in ["1.0.0", "1.1.0"] {
+            std::fs::create_dir_all(app.join(v)).unwrap();
+            std::fs::write(app.join(v).join("bin"), b"").unwrap();
+        }
+        std::os::unix::fs::symlink("1.0.0", app.join("current")).unwrap();
+        let installed = app.join("current/bin");
+        let (channel, _peer) = sys::socketpair_pair().unwrap();
+        let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
+        let mut host = AppHost::with_channel("x", channel, None, cfg);
+        host.exec = resolved(&installed);
+        assert!(!host.is_outdated(&installed), "still the installed version");
+        std::fs::remove_file(app.join("current")).unwrap();
+        std::os::unix::fs::symlink("1.1.0", app.join("current")).unwrap();
+        assert!(host.is_outdated(&installed), "current moved to 1.1.0 while 1.0.0 runs");
     }
 
     #[test]
