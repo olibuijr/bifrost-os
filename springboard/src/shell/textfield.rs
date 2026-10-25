@@ -84,6 +84,9 @@ pub struct TextField {
     undo: Option<(String, usize)>,
     /// what Undo took away, for Ctrl+Shift+Z; any new edit drops it
     redo: Option<(String, usize)>,
+    /// whether the caret blinks over the placeholder while the field is empty (false for Spotlight, which shows only
+    /// the placeholder until typing starts)
+    caret_while_empty: bool,
 }
 
 impl TextField {
@@ -109,7 +112,21 @@ impl TextField {
             menu: None,
             undo: None,
             redo: None,
+            caret_while_empty: true,
         }
+    }
+
+    /// A field that shows only its placeholder while empty: the caret appears once there is text, as the Spotlight
+    /// field does.
+    pub fn without_empty_caret(mut self) -> Self {
+        self.caret_while_empty = false;
+        self
+    }
+
+    /// Whether `draw` paints the caret at `t`: focused, in the visible half of the blink, and, for a field made
+    /// `without_empty_caret`, holding text.
+    pub fn draws_caret(&self, t: f64) -> bool {
+        self.focused && self.caret_on(t) && (self.caret_while_empty || !self.is_empty())
     }
 
     pub fn text(&self) -> &str {
@@ -607,7 +624,7 @@ impl TextField {
             for (cx, cy) in [start, end] {
                 s.fill_rrect(cx - dot / 2.0, cy - dot / 2.0, dot, dot, dot / 2.0, SELECT);
             }
-        } else if self.focused && self.caret_on(t) {
+        } else if self.draws_caret(t) {
             let ch = self.line_h(ui);
             s.fill_rrect(caret_x, mid - ch / 2.0, caret_w, ch, caret_w / 2.0, BLUE);
         }
@@ -703,6 +720,19 @@ mod tests {
 
     fn field(ui: &Ui, secure: bool) -> TextField {
         TextField::new(ui, "Password", 17.0, secure, 10)
+    }
+
+    #[test]
+    fn a_field_without_the_empty_caret_shows_it_only_once_there_is_text() {
+        let ui = ui();
+        let plain = field(&ui, false);
+        assert!(plain.draws_caret(0.0), "an ordinary empty field blinks its caret over the placeholder");
+        let mut spot = TextField::new(&ui, "Search", 17.0, false, 10).without_empty_caret();
+        assert!(!spot.draws_caret(0.0), "the empty Spotlight field shows only the placeholder");
+        spot.edit(&ui, &Out::Text("a".into()), 0.0);
+        assert!(spot.draws_caret(0.0), "the caret appears with the first character");
+        spot.set_text(&ui, "");
+        assert!(!spot.draws_caret(0.0), "clearing the field hides it again");
     }
 
     #[test]

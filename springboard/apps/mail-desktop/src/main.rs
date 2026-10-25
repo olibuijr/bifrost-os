@@ -705,6 +705,13 @@ mod tests {
         click(&mut app, &ctx, at, 1100.0);
         let viewers: Vec<u32> = app.window.as_mut().unwrap().take_viewers().iter().map(|v| v.uid).collect();
         assert_eq!(viewers, vec![9]);
+        // after Mark as Unread on the open message, opening it in its own window marks it read again
+        app.window.as_mut().unwrap().mail.set_flag_locally(9, Flag::Seen, false);
+        click(&mut app, &ctx, at, 3000.0);
+        click(&mut app, &ctx, at, 3100.0);
+        let window = app.window.as_mut().unwrap();
+        assert_eq!(window.take_viewers().iter().map(|v| v.uid).collect::<Vec<u32>>(), vec![9]);
+        assert!(window.mail.flags_of(9).is_some_and(|f| f.contains(Flag::Seen)), "the viewer marks its message read");
         // clicks a second apart are single clicks
         click(&mut app, &ctx, at, 5000.0);
         click(&mut app, &ctx, at, 6000.0);

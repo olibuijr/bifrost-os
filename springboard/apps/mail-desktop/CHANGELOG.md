@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.17.6 — 2026-10-25
+
+- Opening a message in its own window (double-click, File > Open Message, Open in New Window) marks it read, as the
+  reference does, also when it was marked unread while the reader showed it. The blue dot stayed before.
+
 ## 0.17.5 — 2026-10-24
 
 - Add to Contacts saves the sender in the contacts service's new save format, where phones and emails are labeled

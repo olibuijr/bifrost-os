@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.24.3 — 2026-10-25
+
+- Built against the SDK whose alerts wrap their title and message: the Delete Permanently alert ("This note will be deleted immediately. You can’t undo this action.") shows the whole sentence instead of cutting it off with an ellipsis. The alert already goes through the shared sheet (`widgets::sheet`, `Sheet::hit`), so its buttons follow the taller panel.
+
 ## 1.24.2 — 2026-10-24
 
 - Bold, italic, strike-through, underline, highlight and code read as rich text: the editor no longer shows their Markdown markers, the caret, clicks, Backspace and Delete pass over them, and the note list's titles and previews leave them out. The note file keeps its Markdown.

@@ -1215,7 +1215,8 @@ impl QuickSearch {
         self.mac = mac;
         self.made_k = k;
         self.chip = None;
-        self.field = if mac { TextField::new(ui, "Search", MAC_LARGE_TITLE_PT * k, false, QUERY_MAX) } else { TextField::new(ui, "Search", FIELD_TEXT_PT, false, QUERY_MAX) };
+        // Golden Gate: the empty field shows only its "Search" placeholder; the caret appears with the first character
+        self.field = if mac { TextField::new(ui, "Search", MAC_LARGE_TITLE_PT * k, false, QUERY_MAX).without_empty_caret() } else { TextField::new(ui, "Search", FIELD_TEXT_PT, false, QUERY_MAX) };
         self.search_imgs.clear();
     }
 
@@ -2786,6 +2787,20 @@ mod tests {
 
     fn type_text(sh: &mut Shell, text: &str, t: f64) {
         sh.quicksearch.key(&sh.ui, sh.h, Out::Text(text.into()), t);
+    }
+
+    #[test]
+    fn the_golden_gate_field_hides_the_caret_until_typing() {
+        let ui = ui();
+        let mut q = QuickSearch::new(&ui, 1200.0, ui.s);
+        q.field_mut().focused = true;
+        assert!(q.field_mut().draws_caret(0.0), "the tablet field keeps its caret over the placeholder");
+        q.set_mac(&ui, true);
+        let f = q.field_mut();
+        f.focused = true;
+        assert!(!f.draws_caret(0.0), "the empty Golden Gate field shows only \"Search\"");
+        f.set_text(&ui, "ab");
+        assert!(f.draws_caret(0.0), "the caret appears once there is a query");
     }
 
     #[test]
