@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.6.3
+
+- World Clock faces draw the hands as the reference does: a short thick hour hand, a long minute hand that reaches the
+  hour ticks and a thin second hand. The hour and minute hands were the same width and hard to tell apart.
+- Map labels no longer print over each other: each city's name and time try the right of its dot, then the left,
+  above and below, and a label with no free place is left out (London and Paris overlapped).
+
 ## 1.6.2
 
 - Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.

@@ -49,6 +49,15 @@ const TABLE_Y_PT: f32 = 588.0;
 const LAP_ROW_PT: f32 = 48.0;
 const CARD_MARGIN_PT: f32 = 16.0;
 const WORLD_CARD_H_PT: f32 = 300.0;
+/// World Clock face hands (Golden Gate Clock): a short thick hour hand, a long minute hand that reaches the hour
+/// ticks and a thin second hand. Lengths are fractions of the face radius, widths are points.
+const HOUR_HAND_LEN: f32 = 0.5;
+const MINUTE_HAND_LEN: f32 = 0.86;
+const SECOND_HAND_LEN: f32 = 0.9;
+const SECOND_TAIL_LEN: f32 = 0.15;
+const HOUR_HAND_W_PT: f32 = 5.0;
+const MINUTE_HAND_W_PT: f32 = 3.0;
+const SECOND_HAND_W_PT: f32 = 1.3;
 const ALARM_CARD_PT: f32 = 250.0;
 const ALARM_CARD_H_PT: f32 = 270.0;
 const ALARM_GAP_PT: f32 = 6.0;
@@ -1436,8 +1445,11 @@ impl Clock {
             let min_frac = local.min as f32 / 60.0 + local.sec as f32 / 3600.0;
             let sec_frac = local.sec as f32 / 60.0;
             let bbox = (c.0 - r, c.1 - r, 2.0 * r, 2.0 * r);
-            glyphs::paint(s, bbox, ink, glyphs::either(glyphs::segment(c, hand(hour_frac, 0.5), ui.pt(SPACE_XS)), glyphs::segment(c, hand(min_frac, 0.72), ui.pt(SPACE_XS))));
-            glyphs::paint(s, bbox, ORANGE, glyphs::either(glyphs::segment(hand(sec_frac + 0.5, 0.15), hand(sec_frac, 0.8), ui.pt(1.3)), glyphs::disc(c, ui.pt(SPACE_XS))));
+            let hour_hand = glyphs::segment(c, hand(hour_frac, HOUR_HAND_LEN), ui.pt(HOUR_HAND_W_PT));
+            let minute_hand = glyphs::segment(c, hand(min_frac, MINUTE_HAND_LEN), ui.pt(MINUTE_HAND_W_PT));
+            glyphs::paint(s, bbox, ink, glyphs::either(hour_hand, minute_hand));
+            let second_hand = glyphs::segment(hand(sec_frac + 0.5, SECOND_TAIL_LEN), hand(sec_frac, SECOND_HAND_LEN), ui.pt(SECOND_HAND_W_PT));
+            glyphs::paint(s, bbox, ORANGE, glyphs::either(second_hand, glyphs::disc(c, ui.pt(SPACE_XS))));
             let line = format!("{}, {:02}:{:02}", city.name, local.hour, local.min);
             self.dynamic(s, ui, &line, MAC_TITLE3_PT, Weight::Regular, LABEL.now(), c.0, y + ui.pt(WORLD_TIME_Y_PT), 0.5);
             let (word, diff) = tz::relative(city, unix, home);
@@ -1774,6 +1786,18 @@ pub(crate) mod tests {
 
     pub fn ui() -> Ui {
         crate::test_ui()
+    }
+
+    /// E2E8 finding 5: the hour hand is the short thick one, the minute hand the long one, the second hand the thin
+    /// one, as on the reference face.
+    #[test]
+    #[allow(clippy::assertions_on_constants)]
+    fn the_hour_hand_is_short_and_thick_and_the_minute_hand_long() {
+        assert!(HOUR_HAND_LEN < MINUTE_HAND_LEN && MINUTE_HAND_LEN < SECOND_HAND_LEN);
+        assert!(HOUR_HAND_W_PT > MINUTE_HAND_W_PT && MINUTE_HAND_W_PT > SECOND_HAND_W_PT);
+        // the minute hand reaches past the numerals (at 0.8 of the radius) but stays inside the hour ticks (0.915)
+        assert!(MINUTE_HAND_LEN > 0.8 && MINUTE_HAND_LEN < 0.915);
+        assert!(HOUR_HAND_LEN < 0.6 * MINUTE_HAND_LEN + 0.0001);
     }
 
     pub fn clock(ui: &Ui) -> Clock {

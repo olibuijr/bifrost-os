@@ -122,18 +122,59 @@ impl Clock {
         line.add_lines(&terminator(&sun, rect));
         s.stroke_path(&line, &StrokeStyle { width: ui.pt(1.0), ..Default::default() }, &Affine::IDENTITY, LABEL_3.now());
         let r = ui.pt(DOT_R_PT);
+        let name_h = ui.pt(MAC_BODY_PT);
+        let time_dy = ui.pt(MAC_BODY_PT + SPACE_XXS);
+        let label_h = time_dy + (name_h + ui.pt(MAC_FOOTNOTE_PT)) / 2.0;
+        let mut dots: Vec<Point> = Vec::new();
+        let mut sizes: Vec<(f32, f32)> = Vec::new();
+        let mut texts: Vec<(&'static str, String)> = Vec::new();
         for index in self.world.selected.clone() {
             let city = &CITIES[index];
             let Some((lat, lon)) = sun::coords(city.name) else { continue };
-            let (cx, cy) = project(rect, lat as f32, lon as f32);
-            glyphs::paint(s, (cx - r - 1.0, cy - r - 1.0, 2.0 * r + 2.0, 2.0 * r + 2.0), ORANGE, glyphs::disc((cx, cy), r));
+            dots.push(project(rect, lat as f32, lon as f32));
             let local = city.local(unix);
-            let lx = cx + r + ui.pt(DOT_LABEL_GAP_PT);
-            self.label(s, ui, city.name, MAC_BODY_PT, Weight::Semibold, LABEL.now(), lx, cy, 0.0);
             let time = format!("{:02}:{:02}", local.hour, local.min);
-            self.dynamic(s, ui, &time, MAC_FOOTNOTE_PT, Weight::Regular, LABEL.now(), lx, cy + ui.pt(MAC_BODY_PT + SPACE_XXS), 0.0);
+            let w = ui.measure(city.name, MAC_BODY_PT, Weight::Semibold).max(ui.measure(&time, MAC_FOOTNOTE_PT, Weight::Regular));
+            sizes.push((w, label_h));
+            texts.push((city.name, time));
+        }
+        for &(cx, cy) in &dots {
+            glyphs::paint(s, (cx - r - 1.0, cy - r - 1.0, 2.0 * r + 2.0, 2.0 * r + 2.0), ORANGE, glyphs::disc((cx, cy), r));
+        }
+        let places = place_labels(rect, &dots, &sizes, r, ui.pt(DOT_LABEL_GAP_PT), name_h);
+        for (place, (name, time)) in places.into_iter().zip(texts) {
+            let Some((lx, top)) = place else { continue };
+            let mid = top + name_h / 2.0;
+            self.label(s, ui, name, MAC_BODY_PT, Weight::Semibold, LABEL.now(), lx, mid, 0.0);
+            self.dynamic(s, ui, &time, MAC_FOOTNOTE_PT, Weight::Regular, LABEL.now(), lx, mid + time_dy, 0.0);
         }
     }
+}
+
+/// Where each city's label goes on the map: the top left corner of a `sizes[i]` box next to the dot at `dots[i]`
+/// (radius `dot_r`, `gap` from the box), or `None` when it has no room. Each label tries the right of its dot (name
+/// centred on the dot, `name_h` tall), then the left, above and below, and takes the first place inside `rect` that
+/// covers no dot and no label placed before it; a label with no free place is left out (its card still shows it).
+pub fn place_labels(rect: (f32, f32, f32, f32), dots: &[Point], sizes: &[(f32, f32)], dot_r: f32, gap: f32, name_h: f32) -> Vec<Option<Point>> {
+    type Box4 = (f32, f32, f32, f32);
+    let overlaps = |a: Box4, b: Box4| a.0 < b.0 + b.2 && b.0 < a.0 + a.2 && a.1 < b.1 + b.3 && b.1 < a.1 + a.3;
+    let inside = |a: Box4| a.0 >= rect.0 && a.1 >= rect.1 && a.0 + a.2 <= rect.0 + rect.2 && a.1 + a.3 <= rect.1 + rect.3;
+    let mut taken: Vec<Box4> = dots.iter().map(|&(x, y)| (x - dot_r, y - dot_r, 2.0 * dot_r, 2.0 * dot_r)).collect();
+    let clear = dot_r + gap;
+    dots.iter()
+        .zip(sizes)
+        .map(|(&(cx, cy), &(w, h))| {
+            let candidates = [
+                (cx + clear, cy - name_h / 2.0),
+                (cx - clear - w, cy - name_h / 2.0),
+                (cx - w / 2.0, cy - clear - h),
+                (cx - w / 2.0, cy + clear),
+            ];
+            let free = candidates.into_iter().find(|&(x, y)| inside((x, y, w, h)) && !taken.iter().any(|&t| overlaps((x, y, w, h), t)))?;
+            taken.push((free.0, free.1, w, h));
+            Some(free)
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -180,6 +221,45 @@ mod tests {
         let mid = t[TERMINATOR_STEPS / 2].1;
         let edge = t[0].1;
         assert!(mid > edge, "in June the terminator is lowest under the sun ({mid} vs {edge})");
+    }
+
+    /// E2E8 finding 8: London and Paris sit a few pixels apart; their labels must not print over each other.
+    #[test]
+    fn map_labels_never_overlap_each_other_or_a_dot() {
+        // the nine cities of a fresh World Clock
+        let dots: Vec<Point> = CITIES
+            .iter()
+            .take(9)
+            .filter_map(|c| sun::coords(c.name))
+            .map(|(lat, lon)| project(RECT, lat as f32, lon as f32))
+            .collect();
+        let sizes = vec![(110.0, 34.0); dots.len()];
+        let places = place_labels(RECT, &dots, &sizes, 4.0, 4.0, 16.0);
+        assert_eq!(places.len(), dots.len());
+        let boxes: Vec<(f32, f32, f32, f32)> = places.iter().zip(&sizes).filter_map(|(p, &(w, h))| p.map(|(x, y)| (x, y, w, h))).collect();
+        assert!(boxes.len() >= dots.len() - 1, "at most one label is crowded out: {places:?}");
+        let overlaps = |a: (f32, f32, f32, f32), b: (f32, f32, f32, f32)| a.0 < b.0 + b.2 && b.0 < a.0 + a.2 && a.1 < b.1 + b.3 && b.1 < a.1 + a.3;
+        for (i, &a) in boxes.iter().enumerate() {
+            assert!(a.0 >= RECT.0 && a.1 >= RECT.1 && a.0 + a.2 <= RECT.0 + RECT.2 && a.1 + a.3 <= RECT.1 + RECT.3, "{a:?} is on the map");
+            for &b in &boxes[i + 1..] {
+                assert!(!overlaps(a, b), "{a:?} and {b:?} overlap");
+            }
+            for &(x, y) in &dots {
+                assert!(!overlaps(a, (x - 4.0, y - 4.0, 8.0, 8.0)), "{a:?} covers the dot at {x},{y}");
+            }
+        }
+        // of two close cities the first keeps the right of its dot and the second moves to its left
+        let close = [(700.0, 300.0), (692.0, 306.0)];
+        let p = place_labels(RECT, &close, &[(110.0, 34.0); 2], 4.0, 4.0, 16.0);
+        assert_eq!(p, vec![Some((708.0, 292.0)), Some((692.0 - 8.0 - 110.0, 298.0))]);
+    }
+
+    #[test]
+    fn a_label_at_the_east_edge_goes_left_of_its_dot_and_one_without_room_is_left_out() {
+        let p = place_labels(RECT, &[(1430.0, 300.0)], &[(110.0, 34.0)], 4.0, 4.0, 16.0);
+        assert_eq!(p[0], Some((1430.0 - 8.0 - 110.0, 292.0)));
+        // a box wider than the map has no place
+        assert_eq!(place_labels(RECT, &[(720.0, 300.0)], &[(2000.0, 34.0)], 4.0, 4.0, 16.0), vec![None]);
     }
 
     #[test]
