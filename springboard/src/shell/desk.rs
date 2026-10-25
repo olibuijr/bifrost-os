@@ -601,7 +601,8 @@ pub fn shape_contains(shape: &[[i32; 4]], x: f32, y: f32) -> bool {
 
 pub fn full_size(app: AppId) -> bool {
     match app {
-        AppId::Settings => true,
+        // the built-in sidebar apps: the sidebar runs to the top edge under the traffic lights (no title bar)
+        AppId::Settings | AppId::AppStore => true,
         AppId::External(slot) => apphost::installed().get(slot as usize).is_some_and(|a| a.manifest.full_size_content()),
         // an extra window keeps its title bar: the app's full-size content is for its main window
         AppId::ExternalWindow(..) => false,
@@ -627,7 +628,12 @@ pub fn drag_zone(w: &Win, m: &Metrics, controls: &[bifrost_proto::Node]) -> (i32
     }
     // Settings is a built-in full-size window: it reports its toolbar controls the way an SDK app publishes them, so its
     // empty toolbar drags and the back/forward pill (and the search field) take the press (W3-3)
-    let own = (w.app == AppId::Settings).then(|| settings_toolbar_controls(w, m));
+    // so is the App Store: its sidebar search field and the pane's back control take the press
+    let own = match w.app {
+        AppId::Settings => Some(settings_toolbar_controls(w, m)),
+        AppId::AppStore => Some(super::store::toolbar_controls(w.r.w, m.pt)),
+        _ => None,
+    };
     zone_of(w, m, own.as_deref().unwrap_or(controls), full_size(w.app))
 }
 
@@ -812,12 +818,12 @@ impl Win {
                     return Some(Hit::Light(l));
                 }
             }
-            if self.app != AppId::Settings {
+            if !matches!(self.app, AppId::Settings | AppId::AppStore) {
                 // a full-size app: its unified toolbar band is the title bar; controls in it are sorted out on the press
                 return Some(if y < self.r.y as f32 + UNIFIED_BAR_PT * pt { Hit::Title } else { Hit::Content });
             }
-            // Settings: the same band and holes as the window server's drag zone (`drag_zone`), so the empty toolbar
-            // moves the window and the pill and search field get the press
+            // Settings and the App Store: the same band and holes as the window server's drag zone (`drag_zone`), so
+            // the empty toolbar moves the window and the pill, back control and search field get the press
             let (band, holes) = drag_zone(self, m, &[]);
             let (lx, ly) = (x as i32 - self.r.x, y as i32 - self.r.y);
             let on_control = holes.iter().skip(1).any(|r| lx >= r[0] && lx < r[0] + r[2] && ly >= r[1] && ly < r[1] + r[3]);
@@ -4340,6 +4346,30 @@ mod tests {
         let (cx, cy) = bifrost_ui::prefs_layout::Frame::traffic_light(0);
         assert_eq!(w.hit(&m, (r.x + px(cx)) as f32, (r.y + px(cy)) as f32), Some(Hit::Light(Light::Close)));
         assert!(holes[0][0] == 0 && holes[0][2] > 0, "the lights are a hole");
+    }
+
+    #[test]
+    fn the_app_store_is_a_full_size_window_whose_search_field_and_back_control_take_the_press() {
+        // a sidebar app: no title bar, the sidebar runs to the top under the traffic lights (N8)
+        assert!(full_size(AppId::AppStore));
+        let m = Metrics { pt: 1.5, ..metrics() };
+        assert_eq!(title_of(AppId::AppStore, &m), 0, "no title bar above the sidebar");
+        let r = Rect { x: 100, y: 50, w: 1500, h: 1000 };
+        let w = Win { app: AppId::AppStore, r, maximized: false, minimized: false, full: false, restore: r };
+        assert_eq!(w.body(&m), r, "the store draws the whole window");
+        let (band, holes) = drag_zone(&w, &m, &[]);
+        assert_eq!(band, (UNIFIED_BAR_PT * 1.5).round() as i32, "the unified toolbar band drags");
+        assert_eq!(holes.len(), 3, "the lights, the sidebar search field and the back control");
+        let px = |v: f32| (v * 1.5) as i32;
+        let side = ((200.0 * 1.5) as i32).min(r.w / 3);
+        // the search capsule's top edge is inside the band and takes the press; the empty band over the pane drags
+        assert!(!drags(band, &holes, px(60.0), px(48.0)), "the search field is not a drag area");
+        assert!(!drags(band, &holes, side + px(20.0), px(26.0)), "the back control is not a drag area");
+        assert!(drags(band, &holes, side + px(400.0), px(26.0)), "the empty band over the pane moves the window");
+        assert_eq!(w.hit(&m, (r.x + side + px(20.0)) as f32, (r.y + px(26.0)) as f32), Some(Hit::Content));
+        assert_eq!(w.hit(&m, (r.x + side + px(400.0)) as f32, (r.y + px(26.0)) as f32), Some(Hit::Title));
+        let (cx, cy) = bifrost_ui::prefs_layout::Frame::traffic_light(0);
+        assert_eq!(w.hit(&m, (r.x + px(cx)) as f32, (r.y + px(cy)) as f32), Some(Hit::Light(Light::Close)));
     }
 
     fn kit_node(role: bifrost_proto::Role, label: &str, x: f32, y: f32, w: f32, h: f32) -> bifrost_proto::Node {
