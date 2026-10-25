@@ -1222,12 +1222,35 @@ fn sheet_button(s: &mut dyn Canvas, ui: &Ui, r: Rect, b: &bifrost_ui::sheet::She
     blit(s, &img, (ui.pt(r.x + r.w / 2.0) as i32) - img.w as i32 / 2, (ui.pt(r.y) + (ui.pt(r.h) - img.h as f32) / 2.0) as i32);
 }
 
+/// The lines an alert sheet draws at panel width `panel_w_pt`: its title, and each paragraph of its message (an empty
+/// paragraph has no lines and is drawn as a blank line; an empty message has no paragraphs). Wrapped with real glyph
+/// widths (`Ui::wrap_capped`, long words broken); `sheet` draws exactly these and sizes the panel from their count.
+pub fn alert_lines(ui: &Ui, sheet: &bifrost_ui::sheet::Sheet, panel_w_pt: f32) -> (Vec<String>, Vec<Vec<String>>) {
+    let tw = ui.pt(panel_w_pt - bifrost_ui::sheet::SHEET_PAD_PT * 2.0);
+    let title = ui.wrap_capped(&sheet.title, bifrost_render::ui::MAC_HEADLINE_PT, Weight::Semibold, tw, usize::MAX);
+    let message = if sheet.message.is_empty() {
+        Vec::new()
+    } else {
+        sheet.message.split('\n').map(|para| ui.wrap_capped(para, MAC_CALLOUT_PT, Weight::Regular, tw, usize::MAX)).collect()
+    };
+    (title, message)
+}
+
 /// A sheet over `parent` (the window rectangle, points): dims and blocks the parent, then draws the panel hanging from
 /// the title bar (`titlebar_h` tall) at slide `progress` (0..1, from `motion::Kind::SheetSlide`). Alerts draw their
 /// title and message; free-form sheets draw the title and leave the area above the buttons to the caller, who gets the
 /// content rectangle back. Return/Escape and click blocking: `bifrost_ui::sheet::Sheet::key` and `::hit`.
 pub fn sheet(s: &mut dyn Canvas, ui: &Ui, parent: Rect, titlebar_h: f32, sheet: &bifrost_ui::sheet::Sheet, progress: f32, pressed: Option<u32>) -> Rect {
     use bifrost_ui::sheet::SHEET_PAD_PT;
+    // an alert is sized from the wrap it is drawn with: the measured height is recorded before the layout, so the
+    // panel, the text and the button hit areas (`Sheet::hit` reads the same record) agree
+    let alert_text = sheet.alert.then(|| {
+        let (title, message) = alert_lines(ui, sheet, sheet.size.0.min(parent.w));
+        let message_lines = message.iter().map(|lines| lines.len().max(1)).sum::<usize>();
+        let h = bifrost_ui::sheet::alert_height(title.len().max(1), message_lines);
+        bifrost_ui::sheet::record_alert_height(&sheet.title, &sheet.message, sheet.size.0, h);
+        (title, message)
+    });
     let l = sheet.layout(parent, titlebar_h, progress);
     // the sheet is a window whose buttons are its children in the accessibility tree (closed on every return below)
     bifrost_ui::ax::begin_group(bifrost_ui::Role::Window, &sheet.title, l.panel);
@@ -1247,18 +1270,16 @@ pub fn sheet(s: &mut dyn Canvas, ui: &Ui, parent: Rect, titlebar_h: f32, sheet: 
     let tw = ui.pt(l.panel.w - SHEET_PAD_PT * 2.0);
     let head_pt = bifrost_render::ui::MAC_HEADLINE_PT;
     let cx = ui.pt(l.panel.x + l.panel.w / 2.0) as i32;
-    if sheet.alert {
+    if let Some((title, message)) = &alert_text {
         use bifrost_ui::sheet::{ALERT_MESSAGE_LINE_PT, ALERT_TITLE_LINE_PT};
-        // an alert's title and message wrap, centred, never cut off: `Sheet::alert` sized the panel for every line
-        let title = ui.wrap_capped(&sheet.title, head_pt, Weight::Semibold, tw, usize::MAX);
+        // an alert's title and message wrap, centred, never cut off: the panel was sized for these very lines
         for (i, line) in title.iter().enumerate() {
             let head = ui.text(line, head_pt, Weight::Semibold, LABEL.now());
             blit(s, &head, cx - head.w as i32 / 2, ui.pt(y + i as f32 * ALERT_TITLE_LINE_PT) as i32);
         }
         y += 26.0 + title.len().saturating_sub(1) as f32 * ALERT_TITLE_LINE_PT;
-        for para in sheet.message.split('\n') {
-            let lines = ui.wrap_capped(para, MAC_CALLOUT_PT, Weight::Regular, tw, usize::MAX);
-            for line in &lines {
+        for lines in message {
+            for line in lines {
                 let t = ui.text(line, MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now());
                 blit(s, &t, cx - t.w as i32 / 2, ui.pt(y) as i32);
                 y += ALERT_MESSAGE_LINE_PT;
@@ -1951,6 +1972,32 @@ mod tests {
         let mut b = vec![0u32; w * h];
         sheet(&mut Surface { w, h, stride: w, px: &mut b, y0: 0 }, &ui, parent, 28.0, &sh, 0.0, None);
         assert_eq!(b[(btn.y + 11.0) as usize * w + (btn.x + 3.0) as usize], 0, "at progress 0 nothing is drawn");
+    }
+
+    #[test]
+    fn an_alert_of_wide_text_is_sized_from_the_wrap_it_draws_and_its_buttons_stay_clear() {
+        use bifrost_ui::sheet::{alert_height, wrapped_lines, ButtonRole, Hit, Sheet, SheetButton, SHEET_PAD_PT};
+        let ui = test_ui();
+        let (w, h) = (400usize, 600usize);
+        let parent = Rect { x: 0.0, y: 0.0, w: 400.0, h: 600.0 };
+        let (title, message) = ("WWWW MMMM WWWW MMMM WWWW", "WWWW MMMM WWWW MMMM WWWW MMMM WWWW\nMMMM WWWW MMMM WWWW MMMM WWWW MMMM");
+        let buttons = || vec![SheetButton::new(1, "OK", ButtonRole::Default), SheetButton::new(2, "Cancel", ButtonRole::Cancel)];
+        let sh = Sheet::alert(title, message, buttons());
+        let (t, m) = alert_lines(&ui, &sh, sh.size.0);
+        let drawn: usize = m.iter().map(|l| l.len().max(1)).sum();
+        assert!(drawn > wrapped_lines(message, 34), "wide glyphs wrap to more lines ({drawn}) than a character count says");
+        let mut px = vec![0u32; w * h];
+        let content = sheet(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, &ui, parent, 28.0, &sh, 1.0, None);
+        let l = sh.layout(parent, 28.0, 1.0);
+        assert_eq!(l.panel.h, alert_height(t.len(), drawn), "the panel is as tall as the lines drawn");
+        let btn_top = l.buttons[0].1.y;
+        assert!(btn_top - content.y >= 12.0, "the last line ends above the buttons: text to {}, buttons at {btn_top}", content.y);
+        assert_eq!(btn_top, l.panel.bottom() - SHEET_PAD_PT - bifrost_ui::sheet::BUTTON_H_PT);
+        // a sheet built again (as apps do each frame) hits its buttons where they were drawn
+        let again = Sheet::alert(title, message, buttons());
+        let b = l.buttons[0].1;
+        assert_eq!(again.hit(parent, 28.0, 1.0, b.x + 2.0, b.y + 2.0), Hit::Button(1));
+        assert_eq!(px[(b.y + 11.0) as usize * w + (b.x + 3.0) as usize], crate::kit::appearance::accent_now());
     }
 
     #[test]

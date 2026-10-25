@@ -631,7 +631,7 @@ pub fn drag_zone(w: &Win, m: &Metrics, controls: &[bifrost_proto::Node]) -> (i32
     // so is the App Store: its sidebar search field and the pane's back control take the press
     let own = match w.app {
         AppId::Settings => Some(settings_toolbar_controls(w, m)),
-        AppId::AppStore => Some(super::store::toolbar_controls(w.r.w, m.pt)),
+        AppId::AppStore => Some(super::store::toolbar_controls(w.r.w, m.pt, super::store::back_control_pt())),
         _ => None,
     };
     zone_of(w, m, own.as_deref().unwrap_or(controls), full_size(w.app))
@@ -1723,6 +1723,12 @@ impl Shell {
                     }
                     AppId::Settings => {
                         if let Some(side) = self.settings.as_ref().map(|st| st.sidebar_px()).filter(|&p| p > 0) {
+                            rects.push((0.0, top, side as f32, (w.r.h as f32 - top).max(0.0), 0.0, bifrost_render::glass::Kind::Sidebar, None, None));
+                        }
+                    }
+                    // the App Store's sidebar is the same `.sidebar` material (its column is painted translucent)
+                    AppId::AppStore => {
+                        if let Some(side) = self.store.as_ref().map(|st| st.sidebar_px()).filter(|&p| p > 0) {
                             rects.push((0.0, top, side as f32, (w.r.h as f32 - top).max(0.0), 0.0, bifrost_render::glass::Kind::Sidebar, None, None));
                         }
                     }
@@ -4402,11 +4408,19 @@ mod tests {
         let r = Rect { x: 100, y: 50, w: 1500, h: 1000 };
         let w = Win { app: AppId::AppStore, r, maximized: false, minimized: false, full: false, restore: r };
         assert_eq!(w.body(&m), r, "the store draws the whole window");
+        let px = |v: f32| (v * 1.5) as i32;
+        let side = ((200.0 * 1.5) as i32).min(r.w / 3);
+        // no page open: no back control, so the whole band over the pane drags
+        super::super::store::set_back_control_pt(0.0);
+        let (band, holes) = drag_zone(&w, &m, &[]);
+        assert_eq!(holes.len(), 2, "the lights and the sidebar search field");
+        assert!(drags(band, &holes, side + px(20.0), px(26.0)), "with no back control shown its place moves the window");
+        // a page is open: its back control (90 pt drawn) takes the press, and only it
+        super::super::store::set_back_control_pt(90.0);
         let (band, holes) = drag_zone(&w, &m, &[]);
         assert_eq!(band, (UNIFIED_BAR_PT * 1.5).round() as i32, "the unified toolbar band drags");
         assert_eq!(holes.len(), 3, "the lights, the sidebar search field and the back control");
-        let px = |v: f32| (v * 1.5) as i32;
-        let side = ((200.0 * 1.5) as i32).min(r.w / 3);
+        assert!(drags(band, &holes, side + px(100.0), px(26.0)), "past the back control the band drags");
         // the search capsule's top edge is inside the band and takes the press; the empty band over the pane drags
         assert!(!drags(band, &holes, px(60.0), px(48.0)), "the search field is not a drag area");
         assert!(!drags(band, &holes, side + px(20.0), px(26.0)), "the back control is not a drag area");
@@ -4415,6 +4429,7 @@ mod tests {
         assert_eq!(w.hit(&m, (r.x + side + px(400.0)) as f32, (r.y + px(26.0)) as f32), Some(Hit::Title));
         let (cx, cy) = bifrost_ui::prefs_layout::Frame::traffic_light(0);
         assert_eq!(w.hit(&m, (r.x + px(cx)) as f32, (r.y + px(cy)) as f32), Some(Hit::Light(Light::Close)));
+        super::super::store::set_back_control_pt(0.0);
     }
 
     fn kit_node(role: bifrost_proto::Role, label: &str, x: f32, y: f32, w: f32, h: f32) -> bifrost_proto::Node {
