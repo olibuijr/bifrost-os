@@ -191,11 +191,30 @@ fn set_last(message: String, ok: bool) {
 }
 
 /// A Lock Screen request waiting for the shell's tick (a service cannot return effects).
+#[cfg(not(test))]
 static LOCK: AtomicBool = AtomicBool::new(false);
+// Under test each thread has its own request: every test shell ticks `take_lock`, so a process-wide flag queued by one
+// test locked whichever parallel test's shell ticked first (the desktop lock-screen test lost its login field to it).
+#[cfg(test)]
+thread_local! {
+    static LOCK: AtomicBool = const { AtomicBool::new(false) };
+}
+
+/// Runs `f` on the Lock Screen request flag.
+fn with_lock_flag<R>(f: impl FnOnce(&AtomicBool) -> R) -> R {
+    #[cfg(not(test))]
+    {
+        f(&LOCK)
+    }
+    #[cfg(test)]
+    {
+        LOCK.with(f)
+    }
+}
 
 /// Whether a Lock Screen request came in since the last call. The shell's tick locks the screen when it did.
 pub fn take_lock() -> bool {
-    LOCK.swap(false, Ordering::AcqRel)
+    with_lock_flag(|l| l.swap(false, Ordering::AcqRel))
 }
 
 fn start_scan(scan: Scan) {
@@ -212,7 +231,7 @@ fn start_scan(scan: Scan) {
 /// Carries out a checked request.
 fn start(intent: Intent) {
     match intent {
-        Intent::Lock => LOCK.store(true, Ordering::Release),
+        Intent::Lock => with_lock_flag(|l| l.store(true, Ordering::Release)),
         Intent::VpnConnect(name) => desktop_network::send(desktop_network::Request::Vpn(VpnAction::Up(name))),
         Intent::VpnDisconnect(name) => desktop_network::send(desktop_network::Request::Vpn(VpnAction::Down(name))),
         Intent::Scan(scan) => start_scan(scan),
@@ -288,6 +307,15 @@ mod tests {
         start(Intent::Lock);
         assert!(take_lock(), "the request waits for the tick");
         assert!(!take_lock(), "and is taken once");
+    }
+
+    #[test]
+    fn a_queued_lock_under_test_stays_with_the_thread_that_queued_it() {
+        // another test's shell ticking on its own thread must not take this request (and lock its screen)
+        let _ = take_lock();
+        start(Intent::Lock);
+        assert!(!std::thread::spawn(take_lock).join().unwrap(), "another thread does not see it");
+        assert!(take_lock(), "the queuing thread still does");
     }
 
     #[test]
