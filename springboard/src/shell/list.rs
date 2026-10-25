@@ -682,6 +682,9 @@ pub struct NavBar {
     pill: bool,
     /// there is a page to go forward to: the pill's forward half is enabled
     forward: bool,
+    /// a first page with an earlier pane behind it (Settings' split layout after a pane opened from Search): the pill's
+    /// back half is enabled though the page has no back target of its own
+    earlier: bool,
 }
 
 impl NavBar {
@@ -694,6 +697,7 @@ impl NavBar {
             status_pt: STATUS_PT,
             pill: false,
             forward: false,
+            earlier: false,
         }
     }
 
@@ -702,9 +706,14 @@ impl NavBar {
         self.forward = on;
     }
 
+    /// Enables the pill's back half on a page without a back target of its own (an earlier pane is behind it).
+    pub fn set_earlier(&mut self, on: bool) {
+        self.earlier = on;
+    }
+
     /// Whether the pill's back half is enabled (there is a page to go back to).
     pub fn has_back(&self) -> bool {
-        self.back.is_some()
+        self.back.is_some() || (self.pill && self.earlier)
     }
 
     /// Whether the pill's forward half is enabled.
@@ -743,7 +752,7 @@ impl NavBar {
         if self.pill {
             // the left half of the pill
             use bifrost_ui::prefs_layout::m;
-            return self.back.is_some() && x >= ui.pt(m::TOOLBAR_X) && x < ui.pt(m::TOOLBAR_X + m::TOOLBAR_PILL_W / 2.0) && y >= ui.pt(m::TOOLBAR_Y) && y < ui.pt(m::TOOLBAR_Y + m::TOOLBAR_PILL_H);
+            return self.has_back() && x >= ui.pt(m::TOOLBAR_X) && x < ui.pt(m::TOOLBAR_X + m::TOOLBAR_PILL_W / 2.0) && y >= ui.pt(m::TOOLBAR_Y) && y < ui.pt(m::TOOLBAR_Y + m::TOOLBAR_PILL_H);
         }
         self.back.is_some() && y < self.bottom(ui) && x < ui.pt(150.0)
     }
@@ -777,8 +786,8 @@ impl NavBar {
             let (cy, a, th) = (py + ph / 2.0, ui.pt(5.5), ui.pt(1.8));
             let col = |on: bool| if on { LABEL.now() } else { LABEL_2.now() };
             let bx = px + pw * 0.27;
-            icons::line(s, (bx + a * 0.5, cy - a), (bx - a * 0.5, cy), th, col(self.back.is_some()));
-            icons::line(s, (bx - a * 0.5, cy), (bx + a * 0.5, cy + a), th, col(self.back.is_some()));
+            icons::line(s, (bx + a * 0.5, cy - a), (bx - a * 0.5, cy), th, col(self.has_back()));
+            icons::line(s, (bx - a * 0.5, cy), (bx + a * 0.5, cy + a), th, col(self.has_back()));
             // each half is enabled only while there is history that way (a page Back left, for forward)
             let fx = px + pw * 0.73;
             icons::line(s, (fx - a * 0.5, cy - a), (fx + a * 0.5, cy), th, col(self.forward));
@@ -970,6 +979,14 @@ impl ListPage {
     pub fn set_forward(&mut self, on: bool) {
         if self.nav.has_forward() != on {
             self.nav.set_forward(on);
+            self.gen = next_gen();
+        }
+    }
+
+    /// Enables the back half of the toolbar pill for an earlier pane (see `NavBar::set_earlier`).
+    pub fn set_earlier(&mut self, on: bool) {
+        if self.nav.earlier != on {
+            self.nav.set_earlier(on);
             self.gen = next_gen();
         }
     }
