@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.7
+
+- Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.
+
 ## 1.20.6
 
 - The Recently Deleted tile shows its whole name: a name too wide for the tile wraps onto two lines instead of ending in an ellipsis.

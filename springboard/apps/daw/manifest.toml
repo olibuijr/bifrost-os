@@ -1,6 +1,6 @@
 id = "is.olibuijr.daw.desktop"
 name = "DAW"
-version = "0.5.9"
+version = "0.5.10"
 exec = "bifrost-daw"
 icon = "icon.png"
 min_shell = "0.4.84"

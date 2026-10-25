@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.8
+
+- Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.
+
 ## 0.6.7
 
 - The search field edits like a standard text field: Select All (Cmd+A) selects the word so typing replaces it instead of appending, Left, Right, Home and End move the caret, Delete removes the character after it, and Cut, Copy, Paste, Undo and Redo act on the field (Copy with no selection still copies the definition).

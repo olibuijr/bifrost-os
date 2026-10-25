@@ -2,6 +2,10 @@
 
 - The web viewer uses the system font; it no longer bundles a font BifrOSt may not redistribute.
 
+## 0.2.6
+
+- Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.
+
 ## 0.2.5
 
 - Rebuilt with the current SDK: the app redraws after an action from the shell (Look Up, Services, Spotlight) and accepts the shell's account-credential connections.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.10
+
+- Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.
+
 ## 1.6.9
 
 - Rebuilt with the current SDK: the app redraws after an action from the shell (Look Up, Services, Spotlight) and accepts the shell's account-credential connections.

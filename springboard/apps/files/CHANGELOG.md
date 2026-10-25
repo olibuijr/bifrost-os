@@ -3,6 +3,10 @@
 - While a search is active the four view buttons collapse into one view pop-up, so the whole "Searching ..." title fits.
 - Generic document icons have a light folded corner instead of a black one.
 
+## 1.34.5
+
+- Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.
+
 ## 1.34.4
 
 - Rebuilt with the current SDK: the app redraws after an action from the shell (Look Up, Services, Spotlight) and accepts the shell's account-credential connections.

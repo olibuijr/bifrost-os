@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.13.7
+
+- Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.
+
 ## 1.13.6
 
 - Closing the last document closes its window too, and Text Editor keeps running with no window, as the reference does (it used to leave an empty, disabled window). Clicking its Dock icon, choosing it in the app switcher or opening it again shows a new Untitled; File > New or a file opened meanwhile brings the window back with that document (with the matching system update).

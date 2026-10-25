@@ -1,6 +1,6 @@
 [package]
 name = "bifrost-textedit"
-version = "1.13.6"
+version = "1.13.7"
 edition = "2021"
 
 [dependencies]

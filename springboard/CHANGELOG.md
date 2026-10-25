@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.10.40 — 2026-10-25
+
+- Background windows: an app behind other windows is told its new window size and redraws at it (also while suspended), the shell never paints black past an app's frame, and a window that was in full screen at shutdown comes back at its normal frame instead of filling the screen.
+- A window that changes size while covered keeps the size of the pixels it holds, so the presenter never reads past a buffer.
+- Every BifrOSt app is rebuilt with the new SDK.
+
 ## 0.10.39 — 2026-10-25
 
 - Full screen: when the pointer reaches the top edge, the menu bar slides in and the window's toolbar appears directly below it with its traffic lights (green leaves full screen), instead of the menu bar covering the toolbar. Clicks on the revealed toolbar reach the app. Windows from other toolkits are unchanged.

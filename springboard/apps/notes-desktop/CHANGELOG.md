@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.24.9
+
+- Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.
+
 ## 1.24.8
 
 - Headings show no Markdown marker: the `##` (and `###`, or a `#` after the first line) of a heading is hidden as the title's `# ` and the emphasis markers are. A click or the arrows put the caret after the hidden marker, so typing at the start of a heading stays in the heading; Backspace there turns the line into body text and Return opens a line above it.
