@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.10.37 — 2026-10-25
+
+Fixes from the 0.10.36 end-to-end pass on Midget.
+
+- Spotlight: Shortcuts, Clock, Contacts, Files and Calendar results need a real match (a prefix, a word start or a run of the text), and a shortcut run from Spotlight shows its result, or the error, in a banner.
+- Apps can close their main window and keep running; activating such an app again tells it to reopen (new ToApp::Reopen). Only an app that closed its own window is asked to reopen.
+- Heading markers are hidden at every level in markdown text, and typing over or deleting a selection that starts in a hidden marker keeps the heading; Return in an empty heading opens the line below.
+- Ships with TextEdit 1.13.6 (closing the last document closes its window; activating TextEdit again opens a new Untitled; requires shell 0.10.37) and Notes 1.24.8 (headings show no markers, list snippets drop markdown, Delete Permanently asks in an alert sheet).
+- Tests share fonts and wallpaper fixtures instead of leaking a copy per test shell, so the shell test suite fits the build host's memory again.
+
 ## 0.10.36 — 2026-10-25
 
 Fixes from the 0.10.35 end-to-end pass on Midget, a security review of the shell's connections to apps, and every BifrOSt app rebuilt.
