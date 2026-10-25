@@ -404,6 +404,8 @@ impl WmState {
         let Some(id) = Self::known_id(&window) else { return false };
         self.wm.raise_ranked(id, rank);
         self.apply_frames();
+        // the foreign-toplevel list follows the new stack, as after a placement (`place_pending`)
+        self.sync_toplevels();
         self.dirty = true;
         true
     }
@@ -555,7 +557,8 @@ impl WmState {
     pub fn layer_surface_under(&self, layer: smithay::wayland::shell::wlr_layer::Layer, pos: Point<f64, Logical>) -> Option<(WlSurface, Point<f64, Logical>)> {
         let output = self.output()?;
         let layers = layer_map_for_output(&output);
-        let found = layers.layers_on(layer).rev().find_map(|l| {
+        // the order they are drawn in, from the top (`scene::layer_surfaces_bottom_first`: z rank, then map order)
+        let found = crate::scene::layer_surfaces_bottom_first(&layers, layer).into_iter().rev().find_map(|l| {
             let geo = layers.layer_geometry(l)?;
             l.surface_under(pos - geo.loc.to_f64(), WindowSurfaceType::ALL).map(|(s, p)| (s, (p + geo.loc).to_f64()))
         });

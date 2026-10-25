@@ -22,6 +22,43 @@ struct Foreign { handle:foreign_handle::ZwlrForeignToplevelHandleV1, info:Foreig
 struct Lock { obj:lock::ExtSessionLockV1, surface:wl_surface::WlSurface, role:lock_surface::ExtSessionLockSurfaceV1, configured:bool, locked:bool }
 
 
+/// The chrome surface of the accessibility announcement caption (live captions): above every window and every other
+/// chrome surface (`chrome_z`). It was id 17, which the first cascading submenu also uses (`FLYOUT_CHROME_ID`).
+pub const CAPTION_CHROME_ID:u32=41;
+/// The chrome surface of the screen reader's focus ring: over everything, an open menu included (`chrome_z`).
+pub const FOCUS_RING_CHROME_ID:u32=42;
+/// The shell's z policy for its chrome surfaces on the Overlay layer, lowest first. The window server draws and
+/// hit-tests the surfaces of a layer by this rank, then in the order they mapped (newest on top) within a rank
+/// (bifrost-wm `scene::layer_surfaces_bottom_first`), so persistent chrome created early keeps its place under or over
+/// overlays mapped later. The rank goes in the layer surface's namespace (`chrome_namespace`).
+pub mod chrome_rank {
+    /// The system sheets and alerts (id 15, the whole screen): under the Dock, as a modal panel is under the Dock in
+    /// Golden Gate, so a sheet no longer covers it.
+    pub const MODAL:u32=5;
+    /// The Dock: under the full-screen veils that open over it (the Apps grid, Overview) and every menu and panel.
+    pub const DOCK:u32=10;
+    /// The full-screen veils: the Apps grid (8), Overview (9) and a desktop switch's sweep (10).
+    pub const VEIL:u32=20;
+    /// Menus, popups and panels (the window server's default rank, `LAYER_Z_DEFAULT`): everything not named here.
+    pub const PANEL:u32=100;
+    /// The notification banner.
+    pub const BANNER:u32=200;
+    /// The accessibility caption and the screen reader's focus ring, over everything.
+    pub const ACCESSIBILITY:u32=300;
+}
+/// The z rank of chrome surface `id` (`chrome_rank`).
+pub fn chrome_z(id:u32)->u32 {
+    match id {
+        15=>chrome_rank::MODAL,
+        2=>chrome_rank::DOCK,
+        8|9|10=>chrome_rank::VEIL,
+        crate::shell::notify::desk_banner::BANNER_CHROME_ID=>chrome_rank::BANNER,
+        CAPTION_CHROME_ID|FOCUS_RING_CHROME_ID=>chrome_rank::ACCESSIBILITY,
+        _=>chrome_rank::PANEL,
+    }
+}
+/// The layer-shell namespace of chrome surface `id`: its z rank after `.z` (bifrost-wm `scene::LAYER_Z_SUFFIX`).
+fn chrome_namespace(id:u32)->String {format!("bifrost-desktop-chrome.z{}",chrome_z(id))}
 /// A chrome surface's pixels at screen (x, y). `input` limits the pointer to a part of the surface (x, y, w, h in
 /// surface px) when the surface is larger than what takes input: a popup is exported with room for its shadow, and a
 /// click on the shadow must reach what is below. `None` takes the whole surface.
@@ -152,9 +189,10 @@ struct State {
     /// entered). The front window takes the keyboard back once the events read with it are handled, unless a press on
     /// the entered window came with them (the person clicked it: E2E N2)
     refocus:Option<(u32,u32)>,
-    /// windows the shell brought forward together (`restack`), ranked in the window server with the next `windows` call,
-    /// and the last rank sent (`set_stack_rank` ranks only grow)
-    restack:Vec<u32>, stack_rank:u32,
+    /// windows the shell brought forward together (`restack`), ranked in the window server with the next `windows` call
+    /// that lists them, each with the number of `windows` calls it has waited (`unsent_restack`), and the last rank sent
+    /// (`set_stack_rank` ranks only grow)
+    restack:Vec<(u32,u16)>, stack_rank:u32,
     wm:Option<xdg_wm_base::XdgWmBase>, seat:Option<wl_seat::WlSeat>, windows:HashMap<u32,Window>, materials:HashMap<u32,Vec<Glass>>, scale:f32, window_events:Vec<WindowEvent>, target:Option<u32>,
     compositor: Option<wl_compositor::WlCompositor>, shm: Option<wl_shm::WlShm>,
     layer: Option<layer::ZwlrLayerShellV1>, surface: Option<wl_surface::WlSurface>,
@@ -491,13 +529,16 @@ impl Display {
         }
         // bifrost_window_level_v1 set_stack_rank: windows the shell brought forward together stack in its order over other
         // clients' windows, the ones mapped already at once and the new ones when they map, in whatever order (E2E5 1, 3).
-        // Sent before the new toplevels' first buffers, so the rank is there when they map.
+        // Sent before the new toplevels' first buffers, so the rank is there when they map. A window this call does not
+        // list (its toplevel does not exist yet) keeps its rank request for a later call (`unsent_restack`).
         if !ids.is_empty() && !self.state.restack.is_empty() {
-            let want=std::mem::take(&mut self.state.restack);
+            let pending=std::mem::take(&mut self.state.restack);
             if let Some(mgr)=self.state.level_mgr.as_ref().filter(|m|m.version()>=super::window_level_client::STACK_RANK_SINCE) {
+                let want:Vec<u32>=pending.iter().map(|&(id,_)|id).collect();
                 for (id,rank) in stack_ranks(&ids,&want,&mut self.state.stack_rank) {
                     if let Some(w)=self.state.windows.get(&id) { mgr.set_stack_rank(&w.surface,rank); }
                 }
+                self.state.restack=unsent_restack(&ids,pending);
             }
         }
         if let Some(id)=activate { request_activation(&self.state,&qh,id); }
@@ -516,8 +557,13 @@ impl Display {
     /// Raises the front window over every client with the next `windows` call.
     pub fn raise_front(&mut self) {self.state.raise_front=true;}
     /// The shell brought windows `ids` forward together (the Apps grid closing, a hidden app shown, Bring All to Front):
-    /// with the next `windows` call that lists windows they are ranked in the window server, in the shell's order.
-    pub fn restack(&mut self, ids:Vec<u32>) {for id in ids {if !self.state.restack.contains(&id) {self.state.restack.push(id);}}}
+    /// with the next `windows` call that lists them they are ranked in the window server, in the shell's order. Asking
+    /// again for a window still waiting starts its wait over.
+    pub fn restack(&mut self, ids:Vec<u32>) {
+        for id in ids {
+            match self.state.restack.iter_mut().find(|(w,_)|*w==id) {Some(w)=>w.1=0,None=>self.state.restack.push((id,0))}
+        }
+    }
     /// The UI scale (px per pt) for window shadows and corner radii; until set it is derived from the title height.
     pub fn set_scale(&mut self, s:f32) {self.state.scale=s;}
     /// Golden Gate vibrancy: the window-local rects (px, with corner radius) of a window's translucent sidebar
@@ -750,7 +796,7 @@ fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_
                 w.surface.commit();
             } else {
                 let s=self.state.compositor.as_ref().unwrap().create_surface(&qh,());
-                let l=self.state.layer.as_ref().unwrap().get_layer_surface(&s,None,if frame.id==0 {layer::Layer::Top}else{layer::Layer::Overlay},"bifrost-desktop-chrome".into(),&qh,frame.id);
+                let l=self.state.layer.as_ref().unwrap().get_layer_surface(&s,None,if frame.id==0 {layer::Layer::Top}else{layer::Layer::Overlay},chrome_namespace(frame.id),&qh,frame.id);
                 l.set_size(frame.width as u32,frame.height as u32);Self::place_chrome(&l,&frame,screen,top_reserved);
                 if frame.input.is_some() {Self::set_chrome_input(self.state.compositor.as_ref(),&s,frame.input,&qh);}
                 // id 3 is Search, id 6 the assistant panel, id 8 the Apps grid, id 9 Overview and id 11 the screenshot session
@@ -1534,6 +1580,20 @@ fn keep_refocus(refocus:Option<(u32,u32)>,pressed:u32)->Option<(u32,u32)> { refo
 fn stack_ranks(ids:&[u32],want:&[u32],last:&mut u32)->Vec<(u32,u32)> {
     ids.iter().filter(|id|want.contains(id)).map(|&id|{*last=last.wrapping_add(1).max(1);(id,*last)}).collect()
 }
+/// How many `windows` calls a rank request waits for its window's toplevel (`unsent_restack`).
+const RESTACK_WAIT_CALLS:u16=120;
+/// How many rank requests wait at most; the oldest go first.
+const RESTACK_WAITING_MAX:usize=32;
+/// The rank requests `pending` (window, calls waited) that `windows` call listing `ids` could not send, because their
+/// window has no toplevel yet: they wait for a later call, one call older each, until `RESTACK_WAIT_CALLS` and at most
+/// `RESTACK_WAITING_MAX` of them (the newest kept). Taking the whole list on the first call dropped them, so a window
+/// that came back one frame after the others never got its rank and stayed under another client's window.
+fn unsent_restack(ids:&[u32],pending:Vec<(u32,u16)>)->Vec<(u32,u16)> {
+    let mut keep:Vec<(u32,u16)>=pending.into_iter().filter(|(id,_)|!ids.contains(id)).map(|(id,n)|(id,n.saturating_add(1))).filter(|&(_,n)|n<RESTACK_WAIT_CALLS).collect();
+    let extra=keep.len().saturating_sub(RESTACK_WAITING_MAX);
+    keep.drain(..extra);
+    keep
+}
 /// Asks the window server to activate (raise and focus) the shell's window `id`, with the shell's last input serial.
 fn request_activation(s:&State,qh:&QueueHandle<State>,id:u32) {
     if let (Some(activation),Some(seat),Some(surface))=(s.activation.as_ref(),s.seat.as_ref(),s.surface.as_ref()) {
@@ -1561,6 +1621,41 @@ mod tests {
         assert!(super::stack_ranks(&[4],&[5],&mut last).is_empty(),"a window not listed now gets nothing");
         let mut wrap=u32::MAX;
         assert_eq!(super::stack_ranks(&[1],&[1],&mut wrap),vec![(1,1)],"0 is no rank and is never sent");
+    }
+    /// E2E6: a window brought forward with the others whose toplevel does not exist yet keeps its rank request until a
+    /// `windows` call lists it, and the waiting list is bounded in time and length.
+    #[test]
+    fn a_restacked_window_not_listed_yet_keeps_its_rank_until_its_toplevel_exists() {
+        let mut last=0;
+        let pending=vec![(4,0),(9,0)];
+        let want:Vec<u32>=pending.iter().map(|&(id,_)|id).collect();
+        assert_eq!(super::stack_ranks(&[4,7],&want,&mut last),vec![(4,1)],"only the listed window is ranked now");
+        let pending=super::unsent_restack(&[4,7],pending);
+        assert_eq!(pending,vec![(9,1)],"window 9 waits for its toplevel");
+        let want:Vec<u32>=pending.iter().map(|&(id,_)|id).collect();
+        assert_eq!(super::stack_ranks(&[4,7,9],&want,&mut last),vec![(9,2)],"ranked once it is listed, over the earlier one");
+        assert!(super::unsent_restack(&[4,7,9],pending).is_empty(),"sent: nothing waits");
+        assert!(super::unsent_restack(&[1],vec![(9,super::RESTACK_WAIT_CALLS-1)]).is_empty(),"a window that never comes is dropped");
+        let many:Vec<(u32,u16)>=(100..100+super::RESTACK_WAITING_MAX as u32+5).map(|id|(id,0)).collect();
+        let kept=super::unsent_restack(&[1],many);
+        assert_eq!(kept.len(),super::RESTACK_WAITING_MAX);
+        assert_eq!(kept.last().map(|w|w.0),Some(100+super::RESTACK_WAITING_MAX as u32+4),"the newest requests are kept");
+    }
+    /// E2E6: the shell's chrome z policy: the Dock under the Apps grid, the grid under the menus, the menus under the
+    /// banner and the accessibility caption and focus ring over everything; the namespace carries the rank.
+    #[test]
+    fn chrome_surfaces_rank_dock_under_grid_under_menus_under_focus_ring() {
+        use super::{chrome_z,chrome_namespace,CAPTION_CHROME_ID,FOCUS_RING_CHROME_ID};
+        let (dock,grid,menu,flyout)=(chrome_z(2),chrome_z(8),chrome_z(1),chrome_z(17));
+        assert!(dock<grid,"the Dock is under the grid");
+        assert!(grid<menu&&grid<flyout,"a menu and its submenus are over the grid");
+        assert!(chrome_z(15)<dock,"a full-screen sheet does not cover the Dock");
+        let banner=chrome_z(crate::shell::notify::desk_banner::BANNER_CHROME_ID);
+        assert!(menu<banner&&banner<chrome_z(FOCUS_RING_CHROME_ID));
+        assert_eq!(chrome_z(CAPTION_CHROME_ID),chrome_z(FOCUS_RING_CHROME_ID));
+        assert!(chrome_z(FOCUS_RING_CHROME_ID)>menu,"the focus ring is over an open menu");
+        assert_eq!(chrome_namespace(FOCUS_RING_CHROME_ID),format!("bifrost-desktop-chrome.z{}",super::chrome_rank::ACCESSIBILITY));
+        assert_eq!(super::chrome_rank::PANEL,100,"the window server's default rank (LAYER_Z_DEFAULT)");
     }
     /// N11: a glass shape that went away is owed to a chrome surface under it, in the surface's own pixels and clipped
     /// to it; a shape elsewhere owes it nothing.
