@@ -7,7 +7,7 @@ use super::*;
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::controls::{Node, Rect, Role};
-use bifrost_app::kit::ui::{Weight, CONTENT_BG, LABEL, LABEL_2, SEPARATOR_C, SIDEBAR_BG, GRAY_DIM, WHITE, MAC_BODY_PT, MAC_TITLE2_PT};
+use bifrost_app::kit::ui::{Weight, CONTENT_BG, LABEL, LABEL_2, SEPARATOR_C, SIDEBAR_BG, GRAY_DIM, WHITE, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_SUBHEAD_PT, MAC_TITLE2_PT};
 use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
 use bifrost_app::widgets::{self, CAPSULE_PT, TOOLBAR_GAP_PT};
 use bifrost_app::kit::Surface;
@@ -400,19 +400,25 @@ impl Reminders {
         self.data.lists.get((id - LIST_ROW) as usize).map(|l| Target::List(l.id))
     }
 
-    /// A tile name as one or two lines no wider than `max_px`: whole words, cut with an ellipsis only when a single
-    /// word does not fit.
-    pub(super) fn tile_label_lines(ui: &Ui, label: &str, max_px: f32) -> Vec<String> {
-        let mut lines = if ui.measure(label, MAC_BODY_PT, Weight::Semibold) <= max_px {
-            vec![label.to_string()]
-        } else {
-            ui.wrap(label, MAC_BODY_PT, Weight::Semibold, max_px)
-        };
-        if lines.len() > 2 {
-            let rest = lines.split_off(1).join(" ");
-            lines.push(rest);
+    /// A tile name on one line no wider than `max_px`, as the reference tiles draw it: at body size when it fits,
+    /// otherwise shrunk a text style at a time (callout, then subhead), and only below that cut with an ellipsis.
+    /// Returns the line and the point size to draw it at.
+    pub(super) fn tile_label(ui: &Ui, label: &str, max_px: f32) -> (String, f32) {
+        for pt in [MAC_BODY_PT, MAC_CALLOUT_PT, MAC_SUBHEAD_PT] {
+            if ui.measure(label, pt, Weight::Semibold) <= max_px {
+                return (label.to_string(), pt);
+            }
         }
-        lines.iter().map(|l| ui.fit(l, MAC_BODY_PT, max_px)).collect()
+        let pt = MAC_SUBHEAD_PT;
+        let mut chars: Vec<char> = label.trim_end().chars().collect();
+        while !chars.is_empty() {
+            chars.pop();
+            let cut: String = chars.iter().collect::<String>().trim_end().to_string() + "\u{2026}";
+            if ui.measure(&cut, pt, Weight::Semibold) <= max_px {
+                return (cut, pt);
+            }
+        }
+        (String::new(), pt)
     }
 
     /// The sidebar: the smart-list tiles in their colours (count top right, name bottom left, the selected one
@@ -437,13 +443,11 @@ impl Reminders {
                 Tile::List(id) => self.list_glyph(s, ui, id, glyph_at, colour),
             }
             self.right(s, ui, &count.to_string(), MAC_TITLE2_PT, Weight::Bold, WHITE, x + w - ui.pt(SPACE_M), y + ui.pt(SPACE_S));
-            // the name sits at the tile's bottom left; one that is wider than the tile (Recently Deleted) wraps to a
-            // second line above it instead of being cut off
-            let lines = Self::tile_label_lines(ui, &label, w - ui.pt(2.0 * SPACE_M));
-            for (k, line) in lines.iter().rev().enumerate() {
-                let line_y = y + h - ui.pt(SPACE_XL + 2.0) - k as f32 * ui.pt(MAC_BODY_PT * 1.25);
-                self.text(s, ui, line, MAC_BODY_PT, Weight::Semibold, WHITE, x + ui.pt(SPACE_M), line_y);
-            }
+            // the name sits on one line at the tile's bottom left; one wider than the tile (Recently Deleted in a
+            // narrow sidebar) is drawn a text style smaller, its bottom kept where the body-size line ends
+            let (line, pt) = Self::tile_label(ui, &label, w - ui.pt(2.0 * SPACE_M));
+            let line_y = y + h - ui.pt(SPACE_XL + 2.0) + ui.pt(MAC_BODY_PT - pt);
+            self.text(s, ui, &line, pt, Weight::Semibold, WHITE, x + ui.pt(SPACE_M), line_y);
         }
         widgets::source_list(s, ui, self.lists_bounds(ui), &self.lists_source(), 0.0, None);
         // the tiles' column above My Lists keeps the sidebar colour (source_list painted only its bounds)
