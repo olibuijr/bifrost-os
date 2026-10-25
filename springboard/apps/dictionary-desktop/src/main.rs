@@ -575,7 +575,7 @@ impl DictionaryApp {
                 // links only for the terms of a cross-reference line that a dictionary defines
                 let refs: Vec<(usize, usize)> = model::cross_references(&para).into_iter().filter(|&(s, e)| self.is_link(&para[s..e])).collect();
                 let wrapped = ui.wrap(&para, size, Weight::Regular, wrap_px(SENSE_INDENT));
-                let starts = model::line_starts(&wrapped);
+                let starts = model::line_starts(&para, &wrapped);
                 for (line, start) in wrapped.into_iter().zip(starts) {
                     let links = model::clip_links(start, line.len(), &refs).into_iter().map(|(a, b, i)| (a, b, para[refs[i].0..refs[i].1].to_string())).collect();
                     out.push(Line { indent: SENSE_INDENT, links, ..Line::plain(line, size, Weight::Regular, LABEL.now(), size * LEADING) });

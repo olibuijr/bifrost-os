@@ -5,6 +5,7 @@
 - The window follows the Golden Gate Dictionary: a sidebar of the matching headwords under the traffic lights (the word on screen selected), a top bar with the title and how many were found, Back and Forward and a text size pull-down in the kit toolbar, and the kit search field at the top right. The Back and Forward buttons no longer sit under the traffic lights.
 - The entry shows the headword large, with its pronunciation when the dictionary gives one, the part of speech in grey and the senses as plain text. Only the terms of cross-reference lines (Synonyms, See also, Compare) that a dictionary defines are links, not every word of the definition.
 - A window narrower than 560 pt has no sidebar and lists the matches in the content column; File > New Window opens at 720 by 560 pt.
+- Cross-reference links stay on their terms when a line breaks after a hyphen, between Chinese, Japanese or Korean characters, or inside a long word.
 
 ## 0.6.3
 
