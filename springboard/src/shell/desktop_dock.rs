@@ -360,6 +360,18 @@ impl Shell {
   let (a,b)=if vertical{(plate.h,bar.h)}else{(plate.w,bar.w)};
   ((a-b).max(0)+1)/2+(max-rects[0].w.min(rects[0].h)).max(0)
  }
+ /// The hover label of Dock list entry `entry`: the app's name, "Applications" for the Apps grid icon (as the reference
+ /// labels it, E2E6 5), Trash, the Downloads stack, a minimized window's app, or a native client's id; empty for none.
+ pub(super) fn dock_label_text(&self,entry:usize)->String{
+  if entry<apps().len(){return apps()[entry].name.to_string();}
+  if entry==apps().len(){return "Applications".into();}
+  if entry==super::desk::DOCK_TRASH{return "Trash".into();}
+  if entry==super::dock_stack::DOCK_STACK{return "Downloads".into();}
+  if let Some(wi)=dock_min_index(entry){
+   return self.desk.as_ref().and_then(|d|d.wins.get(wi)).and_then(|w|apps().iter().find(|a|a.id==w.app)).map_or(String::new(),|a|a.name.to_string());
+  }
+  self.dock_linux_name(entry)
+ }
  /// The hover label's slot and opacity at `t` ms: fading in for the hovered slot, out for the one just left.
  pub(super) fn dock_label_state(&self,t:f64)->(Option<usize>,f32){
   let Some(d)=self.desk.as_ref()else{return(None,0.);};
@@ -412,6 +424,14 @@ fn dock_reveal(d:&mut super::desk::Desk,now:f64){
 #[cfg(test)]mod tests {
  use super::*;
 
+ /// E2E6 5: the Apps grid icon labels "Applications" on hover like every other icon labels its name; Trash keeps its own.
+ #[test]
+ fn the_apps_grid_icon_is_labelled_applications(){
+  let sh=desktop(2560,1440);
+  assert_eq!(sh.dock_label_text(apps().len()),"Applications");
+  assert_eq!(sh.dock_label_text(super::super::desk::DOCK_TRASH),"Trash");
+  assert_eq!(sh.dock_label_text(0),apps()[0].name);
+ }
  fn desktop(w:i32,h:i32)->Shell{
   let mut sh=crate::shell::tests::desktop_shell();sh.w=w;sh.h=h;
   sh.screen=crate::shell::Screen::Home;sh.anim=None;

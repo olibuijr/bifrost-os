@@ -1280,7 +1280,7 @@ fn show_pointer(s: &State, serial: u32, edge: cursor_device::Shape) {
 impl Dispatch<wl_pointer::WlPointer, ()> for State {
     fn event(s: &mut Self, _: &wl_pointer::WlPointer, e: wl_pointer::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {
         let t = super::sys::now_ms();
-        let offset = s.target.and_then(|id| s.windows.get(&id)).map(|w| (w.frame.x as f32,w.frame.y as f32)).or_else(||s.chrome_target.and_then(|id|s.chrome.get(&id)).map(|w|(w.frame.x as f32,w.frame.y as f32))).unwrap_or((0.0,0.0));
+        let offset = target_offset(s);
         if let wl_pointer::Event::Leave{..}=e {crate::shell::services::screen_sample::pointer_left();}
         match e {
             wl_pointer::Event::Enter { surface,surface_x,surface_y,serial,.. } => {
@@ -1290,6 +1290,9 @@ impl Dispatch<wl_pointer::WlPointer, ()> for State {
                 s.target = s.windows.iter().find(|(_,w)| w.surface == surface).map(|(&id,_)| id);
                 let m = s.target.and_then(|id| s.windows.get(&id)).map_or(0.0, |w| w.margin as f32);
                 s.xy = (surface_x as f32 - m,surface_y as f32 - m);
+                // an absolute pointer (a tablet, VNC, absolute uinput) jumps onto a surface with an Enter and no Motion:
+                // the Enter is a hover where it lands, or the Dock under a resting pointer never magnifies (E2E6 4)
+                if let Some(ev)=enter_hover(s.pressed,s.xy,target_offset(s),t) { s.inputs.push(ev); }
             },
             wl_pointer::Event::Motion { surface_x,surface_y,.. } => {
                 crate::shell::services::cursor_service::pointer_moved();
@@ -1573,6 +1576,15 @@ fn focus_on_configure(first:bool,activated:bool,was_activated:bool)->bool { firs
 fn follows_keyboard_enter(fresh:bool,id:u32,front:Option<u32>)->bool { !fresh || front.map_or(true,|f|f==id) }
 /// The keyboard hand-back still owed after a press on window `pressed`: none when the press is on the fresh window that
 /// just took the keyboard (the person chose it), else the one owed before.
+/// Where the surface the pointer is on sits on the screen: a window's frame origin or a chrome surface's, else 0,0.
+fn target_offset(s:&State)->(f32,f32) {
+    s.target.and_then(|id| s.windows.get(&id)).map(|w| (w.frame.x as f32,w.frame.y as f32)).or_else(||s.chrome_target.and_then(|id|s.chrome.get(&id)).map(|w|(w.frame.x as f32,w.frame.y as f32))).unwrap_or((0.0,0.0))
+}
+/// The shell event for a pointer entering a surface at `xy` (surface px) of a surface at `offset`: a hover there, as a
+/// motion would give, unless a button is down (a drag goes on with its moves).
+fn enter_hover(pressed:bool,xy:(f32,f32),offset:(f32,f32),t:f64)->Option<Event> {
+    (!pressed).then(||Event::Hover{x:xy.0+offset.0,y:xy.1+offset.1,t})
+}
 fn keep_refocus(refocus:Option<(u32,u32)>,pressed:u32)->Option<(u32,u32)> { refocus.filter(|(_,entered)|*entered!=pressed) }
 /// The `set_stack_rank` requests for the windows `want` the shell brought forward: each of them that `ids` (the shell's
 /// windows, bottom first) lists gets the next rank in that order, so the bottom one has the lowest. `last` is the last
@@ -1610,7 +1622,17 @@ fn window_buffer_count(count:usize, available:bool, dirty:bool) -> usize {
 }
 #[cfg(test)]
 mod tests {
-    use super::{dock_placement,DockEdge,DockPlacement,focus_on_configure,keep_refocus,min_size_of,DEFAULT_MIN_SIZE};
+    use super::{dock_placement,DockEdge,DockPlacement,enter_hover,focus_on_configure,keep_refocus,min_size_of,DEFAULT_MIN_SIZE};
+    /// E2E6 4: an absolute pointer arrives on a surface with an Enter alone; it is a hover at the screen point it landed
+    /// on (the Dock magnifies and labels the icon under it), and nothing while a button is held.
+    #[test]
+    fn a_pointer_entering_a_surface_hovers_where_it_landed() {
+        match enter_hover(false,(10.0,20.0),(100.0,1300.0),5.0) {
+            Some(crate::bare::input::Event::Hover{x,y,t}) => assert_eq!((x,y,t),(110.0,1320.0,5.0)),
+            other => panic!("expected a hover, got {other:?}"),
+        }
+        assert!(enter_hover(true,(10.0,20.0),(0.0,0.0),5.0).is_none(),"a drag keeps going with its moves");
+    }
     /// E2E5 1, 3: the windows the shell brought forward are ranked in its stacking order (bottom first), whatever order
     /// it named them in; windows it did not name get none, and the ranks keep growing from one set to the next.
     #[test]

@@ -308,6 +308,26 @@ pub(super) struct AppGrid {
     pub(super) saved: Vec<(AppId, bool)>,
     /// the other client's window that was active when the grid opened (the app whose menus the bar shows), if any
     bar_foreign: Option<u32>,
+    /// how far the grid is shown (0..1) as last drawn: the backdrop fades with it (`overlay_backdrop`)
+    veil: f32,
+}
+
+/// The dim the open grid lays over the whole desktop behind it (premultiplied black at this alpha, 35%): the windows of
+/// other clients, which the grid cannot hide as it hides the shell's, go dim behind it as the reference's desktop
+/// does behind its blur (E2E6 6).
+const BACKDROP_ALPHA: f32 = 89.0;
+
+/// Lays a black veil of `alpha` (0..255) under the premultiplied pixels `px` (source-over of `px` on the veil): clear
+/// pixels become the veil, opaque ones stay as they are.
+fn backdrop_under(px: &mut [u32], alpha: u32) {
+    if alpha == 0 {
+        return;
+    }
+    for p in px {
+        let a = *p >> 24;
+        let out = a + (alpha.min(255) * (255 - a) + 127) / 255;
+        *p = (*p & 0x00ff_ffff) | (out.min(255) << 24);
+    }
 }
 
 fn catalogue() -> Vec<(String, String)> {
@@ -697,6 +717,15 @@ impl AppGrid {
         mask
     }
 
+    /// Puts the backdrop under the exported surface's masked pixels (`overlay_mask`): the whole veil dims what is behind
+    /// it, faded with the grid's opening and closing.
+    #[allow(dead_code)] // the window-server export is the desktop-wayland build's
+    pub(super) fn overlay_backdrop(&self, px: &mut [u32]) {
+        if self.open {
+            backdrop_under(px, (BACKDROP_ALPHA * self.veil.clamp(0.0, 1.0)).round() as u32);
+        }
+    }
+
     fn dot_at(&self, lay: &Lay, pages: usize, x: f32, y: f32) -> Option<usize> {
         if pages < 2 || (y - lay.dots_y).abs() > 14.0 * lay.pt {
             return None;
@@ -762,6 +791,7 @@ impl AppGrid {
             }
             None => opening,
         };
+        self.veil = p;
         let a = (255.0 * p) as u32;
         let ui = &sh.ui;
         // the capsule header: glass like the Search field, the store glyph, the query (or its placeholder) and "..."
@@ -923,6 +953,30 @@ impl AppGrid {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// E2E6 6: the grid's surface no longer leaves the desktop around it clear (another client's window showed there
+    /// as if the grid were not open): clear pixels become the dim veil, the opaque capsule and panel are untouched, an
+    /// anti-aliased edge sits over the veil, and a grid fading to nothing lays no veil.
+    #[test]
+    fn the_backdrop_dims_what_the_grid_leaves_clear() {
+        let mut px = vec![0u32, 0xff20_3040, 0x8010_1010];
+        backdrop_under(&mut px, 89);
+        assert_eq!(px[0], 89 << 24, "clear: premultiplied black at the veil's alpha");
+        assert_eq!(px[1], 0xff20_3040, "opaque: as drawn");
+        assert_eq!(px[2] & 0x00ff_ffff, 0x0010_1010, "an edge keeps its colour");
+        assert!((px[2] >> 24) > 0x80 && (px[2] >> 24) < 0xff, "and gains the veil under it");
+        let mut clear = vec![0u32; 4];
+        backdrop_under(&mut clear, 0);
+        assert!(clear.iter().all(|&p| p == 0));
+        let mut grid = AppGrid::default();
+        let mut px = vec![0u32; 2];
+        grid.overlay_backdrop(&mut px);
+        assert!(px.iter().all(|&p| p == 0), "a closed grid exports no veil");
+        grid.open = true;
+        grid.veil = 1.0;
+        grid.overlay_backdrop(&mut px);
+        assert!(px.iter().all(|&p| p == (BACKDROP_ALPHA as u32) << 24), "fully open: the whole veil");
+    }
 
     fn all() -> Vec<(String, String)> {
         ["Settings", "Term", "Photos", "Files", "App Store"].iter().map(|n| (n.to_lowercase().replace(' ', "."), n.to_string())).collect()

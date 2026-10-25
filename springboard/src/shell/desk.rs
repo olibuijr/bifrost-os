@@ -1955,6 +1955,9 @@ impl Shell {
             // the compositor hands focus back to a window when a menu or sheet closes; on a locked screen that must not
             // lift the window over the lock (Lock Screen from the System menu closes the menu in the same turn); an extra window
             // focuses the app that opened it, because the routing sites match the parent (`desk_refocus` does the same)
+            // the app just launched above it (no frame yet, so no toplevel) stays the front app: the focus the window
+            // server hands back as Spotlight or the Apps grid closes went to the window it still knows in front (E2E6 1)
+            WindowEvent::Focus(_) if self.desk_launching_above(i) => {},
             WindowEvent::Focus(_) => { self.desk.as_mut().unwrap().raise(i); if !self.is_locked() { self.screen = Screen::App(app.parent()); } self.dirty = true; },
             WindowEvent::Close(_) => self.desk_close_app(app),
             // a full-screen window keeps the zoom it goes back to (`set_full_screen`): the window server's maximize state
@@ -3597,6 +3600,28 @@ impl Shell {
         }
     }
 
+    /// True when `app`'s window waits for the first frame of an app that is running: a launch (or a new extra window) in
+    /// progress. A window whose process is gone is not launching.
+    #[cfg(feature = "desktop-wayland")]
+    pub(super) fn desk_window_launching(&self, app: AppId) -> bool {
+        match app {
+            AppId::External(slot) => self.ext.get(slot as usize).and_then(Option::as_ref).is_some_and(|h| h.running() && !h.incompatible && h.frame().is_none() && !h.between_buffers()),
+            AppId::ExternalWindow(slot, id) => self.ext.get(slot as usize).and_then(Option::as_ref).is_some_and(|h| h.running() && !h.window_mapped(u32::from(id))),
+            _ => false,
+        }
+    }
+
+    /// True when the shown windows above window `i` are all still launching (`desk_window_launching`), at least one of
+    /// them: the window server has no toplevel for them yet, so `i` is the front it knows, and a focus it hands back to
+    /// `i` (Spotlight or the Apps grid closing, a menu closing) is not a choice of the person to put `i` over the app
+    /// that was just opened (E2E6 1).
+    #[cfg(feature = "desktop-wayland")]
+    pub(super) fn desk_launching_above(&self, i: usize) -> bool {
+        let Some(d) = self.desk.as_ref() else { return false };
+        let mut above = d.wins.iter().skip(i + 1).filter(|w| !w.minimized).peekable();
+        above.peek().is_some() && above.all(|w| self.desk_window_launching(w.app))
+    }
+
     /// Recomputes `Desk::unmapped` from the app hosts; a window that just gained its first frame is repainted.
     pub(super) fn desk_refresh_unmapped(&mut self) {
         let Some(d) = self.desk.as_ref() else { return };
@@ -4150,11 +4175,7 @@ impl Shell {
         let (label_slot, label_alpha) = self.dock_label_state(t);
         if let Some(k) = label_slot.filter(|_| desk.grab.is_none()) {
             if let (Some(r), Some(&i)) = (rects.get(k), list.get(k)) {
-                let name: String = if i < apps().len() { apps()[i].name.to_string() }
-                    else if i == DOCK_TRASH { "Trash".into() }
-                    else if i == super::dock_stack::DOCK_STACK { "Downloads".into() }
-                    else if let Some(wi) = super::desktop_dock::dock_min_index(i) { desk.wins.get(wi).and_then(|w| apps().iter().find(|a| a.id == w.app)).map_or(String::new(), |a| a.name.to_string()) }
-                    else { self.dock_linux_name(i) };
+                let name = self.dock_label_text(i);
                 if !name.is_empty() && label_alpha > 0.0 {
                     self.draw_dock_label(s, &name, *r, self.dock_preferences().position, label_alpha, MENU_TINT.now(), LABEL.now());
                 }
@@ -6759,5 +6780,41 @@ mod w4_window_tests {
         assert!(d.index_of(AppId::Terminal).is_none(), "the Terminal's window closed");
         assert!(!minimized(&sh, AppId::Settings), "Settings stays on the desktop");
         assert_eq!(sh.screen, crate::shell::Screen::App(AppId::Settings));
+    }
+}
+
+#[cfg(all(test, feature = "desktop-wayland"))]
+mod launch_front_tests {
+    use crate::shell::tests::{desktop_shell, fixture_app, hand_back_after_launch};
+    use crate::shell::{AppId, Screen};
+
+    /// E2E6 1: a Dock click on an app that is not running yet opens it in front, and the keyboard the window server
+    /// hands back to the window it still knows in front does not put that window over the launching app.
+    #[test]
+    fn a_dock_launch_stays_in_front_through_a_keyboard_hand_back() {
+        let mut sh = desktop_shell();
+        sh.screen = Screen::Home;
+        sh.anim = None;
+        let _peer = fixture_app(&mut sh);
+        sh.desk_open(AppId::Settings, 0.0);
+        sh.desk_dock_tap(AppId::External(0), 1.0);
+        assert_eq!(hand_back_after_launch(&mut sh), (Some(AppId::External(0)), Screen::App(AppId::External(0))));
+    }
+
+    /// The guard holds only while every window above is still launching: a drawn window above (a built-in) leaves the
+    /// hand-back as it was, a raise of the window it names.
+    #[test]
+    fn a_hand_back_with_a_drawn_window_above_still_raises() {
+        let mut sh = desktop_shell();
+        sh.screen = Screen::Home;
+        sh.anim = None;
+        let _peer = fixture_app(&mut sh);
+        sh.desk_open(AppId::Settings, 0.0);
+        sh.desk_open(AppId::External(0), 1.0);
+        let m = sh.desk_metrics();
+        sh.desk.as_mut().unwrap().open(&m, AppId::Magnifier, (600, 400));
+        let i = sh.desk.as_ref().unwrap().index_of(AppId::Settings).unwrap();
+        assert!(!sh.desk_launching_above(i), "the built-in above draws its own content");
+        assert_eq!(hand_back_after_launch(&mut sh), (Some(AppId::Settings), Screen::App(AppId::Settings)));
     }
 }

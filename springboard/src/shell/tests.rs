@@ -965,11 +965,37 @@
     /// A fixture host standing for a running external app in slot 0.
     #[cfg(feature="desktop-wayland")]
     #[allow(dead_code)]
-    fn fixture_app(sh:&mut Shell)->bifrost_proto::sys::Channel{
+    pub(super) fn fixture_app(sh:&mut Shell)->bifrost_proto::sys::Channel{
         let (mine,theirs)=bifrost_proto::sys::socketpair_pair().unwrap();
         let host=apphost::AppHost::with_channel("fixture",mine,None,bifrost_proto::Configure{w:100,h:100,scale:1.,safe_top:0.,safe_bottom:0.,dark:true,text_scale:1.,reduce_motion:false});
         sh.ext.push(Some(host));
         theirs
+    }
+
+    /// E2E6 1: an app opened while it has drawn nothing yet (its process just started) is the front app, and the focus
+    /// the window server hands back to the window it still knows in front (Spotlight or the Apps grid closing takes its
+    /// exclusive keyboard away) does not put that window over it. Once the app is gone, the hand-back raises as before.
+    /// Returns the front app and the screen after the hand-back.
+    #[cfg(feature="desktop-wayland")]
+    pub(super) fn hand_back_after_launch(sh:&mut Shell)->(Option<AppId>,Screen){
+        let id=desk::win_id(AppId::Settings).unwrap();
+        sh.wayland_window_event(crate::bare::wayland::WindowEvent::Focus(id));
+        (sh.desk.as_ref().unwrap().front().map(|w|w.app),sh.screen)
+    }
+
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn an_app_launched_over_the_front_window_stays_in_front_when_the_keyboard_is_handed_back() {
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        let _peer=fixture_app(&mut sh);
+        sh.desk_open(AppId::Settings,0.);
+        // the open-app control and Files' Open With both end in `desktop_open_app`, which opens through `desk_open`
+        sh.desk_open(AppId::External(0),1.);
+        assert!(sh.desk_window_launching(AppId::External(0)),"the app has drawn nothing yet");
+        assert_eq!(hand_back_after_launch(&mut sh),(Some(AppId::External(0)),Screen::App(AppId::External(0))),"the launched app stays the front app");
+        // an app whose process is gone holds nothing: the hand-back raises the window under it
+        sh.ext[0].as_mut().unwrap().kill();
+        assert_eq!(hand_back_after_launch(&mut sh),(Some(AppId::Settings),Screen::App(AppId::Settings)));
     }
 
     /// An app that exits without the shell's `pump` seeing it (a failed send, a stall kill) takes its main and extra
