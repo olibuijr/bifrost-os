@@ -602,12 +602,26 @@ pub fn shape_contains(shape: &[[i32; 4]], x: f32, y: f32) -> bool {
     shape.iter().any(|r| x >= r[0] as f32 && x < (r[0] + r[2]) as f32 && y >= r[1] as f32 && y < (r[1] + r[3]) as f32)
 }
 
+/// Whether the Photos window is full-size: on the desktop form factor, read from the process's form factor (fixed for
+/// the life of the shell) rather than from Photos' own state, so it holds before Photos is first opened and never goes
+/// stale. Tests switch Photos' layout on and off themselves (`Photos::set_desktop`), so they read that.
+fn photos_full_size() -> bool {
+    #[cfg(test)]
+    {
+        super::photos::sidebar::sidebar_layout()
+    }
+    #[cfg(not(test))]
+    {
+        bifrost_ui::form_factor::FormFactor::current().is_desktop()
+    }
+}
+
 pub fn full_size(app: AppId) -> bool {
     match app {
         // the built-in sidebar apps: the sidebar runs to the top edge under the traffic lights (no title bar)
         AppId::Settings | AppId::AppStore => true,
         // Photos on the desktop form factor: its source list runs to the top edge (the tablet keeps the title bar)
-        AppId::Photos => super::photos::sidebar::sidebar_layout(),
+        AppId::Photos => photos_full_size(),
         AppId::External(slot) => apphost::installed().get(slot as usize).is_some_and(|a| a.manifest.full_size_content()),
         // an extra window keeps its title bar: the app's full-size content is for its main window
         AppId::ExternalWindow(..) => false,

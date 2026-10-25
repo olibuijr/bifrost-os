@@ -72,7 +72,7 @@ impl Shell {
         if self.desktop_menu_wheel(x, y, dy) {
             return true;
         }
-        if self.settings_wheel(x, y, dy, t) {
+        if self.settings_wheel(x, y, dy, t) || self.photos_wheel(x, y, dy, t) {
             return true;
         }
         let Some((slot, window, lx, ly)) = self.ext_content_at(x, y) else { return false };
@@ -98,6 +98,27 @@ impl Shell {
         let Some(win) = desk.wins.get(i).filter(|w| w.app == AppId::Settings) else { return false };
         let body = win.body(&m);
         if !self.settings.as_mut().is_some_and(|st| st.wheel(x - body.x as f32, dy)) {
+            return false;
+        }
+        self.swallow_wheel_drag(t);
+        self.dirty = true;
+        true
+    }
+
+    /// The wheel over the Photos window's source list scrolls the list (`Photos::side_wheel`), and the drag emulated for
+    /// it is dropped, as for Settings, so the notch does not scroll it twice or press a row. Over the pane the emulated
+    /// drag scrolls the grid as before.
+    fn photos_wheel(&mut self, x: f32, y: f32, dy: f32, t: f64) -> bool {
+        if !self.desk_active() || self.is_locked() {
+            return false;
+        }
+        let Some(desk) = self.desk.as_ref() else { return false };
+        let m = self.desk_metrics();
+        let Some((i, Hit::Content)) = desk.pick(&m, x, y) else { return false };
+        let Some(win) = desk.wins.get(i).filter(|w| w.app == AppId::Photos) else { return false };
+        let body = win.body(&m);
+        let ui = &self.ui;
+        if !self.photos.as_mut().is_some_and(|p| p.side_wheel(ui, x - body.x as f32, dy)) {
             return false;
         }
         self.swallow_wheel_drag(t);
