@@ -3667,4 +3667,20 @@ mod dock_and_scroll_tests {
         sh.quicksearch.key(&sh.ui, sh.h, Out::Text("t".into()), 3100.0);
         assert_eq!(sh.quicksearch.scroll, 0.0);
     }
+
+    /// E2E6 1: an app opened from Search on the desktop is the front app. Search held the keyboard exclusively, so as it
+    /// closes the window server hands the keyboard back to the window it still knows in front (the launched app has no
+    /// toplevel until it draws); that hand-back must not lift Settings over the app (Calculator opened under Settings).
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn an_app_opened_from_search_on_the_desktop_stays_in_front_when_search_closes() {
+        let mut sh = super::super::tests::desktop_shell();
+        sh.screen = Screen::Home;
+        sh.anim = None;
+        let _peer = super::super::tests::fixture_app(&mut sh);
+        sh.desk_open(AppId::Settings, 0.0);
+        let _ = sh.quicksearch_act(Hit::App(AppId::External(0)), 1.0);
+        assert!(!sh.quicksearch.active(), "Search closes as the app opens");
+        assert_eq!(super::super::tests::hand_back_after_launch(&mut sh), (Some(AppId::External(0)), Screen::App(AppId::External(0))));
+    }
 }
