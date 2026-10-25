@@ -4424,7 +4424,13 @@ impl Shell {
             }
         } else {
             s.fill_rect(x0, b.r.y.max(0) as usize, width, band, frame);
+        }
+        // the hairline under a toolbar or title bar (the kit's `toolbar_band` draws it on the band's last row), across
+        // the whole band: it now sits over content, so it also parts the band from the rows under it
+        if band > 0 {
             s.fill_rect(x0, (b.r.y + rv.band - 1).max(0) as usize, width, 1, SEPARATOR_C.now());
+        }
+        if !w.is_full_size() {
             let doc = match w.app {
                 AppId::External(slot) => self.ext.get(slot as usize).and_then(Option::as_ref).map(|h| h.doc_title.clone()).filter(|t| !t.is_empty()),
                 _ => None,
@@ -8116,6 +8122,21 @@ mod fullscreen_reveal_tests {
             let _ = r.finish();
         }
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_revealed_toolbar_ends_in_the_separator_hairline() {
+        let mut sh = full_screen_settings();
+        sh.desktop_pointer(300.0, 2.0, false, 10.0);
+        let (_, rv) = sh.desk_reveal().unwrap();
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let mut px = vec![0u32; w * h];
+        let mut s = crate::gfx::Surface { w, h, stride: w, px: &mut px, y0: 0 };
+        sh.draw_desk_reveal(&mut s);
+        let sep = crate::shell::ui::SEPARATOR_C.now();
+        let last = (rv.top + rv.band - 1) as usize;
+        assert!([w / 2, w - 1].iter().all(|&x| px[last * w + x] == sep), "a hairline across the band's last row");
+        assert_ne!(px[(last - 1) * w + w / 2], sep, "on that row only");
     }
 
     #[test]
