@@ -2,7 +2,8 @@
 //! connection, newline-terminated, on an owner-only Unix socket. The SDK
 //! serves it from the app's main loop, so handlers run on the thread that owns
 //! the app state. Only the owning UID may connect (SO_PEERCRED); root too when the app runs outside a user namespace
-//! (root can do anything to it there anyway). The shell dials sandboxed apps with the account's credentials.
+//! (root can do anything to it there anyway). The shell dials sandboxed apps with the account's credentials: it
+//! switches only its effective ids for the connect, and SO_PEERCRED reports those, so the app sees the account.
 
 use bifrost_core::json::{self, Json};
 use std::ffi::c_void;
@@ -29,8 +30,9 @@ pub const INTERNAL_ERROR: i64 = -32603;
 pub const TIMEOUT: i64 = -32000;
 /// Not sent on the wire: an `App::rpc` handler returns `RpcError::pending(token, timeout_ms)` to answer later.
 pub const PENDING: i64 = -32099;
-/// Longest wait an async call may ask for, milliseconds.
-pub const MAX_TIMEOUT_MS: u64 = 60_000;
+/// Longest wait an async call may ask for, milliseconds. One value for both ends: the shell waits this long (plus a
+/// margin) for a reply (`bifrost_core::app_control_socket::MAX_PENDING_MS`).
+pub const MAX_TIMEOUT_MS: u64 = bifrost_core::app_control_socket::MAX_PENDING_MS;
 /// Async calls held open at once; more are refused with `INTERNAL_ERROR`.
 const MAX_WAITING: usize = 64;
 

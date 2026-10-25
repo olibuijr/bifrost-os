@@ -1986,6 +1986,16 @@ Gaps (Apple behaviour not matched yet):
 - The Shortcuts app (`shortcuts-desktop`) does not list or run intents yet; it could read `intent.list` of running apps and
   the manifests of installed ones and offer them as actions, passing results between steps as the `value` JSON.
 - Intents are served on the control socket, so the app must be running; the shell launches it first.
+- How the shell dials a control socket (`shell::intents`): it opens the app's data folder and then `control.sock` without
+  following a link (`O_PATH|O_NOFOLLOW`), requires a socket whose owner is the folder's, and connects to that inode
+  through `/proc/self/fd/<n>`, so an app cannot swap its socket for a link to another app's. A root shell dials a
+  root socket in a root folder as root, the account's socket as the account, and refuses everything else (also before
+  setup, when there is no account). For the account it switches only the calling thread's effective ids (raw
+  `setgroups`, `setresgid(-1, gid, -1)`, `setresuid(-1, uid, -1)`) and switches back right after the connect, aborting
+  the shell if that fails; `SO_PEERCRED` reports the effective ids, and with the real and saved uid still 0 the
+  account can neither signal nor trace the thread. A reply is at most 1 MiB and must arrive within 62 s of the
+  connect (the SDK's 60 s pending-call limit, `app_control_socket::MAX_PENDING_MS`, plus 2 s); a visual search
+  provider gets 5 s.
 - `Date` is validated as ISO 8601 text only; no natural-language dates or durations. Plural parameters (`[IntentFile]`,
   `Doubles`, `[Placemark]`) are not modelled; `Placemark`, `Measurement` and `File` take one object each.
 drag and drop, no multi-line text view, and the
