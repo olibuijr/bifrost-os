@@ -2407,6 +2407,9 @@ impl Shell {
         if let Some(when)=self.desk.as_ref().and_then(|d|d.dock_hide_at){due.add(Some(when));}
         // a submenu opens when its hover delay is over, a row in the safe triangle takes over after its rest
         if self.desktop_menu.is_some() { due.add(self.desktop_flyout.due()); }
+        // the open Downloads stack takes its items' pictures as the workers finish them
+        #[cfg(feature = "desktop-wayland")]
+        if self.desktop_menu == Some(desktop_bar::Menu::Stack) && self.stack_thumbs_pending() { due.add(Some(t + 50.0)); }
         // a rest on a green button opens its menu when the dwell is over
         if self.desktop_menu.is_none() { if let Some((_,since))=self.desk.as_ref().and_then(|d|d.arrange_at) { if since.is_finite() { due.add(Some(since+desk::ARRANGE_DWELL_MS)); } } }
         if self.dock_animating(t) || self.fx_animating(t) { due.add(Some(t)); }
@@ -4134,6 +4137,11 @@ impl Shell {
         self.desktop_menu_autoscroll(t);
         #[cfg(feature = "desktop-wayland")]
         self.desktop_menu_flyout_tick(t);
+        // an item's picture in the open Downloads stack finished drawing: the stack redraws with it
+        #[cfg(feature = "desktop-wayland")]
+        if self.stack_thumbs_tick() {
+            self.dirty = true;
+        }
         // the keyboard follows text focus on the tablet desktop: raised when a field gains it (edge-triggered, so a
         // dismissal sticks while the field keeps it), lowered whenever the front window has no field
         let now = self.desk_text_focus();

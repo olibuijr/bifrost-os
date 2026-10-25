@@ -433,6 +433,12 @@ pub struct Desk {
     pub(super) stack_items:Vec<super::dock_stack::Item>,
     #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
     pub(super) stack_icon:Option<(f32,f32,f32,f32)>,
+    /// the open stack's type-select prefix (`dock_stack::type_select`), and its items' pictures, drawn off the frame by
+    /// the thumbnail providers and kept on the shared disk cache (`search_thumbs`)
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+    pub(super) stack_typed:bifrost_ui::menu::Menu,
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+    pub(super) stack_thumbs:super::search_thumbs::FileThumbs,
     pub(super) dock_menu_target:Option<usize>,
     pub(super) dock_menu_anchor:(f32,f32),
     grab: Option<Grab>,

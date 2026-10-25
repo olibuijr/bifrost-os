@@ -251,6 +251,14 @@ impl Shortcut {
         matches!(self, Shortcut::Term(_) | Shortcut::Paste | Shortcut::Lock | Shortcut::ForceQuit | Shortcut::Tile(_))
     }
 
+    /// Whether the shortcut opens another surface that takes the keyboard (Search, the app switcher, the assistant,
+    /// Look Up, the Help search, an app's settings, the Force Quit and Log Out cards): an open menu or the Dock's
+    /// Downloads stack closes before it runs (`Shell::desktop_menu_dismiss`). The screenshot shortcuts leave menus
+    /// open, so a menu can be captured, as in the reference.
+    pub fn opens_surface(&self) -> bool {
+        matches!(self, Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Assistant | Shortcut::LookUp | Shortcut::HelpSearch | Shortcut::Settings | Shortcut::ForceQuit | Shortcut::LogOut)
+    }
+
     pub fn tile(key: crate::bare::control::TileKey) -> Self {
         use crate::bare::control::TileKey;
         Shortcut::Tile(match key {
@@ -1470,6 +1478,12 @@ impl Shell {
         // (switcher, search, input source, Home, Back, window keys) never see them. Escape still answers a card alert.
         if self.screen == Screen::App(AppId::Terminal) && self.terminal_ui.secure && !(matches!(sc, Shortcut::Back) && self.card_alert_up()) && !sc.runs_under_secure_entry() {
             return vec![];
+        }
+        // the shortcut runs before the open menu or Dock stack sees the key (`hw_menu_key` comes after it): one that
+        // opens another surface closes them first, or Search would open under the stack and the stack keep its keys
+        #[cfg(feature = "desktop-wayland")]
+        if sc.opens_surface() {
+            self.desktop_menu_dismiss();
         }
         let fx = match sc {
             Shortcut::QuickSearch => {

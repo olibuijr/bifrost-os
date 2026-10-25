@@ -198,12 +198,16 @@ pub(super) fn step(l: &Layout, cur: Option<usize>, code: u16) -> Option<usize> {
     Some(next.min(n))
 }
 
-/// Type to select: the next item after `cur` (wrapping) whose name starts with `c`, ignoring case; None when no name
-/// does.
-pub(super) fn type_select(names: &[&str], cur: Option<usize>, c: char) -> Option<usize> {
-    let n = names.len();
-    let start = cur.map_or(0, |i| i + 1);
-    (0..n).map(|k| (start + k) % n).find(|&i| names[i].chars().next().is_some_and(|f| f.to_lowercase().eq(c.to_lowercase())))
+/// Type to select, as the reference's lists do it (the kit's `Menu::type_select`): keys typed within
+/// `bifrost_ui::menu::TYPE_SELECT_SECS` of each other extend one prefix, and the first name at or after the selection
+/// that starts with it is selected, ignoring case; one key typed again and again steps through the names that start
+/// with it, wrapping. `typed` keeps the prefix between keys; `now_s` is in seconds. None when no name matches (the
+/// selection stays).
+pub(super) fn type_select(typed: &mut bifrost_ui::menu::Menu, names: &[&str], cur: Option<usize>, c: char, now_s: f64) -> Option<usize> {
+    typed.items = names.iter().enumerate().map(|(i, name)| bifrost_ui::menu::MenuItem::new(i as u32, name)).collect();
+    // Open in Files (`cells.len()`) has no name: the search starts from the newest item
+    typed.highlighted = cur.filter(|&i| i < names.len());
+    typed.type_select(c, now_s)
 }
 
 /// The modifier keys (Ctrl, Shift, Alt, Meta, Caps Lock): pressed alone they leave the stack open, since a chord's
@@ -219,17 +223,24 @@ pub(super) enum Key {
     Move,
     /// Return or Enter: opens the selected item
     Choose,
-    /// a letter or digit: selects by name (`type_select`)
+    /// a key that types a character (a letter, digit, punctuation, Space): extends the type-select prefix
+    /// (`type_select`); one that matches no name is used up, as in the reference, and never typed into the app behind
     Type(char),
+    /// Backspace or Delete: used up, the stack stays open (it must not delete in the document behind it)
+    Ignore,
     /// a modifier alone: the stack stays open and the key goes on
     Wait,
-    /// any other key, and every key with Ctrl, Alt or Cmd held: the stack closes and the key goes on (a shortcut,
-    /// typing in the app in front)
+    /// any other key (Tab, the function keys), and every key with Ctrl, Alt or Cmd held: the stack closes and the key
+    /// goes on (a shortcut, a key for the app in front)
     Pass,
 }
 
-/// The use of the key `code` while the stack is open; `chord` is true with Ctrl, Alt or Cmd held.
-pub(super) fn key_use(code: u16, chord: bool) -> Key {
+/// Backspace and Delete.
+const ERASE_KEYS: [u16; 2] = [14, 111];
+
+/// The use of the key `code` while the stack is open; `chord` is true with Ctrl, Alt or Cmd held, `shift` with Shift
+/// held (it picks the character the key types).
+pub(super) fn key_use(code: u16, chord: bool, shift: bool) -> Key {
     if MODIFIER_KEYS.contains(&code) {
         return Key::Wait;
     }
@@ -240,7 +251,8 @@ pub(super) fn key_use(code: u16, chord: bool) -> Key {
         1 => Key::Close,
         103 | 105 | 106 | 108 => Key::Move,
         28 | 96 => Key::Choose,
-        _ => super::evkeys::char_for(code, false).filter(|c| c.is_alphanumeric()).map_or(Key::Pass, Key::Type),
+        c if ERASE_KEYS.contains(&c) => Key::Ignore,
+        _ => super::evkeys::char_for(code, shift).filter(|c| !c.is_control()).map_or(Key::Pass, Key::Type),
     }
 }
 
@@ -318,11 +330,6 @@ pub(super) fn hit(l: &Layout, x: f32, y: f32) -> Option<Hit> {
     l.cells.iter().position(|&r| inside(r, x, y)).map(Hit::Item)
 }
 
-/// The short kind shown on a file's page: its extension in capitals, at most four letters; none without one.
-pub(super) fn badge(name: &str) -> Option<String> {
-    let (stem, ext) = name.rsplit_once('.')?;
-    (!stem.is_empty() && !ext.is_empty() && ext.chars().all(char::is_alphanumeric)).then(|| ext.chars().take(4).collect::<String>().to_uppercase())
-}
 
 /// Offsets (px) of `n` fanned tiles from the front one (index 0, at the origin) to the back one: each further tile
 /// steps right by `step` and up by half of it.
@@ -360,9 +367,39 @@ impl super::Shell {
         let Some(d) = self.desk.as_mut() else { return };
         d.stack_items = items;
         d.stack_icon = Some((icon.x as f32, icon.y as f32, icon.w as f32, icon.h as f32));
+        d.stack_typed = bifrost_ui::menu::Menu::default();
         self.desktop_menu = Some(super::desktop_bar::Menu::Stack);
         self.desktop_menu_row = None;
+        self.stack_want_thumbs();
         self.dirty = true;
+    }
+
+    /// Asks for the pictures of the files the open stack shows, at the size their icons are drawn (`stack_icon_px`).
+    /// They are drawn on worker threads; `stack_thumbs_tick` takes them as they arrive.
+    fn stack_want_thumbs(&mut self) {
+        let Some(l) = self.stack_layout() else { return };
+        let px = self.stack_icon_px(l.style);
+        let Some(d) = self.desk.as_mut() else { return };
+        for item in d.stack_items.iter().take(l.cells.len()).filter(|i| !i.dir) {
+            d.stack_thumbs.want(&item.path, px);
+        }
+    }
+
+    /// The side (px) of an item's icon in the open stack of `style`: the size its picture is drawn and kept at.
+    fn stack_icon_px(&self, style: Style) -> usize {
+        self.ui.pt(if style == Style::Fan { FAN_ICON_PT } else { GRID_ICON_PT }).round() as usize
+    }
+
+    /// Takes the stack items' pictures that finished drawing; true when one arrived while the stack is open (it
+    /// redraws with it).
+    pub(super) fn stack_thumbs_tick(&mut self) -> bool {
+        let open = self.desktop_menu == Some(super::desktop_bar::Menu::Stack);
+        self.desk.as_mut().is_some_and(|d| d.stack_thumbs.poll()) && open
+    }
+
+    /// Whether a stack item's picture is still being drawn (the shell keeps ticking to take it).
+    pub(super) fn stack_thumbs_pending(&self) -> bool {
+        self.desk.as_ref().is_some_and(|d| d.stack_thumbs.pending())
     }
 
     /// The Downloads folder the open stack lists: under the document broker's home, the one grants are made relative to
@@ -499,15 +536,18 @@ impl super::Shell {
     }
 
     /// A key while the stack is open (`key_use`): Esc closes it, the arrows move its selection, Return opens the
-    /// selected item, a letter selects by name. A modifier alone waits; any other key closes the stack and goes on
-    /// (None), as a shortcut or typing for the app in front.
+    /// selected item, typing selects by name (a key that matches nothing, Backspace and Delete are used up). A
+    /// modifier alone waits; any other key closes the stack and goes on (None), as a shortcut or a key for the app in
+    /// front. `t` is in ms.
     pub(super) fn stack_key(&mut self, code: u16, t: f64) -> Option<Vec<super::Effect>> {
         use super::desktop_bar::Menu;
         use bifrost_proto::ModifierFlags as F;
         let chord = [F::CONTROL, F::OPTION, F::COMMAND].into_iter().any(|f| self.key_mods.contains(f));
+        let shift = self.key_mods.contains(F::SHIFT);
         let cur = self.menu_row_of(Menu::Stack);
-        match key_use(code, chord) {
+        match key_use(code, chord, shift) {
             Key::Wait => return None,
+            Key::Ignore => {}
             Key::Pass => {
                 self.stack_close();
                 return None;
@@ -526,9 +566,9 @@ impl super::Shell {
             }
             Key::Type(c) => {
                 let shown = self.stack_layout().map_or(0, |l| l.cells.len());
-                let pick = self.desk.as_ref().and_then(|d| {
+                let pick = self.desk.as_mut().and_then(|d| {
                     let names: Vec<&str> = d.stack_items.iter().take(shown).map(|i| i.name.as_str()).collect();
-                    type_select(&names, cur, c)
+                    type_select(&mut d.stack_typed, &names, cur, c, t / 1000.0)
                 });
                 if let Some(i) = pick {
                     self.desktop_menu_row = Some((Menu::Stack, i));
@@ -578,24 +618,24 @@ impl super::Shell {
     /// (`draw_menu_level` drew it); the fan has no panel: its icons and name capsules float over the desktop. The
     /// keyboard selection (`stack_key`) is drawn on the menu highlight.
     pub(super) fn draw_stack_popover(&self, s: &mut Surface) {
-        use super::ui::{Weight, LABEL, LINK, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, MENU_HIGHLIGHT, MENU_HIGHLIGHT_TEXT, MENU_SOLID, SECONDARY, SEPARATOR_C};
+        use super::ui::{Weight, LABEL, LINK, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, MENU_HIGHLIGHT, MENU_HIGHLIGHT_TEXT, MENU_SOLID, SECONDARY, SEPARATOR_C};
         use bifrost_ui::prefs_layout::m;
         let (Some(l), Some(d)) = (self.stack_layout(), self.desk.as_ref()) else { return };
         let ui = &self.ui;
         let edge = SEPARATOR_C.now();
         let sel = self.menu_row_of(super::desktop_bar::Menu::Stack).map(|i| target_of(&l, i));
-        // an item's icon: a folder, or a page with the file's kind on it
+        // an item's icon, as the reference draws it: the file's picture (`stack_want_thumbs`) once it is drawn, else
+        // the icon of its kind as Files and the open panel show it (a folder, a page in its kind's colour). `bg` is what
+        // a page's cut corner shows.
+        let px = self.stack_icon_px(l.style);
+        let bg = if l.style == Style::Grid { MENU_SOLID.now() } else { 0 };
         let icon = |s: &mut Surface, r: R, item: &Item| {
-            if item.dir {
-                draw_stack(s, &Rect { x: r.0.round() as i32, y: r.1.round() as i32, w: r.2.round() as i32, h: r.3.round() as i32 }, &[]);
+            if let Some(im) = (!item.dir).then(|| d.stack_thumbs.ready(&item.path, px)).flatten() {
+                s.blit(im, (r.0 + (r.2 - im.w as f32) / 2.0) as i32, (r.1 + (r.3 - im.h as f32) / 2.0) as i32, 255, 255);
                 return;
             }
-            draw_page(s, r, edge);
-            if let Some(kind) = badge(&item.name) {
-                self.label(&kind, MAC_FOOTNOTE_PT, Weight::Semibold, SECONDARY, |im| {
-                    s.blit(im, (r.0 + (r.2 - im.w as f32) / 2.0) as i32, (r.1 + r.3 * 0.72 - im.h as f32 / 2.0) as i32, 255, 255)
-                });
-            }
+            let entry = super::docpanel::Entry { name: item.name.clone(), dir: item.dir, enabled: true, path: None };
+            self.draw_file_icon(s, &entry, r.0, r.1, r.2, bg);
         };
         match l.style {
             Style::Grid => {
@@ -676,14 +716,6 @@ fn stack_colours() -> (u32, u32, u32) {
     (rgba(88, 150, 232, 255), rgba(116, 172, 244, 255), rgba(246, 247, 250, 255))
 }
 
-/// A file's page in `r` (px): the stack's pale tile with its edge in `edge`. The kind badge is the caller's.
-pub(super) fn draw_page(s: &mut Surface, (x, y, w, h): R, edge: u32) {
-    let (pw, ph) = (w * 0.74, h * 0.92);
-    let (px, py) = (x + (w - pw) / 2.0, y + (h - ph) / 2.0);
-    s.fill_rrect(px, py, pw, ph, pw * 0.1, stack_colours().2);
-    s.stroke_rrect(px, py, pw, ph, pw * 0.1, (w / 64.0).max(1.0), edge);
-}
-
 /// Draws the Downloads stack in the Dock slot `r`: a blue folder with up to `SHOWN` pale file tiles fanned out behind
 /// its front flap. An empty folder shows the flap alone (the open stack draws a folder item that way).
 pub(super) fn draw_stack(s: &mut Surface, r: &Rect, files: &[String]) {
@@ -757,17 +789,6 @@ mod tests {
         let notes = items.iter().find(|i| i.name == "notes.txt").unwrap();
         assert!(!notes.dir && notes.path == dir.join("notes.txt"));
         std::fs::remove_dir_all(&dir).unwrap();
-    }
-
-    #[test]
-    fn a_file_page_shows_its_kind() {
-        assert_eq!(badge("report.pdf").as_deref(), Some("PDF"));
-        assert_eq!(badge("song.flac").as_deref(), Some("FLAC"));
-        assert_eq!(badge("archive.tar.zstd").as_deref(), Some("ZSTD"));
-        assert_eq!(badge("movie.webmx1").as_deref(), Some("WEBM"), "at most four letters");
-        assert_eq!(badge("README"), None);
-        assert_eq!(badge(".bashrc"), None, "a dot file has no kind");
-        assert_eq!(badge("odd.ex-t"), None);
     }
 
     const PT: f32 = 2.0;
@@ -920,37 +941,70 @@ mod tests {
     #[test]
     fn typing_selects_the_next_item_by_its_first_letter() {
         let names = ["Report.pdf", "photo.png", "readme.txt", "2026 plan.key"];
-        assert_eq!(type_select(&names, None, 'r'), Some(0), "case does not matter");
-        assert_eq!(type_select(&names, Some(0), 'r'), Some(2), "the same letter again moves on");
-        assert_eq!(type_select(&names, Some(2), 'r'), Some(0), "and wraps");
-        assert_eq!(type_select(&names, Some(4), 'p'), Some(1), "from Open in Files too");
-        assert_eq!(type_select(&names, None, '2'), Some(3));
-        assert_eq!(type_select(&names, Some(1), 'z'), None, "no match keeps the selection");
-        assert_eq!(type_select(&[], None, 'a'), None);
+        let mut typed = bifrost_ui::menu::Menu::default();
+        // one letter typed again and again steps on through the names that start with it; after a pause of a second
+        // or more a key starts a new prefix
+        assert_eq!(type_select(&mut typed, &names, None, 'r', 10.0), Some(0), "case does not matter");
+        assert_eq!(type_select(&mut typed, &names, Some(0), 'r', 10.2), Some(2), "the same letter again moves on");
+        assert_eq!(type_select(&mut typed, &names, Some(2), 'r', 10.4), Some(0), "and wraps");
+        assert_eq!(type_select(&mut typed, &names, Some(4), 'p', 20.0), Some(1), "from Open in Files too");
+        assert_eq!(type_select(&mut typed, &names, None, '2', 30.0), Some(3));
+        assert_eq!(type_select(&mut typed, &names, Some(1), 'z', 40.0), None, "no match keeps the selection");
+        assert_eq!(type_select(&mut typed, &[], None, 'a', 50.0), None);
     }
 
-    /// The stack keeps Esc, its arrows, Return and typing; a modifier alone waits for its key; every other key, and
-    /// every chord, closes the stack and goes on.
+    /// E2E7: typing `notes` left the newest item selected and `e2e7-n` closed the stack at `-`: keys typed within a
+    /// second of each other make one prefix, punctuation and spaces included, and the whole name is matched.
+    #[test]
+    fn typing_quickly_selects_by_a_prefix_of_the_name() {
+        let names = ["e2e7-shot.png", "e2e7-notes.txt", "notebook.pdf", "notes.txt", "my file.txt"];
+        let mut typed = bifrost_ui::menu::Menu::default();
+        let mut cur = None;
+        let mut type_out = |text: &str, from: f64| {
+            for (k, c) in text.chars().enumerate() {
+                if let Some(i) = type_select(&mut typed, &names, cur, c, from + k as f64 * 0.1) {
+                    cur = Some(i);
+                }
+            }
+            cur
+        };
+        assert_eq!(type_out("notes", 10.0), Some(3), "notes.txt, not notebook.pdf");
+        assert_eq!(type_out("e2e7-n", 20.0), Some(1), "the hyphen is part of the prefix");
+        assert_eq!(type_out("my f", 30.0), Some(4), "and so is a space");
+        // a pause starts over: `n` alone after a second is a new prefix
+        assert_eq!(type_out("n", 40.0), Some(2), "the first name with n from the selection on");
+    }
+
+    /// The stack keeps Esc, its arrows, Return and every key that types (letters, digits, punctuation, Space), and
+    /// uses up Backspace and Delete; a modifier alone waits for its key; every other key, and every chord, closes the
+    /// stack and goes on.
     #[test]
     fn the_stack_takes_only_its_own_keys() {
-        assert_eq!(key_use(1, false), Key::Close);
+        assert_eq!(key_use(1, false, false), Key::Close);
         for code in [103, 105, 106, 108] {
-            assert_eq!(key_use(code, false), Key::Move);
+            assert_eq!(key_use(code, false, false), Key::Move);
         }
-        assert_eq!(key_use(28, false), Key::Choose);
-        assert_eq!(key_use(96, false), Key::Choose, "keypad Enter");
-        assert_eq!(key_use(30, false), Key::Type('a'));
-        assert_eq!(key_use(2, false), Key::Type('1'));
+        assert_eq!(key_use(28, false, false), Key::Choose);
+        assert_eq!(key_use(96, false, false), Key::Choose, "keypad Enter");
+        assert_eq!(key_use(30, false, false), Key::Type('a'));
+        assert_eq!(key_use(30, false, true), Key::Type('A'));
+        assert_eq!(key_use(2, false, false), Key::Type('1'));
+        assert_eq!(key_use(12, false, false), Key::Type('-'), "a hyphen in a name");
+        assert_eq!(key_use(12, false, true), Key::Type('_'));
+        assert_eq!(key_use(52, false, false), Key::Type('.'));
+        assert_eq!(key_use(57, false, false), Key::Type(' '), "Space");
+        assert_eq!(key_use(14, false, false), Key::Ignore, "Backspace");
+        assert_eq!(key_use(111, false, false), Key::Ignore, "Delete");
         for code in [29, 42, 56, 125] {
-            assert_eq!(key_use(code, false), Key::Wait, "modifier {code}");
-            assert_eq!(key_use(code, true), Key::Wait);
+            assert_eq!(key_use(code, false, false), Key::Wait, "modifier {code}");
+            assert_eq!(key_use(code, true, false), Key::Wait);
         }
-        assert_eq!(key_use(57, false), Key::Pass, "Space");
-        assert_eq!(key_use(15, false), Key::Pass, "Tab");
-        assert_eq!(key_use(59, false), Key::Pass, "F1");
-        assert_eq!(key_use(30, true), Key::Pass, "Cmd+A is the app's");
-        assert_eq!(key_use(1, true), Key::Pass);
-        assert_eq!(key_use(103, true), Key::Pass);
+        assert_eq!(key_use(15, false, false), Key::Pass, "Tab");
+        assert_eq!(key_use(59, false, false), Key::Pass, "F1");
+        assert_eq!(key_use(30, true, false), Key::Pass, "Cmd+A is the app's");
+        assert_eq!(key_use(57, true, false), Key::Pass, "Cmd+Space is the shell's");
+        assert_eq!(key_use(1, true, false), Key::Pass);
+        assert_eq!(key_use(103, true, false), Key::Pass);
     }
 
     /// The stack lists Downloads under the broker's home, whatever `$HOME` says, so the files it lists can be granted.
@@ -1092,10 +1146,19 @@ mod shell_tests {
         assert_eq!(sh.menu_row_of(Menu::Stack), Some(0), "the first arrow selects the newest item");
         assert_eq!(sh.desktop_menu_key(103, 2.0), Some(vec![]));
         assert_eq!(sh.menu_row_of(Menu::Stack), Some(1));
-        // typing: names are "file 0.pdf".. so f moves to the next one
+        // typing: names are "file 0.pdf".., so f keeps the selected one and f again moves to the next one
         assert_eq!(sh.desktop_menu_key(33, 3.0), Some(vec![]));
+        assert_eq!(sh.menu_row_of(Menu::Stack), Some(1));
+        assert_eq!(sh.desktop_menu_key(33, 3.5), Some(vec![]));
         assert_eq!(sh.menu_row_of(Menu::Stack), Some(2));
         assert_eq!(sh.desktop_menu, Some(Menu::Stack));
+        // E2E7: a key that types but matches no name, and Backspace, are used up: the stack stays open and nothing
+        // reaches the document behind it
+        for (code, at) in [(12, 3.6), (57, 3.7), (14, 3.8)] {
+            assert_eq!(sh.hw_menu_key(code, true, at), Some(vec![]), "key {code}");
+            assert_eq!(sh.desktop_menu, Some(Menu::Stack));
+        }
+        assert_eq!(sh.menu_row_of(Menu::Stack), Some(2), "the selection stays");
         // the selection draws
         let (bw, bh) = (sh.w as usize, sh.h as usize);
         let mut buf = vec![0u32; bw * bh];
@@ -1104,8 +1167,8 @@ mod shell_tests {
         // a modifier alone keeps it open and goes on
         assert_eq!(sh.hw_menu_key(125, true, 4.0), None);
         assert_eq!(sh.desktop_menu, Some(Menu::Stack));
-        // Space closes it and goes on
-        assert_eq!(sh.hw_menu_key(57, true, 5.0), None);
+        // Tab closes it and goes on
+        assert_eq!(sh.hw_menu_key(15, true, 5.0), None);
         assert_eq!(sh.desktop_menu, None);
         assert_eq!(sh.menu_row_of(Menu::Stack), None, "the selection goes with it");
         // a chord closes it and goes on, even on a letter the stack would type
@@ -1127,6 +1190,68 @@ mod shell_tests {
         sh.stack_open(sh.desk.as_ref().unwrap().stack_icon.map(|(x, y, w, h)| Rect { x: x as i32, y: y as i32, w: w as i32, h: h as i32 }).unwrap());
         assert_eq!(sh.desktop_menu_key(1, 10.0), Some(vec![]));
         assert_eq!(sh.desktop_menu, None);
+    }
+
+    /// E2E7: Cmd+Space over the open stack opened Search under it and the stack kept the keys: the shortcut runs
+    /// before the stack sees the key, so it closes the stack (and an open menu) first, and the keys go to Search.
+    #[test]
+    fn cmd_space_closes_the_stack_and_opens_search() {
+        use crate::shell::hwkeys::Shortcut;
+        let (mut sh, _) = open_stack(3);
+        sh.desktop_menu_key(103, 1.0);
+        sh.hw_shortcut(Shortcut::QuickSearch, 2.0);
+        assert_eq!(sh.desktop_menu, None, "the stack closed");
+        assert_eq!(sh.menu_row_of(Menu::Stack), None);
+        assert!(sh.quicksearch.active(), "Search is open");
+        assert_eq!(sh.hw_menu_key(46, true, 3.0), None, "a typed key is not the stack's");
+        // the same for a menu-bar menu
+        sh.hw_shortcut(Shortcut::QuickSearch, 4.0);
+        sh.desktop_menu = Some(Menu::System);
+        sh.hw_shortcut(Shortcut::QuickSearch, 5.0);
+        assert_eq!(sh.desktop_menu, None, "the menu closed");
+        // an app's open or save panel stays: its app waits for the answer
+        sh.desktop_menu = Some(Menu::Document);
+        sh.desktop_menu_dismiss();
+        assert_eq!(sh.desktop_menu, Some(Menu::Document));
+        assert!(Shortcut::QuickSearch.opens_surface() && Shortcut::AppSwitch.opens_surface());
+        assert!(!Shortcut::CaptureScreen.opens_surface(), "a screenshot may show the open menu");
+    }
+
+    /// E2E7: the stack's items had generic page icons. A picture's thumbnail is drawn off the frame at its icon's size
+    /// and kept; the stack redraws when it arrives, and a file without one keeps its kind's icon.
+    #[test]
+    fn a_picture_in_the_stack_gets_its_thumbnail() {
+        use std::time::{Duration, Instant};
+        let (mut sh, _) = open_stack(0);
+        let dir = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/target/test-stack-thumbs")).join(std::process::id().to_string());
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let png = dir.join("shot.png");
+        std::fs::write(&png, crate::cg::imageio::tests::png_bytes(256, 256, [200, 30, 30, 255])).unwrap();
+        let missing = dir.join("notes.txt");
+        {
+            let d = sh.desk.as_mut().unwrap();
+            d.stack_thumbs = crate::shell::search_thumbs::FileThumbs::with_cache(dir.join("cache"));
+            d.stack_items = vec![Item { name: "shot.png".into(), path: png.clone(), dir: false }, Item { name: "notes.txt".into(), path: missing.clone(), dir: false }];
+        }
+        sh.stack_want_thumbs();
+        assert!(sh.stack_thumbs_pending());
+        let end = Instant::now() + Duration::from_secs(10);
+        let mut arrived = false;
+        while sh.stack_thumbs_pending() && Instant::now() < end {
+            arrived |= sh.stack_thumbs_tick();
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(arrived, "the open stack redraws when a picture arrives");
+        let px = sh.stack_icon_px(Style::Fan);
+        let d = sh.desk.as_ref().unwrap();
+        assert!(d.stack_thumbs.ready(&png, px).is_some_and(|im| im.w.max(im.h) <= px), "drawn to fit the icon");
+        assert!(d.stack_thumbs.ready(&missing, px).is_none(), "no picture: the kind's icon");
+        let (bw, bh) = (sh.w as usize, sh.h as usize);
+        let mut buf = vec![0u32; bw * bh];
+        sh.draw_desktop_popup(&mut Surface { w: bw, h: bh, stride: bw, px: &mut buf, y0: 0 });
+        assert!(buf.iter().any(|&p| p != 0));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// A picture whose default app is the built-in Photos opens in its viewer, outside the library too; a built-in
