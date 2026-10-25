@@ -644,6 +644,16 @@ struct Table {
     /// app's aliases, `apps::search_aliases`), never by the fuzzy matcher's initials or scattered letters, so "wi" does
     /// not find the browser through "web internet" and "se" does not find Term through "shell". Empty: none.
     prefixes: Vec<String>,
+    /// Rows match only when the query is contiguous in their text or starts one of its words, never by scattered
+    /// letters: the Settings panes, whose text carries many keyword aliases, so "lantern" does not find "Display &
+    /// Brightness" through letters spread over its aliases.
+    strict: bool,
+}
+
+/// Whether the folded query `q` matches folded `text` well enough for a strict table: a prefix or word start (the
+/// matcher's two best kinds) or a contiguous run anywhere in the text ("dark m" in "... dark mode ...").
+fn strict_match(m: &fuzzy::Matcher, q: &str, text: &str) -> bool {
+    !q.is_empty() && (text.contains(q) || m.rank_folded(text).is_some_and(|r| r.kind != fuzzy::Kind::Subsequence))
 }
 
 impl search_rank::Source for Table {
@@ -657,7 +667,10 @@ impl search_rank::Source for Table {
         self.rows
             .iter()
             .enumerate()
-            .filter(|(i, (_, folded))| m.rank_folded(folded).is_some() || self.prefixes.get(*i).is_some_and(|p| starts_a_word(p, &q)))
+            .filter(|(i, (_, folded))| {
+                let hit = if self.strict { strict_match(&m, &q, folded) } else { m.rank_folded(folded).is_some() };
+                hit || self.prefixes.get(*i).is_some_and(|p| starts_a_word(p, &q))
+            })
             .map(|(_, (item, _))| item.clone())
             .collect()
     }
@@ -728,14 +741,14 @@ fn build_tables(c: &Corpus) -> (Vec<Table>, BTreeMap<String, Hit>) {
         })
         .collect();
     let tables = vec![
-        Table { name: "Applications", rows: apps_rows, prefixes: app_prefixes },
-        Table { name: "Settings", rows: settings_rows, prefixes: Vec::new() },
-        Table { name: "Clock", rows: city_rows, prefixes: Vec::new() },
-        Table { name: "Deildu", rows: deildu_rows, prefixes: Vec::new() },
-        Table { name: "Contacts", rows: contact_rows, prefixes: Vec::new() },
-        Table { name: "Shortcuts", rows: shortcut_rows, prefixes: Vec::new() },
-        Table { name: "Files", rows: file_rows, prefixes: Vec::new() },
-        Table { name: "Calendar", rows: event_rows, prefixes: Vec::new() },
+        Table { name: "Applications", rows: apps_rows, prefixes: app_prefixes, strict: false },
+        Table { name: "Settings", rows: settings_rows, prefixes: Vec::new(), strict: true },
+        Table { name: "Clock", rows: city_rows, prefixes: Vec::new(), strict: false },
+        Table { name: "Deildu", rows: deildu_rows, prefixes: Vec::new(), strict: false },
+        Table { name: "Contacts", rows: contact_rows, prefixes: Vec::new(), strict: false },
+        Table { name: "Shortcuts", rows: shortcut_rows, prefixes: Vec::new(), strict: false },
+        Table { name: "Files", rows: file_rows, prefixes: Vec::new(), strict: false },
+        Table { name: "Calendar", rows: event_rows, prefixes: Vec::new(), strict: false },
     ];
     (tables, hits)
 }
@@ -782,12 +795,26 @@ fn dictionary_group(query: &str) -> Option<(Group, bool)> {
     dict::lookup(query).map(|(d, explicit)| (Group { title: "Dictionary", hits: vec![Hit::Definition { word: d.word, dictionary: d.dictionary, preview: d.preview }] }, explicit))
 }
 
+/// Whether the definition group `g` is for the query's own word (an exact headword) while the Top Hit `top` only
+/// matched loosely (its title neither starts with the query nor has a word that does): the headword ranks first then.
+fn headword_beats_top(query: &str, g: &Group, top: Option<&Group>) -> bool {
+    let q = fuzzy::fold(query.trim());
+    let exact = g.hits.iter().any(|h| matches!(h, Hit::Definition { word, dictionary, .. } if !dictionary.is_empty() && fuzzy::fold(word) == q));
+    let Some(top_hit) = top.and_then(|t| t.hits.first()) else { return false };
+    let name_of = |app: AppId| apps().iter().find(|a| a.id == app).map_or(String::new(), |a| a.name.to_string());
+    let (title, _) = row_text(top_hit, name_of, (0, 0));
+    let strong = fuzzy::Matcher::new(query).rank(&title).is_some_and(|r| r.kind != fuzzy::Kind::Subsequence);
+    exact && !strong
+}
+
 /// The groups in display order: the calculator answer, the Top Hit, the sections, the Documents, the files, and the
-/// "Search in Apps" action last. A definition the query asked for ("define x") comes first, so Return opens it; the
+/// "Search in Apps" action last. A definition the query asked for ("define x") comes first, so Return opens it, and so
+/// does the exact headword of a plain word when the Top Hit matched only loosely (`headword_beats_top`); any other
 /// definition of a plain word follows the sections.
 fn compose(query: &str, calc: Option<Group>, top: Option<Group>, sections: Vec<Group>, documents: Vec<Group>, files: Vec<Group>) -> Vec<Group> {
     let (asked, plain) = match dictionary_group(query) {
         Some((g, true)) => (Some(g), None),
+        Some((g, false)) if headword_beats_top(query, &g, top.as_ref()) => (Some(g), None),
         Some((g, false)) => (None, Some(g)),
         None => (None, None),
     };
@@ -3590,6 +3617,38 @@ mod file_actions_tests {
         // a plain word is only defined when a dictionary has it
         assert!(results("zqxjvw", &[]).iter().all(|g| g.title != "Dictionary"));
         assert!(results("e2e", &[]).iter().all(|g| g.title != "Dictionary"));
+    }
+
+    /// E2E10: "lantern" found "Display & Brightness" through letters scattered over its keyword aliases.
+    #[test]
+    fn a_settings_pane_needs_a_contiguous_or_word_start_match() {
+        let m = |q: &str| fuzzy::Matcher::new(q);
+        let text = "display & brightness brightness dark mode appearance text size night shift";
+        assert!(!strict_match(&m("lantern"), "lantern", text), "scattered letters do not find a pane");
+        assert!(strict_match(&m("bright"), "bright", text), "a word start does");
+        assert!(strict_match(&m("dark m"), "dark m", text), "a contiguous run over words does");
+        assert!(strict_match(&m("ightn"), "ightn", text), "a contiguous run inside a word does");
+        assert!(!strict_match(&m(""), "", text));
+        let settings = |q: &str| results(q, &[]).into_iter().flat_map(|g| g.hits).filter(|h| matches!(h, Hit::Settings(_))).collect::<Vec<_>>();
+        assert!(settings("lantern").is_empty(), "{:?}", settings("lantern"));
+        assert!(settings("dark mode").contains(&Hit::Settings("Display & Brightness")), "an alias still finds its pane");
+        assert_eq!(results("wi", &[])[0].hits, vec![Hit::Settings("Wi-Fi")]);
+    }
+
+    #[test]
+    fn an_exact_headword_ranks_above_a_loosely_matched_top_hit() {
+        let def = |word: &str, dictionary: &str| Group { title: "Dictionary", hits: vec![Hit::Definition { word: word.into(), dictionary: dictionary.into(), preview: String::new() }] };
+        let top = |h: Hit| Group { title: "Top Hit", hits: vec![h] };
+        // a top hit matched only by scattered letters loses to the word itself
+        assert!(headword_beats_top("lantern", &def("lantern", "WordNet"), Some(&top(Hit::Settings("Display & Brightness")))));
+        assert!(headword_beats_top("Lantern ", &def("lantern", "WordNet"), Some(&top(Hit::City("Tokyo")))), "case and spaces are ignored");
+        // a top hit whose title starts with the query keeps its place
+        assert!(!headword_beats_top("wi", &def("wi", "WordNet"), Some(&top(Hit::Settings("Wi-Fi")))));
+        assert!(!headword_beats_top("francisco", &def("francisco", "WordNet"), Some(&top(Hit::City("San Francisco")))), "a word start is strong too");
+        // only an exact headword, and only a real definition, moves up
+        assert!(!headword_beats_top("lant", &def("lantern", "WordNet"), Some(&top(Hit::Settings("Display & Brightness")))));
+        assert!(!headword_beats_top("lantern", &def("lantern", ""), Some(&top(Hit::Settings("Display & Brightness")))));
+        assert!(!headword_beats_top("lantern", &def("lantern", "WordNet"), None), "with no top hit the order stays");
     }
 }
 
