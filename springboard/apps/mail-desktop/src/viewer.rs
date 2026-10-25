@@ -1,4 +1,4 @@
-//! Viewer windows: a message opened in a window of its own. Double-click on a message row, or File > New Viewer Window,
+//! Viewer windows: a message opened in a window of its own. Double-click on a message row, or File > Open Message,
 //! asks the window for a [`Snapshot`] of the message; the app opens an SDK window (`bifrost_app::app_windows`) and a
 //! [`Viewer`] draws the snapshot there. A viewer holds no connection of its own: it reads the text the main window
 //! already fetched, so it works from a copy and does not change the mailbox.

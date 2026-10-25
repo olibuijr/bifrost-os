@@ -519,12 +519,21 @@ pub(super) fn changed_bar_rects(before:&[(Menu,f32,f32,String)],after:&[(Menu,f3
     merged.into_iter().map(|(a,b)|(a,0,b-a,height)).collect()
 }
 impl Shell {
-    /// The Window menu's name for an open window: an extra window's title from its app's table, else the app's name.
+    /// The Window menu's name for an open window: an extra window's title from its app's table, a hosted app's main
+    /// window by the title it set (`ToShell::DocumentState`, as Mail names its window after the mailbox shown), else
+    /// the app's name.
     pub(super) fn window_menu_name(&self, app: super::AppId) -> String {
         if let super::AppId::ExternalWindow(slot, id) = app {
             if let Some(Some(h)) = self.ext.get(slot as usize) {
                 if let Some(w) = h.windows.of_app(&h.id).into_iter().find(|w| w.id == u32::from(id)) {
                     return w.title.clone();
+                }
+            }
+        }
+        if let super::AppId::External(slot) = app {
+            if let Some(Some(h)) = self.ext.get(slot as usize) {
+                if !h.doc_title.is_empty() {
+                    return h.doc_title.clone();
                 }
             }
         }

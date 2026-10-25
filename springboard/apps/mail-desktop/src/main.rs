@@ -19,7 +19,7 @@ const INDEX_EVERY_MS: f64 = 3000.0;
 
 struct MailApp {
     window: Option<MailWindow>,
-    /// Viewer windows: a message in a window of its own (double-click, File > New Viewer Window).
+    /// Viewer windows: a message in a window of its own (double-click, File > Open Message).
     viewers: Vec<Viewer>,
     /// Compose windows, and the one whose compose is in the main window's sheet slot.
     composes: Composes,
@@ -35,6 +35,8 @@ struct MailApp {
     scheduled: bool,
     /// The connections the background check opens.
     transport: std::sync::Arc<dyn springboard::deildu::http::Transport>,
+    /// The main window's title as last told to the shell (`draw::main_title`).
+    title: String,
 }
 
 impl MailApp {
@@ -81,7 +83,15 @@ impl MailApp {
 
     fn sync(&mut self, ctx: &Ctx) -> bool {
         match &mut self.window {
-            Some(mail) => self.composes.sync(ctx, mail),
+            Some(mail) => {
+                // the main window is titled after the mailbox it shows, so the shell's Window menu lists it by that name
+                let title = bifrost_mail::draw::main_title(&mail.mail);
+                if self.title != title {
+                    self.title = title.to_string();
+                    ctx.set_document_state(&self.title, false, "");
+                }
+                self.composes.sync(ctx, mail)
+            }
             None => false,
         }
     }
@@ -467,7 +477,7 @@ impl MailApp {
 
 impl MailApp {
     fn new(transport: std::sync::Arc<dyn springboard::deildu::http::Transport>) -> MailApp {
-        MailApp { window: None, viewers: Vec::new(), composes: Composes::default(), pending_url: None, indexed: Default::default(), next_index: 0.0, check: None, scheduled: false, transport }
+        MailApp { window: None, viewers: Vec::new(), composes: Composes::default(), pending_url: None, indexed: Default::default(), next_index: 0.0, check: None, scheduled: false, transport, title: String::new() }
     }
 }
 

@@ -689,6 +689,16 @@ fn short_date(date: &str) -> String {
     }
 }
 
+/// The main window's title: the mailbox it shows ("Inbox"), or "Mail" before an account is added. The toolbar draws it
+/// and the shell's Window menu lists the window by it.
+pub fn main_title(mail: &Mail) -> &str {
+    if mail.accounts.is_empty() {
+        "Mail"
+    } else {
+        mailbox_title(&mail.mailbox)
+    }
+}
+
 fn mailbox_title(name: &str) -> &str {
     if name.eq_ignore_ascii_case("INBOX") {
         "Inbox"
@@ -883,7 +893,7 @@ impl MailWindow {
 
     fn draw_toolbar(&mut self, s: &mut Surface, ui: &Ui, w: f32, _top: f32) {
         widgets::toolbar_band(s, ui, bifrost_app::controls::Rect { x: 0.0, y: 0.0, w: w / ui.pt(1.0), h: TOOLBAR_PT });
-        let title = if self.mail.accounts.is_empty() { "Mail" } else { mailbox_title(&self.mail.mailbox) };
+        let title = main_title(&self.mail);
         let model = toolbar_model(&self.mail);
         let placed = widgets::toolbar(s, ui, toolbar_bounds(ui, w), &model, None);
         if let Some(r) = placed.rect_of(90) {
@@ -1657,5 +1667,20 @@ mod tests {
     fn mailbox_titles() {
         assert_eq!(mailbox_title("INBOX"), "Inbox");
         assert_eq!(mailbox_title("Sent"), "Sent");
+    }
+
+    #[test]
+    fn the_main_window_is_named_after_the_mailbox_it_shows() {
+        assert_eq!(main_title(&Mail::new(Vec::new())), "Mail", "no account yet");
+        let mut mail = Mail::new(vec![bifrost_app::controls::internet_accounts::Account::new(
+            bifrost_app::controls::internet_accounts::Kind::Mail,
+            "work",
+            "Work",
+            "user",
+        )]);
+        mail.mailbox = "INBOX".into();
+        assert_eq!(main_title(&mail), "Inbox");
+        mail.mailbox = "Sent Items".into();
+        assert_eq!(main_title(&mail), "Sent Items");
     }
 }
