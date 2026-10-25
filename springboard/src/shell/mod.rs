@@ -757,6 +757,9 @@ pub struct Shell {
     game: gamemode::Model,
     /// where the pointer was last, for the menu bar that a full-screen window hides (`desk::bar_hidden`)
     pointer_y: Option<f32>,
+    /// the pointer reached the menu bar over a full-screen window and has stayed in the bar or on the toolbar revealed
+    /// under it since (`desk::bar_hidden`'s `keep`): coming up from below onto that toolbar does not bring the bar back
+    bar_latched: bool,
     /// the game pid Game Mode raised, put back when it leaves the front
     game_pid: Option<u32>,
     /// persisted Settings (`settings.ini`), owned here so one writer exists
@@ -1292,6 +1295,7 @@ impl Shell {
             fullscreen: false,
             game: Default::default(),
             pointer_y: None,
+            bar_latched: false,
             game_pid: None,
             prefs: Prefs::memory(),
             screen_zoom: Default::default(),
@@ -3554,10 +3558,19 @@ impl Shell {
     /// window hides (`desk::bar_hidden`). The bar comes and goes as the pointer enters or leaves its band, so crossing the
     /// band repaints.
     pub(super) fn note_pointer_y(&mut self, y: f32) {
+        // the window server's pointer-leave hover comes at (-100, -100): it is no position, so it neither brings the bar
+        // back nor latches it (a later move into the revealed band would otherwise keep a bar the top edge never showed)
+        if y < 0.0 {
+            return;
+        }
         let band = self.desktop_bar_height() as f32;
-        let was_in_band = self.pointer_y.is_some_and(|p| p < band);
+        // over a full-screen window the bar, once back, stays while the pointer is on the toolbar revealed under it
+        let keep = self.desk_full_band().map_or(0.0, |(_, b)| b as f32);
+        let was_in_band = self.pointer_y.is_some_and(|p| p < band + if self.bar_latched { keep } else { 0.0 });
         self.pointer_y = Some(y);
-        if (y < band) != was_in_band {
+        let in_band = y < band || (was_in_band && y < band + keep);
+        self.bar_latched = in_band;
+        if in_band != was_in_band {
             self.dirty = true;
         }
     }
@@ -5784,7 +5797,7 @@ impl Shell {
 
     fn draw_app_status(&self, s: &mut Surface) {
         #[cfg(feature="desktop-wayland")]
-        if self.desk_active() && !self.is_locked() {self.draw_desktop_bar(s);return;}
+        if self.desk_active() && !self.is_locked() {self.draw_desk_reveal(s);self.draw_desktop_bar(s);return;}
         let ui = &self.ui;
         let mid = (ui.pt(scene::STATUS_PT) / 2.0) as i32;
         // time then date, as the bifrost status bar shows them in apps too

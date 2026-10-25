@@ -1058,6 +1058,8 @@ impl Shell {
         // previous frame and only the pixels that changed are presented
         if !bifrost_render::glass::gpu(){return Some(vec![(0,0,self.w,self.h)]);}
         let mut v=vec![(0,0,self.w,self.desktop_bar_height() as i32)];
+        // the band a full-screen window reveals under the shown bar (`draw_desk_reveal`), cleared again once the bar hides
+        if let Some((_,rv))=self.desk_reveal(){v.push((0,rv.top,self.w,rv.band));}
         // the open menu owes its shadow on every side, the top one up into the gap under the bar; the same rect is
         // cleared on the frame after it closes (desk_regions keeps it), so no shadow line is left behind
         // (each cascading submenu as well)
@@ -1757,7 +1759,20 @@ impl Shell {
         let levels=self.menu_level_rects();
         let popup=levels.first().map(|&(_,p,_)|surface_of(p));
         let flyouts:Vec<_>=levels.iter().skip(1).take(super::chrome_ids::FLYOUT_SLOTS as usize).map(|&(_,p,_)|surface_of(p)).collect();
-        let mut frames=Vec::new();for (id,x,y,w,h) in std::iter::once((0,0,0,width,self.desktop_bar_height())).chain({let r=self.dock_surface_rect();std::iter::once((2,r.x.max(0) as usize,r.y.max(0) as usize,r.w.max(0) as usize,r.h.max(0) as usize))}).chain(popup.map(|(r,_)|(1,r.0,r.1,r.2,r.3))).chain(self.desk_panel_overlays()) {
+        let mut frames=Vec::new();
+        // the band a full-screen window reveals under the menu bar (`desk_reveal`): its toolbar or title bar with the traffic
+        // lights, above the window. It is cut first so the menus and panels opened from the bar stack over it, and it is left
+        // clear where they cover it (their surfaces hold those pixels, and composing them twice would double the material)
+        if let Some((_,rv))=self.desk_reveal() {
+            let y=rv.top.max(0) as usize;let h=(rv.band.max(0) as usize).min(height.saturating_sub(y));
+            if h>0&&width>0 {
+                let mut data=Vec::with_capacity(width*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width..row*width+width]);}
+                let covers=popup.iter().chain(flyouts.iter()).map(|&(r,_)|r).chain(self.desk_panel_overlays().into_iter().map(|(_,x,y,w,h)|(x,y,w,h)));
+                for cover in covers {clear_covered(&mut data,(0,y as i32,width,h),cover);}
+                frames.push(crate::bare::wayland::ChromeFrame{shape:Vec::new(),dock:None,id:super::chrome_ids::REVEAL,x:0,y:y as i32,width,height:h,pixels:data,input:None});
+            }
+        }
+        for (id,x,y,w,h) in std::iter::once((0,0,0,width,self.desktop_bar_height())).chain({let r=self.dock_surface_rect();std::iter::once((2,r.x.max(0) as usize,r.y.max(0) as usize,r.w.max(0) as usize,r.h.max(0) as usize))}).chain(popup.map(|(r,_)|(1,r.0,r.1,r.2,r.3))).chain(self.desk_panel_overlays()) {
             let w=w.min(width.saturating_sub(x));let h=h.min(height.saturating_sub(y));if w==0||h==0{continue;}let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}if id==2&&!self.dock_is_visible(){data.fill(0);}let input=match id {1=>popup.map(|(_,menu)|menu),2=>self.dock_input_rect(self.dock_surface_rect()),_=>None};let dock=if id==2{use crate::bare::wayland::{DockEdge,DockPlacement};use super::desktop_dock::Position;let m=self.desk_metrics();Some(match self.dock_preferences().position{Position::Bottom=>DockPlacement{edge:DockEdge::Bottom,reserve:m.dock_bottom},Position::Left=>DockPlacement{edge:DockEdge::Left,reserve:m.dock_left},Position::Right=>DockPlacement{edge:DockEdge::Right,reserve:m.dock_right}})}else{None};let shape=if id==1{self.stack_input_shape(x as i32,y as i32)}else{Vec::new()};frames.push(crate::bare::wayland::ChromeFrame{shape,dock,id,x:x as i32,y:y as i32,width:w,height:h,pixels:data,input});
         }
         // The cascading submenus: ids FLYOUT_CHROME_ID onwards, overlay surfaces above the menu they cascade from (each is
