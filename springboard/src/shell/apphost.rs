@@ -2079,7 +2079,9 @@ impl Shell {
             return;
         }
         if let Some(h) = self.ext[slot].as_mut().filter(|h| h.running()) {
-            if !h.is_outdated(&app.exec_path()) {
+            // an app with unsaved changes keeps running at its old version until they are saved or closed: the restart
+            // would lose them (the update relaunch waits the same way, `Shell::app_update_relaunch`)
+            if !h.is_outdated(&app.exec_path()) || h.doc_edited {
                 return;
             }
             // The package was updated while the app was open: quit the old process and start the new version.
