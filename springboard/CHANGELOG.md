@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.10.36 — 2026-10-25
+
+Fixes from the 0.10.35 end-to-end pass on Midget, a security review of the shell's connections to apps, and every BifrOSt app rebuilt.
+
+- Shell actions reach sandboxed apps: the shell connects to an app's control socket with the account's effective credentials (apps see their own account, nothing else changes in the shell), so Spotlight dictionary hits, Look Up's Open in Dictionary and Services work. The connection never follows links (the socket is opened and checked first, then connected through that handle), replies are limited to 1 MiB with one deadline, the switch back is checked and aborts on failure, and a shell without an account only connects to root's own sockets. Apps accept root only outside a user namespace.
+- An app redraws after a request from the shell, without waiting for the pointer.
+- Services > Look Up in Dictionary opens Dictionary on the selection; Ctrl+Cmd+D keeps the popover.
+- Spotlight no longer matches indexed titles by scattered letters, and the Top Hit gets its own filter chip.
+- Window-level protocol version 9: the shell can move a window that is already on screen (a document window keeps its place when another closes). The window server and the shell ship together.
+- The App Store decodes its icons off the interface thread and revalidates cached icons in the background.
+- Ships with TextEdit 1.13.5 (Undo of Make Plain Text restores rich text; its confirmation is a sheet), Dictionary 0.6.7 (Cmd+A and the other editing keys in the search field) and Notes 1.24.7 (a heading line never shows a checklist marker as raw text); the other apps are rebuilt.
+
 ## 0.10.35 — 2026-10-25
 
 Fixes from the 0.10.34 end-to-end pass on Midget, and every BifrOSt app rebuilt.
