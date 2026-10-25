@@ -1675,7 +1675,7 @@ impl Shell {
         let effects=match self.front_app() {
             FrontApp::Foreign(app_id)=>{let ids=self.foreign_ids_where(|a|a==app_id.as_str());self.hide_foreign(ids)}
             // hiding the active app that has no window hands the front to the window under it
-            FrontApp::Desk(app)=>{if let Some(d)=self.desk.as_mut(){d.hide_app(app);d.windowless_front=None;}Vec::new()}
+            FrontApp::Desk(app)=>{if let Some(d)=self.desk.as_mut(){d.hide_app(app);d.windowless_front.set(None);}Vec::new()}
             FrontApp::Nothing=>Vec::new(),
         };
         self.desk_refocus();

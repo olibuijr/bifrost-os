@@ -372,8 +372,9 @@ pub struct Desk {
     /// The active app that has no window: an SDK app that ordered its last window out while it was in front (Cmd+W on
     /// its last document). As on the reference it keeps the menu bar, the Dock dot and its place in Cmd+Tab, and the
     /// window under it does not take the front, until another window is raised or opened (`raise`, `open`) or the app
-    /// gets a window back (`Shell::desk_windowless_front`).
-    pub(super) windowless_front: Option<AppId>,
+    /// gets a window back (`Shell::desk_windowless_front`). A `Cell` so that the read that finds it no longer holds (the
+    /// process went, or a window came back) clears it there and then: it never comes back once a window shows again.
+    pub(super) windowless_front: std::cell::Cell<Option<AppId>>,
     /// the window server's toplevel list changed since the front intent last looked at it (`Shell::desk_intent_tick`)
     #[cfg(feature = "desktop-wayland")]
     pub(super) intent_check: bool,
@@ -974,7 +975,7 @@ impl Desk {
     /// of its windows (the Dock, Cmd+Tab, the Window menu) shows every window Hide put away, as activating a hidden app does.
     pub fn raise(&mut self, i: usize) -> usize {
         // a window coming to the front makes its app the active one
-        self.windowless_front = None;
+        self.windowless_front.set(None);
         let app = self.wins[i].app;
         let parent = app.parent();
         let i = if self.hidden.iter().any(|a| a.parent() == parent) {
@@ -1290,7 +1291,7 @@ impl Desk {
 
     /// Opens (or raises) the window for `app`; `size` is the wanted outer size.
     pub fn open(&mut self, m: &Metrics, app: AppId, size: (i32, i32)) -> usize {
-        self.windowless_front = None;
+        self.windowless_front.set(None);
         if let Some(i) = self.index_of(app) {
             // opening a hidden app (the Dock, Cmd+Tab, Spotlight) activates it: its windows come back in the order Hide
             // left them, the one that was in front in front, not the main window over its viewer (E2E N2)
@@ -2901,10 +2902,19 @@ impl Shell {
     /// of its windows (main or extra) is on the desk. The screen, the menu bar and the application menu follow it.
     pub(super) fn desk_windowless_front(&self) -> Option<AppId> {
         let d = self.desk.as_ref()?;
-        let app = d.windowless_front?;
-        let AppId::External(slot) = app else { return None };
-        let alive = self.ext.get(slot as usize).and_then(Option::as_ref).is_some_and(|h| h.running());
-        (alive && !d.wins.iter().any(|w| w.app.parent() == app)).then_some(app)
+        let app = d.windowless_front.get()?;
+        let valid = match app {
+            AppId::External(slot) => {
+                let alive = self.ext.get(slot as usize).and_then(Option::as_ref).is_some_and(|h| h.running());
+                alive && !d.wins.iter().any(|w| w.app.parent() == app)
+            }
+            _ => false,
+        };
+        // stale (the process went, or a window came back): cleared, so it does not return when that window goes again
+        if !valid {
+            d.windowless_front.set(None);
+        }
+        valid.then_some(app)
     }
 
     /// The running SDK apps that ordered their main window out (`AppHost::main_ordered_out`): they keep their Dock dot
@@ -3089,8 +3099,12 @@ impl Shell {
                 d.close(i);
                 self.heap_trim_due = true;
             }
-            if was_front {
-                d.windowless_front = Some(app);
+            // only while none of the app's windows is left: with an extra window still shown that window is in front
+            let has_windows = d.wins.iter().any(|w| w.app.parent() == app);
+            if was_front && !has_windows {
+                d.windowless_front.set(Some(app));
+            } else if d.windowless_front.get() == Some(app) {
+                d.windowless_front.set(None);
             }
         }
         self.desk_refocus();
@@ -5518,6 +5532,47 @@ mod tests {
         sh.desk_order_main_out(slot);
         assert_eq!(sh.screen, Screen::App(other));
         assert_eq!(sh.desk_windowless_front(), None);
+    }
+
+    /// `Desk::windowless_front` never goes stale: an app that orders its main window out while an extra window of its
+    /// own is still shown is not windowless, and once a window comes back the mark is gone for good, so the app does
+    /// not become windowless again when that window later goes some other way.
+    #[test]
+    fn the_windowless_front_mark_is_cleared_once_it_no_longer_holds() {
+        use crate::shell::Screen;
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.anim = None;
+        let (mine, _peer) = bifrost_proto::sys::socketpair_pair().unwrap();
+        let cfg = bifrost_proto::Configure { w: 100, h: 100, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
+        sh.ext.push(Some(apphost::AppHost::with_channel("fixture", mine, None, cfg)));
+        let slot = (sh.ext.len() - 1) as u8;
+        let (main, extra, other) = (AppId::External(slot), AppId::ExternalWindow(slot, 1), AppId::Terminal);
+        let m = sh.desk_metrics();
+        {
+            let d = sh.desk.as_mut().unwrap();
+            d.wins.clear();
+            d.open(&m, other, (900, 600));
+            d.open(&m, extra, (400, 300));
+            d.open(&m, main, (600, 400));
+        }
+        sh.screen = Screen::App(main);
+        sh.desk_order_main_out(slot);
+        assert_eq!(sh.desk.as_ref().unwrap().windowless_front.get(), None, "its extra window is still shown");
+        // windowless, then a window of the app comes back without `open` or `raise` (pushed by the window server)
+        {
+            let d = sh.desk.as_mut().unwrap();
+            let i = d.index_of(extra).unwrap();
+            d.wins.remove(i);
+            d.windowless_front.set(Some(main));
+        }
+        assert_eq!(sh.desk_windowless_front(), Some(main));
+        sh.desk.as_mut().unwrap().open(&m, extra, (400, 300));
+        sh.desk.as_mut().unwrap().windowless_front.set(Some(main));
+        assert_eq!(sh.desk_windowless_front(), None, "a window came back");
+        assert_eq!(sh.desk.as_ref().unwrap().windowless_front.get(), None, "the read cleared the stale mark");
+        let i = sh.desk.as_ref().unwrap().index_of(extra).unwrap();
+        sh.desk.as_mut().unwrap().wins.remove(i);
+        assert_eq!(sh.desk_windowless_front(), None, "the mark does not come back when the window goes again");
     }
 
     /// E2E13: an app started in the background (a login item, a notification or share target) or a direct app that fell
