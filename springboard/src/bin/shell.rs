@@ -452,6 +452,8 @@ fn run() -> std::io::Result<()> {
     let mut jank = springboard::bare::jank::Jank::default();
     // `touch $dir/trace` (or `trace on` over the control socket) logs input
     let mut trace = std::path::Path::new(&format!("{dir}/trace")).exists();
+    // the same switch logs the window focus decisions (`bare::focus_trace`)
+    springboard::bare::focus_trace::set(trace);
     let control = springboard::bare::control::Server::bind().map_err(|e| eprintln!("springboard: control socket: {e}")).ok();
     // synthetic touches from the control socket: (due ms, phase, x, y)
     let mut synthetic: std::collections::VecDeque<(f64, u8, f32, f32)> = Default::default();
@@ -939,6 +941,7 @@ fn run() -> std::io::Result<()> {
                     Ok(Request::Perf) => jank.describe().into_bytes(),
                     Ok(Request::Trace(on)) => {
                         trace = on;
+                        springboard::bare::focus_trace::set(on);
                         b"ok\n".to_vec()
                     }
                     Err(e) => format!("error: {e}\n").into_bytes(),

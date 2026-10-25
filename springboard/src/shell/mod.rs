@@ -4128,6 +4128,8 @@ impl Shell {
 
     pub fn tick(&mut self, t: f64) -> Vec<Effect> {
         self.st_mark(t);
+        // the app the shell is bringing to the front: ended after its bound, activated again once it is mapped
+        self.desk_intent_tick(t);
         #[cfg(feature = "desktop-wayland")]
         self.desktop_menu_autoscroll(t);
         #[cfg(feature = "desktop-wayland")]

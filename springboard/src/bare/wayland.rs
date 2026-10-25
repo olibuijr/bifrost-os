@@ -100,10 +100,12 @@ fn min_size_of(min:(i32,i32)) -> (i32,i32) { if min.0>0 && min.1>0 { min } else 
 /// What a shell window's toplevel reported. `Frame` is the window server's own frame of the toplevel (x, y, width,
 /// height in desktop px, `bifrost_window_level_v1` version 2): the window server places and moves toplevels, so this
 /// is where the window really is.
-/// `Focus` is a focus the shell follows (a press on the window, or a focus the window server gave it); `HandBack` is a
-/// focus no press on the window came with, read within `HAND_BACK_MS` of a keyboard-taking chrome layer (Search, the
-/// Apps grid) closing: the window server handing the keyboard back to the window it knows in front (E2E6 1).
-pub enum WindowEvent { Focus(u32), HandBack(u32), Resize(u32,i32,i32), Close(u32), Maximized(u32,bool), Frame(u32,i32,i32,i32,i32),
+/// `Focus` is a press on the window (the person chose it); `ServerFocus` is a focus the window server gave the window on
+/// its own (a keyboard enter or an activating configure no press came with); `HandBack` is such a focus read within
+/// `HAND_BACK_MS` of a keyboard-taking chrome layer (Search, the Apps grid) closing: the window server handing the
+/// keyboard back to the window it knows in front (E2E6 1). The shell follows a `ServerFocus` or a `HandBack` only when
+/// it is not bringing another app to the front itself (`Shell::wayland_window_event`, the front intent).
+pub enum WindowEvent { Focus(u32), ServerFocus(u32), HandBack(u32), Resize(u32,i32,i32), Close(u32), Maximized(u32,bool), Frame(u32,i32,i32,i32,i32),
     /// The window server's full-screen state of the toplevel, when it differs from what the shell last asked for (the
     /// window server's own keys, or a refusal).
     Fullscreen(u32,bool) }
@@ -433,13 +435,14 @@ impl Display {
     /// The answers to window captures since the last call: (token, outcome).
     pub fn capture_results(&mut self) -> Vec<(u64,ShotOutcome)> { std::mem::take(&mut self.state.cap_results) }
     pub fn activate_foreign(&mut self,id:u32) -> io::Result<()> {
-        if let (Some(w),Some(seat))=(self.state.foreign.iter().find(|w|w.info.id==id),self.state.seat.as_ref()) { w.handle.unset_minimized(); w.handle.activate(seat); transient(self.conn.flush())?; }
+        if let (Some(w),Some(seat))=(self.state.foreign.iter().find(|w|w.info.id==id),self.state.seat.as_ref()) { super::focus_trace::log(format_args!("foreign activate toplevel={id} app={}",w.info.app_id)); w.handle.unset_minimized(); w.handle.activate(seat); transient(self.conn.flush())?; }
         Ok(())
     }
     pub fn window_events(&mut self) -> Vec<WindowEvent> {
         // a fresh window took the keyboard from the front one and no press on it came with it: the front one gets it back
         if let Some((front,_))=self.state.refocus.take() {
             if self.state.focused==Some(front) && self.state.windows.contains_key(&front) {
+                super::focus_trace::log(format_args!("activate window={front}: the keyboard back from a fresh window"));
                 request_activation(&self.state,&self.queue.handle(),front);
                 let _=self.conn.flush();
             }
@@ -480,6 +483,7 @@ impl Display {
         // to another window since (a window it mapped), and the raise must not be lost (W4-1, W4-5)
         let raise=std::mem::take(&mut self.state.raise_front);
         let activate=front.filter(|id|raise||Some(*id)!=self.state.focused);
+        let was_focused=self.state.focused;
         self.state.focused=front;
         let removed:Vec<u32> = self.state.windows.keys().filter(|id|!ids.contains(id)).copied().collect();
         for id in removed {
@@ -549,13 +553,13 @@ impl Display {
                 self.state.restack=unsent_restack(&ids,pending);
             }
         }
-        if let Some(id)=activate { request_activation(&self.state,&qh,id); }
+        if let Some(id)=activate { super::focus_trace::log(format_args!("activate window={id} front raise={raise} was={:?}",was_focused)); request_activation(&self.state,&qh,id); }
         // an explicit open or focus: xdg-activation needs a fresh input serial that control-socket and dock opens
         // lack, and a native client may hold focus; wlroots compositors always obey a foreign-toplevel activate
         if raise {
             if let (Some(id),Some(seat))=(front,self.state.seat.as_ref()) {
                 let app_id=format!("is.olibuijr.bifrost.{id}");
-                if let Some(f)=self.state.foreign.iter().find(|f|f.info.app_id==app_id) {f.handle.unset_minimized();f.handle.activate(seat);}
+                if let Some(f)=self.state.foreign.iter().find(|f|f.info.app_id==app_id) {super::focus_trace::log(format_args!("foreign activate window={id} (toplevel {})",f.info.id));f.handle.unset_minimized();f.handle.activate(seat);}
             }
         }
         self.render_windows()?;
@@ -787,7 +791,7 @@ fn chrome_input_rects(input:Option<[i32;4]>,shape:&[[i32;4]])->Option<Vec<[i32;4
         let top_reserved=frames.iter().find(|f|f.id==0).map_or(0,|f|f.height as i32+f.y.max(0));
         let ids:Vec<_>=frames.iter().map(|f|f.id).collect();
         let removed:Vec<_>=self.state.chrome.keys().filter(|id|!ids.contains(id)).copied().collect();
-        for id in removed {if takes_keyboard(id) {self.state.exclusive_closed=Some(super::sys::now_ms());}
+        for id in removed {if takes_keyboard(id) {self.state.exclusive_closed=Some(super::sys::now_ms());super::focus_trace::log(format_args!("layer={id} closed: keyboard hand-back window open, focused={:?}",self.state.focused));}
             let w=self.state.chrome.remove(&id).unwrap();w.layer.destroy();w.surface.destroy();for slot in w.slots {slot.buffer.destroy();}
             if let Some(slots)=self.state.gpu_slots.remove(&id) {for s in slots {s.buffer.destroy();}}
             if let Some(g)=&mut self.gpu {g.p.destroy_surface(id);}}
@@ -1393,8 +1397,10 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for State {
                 if let Some(id)=s.windows.iter().find(|(_,w)|w.surface==surface).map(|(&id,_)|id) {
                     let fresh=s.windows.get_mut(&id).is_some_and(|w|std::mem::take(&mut w.fresh));
                     if follows_keyboard_enter(fresh,id,s.focused) {
+                        super::focus_trace::log(format_args!("enter window={id} fresh={fresh} was={:?}: reported",s.focused));
                         s.focused=Some(id);s.window_events.push(unpressed_focus(id,s.exclusive_closed,super::sys::now_ms()));
                     } else if let Some(front)=s.focused.filter(|f|s.windows.contains_key(f)) {
+                        super::focus_trace::log(format_args!("enter window={id} fresh while front={front}: keyboard owed back to {front}"));
                         // the window server focused a window it just mapped (one that came back from Overview or a
                         // minimize behind the front): the front window the shell raised gets the keyboard back, after the
                         // events read with this one (`window_events`): the window server focuses a window on a press
@@ -1446,7 +1452,7 @@ impl Dispatch<xdg_surface::XdgSurface,u32> for State {
         // Overview or a minimize) and that the window server activated as it mapped must not lift itself over the
         // front one (W4-1, W4-5)
         let front=s.focused;
-        if let xdg_surface::Event::Configure {serial} = e {obj.ack_configure(serial); if let Some(w)=s.windows.get_mut(id) {let focus=follows_keyboard_enter(w.fresh,*id,front)&&focus_on_configure(!w.configured,w.act,w.act_seen);w.configured=true;w.act_seen=w.act;if focus {s.window_events.push(unpressed_focus(*id,s.exclusive_closed,super::sys::now_ms()));}} }
+        if let xdg_surface::Event::Configure {serial} = e {obj.ack_configure(serial); if let Some(w)=s.windows.get_mut(id) {let focus=follows_keyboard_enter(w.fresh,*id,front)&&focus_on_configure(!w.configured,w.act,w.act_seen);w.configured=true;w.act_seen=w.act;if focus {super::focus_trace::log(format_args!("configure window={id} activated={}: reported",w.act));s.window_events.push(unpressed_focus(*id,s.exclusive_closed,super::sys::now_ms()));}} }
     }
 }
 impl Dispatch<xdg_toplevel::XdgToplevel,u32> for State {
@@ -1607,9 +1613,9 @@ fn takes_keyboard(id:u32)->bool { matches!(id,3|6|8|9|11|14|15) }
 const HAND_BACK_MS:f64=1000.0;
 /// The event for a focus of window `id` that no press on it came with (a keyboard enter, an activating configure), read
 /// at `now`, the last keyboard-taking layer having closed at `closed`: a `HandBack` within `HAND_BACK_MS` of it, else a
-/// `Focus`. A press on a window always reports `Focus` (the person chose it).
+/// `ServerFocus`. A press on a window always reports `Focus` (the person chose it).
 fn unpressed_focus(id:u32,closed:Option<f64>,now:f64)->WindowEvent {
-    if closed.is_some_and(|c|now>=c && now-c<=HAND_BACK_MS) { WindowEvent::HandBack(id) } else { WindowEvent::Focus(id) }
+    if closed.is_some_and(|c|now>=c && now-c<=HAND_BACK_MS) { WindowEvent::HandBack(id) } else { WindowEvent::ServerFocus(id) }
 }
 /// The `set_stack_rank` requests for the windows `want` the shell brought forward: each of them that `ids` (the shell's
 /// windows, bottom first) lists gets the next rank in that order, so the bottom one has the lowest. `last` is the last
@@ -1746,9 +1752,9 @@ mod tests {
         assert!(takes_keyboard(3) && takes_keyboard(8), "Search and the Apps grid take the keyboard");
         assert!(!takes_keyboard(13) && !takes_keyboard(0), "the Cmd+Tab strip and the menu bar do not");
         assert!(matches!(unpressed_focus(5, Some(1000.0), 1040.0), WindowEvent::HandBack(5)));
-        assert!(matches!(unpressed_focus(5, Some(1000.0), 1000.0 + HAND_BACK_MS + 1.0), WindowEvent::Focus(5)), "too late: the window server's own focus");
-        assert!(matches!(unpressed_focus(5, None, 1040.0), WindowEvent::Focus(5)), "no layer closed");
-        assert!(matches!(unpressed_focus(5, Some(2000.0), 1040.0), WindowEvent::Focus(5)), "a layer closed after it was read");
+        assert!(matches!(unpressed_focus(5, Some(1000.0), 1000.0 + HAND_BACK_MS + 1.0), WindowEvent::ServerFocus(5)), "too late: the window server's own focus");
+        assert!(matches!(unpressed_focus(5, None, 1040.0), WindowEvent::ServerFocus(5)), "no layer closed");
+        assert!(matches!(unpressed_focus(5, Some(2000.0), 1040.0), WindowEvent::ServerFocus(5)), "a layer closed after it was read");
     }
     /// W4-1/W4-5: the window server focuses every window it maps; a window that maps behind the front one (back from
     /// Overview or a minimize) must not take the front from the window the shell just raised.
