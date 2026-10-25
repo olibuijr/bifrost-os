@@ -788,10 +788,13 @@ struct Table {
     strict: bool,
 }
 
-/// Whether the folded query `q` matches folded `text` well enough for a strict table: a prefix or word start (the
-/// matcher's two best kinds) or a contiguous run anywhere in the text ("dark m" in "... dark mode ...").
-fn strict_match(m: &fuzzy::Matcher, q: &str, text: &str) -> bool {
-    !q.is_empty() && (text.contains(q) || m.rank_folded(text).is_some_and(|r| r.kind != fuzzy::Kind::Subsequence))
+/// Whether the folded query `q` matches folded `text` well enough for a strict table: a contiguous run of the text
+/// that starts at a word start (the text's start or after a non-alphanumeric character), so a prefix ("bright"), a
+/// later word ("wallp") and a run over words ("dark m" in "... dark mode ...") match, but a run inside a word does
+/// not ("words" does not find "Open Passwords", E2E13 4).
+fn strict_match(q: &str, text: &str) -> bool {
+    !q.is_empty()
+        && text.char_indices().any(|(i, _)| text[i..].starts_with(q) && text[..i].chars().next_back().is_none_or(|c| !c.is_alphanumeric()))
 }
 
 impl search_rank::Source for Table {
@@ -806,7 +809,7 @@ impl search_rank::Source for Table {
             .iter()
             .enumerate()
             .filter(|(i, (_, folded))| {
-                let hit = if self.strict { strict_match(&m, &q, folded) } else { m.rank_folded(folded).is_some() };
+                let hit = if self.strict { strict_match(&q, folded) } else { m.rank_folded(folded).is_some() };
                 hit || self.prefixes.get(*i).is_some_and(|p| starts_a_word(p, &q))
             })
             .map(|(_, (item, _))| item.clone())
@@ -947,21 +950,20 @@ fn headword_beats_top(query: &str, g: &Group, top: Option<&Group>) -> bool {
     exact && !top_matched_well(&q, top_hit)
 }
 
-/// Whether the folded query `q` matches `hit` better than by scattered letters: its title by prefix, word start or a
-/// contiguous run, or one of its aliases (an app's aliases as word prefixes, a Settings pane's keywords strictly).
+/// Whether the folded query `q` matches `hit` better than by scattered letters: its title by a contiguous run from a
+/// word start (`strict_match`), or one of its aliases (an app's aliases as word prefixes, a Settings pane's keywords strictly).
 fn top_matched_well(q: &str, hit: &Hit) -> bool {
     if q.is_empty() {
         return false;
     }
-    let m = fuzzy::Matcher::new(q);
     let name_of = |app: AppId| apps().iter().find(|a| a.id == app).map_or(String::new(), |a| a.name.to_string());
     let (title, _) = row_text(hit, name_of, (0, 0));
-    if strict_match(&m, q, &fuzzy::fold(&title)) {
+    if strict_match(q, &fuzzy::fold(&title)) {
         return true;
     }
     match hit {
         Hit::App(id) => apps().iter().find(|a| a.id == *id).is_some_and(|a| starts_a_word(&fuzzy::fold(super::apps::search_aliases(a.icon)), q)),
-        Hit::Settings(page) => fixed().aliases.iter().any(|(h, k)| *h == Hit::Settings(*page) && strict_match(&m, q, k)),
+        Hit::Settings(page) => fixed().aliases.iter().any(|(h, k)| *h == Hit::Settings(*page) && strict_match(q, k)),
         _ => false,
     }
 }
@@ -3859,13 +3861,14 @@ mod file_actions_tests {
     /// E2E10: "lantern" found "Display & Brightness" through letters scattered over its keyword aliases.
     #[test]
     fn a_settings_pane_needs_a_contiguous_or_word_start_match() {
-        let m = |q: &str| fuzzy::Matcher::new(q);
         let text = "display & brightness brightness dark mode appearance text size night shift";
-        assert!(!strict_match(&m("lantern"), "lantern", text), "scattered letters do not find a pane");
-        assert!(strict_match(&m("bright"), "bright", text), "a word start does");
-        assert!(strict_match(&m("dark m"), "dark m", text), "a contiguous run over words does");
-        assert!(strict_match(&m("ightn"), "ightn", text), "a contiguous run inside a word does");
-        assert!(!strict_match(&m(""), "", text));
+        assert!(!strict_match("lantern", text), "scattered letters do not find a pane");
+        assert!(strict_match("display", text), "a prefix does");
+        assert!(strict_match("bright", text), "a word start does");
+        assert!(strict_match("dark m", text), "a contiguous run over words does");
+        assert!(!strict_match("ightn", text), "a run inside a word does not (E2E13 4)");
+        assert!(strict_match("wi-f", "wi-fi network") && strict_match("fi", "wi-fi network"), "a word after punctuation starts a word");
+        assert!(!strict_match("", text));
         let settings = |q: &str| results(q, &[]).into_iter().flat_map(|g| g.hits).filter(|h| matches!(h, Hit::Settings(_))).collect::<Vec<_>>();
         assert!(settings("lantern").is_empty(), "{:?}", settings("lantern"));
         assert!(settings("dark mode").contains(&Hit::Settings("Display & Brightness")), "an alias still finds its pane");
@@ -3889,6 +3892,13 @@ mod file_actions_tests {
         assert!(shortcuts.search("AAPL").is_empty(), "scattered letters do not find a shortcut");
         assert_eq!(shortcuts.search("wallp").len(), 1, "a word start does");
         assert_eq!(shortcuts.search("gullfoss c").len(), 1, "a contiguous run does");
+        let mut hits = BTreeMap::new();
+        let title = "Open Passwords";
+        let row = table_row(&mut hits, "p".into(), title, String::new(), search_rank::Kind::Settings, Hit::Terminal(String::new()), fuzzy::fold(title));
+        let shortcuts = Table { name: "Shortcuts", rows: vec![row], prefixes: Vec::new(), strict: true };
+        assert!(shortcuts.search("words").is_empty(), "a run inside a word does not find a shortcut (E2E13 4)");
+        assert_eq!(shortcuts.search("passw").len(), 1, "a word start does");
+        assert_eq!(shortcuts.search("open").len(), 1, "a prefix does");
         let apps = tables.iter().find(|t| t.name == "Applications").expect("the apps table");
         assert!(apps.rows.iter().any(|(_, f)| fuzzy::Matcher::new("stg").rank_folded(f).is_some()), "an app name still matches loosely (Settings)");
     }
