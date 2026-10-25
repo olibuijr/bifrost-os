@@ -1,6 +1,6 @@
 id = "is.olibuijr.colormeter.desktop"
 name = "Digital Color Meter"
-version = "0.5.6"
+version = "0.5.7"
 exec = "bifrost-colormeter"
 icon = "icon.png"
 min_shell = "0.8.0"

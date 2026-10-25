@@ -2,6 +2,10 @@
 
 - The web viewer uses the system font; it no longer bundles a font BifrOSt may not redistribute.
 
+## 0.2.4
+
+- Rebuilt with the current SDK and renderer: shell actions such as Look Up and Services reach the app, and vibrant text draws inside clipped areas.
+
 ## 0.2.3
 
 - Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.

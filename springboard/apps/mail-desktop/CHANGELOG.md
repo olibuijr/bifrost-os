@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.9
+
+- Rebuilt with the current SDK and renderer: shell actions such as Look Up and Services reach the app, and vibrant text draws inside clipped areas.
+
 ## 0.17.8
 
 - Message bodies, subjects and compose fields wrap with the kit's line breaking: Chinese, Japanese and Korean text

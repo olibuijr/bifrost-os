@@ -1,6 +1,6 @@
 id = "is.olibuijr.wirelessdiagnostics.desktop"
 name = "Wireless Diagnostics"
-version = "0.1.7"
+version = "0.1.8"
 exec = "bifrost-wireless-diagnostics"
 icon = "icon-180.png"
 min_shell = "0.7.25"

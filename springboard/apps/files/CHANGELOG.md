@@ -3,6 +3,10 @@
 - While a search is active the four view buttons collapse into one view pop-up, so the whole "Searching ..." title fits.
 - Generic document icons have a light folded corner instead of a black one.
 
+## 1.34.3
+
+- Rebuilt with the current SDK and renderer: shell actions such as Look Up and Services reach the app, and vibrant text draws inside clipped areas.
+
 ## 1.34.2
 
 - Icon and gallery views show thumbnails of pictures and documents again, drawn in the app over the shared thumbnail cache as the Dock’s Downloads stack draws them.

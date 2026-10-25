@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.4
+
+- Rebuilt with the current SDK and renderer: shell actions such as Look Up and Services reach the app, and vibrant text draws inside clipped areas.
+
 ## 1.6.3
 
 - World Clock faces draw the hands as the reference does: a short thick hour hand, a long minute hand that reaches the

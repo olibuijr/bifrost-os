@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.24.6
+
+- Rebuilt with the current SDK and renderer: shell actions such as Look Up and Services reach the app, and vibrant text draws inside clipped areas.
+
 ## 1.24.5
 
 - Look Up (Ctrl+Cmd+D) and the Services menu work in a note: Notes answers the shell's request for the selection with the selected text (plain, without Markdown markers) of the note or note window that has the keys, and reports the open note's text and caret, so with only a caret in a word Look Up defines that word.
