@@ -2057,6 +2057,37 @@ impl Notes {
         Some(self.editor.text().chars().skip(r.start).take(r.end - r.start).collect())
     }
 
+    /// What the main window tells the shell about the open note (`Ctx::text_state`, `Ctx::caret_rect`), so Look Up
+    /// and the Services menu find the selection or the word at the caret and the popover opens under it: the note's
+    /// text around the caret with the selection, and the caret's box in window px. `None` when no note is open or a
+    /// field (Search, a name, Find and Replace) has the keys.
+    pub fn text_report(&self, ui: &Ui) -> Option<(bifrost_app::proto::TextState, (f32, f32, f32, f32))> {
+        if !self.is_editing() || self.field_focused() {
+            return None;
+        }
+        let text = self.editor.text();
+        let byte = |c: usize| text.char_indices().nth(c).map_or(text.len(), |(i, _)| i);
+        let caret = self.editor.caret();
+        let anchor = self.editor.selection().map_or(caret, |r| if r.start == caret { r.end } else { r.start });
+        let state = bifrost_app::proto::TextState::around(text, byte(caret), byte(anchor));
+        let (x, y, w, h) = self.editor.caret_rect(ui);
+        let (ox, oy) = self.text_origin(ui);
+        Some((state, (ox + x, oy + y, w, h)))
+    }
+
+    /// The selection Look Up and the Services menu act on (`App::selected_text`), as plain text: that of the note
+    /// window `key` when it has the keys, else the open note's. `Some("")` when nothing is selected there (the shell
+    /// then takes the word at the caret); `None` when a field has the keys (the SDK answers from what was reported).
+    pub fn look_up_selection(&self, key: bifrost_app::app_windows::WindowId) -> Option<String> {
+        if !key.is_main() && self.windows.note_of(key).is_some() {
+            return Some(self.windows.selected_text(key).map(|m| md::to_plain(&m)).unwrap_or_default());
+        }
+        if self.field_focused() {
+            return None;
+        }
+        Some(self.selected_markdown().map(|m| md::to_plain(&m)).unwrap_or_default())
+    }
+
     /// The open note's text for printing: what the editor holds, or `None` when no note is open.
     pub fn printable_text(&self) -> Option<String> {
         if !self.is_editing() {
@@ -5149,6 +5180,34 @@ mod tests {
         n.new_note(ui, 1000.0);
         n.editor.replace_range(ui, 0..0, text, 1000.0, false);
         n.changed(ui, 1000.0);
+    }
+
+    /// E2E10: the open note tells the shell its text and caret (Look Up finds the word at the caret and opens under
+    /// it), and Look Up gets the selection as plain text. The list reports nothing.
+    #[test]
+    fn the_open_note_reports_its_text_and_caret_for_look_up() {
+        use bifrost_app::app_windows::WindowId;
+        let dir = scratch("text-report");
+        let ui = ui();
+        let mut n = app(&ui, &dir);
+        assert!(n.text_report(&ui).is_none(), "no note is open");
+        open_with(&mut n, &ui, "Title\nselect this word");
+        let text = n.editor.text().to_string();
+        let c = text[..text.find("select").unwrap()].chars().count();
+        n.editor.set_caret(c + 2);
+        let (state, (x, y, w, h)) = n.text_report(&ui).expect("an open note reports");
+        assert_eq!(state.word_at_cursor(), "select", "the word at the caret");
+        assert_eq!(state.selected_text(), "");
+        let (ox, oy) = n.text_origin(&ui);
+        let (cx, cy, _, ch) = n.editor.caret_rect(&ui);
+        assert_eq!((x, y, h), (ox + cx, oy + cy, ch), "the caret in window px");
+        assert!(w > 0.0 && oy + cy > 0.0, "below the toolbar, not at the window's corner");
+        assert_eq!(n.look_up_selection(WindowId::MAIN).as_deref(), Some(""), "a caret selects nothing");
+        n.editor.select(c..c + 6);
+        let (state, _) = n.text_report(&ui).unwrap();
+        assert_eq!(state.selected_text(), "select");
+        assert_eq!(n.look_up_selection(WindowId::MAIN).as_deref(), Some("select"));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
