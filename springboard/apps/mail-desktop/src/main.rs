@@ -739,10 +739,14 @@ mod tests {
         });
         let items = menu.expect("a context menu");
         assert!(items.iter().any(|i| i.id == bifrost_mail::window::MENU_REPLY && i.enabled));
-        // the choice runs the menu action: Open in New Window
+        // the choice runs the menu action: Open in New Window, which marks the message read like every viewer open,
+        // also after Mark as Unread on the message the reader shows
+        app.window.as_mut().unwrap().mail.set_flag_locally(3, Flag::Seen, false);
         app.event(&ctx, Input::ContextAction(bifrost_mail::window::MENU_NEW_VIEWER));
-        let viewers: Vec<u32> = app.window.as_mut().unwrap().take_viewers().iter().map(|v| v.uid).collect();
+        let window = app.window.as_mut().unwrap();
+        let viewers: Vec<u32> = window.take_viewers().iter().map(|v| v.uid).collect();
         assert_eq!(viewers, vec![3]);
+        assert!(window.mail.flags_of(3).is_some_and(|f| f.contains(Flag::Seen)), "Open in New Window marks it read");
         // a right-click on no message opens nothing
         let _ = ctx.take_sent();
         assert!(!app.event(&ctx, Input::Context { x: 1.0, y: 599.0 }));

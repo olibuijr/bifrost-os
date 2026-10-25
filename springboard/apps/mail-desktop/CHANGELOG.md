@@ -4,6 +4,8 @@
 
 - Opening a message in its own window (double-click, File > Open Message, Open in New Window) marks it read, as the
   reference does, also when it was marked unread while the reader showed it. The blue dot stayed before.
+- Every way of opening a message in a viewer window goes through the one path that marks it read, including Open in
+  New Window in a message's context menu; a test now covers the context-menu route as well as the double-click.
 
 ## 0.17.5 — 2026-10-24
 
