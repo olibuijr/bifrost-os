@@ -553,7 +553,7 @@
         sh.hw_menu_key(31,true,1.); // s: Settings…
         let rows=sh.menu_row_texts(Menu::App);
         assert_eq!(sh.desktop_menu_row.map(|(_,i)|rows[i].clone()),Some("Settings\u{2026}".to_string()));
-        sh.hw_menu_key(30,true,3.); // a, after the type-ahead pause: About
+        sh.hw_menu_key(30,true,1500.); // a, after the type-ahead pause (shell time is ms): About
         assert!(sh.desktop_menu_row.map(|(_,i)|rows[i].clone()).is_some_and(|t|t.starts_with("About")));
         assert_eq!(sh.desktop_menu,Some(Menu::App),"typing keeps the menu open");
     }

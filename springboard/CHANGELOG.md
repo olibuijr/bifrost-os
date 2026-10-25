@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.10.32 — 2026-10-25
+
+Fixes from the 0.10.31 end-to-end pass on Midget, and every BifrOSt app rebuilt.
+
+- A file opened with its default app (Files, the Downloads stack) opens as a document in apps that use the document controller, such as TextEdit, and brings an already open copy to the front; files you own open read-write, so they save in place.
+- The Downloads stack closes when a shortcut opens something else (Spotlight, the app switcher), keeps the keys you type (type-select by name prefix), and shows thumbnails.
+- Dictionary and Look Up have an English dictionary: WordNet 3.0, under its licence, installed as a system StarDict dictionary. Look Up no longer reads the dictionaries on the interface thread.
+- Camera's not-available screen wraps its reason above Try Again.
+- The menu bar's type-select pauses after one second, as it should.
+- Every BifrOSt app (56) is rebuilt with the current renderer and SDK, so Chinese, Japanese and Korean text draws whole in apps too. Clock gains a day and night world map with sunrise and sunset per city; Files follows deletions while in the background; Reminders keeps smart-list tile names on one line.
+
 ## 0.10.31 — 2026-10-25
 
 - Whatever Spotlight, the Applications grid, the Dock or the open-app control opens becomes the front window with the keyboard, whether it is a built-in or an app, and whatever was in front before. For three seconds after an open the shell ignores focus the window server hands to other windows on its own (a keyboard hand-back when Search closes, its own pick of a next window) and activates the opened window again when it maps; a click on another window ends this at once, and so does the opened app exiting.
