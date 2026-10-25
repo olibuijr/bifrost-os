@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.13.2
+
+- Each document has its own window: File > New (and Duplicate, or shared text) opens a second window and keeps the first; a file opened while the front window holds an empty Untitled takes its place; closing a document closes its window.
+
 ## 1.13.1
 
 - Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.

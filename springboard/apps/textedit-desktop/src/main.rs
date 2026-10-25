@@ -6,6 +6,7 @@
 //! `layout.rs`, the spelling in `spell.rs`, the PDF for printing in `print.rs`, and the window in `view.rs`. This file
 //! wires them to the SDK: the document controller, menus, keys, touches and the canvas.
 
+mod doc_windows;
 mod docx;
 mod encoding;
 mod family_font;
@@ -142,6 +143,15 @@ struct TextEditApp {
     rich_clip: Option<(String, Vec<Cell>)>,
     /// Format > Text > Copy Ruler: the tab stop distance copied, for Paste Ruler
     ruler: Option<f32>,
+    /// the document windows (`doc_windows`): the window being handled, its document and size in px (None for the main
+    /// window, which is the configured size), the other windows' parked state, the document notices not yet placed in
+    /// windows, and whether the input being handled was already routed to its window
+    current: bifrost_app::app_windows::WindowId,
+    current_doc: Option<DocId>,
+    size: Option<(u32, u32)>,
+    views: Vec<doc_windows::View>,
+    notices: Vec<Notice>,
+    routed: bool,
 }
 
 /// What a press in the page did.
@@ -320,6 +330,12 @@ impl TextEditApp {
             spacing_sheet: None,
             rich_clip: None,
             ruler: None,
+            current: bifrost_app::app_windows::WindowId::MAIN,
+            current_doc: None,
+            size: None,
+            views: Vec::new(),
+            notices: Vec::new(),
+            routed: false,
         }
     }
 
@@ -392,15 +408,17 @@ impl TextEditApp {
         }
     }
 
-    /// A document was opened or created: the page starts at the top.
+    /// A document was reverted: the page starts at the top. A created or opened one is placed in a window by
+    /// `sync_windows`, whose page then starts at the top.
     fn after_documents(&mut self, notices: &[Notice]) {
         for n in notices {
-            if matches!(n, Notice::Created(_) | Notice::Opened(_) | Notice::Reverted(_)) {
+            if matches!(n, Notice::Reverted(_)) {
                 self.scroll = 0.0;
                 self.follow = true;
                 self.revision += 1;
             }
         }
+        self.notices.extend(notices.iter().cloned());
     }
 
     /// Rebuilds the layout and the misspelled words of the active document when they are stale.
@@ -1158,7 +1176,7 @@ impl TextEditApp {
 
     /// A press while the link panel is open: a button, or nothing (the page behind it is not reachable).
     fn touch_link(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
-        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let geom = self.geom(ctx);
         let layout = properties::layout_rows(geom.width, geom.body_top, 1);
         let can_remove = self.link.as_ref().is_some_and(|s| s.had_link);
         let buttons = view::link_buttons(&ctx.ui, &layout, can_remove);
@@ -1179,7 +1197,7 @@ impl TextEditApp {
             return false;
         }
         let (px, py, dy) = (x / ctx.ui.s, y / ctx.ui.s, dy / ctx.ui.s);
-        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let geom = self.geom(ctx);
         if let Some(panel) = self.fonts.as_mut() {
             let layout = font_panel::fonts_layout(geom.width, geom.body_top);
             if layout.family.contains(px, py) {
@@ -1214,7 +1232,7 @@ impl TextEditApp {
     /// A press while the font panel is open: a family, typeface or size applies to the selection at once; the arrows
     /// scroll the families; Done closes. A press elsewhere is used up (the panel floats over the page).
     fn touch_fonts(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
-        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let geom = self.geom(ctx);
         let layout = font_panel::fonts_layout(geom.width, geom.body_top);
         let Some(panel) = self.fonts.as_mut() else { return false };
         match font_panel::fonts_hit(&layout, panel, px, py) {
@@ -1236,7 +1254,7 @@ impl TextEditApp {
 
     /// A press while the colour panel is open: a swatch colours the selection, Done closes.
     fn touch_colors(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
-        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let geom = self.geom(ctx);
         let layout = font_panel::colors_layout(geom.width, geom.body_top);
         match font_panel::colors_hit(&layout, px, py) {
             Some(Some(i)) => self.perform(ctx, Action::Color(i)),
@@ -1257,7 +1275,7 @@ impl TextEditApp {
 
     /// A press while the Preferences panel is open: Done, a row (which changes that setting), or nothing.
     fn touch_settings(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
-        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let geom = self.geom(ctx);
         let layout = properties::list_layout(geom.width, geom.body_top, prefs::Setting::ALL.len());
         let buttons = view::list_buttons(&ctx.ui, &layout, Action::SettingsDone);
         if let Some(action) = buttons.iter().find(|b| b.rect.contains(px, py)).and_then(|b| b.action) {
@@ -1272,7 +1290,7 @@ impl TextEditApp {
     /// A press while the Customize Encodings List panel is open: Done, a row (which lists or unlists that encoding), or
     /// nothing.
     fn touch_encodings(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
-        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let geom = self.geom(ctx);
         let layout = properties::list_layout(geom.width, geom.body_top, encoding::ALL.len());
         let buttons = view::list_buttons(&ctx.ui, &layout, Action::EncodingsDone);
         if let Some(action) = buttons.iter().find(|b| b.rect.contains(px, py)).and_then(|b| b.action) {
@@ -1286,7 +1304,7 @@ impl TextEditApp {
 
     /// A press while the Show Spelling and Grammar panel is open: a button, or nothing (the page is not reachable).
     fn touch_spelling(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
-        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let geom = self.geom(ctx);
         let layout = properties::layout_rows(geom.width, geom.body_top, 2);
         let buttons = view::spelling_buttons(&ctx.ui, &layout);
         match buttons.iter().find(|b| b.rect.contains(px, py)).and_then(|b| b.action) {
@@ -1309,7 +1327,7 @@ impl TextEditApp {
 
     /// A press while the Select Line panel is open: a button, or nothing (the page behind it is not reachable).
     fn touch_line(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
-        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let geom = self.geom(ctx);
         let layout = properties::layout_rows(geom.width, geom.body_top, 1);
         let buttons = view::line_buttons(&ctx.ui, &layout);
         match buttons.iter().find(|b| b.rect.contains(px, py)).and_then(|b| b.action) {
@@ -1341,7 +1359,7 @@ impl TextEditApp {
 
     /// A press while the properties panel is open: a button, a field, or nothing (the page behind it is not reachable).
     fn touch_properties(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
-        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let geom = self.geom(ctx);
         let layout = properties::layout(geom.width, geom.body_top);
         let buttons = view::properties_buttons(&ctx.ui, &layout);
         if let Some(b) = buttons.iter().find(|b| b.rect.contains(px, py)) {
@@ -1529,7 +1547,7 @@ impl TextEditApp {
 
     /// A press while the Spacing panel is open: a button or a field, or nothing (the page is not reachable).
     fn touch_spacing(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
-        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let geom = self.geom(ctx);
         let layout = properties::layout_rows(geom.width, geom.body_top, 3);
         let buttons = view::spacing_buttons(&ctx.ui, &layout);
         if let Some(action) = buttons.iter().find(|b| b.rect.contains(px, py)).and_then(|b| b.action) {
@@ -1613,7 +1631,7 @@ impl TextEditApp {
         } else {
             // kept as on screen: the lines break where the window breaks them, and the whole column is scaled down to
             // the printable width (never up)
-            let window = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h).text_w;
+            let window = self.geom(ctx).text_w;
             let scale = if window > 0.0 { (width / window).min(1.0) } else { 1.0 };
             let cells = zoomed(doc.text.cells(), scale);
             let layout = layout::layout_tabs(&cells, window * scale, &measure, doc.text.tab_width() * scale);
@@ -1690,7 +1708,7 @@ impl TextEditApp {
 
     /// The Make Plain Text confirmation's touches: the buttons it shows.
     fn touch_plain(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
-        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let geom = self.geom(ctx);
         let layout = properties::layout_rows(geom.width, geom.body_top, 1);
         let buttons = view::plain_buttons(&ctx.ui, &layout);
         match buttons.iter().find(|b| b.rect.contains(px, py)).and_then(|b| b.action) {
@@ -1983,7 +2001,7 @@ impl TextEditApp {
         if self.refuse_edit() {
             return true;
         }
-        let width = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h).text_w;
+        let width = self.geom(ctx).text_w;
         self.ensure_layout(&ctx.ui, width);
         let Some(cache) = self.cache.as_ref() else { return false };
         let Some(doc) = active_doc_mut(&mut self.docs) else { return false };
@@ -1998,7 +2016,7 @@ impl TextEditApp {
 
     /// Page Up or Page Down: the caret goes a window's height of lines up or down, and with Shift the selection grows to it.
     fn page_move(&mut self, ctx: &Ctx, down: bool, shift: bool) -> bool {
-        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let geom = self.geom(ctx);
         self.ensure_layout(&ctx.ui, geom.text_w);
         let (aspects, fit) = self.cache.as_ref().map_or((Vec::new(), 0.0), |c| (c.art.aspects.clone(), c.width));
         let measure = view::measure_in(&ctx.ui, &aspects, fit);
@@ -2038,7 +2056,7 @@ impl TextEditApp {
     /// A navigation key, with the modifiers a chord carries: Shift extends the selection, Alt or Ctrl move by word, Cmd by
     /// line (and to the ends of the text for Up and Down).
     fn navigate(&mut self, ctx: &Ctx, nav: select::Nav, mods: select::NavMods) -> bool {
-        let width = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h).text_w;
+        let width = self.geom(ctx).text_w;
         self.move_caret(&ctx.ui, width, nav, mods)
     }
 
@@ -2120,7 +2138,7 @@ impl TextEditApp {
     /// A control the window published was activated (assistive technology): the same as pressing it in its middle.
     fn activate(&mut self, ctx: &Ctx, node: u64) -> bool {
         let Some(item) = format_bar::item_of_node(node) else { return false };
-        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let geom = self.geom(ctx);
         let status = self.status();
         let placed = format_bar::layout(&ctx.ui, &geom, &status);
         let (hit, rect) = if item == format_bar::OVERFLOW {
@@ -2170,7 +2188,7 @@ impl TextEditApp {
                 if self.link.is_some() {
                     return self.touch_link(ctx, px, py);
                 }
-                let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+                let geom = self.geom(ctx);
                 let status = self.status();
                 let placed = format_bar::layout(&ctx.ui, &geom, &status);
                 if let Some(hit) = format_bar::hit(&placed, px, py) {
@@ -2215,7 +2233,7 @@ impl TextEditApp {
                 if !self.drag {
                     return false;
                 }
-                let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+                let geom = self.geom(ctx);
                 self.page_drag(&ctx.ui, &geom, px, py)
             }
             TouchKind::Up | TouchKind::Cancel => {
@@ -2459,15 +2477,14 @@ fn menu_item(action: Action, title: &str, key: &str, enabled: bool) -> AppMenuIt
 }
 
 impl TextEditApp {
-    /// A new untitled document holding `doc`, shown from its top (as `after_documents` does for a created document).
+    /// A new untitled document holding `doc`, in a window of its own (`sync_windows` places it).
     fn open_untitled(&mut self, doc: TextDocument) {
         let id = self.docs.new_document();
         if let Some(d) = self.docs.get_mut(id) {
             *d = doc;
         }
-        self.scroll = 0.0;
-        self.follow = true;
         self.revision += 1;
+        self.notices.push(Notice::Created(id));
     }
 }
 
@@ -2500,7 +2517,13 @@ impl App for TextEditApp {
             }
             _ => return Err(RpcError::new(METHOD_NOT_FOUND, format!("no method {method}"))),
         };
+        if let Some(ctx) = ctx {
+            self.enter(ctx.key_window());
+        }
         self.open_untitled(doc);
+        if let Some(ctx) = ctx {
+            self.sync_windows(ctx);
+        }
         Ok(Json::Obj(Vec::new()))
     }
 
@@ -2521,16 +2544,204 @@ impl App for TextEditApp {
             let id = self.docs.new_document();
             self.apply_new_defaults(id);
         }
+        self.sync_windows(ctx);
     }
 
     /// The format bar's items are the window's controls (the shell moves the window by its title row, except over these).
     fn controls(&self, ctx: &Ctx) -> Vec<Node> {
-        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let geom = self.geom(ctx);
         let status = self.status();
         format_bar::nodes(&format_bar::layout(&ctx.ui, &geom, &status), &status)
     }
 
+    /// Input for the main window, or (`routed`) for the window `window_event` entered. Touches belong to the main window;
+    /// keys and commands to the key window.
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
+        if !std::mem::take(&mut self.routed) {
+            let target = if matches!(ev, Input::Touch { .. }) { bifrost_app::app_windows::WindowId::MAIN } else { ctx.key_window() };
+            self.enter(target);
+        }
+        let changed = self.input(ctx, ev);
+        self.sync_windows(ctx);
+        changed
+    }
+
+    fn window_event(&mut self, ctx: &Ctx, window: bifrost_app::app_windows::WindowId, ev: Input) -> bool {
+        self.enter(window);
+        if self.current != window {
+            return false;
+        }
+        // a document window's touches arrive in window points; the page takes px, as the main window's
+        let ev = if window.is_main() { ev } else { bifrost_app::app_windows::window_touch_in_px(ev, ctx.ui.pt(1.0)) };
+        self.routed = true;
+        self.event(ctx, ev)
+    }
+
+    /// A menu item chosen while a document window is key acts on that window's document (the default sends it to the
+    /// main window only).
+    fn window_input(&mut self, ctx: &Ctx, window: bifrost_app::app_windows::WindowId, input: bifrost_app::proto::WindowInput) -> bool {
+        if let bifrost_app::proto::WindowInput::MenuAction(id) = input {
+            self.enter(window);
+            self.routed = true;
+            return self.menu_action(ctx, id);
+        }
+        bifrost_app::app_windows::default_window_input(self, ctx, window, input)
+    }
+
+    /// The wheel over a document window scrolls that window's page (its location comes in window points).
+    fn window_pointer(&mut self, ctx: &Ctx, window: bifrost_app::app_windows::WindowId, ev: &bifrost_app::pointer_events::PointerEvent) -> bool {
+        if window.is_main() {
+            return self.pointer(ctx, ev);
+        }
+        self.enter(window);
+        if self.current != window {
+            return false;
+        }
+        match *ev {
+            bifrost_app::pointer_events::PointerEvent::Wheel { x, y, dy, .. } => {
+                let s = ctx.ui.s;
+                self.wheel(ctx, x * s, y * s, dy * s)
+            }
+            _ => false,
+        }
+    }
+
+    fn draw_window(&mut self, ctx: &Ctx, window: bifrost_app::app_windows::WindowId, s: &mut Surface, t: f64) -> Damage {
+        if window.is_main() {
+            return self.draw(ctx, s, t);
+        }
+        self.draw_doc_window(ctx, window, s)
+    }
+
+    fn window_closed(&mut self, ctx: &Ctx, window: bifrost_app::app_windows::WindowId) -> bool {
+        self.doc_window_closed(ctx, window)
+    }
+
+    /// The scroll wheel, in place of the drag the shell would emulate for it (which placed the caret and selected text).
+    fn pointer_interest(&self) -> u32 {
+        bifrost_app::pointer_events::WHEEL
+    }
+
+    fn pointer(&mut self, ctx: &Ctx, ev: &bifrost_app::pointer_events::PointerEvent) -> bool {
+        self.enter(bifrost_app::app_windows::WindowId::MAIN);
+        match *ev {
+            bifrost_app::pointer_events::PointerEvent::Wheel { x, y, dy, .. } => self.wheel(ctx, x, y, dy),
+            _ => false,
+        }
+    }
+
+    /// Copy and Paste are enabled only when they have something to act on.
+    fn commands(&self, _ctx: &Ctx) -> Commands {
+        let (has_sel, can_undo, can_redo) = match active_doc(&self.docs) {
+            Some(d) => (d.text.has_selection(), d.text.can_undo(), d.text.can_redo()),
+            None => (false, false, false),
+        };
+        Commands::default()
+            .with(Command::Cut, has_sel)
+            .with(Command::Copy, has_sel)
+            .with(Command::Paste, clipboard::text().is_some())
+            .with(Command::SelectAll, active_doc(&self.docs).is_some())
+            .with(Command::Undo, can_undo)
+            .with(Command::Redo, can_redo)
+    }
+
+    fn undo_titles(&self, _ctx: &Ctx) -> (String, String) {
+        match active_doc(&self.docs) {
+            Some(d) => (
+                d.text.undo_name().map_or("Undo".into(), |n| format!("Undo {n}")),
+                d.text.redo_name().map_or("Redo".into(), |n| format!("Redo {n}")),
+            ),
+            None => ("Undo".into(), "Redo".into()),
+        }
+    }
+
+    fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
+        vec![self.file_menu(), self.text_menu(), self.format_menu(), self.view_menu(), self.preferences_menu()]
+    }
+
+    fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
+        if !std::mem::take(&mut self.routed) {
+            self.enter(ctx.key_window());
+        }
+        let changed = if is_menu_id(id) {
+            self.perform(ctx, Action::Document(id))
+        } else {
+            match Action::from_id(id) {
+                Some(action) => self.perform(ctx, action),
+                None => false,
+            }
+        };
+        self.sync_windows(ctx);
+        changed
+    }
+
+    /// A picture dragged over the window is accepted when it is a picture and the page can take it (rich text, editable).
+    /// On the drop the files arrive as documents (see `picture_event`); the drop is answered here.
+    fn drag(&mut self, ctx: &Ctx, ev: dnd::Event) -> bool {
+        let dnd::Event::Dest { session, phase, items, .. } = ev else { return false };
+        let pictures = items.iter().any(|item| dnd::image_format_of(item).is_some());
+        let takes = pictures && active_doc(&self.docs).is_some_and(|d| d.rich && !d.read_only);
+        match phase {
+            DragPhase::Entered | DragPhase::Updated => {
+                if takes && !self.drop_sessions.contains(&session) {
+                    if self.drop_sessions.len() >= 16 {
+                        self.drop_sessions.remove(0);
+                    }
+                    self.drop_sessions.push(session);
+                }
+                dnd::reply(ctx, session, if takes { dragop::COPY } else { 0 });
+            }
+            DragPhase::Exited => self.drop_sessions.retain(|s| *s != session),
+            DragPhase::Perform => {
+                // the files follow as documents (`picture_event` inserts them); the drop is accepted here
+                dnd::performed(ctx, session, takes);
+            }
+        }
+        true
+    }
+
+    fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
+        self.enter(ctx.key_window());
+        let changed = self.document_event(ctx, ev);
+        self.sync_windows(ctx);
+        changed
+    }
+
+    fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
+        self.docs.tick(ctx, t);
+        self.sync_titles(ctx);
+        false
+    }
+
+    fn next_wake(&self, _t: f64) -> Option<f64> {
+        self.docs.next_wake()
+    }
+
+    fn suspend(&mut self, ctx: &Ctx) {
+        self.docs.suspend(ctx);
+    }
+
+    /// The window draws through `Canvas`, so the same routine serves the CPU `Surface` and the GPU canvas.
+    fn draws_canvas(&self) -> bool {
+        true
+    }
+
+    fn draw_canvas(&mut self, ctx: &Ctx, canvas: &mut dyn Canvas, _t: f64) -> Damage {
+        self.enter(bifrost_app::app_windows::WindowId::MAIN);
+        let d = self.paint(ctx, canvas);
+        self.enter(ctx.key_window());
+        d
+    }
+
+    /// The shared-memory path: the same routine on the CPU `Surface`, which implements `Canvas`.
+    fn draw(&mut self, ctx: &Ctx, s: &mut Surface, t: f64) -> Damage {
+        self.draw_canvas(ctx, s, t)
+    }
+}
+
+impl TextEditApp {
+    /// The input of the window being handled.
+    fn input(&mut self, ctx: &Ctx, ev: Input) -> bool {
         match ev {
             Input::Command(command) => match command {
                 Command::Cut => self.perform(ctx, Action::Cut),
@@ -2704,83 +2915,7 @@ impl App for TextEditApp {
         }
     }
 
-    /// The scroll wheel, in place of the drag the shell would emulate for it (which placed the caret and selected text).
-    fn pointer_interest(&self) -> u32 {
-        bifrost_app::pointer_events::WHEEL
-    }
-
-    fn pointer(&mut self, ctx: &Ctx, ev: &bifrost_app::pointer_events::PointerEvent) -> bool {
-        match *ev {
-            bifrost_app::pointer_events::PointerEvent::Wheel { x, y, dy, .. } => self.wheel(ctx, x, y, dy),
-            _ => false,
-        }
-    }
-
-    /// Copy and Paste are enabled only when they have something to act on.
-    fn commands(&self, _ctx: &Ctx) -> Commands {
-        let (has_sel, can_undo, can_redo) = match active_doc(&self.docs) {
-            Some(d) => (d.text.has_selection(), d.text.can_undo(), d.text.can_redo()),
-            None => (false, false, false),
-        };
-        Commands::default()
-            .with(Command::Cut, has_sel)
-            .with(Command::Copy, has_sel)
-            .with(Command::Paste, clipboard::text().is_some())
-            .with(Command::SelectAll, active_doc(&self.docs).is_some())
-            .with(Command::Undo, can_undo)
-            .with(Command::Redo, can_redo)
-    }
-
-    fn undo_titles(&self, _ctx: &Ctx) -> (String, String) {
-        match active_doc(&self.docs) {
-            Some(d) => (
-                d.text.undo_name().map_or("Undo".into(), |n| format!("Undo {n}")),
-                d.text.redo_name().map_or("Redo".into(), |n| format!("Redo {n}")),
-            ),
-            None => ("Undo".into(), "Redo".into()),
-        }
-    }
-
-    fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
-        vec![self.file_menu(), self.text_menu(), self.format_menu(), self.view_menu(), self.preferences_menu()]
-    }
-
-    fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
-        if is_menu_id(id) {
-            return self.perform(ctx, Action::Document(id));
-        }
-        match Action::from_id(id) {
-            Some(action) => self.perform(ctx, action),
-            None => false,
-        }
-    }
-
-    /// A picture dragged over the window is accepted when it is a picture and the page can take it (rich text, editable).
-    /// On the drop the files arrive as documents (see `picture_event`); the drop is answered here.
-    fn drag(&mut self, ctx: &Ctx, ev: dnd::Event) -> bool {
-        let dnd::Event::Dest { session, phase, items, .. } = ev else { return false };
-        let pictures = items.iter().any(|item| dnd::image_format_of(item).is_some());
-        let takes = pictures && active_doc(&self.docs).is_some_and(|d| d.rich && !d.read_only);
-        match phase {
-            DragPhase::Entered | DragPhase::Updated => {
-                if takes && !self.drop_sessions.contains(&session) {
-                    if self.drop_sessions.len() >= 16 {
-                        self.drop_sessions.remove(0);
-                    }
-                    self.drop_sessions.push(session);
-                }
-                dnd::reply(ctx, session, if takes { dragop::COPY } else { 0 });
-            }
-            DragPhase::Exited => self.drop_sessions.retain(|s| *s != session),
-            DragPhase::Perform => {
-                // the files follow as documents (`picture_event` inserts them); the drop is accepted here
-                dnd::performed(ctx, session, takes);
-            }
-        }
-        true
-    }
-
-    fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
+    fn document_event(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
         let ev = match self.export_event(ctx, ev) {
             Ok(handled) => return handled,
             Err(ev) => ev,
@@ -2798,28 +2933,12 @@ impl App for TextEditApp {
         }
     }
 
-    fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
-        self.docs.tick(ctx, t);
-        false
-    }
-
-    fn next_wake(&self, _t: f64) -> Option<f64> {
-        self.docs.next_wake()
-    }
-
-    fn suspend(&mut self, ctx: &Ctx) {
-        self.docs.suspend(ctx);
-    }
-
-    /// The window draws through `Canvas`, so the same routine serves the CPU `Surface` and the GPU canvas.
-    fn draws_canvas(&self) -> bool {
-        true
-    }
-
-    fn draw_canvas(&mut self, ctx: &Ctx, canvas: &mut dyn Canvas, _t: f64) -> Damage {
+    /// Draws the window being handled (`doc_windows`): the main window from `draw_canvas`, a document window from
+    /// `draw_window`.
+    pub(crate) fn paint(&mut self, ctx: &Ctx, canvas: &mut dyn Canvas) -> Damage {
         let (w, h) = canvas.size();
         let ui = &ctx.ui;
-        let geom = self.geometry(ui, ctx.cfg.w, ctx.cfg.h);
+        let geom = self.geom(ctx);
         let find = self.find_buttons(ui, &geom);
         view::draw_bar(canvas, ui, &geom);
         view::draw_title(canvas, ui, &geom, &self.window_title());
@@ -2933,11 +3052,6 @@ impl App for TextEditApp {
         d.all();
         d
     }
-
-    /// The shared-memory path: the same routine on the CPU `Surface`, which implements `Canvas`.
-    fn draw(&mut self, ctx: &Ctx, s: &mut Surface, t: f64) -> Damage {
-        self.draw_canvas(ctx, s, t)
-    }
 }
 
 /// The standard editing command a Cmd (or Ctrl) chord names: A select all, C copy, X cut, V paste, Z undo (Shift redo).
@@ -2974,9 +3088,12 @@ mod tests {
 
     #[test]
     fn an_untitled_document_holds_the_text_it_is_given_and_shows_from_the_top() {
+        let ctx = window(1200, 780);
         let mut app = TextEditApp::new();
         app.scroll = 40.0;
         app.open_untitled(doc("shared text"));
+        // the first document takes the window there is (`doc_windows`), from its top
+        app.sync_windows(&ctx);
         assert_eq!(active_doc(&app.docs).unwrap().text.text(), "shared text");
         assert!(app.follow);
         assert_eq!(app.scroll, 0.0);
