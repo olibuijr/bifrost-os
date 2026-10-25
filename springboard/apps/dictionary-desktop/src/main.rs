@@ -6,18 +6,24 @@ use bifrost_app::intents::{self, Intent, IntentResult, Param, ParamType};
 use bifrost_app::control::{RpcError, INTERNAL_ERROR, INVALID_PARAMS, METHOD_NOT_FOUND};
 use bifrost_app::dispatch::{DispatchQueue, Qos};
 use bifrost_app::kit::canvas::{Canvas, RectF};
-use bifrost_app::kit::ui::{Ui, Weight, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, LINK, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MATERIAL_SELECTION, ROW_PRESSED, SEGMENT_ON, SPACE_XS};
+use bifrost_app::controls::nav::{Toolbar, ToolbarItem};
+use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
+use bifrost_app::controls::{Rect, TextField};
+use bifrost_app::kit::ui::{
+    Ui, Weight, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, LINK, MAC_BODY_PT, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, MAC_TITLE1_PT, MATERIAL_SELECTION,
+    ROW_PRESSED, SEGMENT_ON, SEPARATOR_C, SPACE_XS,
+};
 use bifrost_app::kit::{Damage, Scroller};
 use bifrost_app::widgets;
 use bifrost_app::app_windows::{WindowId, WindowSpec};
 use bifrost_app::services::ServiceCall;
-use bifrost_app::{App, AppMenu, AppMenuItem, Command, Ctx, Input, KeyInput, TouchKind};
+use bifrost_app::{App, AppMenu, AppMenuItem, Command, ContextItem, Ctx, Input, KeyInput, TouchKind};
 use bifrost_core::json::Json;
 use bifrost_ui::stardict::{load_library, Hit, Library};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use bifrost_dictionary::model::{self, History, Prefs};
+use bifrost_dictionary::model::{self, layout, History, Prefs};
 
 const MENU_LOOK_UP_CLIPBOARD: u32 = 1;
 const MENU_COPY_DEFINITION: u32 = 2;
@@ -38,27 +44,32 @@ const MENU_PRINT: u32 = 16;
 const MENU_OPEN_FOLDER: u32 = 17;
 const MENU_NEW_WINDOW: u32 = 18;
 
-/// The size of a window opened with File > New Window, in points.
-const NEW_WINDOW_PT: (f32, f32) = (480.0, 560.0);
+/// The size of a window opened with File > New Window, in points: wide enough for the sidebar
+/// (`layout::SIDEBAR_MIN_WINDOW_PT`).
+const NEW_WINDOW_PT: (f32, f32) = (720.0, 560.0);
 
-/// Most suggestions listed under the search field.
-const SUGGESTIONS: usize = 12;
+/// Most matching headwords listed in the sidebar.
+const SUGGESTIONS: usize = 60;
 
-/// Layout in points: the search field, the list below it and the footer line.
-const FIELD_TOP: f32 = 12.0;
-const FIELD_H: f32 = 32.0;
-const PAD: f32 = 16.0;
-const LIST_TOP: f32 = 56.0;
-const FOOTER_H: f32 = 28.0;
-/// Height of one suggestion row, in points.
+/// Layout in points (the window regions are `model::layout`). Side padding of the content column.
+const PAD: f32 = layout::PAD;
+/// Height of a sidebar row and of a match row in a window too narrow for the sidebar.
 const ROW_H: f32 = 28.0;
+/// Height of a sidebar section header (unused: the sidebar has no headers, but `SourceList` needs one).
+const SIDEBAR_HEADER_H: f32 = 22.0;
+/// The senses of a part of speech are indented under its label, as in the reference.
+const SENSE_INDENT: f32 = 12.0;
 /// Line advance of wrapped text, as a multiple of its size.
 const LEADING: f32 = 1.35;
-/// Height of the scope bar under the search field, and the width of a toolbar button, in points.
+/// Height of the scope bar and the find bar under the top bar, in points.
 const SCOPE_H: f32 = 28.0;
-const BTN_W: f32 = 28.0;
 /// Height of a row in the settings page.
 const SETTINGS_ROW_H: f32 = 32.0;
+
+/// Toolbar item ids.
+const TB_BACK: u32 = 1;
+const TB_FORWARD: u32 = 2;
+const TB_TEXT_SIZE: u32 = 3;
 
 /// What a clickable region does.
 #[derive(Clone, Debug, PartialEq)]
@@ -73,6 +84,10 @@ enum Act {
     Down(usize),
     Rename(usize),
     Done,
+    /// The toolbar's text size pull-down; its menu opens at this point under the button.
+    TextSize(f32, f32),
+    /// The search field's clear button.
+    ClearSearch,
 }
 
 /// A clickable region of the last frame, in points.
@@ -118,8 +133,29 @@ struct Line {
     weight: Weight,
     colour: u32,
     h: f32,
-    /// A line of a definition: a tap on one of its words follows it as a cross-reference.
-    body: bool,
+    /// Points from the content column's padding to the text.
+    indent: f32,
+    /// The cross-references on the line: a byte range of `text` and the term a tap on it looks up. Only the terms a
+    /// cross-reference line names (`model::cross_references`) that some dictionary defines are links.
+    links: Vec<(usize, usize, String)>,
+    /// Secondary text drawn after `text` in grey: the headword's pronunciation.
+    trail: Option<String>,
+}
+
+impl Line {
+    fn plain(text: String, pt: f32, weight: Weight, colour: u32, h: f32) -> Line {
+        Line { text, pt, weight, colour, h, indent: 0.0, links: Vec::new(), trail: None }
+    }
+}
+
+/// A line drawn with links in the last frame, for taps: its top, height and left edge in points, its text, size and links.
+struct LinkRow {
+    y: f32,
+    h: f32,
+    x: f32,
+    text: String,
+    pt: f32,
+    links: Vec<(usize, usize, String)>,
 }
 
 struct DictionaryApp {
@@ -142,8 +178,14 @@ struct DictionaryApp {
     /// The dictionary being renamed in the settings page, with the text typed so far.
     rename: Option<(usize, String)>,
     hot: Vec<Hot>,
-    /// The definition lines on screen in the last frame: top, height, text and size, in points.
-    body_rows: Vec<(f32, f32, String, f32)>,
+    /// The lines with links on screen in the last frame.
+    link_rows: Vec<LinkRow>,
+    /// The sidebar's bounds in the last frame (zero wide when the window is too narrow for one), in points.
+    sidebar: Rect,
+    /// Top of the match rows in the content column in the last frame, when the window has no sidebar and lists them there.
+    match_rows_top: Option<f32>,
+    /// The toolbar offers the text size pull-down. Only the main window: a context menu opens in it.
+    text_size_menu: bool,
     /// The settings row being dragged, if any.
     drag: Option<Drag>,
     /// Top of the first dictionary row of the settings page in the last frame, in points.
@@ -184,7 +226,10 @@ impl DictionaryApp {
             settings: false,
             rename: None,
             hot: Vec::new(),
-            body_rows: Vec::new(),
+            link_rows: Vec::new(),
+            sidebar: Rect::default(),
+            match_rows_top: None,
+            text_size_menu: true,
             drag: None,
             rows_top: 0.0,
             known: HashMap::new(),
@@ -197,6 +242,7 @@ impl DictionaryApp {
         let (w, h) = NEW_WINDOW_PT;
         let Ok(id) = ctx.open_window(WindowSpec::new("Dictionary", w, h)) else { return false };
         let mut app = DictionaryApp::new();
+        app.text_size_menu = false;
         app.configure(ctx);
         self.windows.push(ExtraWindow { id, app });
         true
@@ -359,6 +405,12 @@ impl DictionaryApp {
                 self.drag = None;
                 true
             }
+            // opened by `touch`, which has the context the menu needs
+            Act::TextSize(..) => false,
+            Act::ClearSearch => {
+                self.query.clear();
+                self.edited()
+            }
         }
     }
 
@@ -397,7 +449,8 @@ impl DictionaryApp {
             }
         }
         self.query = word.to_string();
-        self.suggestions.clear();
+        // the sidebar keeps listing the headwords that match, with this one selected
+        self.suggestions = self.library.as_ref().map(|l| l.suggest(word, SUGGESTIONS)).unwrap_or_default();
         self.shown = Some(Shown { word: word.to_string(), hits });
         if let Some(f) = &mut self.find {
             f.cur = None;
@@ -460,42 +513,75 @@ impl DictionaryApp {
         }
     }
 
-    /// The lines of the list under the search field, in order, for a `width` points wide list.
-    fn lines(&self, ui: &Ui, width: f32) -> Vec<Line> {
+    /// The sidebar: the headwords that match the query, the one on screen selected.
+    fn source_list(&self) -> SourceList {
+        let rows = self.suggestions.iter().enumerate().map(|(i, w)| SidebarItem::row(i as u32, w)).collect();
+        let mut list = SourceList::new(rows, ROW_H, SIDEBAR_HEADER_H);
+        let on = self.shown.as_ref().and_then(|s| self.suggestions.iter().position(|w| w.eq_ignore_ascii_case(&s.word)));
+        list.set_selected(on.map(|i| i as u32));
+        list
+    }
+
+    /// The lines of the content column, in order, for a column `width` points wide. `list_matches` lists the matching
+    /// headwords as rows (a window too narrow for the sidebar).
+    fn lines(&mut self, ui: &Ui, width: f32, list_matches: bool) -> Vec<Line> {
         let mut out = Vec::new();
         let size = self.prefs.scaled(MAC_BODY_PT);
-        let body = |text: String, colour: u32| Line { text, pt: size, weight: Weight::Regular, colour, h: size * LEADING, body: false };
+        let wrap_px = |indent: f32| ui.pt((width - 2.0 * PAD - indent).max(PAD));
         let message = |out: &mut Vec<Line>, text: &str, colour: u32| {
-            for line in ui.wrap(text, size, Weight::Regular, ui.pt(width - 2.0 * PAD)) {
-                out.push(body(line, colour));
+            for line in ui.wrap(text, size, Weight::Regular, wrap_px(0.0)) {
+                out.push(Line::plain(line, size, Weight::Regular, colour, size * LEADING));
             }
         };
-        if let Some(shown) = &self.shown {
-            let hits = self.visible_hits();
-            if hits.is_empty() {
-                message(&mut out, &self.no_answer(&shown.word), LABEL_2.now());
-            }
-            for hit in &hits {
-                out.push(Line { text: hit.dictionary.clone(), pt: MAC_SUBHEAD_PT, weight: Weight::Semibold, colour: LABEL_2.now(), h: 24.0, body: false });
-                for paragraph in hit.text.split('\n') {
-                    if paragraph.is_empty() {
-                        out.push(Line { text: String::new(), pt: size, weight: Weight::Regular, colour: LABEL.now(), h: 8.0, body: false });
-                        continue;
-                    }
-                    for line in ui.wrap(paragraph, size, Weight::Regular, ui.pt(width - 2.0 * PAD)) {
-                        out.push(Line { body: true, ..body(line, LABEL.now()) });
-                    }
+        let Some(word) = self.shown.as_ref().map(|s| s.word.clone()) else {
+            if list_matches && !self.suggestions.is_empty() {
+                for w in &self.suggestions {
+                    out.push(Line::plain(w.clone(), size, Weight::Regular, LABEL.now(), ROW_H));
                 }
-                out.push(Line { text: String::new(), pt: size, weight: Weight::Regular, colour: LABEL.now(), h: 18.0, body: false });
+            } else if self.query.trim().is_empty() {
+                message(&mut out, "Type a word to look it up.", LABEL_2.now());
+            } else if self.suggestions.is_empty() {
+                message(&mut out, &format!("No words start with \u{201c}{}\u{201d}.", self.query.trim()), LABEL_2.now());
+            } else {
+                message(&mut out, "Choose a word in the sidebar, or press Return to look it up.", LABEL_2.now());
             }
-        } else if !self.suggestions.is_empty() {
-            for word in &self.suggestions {
-                out.push(Line { text: word.clone(), pt: size, weight: Weight::Regular, colour: LABEL.now(), h: ROW_H, body: false });
+            return out;
+        };
+        let hits = self.visible_hits();
+        if hits.is_empty() {
+            message(&mut out, &self.no_answer(&word), LABEL_2.now());
+            return out;
+        }
+        // the headword, with the first pronunciation a dictionary gives
+        let head_pt = self.prefs.scaled(MAC_TITLE1_PT);
+        let pron = hits.iter().find_map(|h| model::pronunciation(&h.text).0);
+        out.push(Line { trail: pron.map(|p| format!("| {p} |")), ..Line::plain(word.clone(), head_pt, Weight::Bold, LABEL.now(), head_pt * LEADING + 8.0) });
+        let several = hits.len() > 1;
+        for hit in &hits {
+            if several {
+                out.push(Line::plain(hit.dictionary.clone(), MAC_SUBHEAD_PT, Weight::Semibold, LABEL_2.now(), 24.0));
             }
-        } else if self.query.trim().is_empty() {
-            message(&mut out, "Type a word to look it up.", LABEL_2.now());
-        } else {
-            message(&mut out, &format!("No words start with \u{201c}{}\u{201d}.", self.query.trim()), LABEL_2.now());
+            let (_, text) = model::pronunciation(&hit.text);
+            for paragraph in text.split('\n') {
+                let para = model::normalize(paragraph);
+                if para.is_empty() {
+                    out.push(Line::plain(String::new(), size, Weight::Regular, LABEL.now(), 8.0));
+                    continue;
+                }
+                if model::is_part_of_speech(&para) {
+                    out.push(Line::plain(para, size, Weight::Regular, LABEL_2.now(), size * LEADING));
+                    continue;
+                }
+                // links only for the terms of a cross-reference line that a dictionary defines
+                let refs: Vec<(usize, usize)> = model::cross_references(&para).into_iter().filter(|&(s, e)| self.is_link(&para[s..e])).collect();
+                let wrapped = ui.wrap(&para, size, Weight::Regular, wrap_px(SENSE_INDENT));
+                let starts = model::line_starts(&wrapped);
+                for (line, start) in wrapped.into_iter().zip(starts) {
+                    let links = model::clip_links(start, line.len(), &refs).into_iter().map(|(a, b, i)| (a, b, para[refs[i].0..refs[i].1].to_string())).collect();
+                    out.push(Line { indent: SENSE_INDENT, links, ..Line::plain(line, size, Weight::Regular, LABEL.now(), size * LEADING) });
+                }
+            }
+            out.push(Line::plain(String::new(), size, Weight::Regular, LABEL.now(), 18.0));
         }
         out
     }
@@ -504,7 +590,7 @@ impl DictionaryApp {
         let (px, py) = to_points(ctx, x, y);
         match kind {
             TouchKind::Down => {
-                if self.settings && self.rename.is_none() && self.hit_test(px, py).is_none() {
+                if self.settings && self.rename.is_none() && px >= self.sidebar.w && self.hit_test(px, py).is_none() {
                     if let Some(from) = model::row_at(py, self.rows_top, SETTINGS_ROW_H, self.prefs.dicts.len()) {
                         self.drag = Some(Drag { from, y: py });
                         return true;
@@ -533,9 +619,16 @@ impl DictionaryApp {
                 }
                 if self.scroll.up(py, t) {
                     if let Some(act) = self.hit_test(px, py) {
+                        if let Act::TextSize(ax, ay) = act {
+                            self.open_text_size_menu(ctx, ax, ay);
+                            return false;
+                        }
                         return self.perform(act);
                     }
-                    if self.tap_definition(ctx, x, py) {
+                    if self.tap_sidebar(px, py) {
+                        return true;
+                    }
+                    if self.tap_definition(ctx, px, py) {
                         return true;
                     }
                     self.tap_row(py)
@@ -553,30 +646,63 @@ impl DictionaryApp {
         }
     }
 
-    /// A tap on a word of a definition looks that word up when some dictionary knows it (a cross-reference).
-    fn tap_definition(&mut self, ctx: &Ctx, x_px: f32, py: f32) -> bool {
+    /// The toolbar's text size pull-down (`NSMenuToolbarItem`): its menu opens under the button, at (`x`, `y`) points, and
+    /// the choice comes back as `Input::ContextAction` with the View menu's ids.
+    fn open_text_size_menu(&self, ctx: &Ctx, x: f32, y: f32) {
+        let s = ctx.ui.pt(1.0);
+        ctx.context_menu(
+            x * s,
+            y * s,
+            vec![
+                ContextItem::new(MENU_BIGGER, "Bigger Text").key("cmd+=").enabled(self.prefs.step < model::MAX_STEP),
+                ContextItem::new(MENU_SMALLER, "Smaller Text").key("cmd+-").enabled(self.prefs.step > model::MIN_STEP),
+                ContextItem::new(MENU_ACTUAL_SIZE, "Actual Size").key("cmd+0").enabled(self.prefs.step != 0),
+            ],
+        );
+    }
+
+    /// A tap on a sidebar row (points) looks its headword up.
+    fn tap_sidebar(&mut self, px: f32, py: f32) -> bool {
+        if self.sidebar.w <= 0.0 || !self.sidebar.contains(px, py) {
+            return false;
+        }
+        match self.source_list().hit(self.sidebar, -bifrost_app::layout::UNIFIED_BAR_PT, px, py) {
+            Some(i) => match self.suggestions.get(i as usize).cloned() {
+                Some(word) => {
+                    self.settings = false;
+                    self.look_up(&word)
+                }
+                None => true,
+            },
+            None => true,
+        }
+    }
+
+    /// A tap on a cross-reference in a definition (points) looks the term up.
+    fn tap_definition(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
         if self.settings || self.shown.is_none() {
             return false;
         }
-        let Some((_, _, text, pt)) = self.body_rows.iter().find(|(y, h, _, _)| py >= *y && py < *y + *h).cloned() else { return false };
-        let tap = x_px - ctx.ui.pt(PAD);
-        for (start, end) in model::word_spans(&text) {
-            let from = ctx.ui.measure(&text[..start], pt, Weight::Regular);
-            let to = ctx.ui.measure(&text[..end], pt, Weight::Regular);
-            if tap >= from && tap < to {
-                let word = text[start..end].to_string();
-                return self.is_link(&word) && self.look_up(&word);
-            }
+        let Some(row) = self.link_rows.iter().find(|r| py >= r.y && py < r.y + r.h) else { return false };
+        let tap = ctx.ui.pt(px - row.x);
+        let target = row.links.iter().find_map(|(a, b, term)| {
+            let from = ctx.ui.measure(&row.text[..*a], row.pt, Weight::Regular);
+            let to = ctx.ui.measure(&row.text[..*b], row.pt, Weight::Regular);
+            (tap >= from && tap < to).then(|| term.clone())
+        });
+        match target {
+            Some(term) => self.look_up(&term),
+            None => false,
         }
-        false
     }
 
-    /// A tap at `py` (points) on the suggestion list looks that word up.
+    /// A tap at `py` (points) on the match rows of a window without a sidebar looks that word up.
     fn tap_row(&mut self, py: f32) -> bool {
-        if self.shown.is_some() || self.settings || py < LIST_TOP {
+        let Some(top) = self.match_rows_top else { return true };
+        if self.shown.is_some() || self.settings || py < top {
             return true;
         }
-        let row = ((py - LIST_TOP + self.scroll.offset()) / ROW_H).floor();
+        let row = ((py - top + self.scroll.offset()) / ROW_H).floor();
         if row < 0.0 {
             return true;
         }
@@ -722,12 +848,14 @@ fn text_at(canvas: &mut dyn Canvas, ui: &Ui, text: &str, pt: f32, weight: Weight
 
 impl DictionaryApp {
     /// The settings page: which dictionaries are used, in what order and under what label, the text size and Done.
-    fn draw_settings(&mut self, ctx: &Ctx, canvas: &mut dyn Canvas, width_pt: f32, top: f32, view_h: f32) {
+    /// `left` and `width_pt` are the content column's left edge and width, in points.
+    fn draw_settings(&mut self, ctx: &Ctx, canvas: &mut dyn Canvas, left: f32, width_pt: f32, top: f32, view_h: f32) {
         let ui = &ctx.ui;
-        let (cw, _) = canvas.size();
-        canvas.push_clip(RectF::new(0.0, ui.pt(top), cw as f32, ui.pt(view_h)), 0.0);
+        canvas.push_clip(RectF::new(ui.pt(left), ui.pt(top), ui.pt(width_pt), ui.pt(view_h)), 0.0);
         let mut y = top;
-        text_at(canvas, ui, "Dictionaries", MAC_SUBHEAD_PT, Weight::Semibold, LABEL_2.now(), PAD, y, width_pt - 2.0 * PAD);
+        let pad = left + PAD;
+        let right = left + width_pt - PAD;
+        text_at(canvas, ui, "Dictionaries", MAC_SUBHEAD_PT, Weight::Semibold, LABEL_2.now(), pad, y, width_pt - 2.0 * PAD);
         y += SETTINGS_ROW_H;
         let count = self.prefs.dicts.len();
         self.rows_top = y;
@@ -744,14 +872,14 @@ impl DictionaryApp {
             if let Some((from, pointer)) = dragged {
                 if from == i {
                     y = (pointer - SETTINGS_ROW_H / 2.0).clamp(rows_top, rows_top + (count.max(1) - 1) as f32 * SETTINGS_ROW_H);
-                    canvas.fill_rect(RectF::new(0.0, ui.pt(y), cw as f32, ui.pt(SETTINGS_ROW_H)), ROW_PRESSED.now());
+                    canvas.fill_rect(RectF::new(ui.pt(left), ui.pt(y), ui.pt(width_pt), ui.pt(SETTINGS_ROW_H)), ROW_PRESSED.now());
                 }
             }
             let renaming = self.rename.as_ref().and_then(|(r, buf)| (*r == i).then(|| buf.clone()));
-            button(canvas, ui, &mut self.hot, PAD, y + 4.0, 36.0, SETTINGS_ROW_H - 8.0, if d.enabled { "On" } else { "Off" }, Some(Act::Toggle(i)), d.enabled);
+            button(canvas, ui, &mut self.hot, pad, y + 4.0, 36.0, SETTINGS_ROW_H - 8.0, if d.enabled { "On" } else { "Off" }, Some(Act::Toggle(i)), d.enabled);
             let buttons_w = 3.0 * 56.0 + 2.0 * 4.0;
-            let name_x = PAD + 36.0 + 12.0;
-            let name_w = (width_pt - PAD - buttons_w - name_x - 8.0).max(40.0);
+            let name_x = pad + 36.0 + 12.0;
+            let name_w = (right - buttons_w - name_x - 8.0).max(40.0);
             match renaming {
                 Some(buf) => {
                     let r = RectF::new(ui.pt(name_x), ui.pt(y + 3.0), ui.pt(name_w), ui.pt(SETTINGS_ROW_H - 6.0));
@@ -763,20 +891,19 @@ impl DictionaryApp {
                     text_at(canvas, ui, d.shown_name(), MAC_BODY_PT, Weight::Regular, colour, name_x, y, name_w);
                 }
             }
-            let bx = width_pt - PAD - buttons_w;
+            let bx = right - buttons_w;
             button(canvas, ui, &mut self.hot, bx, y + 4.0, 56.0, SETTINGS_ROW_H - 8.0, "Up", (i > 0).then_some(Act::Up(i)), false);
             button(canvas, ui, &mut self.hot, bx + 60.0, y + 4.0, 56.0, SETTINGS_ROW_H - 8.0, "Down", (i + 1 < count).then_some(Act::Down(i)), false);
             button(canvas, ui, &mut self.hot, bx + 120.0, y + 4.0, 56.0, SETTINGS_ROW_H - 8.0, "Rename", Some(Act::Rename(i)), false);
         }
         y = rows_top + count as f32 * SETTINGS_ROW_H;
         if count == 0 {
-            text_at(canvas, ui, "No dictionary is installed yet.", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), PAD, y, width_pt - 2.0 * PAD);
+            text_at(canvas, ui, "No dictionary is installed yet.", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), pad, y, width_pt - 2.0 * PAD);
             y += SETTINGS_ROW_H;
         }
         y += SETTINGS_ROW_H / 2.0;
         let size_text = format!("Text size: {}%", 100 + 10 * self.prefs.step);
-        text_at(canvas, ui, &size_text, MAC_BODY_PT, Weight::Regular, LABEL.now(), PAD, y, width_pt - 2.0 * PAD - 120.0);
-        let right = width_pt - PAD;
+        text_at(canvas, ui, &size_text, MAC_BODY_PT, Weight::Regular, LABEL.now(), pad, y, width_pt - 2.0 * PAD - 120.0);
         button(canvas, ui, &mut self.hot, right - 56.0, y + 4.0, 56.0, SETTINGS_ROW_H - 8.0, "A+", (self.prefs.step < model::MAX_STEP).then_some(Act::Bigger), false);
         button(canvas, ui, &mut self.hot, right - 116.0, y + 4.0, 56.0, SETTINGS_ROW_H - 8.0, "A-", (self.prefs.step > model::MIN_STEP).then_some(Act::Smaller), false);
         y += SETTINGS_ROW_H * 1.5;
@@ -820,6 +947,8 @@ impl App for DictionaryApp {
                 self.copy_definition(ctx);
                 false
             }
+            // the toolbar's text size pull-down
+            Input::ContextAction(id @ (MENU_BIGGER | MENU_SMALLER | MENU_ACTUAL_SIZE)) => self.menu_action(ctx, id),
             Input::Command(Command::Paste) => {
                 let text = ctx.pasteboard_string().unwrap_or_default();
                 let line = text.lines().next().unwrap_or("").to_string();
@@ -998,43 +1127,93 @@ impl App for DictionaryApp {
         let width_pt = cw as f32 / scale;
         let height_pt = ch as f32 / scale;
         self.hot.clear();
-        self.body_rows.clear();
+        self.link_rows.clear();
+        self.match_rows_top = None;
+        let bar_h = bifrost_app::layout::UNIFIED_BAR_PT;
+        let regions = layout::regions(width_pt, height_pt, bar_h, widgets::toolbar_lead_pt());
+        self.sidebar = regions.sidebar;
+        let content = regions.content;
 
         canvas.fill_rect(RectF::new(0.0, 0.0, cw as f32, ch as f32), CONTENT_BG.now());
 
-        // the toolbar: Back and Forward, the search field, and the text size buttons
-        let gap = 4.0;
-        let can_back = self.history.can_back();
-        let can_forward = self.history.can_forward();
-        let can_smaller = self.prefs.step > model::MIN_STEP;
-        let can_bigger = self.prefs.step < model::MAX_STEP;
-        button(canvas, ui, &mut self.hot, PAD, FIELD_TOP, BTN_W, FIELD_H, "<", can_back.then_some(Act::Back), false);
-        button(canvas, ui, &mut self.hot, PAD + BTN_W + gap, FIELD_TOP, BTN_W, FIELD_H, ">", can_forward.then_some(Act::Forward), false);
-        let right = width_pt - PAD;
-        button(canvas, ui, &mut self.hot, right - BTN_W, FIELD_TOP, BTN_W, FIELD_H, "A+", can_bigger.then_some(Act::Bigger), false);
-        button(canvas, ui, &mut self.hot, right - 2.0 * BTN_W - gap, FIELD_TOP, BTN_W, FIELD_H, "A-", can_smaller.then_some(Act::Smaller), false);
-        let field_x = PAD + 2.0 * (BTN_W + gap);
-        let field_w = (right - 2.0 * (BTN_W + gap) - field_x).max(40.0);
-        let field = RectF::new(ui.pt(field_x), ui.pt(FIELD_TOP), ui.pt(field_w), ui.pt(FIELD_H));
-        canvas.fill_rrect(field, ui.pt(6.0), FIELD_BG.now());
-        let (text, colour) = if self.query.is_empty() { ("Search Dictionary", LABEL_2.now()) } else { (self.query.as_str(), LABEL.now()) };
-        let fitted = ui.fit(text, MAC_BODY_PT, field.w - ui.pt(PAD));
-        let img = ui.text(&fitted, MAC_BODY_PT, Weight::Regular, colour);
-        widgets::blit(canvas, &img, (field.x + ui.pt(PAD / 2.0)) as i32, (field.y + (field.h - img.h as f32) / 2.0) as i32);
+        // the sidebar: the matching headwords under the traffic lights, the one on screen selected
+        if regions.sidebar.w > 0.0 {
+            widgets::source_list(canvas, ui, regions.sidebar, &self.source_list(), -bar_h, None);
+            canvas.fill_rect(RectF::new(ui.pt(regions.sidebar.w) - 1.0, 0.0, 1.0, ch as f32), SEPARATOR_C.now());
+        }
 
-        let mut top = LIST_TOP;
+        // the title and what was found, as the reference's "Dictionary / 33 found"
+        let subtitle = match &self.library {
+            Some(lib) if !lib.problems.is_empty() => format!("{} could not be opened", lib.problems.len()),
+            Some(lib) if lib.is_empty() => "No dictionaries installed".to_string(),
+            _ if !self.suggestions.is_empty() => format!("{} found", self.suggestions.len()),
+            Some(lib) => {
+                let names = lib.dictionaries.len();
+                format!("{names} dictionar{} \u{b7} {} words", if names == 1 { "y" } else { "ies" }, lib.word_count())
+            }
+            None => String::new(),
+        };
+        let t = regions.title;
+        if t.w > 0.0 {
+            let title = ui.text(&ui.fit("Dictionary", MAC_HEADLINE_PT, ui.pt(t.w)), MAC_HEADLINE_PT, Weight::Semibold, LABEL.now());
+            let sub = ui.text(&ui.fit(&subtitle, MAC_SUBHEAD_PT, ui.pt(t.w)), MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now());
+            let top = ui.pt(t.y) + (ui.pt(t.h) - (title.h + sub.h) as f32) / 2.0;
+            widgets::blit(canvas, &title, ui.pt(t.x) as i32, top as i32);
+            widgets::blit(canvas, &sub, ui.pt(t.x) as i32, (top + title.h as f32) as i32);
+        }
+
+        // the toolbar: Back and Forward in one capsule, then the text size pull-down, right-aligned before the search field
+        let mut items = vec![
+            ToolbarItem::flexible_space(),
+            ToolbarItem::icon(TB_BACK, "Back", "chevron.left").in_group(1).enabled(self.history.can_back()),
+            ToolbarItem::icon(TB_FORWARD, "Forward", "chevron.right").in_group(1).enabled(self.history.can_forward()),
+        ];
+        if self.text_size_menu {
+            items.push(ToolbarItem::menu(TB_TEXT_SIZE, "Text Size", Some("textformat")));
+        }
+        let bar = Toolbar::new(items);
+        if regions.tools.w > 0.0 {
+            let placed = widgets::toolbar(canvas, ui, regions.tools, &bar, None);
+            for (id, r) in &placed.visible {
+                let act = match *id {
+                    TB_BACK if self.history.can_back() => Act::Back,
+                    TB_FORWARD if self.history.can_forward() => Act::Forward,
+                    TB_TEXT_SIZE => {
+                        let (ax, ay) = placed.menu_anchor(TB_TEXT_SIZE, 4.0).unwrap_or((r.x, r.y + r.h));
+                        Act::TextSize(ax, ay)
+                    }
+                    _ => continue,
+                };
+                self.hot.push(Hot { x: r.x, y: r.y, w: r.w, h: r.h, act });
+            }
+        }
+
+        // the search field: typing always goes to it while no find or settings page has the keys
+        let s = regions.search;
+        if s.w > 0.0 {
+            let mut field = TextField::new();
+            field.push_str(&self.query);
+            widgets::search_field(canvas, ui, &field, s, "Search", !self.settings && self.find.is_none());
+            if let Some(c) = bifrost_app::controls::search::layout(s, !self.query.is_empty()).clear {
+                self.hot.push(Hot { x: c.x, y: c.y, w: c.w, h: c.h, act: Act::ClearSearch });
+            }
+        }
+
+        let left = content.x + PAD;
+        let mut top = content.y;
+        let gap = 4.0;
         // the scope bar: All and each dictionary that answered
         if !self.settings && self.show_scope_bar() {
-            let mut x = PAD;
+            let mut x = left;
             let mut entries: Vec<(String, Option<String>)> = vec![("All".to_string(), None)];
             entries.extend(self.scope_names().into_iter().map(|n| (n.clone(), Some(n))));
             for (label, scope) in entries {
                 let w = ui.measure(&label, MAC_SUBHEAD_PT, Weight::Regular) / scale + 16.0;
-                if x + w > width_pt - PAD {
+                if x + w > content.x + content.w - PAD {
                     break;
                 }
                 let on = self.scope == scope;
-                button(canvas, ui, &mut self.hot, x, top, w, SCOPE_H - 4.0, &label, Some(Act::Scope(scope)), on);
+                button(canvas, ui, &mut self.hot, x, top + 2.0, w, SCOPE_H - 4.0, &label, Some(Act::Scope(scope)), on);
                 x += w + gap;
             }
             top += SCOPE_H;
@@ -1050,19 +1229,26 @@ impl App for DictionaryApp {
                     format!("{} of {}", f.cur.map_or(0, |c| c + 1), f.count)
                 };
                 let text = format!("Find: {}  \u{b7}  {status}", f.query);
-                let img = ui.text(&ui.fit(&text, MAC_BODY_PT, ui.pt(width_pt - 2.0 * PAD)), MAC_BODY_PT, Weight::Regular, LABEL.now());
-                canvas.fill_rect(RectF::new(0.0, ui.pt(top), cw as f32, ui.pt(SCOPE_H)), ROW_PRESSED.now());
-                widgets::blit(canvas, &img, ui.pt(PAD) as i32, (ui.pt(top) + (ui.pt(SCOPE_H) - img.h as f32) / 2.0) as i32);
+                let img = ui.text(&ui.fit(&text, MAC_BODY_PT, ui.pt(content.w - 2.0 * PAD)), MAC_BODY_PT, Weight::Regular, LABEL.now());
+                canvas.fill_rect(RectF::new(ui.pt(content.x), ui.pt(top), ui.pt(content.w), ui.pt(SCOPE_H)), ROW_PRESSED.now());
+                widgets::blit(canvas, &img, ui.pt(left) as i32, (ui.pt(top) + (ui.pt(SCOPE_H) - img.h as f32) / 2.0) as i32);
                 top += SCOPE_H;
             }
         }
-        let view_h = (height_pt - top - FOOTER_H).max(0.0);
+        // a hairline under the bars, as under the reference's scope bar
+        canvas.fill_rect(RectF::new(ui.pt(content.x), ui.pt(top) - 1.0, ui.pt(content.w), 1.0), SEPARATOR_C.now());
+        top += PAD;
+        let view_h = (content.y + content.h - top).max(0.0);
 
         if self.settings {
-            self.draw_settings(ctx, canvas, width_pt, top, view_h);
+            self.draw_settings(ctx, canvas, content.x, content.w, top, view_h);
         } else {
-            // the list, clipped under the field and above the footer
-            let lines = self.lines(ui, width_pt);
+            // the entry (or the matches, in a window too narrow for the sidebar), clipped to the content column
+            let list_matches = regions.sidebar.w <= 0.0;
+            let lines = self.lines(ui, content.w, list_matches);
+            if list_matches && self.shown.is_none() && !self.suggestions.is_empty() {
+                self.match_rows_top = Some(top);
+            }
             let content_h: f32 = lines.iter().map(|l| l.h).sum();
             self.scroll.set_max(content_h - view_h);
             let mut ys = Vec::with_capacity(lines.len());
@@ -1095,54 +1281,42 @@ impl App for DictionaryApp {
                 self.scroll.jump_to((ys[i] - 8.0).max(0.0));
             }
             let offset = self.scroll.offset();
-            let clip = RectF::new(0.0, ui.pt(top), cw as f32, ui.pt(view_h));
+            let clip = RectF::new(ui.pt(content.x), ui.pt(top), ui.pt(content.w), ui.pt(view_h));
             canvas.push_clip(clip, 0.0);
             for (i, line) in lines.iter().enumerate() {
                 let y = top + ys[i] - offset;
                 if y + line.h > top && y < top + view_h && !line.text.is_empty() {
-                    let left = ui.pt(PAD);
+                    let x_pt = left + line.indent;
+                    let x0 = ui.pt(x_pt);
                     // the found words, the current one stronger
                     for m in matches.iter().filter(|m| m.line == i) {
                         let from = ui.measure(&line.text[..m.start], line.pt, line.weight);
                         let to = ui.measure(&line.text[..m.end], line.pt, line.weight);
                         let tint = if current == Some(*m) { MATERIAL_SELECTION.now() } else { ROW_PRESSED.now() };
-                        canvas.fill_rrect(RectF::new(left + from, ui.pt(y), to - from, ui.pt(line.h)), ui.pt(3.0), tint);
+                        canvas.fill_rrect(RectF::new(x0 + from, ui.pt(y), to - from, ui.pt(line.h)), ui.pt(3.0), tint);
                     }
-                    // a definition line draws the words that have a definition of their own as links
-                    let runs = if line.body {
-                        model::link_runs(&line.text, |w| self.is_link(w))
-                    } else {
-                        vec![model::Run { start: 0, end: line.text.len(), link: false }]
-                    };
-                    for run in runs {
+                    // plain text, with the cross-references of the line as links
+                    let spans: Vec<(usize, usize)> = line.links.iter().map(|(a, b, _)| (*a, *b)).collect();
+                    for run in model::runs(line.text.len(), &spans) {
                         let piece = &line.text[run.start..run.end];
                         let img = ui.text(piece, line.pt, line.weight, if run.link { LINK } else { line.colour });
-                        let x = left + if run.start == 0 { 0.0 } else { ui.measure(&line.text[..run.start], line.pt, line.weight) };
+                        let x = x0 + if run.start == 0 { 0.0 } else { ui.measure(&line.text[..run.start], line.pt, line.weight) };
                         let ty = ui.pt(y) + (ui.pt(line.h) - img.h as f32) / 2.0;
                         widgets::blit(canvas, &img, x as i32, ty as i32);
                     }
-                    if line.body {
-                        self.body_rows.push((y, line.h, line.text.clone(), line.pt));
+                    if let Some(trail) = &line.trail {
+                        let img = ui.text(trail, line.pt, Weight::Regular, LABEL_2.now());
+                        let x = x0 + ui.measure(&line.text, line.pt, line.weight) + ui.pt(PAD);
+                        let ty = ui.pt(y) + (ui.pt(line.h) - img.h as f32) / 2.0;
+                        widgets::blit(canvas, &img, x as i32, ty as i32);
+                    }
+                    if !line.links.is_empty() {
+                        self.link_rows.push(LinkRow { y, h: line.h, x: x_pt, text: line.text.clone(), pt: line.pt, links: line.links.clone() });
                     }
                 }
             }
             canvas.pop_clip();
         }
-
-        // the footer: what is installed, and any dictionary that could not be opened
-        let footer = match &self.library {
-            Some(lib) if !lib.is_empty() => {
-                let names = lib.dictionaries.len();
-                let mut text = format!("{names} dictionar{} \u{b7} {} words", if names == 1 { "y" } else { "ies" }, lib.word_count());
-                if !lib.problems.is_empty() {
-                    text.push_str(&format!(" \u{b7} {} could not be opened", lib.problems.len()));
-                }
-                text
-            }
-            _ => "No dictionaries installed".to_string(),
-        };
-        let img = ui.text(&ui.fit(&footer, MAC_FOOTNOTE_PT, ui.pt(width_pt - 2.0 * PAD)), MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now());
-        widgets::blit(canvas, &img, ui.pt(PAD) as i32, (ui.pt(height_pt - FOOTER_H) + (ui.pt(FOOTER_H) - img.h as f32) / 2.0) as i32);
 
         let mut d = Damage::new(cw as usize, ch as usize);
         d.all();
@@ -1189,6 +1363,48 @@ mod window_tests {
         assert_eq!(app.shown.as_ref().map(|s| s.word.as_str()), Some("cat"));
         assert_eq!(app.history.current(), Some("cat"));
         assert!(!app.show_from_intent("   "), "a blank word shows nothing");
+    }
+
+    #[test]
+    fn the_sidebar_lists_the_matches_with_the_word_on_screen_selected() {
+        let mut app = DictionaryApp::new();
+        app.suggestions = vec!["computer".into(), "computer-aided".into()];
+        assert_eq!(app.source_list().selected(), None, "nothing is selected while the query is typed");
+        app.shown = Some(Shown { word: "Computer".into(), hits: Vec::new() });
+        let list = app.source_list();
+        assert_eq!(list.items.len(), 2);
+        assert_eq!(list.selected(), Some(0));
+        app.shown = Some(Shown { word: "abacus".into(), hits: Vec::new() });
+        assert_eq!(app.source_list().selected(), None, "a word that is not in the list selects no row");
+    }
+
+    #[test]
+    fn a_tap_on_a_sidebar_row_looks_its_word_up_and_the_content_column_is_left_alone() {
+        let mut app = DictionaryApp::new();
+        app.suggestions = vec!["computer".into(), "computer-aided".into()];
+        app.sidebar = Rect { x: 0.0, y: 0.0, w: 200.0, h: 600.0 };
+        assert!(!app.tap_sidebar(300.0, 70.0), "a tap right of the sidebar is not the sidebar's");
+        assert!(app.shown.is_none());
+        // the rows start under the traffic lights' band
+        assert!(app.tap_sidebar(50.0, bifrost_app::layout::UNIFIED_BAR_PT + ROW_H * 0.5));
+        assert_eq!(app.shown.as_ref().map(|s| s.word.as_str()), Some("computer"));
+        assert_eq!(app.history.current(), Some("computer"));
+        app.sidebar = Rect::default();
+        assert!(!app.tap_sidebar(50.0, 70.0), "a window without a sidebar takes no sidebar taps");
+    }
+
+    #[test]
+    fn the_search_fields_clear_button_empties_the_query() {
+        let mut app = DictionaryApp::new();
+        app.query = "comp".into();
+        assert!(app.perform(Act::ClearSearch));
+        assert!(app.query.is_empty() && app.shown.is_none());
+        assert!(!app.perform(Act::TextSize(10.0, 20.0)), "the text size pull-down opens from `touch`, with the context");
+    }
+
+    #[test]
+    fn only_the_main_window_offers_the_text_size_pull_down() {
+        assert!(DictionaryApp::new().text_size_menu);
     }
 
     #[test]
