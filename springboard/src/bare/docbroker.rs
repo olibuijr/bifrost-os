@@ -146,6 +146,18 @@ impl Opener {
         }
     }
 
+    /// Opens `rel` the way opening a file with its default app does (the Dock's stack, Files' Open): read-write when the
+    /// account owns the file and may write it, as the reference's file manager opens a document read-write; read-only
+    /// otherwise (the app then shows the locked state). A folder opens read-only.
+    pub fn open_default(&self, rel: &Path) -> Result<(File, DocMode), DocErrorCode> {
+        if let Ok(f) = self.open(rel, DocMode::Write) {
+            if f.metadata().is_ok_and(|m| m.uid() == self.uid) {
+                return Ok((f, DocMode::Write));
+            }
+        }
+        self.open_any(rel, DocMode::Read).map(|f| (f, DocMode::Read))
+    }
+
     /// `NativeSavePanel.canCreateDirectories`: makes the folder `name` inside `parent` (one plain component, as the
     /// account, mode 0755). Fails with `Denied` when it exists or the name is not valid.
     pub fn make_dir(&self, parent: &Path, name: &str) -> Result<(), DocErrorCode> {
@@ -494,6 +506,27 @@ mod tests {
         assert_eq!(o.list(Path::new("Documents")).unwrap(), [("a.txt".to_string(), false)]);
         assert_eq!(o.list(Path::new("docs")).unwrap_err(), DocErrorCode::Denied, "a symlinked folder");
         assert_eq!(o.list(Path::new("..")).unwrap_err(), DocErrorCode::Denied);
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn default_open_is_read_write_for_an_owned_writable_file_and_read_only_otherwise() {
+        let d = scratch("default");
+        fs::write(d.join("home/Documents/mine.txt"), "a").unwrap();
+        fs::write(d.join("home/Documents/locked.txt"), "b").unwrap();
+        fs::set_permissions(d.join("home/Documents/locked.txt"), fs::Permissions::from_mode(0o444)).unwrap();
+        let o = opener(&d);
+        let (mut f, mode) = o.open_default(Path::new("Documents/mine.txt")).unwrap();
+        assert_eq!(mode, DocMode::Write);
+        f.write_all(b"z").unwrap();
+        let (_, mode) = o.open_default(Path::new("Documents/locked.txt")).unwrap();
+        // root may write anything; the read-only answer is what the account sees
+        if fs::metadata(&d).unwrap().uid() != 0 {
+            assert_eq!(mode, DocMode::Read, "a file the account may not write opens read-only");
+        }
+        let (_, mode) = o.open_default(Path::new("Documents")).unwrap();
+        assert_eq!(mode, DocMode::Read, "a folder");
+        assert_eq!(o.open_default(Path::new("Documents/none.txt")).unwrap_err(), DocErrorCode::NotFound);
         fs::remove_dir_all(&d).unwrap();
     }
 
