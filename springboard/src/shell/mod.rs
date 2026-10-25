@@ -2460,6 +2460,10 @@ impl Shell {
         if self.markup_load.is_some() || self.visual_search_pending() {
             due.add(Some(t + 50.0));
         }
+        // a shortcut run from Search posts its result banner when its thread finishes (`shortcut_results_tick`)
+        if quicksearch::shortcut_runs_pending() {
+            due.add(Some(t + 50.0));
+        }
         if self.screen_on {
             if let Some(w) = self.quicksearch.next_wake(t) {
                 due.add(Some(w));
