@@ -641,6 +641,10 @@ pub enum ToApp {
     WindowFocus { window: u32, focused: bool },
     /// Several windows: input for the key window `window` (see `WindowInput`). Window 0 never arrives here. Tag 0x250.
     WindowInput { window: u32, input: WindowInput },
+    /// `applicationShouldHandleReopen:hasVisibleWindows:`: the person activated the app (Dock, the app switcher,
+    /// Search, an open) while its main window was closed, and the shell has put the main window back. A document app
+    /// that closed its last document shows a new one. An app built before this message ignores it. Tag 0x254.
+    Reopen,
     Resume,
     Suspend,
     Quit,
@@ -934,7 +938,9 @@ pub enum ToShell {
     /// `position` (optional, points relative to the visible desktop area) asks where the window goes; the shell clamps it to
     /// the screen. `flags` is a `window_flags` set. Tag 0x240.
     WindowOpen { id: u32, title: String, w: f32, h: f32, position: Option<(f32, f32)>, flags: u32 },
-    /// Several windows: close window `id`. The shell drops its frames.
+    /// Several windows: close window `id`. The shell drops its frames. Id 0 orders the main window out
+    /// (`NSWindow.orderOut`, a document app's last document closed): the desk drops it and the app keeps running with no
+    /// window until it is activated again (`ToApp::Reopen`) or asks for it back with `WindowOpen` id 0.
     WindowClose { id: u32 },
     /// Several windows: the window's title.
     WindowTitle { id: u32, title: String },
@@ -1372,6 +1378,8 @@ mod tag {
     pub const WINDOW_FOCUS: u32 = 0x24f;
     /// Shell -> app: input for the key window (`ToApp::WindowInput`).
     pub const WINDOW_INPUT: u32 = 0x250;
+    /// Shell -> app: the app was activated with its main window closed (`ToApp::Reopen`).
+    pub const REOPEN: u32 = 0x254;
 
     pub const HELLO: u32 = 0x101;
     pub const BUFFERS: u32 = 0x102;
@@ -1869,6 +1877,7 @@ impl ToApp {
                 u32_(&mut b, *window);
                 window_input_encode(&mut b, input);
             }
+            ToApp::Reopen => u32_(&mut b, tag::REOPEN),
             ToApp::Resume => u32_(&mut b, tag::RESUME),
             ToApp::Suspend => u32_(&mut b, tag::SUSPEND),
             ToApp::AxSet { id, action } => {
@@ -2060,6 +2069,7 @@ impl ToApp {
                 let window = r.u32()?;
                 ToApp::WindowInput { window, input: window_input_decode(&mut r)? }
             }
+            tag::REOPEN => ToApp::Reopen,
             tag::RESUME => ToApp::Resume,
             tag::SUSPEND => ToApp::Suspend,
             tag::CONTEXT=>{let x=r.f32()?;let y=r.f32()?;if !x.is_finite()||!y.is_finite(){return Err(DecodeError::BadValue);}ToApp::Context{x,y}},
@@ -3075,6 +3085,17 @@ mod tests {
         assert_eq!(ToShell::decode(&invalid), Err(DecodeError::BadValue));
     }
 
+    /// E2E12 2: the shell tells an app that was activated with its main window closed (tag 0x254), and an app asks for
+    /// its main window to be ordered out with `WindowClose` id 0.
+    #[test]
+    fn reopen_and_ordering_out_the_main_window_have_their_tags() {
+        let bytes = ToApp::Reopen.encode();
+        assert_eq!(&bytes[..4], &0x254u32.to_le_bytes());
+        assert_eq!(ToApp::decode(&bytes), Ok(ToApp::Reopen));
+        let close = ToShell::WindowClose { id: 0 };
+        assert_eq!(ToShell::decode(&close.encode()), Ok(close));
+    }
+
     #[test]
     fn to_app_round_trips() {
         let cfg = Configure { w: 1200, h: 1920, scale: 1.5625, safe_top: 24.0, safe_bottom: 20.0, dark: true, text_scale: 1.1, reduce_motion: false };
@@ -3090,6 +3111,7 @@ mod tests {
             ToApp::KeyboardConfig(KeyboardConfig::default()),
             ToApp::KeyboardConfig(KeyboardConfig { layout: KeyboardLayout::Floating, return_key: ReturnKey::Send, flags: kbflags::PREDICTIVE | kbflags::SHOWN, languages: 3, language: 1 }),
             ToApp::Activate(u64::MAX),
+            ToApp::Reopen,
             ToApp::Resume,
             ToApp::Suspend,
             ToApp::Quit,

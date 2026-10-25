@@ -829,6 +829,13 @@ pub trait App {
     fn window_closed(&mut self, _ctx: &Ctx, _window: app_windows::WindowId) -> bool {
         false
     }
+    /// `applicationShouldHandleReopen:hasVisibleWindows:`: the person activated the app (Dock, the app switcher, Search,
+    /// an open) while its main window was ordered out (`Ctx::close_main_window`) or closed from the desk; the shell has
+    /// put the main window back. A document app with no document opens a new one here. True when the app needs a new
+    /// frame.
+    fn reopen(&mut self, _ctx: &Ctx) -> bool {
+        false
+    }
     /// The person dragged one of the app's windows (`ToApp::WindowMoved`): (x, y) is where it is now, in points relative to
     /// the visible desktop area. Keep it to restore later. True when the app needs a new frame.
     fn window_moved(&mut self, _ctx: &Ctx, _window: app_windows::WindowId, _x: f32, _y: f32) -> bool {

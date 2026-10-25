@@ -5619,6 +5619,22 @@ The shell sends `WindowClosed {id}` (its own close control), `WindowConfigure {i
 t_ms}` and `WindowRelease {id, buf, generation}`; the wheel and hover over an extra window arrive as `WindowInput::Pointer` for
 that window (`App::window_pointer`, see "Pointer events"). Titles are cut to 512 bytes; non-finite or negative sizes are refused.
 
+Ordering the main window out and reopening (2026-10-25, E2E12 2; `NSWindow.orderOut`,
+`applicationShouldHandleReopen:hasVisibleWindows:`). Apple parity gap closed: an app could not run with no window, so
+TextEdit's last document closing left an empty, disabled main window. `Ctx::close_main_window()` sends `WindowClose {id: 0}`:
+the desk drops the main window with the close effect, leaves the app's other windows and keeps the app running; nothing
+reopens it on its own (the 0.10.34 "an app whose main window was closed opens it again" rule is `desk_open`, an
+activation). Activating the app (Dock, app switcher, Search, an open) puts the main window back and sends the new
+`ToApp::Reopen` (tag 0x254) to `App::reopen(ctx)` (default: nothing); `Ctx::show_main_window()` (`WindowOpen {id: 0}`)
+asks for it back without an activation, for a document made while no window was open. `AppWindows::main_shown()` says
+which; the main window stays in the registry. TextEdit opens a new Untitled on `reopen`: the reference shows its open panel
+there when the iCloud picker is on, but this editor starts with an Untitled on launch, so a reopen does the same. Gap: on the
+direct (window-server) route the app's toplevel is its own, so ordering out is ignored there until the SDK can unmap and
+remap it. Tests: proto `reopen_and_ordering_out_the_main_window_have_their_tags`, app_windows
+`the_main_window_is_ordered_out_and_back_once`, apphost `the_main_window_is_ordered_out_and_back_once_for_the_desk`, desk
+`a_main_window_the_app_ordered_out_stays_closed_until_the_app_is_activated`, textedit
+`closing_the_last_document_closes_the_main_window_and_a_reopen_shows_an_untitled`.
+
 Units (2026-10-23, E2E follow-up). `WindowTouch` and an extra window's pointer events are in the window's **points**, while
 the main window's `ToApp::Touch` is in surface pixels. An app that hit-tests an extra window in px, or hands its touches to code
 written for the main window, scales them first: `app_windows::window_touch_in_px(ev, ctx.ui.pt(1.0))` returns the touch in px
