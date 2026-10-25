@@ -1285,6 +1285,31 @@ mod tests {
         std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/test-cff.otf")).expect("tests/fixtures/test-cff.otf")
     }
 
+    /// Noto Sans CJK is CID-keyed: its local subrs and widths live per font DICT (FDArray/FDSelect). Each of 你 and
+    /// 好 has strokes on both sides of the em, so a glyph whose local subrs went missing shows up as a lopsided or
+    /// blank image. Skipped when the system font is not installed.
+    #[test]
+    fn cid_keyed_cjk_glyphs_have_ink_in_both_halves() {
+        let Ok(data) = std::fs::read("/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc") else {
+            eprintln!("skipped: NotoSansCJK-Regular.ttc not installed");
+            return;
+        };
+        let f = Font::parse(&data).unwrap();
+        assert!(f.cff().is_some_and(|c| c.is_cid()), "Noto Sans CJK is CID-keyed CFF");
+        let st = Style { px: 64.0, embolden: 0.0, color: pack(255, 255, 255, 255), shadow: false };
+        for ch in ['你', '好'] {
+            let gid = f.glyph(ch);
+            assert_ne!(gid, 0, "{ch} is in the font");
+            let img = f.render_glyph(gid, &st);
+            let half = |left: bool| -> u64 {
+                (0..img.h).flat_map(|y| (0..img.w).map(move |x| (x, y))).filter(|&(x, _)| (x < img.w / 2) == left).map(|(x, y)| (img.px[y * img.w + x] >> 24) as u64).sum()
+            };
+            let (l, r) = (half(true), half(false));
+            assert!(l > 255 * 64 && r > 255 * 64, "{ch}: ink left {l}, right {r}");
+            assert!(l.min(r) * 4 > l.max(r), "{ch}: both halves carry strokes (left {l}, right {r})");
+        }
+    }
+
     #[test]
     fn cff_font_renders_through_the_same_path() {
         let data = cff_fixture();
