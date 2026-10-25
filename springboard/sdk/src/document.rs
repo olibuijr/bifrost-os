@@ -216,6 +216,9 @@ struct Entry<D> {
     tried: Option<Stamp>,
     /// the folder a package document was read from, which a save writes back to (None for a file)
     package: Option<PathBuf>,
+    /// the device and inode of the document's file, so the same file arriving under a new grant (opened again from
+    /// Files or the Dock) finds this document instead of opening a second copy
+    file_id: Option<(u64, u64)>,
 }
 
 impl<D> Entry<D> {
@@ -339,7 +342,7 @@ impl<D: Document> DocumentController<D> {
     fn add(&mut self, doc: D, untitled: Option<u32>, name: String, grant: Option<GrantId>, uttype: &str) -> DocId {
         self.next_id += 1;
         let id = DocId(self.next_id);
-        self.docs.push(Entry { id, doc, untitled, name, grant, uttype: uttype.into(), now: Stamp::default(), saved: Stamp::default(), edit_since: None, tried: None, package: None });
+        self.docs.push(Entry { id, doc, untitled, name, grant, uttype: uttype.into(), now: Stamp::default(), saved: Stamp::default(), edit_since: None, tried: None, package: None, file_id: None });
         self.active = Some(id);
         id
     }
@@ -629,11 +632,9 @@ impl<D: Document> DocumentController<D> {
         let out = match ev {
             DocumentEvent::Opened(file) => self.on_opened(host, vec![file])?,
             DocumentEvent::OpenedMany { request, docs } => {
-                if !self.pending.contains_key(&request) {
-                    return None;
-                }
                 if docs.is_empty() {
-                    self.pending.remove(&request);
+                    // an empty inbound batch is nothing to report; an empty answer to our panel is a cancel
+                    self.pending.remove(&request)?;
                     vec![failed(None, Some(DocErrorCode::Cancelled), "nothing chosen")]
                 } else {
                     self.on_opened(host, docs)?
@@ -649,7 +650,13 @@ impl<D: Document> DocumentController<D> {
 
     fn on_opened(&mut self, host: &dyn DocumentHost, files: Vec<crate::Document>) -> Option<Vec<Notice>> {
         let request = files.first()?.request;
-        let pending = self.pending.remove(&request)?;
+        // an inbound document (`application:openURLs:`): a file opened with this app from Files or the Dock, shared
+        // or handed over by another app. No request of ours asked for it; it opens like a file chosen in the open panel.
+        let pending = match self.pending.remove(&request) {
+            Some(p) => p,
+            None if is_inbound(request) => Pending::Open,
+            None => return None,
+        };
         let mut out = Vec::new();
         for file in files {
             // a folder grant is a package (the panels hand over folders only for package types)
@@ -678,14 +685,21 @@ impl<D: Document> DocumentController<D> {
                 }
                 continue;
             }
-            if let Some(id) = self.docs.iter().find(|e| e.grant == Some(file.grant)).map(|e| e.id) {
-                host.release(file.grant);
+            // already open (same grant, or the same file under a new grant): that document comes to the front
+            let fid = file_id(&file.file);
+            if let Some(id) = self.docs.iter().find(|e| e.grant == Some(file.grant) || (fid.is_some() && e.file_id == fid)).map(|e| e.id) {
+                if self.entry(id).is_some_and(|e| e.grant != Some(file.grant)) {
+                    host.release(file.grant);
+                }
                 self.active = Some(id);
                 continue;
             }
             match D::read(&bytes, &uttype) {
                 Ok(doc) => {
                     let id = self.add(doc, None, file.name.clone(), Some(file.grant), &uttype);
+                    if let Some(e) = self.entry_mut(id) {
+                        e.file_id = fid;
+                    }
                     self.note_recent(host, file.grant, &file.name);
                     out.push(Notice::Opened(id));
                 }
@@ -712,8 +726,10 @@ impl<D: Document> DocumentController<D> {
         match read {
             Ok((doc, path)) => {
                 let id = self.add(doc, None, name.clone(), Some(file.grant), &uttype);
+                let fid = file_id(&file.file);
                 if let Some(e) = self.entry_mut(id) {
                     e.package = Some(path);
+                    e.file_id = fid;
                 }
                 self.note_recent(host, file.grant, &name);
                 Notice::Opened(id)
@@ -808,6 +824,8 @@ impl<D: Document> DocumentController<D> {
         }
         // a package keeps its folder, which a later save writes back to; a saved file has none
         e.package = if file.file.metadata().is_ok_and(|m| m.is_dir()) { package_path(&file.file) } else { None };
+        // the save renamed its file into place, so the document now lives at that file's inode
+        e.file_id = file_id(&file.file);
         // every save is a version of the document; a folder package has no single byte stream, so it keeps none
         if !file.file.metadata().is_ok_and(|m| m.is_dir()) {
             let mut bytes = Vec::new();
@@ -1043,6 +1061,18 @@ fn failed(doc: Option<DocId>, code: Option<DocErrorCode>, message: &str) -> Noti
 const AUTOSAVE_DIR: &str = "autosave";
 
 /// The path a granted descriptor was opened from (Linux keeps it in `/proc/self/fd`); `None` when it has none.
+/// Whether `request` is an inbound document the shell sent unasked (`share::INBOUND` set): a file opened with this app
+/// from Files or the Dock, a share, or a drop.
+fn is_inbound(request: u32) -> bool {
+    request & crate::share::INBOUND != 0
+}
+
+/// The device and inode of an open file, which name it whatever grant it came under.
+fn file_id(file: &std::fs::File) -> Option<(u64, u64)> {
+    use std::os::unix::fs::MetadataExt;
+    file.metadata().ok().map(|m| (m.dev(), m.ino()))
+}
+
 fn package_path(file: &std::fs::File) -> Option<PathBuf> {
     use std::os::unix::io::AsRawFd;
     std::fs::read_link(format!("/proc/self/fd/{}", file.as_raw_fd())).ok()
@@ -1745,5 +1775,64 @@ mod tests {
         first.close(&m, id);
         let seen = second.recents(&m).to_vec();
         assert_eq!(seen, vec![RecentDocument { grant: [9; 16], name: "shared.txt".into() }]);
+    }
+
+    /// A file the shell hands over as an inbound document under `grant`, the same file on disk each time.
+    fn inbound(request: u32, path: &Path, name: &str, grant: u8) -> crate::Document {
+        let file = std::fs::OpenOptions::new().read(true).write(true).open(path).unwrap();
+        crate::Document { request, grant: [grant; 16], name: name.into(), size: 0, mode: DocMode::Read, file }
+    }
+
+    #[test]
+    fn an_inbound_file_opens_as_a_document_without_a_request_of_ours() {
+        // "open with the default app" (Files, the Dock's stack): the shell sends the grant unasked
+        let m = Mock::new("inbound");
+        let mut c = DocumentController::<Text>::new();
+        let untitled = c.new_document();
+        let path = m.dir.join("notes.txt");
+        std::fs::write(&path, "from the dock").unwrap();
+        let req = crate::share::INBOUND | 1;
+        let n = c.handle(&m, DocumentEvent::Opened(inbound(req, &path, "notes.txt", 3))).expect("the controller takes it");
+        let [Notice::Opened(id)] = n[..] else { panic!("{n:?}") };
+        assert_ne!(id, untitled);
+        assert_eq!(c.active(), Some(id), "the opened file is in front");
+        assert_eq!(c.get(id), Some(&Text("from the dock".into())));
+        assert_eq!(c.display_name(id).as_deref(), Some("notes.txt"));
+        assert_eq!(c.recents(&m)[0].name, "notes.txt", "it joins Open Recent");
+        // several at once (a drop of many files on the Dock icon)
+        let other = m.dir.join("other.txt");
+        std::fs::write(&other, "b").unwrap();
+        let req = crate::share::INBOUND | 2;
+        let n = c.handle(&m, DocumentEvent::OpenedMany { request: req, docs: vec![inbound(req, &other, "other.txt", 4)] }).unwrap();
+        assert!(matches!(n[..], [Notice::Opened(_)]), "{n:?}");
+        assert_eq!(c.len(), 3);
+    }
+
+    #[test]
+    fn the_same_file_opened_again_under_a_new_grant_brings_its_document_to_the_front() {
+        let m = Mock::new("inbound-again");
+        let mut c = DocumentController::<Text>::new();
+        let path = m.dir.join("notes.txt");
+        std::fs::write(&path, "x").unwrap();
+        c.handle(&m, DocumentEvent::Opened(inbound(crate::share::INBOUND | 1, &path, "notes.txt", 3))).unwrap();
+        let first = c.active().unwrap();
+        let second = c.new_document();
+        assert_eq!(c.active(), Some(second));
+        let n = c.handle(&m, DocumentEvent::Opened(inbound(crate::share::INBOUND | 2, &path, "notes.txt", 7))).unwrap();
+        assert!(n.is_empty(), "no second copy: {n:?}");
+        assert_eq!(c.len(), 2);
+        assert_eq!(c.active(), Some(first), "the open document comes to the front");
+        assert!(m.log().contains(&"release:7".to_string()), "the new grant is not kept");
+        assert!(!m.log().contains(&"release:3".to_string()), "the document keeps its own grant");
+    }
+
+    #[test]
+    fn a_reply_to_a_request_the_controller_did_not_make_is_left_to_the_app() {
+        let m = Mock::new("not-ours");
+        let mut c = DocumentController::<Text>::new();
+        let file = m.file(41, "own-panel.txt", 2, "x");
+        assert!(c.handle(&m, DocumentEvent::Opened(file)).is_none(), "the app's own panel answer");
+        assert!(c.handle(&m, DocumentEvent::OpenedMany { request: 42, docs: vec![] }).is_none());
+        assert!(c.is_empty());
     }
 }
