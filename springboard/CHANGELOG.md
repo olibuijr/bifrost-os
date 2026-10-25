@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.10.38 — 2026-10-25
+
+Fixes from the 0.10.37 end-to-end pass on Midget.
+
+- An app that closes its last window keeps its Dock icon and running dot, stays in Cmd+Tab and stays the active app with its menu bar; activating it reopens a window.
+- After lock and unlock the windows are stacked in the shell's order again, and the window server's focus changes under the lock no longer reorder them.
+- Light/Dark switches reach every window at once: the window server follows the scheme for window materials, and cached windows redraw during the fade (in a few steps, to keep the cost bounded).
+- Spotlight's strict sections match only from a word start ("words" no longer finds "Open Passwords"); a query of digits finds a contact by any part of its phone number.
+- Settings: Back returns from a pane opened by Search to the pane open before; the first hit is highlighted before Return.
+- Ships with Reminders 1.20.6 (smart-list tile names wrap instead of being cut).
+
 ## 0.10.37 — 2026-10-25
 
 Fixes from the 0.10.36 end-to-end pass on Midget.

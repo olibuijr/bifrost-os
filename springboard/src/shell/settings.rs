@@ -483,7 +483,7 @@ const PANE_HISTORY: usize = 8;
 /// highlighted only as a cue: Down steps on from it to the next page's hit, and Up opens the last hit.
 fn step_hit(hits: &[PageId], at: Option<usize>, down: bool) -> Option<PageId> {
     let Some(at) = at else {
-        return if down { step_hit(hits, (!hits.is_empty()).then_some(0), true) } else { hits.last().copied() };
+        return if hits.is_empty() { None } else if down { step_hit(hits, Some(0), true) } else { hits.last().copied() };
     };
     let cur = hits[at];
     if down { hits[at + 1..].iter().find(|p| **p != cur) } else { hits[..at].iter().rev().find(|p| **p != cur) }.copied()

@@ -3089,6 +3089,7 @@ mod window_menu_tests {
     use super::Menu;
     use crate::shell::{AppId, Screen};
 
+    #[cfg(feature = "desktop-wayland")]
     #[test]
     fn a_normal_window_enables_the_halves_center_and_bring_all_to_front() {
         let mut sh = crate::shell::tests::desktop_shell();
@@ -3109,6 +3110,7 @@ mod window_menu_tests {
         assert_eq!(super::window_menu_title("notes.txt", false), "notes.txt");
     }
 
+    #[cfg(feature = "desktop-wayland")]
     #[test]
     fn with_no_window_the_placements_are_labels() {
         let mut sh = crate::shell::tests::desktop_shell();

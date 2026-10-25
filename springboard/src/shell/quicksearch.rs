@@ -3956,8 +3956,8 @@ mod file_actions_tests {
         // a top hit found by an alias keeps its place: "terminal" is Term, "preview" is the Viewer
         assert!(!headword_beats_top("terminal", &def("terminal", "WordNet"), Some(&top(Hit::App(AppId::Terminal)))));
         assert!(!headword_beats_top("Terminal", &def("terminal", "WordNet"), Some(&top(Hit::App(AppId::Terminal)))), "case is ignored");
-        // a contiguous run inside the title is strong too
-        assert!(!headword_beats_top("isco", &def("isco", "WordNet"), Some(&top(Hit::City("San Francisco")))));
+        // a run inside a word of the title is weak since 0.10.38 (strict matches start at a word start)
+        assert!(headword_beats_top("isco", &def("isco", "WordNet"), Some(&top(Hit::City("San Francisco")))));
     }
 }
 
