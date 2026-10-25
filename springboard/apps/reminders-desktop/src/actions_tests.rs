@@ -1427,6 +1427,7 @@ fn delete_permanently_names_and_removes_the_chosen_kept_reminder_when_ids_repeat
     // E2E N3: delete the only reminder, add another, delete it too; the second row's Delete Permanently acts on it
     let (mut app, ui, path) = app("purge-same-id");
     let store = archive::path_beside(&path);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     // a store from before the fix, where a deleted reminder 1 is already kept
     archive::keep(&store, &[model::Reminder::new(1, "E2E test list")]).unwrap();
     app.refresh_kept();
@@ -1452,6 +1453,7 @@ fn delete_permanently_names_and_removes_the_chosen_kept_reminder_when_ids_repeat
 fn reminders_sharing_an_id_in_the_store_are_purged_by_their_row() {
     let (mut app, ui, path) = app("purge-dup-rows");
     let store = archive::path_beside(&path);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     archive::keep(&store, &[model::Reminder::new(1, "First")]).unwrap();
     archive::keep(&store, &[model::Reminder::new(1, "Second")]).unwrap();
     app.activate(&ui, Target::Deleted, 10.0);

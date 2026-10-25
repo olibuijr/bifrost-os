@@ -850,7 +850,8 @@ impl Font<'_> {
         let layout = self.ot.get_or_init(|| OtLayout::from_sfnt(self.data));
         // control characters become spaces or leave the run before anything else sees them (`run_char`)
         let controls: String;
-        let text = if text.chars().any(char::is_control) {
+        // U+2028/2029 are separators, not `is_control`, so the test is whether `run_char` changes anything
+        let text = if text.chars().any(|c| run_char(c) != Some(c)) {
             controls = text.chars().filter_map(run_char).collect();
             controls.as_str()
         } else {
