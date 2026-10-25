@@ -97,6 +97,19 @@ package_bifrost_files() {
   for pack in "$here"/translation/*.tsv; do
     install -Dm644 "$pack" "$pkgdir/usr/share/bifrost/translation/$(basename "$pack")"
   done
+  # the system English dictionary (WordNet 3.0 as StarDict, built by tools/build-wordnet-stardict.py into PC_DICTIONARIES):
+  # the Dictionary app and the shell's Look Up read /usr/share/stardict; the WordNet licence asks every copy to carry
+  # Princeton's notice, which ships beside the package's other licence files. Without the tree the package ships none.
+  if [[ -n ${PC_DICTIONARIES:-} && -f ${PC_DICTIONARIES}/wordnet.ifo ]]; then
+    if [[ ! -f ${PC_DICTIONARIES}/LICENSE-WordNet ]]; then
+      echo "package-files.sh: $PC_DICTIONARIES has no LICENSE-WordNet; the dictionary may not ship without its notice" >&2
+      return 1 2>/dev/null || exit 1
+    fi
+    for ext in ifo idx dict; do
+      install -Dm644 "$PC_DICTIONARIES/wordnet.$ext" "$pkgdir/usr/share/stardict/wordnet.$ext"
+    done
+    install -Dm644 "$PC_DICTIONARIES/LICENSE-WordNet" "$pkgdir/usr/share/licenses/springboard-shell/LICENSE-WordNet"
+  fi
   install -Dm644 "$here/bifrost-desktop-ready.service" "$pkgdir/usr/lib/systemd/system/bifrost-desktop-ready.service"
   install -Dm644 "$here/bifrost-after-desktop.target" "$pkgdir/usr/lib/systemd/system/bifrost-after-desktop.target"
   install -Dm644 "$here/dbus/org.freedesktop.portal.Desktop.service" "$pkgdir/usr/share/dbus-1/services/org.freedesktop.portal.Desktop.service"

@@ -60,6 +60,9 @@ build() {
   cargo build --release --locked -p bifrost-chrome --bins ${SPRINGBOARD_CARGO_FLAGS:---offline}
   # the command-line tools (springboard/cmd/src/bin): package-files.sh installs every one of them
   cargo build --release --locked -p bifrost-cmd --bins ${SPRINGBOARD_CARGO_FLAGS:---offline}
+  # the system English dictionary (WordNet 3.0 as StarDict; pinned in packaging/arch/dictionaries/wordnet.json). Offline
+  # with no cached tarball the package ships none.
+  python3 "$_repo/tools/build-wordnet-stardict.py" "$srcdir/dictionaries" || echo "no WordNet dictionary: the package ships none" >&2
 }
 
 check() {
@@ -68,7 +71,7 @@ check() {
 
 package() {
   source "$_repo/packaging/arch/package-files.sh"
-  PC_MCP="$srcdir/target/release/bifrost-mcp" PC_BIFROSTD="$srcdir/target/release/bifrostd" PC_AUDIOD="$srcdir/target/release/bifrost-audiod" PC_SVC_AUDIOD="$srcdir/target/release/audiod" PC_SVC_NETD="$srcdir/target/release/netd" PC_SVC_UPDATED="$srcdir/target/release/updated" PC_AUDIO_BENCH="$srcdir/target/release/bifrost-audio-bench" PC_MIDID="$srcdir/target/release/bifrost-midid" PC_ALSA_PLUGIN="$srcdir/target/release/libasound_module_pcm_bifrost.so" PC_CMD_DIR="$srcdir/target/release" package_bifrost_files "$_repo/packaging/arch" "$srcdir/target/release/shell" "$srcdir/bifrost-update-guard"
+  PC_MCP="$srcdir/target/release/bifrost-mcp" PC_BIFROSTD="$srcdir/target/release/bifrostd" PC_AUDIOD="$srcdir/target/release/bifrost-audiod" PC_SVC_AUDIOD="$srcdir/target/release/audiod" PC_SVC_NETD="$srcdir/target/release/netd" PC_SVC_UPDATED="$srcdir/target/release/updated" PC_AUDIO_BENCH="$srcdir/target/release/bifrost-audio-bench" PC_MIDID="$srcdir/target/release/bifrost-midid" PC_ALSA_PLUGIN="$srcdir/target/release/libasound_module_pcm_bifrost.so" PC_CMD_DIR="$srcdir/target/release" PC_DICTIONARIES="$srcdir/dictionaries" package_bifrost_files "$_repo/packaging/arch" "$srcdir/target/release/shell" "$srcdir/bifrost-update-guard"
   install -Dm755 "$srcdir/target/release/bootweave" "$pkgdir/usr/bin/bifrost-bootweave"
   install -Dm755 "$srcdir/target/release/bifrost-portal" "$pkgdir/usr/bin/bifrost-portal"
   install -Dm755 "$srcdir/target/release/bifrost-privd" "$pkgdir/usr/bin/bifrost-privd"

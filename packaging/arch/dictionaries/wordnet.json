@@ -1,0 +1,7 @@
+{
+  "name": "WordNet 3.0",
+  "url": "https://wordnetcode.princeton.edu/3.0/WordNet-3.0.tar.gz",
+  "sha256": "640db279c949a88f61f851dd54ebbb22d003f8b90b85267042ef85a3781d3a52",
+  "homepage": "https://wordnet.princeton.edu/",
+  "license": "WordNet 3.0 license (Princeton University): use, copy, modify and distribute for any purpose without fee, with the copyright notice and disclaimer on all copies; https://wordnet.princeton.edu/license-and-commercial-use"
+}
