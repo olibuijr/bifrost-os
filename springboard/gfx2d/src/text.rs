@@ -232,8 +232,9 @@ pub fn placements(font: &Font<'_>, run: &TextRun) -> Vec<Placement> {
     let base = ox as f32 + PAD as f32;
     let mut out = Vec::with_capacity(run.text.len());
     for (i, ch) in run.text.char_indices() {
-        // a default-ignorable character has no glyph and no advance (as on the CPU path): never a `.notdef` box
-        if bifrost_render::font::is_default_ignorable(ch) {
+        // a default-ignorable character has no glyph and no advance, and a control character lays out as a space or
+        // as nothing (`font::run_char`), as on the CPU path: never a `.notdef` box
+        if bifrost_render::font::is_default_ignorable(ch) || ch.is_control() {
             continue;
         }
         let gid = font.glyph(ch);
@@ -421,6 +422,18 @@ mod tests {
         assert_eq!(chars(&padded), "548 St.", "no glyph is placed for an invisible character");
         let pens = |v: &[Placement]| v.iter().map(|p| p.pen).collect::<Vec<f32>>();
         assert_eq!(pens(&padded), pens(&plain), "and they move no pen");
+    }
+
+    #[test]
+    fn placements_lay_a_newline_out_as_a_space_without_a_box() {
+        let data = sf();
+        let font = Font::parse(&data).unwrap();
+        let plain = placements(&font, &run("Reddit u/x", 20.0, 0.0, 0.0));
+        let broken = placements(&font, &run("Reddit\nu/x", 20.0, 0.0, 0.0));
+        let chars = |v: &[Placement]| v.iter().map(|p| p.ch).collect::<String>();
+        assert_eq!(chars(&broken), "Redditu/x", "no glyph is placed for the newline");
+        let pens = |v: &[Placement]| v.iter().filter(|p| p.ch != ' ').map(|p| p.pen).collect::<Vec<f32>>();
+        assert_eq!(pens(&broken), pens(&plain), "and it advances like a space");
     }
 
     #[test]
