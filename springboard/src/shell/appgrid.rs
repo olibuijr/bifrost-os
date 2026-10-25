@@ -1135,6 +1135,26 @@ mod overlay_tests {
         assert!(!frame_ids(&sh).contains(&8), "the frame it closes in drops the surface");
     }
 
+    /// E2E12 4: the exported grid surface, above every toplevel (VEIL rank), carries the dim backdrop over the whole veil
+    /// outside the capsule and the panel, so another client's window behind it goes dim with the wallpaper.
+    #[test]
+    fn the_exported_grid_surface_dims_everything_around_the_capsule_and_panel() {
+        let mut sh = open_grid();
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let mut px = vec![0u32; w * h];
+        let mut grid = std::mem::take(&mut sh.overview.grid);
+        grid.draw(&sh, &mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 1e9);
+        sh.overview.grid = grid;
+        let pixels = vec![0u32; w * h];
+        let frames = sh.desktop_chrome_frames(&pixels, w, h);
+        let f = frames.iter().find(|f| f.id == crate::shell::chrome_ids::APP_GRID).expect("the grid surface");
+        assert!(crate::bare::wayland::chrome_z(f.id) > crate::bare::wayland::chrome_z(crate::shell::chrome_ids::DOCK), "above the windows and the Dock");
+        let veil = (super::BACKDROP_ALPHA as u32) << 24;
+        for (x, y) in [(0, 0), (f.width - 1, 0), (0, f.height - 1), (f.width - 1, f.height - 1)] {
+            assert_eq!(f.pixels[y * f.width + x], veil, "the corner ({x}, {y}) of the veil is dimmed");
+        }
+    }
+
     #[test]
     fn the_apps_icon_while_the_grid_animates_out_opens_it_again() {
         let mut sh = open_grid();

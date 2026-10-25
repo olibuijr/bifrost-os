@@ -74,6 +74,38 @@ const USAGE_FILE: &str = "search-usage.txt";
 const LAUNCHES_FILE: &str = "app-launches.txt";
 /// The opens of indexed results, read by the Documents section; loaded by `QuickSearch::load`.
 static OPENS: std::sync::Mutex<Option<bifrost_ui::search_rank::Usage>> = std::sync::Mutex::new(None);
+
+/// A shortcut run from Search (`Hit::Shortcut`) that finished on its thread: the app's slot, the shortcut's title and
+/// what the run gave (its dialog text, or why it failed).
+struct ShortcutRun {
+    slot: u8,
+    title: String,
+    outcome: Result<Option<String>, String>,
+}
+
+/// The shortcut runs still on their threads, and the finished ones whose banner the shell has not posted yet
+/// (`Shell::shortcut_results_tick`).
+static SHORTCUT_RUNS: std::sync::Mutex<(usize, Vec<ShortcutRun>)> = std::sync::Mutex::new((0, Vec::new()));
+
+fn shortcut_runs() -> std::sync::MutexGuard<'static, (usize, Vec<ShortcutRun>)> {
+    SHORTCUT_RUNS.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// True while a shortcut run from Search is out or its result is not shown yet: the shell polls for it.
+pub(super) fn shortcut_runs_pending() -> bool {
+    let g = shortcut_runs();
+    g.0 > 0 || !g.1.is_empty()
+}
+
+/// The banner of a finished shortcut, as the reference shows a shortcut's result: its name over its output, "Done" when
+/// it gave none, or the problem when it failed.
+fn shortcut_banner(title: &str, outcome: &Result<Option<String>, String>) -> (String, String) {
+    match outcome {
+        Ok(Some(said)) if !said.trim().is_empty() => (title.to_string(), said.trim().to_string()),
+        Ok(_) => (title.to_string(), "Done".to_string()),
+        Err(e) => (title.to_string(), format!("There was a problem running the shortcut: {e}")),
+    }
+}
 /// How long a scan of the Files root is reused by later opens before the next opening scans again.
 const FILES_MAX_AGE: std::time::Duration = std::time::Duration::from_secs(20);
 const QUERY_MAX: usize = 64;
@@ -714,8 +746,9 @@ struct Table {
     /// not find the browser through "web internet" and "se" does not find Term through "shell". Empty: none.
     prefixes: Vec<String>,
     /// Rows match only when the query is contiguous in their text or starts one of its words, never by scattered
-    /// letters: the Settings panes, whose text carries many keyword aliases, so "lantern" does not find "Display &
-    /// Brightness" through letters spread over its aliases.
+    /// letters: every section but Applications and Deildu. The Settings panes' text carries many keyword aliases, so
+    /// "lantern" does not find "Display & Brightness" through letters spread over them, and "aapl" does not find the
+    /// Shortcuts row "Set Wallpaper to ..." (E2E12 1).
     strict: bool,
 }
 
@@ -809,15 +842,18 @@ fn build_tables(c: &Corpus) -> (Vec<Table>, BTreeMap<String, Hit>) {
             table_row(&mut hits, format!("event:{}", e.id), &e.title, text, search_rank::Kind::Other, Hit::Event { title: e.title.clone() }, folded)
         })
         .collect();
+    // only an app's name is matched by scattered letters (its aliases by word prefix); Settings, Clock, Contacts,
+    // Shortcuts, Files and Calendar need a prefix, a word start or a contiguous run, so "aapl" does not list
+    // "Set Wallpaper to ..." in Shortcuts (E2E12 1)
     let tables = vec![
         Table { name: "Applications", rows: apps_rows, prefixes: app_prefixes, strict: false },
         Table { name: "Settings", rows: settings_rows, prefixes: Vec::new(), strict: true },
-        Table { name: "Clock", rows: city_rows, prefixes: Vec::new(), strict: false },
+        Table { name: "Clock", rows: city_rows, prefixes: Vec::new(), strict: true },
         Table { name: "Deildu", rows: deildu_rows, prefixes: Vec::new(), strict: false },
-        Table { name: "Contacts", rows: contact_rows, prefixes: Vec::new(), strict: false },
-        Table { name: "Shortcuts", rows: shortcut_rows, prefixes: Vec::new(), strict: false },
-        Table { name: "Files", rows: file_rows, prefixes: Vec::new(), strict: false },
-        Table { name: "Calendar", rows: event_rows, prefixes: Vec::new(), strict: false },
+        Table { name: "Contacts", rows: contact_rows, prefixes: Vec::new(), strict: true },
+        Table { name: "Shortcuts", rows: shortcut_rows, prefixes: Vec::new(), strict: true },
+        Table { name: "Files", rows: file_rows, prefixes: Vec::new(), strict: true },
+        Table { name: "Calendar", rows: event_rows, prefixes: Vec::new(), strict: true },
     ];
     (tables, hits)
 }
@@ -2791,14 +2827,21 @@ impl Shell {
                     return self.open_settings_intent_page(page, t);
                 }
             }
-            Hit::Shortcut { app_id, intent, .. } => {
+            Hit::Shortcut { app_id, intent, title, .. } => {
                 if let Some(n) = super::apphost::slot_of(&app_id) {
                     self.open(AppId::External(n as u8), t);
-                    // the app may still be starting: retry the connection for a few seconds, off the UI thread
+                    // the app may still be starting: retry the connection for a few seconds, off the UI thread; the
+                    // result comes back as a banner with the shortcut's name (E2E12 5)
+                    shortcut_runs().0 += 1;
                     crate::bare::sys::spawn_named("intent-retry", move || {
-                        if let Err(e) = super::intents::run(&app_id, &intent, std::time::Duration::from_secs(8)) {
-                            eprintln!("quicksearch: intent {intent} of {app_id}: {e}");
+                        let outcome = super::intents::run(&app_id, &intent, std::time::Duration::from_secs(8));
+                        match &outcome {
+                            Ok(_) => bifrost_core::log::shell_logger("quicksearch").info(format!("shortcut {intent} of {app_id} ran")),
+                            Err(e) => bifrost_core::log::shell_logger("quicksearch").error(format!("shortcut {intent} of {app_id}: {e}")),
                         }
+                        let mut g = shortcut_runs();
+                        g.0 = g.0.saturating_sub(1);
+                        g.1.push(ShortcutRun { slot: n as u8, title, outcome });
                     });
                 }
             }
@@ -2875,7 +2918,25 @@ impl Shell {
             let dock_top = self.quicksearch_dock_top();
             self.quicksearch.set_dock_top(&self.ui, self.h, dock_top)
         };
-        self.quicksearch.tick(&self.ui, self.h, t) || moved
+        let posted = self.shortcut_results_tick();
+        self.quicksearch.tick(&self.ui, self.h, t) || moved || posted
+    }
+
+    /// Posts the banner of every shortcut run from Search that finished since the last tick, through the ordinary
+    /// notification path (the app's notification settings apply). True when one was posted.
+    pub(super) fn shortcut_results_tick(&mut self) -> bool {
+        let done = std::mem::take(&mut shortcut_runs().1);
+        self.post_shortcut_runs(done)
+    }
+
+    fn post_shortcut_runs(&mut self, done: Vec<ShortcutRun>) -> bool {
+        let posted = !done.is_empty();
+        for run in done {
+            let (title, body) = shortcut_banner(&run.title, &run.outcome);
+            let time = self.notify.now();
+            self.notify(super::notify::Notification::new(AppId::External(run.slot), title, body, time));
+        }
+        posted
     }
 
     /// The home screen with the card and keyboard over it; the keyboard
@@ -3581,6 +3642,32 @@ mod desktop_tests {
         assert_eq!(sh.quicksearch.query(), "cl");
     }
 
+    /// E2E12 5: a shortcut run from Search answers with a banner of the app: its name over its output, "Done" when it
+    /// said nothing, and the problem when it failed.
+    #[test]
+    fn a_finished_shortcut_posts_its_result_as_a_notification() {
+        use super::{shortcut_banner, ShortcutRun};
+        assert_eq!(shortcut_banner("Current Weather", &Ok(Some(" 4° and cloudy ".into()))), ("Current Weather".into(), "4° and cloudy".into()));
+        assert_eq!(shortcut_banner("New Note", &Ok(None)), ("New Note".into(), "Done".into()));
+        assert_eq!(shortcut_banner("New Note", &Ok(Some("  ".into()))).1, "Done");
+        let (title, body) = shortcut_banner("New Note", &Err("no reply".into()));
+        assert_eq!(title, "New Note");
+        assert!(body.contains("problem") && body.contains("no reply"), "{body}");
+        let mut sh = crate::shell::tests::desktop_shell();
+        let app = AppId::External(5);
+        let before = sh.notify.store().count(app);
+        assert!(!sh.post_shortcut_runs(Vec::new()), "nothing finished, nothing posted");
+        let runs = vec![
+            ShortcutRun { slot: 5, title: "Current Weather".into(), outcome: Ok(Some("4° and cloudy".into())) },
+            ShortcutRun { slot: 5, title: "Broken".into(), outcome: Err("refused".into()) },
+        ];
+        assert!(sh.post_shortcut_runs(runs));
+        assert_eq!(sh.notify.store().count(app), before + 2, "one notification per run, from the app");
+        let group = sh.notify.store().groups().into_iter().find(|g| g.app == app).expect("the app's notifications");
+        assert!(group.items.iter().any(|n| n.title == "Current Weather" && n.body == "4° and cloudy"));
+        assert!(group.items.iter().any(|n| n.title == "Broken" && n.body.contains("refused")));
+    }
+
     /// Cmd+Space opens Search over an app the shell does not draw (an external window in front), and a second press closes it.
     #[test]
     fn cmd_space_opens_and_closes_quicksearch_over_an_external_app() {
@@ -3722,6 +3809,27 @@ mod file_actions_tests {
         assert!(settings("lantern").is_empty(), "{:?}", settings("lantern"));
         assert!(settings("dark mode").contains(&Hit::Settings("Display & Brightness")), "an alias still finds its pane");
         assert_eq!(results("wi", &[])[0].hits, vec![Hit::Settings("Wi-Fi")]);
+    }
+
+    /// E2E12 1: "AAPL" listed "Set Wallpaper to ..." in Shortcuts through scattered letters, in Spotlight and in Look
+    /// Up's Search section. Every section but Applications (and Deildu) is strict; an app's name stays fuzzy.
+    #[test]
+    fn only_app_names_match_by_scattered_letters() {
+        let corpus = Corpus { deildu: &[], deildu_folded: &[], contacts: &[], contacts_folded: &[], files: &[], files_folded: &[], events: &[] };
+        let (tables, _) = build_tables(&corpus);
+        for t in &tables {
+            assert_eq!(t.strict, !matches!(t.name, "Applications" | "Deildu"), "{} strictness", t.name);
+        }
+        let mut hits = BTreeMap::new();
+        let title = "Set Wallpaper to Gullfoss Canyon";
+        let row = table_row(&mut hits, "w".into(), title, String::new(), search_rank::Kind::Settings, Hit::Terminal(String::new()), fuzzy::fold(title));
+        let shortcuts = Table { name: "Shortcuts", rows: vec![row], prefixes: Vec::new(), strict: true };
+        use search_rank::Source;
+        assert!(shortcuts.search("AAPL").is_empty(), "scattered letters do not find a shortcut");
+        assert_eq!(shortcuts.search("wallp").len(), 1, "a word start does");
+        assert_eq!(shortcuts.search("gullfoss c").len(), 1, "a contiguous run does");
+        let apps = tables.iter().find(|t| t.name == "Applications").expect("the apps table");
+        assert!(apps.rows.iter().any(|(_, f)| fuzzy::Matcher::new("stg").rank_folded(f).is_some()), "an app name still matches loosely (Settings)");
     }
 
     #[test]
