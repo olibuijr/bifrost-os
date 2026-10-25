@@ -3,7 +3,7 @@
 //! Clipboard. The `look-up` intent returns a definition to other callers.
 
 use bifrost_app::intents::{self, Intent, IntentResult, Param, ParamType};
-use bifrost_app::control::{RpcError, INTERNAL_ERROR, INVALID_PARAMS, METHOD_NOT_FOUND};
+use bifrost_app::control::{RpcError, INVALID_PARAMS, METHOD_NOT_FOUND};
 use bifrost_app::dispatch::{DispatchQueue, Qos};
 use bifrost_app::kit::canvas::{Canvas, RectF};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem};
@@ -200,6 +200,9 @@ struct DictionaryApp {
     known: HashMap<String, bool>,
     /// The windows opened with File > New Window, in the order they were opened. The main window is `self`.
     windows: Vec<ExtraWindow>,
+    /// A word asked for before the dictionaries were loaded (a look-up intent, a Services call or a launch argument
+    /// on a cold launch: the control socket answers before the first Configure). `configure` shows it.
+    pending_word: Option<String>,
 }
 
 /// A window opened with File > New Window. It is a whole lookup of its own (query, answer, history, scope, find), so
@@ -207,6 +210,12 @@ struct DictionaryApp {
 struct ExtraWindow {
     id: WindowId,
     app: DictionaryApp,
+}
+
+/// The part of the sidebar its rows are drawn in: below the `bar_h` band of the traffic lights, in points.
+fn sidebar_rows(sidebar: Rect, bar_h: f32) -> Rect {
+    let band = bar_h.clamp(0.0, sidebar.h.max(0.0));
+    Rect { x: sidebar.x, y: sidebar.y + band, w: sidebar.w, h: sidebar.h - band }
 }
 
 /// Pointer position in points: input is in pixels, and the layout is in points.
@@ -243,6 +252,7 @@ impl DictionaryApp {
             rows_top: 0.0,
             known: HashMap::new(),
             windows: Vec::new(),
+            pending_word: None,
         }
     }
 
@@ -434,7 +444,26 @@ impl DictionaryApp {
         self.suggestions = self.library.as_ref().map(|l| l.suggest(&self.query, SUGGESTIONS)).unwrap_or_default();
         self.scroll.jump_top();
         self.side_scroll.jump_top();
+        self.preview_first();
         true
+    }
+
+    /// While a word is typed, the first match is selected in the sidebar and its entry shown, as in the reference, so
+    /// nothing waits for Return. The field keeps what was typed, and the history records the word only once it is
+    /// chosen (Return or a tap). A window without a sidebar lists the matches instead.
+    fn preview_first(&mut self) {
+        if self.sidebar.w <= 0.0 || self.query.trim().is_empty() {
+            return;
+        }
+        let Some(word) = self.suggestions.first().cloned() else { return };
+        let raw = self.library.as_ref().map(|l| l.lookup(&word)).unwrap_or_default();
+        let hits = self.prefs.arrange(raw);
+        if let Some(s) = &self.scope {
+            if !hits.iter().any(|h| &h.dictionary == s) {
+                self.scope = None;
+            }
+        }
+        self.shown = Some(Shown { word, hits });
     }
 
     /// Looks `word` up and shows the answer. Returns true when the screen needs a frame.
@@ -482,6 +511,32 @@ impl DictionaryApp {
         }
         self.settings = false;
         self.show(word, true)
+    }
+
+    /// Shows `word` now when the dictionaries are loaded, else keeps it for `configure` to show once they are, so a
+    /// look-up that starts the app (Spotlight's dictionary hit, Open in Dictionary) lands on its word. True when the
+    /// screen needs a frame.
+    fn show_or_queue(&mut self, word: &str) -> bool {
+        if self.library.is_some() {
+            return self.show_from_intent(word);
+        }
+        let word = word.trim();
+        if !word.is_empty() {
+            self.pending_word = Some(word.to_string());
+        }
+        false
+    }
+
+    /// Shows the word asked for before the dictionaries were loaded (cold launch from Spotlight or another app), once
+    /// they are. True when it was shown.
+    fn show_pending(&mut self) -> bool {
+        if self.library.is_none() {
+            return false;
+        }
+        match self.pending_word.take() {
+            Some(word) => self.show_from_intent(&word),
+            None => false,
+        }
     }
 
     /// The first line of the clipboard, looked up.
@@ -800,8 +855,9 @@ impl DictionaryApp {
                 }
                 self.edited()
             }
+            // Return chooses the word on screen (the first match while typing), else looks the typed text up
             KeyInput::Code(13) => {
-                let word = self.query.clone();
+                let word = self.shown.as_ref().map(|s| s.word.clone()).unwrap_or_else(|| self.query.clone());
                 self.look_up(&word)
             }
             KeyInput::Code(1 | 27) => {
@@ -961,6 +1017,7 @@ impl App for DictionaryApp {
             }
             self.library = Some(library);
         }
+        self.show_pending();
     }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
@@ -1052,12 +1109,12 @@ impl App for DictionaryApp {
         }
         let call = ServiceCall::from_params(params).ok_or_else(|| RpcError::new(INVALID_PARAMS, "the service call has no text"))?;
         let text = call.text.ok_or_else(|| RpcError::new(INVALID_PARAMS, "the service needs text"))?;
-        if ctx.is_none() {
-            return Err(RpcError::new(INTERNAL_ERROR, "Dictionary is not running yet"));
-        }
         let word = model::service_word(&text).ok_or_else(|| RpcError::new(INVALID_PARAMS, "the selection has no word to look up"))?;
-        if !self.show_from_intent(&word) {
-            return Err(RpcError::new(INTERNAL_ERROR, "Dictionary has not loaded its dictionaries yet"));
+        // before the first Configure (the service started the app) the word waits for the window
+        if ctx.is_none() || self.library.is_none() {
+            self.pending_word = Some(word);
+        } else {
+            self.show_from_intent(&word);
         }
         Ok(Json::Obj(Vec::new()))
     }
@@ -1077,9 +1134,12 @@ impl App for DictionaryApp {
         };
         let text = first.text.clone();
         // a running window shows the word too, so Look Up from another app (the Services menu, the look-up popover's
-        // Open in Dictionary row) lands in the app's own window with its history, scope bar and find
+        // Open in Dictionary row) lands in the app's own window with its history, scope bar and find. On a cold launch
+        // the intent arrives before the first Configure (no context, no dictionaries yet): the word waits for it.
         if ctx.is_some() {
-            self.show_from_intent(&word);
+            self.show_or_queue(&word);
+        } else {
+            self.pending_word = Some(word.clone());
         }
         Ok(IntentResult::value(Json::Str(text.clone())).with_dialog(&format!("{word}: {text}")))
     }
@@ -1183,7 +1243,14 @@ impl App for DictionaryApp {
                     self.side_scroll.jump_to(to);
                 }
             }
+            // the band under the traffic lights keeps the sidebar's material, but the rows are clipped below it, so a
+            // scrolled row never draws under the traffic lights (the material is written, not blended, so the second
+            // pass over the rows' area leaves it as the first)
+            widgets::source_list(canvas, ui, regions.sidebar, &SourceList::new(Vec::new(), ROW_H, SIDEBAR_HEADER_H), 0.0, None);
+            let rows = sidebar_rows(regions.sidebar, bar_h);
+            canvas.push_clip(RectF::new(ui.pt(rows.x), ui.pt(rows.y), ui.pt(rows.w), ui.pt(rows.h)), 0.0);
             widgets::source_list(canvas, ui, regions.sidebar, &list, self.sidebar_scroll(), None);
+            canvas.pop_clip();
             canvas.fill_rect(RectF::new(ui.pt(regions.sidebar.w) - 1.0, 0.0, 1.0, ch as f32), SEPARATOR_C.now());
         }
 
@@ -1192,10 +1259,8 @@ impl App for DictionaryApp {
             Some(lib) if !lib.problems.is_empty() => format!("{} could not be opened", lib.problems.len()),
             Some(lib) if lib.is_empty() => "No dictionaries installed".to_string(),
             _ if !self.suggestions.is_empty() => format!("{} found", self.suggestions.len()),
-            Some(lib) => {
-                let names = lib.dictionaries.len();
-                format!("{names} dictionar{} \u{b7} {} words", if names == 1 { "y" } else { "ies" }, lib.word_count())
-            }
+            // short enough for the title column: "151,378 words" (the dictionaries are listed in Settings)
+            Some(lib) => model::idle_subtitle(lib.word_count()),
             None => String::new(),
         };
         let t = regions.title;
@@ -1375,7 +1440,10 @@ impl App for DictionaryApp {
 }
 
 fn main() {
-    bifrost_app::run(DictionaryApp::new());
+    let mut app = DictionaryApp::new();
+    // `bifrost-dictionary <word>` or a `dict:` URL: the first frame shows that word
+    app.pending_word = model::launch_word(std::env::args().skip(1));
+    bifrost_app::run(app);
 }
 
 #[cfg(test)]
@@ -1473,6 +1541,74 @@ mod window_tests {
         app.shown = Some(Shown { word: "word30".into(), hits: Vec::new() });
         let to = app.source_list().scroll_to_selected(rows_h, app.side_scroll.offset());
         assert!(to + rows_h >= ROW_H * 31.0 && to <= ROW_H * 30.0);
+    }
+
+    /// E2E9 2: a look-up that starts the app arrives before the dictionaries are loaded; the word waits and is shown then.
+    #[test]
+    fn a_word_asked_for_before_the_dictionaries_load_is_shown_once_they_are() {
+        let mut app = DictionaryApp::new();
+        assert!(!app.show_or_queue("  terminal "));
+        assert!(app.shown.is_none());
+        assert_eq!(app.pending_word.as_deref(), Some("terminal"));
+        assert!(!app.show_pending(), "still nothing to show it with");
+        assert_eq!(app.pending_word.as_deref(), Some("terminal"), "the word keeps waiting");
+        let dir = std::env::temp_dir().join(format!("bifrost-dictionary-pending-{}", std::process::id()));
+        app.library = Some(load_library(&dir));
+        app.settings = true;
+        assert!(app.show_pending());
+        assert!(!app.settings);
+        assert_eq!(app.shown.as_ref().map(|s| s.word.as_str()), Some("terminal"));
+        assert_eq!(app.query, "terminal", "the search field shows the word");
+        assert!(app.pending_word.is_none() && !app.show_pending(), "shown once");
+        assert!(!app.show_or_queue("   ") && app.pending_word.is_none(), "a blank word is not kept");
+        // a running app shows a later word at once
+        assert!(app.show_or_queue("orange"));
+        assert_eq!(app.shown.as_ref().map(|s| s.word.as_str()), Some("orange"));
+    }
+
+    /// E2E9 10: typing selects the first match and shows its entry; Return chooses it.
+    #[test]
+    fn typing_selects_and_shows_the_first_match() {
+        let mut app = DictionaryApp::new();
+        app.sidebar = Rect { x: 0.0, y: 0.0, w: 200.0, h: 600.0 };
+        app.query = "comp".into();
+        app.suggestions = vec!["comp".into(), "compact".into(), "computer".into()];
+        app.preview_first();
+        assert_eq!(app.shown.as_ref().map(|s| s.word.as_str()), Some("comp"));
+        assert_eq!(app.source_list().selected(), Some(0), "the first row is selected");
+        assert_eq!(app.query, "comp", "the field keeps what was typed");
+        assert_eq!(app.history.current(), None, "typing records nothing");
+        app.suggestions = vec!["compact".into(), "computer".into()];
+        app.query = "compa".into();
+        app.preview_first();
+        assert!(app.key(&KeyInput::Code(13)));
+        assert_eq!(app.history.current(), Some("compact"), "Return chooses the word on screen");
+        // a blank query, no matches or no sidebar show nothing
+        let mut narrow = DictionaryApp::new();
+        narrow.query = "comp".into();
+        narrow.suggestions = vec!["comp".into()];
+        narrow.preview_first();
+        assert!(narrow.shown.is_none(), "a window without a sidebar lists the matches instead");
+        narrow.sidebar = Rect { x: 0.0, y: 0.0, w: 200.0, h: 600.0 };
+        narrow.query = "  ".into();
+        narrow.preview_first();
+        assert!(narrow.shown.is_none());
+        narrow.query = "zzz".into();
+        narrow.suggestions.clear();
+        narrow.preview_first();
+        assert!(narrow.shown.is_none());
+    }
+
+    /// E2E9 8: the sidebar's rows are clipped below the traffic lights' band.
+    #[test]
+    fn the_sidebar_rows_are_drawn_below_the_traffic_lights_band() {
+        let bar = bifrost_app::layout::UNIFIED_BAR_PT;
+        let side = Rect { x: 0.0, y: 0.0, w: 200.0, h: 600.0 };
+        let rows = sidebar_rows(side, bar);
+        assert_eq!((rows.x, rows.y, rows.w), (0.0, bar, 200.0));
+        assert!((rows.y + rows.h - 600.0).abs() < 0.01, "down to the bottom of the column");
+        let short = sidebar_rows(Rect { x: 0.0, y: 0.0, w: 200.0, h: bar / 2.0 }, bar);
+        assert!(short.h >= 0.0, "a column shorter than the band has no rows area");
     }
 
     #[test]
