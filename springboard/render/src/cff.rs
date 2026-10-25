@@ -668,7 +668,7 @@ const STANDARD_STRINGS: &str = ".notdef space exclam quotedbl numbersign dollar 
 mod tests {
     use super::*;
 
-    #[derive(Debug, PartialEq)]
+    #[derive(Debug, Clone, PartialEq)]
     enum Cmd {
         M(f32, f32),
         L(f32, f32),
