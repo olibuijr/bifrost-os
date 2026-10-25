@@ -274,14 +274,14 @@ def stage_system_assets(work, assets=ASSETS_SRC):
 
 def stage_dictionaries(work):
     """Build the system English dictionary (WordNet 3.0 as StarDict, tools/build-wordnet-stardict.py; the tarball is
-    pinned in packaging/arch/dictionaries/wordnet.json and cached in out/upstream) into `work`/dictionaries and return
-    the environment for the package build ({"PC_DICTIONARIES": dir}). When it cannot be built (offline with no cached
-    tarball) the publish goes on and the package ships no dictionary."""
+    pinned in packaging/arch/dictionaries/wordnet.json and cached in out/upstream; the built files are cached in
+    out/dictionaries/wordnet and rebuilt only when the pin or the converter changes) into `work`/dictionaries and return
+    the environment for the package build ({"PC_DICTIONARIES": dir}). When it cannot be built (a needed download
+    failed) the publish stops: a package must not lose its dictionary quietly."""
     dest = os.path.join(work, "dictionaries")
     r = subprocess.run([sys.executable, os.path.join(REPO, "tools/build-wordnet-stardict.py"), dest])
     if r.returncode:
-        print("pc-publish: the WordNet dictionary could not be built; the package ships no dictionary", file=sys.stderr)
-        return {}
+        sys.exit("pc-publish: the WordNet dictionary could not be built (see above)")
     return {"PC_DICTIONARIES": dest}
 
 
