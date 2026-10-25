@@ -141,6 +141,30 @@ const SIDE_ROW_H: f32 = 36.0;
 const SIDE_ACCOUNT_H: f32 = 56.0;
 const SIDE_INSET: f32 = 10.0;
 
+/// The desktop window is full-size (its sidebar runs to the top edge under the traffic lights): the pane's content
+/// starts under the unified toolbar band, where the back control sits (`super::desk::UNIFIED_BAR_PT`).
+const DESKTOP_BAR_PT: f32 = super::desk::UNIFIED_BAR_PT;
+/// How wide a press on the pane's back control may be (pt from the pane's left edge).
+const BACK_HIT_PT: f32 = 140.0;
+
+/// The sidebar width (px) of a desktop App Store window `w` px wide at `pt` px per point.
+fn sidebar_px(w: i32, pt: f32) -> i32 {
+    ((200.0 * pt) as i32).min(w / 3)
+}
+
+/// The desktop window's controls in its unified toolbar band, in window points, as the shell's drag zone needs them:
+/// the sidebar's search capsule and the pane's back control. The rest of the band moves the window.
+pub fn toolbar_controls(w_px: i32, pt: f32) -> Vec<bifrost_proto::Node> {
+    use bifrost_proto::{Node, Role};
+    let pt = pt.max(0.01);
+    let side = sidebar_px(w_px, pt) as f32 / pt;
+    let node = |id, role, label: &str, bounds| Node { id, role, label: label.into(), value: String::new(), bounds, enabled: true };
+    vec![
+        node(1, Role::TextField, "Search", bifrost_ui::Rect { x: SIDE_INSET, y: SIDE_SEARCH_Y, w: (side - 2.0 * SIDE_INSET).max(0.0), h: SIDE_SEARCH_H }),
+        node(2, Role::Button, "Back", bifrost_ui::Rect { x: side, y: 0.0, w: BACK_HIT_PT, h: DESKTOP_BAR_PT }),
+    ]
+}
+
 /// What a click in the desktop sidebar lands on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum SideHit {
@@ -391,7 +415,7 @@ impl AppStore {
         let installed = install::installed_in(&root);
         let reviews = bifrost_core::app_review::ReviewBook::from_text(&std::fs::read_to_string(root.join(REVIEWS_FILE)).unwrap_or_default());
         let desktop = true;
-        let sidebar = if desktop { (ui.pt(200.0) as i32).min(w / 3) } else { 0 };
+        let sidebar = if desktop { sidebar_px(w, ui.pt(1.0)) } else { 0 };
         AppStore {
             desktop,
             sidebar,
@@ -443,7 +467,7 @@ impl AppStore {
     }
 
     pub fn set_size(&mut self, ui: &Ui, w: i32, h: i32) {
-        self.sidebar = if self.desktop { (ui.pt(200.0) as i32).min(w / 3) } else { 0 };
+        self.sidebar = if self.desktop { sidebar_px(w, ui.pt(1.0)) } else { 0 };
         self.w = (w - self.sidebar).max(1);
         self.h = h.max(1);
         self.fit_scroll(ui);
@@ -1092,6 +1116,10 @@ impl AppStore {
     }
 
     fn top(&self, ui: &Ui) -> f32 {
+        // the desktop window has no title bar: its pane starts under the unified toolbar band, which holds the back control
+        if self.desktop {
+            return ui.pt(DESKTOP_BAR_PT);
+        }
         if self.page.is_none() && self.tab == Tab::Today {
             return ui.pt(STATUS_PT);
         }
@@ -1202,7 +1230,7 @@ impl AppStore {
             return TABS.get(i).map(|(t, _)| Target::Tab(*t));
         }
         if y < self.top(ui) {
-            return (self.page.is_some() && x < ui.pt(140.0)).then_some(Target::Back);
+            return (self.page.is_some() && x < ui.pt(BACK_HIT_PT)).then_some(Target::Back);
         }
         if y >= bar {
             return None;
@@ -1963,7 +1991,7 @@ impl AppStore {
     fn draw_bars(&mut self, s: &mut Surface, ui: &Ui) {
         let top = self.top(ui) as usize;
         s.fill_rect(0, 0, self.w as usize, top, bg());
-        let mid = ui.pt(STATUS_PT + 22.0);
+        let mid = if self.desktop { ui.pt(DESKTOP_BAR_PT / 2.0) } else { ui.pt(STATUS_PT + 22.0) };
         if let Some((back_tab, id)) = self.page.as_ref().map(|p| (p.back, p.id.clone())) {
             let history = self.page.as_ref().is_some_and(|p| p.history);
             let prev = if history { self.find(&id).map(|a| a.name.clone()).unwrap_or_default() } else { Some(tab_name(back_tab, self.desktop)).filter(|n| !n.is_empty()).unwrap_or("Back").to_string() };
@@ -2750,6 +2778,28 @@ mod tests {
         assert_eq!(tab_name(Tab::Today, true), "Discover");
         assert_eq!(tab_name(Tab::Today, false), "Today");
         assert_eq!(tab_name(Tab::Categories, false), "Categories");
+    }
+
+    #[test]
+    fn the_full_size_desktop_window_reports_its_toolbar_controls_and_starts_its_pane_under_the_band() {
+        let ui = crate::shell::tests::ui();
+        let mut s = store();
+        let pt = ui.pt(1.0);
+        // the pane starts under the unified toolbar band, on Today and on a product page alike
+        assert_eq!(s.top(&ui), ui.pt(DESKTOP_BAR_PT));
+        s.page = Some(Page { id: "is.o.chess".into(), back: Tab::Today, desc: vec![], list_scroll: 0.0, whatsnew: vec![], history: false, hist: vec![] });
+        assert_eq!(s.top(&ui), ui.pt(DESKTOP_BAR_PT));
+        // the back control in that band takes the press
+        assert_eq!(s.hit(&ui, ui.pt(20.0), ui.pt(DESKTOP_BAR_PT / 2.0)), Some(Target::Back));
+        // the controls the shell's drag zone leaves to the app are where the window draws them
+        let c = toolbar_controls(s.sidebar + s.w, pt);
+        let (fx, fy, fw, fh) = s.side_search_rect(&ui);
+        let search = c.iter().find(|n| n.label == "Search").expect("the search field");
+        assert!((search.bounds.x * pt - fx).abs() < 1.0 && (search.bounds.y * pt - fy).abs() < 1.0, "search at {fx},{fy}");
+        assert!((search.bounds.w * pt - fw).abs() < 1.0 && (search.bounds.h * pt - fh).abs() < 1.0);
+        let back = c.iter().find(|n| n.label == "Back").expect("the back control");
+        assert!((back.bounds.x * pt - s.sidebar as f32).abs() < 1.0, "the back control starts at the pane's left edge");
+        assert!(back.bounds.y < DESKTOP_BAR_PT && back.bounds.h >= DESKTOP_BAR_PT);
     }
 
     #[test]
