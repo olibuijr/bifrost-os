@@ -678,7 +678,7 @@ pub mod preview_manifest;
 pub mod preview_view;
 pub mod fileaction;
 pub mod actionrequest;
-pub mod textbreak;
+pub use bifrost_render::textbreak;
 pub mod textmetrics;
 pub mod typeset;
 pub mod paragraph;

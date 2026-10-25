@@ -539,8 +539,8 @@ pub struct Laid {
     pub lines: Vec<String>,
 }
 
-/// Greedy word wrap at `width` pixels. Blank lines in the text stay as blank lines. A word wider than the line is
-/// left whole on its own line.
+/// Greedy line wrap at `width` pixels with the kit's line breaking ([`Ui::wrap`]: after spaces, between CJK
+/// characters, and inside a run wider than the line as a last resort). Blank lines in the text stay as blank lines.
 pub fn wrap(ui: &Ui, text: &str, width: f32, pt: f32, weight: Weight) -> Vec<String> {
     let mut lines = Vec::new();
     for paragraph in text.split('\n') {
@@ -549,17 +549,7 @@ pub fn wrap(ui: &Ui, text: &str, width: f32, pt: f32, weight: Weight) -> Vec<Str
             lines.push(String::new());
             continue;
         }
-        let mut line = String::new();
-        for word in paragraph.split_whitespace() {
-            let candidate = if line.is_empty() { word.to_string() } else { format!("{line} {word}") };
-            if line.is_empty() || ui.measure(&candidate, pt, weight) <= width {
-                line = candidate;
-            } else {
-                lines.push(std::mem::take(&mut line));
-                line = word.to_string();
-            }
-        }
-        lines.push(line);
+        lines.extend(ui.wrap(paragraph, pt, weight, width));
     }
     lines
 }
@@ -1542,6 +1532,20 @@ mod tests {
         let failed = sheet_layout(&ui, w, h, &Sheet::Compose(compose), 0, true);
         let error = failed.error.expect("a line for the error");
         assert!(error[1] + error[3] <= failed.primary[1], "above the buttons");
+    }
+
+    /// E2E8 finding 6: an all-CJK paragraph wraps between characters instead of running past the reading pane.
+    #[test]
+    fn a_cjk_body_wraps_inside_the_pane() {
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        let ui = Ui::new(bifrost_app::kit::Font::parse(data).unwrap(), 2.0);
+        let body = "Hello\n\n不想再收到我们的邮件？请点击这里取消订阅，或者直接回复这封邮件（或点击「回复」）。";
+        let width = ui.pt(160.0);
+        let lines = wrap(&ui, body, width, MAC_BODY_PT, Weight::Regular);
+        assert_eq!(&lines[..2], &["Hello".to_string(), String::new()]);
+        assert!(lines.len() >= 3, "the CJK paragraph takes several lines: {lines:?}");
+        assert!(lines.iter().all(|l| ui.measure(l, MAC_BODY_PT, Weight::Regular) <= width), "{lines:?}");
+        assert_eq!(lines[2..].concat(), body.lines().last().unwrap());
     }
 
     #[test]

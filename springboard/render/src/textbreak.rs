@@ -347,6 +347,66 @@ fn decide(prev: L, cur: L, core: Option<L>, prev_prev: Option<L>, ri_run: usize)
     Brk::Allowed
 }
 
+/// Greedy line wrap of one paragraph into lines no wider than `max_w` as `measure` reports it. Runs of white space
+/// (newlines included) collapse to one space and no line starts or ends with one. Lines end at the line break
+/// opportunities of [`line_breaks`]: after spaces and hyphens, between ideographs, kana and hangul, never before
+/// closing punctuation (`、。」）`) nor after opening punctuation (`「（`). As a last resort a run with no opportunity
+/// that is wider than the line is split between grapheme clusters, so every line fits unless one cluster alone is
+/// wider than `max_w`.
+pub fn wrap_paragraph(text: &str, max_w: f32, measure: &dyn Fn(&str) -> f32) -> Vec<String> {
+    let norm = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let chars: Vec<char> = norm.chars().collect();
+    let breaks = line_breaks(&chars);
+    let mut lines: Vec<String> = Vec::new();
+    let mut line = String::new();
+    let mut start = 0;
+    for i in 1..=chars.len() {
+        if i < chars.len() && breaks[i] == Brk::No {
+            continue;
+        }
+        let seg: String = chars[start..i].iter().collect();
+        start = i;
+        let candidate = format!("{line}{seg}");
+        if measure(candidate.trim_end()) <= max_w {
+            line = candidate;
+            continue;
+        }
+        if !line.is_empty() {
+            lines.push(line.trim_end().to_string());
+        }
+        line = seg;
+        if measure(line.trim_end()) > max_w {
+            line = split_clusters(&line, max_w, measure, &mut lines);
+        }
+    }
+    if !line.trim_end().is_empty() {
+        lines.push(line.trim_end().to_string());
+    }
+    lines
+}
+
+/// Splits `run` between grapheme clusters: every full line goes to `lines`, the last, partly filled one is returned.
+fn split_clusters(run: &str, max_w: f32, measure: &dyn Fn(&str) -> f32, lines: &mut Vec<String>) -> String {
+    let chars: Vec<char> = run.chars().collect();
+    let bounds = grapheme_boundaries(&chars);
+    let mut cur = String::new();
+    let mut from = 0;
+    for i in 1..=chars.len() {
+        if !bounds[i] {
+            continue;
+        }
+        let cluster: String = chars[from..i].iter().collect();
+        from = i;
+        let next = format!("{cur}{cluster}");
+        if !cur.is_empty() && measure(next.trim_end()) > max_w {
+            lines.push(std::mem::replace(&mut cur, cluster));
+        } else {
+            cur = next;
+        }
+    }
+    cur
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -407,6 +467,53 @@ mod tests {
         assert_eq!(allowed("(a b)"), vec![3]);
         // no-break space does not break
         assert_eq!(allowed("a\u{a0}b c"), vec![4]);
+    }
+
+    /// Monospace: 10 points per character.
+    fn m(s: &str) -> f32 {
+        s.chars().count() as f32 * 10.0
+    }
+
+    #[test]
+    fn wrap_paragraph_breaks_words_at_spaces() {
+        assert_eq!(wrap_paragraph("aa bb cc dd", 50.0, &m), vec!["aa bb", "cc dd"]);
+        assert_eq!(wrap_paragraph("  aa \n bb  ", 100.0, &m), vec!["aa bb"]);
+        assert!(wrap_paragraph("   ", 100.0, &m).is_empty());
+    }
+
+    #[test]
+    fn wrap_paragraph_breaks_between_ideographs_kana_and_hangul() {
+        // Four characters fit on a 40 point line.
+        assert_eq!(wrap_paragraph("不想再收到我们的邮件", 40.0, &m), vec!["不想再收", "到我们的", "邮件"]);
+        assert_eq!(wrap_paragraph("ひらがなカタカナ", 40.0, &m), vec!["ひらがな", "カタカナ"]);
+        assert_eq!(wrap_paragraph("한국어문장입니다", 40.0, &m), vec!["한국어문", "장입니다"]);
+    }
+
+    #[test]
+    fn wrap_paragraph_keeps_cjk_punctuation_with_its_neighbour() {
+        // 、 and 。 never start a line: the ideograph before them moves down with them.
+        assert_eq!(wrap_paragraph("日本語、日本", 30.0, &m), vec!["日本", "語、日", "本"]);
+        assert_eq!(wrap_paragraph("日本語。", 30.0, &m), vec!["日本", "語。"]);
+        // 「 and （ never end a line: they move down with the character after them.
+        assert_eq!(wrap_paragraph("日本「語」", 30.0, &m), vec!["日本", "「語」"]);
+        assert_eq!(wrap_paragraph("日本（語）", 30.0, &m), vec!["日本", "（語）"]);
+        let lines = wrap_paragraph("（或点击「回复」）。不想再收到我们的邮件？", 50.0, &m);
+        for l in &lines {
+            assert!(!l.ends_with('「') && !l.ends_with('（'), "{lines:?}");
+            assert!(!l.starts_with('」') && !l.starts_with('）') && !l.starts_with('。') && !l.starts_with('？'), "{lines:?}");
+            assert!(m(l) <= 50.0, "{lines:?}");
+        }
+        assert_eq!(lines.concat(), "（或点击「回复」）。不想再收到我们的邮件？");
+    }
+
+    #[test]
+    fn wrap_paragraph_splits_an_overlong_run_at_the_width() {
+        assert_eq!(wrap_paragraph("abcdefg", 30.0, &m), vec!["abc", "def", "g"]);
+        assert_eq!(wrap_paragraph("ab cdefgh ij", 30.0, &m), vec!["ab", "cde", "fgh", "ij"]);
+        // a cluster wider than the line still takes a line of its own
+        assert_eq!(wrap_paragraph("ab", 5.0, &m), vec!["a", "b"]);
+        // a combining mark stays with its base
+        assert_eq!(wrap_paragraph("e\u{301}e\u{301}", 15.0, &m), vec!["e\u{301}", "e\u{301}"]);
     }
 
     #[test]
