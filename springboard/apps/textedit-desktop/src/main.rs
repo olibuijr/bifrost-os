@@ -915,8 +915,8 @@ impl TextEditApp {
             return false;
         }
         let changed = match action {
-            Action::Undo => doc.text.undo(),
-            Action::Redo => doc.text.redo(),
+            Action::Undo => doc.undo(),
+            Action::Redo => doc.redo(),
             Action::Cut => {
                 let picked = doc.text.cells()[doc.text.selection()].to_vec();
                 let picture = picture_of(doc, &picked);
@@ -1812,14 +1812,21 @@ impl TextEditApp {
         self.docs.alert().filter(|_| self.close_alert_here()).map(|a| a.sheet())
     }
 
-    /// The Make Plain Text confirmation's touches: the buttons it shows.
+    /// The Make Plain Text confirmation as the kit's alert sheet (E2E11 6), hung from the title bar like the close
+    /// confirmation: stacked full-width buttons, OK the default on top. `None` while it is not up.
+    fn plain_alert_sheet(&self) -> Option<bifrost_app::controls::sheet::Sheet> {
+        self.plain_sheet.then(|| view::plain_alert(active_doc(&self.docs).is_some_and(|d| d.text.has_attachments())).sheet())
+    }
+
+    /// The Make Plain Text confirmation's touches: its buttons; the rest of the window is blocked while it is up.
     fn touch_plain(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
         let geom = self.geom(ctx);
-        let layout = properties::layout_rows(geom.width, geom.body_top, 1);
-        let buttons = view::plain_buttons(&ctx.ui, &layout);
-        match buttons.iter().find(|b| b.rect.contains(px, py)).and_then(|b| b.action) {
-            Some(action) => self.perform(ctx, action),
-            None => true,
+        let Some(sheet) = self.plain_alert_sheet() else { return false };
+        let (parent, bar) = close_sheet_parent(&geom);
+        match sheet.hit(parent, bar, 1.0, px, py) {
+            bifrost_app::controls::sheet::Hit::Button(view::PLAIN_OK) => self.perform(ctx, Action::PlainDone),
+            bifrost_app::controls::sheet::Hit::Button(_) => self.perform(ctx, Action::PlainCancel),
+            _ => true,
         }
     }
 
@@ -3133,11 +3140,9 @@ impl TextEditApp {
             let buttons = view::link_buttons(ui, &layout, sheet.had_link);
             view::draw_sheet(canvas, ui, &layout, "Link", &[("Address", sheet.url.as_str())], 0, &buttons);
         }
-        if self.plain_sheet {
-            let layout = properties::layout_rows(geom.width, geom.body_top, 1);
-            let buttons = view::plain_buttons(ui, &layout);
-            let attachments = active_doc(&self.docs).is_some_and(|d| d.text.has_attachments());
-            view::draw_confirm(canvas, ui, &layout, view::PLAIN_TITLE, view::plain_message(attachments), &buttons);
+        if let Some(sheet) = self.plain_alert_sheet() {
+            let (parent, bar) = close_sheet_parent(&geom);
+            bifrost_app::widgets::sheet(canvas, ui, parent, bar, &sheet, 1.0, None);
         }
         // the close confirmation of this window's document, over everything else in the window
         if let Some(sheet) = self.close_sheet() {
@@ -3917,6 +3922,20 @@ mod tests {
         assert!(app.perform(&ctx, Action::MakePlain));
         assert!(app.plain_sheet, "a rich document with text asks before converting");
         assert!(active_doc(&app.docs).unwrap().rich, "nothing changes until the sheet is answered");
+        // E2E11 finding 6: the kit's alert sheet hanging from the title bar, buttons stacked full width, OK on top
+        let sheet = app.plain_alert_sheet().expect("the confirmation is an alert sheet");
+        assert!(sheet.alert);
+        assert_eq!(sheet.title, view::PLAIN_TITLE);
+        assert_eq!(sheet.default_button(), Some(view::PLAIN_OK));
+        assert_eq!(sheet.cancel_button(), Some(view::PLAIN_CANCEL));
+        let geom = app.geom(&ctx);
+        let (parent, bar) = close_sheet_parent(&geom);
+        let placed = sheet.layout(parent, bar, 1.0);
+        assert_eq!(placed.panel.y, bar, "attached under the title bar");
+        let ids: Vec<u32> = placed.buttons.iter().map(|(id, _)| *id).collect();
+        assert_eq!(ids, vec![view::PLAIN_OK, view::PLAIN_CANCEL], "OK on top, Cancel under it");
+        let (ok, cancel) = (placed.buttons[0].1, placed.buttons[1].1);
+        assert!(cancel.y > ok.y && cancel.x == ok.x && cancel.w == ok.w, "stacked, not side by side");
         assert!(app.perform(&ctx, Action::PlainCancel));
         assert!(!app.plain_sheet && active_doc(&app.docs).unwrap().rich, "Cancel keeps the rich text");
         app.perform(&ctx, Action::MakePlain);
@@ -3925,6 +3944,11 @@ mod tests {
         assert!(!doc.rich && !app.plain_sheet);
         assert!(doc.text.cells().iter().all(|c| c.style.font == text::PLAIN_FONT), "the text takes the plain text font");
         assert_eq!(view::PLAIN_TITLE, "Convert this document to plain text?");
+        // E2E11 finding 5: Undo put the font back but left the document in plain text mode (no format bar, no ruler)
+        assert!(app.perform(&ctx, Action::Undo));
+        assert!(active_doc(&app.docs).unwrap().rich, "Undo of Make Plain Text makes the document rich text again");
+        assert!(app.perform(&ctx, Action::Redo));
+        assert!(!active_doc(&app.docs).unwrap().rich, "Redo makes it plain text again");
     }
 
     /// Preferences > Default Font lists every family a document can use, and choosing one keeps it.

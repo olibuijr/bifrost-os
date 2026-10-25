@@ -36,8 +36,11 @@ pub mod protocol {
 /// `set_white_point` and `white_point_mode`, Night Shift applied by the window server to the whole output; 6 adds
 /// `set_zoom`, Screen Zoom of the whole output; 7 adds `tile_toplevel`, the shell's request to place another client's
 /// window (a native app's), named by its foreign toplevel handle; 8 adds `set_stack_rank`, the shell's order for a set
-/// of its windows it brings forward over other clients' windows.
-pub const VERSION: u32 = 8;
+/// of its windows it brings forward over other clients' windows; 9 adds `set_position`, the shell's request to move one
+/// of its mapped toplevels where the app asked its window to go (E2E11 3: `set_origin` applies on the next map only).
+pub const VERSION: u32 = 9;
+/// The version that introduced `set_position`; a manager bound at an older version is never sent one.
+pub const POSITION_SINCE: u32 = 9;
 /// The version that introduced `set_stack_rank`; a manager bound at an older version is never sent one.
 pub const STACK_RANK_SINCE: u32 = 8;
 /// The version that introduced `tile_toplevel`; a manager bound at an older version is never sent one.
@@ -108,6 +111,13 @@ mod tests {
         let xml = include_str!("../../wm/protocol/bifrost-window-level-v1.xml");
         assert!(xml.contains(&format!("name=\"bifrost_window_level_manager_v1\" version=\"{VERSION}\"")));
         assert!(xml.contains("<event name=\"frame\" since=\"2\">"));
+    }
+
+    #[test]
+    fn the_shell_asks_for_the_set_position_request_the_protocol_declares() {
+        let xml = include_str!("../../wm/protocol/bifrost-window-level-v1.xml");
+        assert!(xml.contains(&format!("<request name=\"set_position\" since=\"{POSITION_SINCE}\">")));
+        assert!(STACK_RANK_SINCE < POSITION_SINCE && POSITION_SINCE <= VERSION);
     }
 
     #[test]

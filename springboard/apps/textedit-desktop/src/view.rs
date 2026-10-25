@@ -878,15 +878,16 @@ pub fn plain_message(attachments: bool) -> &'static str {
     }
 }
 
-/// The buttons of the Make Plain Text confirmation: OK (convert) is the default.
-pub fn plain_buttons(ui: &Ui, l: &PanelLayout) -> Vec<Button> {
-    sheet_buttons(ui, l, &[("Cancel", Action::PlainCancel, false), ("OK", Action::PlainDone, true)])
-}
+/// The Make Plain Text confirmation's button ids (`Sheet::hit` answers them).
+pub const PLAIN_OK: u32 = 1;
+pub const PLAIN_CANCEL: u32 = 0;
 
-/// The confirmation sheet: its title, a one-line message in the first row, and its buttons.
-pub fn draw_confirm(c: &mut dyn Canvas, ui: &Ui, l: &PanelLayout, title: &str, message: &str, buttons: &[Button]) {
-    draw_sheet(c, ui, l, title, &[], 0, buttons);
-    text_at(c, ui, message, MAC_BODY_PT, Weight::Regular, LABEL.now(), l.labels_x, l.fields[0].y);
+/// The Make Plain Text confirmation as the kit's alert (E2E11 finding 6): shown as a document-modal sheet hanging from
+/// the title bar, like the close confirmation, with OK (convert) the accent-filled default on top and Cancel stacked
+/// under it.
+pub fn plain_alert(attachments: bool) -> bifrost_app::controls::nav::Alert {
+    use bifrost_app::controls::nav::{Alert, AlertStyle};
+    Alert::new(PLAIN_TITLE, plain_message(attachments)).action(PLAIN_OK, "OK", AlertStyle::Default).action(PLAIN_CANCEL, "Cancel", AlertStyle::Cancel)
 }
 
 pub fn line_buttons(ui: &Ui, l: &PanelLayout) -> Vec<Button> {
