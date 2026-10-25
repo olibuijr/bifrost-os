@@ -6,15 +6,14 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use bifrost_app::thumbnails;
+use springboard::shell::search_thumbs::FileThumbs;
 
-/// What the thumbnails service answered for one file at one pixel edge.
+/// What the thumbnail providers drew for one file at one pixel edge.
 pub(crate) enum Thumb {
-    /// Asked for; the answer has not come yet.
+    /// Asked for; no picture yet (it is being drawn, or the file's type has only an icon, which the view draws).
     Asked,
-    /// The picture the service drew.
+    /// The picture the providers drew.
     Picture(Rc<Image>),
-    /// The service has only the file's type icon, or could not draw the file: the view draws the icon.
-    Icon,
 }
 
 /// A thumbnail slot: the file's modification time when it was asked for, and the answer.
@@ -172,10 +171,13 @@ pub(crate) struct ViewOpts {
     /// List view: folders opened inline, and the nesting depth of every row (parallel to `rows`).
     pub(crate) expanded: BTreeSet<PathBuf>,
     pub(crate) depth: Vec<usize>,
-    /// Thumbnails of the system thumbnails service by (path, pixel edge); see [`ViewOpts::thumb`].
+    /// Thumbnails by (path, pixel edge); see [`ViewOpts::thumb`].
     pub(crate) thumbs: RefCell<HashMap<(PathBuf, u32), ThumbSlot>>,
-    /// The thumbnails the views asked for while painting: (path, size in pt, scale). `Files::request_thumbnails` sends them.
-    pub(crate) thumb_asks: RefCell<Vec<(PathBuf, u32, f32)>>,
+    /// The pictures are drawn here, in the app, by the system thumbnail providers on worker threads over the shared
+    /// disk cache, as the Dock's Downloads stack and Search draw theirs (`search_thumbs`). The `thumbnails` service
+    /// answered with a file in the shell's own cache, which the app's sandbox cannot read, so the icon view showed only
+    /// type icons (E2E8 11). `Files::tick` polls it.
+    pub(crate) pictures: RefCell<FileThumbs>,
     /// The children of expanded folders as read, with the folder's modification time they were read at; see
     /// [`ViewOpts::kids_of`].
     pub(crate) kids: RefCell<HashMap<PathBuf, (std::time::SystemTime, Vec<Entry>)>>,
@@ -198,7 +200,7 @@ impl Default for ViewOpts {
             expanded: BTreeSet::new(),
             depth: vec![],
             thumbs: RefCell::new(HashMap::new()),
-            thumb_asks: RefCell::new(Vec::new()),
+            pictures: RefCell::new(FileThumbs::default()),
             kids: RefCell::new(HashMap::new()),
         }
     }
@@ -228,31 +230,52 @@ impl ViewOpts {
 }
 
 impl ViewOpts {
-    /// The picture the thumbnails service drew for `path` at `side` pt and `scale` pixels per point, or None while it
-    /// has none. The first ask for a file (and an ask for a file whose modification time changed) is queued for the
-    /// service; its answer comes back as a reply or an event, and the view repaints then.
+    /// The picture the thumbnail providers drew for `path` at `side` pt and `scale` pixels per point, or None while
+    /// there is none (being drawn, or a type that only has an icon). The first ask for a file (and an ask for a file
+    /// whose modification time changed) starts the drawing; `Files::tick` takes the finished pictures and the view
+    /// repaints then.
     pub(crate) fn thumb(&self, path: &std::path::Path, mtime: i64, side: u32, scale: f32) -> Option<Rc<Image>> {
-        let key = (path.to_path_buf(), thumbnails::edge_px(side, scale));
+        let px = thumbnails::edge_px(side, scale) as usize;
+        let key = (path.to_path_buf(), px as u32);
         let mut map = self.thumbs.borrow_mut();
-        if let Some(slot) = map.get(&key) {
-            if slot.mtime == mtime {
-                return match &slot.art {
-                    Thumb::Picture(im) => Some(im.clone()),
-                    Thumb::Asked | Thumb::Icon => None,
-                };
+        let mut pictures = self.pictures.borrow_mut();
+        let changed = match map.get_mut(&key) {
+            Some(slot) if slot.mtime == mtime => {
+                if let Thumb::Picture(im) = &slot.art {
+                    return Some(im.clone());
+                }
+                if let Some(im) = pictures.ready(path, px) {
+                    let im = Rc::new(im.clone());
+                    slot.art = Thumb::Picture(im.clone());
+                    return Some(im);
+                }
+                // asks again only when the tracker forgot the answer (its memory is bounded): a file still being drawn,
+                // or one that has only its icon, is a no-op
+                pictures.want(path, px);
+                return None;
             }
-        }
+            Some(_) => true,
+            None => false,
+        };
         if map.len() >= MAX_THUMB_SLOTS {
             map.clear();
         }
         map.insert(key, ThumbSlot { mtime, art: Thumb::Asked });
-        self.thumb_asks.borrow_mut().push((path.to_path_buf(), side, scale));
+        if changed {
+            pictures.forget(path, px);
+        }
+        pictures.want(path, px);
         None
     }
 
-    /// The asks made since the last call.
-    pub(crate) fn take_thumb_asks(&self) -> Vec<(PathBuf, u32, f32)> {
-        std::mem::take(&mut *self.thumb_asks.borrow_mut())
+    /// Takes the pictures the workers finished. True when one arrived, so the view repaints.
+    pub(crate) fn poll_thumbs(&self) -> bool {
+        self.pictures.borrow_mut().poll()
+    }
+
+    /// True while a picture is being drawn (the loop wakes to take it).
+    pub(crate) fn thumbs_pending(&self) -> bool {
+        self.pictures.borrow().pending()
     }
 }
 
@@ -336,9 +359,9 @@ impl Files {
             }
         }
     }
-    /// A file's thumbnail from the system thumbnails service, fitted into the box (x, y, w, h in pt) and centred in it.
-    /// False while the service has no picture for the file (it draws it in the background), for folders, and for a file
-    /// the service only has the type icon of.
+    /// A file's thumbnail from the system thumbnail providers, fitted into the box (x, y, w, h in pt) and centred in it.
+    /// False while there is no picture for the file yet (it is drawn in the background), for folders, and for a file
+    /// whose type has only an icon.
     pub(crate) fn blit_thumb(&self, s: &mut Surface, ui: &Ui, e: &Entry, b: (f32, f32, f32, f32)) -> bool {
         if e.is_dir {
             return false;
@@ -352,26 +375,6 @@ impl Files {
         let y = ui.pt(b.1) as i32 + (ph - im.h as i32) / 2;
         s.blit(&im, x, y, 255, 255);
         true
-    }
-    /// A thumbnail answer from the service (a reply to a request, or a `ready` or `failed` event): the picture when the
-    /// service has one, else the icon. True when a slot changed, so a frame is needed.
-    pub(crate) fn thumb_answer(&mut self, reply: &thumbnails::Reply) -> bool {
-        let art = match &reply.state {
-            thumbnails::State::Pending => return false,
-            thumbnails::State::Pixels { image, .. } => match thumbnails::load_pixels(image) {
-                Some(im) => Thumb::Picture(Rc::new(im)),
-                None => Thumb::Icon,
-            },
-            thumbnails::State::Icon { .. } | thumbnails::State::Failed(_) => Thumb::Icon,
-        };
-        let key = (PathBuf::from(&reply.file), reply.px);
-        match self.vo.thumbs.borrow_mut().get_mut(&key) {
-            Some(slot) => {
-                slot.art = art;
-                true
-            }
-            None => false,
-        }
     }
     /// An entry's icon (folder or file type) in a square of `side` pt, or its picture thumbnail.
     pub(crate) fn paint_entry_icon(&self, ui: &Ui, s: &mut Surface, e: &Entry, x: f32, y: f32, side: f32, thumbs: bool) {
@@ -626,5 +629,37 @@ mod group_tests {
         assert_eq!(Group::Size.key(&entry("b", false, 5 * MB)).1, "1 MB to 100 MB");
         assert_eq!(Group::Size.key(&entry("c", false, 500 * MB)).1, "100 MB to 1 GB");
         assert_eq!(Group::Size.key(&entry("d", false, 2048 * MB)).1, "Over 1 GB");
+    }
+}
+
+/// E2E8 11: the icon and gallery views draw a picture's thumbnail in the app, as the Dock's stack does, instead of
+/// waiting for a service answer that names a file the sandbox cannot read.
+#[cfg(test)]
+mod thumb_tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn a_picture_gets_its_thumbnail_after_the_workers_finish() {
+        let dir = std::env::temp_dir().join(format!("bifrost-files-thumbs-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("photo.png");
+        std::fs::write(&file, springboard::pngenc::encode_rgba(40, 20, &vec![0xFF3366CC; 40 * 20])).unwrap();
+        let vo = ViewOpts { pictures: RefCell::new(FileThumbs::with_cache(dir.join("cache"))), ..ViewOpts::default() };
+        assert!(vo.thumb(&file, 1, 64, 1.0).is_none(), "the first ask starts the drawing");
+        assert!(vo.thumbs_pending());
+        let end = Instant::now() + Duration::from_secs(10);
+        while vo.thumbs_pending() && Instant::now() < end {
+            vo.poll_thumbs();
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let im = vo.thumb(&file, 1, 64, 1.0).expect("the picture is drawn");
+        assert!(im.w <= 64 && im.h <= 64 && im.w > im.h, "fitted into the cell, aspect kept: {}x{}", im.w, im.h);
+        assert!(vo.thumb(&file, 1, 64, 1.0).is_some(), "kept for the next paint");
+        // a changed file is drawn again
+        assert!(vo.thumb(&file, 2, 64, 1.0).is_none());
+        assert!(vo.thumbs_pending());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

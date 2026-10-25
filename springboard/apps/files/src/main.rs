@@ -372,9 +372,6 @@ impl App for Files {
         self.service_answer(request, result)
     }
     fn service_event(&mut self, _ctx: &Ctx, service: &str, event: &str, body: &bifrost_core::json::Json) -> bool {
-        if let Some(reply) = bifrost_app::thumbnails::event(service, event, body) {
-            return self.thumb_answer(&reply);
-        }
         if !bifrost_app::quick_look::is_quick_look(service) {
             return false;
         }
@@ -427,8 +424,15 @@ impl App for Files {
         self.close_extra(window)
     }
     fn tick(&mut self, ctx: &Ctx, _: f64) -> bool {
-        self.request_thumbnails(ctx);
-        let mut changed = self.poll_search();
+        // the pictures the thumbnail workers finished, for this window and the New Window ones
+        let mut changed = self.vo.poll_thumbs();
+        for e in &mut self.windows {
+            if e.files.vo.poll_thumbs() {
+                e.files.revision += 1;
+                changed = true;
+            }
+        }
+        changed |= self.poll_search();
         // the shell would not open an app from the Applications place (not installed any more, or not an app)
         if let Some(name) = self.sys.take_app_open_failure() {
             self.notice = Some(format!("\u{201C}{name}\u{201D} can\u{2019}t be opened."));
@@ -557,7 +561,13 @@ impl App for Files {
     fn next_wake(&self, t: f64) -> Option<f64> {
         // a drag hovering over a folder opens it; a batch of folder events matures; otherwise the loop sleeps
         let events = self.watch.as_ref().and_then(|w| w.next_deadline(Instant::now()));
-        wake_at(t, self.fx.spring.is_some(), events)
+        let wake = wake_at(t, self.fx.spring.is_some(), events);
+        // a thumbnail being drawn is taken by the next tick
+        if self.vo.thumbs_pending() || self.windows.iter().any(|e| e.files.vo.thumbs_pending()) {
+            let soon = t + THUMB_POLL_MS;
+            return Some(wake.map_or(soon, |w| w.min(soon)));
+        }
+        wake
     }
     fn wake_fd(&self) -> Option<i32> {
         self.watch.as_ref().and_then(|w| w.fd())
@@ -573,6 +583,8 @@ impl App for Files {
 }
 /// How often a drag hovering over a folder is checked for its spring-loaded open (ms).
 const SPRING_POLL_MS: f64 = 100.0;
+/// How soon the loop wakes to take a thumbnail the workers are drawing.
+const THUMB_POLL_MS: f64 = 50.0;
 
 /// When the loop wakes, in ms like `t`: soon while a drag hovers (spring-loading), when the next batch of folder events
 /// matures (`events` from now), else never.
