@@ -394,7 +394,7 @@ pub(super) fn app_menu_chord(menus:&[bifrost_proto::AppMenu],ch:char,mods:u32)->
 /// app in front first: the shell closes or minimizes a window with Cmd+W or Cmd+M only when the app does not take the chord (a tabbed
 /// app's Close Tab keeps Cmd+W while it has a tab to close).
 pub(super) fn chord_in_menus(menus:&[bifrost_proto::AppMenu],code:u16,mods:u32)->bool {
-    super::evkeys::char_for(code,false).and_then(|c|app_menu_chord(menus,c,mods)).is_some()
+    super::evkeys::chord_char_for(code).and_then(|c|app_menu_chord(menus,c,mods)).is_some()
 }
 /// What quitting (Cmd+Q, the App menu's Quit) does to the app in front. Cmd+W only ever closes the window.
 #[cfg(feature = "desktop-wayland")]
