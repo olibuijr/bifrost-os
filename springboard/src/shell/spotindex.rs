@@ -152,8 +152,120 @@ fn kind_of(url: &str) -> Option<&'static str> {
     }
 }
 
+/// Decodes the RFC 2047 encoded words (`=?utf-8?Q?=C3=86fing?=`, B and Q encodings in any case) of a title or a
+/// description an app indexed, so a mail subject donated as its raw header reads as text in Search. Whitespace between
+/// two encoded words is dropped and adjacent words of one charset are decoded together (a letter split across them
+/// comes out whole). UTF-8, US-ASCII and ISO-8859-1 (also for Windows-1252, whose 0x80 to 0x9f letters it cannot name)
+/// are read; a malformed word or another charset stays as written.
+pub fn decode_encoded_words(value: &str) -> String {
+    if !value.contains("=?") {
+        return value.to_string();
+    }
+    // the encoded words read since the last plain text: (charset, bytes, raw text)
+    let mut run: Option<(String, Vec<u8>, String)> = None;
+    // whitespace read after the last encoded word of `run`
+    let mut gap = String::new();
+    let mut out = String::new();
+    let flush = |out: &mut String, run: Option<(String, Vec<u8>, String)>| {
+        if let Some((charset, bytes, raw)) = run {
+            out.push_str(&decode_charset(&charset, &bytes).unwrap_or(raw));
+        }
+    };
+    let mut i = 0;
+    while i < value.len() {
+        let rest = &value[i..];
+        if let Some((len, charset, bytes)) = rest.starts_with("=?").then(|| parse_encoded_word(rest)).flatten() {
+            let raw = &rest[..len];
+            match run.as_mut() {
+                Some((cs, b, r)) if cs.eq_ignore_ascii_case(&charset) => {
+                    b.extend(bytes);
+                    r.push_str(&gap);
+                    r.push_str(raw);
+                }
+                _ => {
+                    flush(&mut out, run.take());
+                    run = Some((charset, bytes, raw.to_string()));
+                }
+            }
+            gap.clear();
+            i += len;
+            continue;
+        }
+        let Some(c) = rest.chars().next() else { break };
+        i += c.len_utf8();
+        if run.is_some() && c.is_whitespace() {
+            gap.push(c);
+            continue;
+        }
+        flush(&mut out, run.take());
+        out.push_str(&gap);
+        gap.clear();
+        out.push(c);
+    }
+    flush(&mut out, run.take());
+    out.push_str(&gap);
+    out
+}
+
+/// The encoded word that starts `s`: (bytes it takes, charset, decoded bytes). `None` when `s` does not start with a
+/// well-formed one.
+fn parse_encoded_word(s: &str) -> Option<(usize, String, Vec<u8>)> {
+    let rest = s.strip_prefix("=?")?;
+    let (charset, rest) = rest.split_once('?')?;
+    let (encoding, rest) = rest.split_once('?')?;
+    let end = rest.find("?=")?;
+    let text = &rest[..end];
+    if charset.is_empty() || charset.contains(char::is_whitespace) || text.contains(char::is_whitespace) {
+        return None;
+    }
+    let bytes = match encoding {
+        "B" | "b" => bifrost_core::plist::base64_decode(text)?,
+        "Q" | "q" => q_decode(text)?,
+        _ => return None,
+    };
+    Some((2 + charset.len() + 1 + encoding.len() + 1 + end + 2, charset.to_string(), bytes))
+}
+
+/// The bytes of a Q-encoded text: `_` is a space and `=XX` a byte. `None` for an `=` without two hex digits.
+fn q_decode(text: &str) -> Option<Vec<u8>> {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'_' => out.push(b' '),
+            b'=' => {
+                let hex = bytes.get(i + 1..i + 3)?;
+                if !hex.iter().all(u8::is_ascii_hexdigit) {
+                    return None;
+                }
+                out.push(u8::from_str_radix(std::str::from_utf8(hex).ok()?, 16).ok()?);
+                i += 2;
+            }
+            b => out.push(b),
+        }
+        i += 1;
+    }
+    Some(out)
+}
+
+/// The text of `bytes` in `charset` (an RFC 2231 language suffix, `utf-8*is`, is ignored). `None` for a charset this
+/// cannot read or bytes that are not valid in it.
+fn decode_charset(charset: &str, bytes: &[u8]) -> Option<String> {
+    let name = charset.split('*').next().unwrap_or("").to_ascii_lowercase();
+    match name.as_str() {
+        "utf-8" | "utf8" => String::from_utf8(bytes.to_vec()).ok(),
+        "us-ascii" | "ascii" => bytes.is_ascii().then(|| bytes.iter().map(|&b| b as char).collect()),
+        "iso-8859-1" | "iso8859-1" | "iso_8859-1" | "latin1" | "l1" | "windows-1252" | "cp1252" => Some(bytes.iter().map(|&b| b as char).collect()),
+        _ => None,
+    }
+}
+
 impl Entry {
-    fn new(item: SearchableItem, indexed: u64) -> Entry {
+    fn new(mut item: SearchableItem, indexed: u64) -> Entry {
+        // a mail subject may come as its raw header; it is searched and shown decoded (stored entries are decoded on load)
+        item.title = decode_encoded_words(&item.title);
+        item.description = decode_encoded_words(&item.description);
         let text = format!("{} {} {}", item.title, item.keywords.join(" "), item.description);
         Entry {
             title_folded: super::fuzzy::fold(&item.title),
@@ -1187,6 +1299,22 @@ mod tests {
 
     fn it(id: &str, domain: &str, title: &str, desc: &str, kw: &[&str]) -> SearchableItem {
         SearchableItem { unique_id: id.into(), domain: domain.into(), title: title.into(), description: desc.into(), keywords: kw.iter().map(|s| s.to_string()).collect(), ..Default::default() }
+    }
+
+    /// E2E9 3: a mail subject indexed as its raw RFC 2047 header is shown and found decoded.
+    #[test]
+    fn encoded_words_in_an_indexed_title_are_decoded() {
+        assert_eq!(decode_encoded_words("=?utf-8?Q?=C3=86fingasv=C3=A6=C3=B0i?="), "Æfingasvæði");
+        assert_eq!(decode_encoded_words("=?UTF-8?B?w4Z2aW50w70=?= og =?iso-8859-1?q?f=E6ri?="), "Ævintý og færi");
+        assert_eq!(decode_encoded_words("=?utf-8?Q?=C3?= =?utf-8?Q?=86_b?="), "Æ b", "a letter split across two words, the gap dropped");
+        assert_eq!(decode_encoded_words("Re: =?utf-8?q?hall=C3=B3?= vinur"), "Re: halló vinur");
+        assert_eq!(decode_encoded_words("plain = text ?= here"), "plain = text ?= here");
+        assert_eq!(decode_encoded_words("=?x-unknown?Q?abc?= =?utf-8?Q?=ZZ?="), "=?x-unknown?Q?abc?= =?utf-8?Q?=ZZ?=", "unreadable words stay as written");
+        let mut ix = Index::default();
+        ix.index("is.olibuijr.mail.desktop", vec![it("m1", "mail", "=?utf-8?Q?=C3=86fingasv=C3=A6=C3=B0i?=", "Ana", &[])]);
+        let found = ix.search("aefingasv", 5);
+        let found = if found.is_empty() { ix.search("æfingasv", 5) } else { found };
+        assert_eq!(found.first().map(|f| f.title.as_str()), Some("Æfingasvæði"));
     }
 
     #[test]

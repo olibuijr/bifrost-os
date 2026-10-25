@@ -2712,6 +2712,12 @@ impl Shell {
             self.desk_focus_extra_window(slot, id);
             return;
         }
+        // activating an app that shows windows besides its main one (from Search, Cmd+Tab, a menu or the Dock) brings
+        // all of them forward in their own order, not only the main window (E2E9 5)
+        if self.desk_activate_shown_app(app, t) {
+            self.quicksearch.note_launch(app);
+            return;
+        }
 
         // a limit already reached covers the window this opens (see `st_launch_check`); a blocked app's own
         // process (native route) is then never started
@@ -5134,6 +5140,27 @@ mod tests {
         assert!(sh.take_raise_front(), "the window server raises and focuses the viewer");
         assert!(!sh.desk_activate_shown_app(AppId::Terminal, 0.0), "one window: the open path");
         assert!(!sh.desk_activate_shown_app(viewer, 0.0), "only an app (its main id) is activated");
+    }
+
+    /// E2E9 5: opening an app that already shows two windows (Search's Return, Cmd+Tab) brings both forward, in their
+    /// own order, instead of only its main window.
+    #[test]
+    fn opening_a_running_app_brings_all_of_its_windows_forward() {
+        let mut sh = crate::shell::tests::desktop_shell();
+        let m = sh.desk_metrics();
+        let (main, second) = (AppId::External(3), AppId::ExternalWindow(3, 1));
+        {
+            let d = sh.desk.as_mut().unwrap();
+            d.wins.clear();
+            d.open(&m, second, (500, 400));
+            d.open(&m, AppId::Terminal, (900, 600));
+            d.open(&m, main, (900, 600));
+            d.open(&m, AppId::Settings, (700, 500));
+        }
+        sh.desk_open(main, 0.0);
+        let d = sh.desk.as_ref().unwrap();
+        assert_eq!(d.wins.iter().map(|w| w.app).collect::<Vec<_>>(), vec![AppId::Terminal, AppId::Settings, second, main]);
+        assert_eq!(sh.screen, crate::shell::Screen::App(main));
     }
 
     /// E2E5 3: the window server raises only the window it is asked to activate, so a Dock click on an app showing a

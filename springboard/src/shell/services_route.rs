@@ -79,10 +79,20 @@ pub fn app_services_for(sel: &Selection) -> Vec<AppService> {
 pub fn menu_entries(sel: Option<Selection>) -> Vec<(u8, String)> {
     let Some(sel) = sel else { return Vec::new() };
     let base = Service::ALL.len();
-    let mut rows: Vec<(u8, String)> = Service::ALL.iter().enumerate().filter(|(_, s)| s.accepts(&sel)).map(|(i, s)| (i as u8, s.title().to_string())).collect();
-    // the row index is a u8: at most the indexes that remain after the built-in ones
+    let shown: Vec<Service> = Service::ALL.iter().copied().filter(|s| s.accepts(&sel)).collect();
+    let mut rows: Vec<(u8, String)> = Service::ALL.iter().enumerate().filter(|(_, s)| shown.contains(s)).map(|(i, s)| (i as u8, s.title().to_string())).collect();
+    // the row index is a u8: at most the indexes that remain after the built-in ones. An app's service named like a
+    // built-in row (the Dictionary app's "Look Up in Dictionary") is listed once, as that row; the others keep their
+    // index in `app_services_for`, which `run_app_service_on` reads.
     let room = u8::MAX as usize - base;
-    rows.extend(app_services_for(&sel).iter().take(room).enumerate().map(|(k, s)| ((base + k) as u8, s.decl.title.clone())));
+    rows.extend(
+        app_services_for(&sel)
+            .iter()
+            .take(room)
+            .enumerate()
+            .filter(|(_, s)| !menu::duplicates_built_in(&s.decl.title, &shown))
+            .map(|(k, s)| ((base + k) as u8, s.decl.title.clone())),
+    );
     rows
 }
 
