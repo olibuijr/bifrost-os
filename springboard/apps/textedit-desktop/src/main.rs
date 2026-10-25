@@ -155,6 +155,9 @@ struct TextEditApp {
     /// The text state last reported to the shell (`ctx.text_state`): the active document's selection and caret, which
     /// the Services submenu and Look Up read, as an SDK text field reports its own.
     text_published: Option<bifrost_app::proto::TextState>,
+    /// The caret rectangle last reported to the shell (`ctx.caret_rect`) and the window it is in: Look Up opens under
+    /// it, an input method's candidates beside it.
+    caret_published: Option<(bifrost_app::app_windows::WindowId, (f32, f32, f32, f32))>,
 }
 
 /// What a press in the page did.
@@ -365,6 +368,7 @@ impl TextEditApp {
             plain_sheet: false,
             drop_sessions: Vec::new(),
             text_published: None,
+            caret_published: None,
             props: None,
             link: None,
             line: None,
@@ -413,8 +417,10 @@ impl TextEditApp {
 
     /// The window's regions for the current window size, find bar and document. The ruler shows for rich text only.
     fn geometry(&self, ui: &Ui, width_px: u32, height_px: u32) -> view::Geometry {
+        let rich = active_doc(&self.docs).is_none_or(|d| d.rich);
         let ruler = self.opts.show_ruler && active_doc(&self.docs).is_some_and(|d| d.rich);
-        view::geometry_with(width_px as f32 / ui.s, height_px as f32 / ui.s, self.find_open, ruler, self.opts.wrap_window)
+        // a plain text document has no format bar (E2E9 11): the page starts under the title row
+        view::geometry_with(width_px as f32 / ui.s, height_px as f32 / ui.s, self.find_open, ruler, self.opts.wrap_window, rich)
     }
 
     /// The format bar's status: what the document has at the caret, or in the first selected character.
@@ -462,6 +468,10 @@ impl TextEditApp {
     pub(crate) fn sync_text_state(&mut self, ctx: &Ctx) {
         let now = active_doc(&self.docs).map(text_state_of).unwrap_or_default();
         if self.text_published.as_ref() != Some(&now) {
+            // an empty state clears the shell's caret too: the next caret is reported again
+            if now == bifrost_app::proto::TextState::default() {
+                self.caret_published = None;
+            }
             ctx.text_state(now.clone());
             self.text_published = Some(now);
         }
@@ -1787,12 +1797,18 @@ impl TextEditApp {
     /// The close confirmation's touches: the buttons it shows; the rest of the window is blocked while it is up.
     fn touch_close_alert(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
         let geom = self.geom(ctx);
-        let layout = properties::layout_rows(geom.width, geom.body_top, 1);
-        let buttons = view::close_alert_buttons(&ctx.ui, &layout);
-        match buttons.iter().find(|b| b.rect.contains(px, py)).and_then(|b| b.action) {
-            Some(action) => self.perform(ctx, action),
-            None => true,
+        let Some(sheet) = self.close_sheet() else { return false };
+        let (parent, bar) = close_sheet_parent(&geom);
+        match sheet.hit(parent, bar, 1.0, px, py) {
+            bifrost_app::controls::sheet::Hit::Button(id) => self.perform(ctx, Action::CloseAnswer(id as u8)),
+            _ => true,
         }
+    }
+
+    /// The close confirmation of this window's document as the kit's alert sheet (`Alert::sheet`, E2E9 6): it hangs
+    /// from the title bar, its title wraps instead of being cut, and Save is the accent-filled default (Return).
+    fn close_sheet(&self) -> Option<bifrost_app::controls::sheet::Sheet> {
+        self.docs.alert().filter(|_| self.close_alert_here()).map(|a| a.sheet())
     }
 
     /// The Make Plain Text confirmation's touches: the buttons it shows.
@@ -3062,9 +3078,11 @@ impl TextEditApp {
         let matches = self.find_matches();
         view::page_clip(canvas, ui, &geom, self.opts.dark_background);
         let view_h = geom.body_bottom - geom.body_top;
+        let mut caret_now = None;
         if let (Some(doc), Some(cache)) = (active_doc(&self.docs), self.cache.as_ref()) {
             let sel = doc.text.selection();
             let head = doc.text.head();
+            let caret_at = if sel.is_empty() { head } else { sel.start };
             if self.follow {
                 let (_, top, height) = cache.layout.caret(&cache.cells, head, &view::measure_in(ui, &cache.art.aspects, cache.layout.width));
                 if top < self.scroll {
@@ -3091,8 +3109,18 @@ impl TextEditApp {
                 &matches,
                 self.opts.dark_background,
             );
+            // where the caret (or the selection's start) is in the window, in points, as the page draws it
+            let (x, top, height) = cache.layout.caret(&cache.cells, caret_at, &view::measure_in(ui, &cache.art.aspects, cache.layout.width));
+            caret_now = Some(caret_in_window(&geom, self.scroll, (x, top, height)));
         }
         canvas.pop_clip();
+        // the key window's caret goes to the shell (`firstRectForCharacterRange:`): Look Up opens under the selection
+        if let Some(rect) = caret_now.filter(|_| ctx.key_window() == self.current) {
+            if self.caret_published != Some((self.current, rect)) {
+                ctx.caret_rect(rect.0, rect.1, rect.2, rect.3);
+                self.caret_published = Some((self.current, rect));
+            }
+        }
         if let Some((_, panel)) = &self.props {
             let layout = properties::layout(geom.width, geom.body_top);
             let buttons = view::properties_buttons(ui, &layout);
@@ -3110,10 +3138,9 @@ impl TextEditApp {
             view::draw_confirm(canvas, ui, &layout, "Make Plain Text", "Attachments will be removed from the document.", &buttons);
         }
         // the close confirmation of this window's document, over everything else in the window
-        if let Some(alert) = self.docs.alert().filter(|_| self.close_alert_here()) {
-            let layout = properties::layout_rows(geom.width, geom.body_top, 1);
-            let buttons = view::close_alert_buttons(ui, &layout);
-            view::draw_alert(canvas, ui, &layout, &alert.title, &alert.message, &buttons);
+        if let Some(sheet) = self.close_sheet() {
+            let (parent, bar) = close_sheet_parent(&geom);
+            bifrost_app::widgets::sheet(canvas, ui, parent, bar, &sheet, 1.0, None);
         }
         if let Some(typed) = &self.line {
             let layout = properties::layout_rows(geom.width, geom.body_top, 1);
@@ -3188,6 +3215,18 @@ fn chord_edit_action(key: u32, shift: bool, alt: bool, ctrl: bool, meta: bool) -
 
 fn main() {
     bifrost_app::run(TextEditApp::new());
+}
+
+/// The window a document-modal sheet covers (points) and the height of the title bar it hangs from: the unified title
+/// row, above the format bar.
+fn close_sheet_parent(geom: &view::Geometry) -> (bifrost_app::controls::Rect, f32) {
+    (bifrost_app::controls::Rect { x: 0.0, y: 0.0, w: geom.width, h: geom.height }, bifrost_app::layout::UNIFIED_BAR_PT)
+}
+
+/// The caret `(x, top, height)` of the page's layout as a rectangle in the window, in points: the text column starts at
+/// `text_x` and the page at `body_top`, scrolled by `scroll`. The caret is one point wide.
+fn caret_in_window(geom: &view::Geometry, scroll: f32, (x, top, height): (f32, f32, f32)) -> (f32, f32, f32, f32) {
+    (geom.text_x + x, geom.body_top - scroll + top, 1.0, height)
 }
 
 #[cfg(test)]
@@ -3475,6 +3514,33 @@ mod tests {
         let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice());
         let cfg = bifrost_app::Configure { w, h, scale: 1.0, safe_top: 0.0, safe_bottom: 0.0, dark: true, text_scale: 1.0, reduce_motion: false };
         Ctx::testing(Ui::new(Font::parse(data).unwrap(), 1.0), cfg)
+    }
+
+    fn carets_sent(ctx: &Ctx) -> Vec<(f32, f32, f32, f32)> {
+        use bifrost_app::proto::ToShell;
+        ctx.take_sent().into_iter().filter_map(|m| if let ToShell::CaretRect { x, y, w, h } = m { Some((x, y, w, h)) } else { None }).collect()
+    }
+
+    /// E2E9: the key window reports its caret to the shell in window points, on the page's first line after the typed
+    /// word, so Look Up opens under the selection instead of under the menu bar; an unchanged caret is not sent again.
+    #[test]
+    fn painting_reports_the_caret_of_the_key_window() {
+        let ctx = window(1200, 780);
+        let mut app = TextEditApp::new();
+        app.configure(&ctx);
+        app.window_event(&ctx, bifrost_app::app_windows::WindowId::MAIN, Input::Key(KeyInput::Text("orange".into())));
+        ctx.take_sent();
+        let mut buf = vec![0u32; 1200 * 780];
+        app.draw(&ctx, &mut Surface { w: 1200, h: 780, stride: 1200, px: &mut buf, y0: 0 }, 0.0);
+        let carets = carets_sent(&ctx);
+        assert_eq!(carets.len(), 1, "one caret for the key window");
+        let geom = app.geometry(&ctx.ui, 1200, 780);
+        let (x, y, _, h) = carets[0];
+        assert!(x > geom.text_x, "after the typed word");
+        assert!(y >= geom.body_top && y < geom.body_bottom && h > 0.0, "on the page");
+        assert_eq!(caret_in_window(&geom, 0.0, (10.0, 0.0, 16.0)), (geom.text_x + 10.0, geom.body_top, 1.0, 16.0));
+        app.draw(&ctx, &mut Surface { w: 1200, h: 780, stride: 1200, px: &mut buf, y0: 0 }, 0.0);
+        assert!(carets_sent(&ctx).is_empty(), "nothing moved: nothing is sent");
     }
 
     /// The window point a quarter of the way into the character at `index` on the first line of the page: the caret nearest
@@ -4091,17 +4157,22 @@ mod tests {
         assert_eq!(TextEditApp::new().window_title(), "Text Editor", "with no document the app's own name shows");
     }
 
+    /// E2E9 11: a plain text document shows no format bar (the reference shows none): no items are placed, published
+    /// or pressed, and the page starts under the title row.
     #[test]
-    fn a_plain_text_document_takes_no_press_on_the_format_bar() {
+    fn a_plain_text_document_has_no_format_bar() {
         let ctx = window(1200, 780);
         let mut app = app_with_text(SENTENCE, 0..5);
+        let rich = app.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        assert_eq!(rich.format_h, view::FORMAT_H, "rich text has the bar");
         active_doc_mut(&mut app.docs).unwrap().rich = false;
         let geom = app.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        assert_eq!(geom.format_h, 0.0);
+        assert_eq!(geom.body_top, bifrost_app::layout::UNIFIED_BAR_PT);
         let placed = format_bar::layout(&ctx.ui, &geom, &app.status());
-        let bold = centre(placed.rect_of(format_bar::BOLD).unwrap());
-        assert!(!press(&mut app, &ctx, TouchKind::Down, bold, 0.0));
-        assert!(!active_doc(&app.docs).unwrap().text.cells()[0].style.bold);
-        assert!(ctx.take_sent().is_empty());
+        assert!(placed.rect_of(format_bar::BOLD).is_none(), "nothing is placed");
+        assert!(format_bar::hit(&placed, 100.0, geom.format_top + 10.0).is_none());
+        assert!(app.controls(&ctx).is_empty(), "no format controls are published");
     }
 
     #[test]

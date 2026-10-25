@@ -219,10 +219,15 @@ fn suggestion_source(term: &str, selection: Option<Selection>) -> String {
     }
 }
 
-/// The point the popover drops from: the bottom centre of the caret rectangle `(x, y, w, h)` of a window whose content
-/// starts at `body` (px).
-fn caret_anchor(body: (f32, f32), (cx, cy, cw, ch): (f32, f32, f32, f32)) -> (f32, f32) {
-    (body.0 + cx + cw / 2.0, body.1 + cy + ch)
+/// The point the popover drops from: the bottom centre of the caret rectangle `(x, y, w, h)` (screen px).
+fn caret_anchor((cx, cy, cw, ch): (f32, f32, f32, f32)) -> (f32, f32) {
+    (cx + cw / 2.0, cy + ch)
+}
+
+/// An app's caret rectangle (`ToShell::CaretRect`, window points) on the screen in px: from the top left of the body of
+/// the window `body` (px) at `k` px a point.
+pub(super) fn caret_on_screen(body: (f32, f32), k: f32, (cx, cy, cw, ch): (f32, f32, f32, f32)) -> (f32, f32, f32, f32) {
+    (body.0 + cx * k, body.1 + cy * k, cw * k, ch * k)
 }
 
 /// The text a quick search result is listed by. A Terminal or Show in Folder result has no title to list.
@@ -254,16 +259,24 @@ impl Shell {
     }
 
     /// Where the popover opens (px): under the caret of the external app in front, which sits at the selection it
-    /// reported (`ToShell::CaretRect`, in its window below the title bar), else under the menu bar's centre.
+    /// reported (`ToShell::CaretRect`), else under the menu bar's centre.
     fn look_up_anchor(&self) -> (f32, f32) {
-        let caret = || {
-            let slot = self.front_ext_slot()?;
-            let (cx, cy, cw, ch) = self.ext.get(slot as usize)?.as_ref()?.caret_rect?;
-            let win = self.desk.as_ref()?.wins.iter().find(|w| w.app == super::AppId::External(slot))?;
-            let body = win.body(&self.desk_metrics());
-            Some(caret_anchor((body.x as f32, body.y as f32), (cx, cy, cw, ch)))
-        };
-        caret().unwrap_or((self.w as f32 / 2.0, self.desktop_bar_height() as f32))
+        self.front_ext_slot()
+            .and_then(|slot| self.ext_caret_on_screen(slot))
+            .map(caret_anchor)
+            .unwrap_or((self.w as f32 / 2.0, self.desktop_bar_height() as f32))
+    }
+
+    /// The caret rectangle app `slot` reported (`ToShell::CaretRect`, points in its key window's content) on the screen
+    /// in px. The app reports the caret of its key window: the app's front desk window when that is one of its own (a
+    /// second document window), else its main window.
+    pub(super) fn ext_caret_on_screen(&self, slot: u8) -> Option<(f32, f32, f32, f32)> {
+        let caret = self.ext.get(slot as usize)?.as_ref()?.caret_rect?;
+        let desk = self.desk.as_ref()?;
+        let main = super::AppId::External(slot);
+        let win = desk.front().filter(|w| w.app.parent() == main).or_else(|| desk.wins.iter().find(|w| w.app == main))?;
+        let body = win.body(&self.desk_metrics());
+        Some(caret_on_screen((body.x as f32, body.y as f32), self.ui.pt(1.0), caret))
     }
 
     /// The popover's box on the screen in px, clipped to it: its overlay surface and a region the GPU presenter keeps.
@@ -499,7 +512,9 @@ mod tests {
 
     #[test]
     fn the_popover_drops_from_the_bottom_centre_of_the_caret() {
-        assert_eq!(caret_anchor((100.0, 50.0), (20.0, 30.0, 2.0, 16.0)), (121.0, 96.0));
+        assert_eq!(caret_anchor((120.0, 80.0, 2.0, 16.0)), (121.0, 96.0));
+        // E2E9: the caret an app reports is in points; at 2 px a point it lands twice as far into the window
+        assert_eq!(caret_on_screen((100.0, 50.0), 2.0, (20.0, 30.0, 1.0, 16.0)), (140.0, 110.0, 2.0, 32.0));
     }
 
     /// E2E8 2: on the desktop the popover is an overlay surface above the app windows (a menu's rank), on its own box,

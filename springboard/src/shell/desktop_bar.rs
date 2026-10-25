@@ -522,6 +522,12 @@ pub(super) fn changed_bar_rects(before:&[(Menu,f32,f32,String)],after:&[(Menu,f3
     }
     merged.into_iter().map(|(a,b)|(a,0,b-a,height)).collect()
 }
+/// A document window's name in the Window menu, as its title bar reads: the reference lists an edited document's window
+/// with the "– Edited" its title carries (`NSWindow` `documentEdited`).
+pub(super) fn window_menu_title(title: &str, edited: bool) -> String {
+    if edited { format!("{title} \u{2013} Edited") } else { title.to_string() }
+}
+
 impl Shell {
     /// The Window menu's name for an open window: an extra window's title from its app's table, a hosted app's main
     /// window by the title it set (`ToShell::DocumentState`, as Mail names its window after the mailbox shown), else
@@ -537,7 +543,8 @@ impl Shell {
         if let super::AppId::External(slot) = app {
             if let Some(Some(h)) = self.ext.get(slot as usize) {
                 if !h.doc_title.is_empty() {
-                    return h.doc_title.clone();
+                    // the title as the window shows it: an edited document reads "Untitled – Edited" (E2E9 7)
+                    return window_menu_title(&h.doc_title, h.doc_edited);
                 }
             }
         }
@@ -3085,6 +3092,13 @@ mod window_menu_tests {
             let row = rows.iter().find(|r| r.text.trim() == want).unwrap_or_else(|| panic!("{want} is in the Window menu"));
             assert!(row.action.is_some(), "{want} is enabled for a normal window");
         }
+    }
+
+    /// E2E9 7: an edited document's window is listed as its title bar reads it, "Untitled – Edited".
+    #[test]
+    fn an_edited_document_window_is_listed_with_its_edited_mark() {
+        assert_eq!(super::window_menu_title("Untitled", true), "Untitled \u{2013} Edited");
+        assert_eq!(super::window_menu_title("notes.txt", false), "notes.txt");
     }
 
     #[test]

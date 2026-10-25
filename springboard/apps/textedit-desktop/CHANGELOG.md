@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.13.3
+
+- A second document window shows one title row, like the first: it opens with full-size content, so the system draws no title bar over the window's own.
+- The save confirmation is a sheet hanging from the title bar: the whole document name shows (the title wraps), and Save is the blue default button that Return presses.
+- Plain text documents show no format bar; the page starts under the title row.
+- The window reports where its caret is, so Look Up opens under the selection instead of under the menu bar.
+
 ## 1.13.2
 
 - Each document has its own window: File > New (and Duplicate, or shared text) opens a second window and keeps the first; a file opened while the front window holds an empty Untitled takes its place; closing a document closes its window.

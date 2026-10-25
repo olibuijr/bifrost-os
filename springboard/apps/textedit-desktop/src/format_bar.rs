@@ -155,9 +155,15 @@ pub fn bounds(geom: &Geometry) -> Rect {
     Rect { x: MARGIN_PT, y: geom.format_top + (FORMAT_H - CAPSULE_PT) / 2.0, w: (geom.width - 2.0 * MARGIN_PT).max(0.0), h: CAPSULE_PT }
 }
 
-/// Where the kit puts each item for this window and document.
+/// The bar's items: none when the window shows no format bar (a plain text document, `Geometry::format_h` 0).
+fn shown_toolbar(geom: &Geometry, status: &Status) -> Toolbar {
+    if geom.format_h > 0.0 { toolbar(status) } else { Toolbar::new(Vec::new()) }
+}
+
+/// Where the kit puts each item for this window and document. A window with no format bar has no items, so nothing is
+/// hit, published or drawn there.
 pub fn layout(ui: &Ui, geom: &Geometry, status: &Status) -> ToolbarLayout {
-    widgets::toolbar_layout(ui, bounds(geom), &toolbar(status))
+    widgets::toolbar_layout(ui, bounds(geom), &shown_toolbar(geom, status))
 }
 
 /// The items the window is too narrow for: they are behind the `>>` button.
@@ -355,6 +361,10 @@ fn draw_well(c: &mut dyn Canvas, ui: &Ui, slot: Rect, color: u32, enabled: bool)
 /// Draws the bar: the kit's toolbar (capsules, glyphs, the `>>` button) and then the slots the app draws itself. Returns
 /// where everything is, for hit-testing.
 pub fn draw(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry, status: &Status, pressed: Option<u32>) -> ToolbarLayout {
+    // plain text: no bar at all (the reference shows none), so nothing of it is drawn
+    if geom.format_h <= 0.0 {
+        return layout(ui, geom, status);
+    }
     let bar = toolbar(status);
     let placed = widgets::toolbar(c, ui, bounds(geom), &bar, pressed);
     let style = &status.style;

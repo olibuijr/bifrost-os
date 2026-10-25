@@ -32,6 +32,9 @@ pub struct ExtraWindow {
     pub title_double_click: bool,
     /// The app asked for no position and for the window to cascade from its other windows (`window_flags::CASCADE`).
     pub cascade: bool,
+    /// The app draws its own title row under the traffic lights (`window_flags::FULL_SIZE`): the desk draws no title
+    /// bar for the window, as for a main window with `window = "full-size"`.
+    pub full_size: bool,
 }
 
 /// The part of a title bar, in points, that stays reachable on screen: a window keeps this much of its width inside
@@ -102,6 +105,7 @@ impl WindowTable {
             collapsed: false,
             title_double_click: false,
             cascade: false,
+            full_size: false,
         };
         let at = self.windows.iter().position(|x| x.app == app).unwrap_or(self.windows.len());
         self.windows.insert(at, window);
@@ -239,6 +243,17 @@ impl WindowTable {
         match self.index_of(app, id) {
             Some(index) => {
                 self.windows[index].cascade = on;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Whether window `id` draws its content under the title bar. False when the window is not open.
+    pub fn set_full_size(&mut self, app: &str, id: u32, on: bool) -> bool {
+        match self.index_of(app, id) {
+            Some(index) => {
+                self.windows[index].full_size = on;
                 true
             }
             None => false,
