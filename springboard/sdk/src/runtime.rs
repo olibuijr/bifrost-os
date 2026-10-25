@@ -202,6 +202,21 @@ pub(crate) fn selection_reply<A: App>(app: &mut A, ctx: &Ctx) -> String {
     app.selected_text(ctx).unwrap_or_else(|| LAST_TEXT_STATE.with(|t| t.borrow().selected_text().to_string()))
 }
 
+/// Answers `ToApp::SelectionRequest` `request`: where the selection is first (`App::selection_rect`, sent as the caret
+/// rectangle, so Look Up opens under it), then its text (`selection_reply`).
+pub(crate) fn answer_selection_request<A: App>(app: &mut A, ctx: &Ctx, request: u32) {
+    if let Some((x, y, w, h)) = app.selection_rect(ctx) {
+        ctx.caret_rect(x, y, w, h);
+    }
+    let text = selection_reply(app, ctx);
+    ctx.send_to_shell(ToShell::SelectionReply { request, text });
+}
+
+/// A caret rectangle the wire takes: finite, with no negative size. `None` when a value is not finite.
+fn clean_caret_rect((x, y, w, h): (f32, f32, f32, f32)) -> Option<(f32, f32, f32, f32)> {
+    [x, y, w, h].iter().all(|v| v.is_finite()).then_some((x, y, w.max(0.0), h.max(0.0)))
+}
+
 thread_local! {
     static SUDDEN: RefCell<crate::process_info::SuddenTermination> = RefCell::new(Default::default());
     static ACTIVITIES: RefCell<crate::process_info::ActivityTracker> = RefCell::new(Default::default());
@@ -311,10 +326,13 @@ impl Ctx {
         LAST_TEXT_STATE.with(|t| *t.borrow_mut() = state.clone());
         self.send(ToShell::TextState(state));
     }
-    /// Report the caret rectangle in window points (`firstRectForCharacterRange:`) so the candidate window or the
-    /// keyboard can position itself.
+    /// Report the caret rectangle in window points (`firstRectForCharacterRange:`) so the candidate window, the
+    /// keyboard and Look Up's popover can position themselves. A rectangle that is not finite is dropped (the shell
+    /// would refuse the message); a negative size counts as zero.
     pub fn caret_rect(&self, x: f32, y: f32, w: f32, h: f32) {
-        self.send(ToShell::CaretRect { x, y, w, h });
+        if let Some((x, y, w, h)) = clean_caret_rect((x, y, w, h)) {
+            self.send(ToShell::CaretRect { x, y, w, h });
+        }
     }
     /// Report the focused field's `NativeTextInputTraits` (return key type, content kind, flags `tiflags::*`).
     pub fn input_traits(&self, traits: crate::proto::InputTraits) {
@@ -999,8 +1017,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                 }
                 ToApp::SelectionRequest { request } => {
                     if let Some(c) = &ctx {
-                        let text = selection_reply(&mut app, c);
-                        c.send_to_shell(ToShell::SelectionReply { request, text });
+                        answer_selection_request(&mut app, c, request);
                     }
                 }
                 ToApp::ServiceEvent { service, event, body } => {
@@ -2228,6 +2245,7 @@ mod selection_request_tests {
     /// An app with no text fields of its own, or one that draws its own text and says what is selected in it.
     struct Editor {
         own: Option<String>,
+        rect: Option<(f32, f32, f32, f32)>,
     }
 
     impl App for Editor {
@@ -2239,6 +2257,9 @@ mod selection_request_tests {
         }
         fn selected_text(&mut self, _ctx: &Ctx) -> Option<String> {
             self.own.clone()
+        }
+        fn selection_rect(&mut self, _ctx: &Ctx) -> Option<(f32, f32, f32, f32)> {
+            self.rect
         }
     }
 
@@ -2256,11 +2277,34 @@ mod selection_request_tests {
         let ctx = test_ctx();
         ctx.text_state(TextState { text: "the second line".into(), cursor: 10, anchor: 4, marked: None });
         let _ = ctx.take_sent();
-        assert_eq!(selection_reply(&mut Editor { own: None }, &ctx), "second", "the field the SDK reported");
-        assert_eq!(selection_reply(&mut Editor { own: Some("own words".into()) }, &ctx), "own words", "the app's own selection wins");
-        assert_eq!(selection_reply(&mut Editor { own: Some(String::new()) }, &ctx), "", "the app says nothing is selected");
+        assert_eq!(selection_reply(&mut Editor { own: None, rect: None }, &ctx), "second", "the field the SDK reported");
+        assert_eq!(selection_reply(&mut Editor { own: Some("own words".into()), rect: None }, &ctx), "own words", "the app's own selection wins");
+        assert_eq!(selection_reply(&mut Editor { own: Some(String::new()), rect: None }, &ctx), "", "the app says nothing is selected");
         // the focus left text: nothing selected
         ctx.text_state(TextState::default());
-        assert_eq!(selection_reply(&mut Editor { own: None }, &ctx), "");
+        assert_eq!(selection_reply(&mut Editor { own: None, rect: None }, &ctx), "");
+    }
+
+    /// E2E10: an app that draws its own text says where its selection is before it answers, so the shell has the caret
+    /// rectangle when Look Up opens; an app that says nothing sends only the answer.
+    #[test]
+    fn a_selection_request_reports_the_selection_rect_before_the_answer() {
+        let ctx = test_ctx();
+        let mut app = Editor { own: Some("orange".into()), rect: Some((120.0, 40.5, 30.0, 17.0)) };
+        answer_selection_request(&mut app, &ctx, 7);
+        match ctx.take_sent().as_slice() {
+            [ToShell::CaretRect { x, y, w, h }, ToShell::SelectionReply { request: 7, text }] => {
+                assert_eq!((*x, *y, *w, *h), (120.0, 40.5, 30.0, 17.0));
+                assert_eq!(text, "orange");
+            }
+            other => panic!("the rectangle, then the answer: {other:?}"),
+        }
+        answer_selection_request(&mut Editor { own: Some("x".into()), rect: None }, &ctx, 8);
+        assert!(matches!(ctx.take_sent().as_slice(), [ToShell::SelectionReply { request: 8, .. }]));
+        // a rectangle the wire would refuse is not sent; a negative size is zero
+        answer_selection_request(&mut Editor { own: None, rect: Some((f32::NAN, 0.0, 1.0, 1.0)) }, &ctx, 9);
+        assert!(matches!(ctx.take_sent().as_slice(), [ToShell::SelectionReply { request: 9, .. }]));
+        ctx.caret_rect(1.0, 2.0, -3.0, 4.0);
+        assert!(matches!(ctx.take_sent().as_slice(), [ToShell::CaretRect { w, h, .. }] if *w == 0.0 && *h == 4.0));
     }
 }

@@ -870,6 +870,13 @@ pub trait App {
     fn selected_text(&mut self, _ctx: &Ctx) -> Option<String> {
         None
     }
+    /// `firstRectForCharacterRange:` of the selection: where the selected text (or the caret) is, in window points
+    /// (x, y, w, h), for an app that draws its own text. The SDK sends it as the caret rectangle before it answers a
+    /// `ToApp::SelectionRequest`, so Look Up (Ctrl+Cmd+D) opens just below the selection rather than under the menu
+    /// bar. `None` sends nothing: SDK text fields report their caret on their own (`ViewApp::sync_text_input`).
+    fn selection_rect(&mut self, _ctx: &Ctx) -> Option<(f32, f32, f32, f32)> {
+        None
+    }
     /// IME and keyboard composition for `window`, the key window (`NSTextInputClient` of the window's first
     /// responder): `SetMarkedText`, `UnmarkText`, `DeleteSurrounding` and `AccentHold`, as `text_input` takes them. The
     /// shell sends them to the window that has the keys, so marked text (an input method's candidate, a held letter's

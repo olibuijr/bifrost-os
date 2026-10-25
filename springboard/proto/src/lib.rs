@@ -516,6 +516,28 @@ pub struct TextState {
 }
 
 impl TextState {
+    /// The state of a field holding `text`, with the caret at byte `cursor` and the selection's other end at byte
+    /// `anchor`: a window of at most `MAX_SURROUNDING` bytes around the caret (cut at character boundaries), its
+    /// offsets moved into the window. An anchor outside the window is clamped to its edge; an offset that splits a
+    /// character or is past the end is moved back to the character it is in.
+    pub fn around(text: &str, cursor: usize, anchor: usize) -> TextState {
+        let floor = |mut b: usize| {
+            b = b.min(text.len());
+            while !text.is_char_boundary(b) {
+                b -= 1;
+            }
+            b
+        };
+        let (cursor, anchor) = (floor(cursor), floor(anchor));
+        let mut start = cursor.saturating_sub(MAX_SURROUNDING / 2);
+        while !text.is_char_boundary(start) {
+            start += 1;
+        }
+        let end = floor((start + MAX_SURROUNDING).min(text.len()));
+        let rel = |b: usize| (b.clamp(start, end) - start) as u32;
+        TextState { text: text[start..end].to_string(), cursor: rel(cursor), anchor: rel(anchor), marked: None }
+    }
+
     /// The selected text: the bytes between `anchor` and `cursor`. Empty when nothing is selected, or when an offset
     /// is out of range or splits a character.
     pub fn selected_text(&self) -> &str {
@@ -2916,6 +2938,26 @@ mod tests {
         assert_eq!(wide.word_at_cursor(), "", "inside a character");
         let wide = TextState { text: "þú ert".into(), cursor: 2, anchor: 2, marked: None };
         assert_eq!(wide.word_at_cursor(), "þú");
+    }
+
+    /// E2E10: an editor that keeps its own text reports a window of it around the caret that always decodes.
+    #[test]
+    fn text_state_around_keeps_a_window_at_the_caret_that_decodes() {
+        let short = TextState::around("the second line", 6, 4);
+        assert_eq!((short.text.as_str(), short.cursor, short.anchor), ("the second line", 6, 4));
+        assert_eq!(short.word_at_cursor(), "second");
+        // a byte inside "þ" moves back to it; offsets past the end stop at the end
+        let wide = TextState::around("þú ert", 1, 99);
+        assert_eq!((wide.cursor, wide.anchor), (0, 8));
+        // a long text: the window holds the caret's word, and the message decodes
+        let long = format!("{} orange {}", "é".repeat(MAX_SURROUNDING), "ü".repeat(MAX_SURROUNDING));
+        let at = long.find("orange").unwrap();
+        let s = TextState::around(&long, at + 2, at);
+        assert!(s.text.len() <= MAX_SURROUNDING);
+        assert_eq!(s.word_at_cursor(), "orange");
+        assert_eq!(s.selected_text(), "or");
+        let m = ToShell::TextState(s);
+        assert_eq!(ToShell::decode(&m.encode()), Ok(m));
     }
 
     /// A selection longer than `MAX_SURROUNDING` characters is cut on the way out, so the reply always decodes.

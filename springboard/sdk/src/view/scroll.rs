@@ -795,6 +795,48 @@ mod view_tests {
         assert!(!w.wheel(500.0, 500.0, 0.0, -40.0), "outside the window nothing scrolls");
     }
 
+    /// A document that holds one text field 500 pt down.
+    struct FieldDoc {
+        base: ViewBase,
+        kids: Vec<Box<dyn View>>,
+    }
+    impl View for FieldDoc {
+        crate::view_base!();
+        fn intrinsic(&self, _ui: &Ui) -> (f32, f32) {
+            (0.0, 1000.0)
+        }
+        fn children(&self) -> &[Box<dyn View>] {
+            &self.kids
+        }
+        fn children_mut(&mut self) -> &mut [Box<dyn View>] {
+            &mut self.kids
+        }
+        fn layout(&mut self, ui: &Ui, bounds: Rect) {
+            self.set_frame(bounds);
+            self.kids[0].layout(ui, Rect { x: bounds.x, y: bounds.y + 500.0, w: bounds.w, h: 22.0 });
+        }
+    }
+
+    /// E2E10: Look Up and the candidate window open at the caret the app reports, so a field in a scroll view reports
+    /// its caret where it is drawn (window points), not at its place in the document.
+    #[test]
+    fn a_text_field_in_a_scroll_view_reports_its_caret_in_window_points() {
+        let tf = crate::view::TextField::new("Name", "name");
+        let field = tf.id();
+        let sv = ScrollView::new(Box::new(FieldDoc { base: ViewBase::default(), kids: vec![Box::new(tf)] }));
+        let scroller = sv.id();
+        let mut w: crate::view::Window = crate::view::Window::new(sv, 10);
+        w.layout(&ui(), Rect { x: 0.0, y: 0.0, w: 200.0, h: 100.0 });
+        assert!(w.make_first_responder(Some(field)));
+        let offset = |w: &crate::view::Window| w.view::<ScrollView>(scroller).unwrap().content_offset();
+        let (y0, o0) = (w.text_input_info().unwrap().caret.1, offset(&w));
+        assert!(y0 + o0 >= 500.0 && y0 + o0 < 522.0, "the caret sits in the field: {} at offset {}", y0, o0);
+        w.view_mut::<ScrollView>(scroller).unwrap().scroll_to(o0 + 120.0);
+        let (y1, o1) = (w.text_input_info().unwrap().caret.1, offset(&w));
+        assert!(o1 > o0, "scrolled");
+        assert!((y1 - (y0 - (o1 - o0))).abs() < 0.01, "the caret moved up with the content: {y0} -> {y1}");
+    }
+
     #[test]
     fn a_tap_moves_nothing_and_starts_no_motion() {
         let mut sv = list();
