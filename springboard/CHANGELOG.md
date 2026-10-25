@@ -2,10 +2,19 @@
 
 ## Unreleased
 
-- The Window menu lists a hosted app's main window by the title the app gave it (`DocumentState`), as Mail's window by its mailbox ("Inbox"), instead of always by the app's name.
+## 0.10.28 — 2026-10-25
 
-||||||| 4641c82c4
-- Text with a line break, tab or other control character in a one-line label (a notification banner's subtitle and body, a folded mail subject) shows a space there instead of the missing-glyph box, on the CPU and GPU text paths.
+Fixes from the 0.10.27 end-to-end pass on Midget, a parity wave across nine frameworks, and system appearance for apps built with other toolkits.
+
+- Apps updated while they run (an OS update's restored session, an App Store update) relaunch at the new version with their window frames, unless they have unsaved changes or are in use in front; a half-installed package is never launched.
+- Hiding and showing an app keeps its windows' stacking and focus (Cmd+W closes the window you see in front). Dock clicks between two icons open the nearer app; hover, labels and the context menu use the same areas. Restored windows open where they were, and a native window recreated after Show Desktop comes back at its old frame.
+- The menu bar keeps the front app while the Applications grid is open, its menus draw over the grid, and Escape closes an open menu first.
+- The App Store is a full-size sidebar window with the sidebar material. Alert sheets wrap their title and message and size themselves from the wrapped text.
+- Control characters and line or paragraph separators in one-line text lay out as a space instead of a missing-glyph box (the thick bar seen for "|" in mail subjects).
+- The Window menu lists a hosted app's main window by the title the app gave it, such as Mail's mailbox.
+- Third-party apps follow Light and Dark: the settings portal reports Increase Contrast and the Auto switch on time, Qt apps use a theme that follows the portal, and GTK 3 apps get the dark-theme setting at start.
+- Developer kit, measured against the reference platform: Core Image (compositing and blend modes, perspective and Lanczos scaling, five barcode generators, lens distortions, temperature and tint), Core Graphics (shadings with alpha, font variations, every PDF text drawing mode), AppKit colour and printing (semantic colours, colour panel modes, colour well, printer capabilities), declarative views (baselines, button styles, scroll position, group box, control group, tab view), Core Animation (media timing, springs, transitions), widgets for assistive technology, Contacts (full records, more fields, address formats), Image I/O (WebP read and write with metadata, thumbnails, region decode) and accessibility custom actions and hover speech.
+- Ships with Mail 0.17.5 (own File menu, Mark as Read toggle, window titled by mailbox, the new contacts save format) and Reminders 1.20.2 (Delete Permanently acts on the right reminder; Undo takes it out of Recently Deleted).
 
 ## 0.10.27 — 2026-10-24
 
