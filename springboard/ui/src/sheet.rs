@@ -40,6 +40,39 @@ pub const SHEET_RADIUS_PT: f32 = 10.0;
 /// Alert sheet width in points.
 pub const ALERT_W_PT: f32 = 260.0;
 const CHARS_PER_LINE: usize = 34;
+/// The alert title (headline, semibold) fits fewer characters on a line than the message.
+const TITLE_CHARS_PER_LINE: usize = 28;
+/// Line advance of a wrapped alert title and of a message line, in points.
+pub const ALERT_TITLE_LINE_PT: f32 = 17.0;
+pub const ALERT_MESSAGE_LINE_PT: f32 = 15.0;
+
+/// How many lines `text` takes when word-wrapped at `per_line` characters: each `\n` starts a paragraph (an empty
+/// one is a line), a word longer than a line is broken across lines. The renderer wraps with real glyph widths, so
+/// the budget per line is conservative and the panel is tall enough for every line: alert text is never truncated.
+pub fn wrapped_lines(text: &str, per_line: usize) -> usize {
+    let per_line = per_line.max(1);
+    text.split('\n')
+        .map(|para| {
+            let (mut lines, mut len) = (1usize, 0usize);
+            for word in para.split_whitespace() {
+                let n = word.chars().count();
+                if len == 0 {
+                    len = n;
+                } else if len + 1 + n <= per_line {
+                    len += 1 + n;
+                } else {
+                    lines += 1;
+                    len = n;
+                }
+                while len > per_line {
+                    lines += 1;
+                    len -= per_line;
+                }
+            }
+            lines
+        })
+        .sum()
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Sheet {
@@ -76,11 +109,13 @@ impl Sheet {
         Sheet { title: title.to_string(), message: String::new(), buttons, size, alert: false }
     }
 
-    /// An alert sheet: title, informative text and buttons; height follows the text.
+    /// An alert sheet: title, informative text and buttons; height follows the text. Both the title and the message
+    /// wrap (`wrapped_lines`): a long title such as a whole sentence is never cut off.
     pub fn alert(title: &str, message: &str, buttons: Vec<SheetButton>) -> Self {
-        let lines = message.split('\n').map(|l| l.chars().count().div_ceil(CHARS_PER_LINE).max(1)).sum::<usize>();
-        let msg_h = if message.is_empty() { 0.0 } else { lines as f32 * 15.0 + 8.0 };
-        let h = SHEET_PAD_PT * 2.0 + 18.0 + msg_h + 16.0 + BUTTON_H_PT;
+        let lines = wrapped_lines(message, CHARS_PER_LINE);
+        let msg_h = if message.is_empty() { 0.0 } else { lines as f32 * ALERT_MESSAGE_LINE_PT + 8.0 };
+        let title_h = 18.0 + (wrapped_lines(title, TITLE_CHARS_PER_LINE) - 1) as f32 * ALERT_TITLE_LINE_PT;
+        let h = SHEET_PAD_PT * 2.0 + title_h + msg_h + 16.0 + BUTTON_H_PT;
         Sheet { title: title.to_string(), message: message.to_string(), buttons, size: (ALERT_W_PT, h), alert: true }
     }
 
@@ -263,6 +298,21 @@ mod tests {
         let tiny = Rect { x: 0.0, y: 0.0, w: 200.0, h: 100.0 };
         let l = long.layout(tiny, 28.0, 1.0);
         assert!(l.panel.w <= 200.0 && l.panel.h <= 72.0);
+    }
+
+    #[test]
+    fn a_long_alert_title_wraps_and_the_panel_grows_for_every_line() {
+        assert_eq!(wrapped_lines("", 10), 1);
+        assert_eq!(wrapped_lines("one two", 10), 1);
+        assert_eq!(wrapped_lines("one two three", 10), 2, "words that do not fit start a new line");
+        assert_eq!(wrapped_lines("a\n\nb", 10), 3, "each paragraph, even an empty one, is a line");
+        assert_eq!(wrapped_lines(&"x".repeat(25), 10), 3, "a word longer than a line breaks across lines");
+        // the Notes delete alert puts a whole sentence in the title: it must not be cut to one line (E2E N9)
+        let short = Sheet::alert("Delete?", "", vec![]);
+        let long = Sheet::alert("This note will be deleted immediately. You can\u{2019}t undo this action.", "", vec![]);
+        let n = wrapped_lines(&long.title, TITLE_CHARS_PER_LINE);
+        assert!(n >= 3, "the sentence takes {n} lines");
+        assert_eq!(long.size.1 - short.size.1, (n - 1) as f32 * ALERT_TITLE_LINE_PT);
     }
 
     #[test]

@@ -1245,18 +1245,33 @@ pub fn sheet(s: &mut dyn Canvas, ui: &Ui, parent: Rect, titlebar_h: f32, sheet: 
     s.stroke_rrect(RectF::new(ui.pt(body.x), ui.pt(body.y), ui.pt(body.w), ui.pt(body.h)), ui.pt(r), ui.pt(1.0).max(1.0), HAIRLINE_C.now());
     let mut y = l.panel.y + SHEET_PAD_PT;
     let tw = ui.pt(l.panel.w - SHEET_PAD_PT * 2.0);
-    let head = ui.text(&ui.fit(&sheet.title, bifrost_render::ui::MAC_HEADLINE_PT, tw), bifrost_render::ui::MAC_HEADLINE_PT, Weight::Semibold, LABEL.now());
+    let head_pt = bifrost_render::ui::MAC_HEADLINE_PT;
     let cx = ui.pt(l.panel.x + l.panel.w / 2.0) as i32;
-    let centred = sheet.alert;
-    let hx = if centred { cx - head.w as i32 / 2 } else { ui.pt(l.panel.x + SHEET_PAD_PT) as i32 };
-    blit(s, &head, hx, ui.pt(y) as i32);
-    y += 26.0;
     if sheet.alert {
-        for line in sheet.message.split('\n') {
-            let t = ui.text(&ui.fit(line, MAC_CALLOUT_PT, tw), MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now());
-            blit(s, &t, cx - t.w as i32 / 2, ui.pt(y) as i32);
-            y += 15.0;
+        use bifrost_ui::sheet::{ALERT_MESSAGE_LINE_PT, ALERT_TITLE_LINE_PT};
+        // an alert's title and message wrap, centred, never cut off: `Sheet::alert` sized the panel for every line
+        let title = ui.wrap_capped(&sheet.title, head_pt, Weight::Semibold, tw, usize::MAX);
+        for (i, line) in title.iter().enumerate() {
+            let head = ui.text(line, head_pt, Weight::Semibold, LABEL.now());
+            blit(s, &head, cx - head.w as i32 / 2, ui.pt(y + i as f32 * ALERT_TITLE_LINE_PT) as i32);
         }
+        y += 26.0 + title.len().saturating_sub(1) as f32 * ALERT_TITLE_LINE_PT;
+        for para in sheet.message.split('\n') {
+            let lines = ui.wrap_capped(para, MAC_CALLOUT_PT, Weight::Regular, tw, usize::MAX);
+            for line in &lines {
+                let t = ui.text(line, MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now());
+                blit(s, &t, cx - t.w as i32 / 2, ui.pt(y) as i32);
+                y += ALERT_MESSAGE_LINE_PT;
+            }
+            // an empty paragraph is a blank line
+            if lines.is_empty() {
+                y += ALERT_MESSAGE_LINE_PT;
+            }
+        }
+    } else {
+        let head = ui.text(&ui.fit(&sheet.title, head_pt, tw), head_pt, Weight::Semibold, LABEL.now());
+        blit(s, &head, ui.pt(l.panel.x + SHEET_PAD_PT) as i32, ui.pt(y) as i32);
+        y += 26.0;
     }
     for (b, (id, rect)) in sheet.buttons.iter().zip(&l.buttons) {
         sheet_button(s, ui, *rect, b, pressed == Some(*id));

@@ -3093,7 +3093,7 @@ and shows Safari-style Top Hits under the address field. Gaps against AppKit/Saf
 
 ## Golden Gate kit: sheets and small controls (round 58)
 
-- `bifrost_ui::sheet`: `Sheet::new` / `Sheet::alert`, `layout(parent, titlebar_h, progress)`, `hit`, `key` (Return = default button, Escape = cancel button, all keys consumed while shown), `segments` / `segment_hit` / `segment_key`, `stepper_*`, `focus_ring_rect`. Drawing: `widgets::sheet`, `segmented`, `stepper`, `focus_ring`, `popover` (arrow on the Popover material).
+- `bifrost_ui::sheet`: `Sheet::new` / `Sheet::alert`, `layout(parent, titlebar_h, progress)`, `hit`, `key` (Return = default button, Escape = cancel button, all keys consumed while shown), `segments` / `segment_hit` / `segment_key`, `stepper_*`, `focus_ring_rect`. Drawing: `widgets::sheet`, `segmented`, `stepper`, `focus_ring`, `popover` (arrow on the Popover material). An alert's title and message word-wrap (centred) and `Sheet::alert` sizes the panel for every line (`wrapped_lines`), so alert text is never truncated, as `NativeAlert` wraps its message text.
 - A sheet slides from the title bar (`motion::Kind::SheetSlide`; progress is 1 at once under Reduce Motion), dims the parent (28% black) and swallows clicks on it (`Hit::Blocked`).
 - Metrics: segmented 24 pt, stepper 13 x 22 pt, pop-up button 22 pt, focus ring 3 pt, sheet radius 10 pt, alert width 260 pt.
 - Gaps: sheet buttons size by character count (no text measuring); the top corners of the panel are hidden by extending it upward inside the parent, not clipped.
