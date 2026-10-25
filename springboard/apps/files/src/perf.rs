@@ -301,6 +301,36 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    #[test]
+    fn a_file_removed_from_the_open_folder_leaves_the_listing_and_the_background_window_follows() {
+        let dir = std::env::temp_dir().join(format!("files-removed-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("keep.txt"), "x").unwrap();
+        std::fs::write(dir.join("gone.txt"), "y").unwrap();
+        let mut files = Files::new();
+        files.path = dir.clone();
+        files.loading = false;
+        files.listing = fs::list(&dir).unwrap();
+        files.refresh_rows();
+        let names = |f: &Files| f.rows.iter().map(|e| e.name.clone()).collect::<Vec<_>>();
+        assert!(names(&files).contains(&"gone.txt".to_string()));
+        // rm from a shell while the window is open: the watch reports the removal and the row goes
+        std::fs::remove_file(dir.join("gone.txt")).unwrap();
+        files.record_events(vec![WatchEvent { path: dir.join("gone.txt"), flags: WatchEventFlags::REMOVED }]);
+        assert!(files.catch_up(), "the removal changes what the window shows");
+        assert_eq!(names(&files), ["keep.txt"]);
+        // moved out of the folder (a rename event whose path no longer exists) leaves too
+        std::fs::rename(dir.join("keep.txt"), std::env::temp_dir().join(format!("files-moved-{}", std::process::id()))).unwrap();
+        files.record_events(vec![WatchEvent { path: dir.join("keep.txt"), flags: WatchEventFlags::RENAMED }]);
+        assert!(files.catch_up());
+        assert!(files.rows.is_empty());
+        // and it keeps doing so while another app is in front
+        assert!(App::ticks_in_background(&files));
+        let _ = std::fs::remove_file(std::env::temp_dir().join(format!("files-moved-{}", std::process::id())));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     fn bench(name: &str, runs: usize, mut f: impl FnMut()) {
         let mut t: Vec<f64> = (0..runs)
             .map(|_| {

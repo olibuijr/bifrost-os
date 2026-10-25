@@ -290,6 +290,35 @@ fn zoomed((x, y, w, h): (usize, usize, usize, usize), factor: usize) -> (usize, 
     (x + (w - nw) / 2, y + (h - nh) / 2, nw, nh)
 }
 
+type Rect4 = (f32, f32, f32, f32);
+
+/// Most lines of the reason shown under "Camera not available"; longer text ends in an ellipsis.
+const UNAVAILABLE_LINES: usize = 3;
+
+/// Sizes in px of the parts of the "Camera not available" stack.
+struct UnavailableMetrics {
+    title_h: f32,
+    line_h: f32,
+    title_gap: f32,
+    button_gap: f32,
+    button: (f32, f32),
+}
+
+/// Lays the title, `lines` rows of reason and the Try Again button out top to bottom without overlap, the
+/// stack centred vertically in `view` (pinned to its top when the pane is shorter than the stack) and each
+/// part centred horizontally. Returns (title, one rect per line, button).
+fn unavailable_stack((vx, vy, vw, vh): Rect4, lines: usize, m: &UnavailableMetrics) -> (Rect4, Vec<Rect4>, Rect4) {
+    let text_h = if lines == 0 { 0.0 } else { m.title_gap + m.line_h * lines as f32 };
+    let total = m.title_h + text_h + m.button_gap + m.button.1;
+    let top = vy + ((vh - total) / 2.0).max(0.0);
+    let title = (vx, top, vw, m.title_h);
+    let first = top + m.title_h + m.title_gap;
+    let rows = (0..lines).map(|i| (vx, first + m.line_h * i as f32, vw, m.line_h)).collect();
+    let button_y = top + m.title_h + text_h + m.button_gap;
+    let button = (vx + (vw - m.button.0) / 2.0, button_y, m.button.0, m.button.1);
+    (title, rows, button)
+}
+
 /// The largest `(w, h)` with the frame's aspect that fits in `bw` x `bh`.
 pub fn fit(fw: usize, fh: usize, bw: i32, bh: i32) -> (i32, i32) {
     if fw == 0 || fh == 0 {
@@ -588,8 +617,27 @@ impl Camera {
     }
 
     fn retry_rect(&self, ui: &Ui) -> (f32, f32, f32, f32) {
-        let (w, h) = (ui.pt(180.0), ui.pt(56.0));
-        ((self.w as f32 - w) / 2.0, self.h as f32 / 2.0 + ui.pt(30.0), w, h)
+        self.unavailable_layout(ui).2
+    }
+
+    /// The "Camera not available" screen: the title, the reason wrapped to the viewfinder pane (at most
+    /// `UNAVAILABLE_LINES` lines), and the Try Again button below them, the whole stack centred in the pane.
+    fn unavailable_layout(&self, ui: &Ui) -> (Rect4, Vec<(String, Rect4)>, Rect4) {
+        let view = self.view_rect(ui);
+        let why = match &self.state {
+            State::Unavailable(why) => why.as_str(),
+            _ => "",
+        };
+        let lines = ui.wrap_capped(why, 14.0, Weight::Regular, (view.2 - ui.pt(48.0)).max(ui.pt(40.0)), UNAVAILABLE_LINES);
+        let metrics = UnavailableMetrics {
+            title_h: ui.pt(34.0),
+            line_h: ui.pt(20.0),
+            title_gap: ui.pt(6.0),
+            button_gap: ui.pt(24.0),
+            button: (ui.pt(180.0), ui.pt(56.0)),
+        };
+        let (title, rows, retry) = unavailable_stack(view, lines.len(), &metrics);
+        (title, lines.into_iter().zip(rows).collect(), retry)
     }
 
     fn inside((x, y, w, h): (f32, f32, f32, f32), px: f32, py: f32) -> bool {
@@ -890,11 +938,12 @@ impl Camera {
                     self.label(s, ui, "Starting camera…", 18.0, SECONDARY, (vx, vy, vw, vh));
                 }
             }
-            State::Unavailable(why) => {
-                self.label(s, ui, "Camera not available", 24.0, WHITE, (vx, vy, vw, vh));
-                let detail = ui.fit(&why, 14.0, self.w as f32 - ui.pt(48.0));
-                self.label(s, ui, &detail, 14.0, SECONDARY, (vx, vy + ui.pt(44.0), vw, vh));
-                let r = self.retry_rect(ui);
+            State::Unavailable(_) => {
+                let (title, lines, r) = self.unavailable_layout(ui);
+                self.label(s, ui, "Camera not available", 24.0, WHITE, title);
+                for (line, rect) in &lines {
+                    self.label(s, ui, line, 14.0, SECONDARY, *rect);
+                }
                 let fill = if self.pressed == Some(Target::Retry) { pack(72, 72, 74, 255) } else { PLATE };
                 s.fill_rrect(r.0, r.1, r.2, r.3, RADIUS, fill);
                 self.label(s, ui, "Try Again", 17.0, WHITE, r);
@@ -1016,6 +1065,29 @@ pub fn icon(size: usize) -> Image {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unavailable_stack_puts_the_button_below_every_line_of_the_reason() {
+        let m = UnavailableMetrics { title_h: 34.0, line_h: 20.0, title_gap: 6.0, button_gap: 24.0, button: (180.0, 56.0) };
+        let view = (0.0, 28.0, 800.0, 600.0);
+        for lines in 0..=UNAVAILABLE_LINES {
+            let (title, rows, button) = unavailable_stack(view, lines, &m);
+            assert_eq!(rows.len(), lines);
+            let mut bottom = title.1 + title.3;
+            for r in &rows {
+                assert!(r.1 >= bottom, "line {r:?} overlaps the text above it");
+                bottom = r.1 + r.3;
+            }
+            assert!(button.1 >= bottom + m.button_gap - 0.01, "button {button:?} overlaps the reason (ends at {bottom})");
+            // centred in the pane
+            let (top, end) = (title.1 - view.1, view.1 + view.3 - (button.1 + button.3));
+            assert!((top - end).abs() < 0.01);
+            assert!((button.0 + button.2 / 2.0 - view.2 / 2.0).abs() < 0.01);
+        }
+        // a pane shorter than the stack pins it to the top instead of pushing the title out
+        let (title, _, _) = unavailable_stack((0.0, 28.0, 300.0, 50.0), 3, &m);
+        assert_eq!(title.1, 28.0);
+    }
 
     #[test]
     fn viewfinder_fit_keeps_the_aspect() {

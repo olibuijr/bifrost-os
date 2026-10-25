@@ -487,15 +487,20 @@ fn smart_list_tiles_can_be_hidden_and_a_pinned_list_gets_a_tile() {
 }
 
 #[test]
-fn a_tile_name_wider_than_the_tile_wraps_instead_of_being_cut() {
-    use bifrost_app::kit::ui::{Weight, MAC_BODY_PT, SPACE_M};
+fn a_tile_name_stays_on_one_line_that_fits_the_tile() {
+    use bifrost_app::kit::ui::{Weight, MAC_BODY_PT, MAC_SUBHEAD_PT, SPACE_M};
     let (app, ui, path) = app("tile-labels");
     let room = ui.pt(app.tile_rect(&ui, 0).w) - ui.pt(2.0 * SPACE_M);
-    let lines = Reminders::tile_label_lines(&ui, "Recently Deleted", room);
-    assert_eq!(lines, ["Recently", "Deleted"], "two whole lines, no ellipsis");
-    assert!(lines.iter().all(|l| ui.measure(l, MAC_BODY_PT, Weight::Semibold) <= room));
-    assert_eq!(Reminders::tile_label_lines(&ui, "Today", room), ["Today"]);
-    assert_eq!(Reminders::tile_label_lines(&ui, "Scheduled", room), ["Scheduled"]);
+    let (line, pt) = Reminders::tile_label(&ui, "Recently Deleted", room);
+    assert!(ui.measure(&line, pt, Weight::Semibold) <= room, "{line:?} at {pt} pt is wider than the tile");
+    assert!(pt >= MAC_SUBHEAD_PT && pt <= MAC_BODY_PT);
+    assert_eq!(Reminders::tile_label(&ui, "Today", room), ("Today".to_string(), MAC_BODY_PT));
+    assert_eq!(Reminders::tile_label(&ui, "Scheduled", room), ("Scheduled".to_string(), MAC_BODY_PT));
+    // a name too long for the smallest style is cut with an ellipsis, still one line inside the tile
+    let (cut, pt) = Reminders::tile_label(&ui, "A very long smart list name that never fits", room);
+    assert_eq!(pt, MAC_SUBHEAD_PT);
+    assert!(cut.ends_with('\u{2026}') && !cut.contains('\n'));
+    assert!(ui.measure(&cut, pt, Weight::Semibold) <= room);
     cleanup(&path);
 }
 
