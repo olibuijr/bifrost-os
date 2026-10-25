@@ -221,8 +221,9 @@ pub enum Hit {
     /// Sent to the session's owner; no window opens.
     MediaTransport { command: bifrost_ui::media_session::RemoteCommand, title: String },
     /// an item an app put into the Core Search index: opens the app and sends it a continue-activity message.
-    /// `kind` is the file type's name ("PDF document", "" when unknown); `thumb` the thumbnail path in the app's data dir.
-    Indexed { app_id: String, unique_id: String, domain: String, title: String, kind: String, thumb: String },
+    /// `kind` is the file type's name ("PDF document", "" when unknown); `thumb` the thumbnail path in the app's data dir;
+    /// `snippet` the indexed text around the match when the title does not match (a mail found by its body), else "".
+    Indexed { app_id: String, unique_id: String, domain: String, title: String, kind: String, thumb: String, snippet: String },
     /// a calendar event: opens the Calendar app
     Event { title: String },
 }
@@ -367,6 +368,8 @@ fn row_text(hit: &Hit, apps_name: impl Fn(AppId) -> String, (now, offset): (i64,
         Hit::SettingsIntent { id, title } => (title.to_string(), super::settings_intents::find(id).map_or("Settings", |i| i.description).to_string()),
         Hit::SettingsAction { intent, title } => (title.clone(), action_line(intent).to_string()),
         Hit::MediaTransport { title, .. } => (title.clone(), "Control the playing media".to_string()),
+        // a match in the body shows the text around it, so the row says why it is listed
+        Hit::Indexed { title, snippet, .. } if !snippet.is_empty() => (title.clone(), snippet.clone()),
         Hit::Indexed { title, kind, .. } => (title.clone(), kind.clone()),
     }
 }
@@ -538,8 +541,10 @@ mod symbol_and_line_tests {
         assert_eq!(row_text(&wallpaper, name, W).1, "Use this picture as the desktop wallpaper");
         assert_eq!(row_text(&Hit::Answer("4".into()), name, W), ("= 4".to_string(), "Calculator".to_string()));
         assert_eq!(row_text(&Hit::Terminal("ls".into()), name, W), ("Search in Terminal".to_string(), "ls".to_string()));
-        let indexed = Hit::Indexed { app_id: "a".into(), unique_id: "1".into(), domain: String::new(), title: "Q1 report".into(), kind: "PDF document".into(), thumb: String::new() };
+        let indexed = Hit::Indexed { app_id: "a".into(), unique_id: "1".into(), domain: String::new(), title: "Q1 report".into(), kind: "PDF document".into(), thumb: String::new(), snippet: String::new() };
         assert_eq!(row_text(&indexed, name, W), ("Q1 report".to_string(), "PDF document".to_string()));
+        let body = Hit::Indexed { app_id: "m".into(), unique_id: "2".into(), domain: String::new(), title: "Ný bókunarsíða".into(), kind: String::new(), thumb: String::new(), snippet: "\u{2026}about the glacier tour".into() };
+        assert_eq!(row_text(&body, name, W), ("Ný bókunarsíða".to_string(), "\u{2026}about the glacier tour".to_string()), "a body match shows its snippet");
         let intent = Hit::SettingsIntent { id: "open-keyboard", title: "Open Keyboard" };
         assert_eq!(row_text(&intent, name, W), ("Open Keyboard".to_string(), "Show the keyboard settings".to_string()));
     }
@@ -644,6 +649,16 @@ struct Table {
     /// app's aliases, `apps::search_aliases`), never by the fuzzy matcher's initials or scattered letters, so "wi" does
     /// not find the browser through "web internet" and "se" does not find Term through "shell". Empty: none.
     prefixes: Vec<String>,
+    /// Rows match only when the query is contiguous in their text or starts one of its words, never by scattered
+    /// letters: the Settings panes, whose text carries many keyword aliases, so "lantern" does not find "Display &
+    /// Brightness" through letters spread over its aliases.
+    strict: bool,
+}
+
+/// Whether the folded query `q` matches folded `text` well enough for a strict table: a prefix or word start (the
+/// matcher's two best kinds) or a contiguous run anywhere in the text ("dark m" in "... dark mode ...").
+fn strict_match(m: &fuzzy::Matcher, q: &str, text: &str) -> bool {
+    !q.is_empty() && (text.contains(q) || m.rank_folded(text).is_some_and(|r| r.kind != fuzzy::Kind::Subsequence))
 }
 
 impl search_rank::Source for Table {
@@ -657,7 +672,10 @@ impl search_rank::Source for Table {
         self.rows
             .iter()
             .enumerate()
-            .filter(|(i, (_, folded))| m.rank_folded(folded).is_some() || self.prefixes.get(*i).is_some_and(|p| starts_a_word(p, &q)))
+            .filter(|(i, (_, folded))| {
+                let hit = if self.strict { strict_match(&m, &q, folded) } else { m.rank_folded(folded).is_some() };
+                hit || self.prefixes.get(*i).is_some_and(|p| starts_a_word(p, &q))
+            })
             .map(|(_, (item, _))| item.clone())
             .collect()
     }
@@ -728,14 +746,14 @@ fn build_tables(c: &Corpus) -> (Vec<Table>, BTreeMap<String, Hit>) {
         })
         .collect();
     let tables = vec![
-        Table { name: "Applications", rows: apps_rows, prefixes: app_prefixes },
-        Table { name: "Settings", rows: settings_rows, prefixes: Vec::new() },
-        Table { name: "Clock", rows: city_rows, prefixes: Vec::new() },
-        Table { name: "Deildu", rows: deildu_rows, prefixes: Vec::new() },
-        Table { name: "Contacts", rows: contact_rows, prefixes: Vec::new() },
-        Table { name: "Shortcuts", rows: shortcut_rows, prefixes: Vec::new() },
-        Table { name: "Files", rows: file_rows, prefixes: Vec::new() },
-        Table { name: "Calendar", rows: event_rows, prefixes: Vec::new() },
+        Table { name: "Applications", rows: apps_rows, prefixes: app_prefixes, strict: false },
+        Table { name: "Settings", rows: settings_rows, prefixes: Vec::new(), strict: true },
+        Table { name: "Clock", rows: city_rows, prefixes: Vec::new(), strict: false },
+        Table { name: "Deildu", rows: deildu_rows, prefixes: Vec::new(), strict: false },
+        Table { name: "Contacts", rows: contact_rows, prefixes: Vec::new(), strict: false },
+        Table { name: "Shortcuts", rows: shortcut_rows, prefixes: Vec::new(), strict: false },
+        Table { name: "Files", rows: file_rows, prefixes: Vec::new(), strict: false },
+        Table { name: "Calendar", rows: event_rows, prefixes: Vec::new(), strict: false },
     ];
     (tables, hits)
 }
@@ -782,12 +800,26 @@ fn dictionary_group(query: &str) -> Option<(Group, bool)> {
     dict::lookup(query).map(|(d, explicit)| (Group { title: "Dictionary", hits: vec![Hit::Definition { word: d.word, dictionary: d.dictionary, preview: d.preview }] }, explicit))
 }
 
+/// Whether the definition group `g` is for the query's own word (an exact headword) while the Top Hit `top` only
+/// matched loosely (its title neither starts with the query nor has a word that does): the headword ranks first then.
+fn headword_beats_top(query: &str, g: &Group, top: Option<&Group>) -> bool {
+    let q = fuzzy::fold(query.trim());
+    let exact = g.hits.iter().any(|h| matches!(h, Hit::Definition { word, dictionary, .. } if !dictionary.is_empty() && fuzzy::fold(word) == q));
+    let Some(top_hit) = top.and_then(|t| t.hits.first()) else { return false };
+    let name_of = |app: AppId| apps().iter().find(|a| a.id == app).map_or(String::new(), |a| a.name.to_string());
+    let (title, _) = row_text(top_hit, name_of, (0, 0));
+    let strong = fuzzy::Matcher::new(query).rank(&title).is_some_and(|r| r.kind != fuzzy::Kind::Subsequence);
+    exact && !strong
+}
+
 /// The groups in display order: the calculator answer, the Top Hit, the sections, the Documents, the files, and the
-/// "Search in Apps" action last. A definition the query asked for ("define x") comes first, so Return opens it; the
+/// "Search in Apps" action last. A definition the query asked for ("define x") comes first, so Return opens it, and so
+/// does the exact headword of a plain word when the Top Hit matched only loosely (`headword_beats_top`); any other
 /// definition of a plain word follows the sections.
 fn compose(query: &str, calc: Option<Group>, top: Option<Group>, sections: Vec<Group>, documents: Vec<Group>, files: Vec<Group>) -> Vec<Group> {
     let (asked, plain) = match dictionary_group(query) {
         Some((g, true)) => (Some(g), None),
+        Some((g, false)) if headword_beats_top(query, &g, top.as_ref()) => (Some(g), None),
         Some((g, false)) => (None, Some(g)),
         None => (None, None),
     };
@@ -987,6 +1019,7 @@ fn indexed_groups(query: &str) -> Vec<Group> {
             unique_id: f.unique_id,
             domain: f.domain,
             title: f.title,
+            snippet: f.snippet,
         };
         match groups.iter_mut().find(|g| g.title == title) {
             Some(g) => {
@@ -1887,6 +1920,7 @@ impl QuickSearch {
                     Hit::Shortcut { title, app_name, .. } => format!("{title} ({app_name})"),
                     Hit::SettingsIntent { title, .. } => title.to_string(),
                     Hit::SettingsAction { title, .. } | Hit::MediaTransport { title, .. } => title.clone(),
+                    Hit::Indexed { title, snippet, .. } if !snippet.is_empty() => indexed_label(title, snippet),
                     Hit::Indexed { title, kind, .. } => indexed_label(title, kind),
                     Hit::Definition { word, preview, .. } if !preview.is_empty() => format!("{word}: {preview}"),
                     Hit::Definition { word, .. } => format!("Look up \u{201c}{word}\u{201d}"),
@@ -3590,6 +3624,38 @@ mod file_actions_tests {
         // a plain word is only defined when a dictionary has it
         assert!(results("zqxjvw", &[]).iter().all(|g| g.title != "Dictionary"));
         assert!(results("e2e", &[]).iter().all(|g| g.title != "Dictionary"));
+    }
+
+    /// E2E10: "lantern" found "Display & Brightness" through letters scattered over its keyword aliases.
+    #[test]
+    fn a_settings_pane_needs_a_contiguous_or_word_start_match() {
+        let m = |q: &str| fuzzy::Matcher::new(q);
+        let text = "display & brightness brightness dark mode appearance text size night shift";
+        assert!(!strict_match(&m("lantern"), "lantern", text), "scattered letters do not find a pane");
+        assert!(strict_match(&m("bright"), "bright", text), "a word start does");
+        assert!(strict_match(&m("dark m"), "dark m", text), "a contiguous run over words does");
+        assert!(strict_match(&m("ightn"), "ightn", text), "a contiguous run inside a word does");
+        assert!(!strict_match(&m(""), "", text));
+        let settings = |q: &str| results(q, &[]).into_iter().flat_map(|g| g.hits).filter(|h| matches!(h, Hit::Settings(_))).collect::<Vec<_>>();
+        assert!(settings("lantern").is_empty(), "{:?}", settings("lantern"));
+        assert!(settings("dark mode").contains(&Hit::Settings("Display & Brightness")), "an alias still finds its pane");
+        assert_eq!(results("wi", &[])[0].hits, vec![Hit::Settings("Wi-Fi")]);
+    }
+
+    #[test]
+    fn an_exact_headword_ranks_above_a_loosely_matched_top_hit() {
+        let def = |word: &str, dictionary: &str| Group { title: "Dictionary", hits: vec![Hit::Definition { word: word.into(), dictionary: dictionary.into(), preview: String::new() }] };
+        let top = |h: Hit| Group { title: "Top Hit", hits: vec![h] };
+        // a top hit matched only by scattered letters loses to the word itself
+        assert!(headword_beats_top("lantern", &def("lantern", "WordNet"), Some(&top(Hit::Settings("Display & Brightness")))));
+        assert!(headword_beats_top("Lantern ", &def("lantern", "WordNet"), Some(&top(Hit::City("Tokyo")))), "case and spaces are ignored");
+        // a top hit whose title starts with the query keeps its place
+        assert!(!headword_beats_top("wi", &def("wi", "WordNet"), Some(&top(Hit::Settings("Wi-Fi")))));
+        assert!(!headword_beats_top("francisco", &def("francisco", "WordNet"), Some(&top(Hit::City("San Francisco")))), "a word start is strong too");
+        // only an exact headword, and only a real definition, moves up
+        assert!(!headword_beats_top("lant", &def("lantern", "WordNet"), Some(&top(Hit::Settings("Display & Brightness")))));
+        assert!(!headword_beats_top("lantern", &def("lantern", ""), Some(&top(Hit::Settings("Display & Brightness")))));
+        assert!(!headword_beats_top("lantern", &def("lantern", "WordNet"), None), "with no top hit the order stays");
     }
 }
 

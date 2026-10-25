@@ -98,5 +98,5 @@ fn headless_a_reply_yields_its_dialog_or_its_error_message() {
 
 #[test]
 fn headless_the_control_socket_of_an_app_is_named_by_its_id() {
-    assert!(socket_path("is.example.notes").ends_with("bifrost/apps/is.example.notes.sock"));
+    assert!(socket_path("is.example.notes").ends_with("appdata/is.example.notes/control.sock"));
 }

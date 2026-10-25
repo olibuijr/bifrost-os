@@ -94,16 +94,11 @@ fn matches(locator: &Locator, app: &RunningApp) -> bool {
     }
 }
 
-/// The control socket of app `app_id`. The `explicit` path wins, else `runtime_dir/bifrost/apps/<id>.sock`, else
-/// `control.sock` in the app's data directory. The shell and the SDK runtime both use this rule.
-pub fn socket_path(app_id: &str, explicit: Option<&Path>, runtime_dir: Option<&Path>, data_dir: &Path) -> PathBuf {
-    if let Some(path) = explicit {
-        return path.to_path_buf();
-    }
-    match runtime_dir {
-        Some(dir) => dir.join("bifrost").join("apps").join(format!("{app_id}.sock")),
-        None => data_dir.join("control.sock"),
-    }
+/// The control socket of an app whose data directory is `data_dir`: the `explicit` path wins, else `control.sock` in the
+/// data directory. The shell and the SDK runtime both use this rule (`bifrost_core::app_control_socket`): the sandbox
+/// binds the data directory at its own path, so the shell sees the socket where the app made it.
+pub fn socket_path(explicit: Option<&Path>, data_dir: &Path) -> PathBuf {
+    bifrost_core::app_control_socket::socket_path(explicit, data_dir)
 }
 
 #[cfg(test)]
@@ -173,21 +168,14 @@ mod tests {
     }
 
     #[test]
-    fn an_explicit_socket_path_wins_over_the_runtime_directory() {
-        let explicit = Path::new("/run/custom/notes.sock");
-        let p = socket_path("is.example.notes", Some(explicit), Some(Path::new("/run/user/1000")), Path::new("/data"));
+    fn an_explicit_socket_path_wins() {
+        let p = socket_path(Some(Path::new("/run/custom/notes.sock")), Path::new("/data"));
         assert_eq!(p, PathBuf::from("/run/custom/notes.sock"));
     }
 
     #[test]
-    fn the_socket_lives_under_the_runtime_directory_when_there_is_one() {
-        let p = socket_path("is.example.notes", None, Some(Path::new("/run/user/1000")), Path::new("/data"));
-        assert_eq!(p, PathBuf::from("/run/user/1000/bifrost/apps/is.example.notes.sock"));
-    }
-
-    #[test]
-    fn without_a_runtime_directory_the_socket_is_in_the_data_directory() {
-        let p = socket_path("is.example.notes", None, None, Path::new("/home/u/.data/notes"));
+    fn the_socket_is_in_the_data_directory() {
+        let p = socket_path(None, Path::new("/home/u/.data/notes"));
         assert_eq!(p, PathBuf::from("/home/u/.data/notes/control.sock"));
     }
 }

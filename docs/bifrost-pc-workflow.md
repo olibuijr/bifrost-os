@@ -401,8 +401,9 @@ Every SDK app that runs on the PC serves JSON-RPC 2.0 on a Unix socket, so agent
 scripts can read and drive it without touching the screen. Design and status:
 `tasks/app-control.md`.
 
-- Socket: `$XDG_RUNTIME_DIR/bifrost/apps/<app-id>.sock` (mode 0600, directory 0700).
-  Fallback when the variable is unset: `control.sock` in the app's data directory.
+- Socket: `control.sock` in the app's data directory (`/var/lib/springboard/appdata/<app-id>/control.sock`,
+  mode 0600). The sandbox binds the data directory at its own path and keeps `/run` private, so this is the one path
+  the app and the shell both see; both resolve it with `bifrost_core::app_control_socket`.
   `BIFROST_CONTROL` overrides the path.
 - Framing: one request per connection, one JSON object per line, one reply line, then close.
   Only the owning UID may connect (checked with `SO_PEERCRED`).

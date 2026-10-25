@@ -65,6 +65,11 @@ impl Matcher {
         Self(fold(query.trim()))
     }
 
+    /// The query, folded and trimmed.
+    pub fn query(&self) -> &str {
+        &self.0
+    }
+
     /// How the query matches `candidate`; None when it does not (or is blank).
     pub fn rank(&self, candidate: &str) -> Option<Rank> {
         self.rank_folded(&fold(candidate))
