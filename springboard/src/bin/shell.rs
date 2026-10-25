@@ -685,7 +685,7 @@ fn run() -> std::io::Result<()> {
             disp.wayland_inputs(&mut events);
             // the buttons come from evdev (`InputSet::buttons`); the compositor's copy of them would count twice
             if inputs.has_buttons() {
-                events.retain(|e| !matches!(e, input::Event::Key { code, .. } if matches!(*code, input::KEY_POWER | input::KEY_VOLUMEUP | input::KEY_VOLUMEDOWN)));
+                events.retain(|e| !matches!(e, input::Event::Key { code, .. } if input::is_button_key(*code)));
             }
             for batch in disp.wayland_input_method_batches() { shell.input_method_batch(batch, t); }
             if let Some(windows)=disp.wayland_foreign_windows() { shell.wayland_foreign_windows(windows); }
