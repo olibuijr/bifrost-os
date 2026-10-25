@@ -6,7 +6,7 @@ keywords: text editor, text, write, select, caret, click, double click, triple c
 Choose New Document in the File menu. Each document opens in its own window, and New Window Containing Selection opens the selected text in a new window.
 
 ## Rich text and plain text {#rich-plain}
-A document is either Rich Text, which keeps fonts, sizes and colours, or Plain Text, which keeps only the characters. Choose Make Plain Text or Make Rich Text in the Format menu to change it. Converting to plain text removes the formatting.
+A document is either Rich Text, which keeps fonts, sizes and colours, or Plain Text, which keeps only the characters. Choose Make Plain Text or Make Rich Text in the Format menu to change it. Make Plain Text asks first, then removes the formatting and attachments and shows the text in a fixed-width font.
 
 ## Save and open {#save}
 Save writes the document to its file. Open shows the files you can open in Text Editor. Plain text files keep their encoding; choose Plain Text Encoding in the Format menu to pick another one.

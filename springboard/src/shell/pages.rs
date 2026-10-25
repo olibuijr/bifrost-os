@@ -2109,12 +2109,13 @@ pub fn appearance_page(m: &Model<'_>, d: &DeskPrefs) -> Spec {
         ])
             .header("THEME")
             .footer("The colour of buttons, links, switches, sliders and the selected sidebar row, and of selected text. Multicolour uses blue for controls."),
+        // the footer explains the icon styles, so it closes that row's own group, not the one ending in Show scroll bars
+        Group::new(vec![Item::new("Icon & widget style").popup(choice_labels(&ICON_STYLES), icon_style, Action::Pick(Pick::IconStyle(icon_style)))])
+            .footer("Dark draws app icons on a dark tile. Tinted draws them in the accent colour over grey."),
         Group::new(vec![
-            Item::new("Icon & widget style").popup(choice_labels(&ICON_STYLES), icon_style, Action::Pick(Pick::IconStyle(icon_style))),
             Item::new("Sidebar icon size").popup(choice_labels(&SIDEBAR_ICON_SIZES), sidebar_icons, Action::Pick(Pick::SidebarIcons(sidebar_icons))),
             Item::new("Show scroll bars").popup(choice_labels(&SCROLL_BAR_MODES), scroll_bars, Action::Pick(Pick::ScrollBars(scroll_bars))),
-        ])
-            .footer("Dark draws app icons on a dark tile. Tinted draws them in the accent colour over grey."),
+        ]),
         Group::new(vec![
             Item::slider(Ends::Glass, bifrost_render::glass::clarity(), Action::Slider(Slider::LiquidGlass)),
             reduce_transparency_item(m.a11y.reduce_transparency, m.a11y.increase_contrast),
@@ -2301,6 +2302,15 @@ pub fn resolution_page(m: &Model<'_>) -> Spec {
 mod tests {
     use super::super::desktop_dock::Preferences as DockPrefs;
     use super::*;
+
+    #[test]
+    fn the_icon_style_footer_sits_under_the_icon_style_row() {
+        let (info, opts) = (info(), Options::default());
+        let s = appearance_page(&model(&info, &opts), &DeskPrefs::default());
+        let g = s.groups.iter().find(|g| g.footer.as_deref().is_some_and(|f| f.starts_with("Dark draws app icons"))).expect("the icon style footer");
+        assert_eq!(g.items.last().map(|i| i.label.as_str()), Some("Icon & widget style"), "the footer explains the row right above it");
+        assert!(!g.items.iter().any(|i| i.label == "Show scroll bars"));
+    }
 
     #[test]
     fn a_desktop_without_a_battery_shows_none_not_a_made_up_level() {
