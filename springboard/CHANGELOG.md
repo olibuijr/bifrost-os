@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 0.10.29 — 2026-10-25
+
+Fixes from the 0.10.28 end-to-end pass on Midget.
+
+- Windows brought back by closing the Applications grid, Overview or showing a hidden app return in their order above other apps' windows (window-level protocol version 8, stack ranks; the window server and shell ship together). Showing an app brings all of its windows forward.
+- Shell surfaces stack by a fixed rank (sheets, Dock, grid and Overview, menus, banners, captions and the focus ring), so menus open over the grid with their items, and drawing and clicks agree.
+- The menu bar keeps the front app while Overview is open.
+- The Dock magnifies about the pointer, and hover, labels, clicks and the context menu use the icons as they are drawn.
+- Chinese, Japanese and Korean text draws from the Noto Sans CJK collection instead of missing-glyph boxes (font collections are now read; apps get it when rebuilt).
+- Photos on the desktop is a full-size sidebar window with a scrolling source list, and its content follows Light and Dark.
+- Spotlight shows its placeholder without a caret until you type.
+- Ships with Mail 0.17.6 (a message opened in its own window is marked read; CJK text) and Notes 1.24.3 (alerts wrap).
+
 ## 0.10.28 — 2026-10-25
 
 Fixes from the 0.10.27 end-to-end pass on Midget, a parity wave across nine frameworks, and system appearance for apps built with other toolkits.
