@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.10.33 — 2026-10-25
+
+Fixes from the 0.10.32 end-to-end pass on Midget.
+
+- Look Up (Ctrl+Cmd+D) and Services use the front app's selection, or the word at its caret, instead of the clipboard. Apps answer a new selection request; the Look Up popover floats above app windows at the caret, with link-blue actions.
+- Type-select in menus and the Downloads stack, and menu key equivalents, follow the session keyboard layout (on Icelandic, "-" is the "-" key).
+- Line wrapping breaks between Chinese, Japanese and Korean characters (never before closing or after opening punctuation) and splits a word longer than the line, across the shell and apps.
+- The Dock's label is hidden while the Downloads stack is open. Settings > Displays no longer repeats the Appearance setting.
+- Ships with Mail 0.17.8 (Chinese paragraphs wrap inside the pane), Clock 1.6.3 (a short hour hand and a long minute hand; world-map labels avoid each other), Files 1.34.2 (image thumbnails in its views), TextEdit 1.13.2 (New opens a second window; reports its selection; asks before closing an edited document) and Dictionary 0.6.4 (a sidebar of matches, a toolbar search field, plain definitions with cross-reference links only).
 - The desktop's overlay surfaces (menus and their submenus, panels, Look Up, banners, the accessibility caption and focus ring) each keep their own surface id: submenus have a reserved range, so a deep submenu can no longer take over another surface.
 - Settings rows whose label is cut to two lines keep the text as written in the last line: no spaces appear inside Chinese, Japanese or Korean labels or inside a word broken at a hyphen.
 
