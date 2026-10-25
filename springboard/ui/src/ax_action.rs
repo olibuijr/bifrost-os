@@ -100,10 +100,10 @@ pub fn record(id: u64, names: &[&str]) {
     }
     FRAME.with(|f| {
         let mut f = f.borrow_mut();
-        match f.iter_mut().find(|s| s.id == id) {
-            Some(s) => s.names.extend(names.iter().map(|n| n.to_string())),
-            None if f.len() < MAX_ACTION_ELEMENTS => f.push(AxActionSet::new(id, names)),
-            None => {}
+        if let Some(s) = f.iter_mut().find(|s| s.id == id) {
+            s.names.extend(names.iter().map(|n| n.to_string()));
+        } else if f.len() < MAX_ACTION_ELEMENTS {
+            f.push(AxActionSet::new(id, names));
         }
     });
 }
