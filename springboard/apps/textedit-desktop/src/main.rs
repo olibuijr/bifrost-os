@@ -3837,4 +3837,36 @@ mod tests {
         assert!(is_formatting(Action::Size(3)));
         assert!(is_formatting(Action::FontStyle(1)));
     }
+
+    /// E2E: a .txt opened with its default app (the Dock's Downloads stack, a double-click in Files) arrives as an inbound
+    /// grant no panel of ours asked for. It opens as a document in front; opened again it brings that document back.
+    #[test]
+    fn a_file_opened_with_textedit_from_files_or_the_dock_opens_as_a_document() {
+        let ctx = window(1200, 780);
+        let mut app = TextEditApp::new();
+        let untitled = app.docs.new_document();
+        let dir = std::env::temp_dir().join(format!("textedit-inbound-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("e2e7-notes.txt");
+        std::fs::write(&path, SENTENCE).unwrap();
+        let granted = |request: u32, grant: u8| bifrost_app::Document {
+            request,
+            grant: [grant; 16],
+            name: "e2e7-notes.txt".into(),
+            size: SENTENCE.len() as u64,
+            mode: bifrost_app::proto::DocMode::Read,
+            file: std::fs::File::open(&path).unwrap(),
+        };
+        assert!(app.document(&ctx, DocumentEvent::Opened(granted(bifrost_app::share::INBOUND | 1, 1))));
+        let opened = app.docs.active().unwrap();
+        assert_ne!(opened, untitled, "a new document, not the empty Untitled one");
+        assert_eq!(app.docs.display_name(opened).as_deref(), Some("e2e7-notes.txt"));
+        assert_eq!(active_doc(&app.docs).unwrap().text.text(), SENTENCE);
+        // the same file again, under the shell's new grant: no second copy, the open one comes to the front
+        app.docs.set_active(untitled);
+        assert!(app.document(&ctx, DocumentEvent::Opened(granted(bifrost_app::share::INBOUND | 2, 2))));
+        assert_eq!(app.docs.len(), 2);
+        assert_eq!(app.docs.active(), Some(opened));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
