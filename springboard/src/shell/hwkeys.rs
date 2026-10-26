@@ -1077,6 +1077,11 @@ impl Shell {
             self.last_input = t;
             return true;
         }
+        // Cmd+Down and Cmd+Up in Search jump between the result categories
+        if matches!(code, KEY_UP | KEY_DOWN) && mods == CHORD_META && self.screen_on && !self.card_alert_up() && self.quicksearch_jump(if code == KEY_DOWN { 1 } else { -1 }) {
+            self.last_input = t;
+            return true;
+        }
         if !self.screen_on || self.anim.is_some() || self.shell_takes_typing() || self.card_alert_up() {
             return false;
         }
