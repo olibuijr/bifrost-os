@@ -22,6 +22,7 @@ mod suggest;
 
 mod browser_ctl;
 mod webbridge;
+mod maskfallback;
 mod control;
 mod devtools;
 mod elements;
