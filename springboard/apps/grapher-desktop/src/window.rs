@@ -265,17 +265,20 @@ impl Grapher {
         }
     }
 
+    /// Adds an empty equation and selects it, so what is typed next goes into it and not into an existing one.
+    fn add_equation(&mut self, dir: &Path) -> bool {
+        self.model.add("");
+        self.persist(dir);
+        true
+    }
+
     fn button(&mut self, ui: &Ui, dir: &Path, id: u32) -> bool {
         let enabled = self.toolbar().items.iter().any(|item| item.id == id && item.enabled);
         if !enabled {
             return false;
         }
         match id {
-            B_ADD => {
-                self.model.add("y = sin(x)");
-                self.persist(dir);
-                true
-            }
+            B_ADD => self.add_equation(dir),
             B_REMOVE => match self.model.selected {
                 Some(selected) => {
                     self.model.remove(selected);
@@ -364,6 +367,20 @@ mod tests {
         g.model.select(2);
         let list = g.sidebar_list();
         assert_eq!(list.selected(), Some(ROW_BASE + 2));
+    }
+
+    #[test]
+    fn add_makes_an_empty_selected_row_that_typing_fills() {
+        let dir = std::env::temp_dir().join("grapher-add-test");
+        let mut g = Grapher::new();
+        let before: Vec<String> = g.model.rows.iter().map(|r| r.text.clone()).collect();
+        g.add_equation(&dir);
+        assert_eq!(g.model.selected_row().map(|r| r.text.as_str()), Some(""));
+        g.key(&dir, KeyInput::Text("y = x".into()));
+        let after: Vec<String> = g.model.rows.iter().map(|r| r.text.clone()).collect();
+        assert_eq!(&after[..before.len()], &before[..]);
+        assert_eq!(after.last().map(String::as_str), Some("y = x"));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
