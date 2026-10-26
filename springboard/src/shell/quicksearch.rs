@@ -510,10 +510,12 @@ fn shortcut_items() -> Vec<(Hit, String)> {
         .collect()
 }
 
-/// The Settings intents as Shortcuts rows: each opens its pane. Searched by title, listed with its description.
+/// The Settings intents as Shortcuts rows: each opens its pane. Searched by title, listed with its description. A pane
+/// that already has its own Settings row (`settings::PAGES`) gets no second, intent row for the same target.
 fn settings_intent_rows(hits: &mut BTreeMap<String, Hit>) -> Vec<(search_rank::Item, String)> {
     super::settings_intents::CATALOGUE
         .iter()
+        .filter(|intent| !settings::PAGES.iter().any(|name| settings::named_page(name) == Some(intent.page)))
         .map(|intent| table_row(hits, format!("settings-intent:{}", intent.id), intent.title, intent.description.to_string(), search_rank::Kind::Settings, Hit::SettingsIntent { id: intent.id, title: intent.title }, fuzzy::fold(intent.title)))
         .collect()
 }
@@ -619,6 +621,15 @@ mod symbol_and_line_tests {
         for intent in super::super::settings_intents::CATALOGUE {
             assert!(result_symbol(&Hit::SettingsIntent { id: intent.id, title: intent.title }).is_some(), "{}", intent.id);
         }
+    }
+
+    #[test]
+    fn a_pane_with_a_settings_row_has_no_second_intent_row() {
+        let mut hits = BTreeMap::new();
+        let rows = settings_intent_rows(&mut hits);
+        assert!(!hits.contains_key("settings-intent:open-displays"), "Display & Brightness is already a Settings row");
+        assert!(hits.contains_key("settings-intent:open-sound"), "a pane without a Settings row keeps its intent");
+        assert_eq!(rows.len(), hits.len());
     }
 
     #[test]
