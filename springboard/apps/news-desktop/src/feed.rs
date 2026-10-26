@@ -246,6 +246,43 @@ pub fn short_date(raw: &str) -> String {
     s
 }
 
+/// Minutes since 1970-01-01 of an item's short date (`Mon, 26 Oct 2026 03:43` or `2026-10-26 03:43`, the feed's own
+/// clock), or None when the date is missing or unreadable.
+pub fn minutes_of(date: &str) -> Option<i64> {
+    use bifrost_app::calendar_system::days_from_civil;
+    let (y, m, d, time) = if date.starts_with(|c: char| c.is_ascii_digit()) && date.as_bytes().get(4) == Some(&b'-') {
+        let (day, time) = date.split_once(' ').unwrap_or((date, ""));
+        let mut p = day.split('-');
+        (p.next()?.parse().ok()?, p.next()?.parse().ok()?, p.next()?.parse().ok()?, time)
+    } else {
+        let parts: Vec<&str> = date.split_whitespace().map(|p| p.trim_end_matches(',')).collect();
+        let at = parts.iter().position(|p| p.parse::<i64>().is_ok_and(|n| (1..=31).contains(&n)))?;
+        let month = parts.get(at + 1)?;
+        let m = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"].iter().position(|n| month.to_ascii_lowercase().starts_with(n))? as i64 + 1;
+        (parts.get(at + 2)?.parse().ok()?, m, parts[at].parse().ok()?, parts.get(at + 3).copied().unwrap_or(""))
+    };
+    let mut t = time.split(':');
+    let hour: i64 = t.next().and_then(|h| h.parse().ok()).unwrap_or(0);
+    let minute: i64 = t.next().and_then(|m| m.parse().ok()).unwrap_or(0);
+    Some(days_from_civil(y, m, d) * 1440 + hour * 60 + minute)
+}
+
+/// Today's list: every feed's items dated on `day` (days since 1970-01-01), newest first across the sources.
+/// Items with no readable date follow the dated ones, in feed order.
+pub fn today_list(feeds: &[Vec<Item>], day: i64) -> Vec<Item> {
+    let mut dated: Vec<(i64, &Item)> = vec![];
+    let mut undated: Vec<&Item> = vec![];
+    for item in feeds.iter().flatten() {
+        match minutes_of(&item.date) {
+            Some(m) if m.div_euclid(1440) == day => dated.push((m, item)),
+            Some(_) => {}
+            None => undated.push(item),
+        }
+    }
+    dated.sort_by(|a, b| b.0.cmp(&a.0));
+    dated.into_iter().map(|(_, i)| i).chain(undated).cloned().collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -297,5 +334,25 @@ mod tests {
     fn garbage_gives_nothing() {
         assert!(parse("<item><title>", "x").is_empty());
         assert!(parse("", "x").is_empty());
+    }
+
+    #[test]
+    fn minutes_read_both_date_styles() {
+        assert_eq!(minutes_of("Mon, 26 Oct 2026 03:43"), minutes_of("2026-10-26 03:43"));
+        assert_eq!(minutes_of("2026-10-26 03:43").map(|m| m - minutes_of("2026-10-26 03:42").unwrap()), Some(1));
+        assert_eq!(minutes_of(""), None);
+        assert_eq!(minutes_of("soon"), None);
+    }
+
+    #[test]
+    fn today_is_newest_first_and_leaves_out_other_days() {
+        let item = |date: &str, source: &str| Item { title: date.into(), date: date.into(), source: source.into(), ..Item::default() };
+        let feeds = vec![
+            vec![item("Mon, 26 Oct 2026 03:43", "A"), item("Sun, 25 Oct 2026 21:48", "A"), item("", "A")],
+            vec![item("Mon, 26 Oct 2026 02:21", "B"), item("2026-10-26 05:00", "B")],
+        ];
+        let day = minutes_of("2026-10-26 00:00").unwrap() / 1440;
+        let titles: Vec<String> = today_list(&feeds, day).into_iter().map(|i| i.title).collect();
+        assert_eq!(titles, ["2026-10-26 05:00", "Mon, 26 Oct 2026 03:43", "Mon, 26 Oct 2026 02:21", ""]);
     }
 }
