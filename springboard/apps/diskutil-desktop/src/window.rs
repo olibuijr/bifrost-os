@@ -567,8 +567,14 @@ impl DiskUtility {
         !self.busy() && self.selected_node().is_some_and(|n| n.mount_point.is_none() && n.fs_type.is_some())
     }
 
-    /// Whether Unmount can run on the selected row: a mounted row, and no running action.
+    /// Whether Unmount can run on the selected row: a mounted row that is not part of the running system (the
+    /// reference's startup volume cannot be unmounted either), and no running action.
     pub fn can_unmount(&self) -> bool {
+        !self.busy() && self.selected_node().is_some_and(|n| n.mount_point.is_some()) && !self.selected_is_system()
+    }
+
+    /// Whether the selected row is mounted, so Show in Files has a folder to open (true for the system volume too).
+    pub fn selected_mounted(&self) -> bool {
         !self.busy() && self.selected_node().is_some_and(|n| n.mount_point.is_some())
     }
 
@@ -844,6 +850,20 @@ mod tests {
         assert!(!w.can_eject() && !w.can_unmount(), "a running action blocks the commands");
         let bar = w.toolbar();
         assert!(bar.items.iter().filter(|i| matches!(i.id, B_MOUNT | B_UNMOUNT | B_EJECT)).all(|i| !i.enabled));
+    }
+
+    #[test]
+    fn the_system_volume_cannot_be_unmounted() {
+        let mut w = DiskUtility::new();
+        w.nodes = vec![
+            Node { name: "nvme0n1".into(), size: 500_000_000_000, ..Node::default() },
+            Node { name: "nvme0n1p2".into(), kind: Kind::Partition, parent: Some("nvme0n1".into()), fs_type: Some("btrfs".into()), mount_point: Some("/".into()), ..Node::default() },
+        ];
+        w.selected = Some("nvme0n1p2".into());
+        assert!(!w.can_unmount(), "unmounting / would break the running system");
+        assert!(w.selected_mounted(), "the system volume can still be shown in Files");
+        let bar = w.toolbar();
+        assert!(!bar.items.iter().find(|i| i.id == B_UNMOUNT).is_some_and(|i| i.enabled));
     }
 
     #[test]
