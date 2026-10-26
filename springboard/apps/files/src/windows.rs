@@ -11,6 +11,26 @@ const NEW_WINDOW_PT: (f32, f32) = (900.0, 600.0);
 pub(crate) struct ExtraWindow {
     pub(crate) id: WindowId,
     pub(crate) files: Box<Files>,
+    /// The pixel size of the surface the last draw went into. The SDK gives a window fresh, empty buffers whenever its
+    /// size changes (the desk resizes the body after it opens), and `Files::render` repaints only what changed.
+    drawn: Option<(usize, usize)>,
+}
+
+impl ExtraWindow {
+    pub(crate) fn new(id: WindowId, files: Box<Files>) -> Self {
+        Self { id, files, drawn: None }
+    }
+
+    /// Draws the window. A surface of another size than the last one is blank, so everything is painted again: without
+    /// that the state matched the last paint, nothing was redrawn and the new buffers went out empty (a transparent
+    /// window body).
+    pub(crate) fn draw(&mut self, ctx: &Ctx, s: &mut Surface, t: f64) -> Damage {
+        if self.drawn != Some((s.w, s.h)) {
+            self.files.painted_state.clear();
+            self.drawn = Some((s.w, s.h));
+        }
+        self.files.draw(ctx, s, t)
+    }
 }
 
 impl Files {
@@ -23,7 +43,7 @@ impl Files {
         files.w = w;
         files.h = h;
         files.update_controls();
-        self.windows.push(ExtraWindow { id, files });
+        self.windows.push(ExtraWindow::new(id, files));
         true
     }
 
@@ -43,8 +63,8 @@ mod tests {
     fn a_closed_extra_window_is_dropped_once() {
         let mut files = Files::new();
         assert!(files.windows.is_empty(), "the main window is not in the list");
-        files.windows.push(ExtraWindow { id: WindowId(1), files: Box::new(Files::new()) });
-        files.windows.push(ExtraWindow { id: WindowId(2), files: Box::new(Files::new()) });
+        files.windows.push(ExtraWindow::new(WindowId(1), Box::new(Files::new())));
+        files.windows.push(ExtraWindow::new(WindowId(2), Box::new(Files::new())));
         assert!(!files.close_extra(WindowId(9)), "an unknown window is left alone");
         assert!(files.close_extra(WindowId(1)));
         assert!(!files.close_extra(WindowId(1)), "a window is removed once");

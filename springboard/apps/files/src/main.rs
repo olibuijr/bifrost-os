@@ -449,7 +449,7 @@ impl App for Files {
             return self.draw(ctx, s, t);
         }
         match self.windows.iter_mut().find(|e| e.id == window) {
-            Some(e) => e.files.draw(ctx, s, t),
+            Some(e) => e.draw(ctx, s, t),
             None => Damage::new(s.w, s.h),
         }
     }
