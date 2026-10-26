@@ -693,6 +693,10 @@ impl MessagesWindow {
             self.timeline_scroll.jump_to(max);
         }
         let Some(room) = self.model.selected_room() else {
+            // The sign-in sheet covers the centre, so the hint would peek out around its edges.
+            if self.model.sign_in.is_some() {
+                return;
+            }
             let hint = if self.model.signed_in() { "Choose a conversation" } else { "Sign in to Matrix to start" };
             put_centred(s, &mut self.labels, ui, hint, MAC_BODY_PT, Weight::Regular, LABEL_2.now(), area[0] + area[2] / 2.0, area[1] + area[3] / 2.0);
             return;
