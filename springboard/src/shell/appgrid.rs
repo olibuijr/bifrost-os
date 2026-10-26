@@ -1000,6 +1000,7 @@ mod tests {
         assert_eq!(CHIPS[chip_for_manifest("x", " photo & video ")], "Creativity");
         assert_eq!(CHIPS[chip_for_manifest("x", "Music")], "Entertainment");
         assert_eq!(CHIPS[chip_for_manifest("x", "Books")], "Information & Reading");
+        assert_eq!(CHIPS[chip_for_manifest("x", "News")], "Information & Reading");
         assert_eq!(CHIPS[chip_for_manifest("x", "Something new")], "Other");
         assert_eq!(CHIPS[chip_for_manifest("is.olibuijr.messages.desktop", "Productivity")], "Social", "the id table wins over the category");
         assert!(MANIFEST_CHIP.iter().chain(ID_CHIP).all(|&(_, c)| c < CHIPS.len()));
