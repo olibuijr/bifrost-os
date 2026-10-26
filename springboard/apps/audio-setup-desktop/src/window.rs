@@ -31,7 +31,6 @@ pub const REFRESH_S: f64 = 2.0;
 
 /// Toolbar item ids.
 pub const B_NEW_AGG: u32 = 1;
-pub const B_NEW_MULTI: u32 = 2;
 pub const B_EDIT: u32 = 3;
 pub const B_REMOVE: u32 = 4;
 pub const B_REFRESH: u32 = 5;
@@ -206,7 +205,6 @@ impl AudioSetup {
         match target {
             Target::Nothing | Target::Name => false,
             Target::Toolbar(B_NEW_AGG) => self.open_for_new(Kind::Aggregate),
-            Target::Toolbar(B_NEW_MULTI) => self.open_for_new(Kind::MultiOutput),
             Target::Toolbar(B_EDIT) => {
                 self.edit_selected();
                 true
@@ -269,10 +267,10 @@ impl AudioSetup {
     /// The toolbar for the current state: the made-device actions need a made device selected and no open editor.
     pub fn toolbar(&self) -> Toolbar {
         let made = self.editor.is_none() && self.selected_device().is_some_and(|d| d.kind.is_made());
-        let idle = self.editor.is_none();
+        // One add control: the editor's kind switch picks Aggregate or Multi-Output. Nothing can be made without a server.
+        let can_add = self.editor.is_none() && self.error.is_none();
         Toolbar::new(vec![
-            ToolbarItem::icon(B_NEW_AGG, "New Aggregate", "plus").enabled(idle),
-            ToolbarItem::button(B_NEW_MULTI, "New Multi-Output").enabled(idle),
+            ToolbarItem::icon(B_NEW_AGG, "New Device", "plus").enabled(can_add),
             ToolbarItem::button(B_EDIT, "Edit").enabled(made),
             ToolbarItem::button(B_REMOVE, "Remove").enabled(made),
             ToolbarItem::flexible_space(),
@@ -474,6 +472,17 @@ mod tests {
         w.open_editor(Kind::Aggregate);
         let bar = w.toolbar();
         assert!(!enabled(&bar, B_NEW_AGG) && !enabled(&bar, B_EDIT) && enabled(&bar, B_REFRESH));
+    }
+
+    #[test]
+    fn the_toolbar_has_one_add_control_and_it_needs_a_server() {
+        let mut w = AudioSetup::new();
+        let bar = w.toolbar();
+        assert_eq!(bar.items.iter().filter(|i| i.label.contains("New")).count(), 1);
+        assert!(bar.items.iter().find(|i| i.id == B_NEW_AGG).unwrap().enabled);
+        w.error = Some("The audio server is not running.".into());
+        let bar = w.toolbar();
+        assert!(!bar.items.iter().find(|i| i.id == B_NEW_AGG).unwrap().enabled);
     }
 
     #[test]
