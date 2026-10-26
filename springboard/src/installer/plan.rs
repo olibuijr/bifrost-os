@@ -25,9 +25,11 @@ fn lab_link() -> Option<(String, String)> {
 }
 
 /// A NetworkManager keyfile that pins the lab address on the NIC with this MAC (gateway titan, 10.99.0.1). The keyfile
-/// stores wake-on-lan as the flag integer (64 = magic packet); the name `magic` is rejected at every boot.
+/// stores wake-on-lan as the flag integer (64 = magic packet); the name `magic` is rejected at every boot. TSO and GSO
+/// are off (`[ethtool]`, booleans as `false`): the lab NIC is often an Intel e1000e, which hangs under heavy transmit
+/// with them on, and the keyfile needs no ethtool binary.
 fn lab_nmconnection(mac: &str, cidr: &str) -> String {
-    format!("[connection]\nid=lab\ntype=ethernet\nautoconnect=true\n\n[ethernet]\nmac-address={mac}\nwake-on-lan=64\n\n[ipv4]\nmethod=manual\naddress1={cidr},10.99.0.1\ndns=1.1.1.1;\n\n[ipv6]\nmethod=ignore\n")
+    format!("[connection]\nid=lab\ntype=ethernet\nautoconnect=true\n\n[ethernet]\nmac-address={mac}\nwake-on-lan=64\n\n[ethtool]\nfeature-tso=false\nfeature-gso=false\n\n[ipv4]\nmethod=manual\naddress1={cidr},10.99.0.1\ndns=1.1.1.1;\n\n[ipv6]\nmethod=ignore\n")
 }
 
 /// Everything the user chose.
@@ -1315,6 +1317,7 @@ mod tests {
         assert!(k.contains("method=manual\naddress1=10.99.0.200/24,10.99.0.1\n"));
         assert!(k.contains("[ipv6]\nmethod=ignore"));
         assert!(k.contains("[ethernet]\nmac-address=00:23:24:dc:c8:40\nwake-on-lan=64\n"), "the lab NIC wakes on a magic packet");
+        assert!(k.contains("[ethtool]\nfeature-tso=false\nfeature-gso=false\n"), "TSO and GSO are off for e1000e");
     }
 
     #[test]
