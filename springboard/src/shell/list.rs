@@ -1014,6 +1014,41 @@ impl ListPage {
         }
     }
 
+    /// The page each row that opens one leads to, top to bottom: the rows the arrow keys step over in the sidebar.
+    pub fn push_pages(&self) -> Vec<PageId> {
+        self.spec.groups.iter().flat_map(|g| g.items.iter()).filter_map(|it| if let Action::Push(id) = it.action { Some(id) } else { None }).collect()
+    }
+
+    /// The selected sidebar row's plate (x, y, w, h) on screen at the current scroll offset (None without a sidebar
+    /// selection on the page).
+    pub fn selected_plate(&self, ui: &Ui) -> Option<(f32, f32, f32, f32)> {
+        let sb = self.sidebar.as_ref()?;
+        let r = self.rows.iter().find(|r| self.item(r.g, r.i).action == Action::Push(sb.selected))?;
+        let m = self.margin;
+        let top = r.y - self.draw_offset() + ui.pt((sidebar_pt(SIDEBAR_ROW_PT) - sidebar_pt(SIDEBAR_SEL_H_PT)) / 2.0);
+        Some((m, top, self.w as f32 - 2.0 * m, ui.pt(sidebar_pt(SIDEBAR_SEL_H_PT))))
+    }
+
+    /// Scrolls the sidebar just far enough that the selected row is in view (below the search field, above the bottom).
+    pub fn reveal_selected(&mut self, ui: &Ui) {
+        let Some((_, y, _, h)) = self.selected_plate(ui) else { return };
+        let (top, bottom) = (ui.pt(bifrost_ui::prefs_layout::m::SEARCH_Y + bifrost_ui::prefs_layout::m::SEARCH_H + 4.0), self.h as f32);
+        let off = self.scroll.offset();
+        if y < top {
+            self.scroll.jump_to((off - (top - y)).max(0.0));
+        } else if y + h > bottom {
+            self.scroll.jump_to(off + (y + h - bottom));
+        }
+    }
+
+    /// The keyboard focus ring round the selected sidebar row, drawn on `s` (a surface with the sidebar at its left).
+    pub fn draw_selected_ring(&self, s: &mut Surface, ui: &Ui) {
+        let Some((x, y, w, h)) = self.selected_plate(ui) else { return };
+        // the ring's geometry is the kit's (`sheet::focus_ring_rect`): drawn outside the control, radius grown by its width
+        let g = ui.pt(bifrost_ui::sheet::FOCUS_RING_PT);
+        s.stroke_rrect(x - g, y - g, w + 2.0 * g, h + 2.0 * g, ui.pt(bifrost_ui::prefs_layout::m::SELECTION_RADIUS) + g, ui.pt(2.0), bifrost_render::appearance::accent_now());
+    }
+
     /// The search capsule's rect on screen, when it is on the page.
     pub fn search_frame(&self, ui: &Ui) -> Option<(f32, f32, f32, f32)> {
         let y = self.search_y? - self.draw_offset();

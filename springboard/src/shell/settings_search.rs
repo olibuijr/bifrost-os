@@ -64,6 +64,11 @@ impl Search {
         self.keyboard.set_shown(false, t);
     }
 
+    /// Gives the field the keyboard (Tab into it) or takes it away (Tab out of it, leaving the query).
+    pub fn focus(&mut self, on: bool, t: f64) {
+        self.show(on, t);
+    }
+
     /// Applies a key; true when the query changed.
     pub fn edit(&mut self, ui: &Ui, out: Out, t: f64) -> bool {
         match out {
@@ -150,6 +155,11 @@ impl Search {
     pub fn draw_field(&self, s: &mut Surface, ui: &Ui, (x, y, w, h): (f32, f32, f32, f32), t: f64) {
         // a capsule: the radius is half the height
         s.fill_rrect(x, y, w, h, h / 2.0, FIELD_BG.now());
+        // the focus ring while the field has the keyboard, outside the capsule as the kit draws it (`sheet::focus_ring_rect`)
+        if self.active {
+            let g = ui.pt(bifrost_ui::sheet::FOCUS_RING_PT);
+            s.stroke_rrect(x - g, y - g, w + 2.0 * g, h + 2.0 * g, h / 2.0 + g, ui.pt(2.0), bifrost_render::appearance::accent_now());
+        }
         let mid = y + h / 2.0;
         let (gx, gr, stroke) = (x + ui.pt(GLASS_X_PT), ui.pt(GLASS_R_PT), ui.pt(1.8));
         let glass = glyphs::either(glyphs::ring((gx, mid - ui.pt(1.0)), gr, stroke), glyphs::segment((gx + gr * 0.72, mid - ui.pt(1.0) + gr * 0.72), (gx + gr * 1.5, mid - ui.pt(1.0) + gr * 1.5), stroke * 1.2));
