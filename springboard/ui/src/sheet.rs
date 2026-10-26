@@ -4,7 +4,7 @@
 //! button and Escape to the cancel button. `progress` (0..1) is the slide, driven by the caller from
 //! `motion::Kind::SheetSlide` (with Reduce Motion the duration is 0, so progress is 1 at once).
 use crate::geometry::Edge;
-use crate::keys::Key;
+use crate::keys::{Key, KeyCombo};
 use crate::Rect;
 
 /// Role of a sheet button; decides the key it answers to and its look.
@@ -161,6 +161,17 @@ pub struct Sheet {
     /// Panel size in points; for an alert it is computed from the text.
     pub size: (f32, f32),
     pub alert: bool,
+    /// The button that has keyboard focus (Tab moves it, Space presses it); drawn with a focus ring. `None` until Tab.
+    pub focus: Option<u32>,
+}
+
+/// What a key did to a sheet (`Sheet::handle_key`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SheetKey {
+    /// The button the key pressed, if any.
+    pub answer: Option<u32>,
+    /// The focused button after the key.
+    pub focus: Option<u32>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -186,7 +197,7 @@ pub enum Hit {
 impl Sheet {
     /// A free-form sheet of the given size with a row of buttons at the bottom.
     pub fn new(title: &str, size: (f32, f32), buttons: Vec<SheetButton>) -> Self {
-        Sheet { title: title.to_string(), message: String::new(), buttons, size, alert: false }
+        Sheet { title: title.to_string(), message: String::new(), buttons, size, alert: false, focus: None }
     }
 
     /// An alert sheet: title, informative text and buttons; height follows the text. Both the title and the message
@@ -197,7 +208,7 @@ impl Sheet {
         let message_lines = if message.is_empty() { 0 } else { wrapped_lines(message, CHARS_PER_LINE) };
         let estimate = alert_sheet_height(wrapped_lines(title, TITLE_CHARS_PER_LINE), message_lines, buttons.len());
         let h = measured_alert_height(title, message, ALERT_W_PT).unwrap_or(estimate);
-        Sheet { title: title.to_string(), message: message.to_string(), buttons, size: (ALERT_W_PT, h), alert: true }
+        Sheet { title: title.to_string(), message: message.to_string(), buttons, size: (ALERT_W_PT, h), alert: true, focus: None }
     }
 
     /// The panel height before it is clamped to the parent: for an alert the renderer measured, that measurement (so
@@ -225,6 +236,57 @@ impl Sheet {
             Key::Return => (self.default_button(), true),
             Key::Escape => (self.cancel_button(), true),
             _ => (None, true),
+        }
+    }
+
+    /// The sheet with keyboard focus on button `id` (`None`, or an id that is no button here, clears it).
+    pub fn with_focus(mut self, id: Option<u32>) -> Self {
+        self.focus = id.filter(|id| self.buttons.iter().any(|b| b.id == *id));
+        self
+    }
+
+    /// The button Cmd+D (and Cmd+Delete) presses: the destructive "Don't Save" or "Delete" alternative (`NativeAlert` key equivalents).
+    pub fn dont_save_button(&self) -> Option<u32> {
+        let named = |t: &str| {
+            let t = t.replace('\u{2019}', "'").to_lowercase();
+            t == "don't save" || t == "delete"
+        };
+        self.buttons.iter().find(|b| b.role == ButtonRole::Destructive && named(&b.title)).map(|b| b.id)
+    }
+
+    /// The button after `current` in Tab order (the order the buttons are drawn, `stacked_order`), or before it when
+    /// `backwards`; wraps around. With no focus yet, Tab lands on the first button and Shift+Tab on the last.
+    pub fn next_focus(&self, current: Option<u32>, backwards: bool) -> Option<u32> {
+        let order = stacked_order(&self.buttons);
+        let n = order.len();
+        if n == 0 {
+            return None;
+        }
+        let at = current.and_then(|id| order.iter().position(|b| b.id == id));
+        let i = match (at, backwards) {
+            (None, false) => 0,
+            (None, true) => n - 1,
+            (Some(i), false) => (i + 1) % n,
+            (Some(i), true) => (i + n - 1) % n,
+        };
+        Some(order[i].id)
+    }
+
+    /// A key press on the sheet with button `focus` focused. Return presses the default button, Escape and Cmd+Period
+    /// Cancel, Cmd+D the Don't Save (or Delete) button, Tab and Shift+Tab move the focus ring between the buttons and
+    /// Space presses the focused one. The sheet consumes every key while shown.
+    pub fn handle_key(&self, combo: KeyCombo, focus: Option<u32>) -> SheetKey {
+        if combo.cmd {
+            return match combo.key {
+                Key::Char('d') | Key::Delete if !combo.alt && !combo.ctrl =>SheetKey { answer: self.dont_save_button(), focus },
+                Key::Char('.') => SheetKey { answer: self.cancel_button(), focus },
+                _ => SheetKey { answer: None, focus },
+            };
+        }
+        match combo.key {
+            Key::Tab => SheetKey { answer: None, focus: self.next_focus(focus, combo.shift) },
+            Key::Space => SheetKey { answer: focus, focus },
+            k => SheetKey { answer: self.key(k).0, focus },
         }
     }
 
@@ -380,6 +442,61 @@ mod tests {
         assert_eq!(s.key(Key::Char('a')), (None, true));
         let only_default = Sheet::new("t", (300.0, 100.0), vec![SheetButton::new(9, "OK", ButtonRole::Default)]);
         assert_eq!(only_default.key(Key::Escape), (None, true));
+    }
+
+    fn save_alert() -> Sheet {
+        Sheet::alert(
+            "Do you want to save the changes?",
+            "",
+            vec![
+                SheetButton::new(1, "Save", ButtonRole::Default),
+                SheetButton::new(2, "Cancel", ButtonRole::Cancel),
+                SheetButton::new(3, "Don\u{2019}t Save", ButtonRole::Destructive),
+            ],
+        )
+    }
+
+    fn cmd(c: char) -> KeyCombo {
+        KeyCombo { cmd: true, ..KeyCombo::new(Key::Char(c)) }
+    }
+
+    #[test]
+    fn cmd_d_presses_dont_save_and_cmd_period_cancels() {
+        let s = save_alert();
+        assert_eq!(s.handle_key(cmd('d'), None), SheetKey { answer: Some(3), focus: None });
+        assert_eq!(s.handle_key(KeyCombo { cmd: true, ..KeyCombo::new(Key::Delete) }, None).answer, Some(3));
+        assert_eq!(s.handle_key(cmd('.'), None).answer, Some(2));
+        assert_eq!(s.handle_key(cmd('x'), None).answer, None, "other chords press nothing");
+        assert_eq!(s.handle_key(KeyCombo::new(Key::Char('d')), None).answer, None, "plain D is not Cmd+D");
+        assert_eq!(alert().handle_key(cmd('d'), None).answer, None, "a sheet with no Don't Save ignores Cmd+D");
+        let delete = Sheet::alert("Delete it?", "", vec![SheetButton::new(1, "Cancel", ButtonRole::Cancel), SheetButton::new(2, "Delete", ButtonRole::Destructive)]);
+        assert_eq!(delete.handle_key(cmd('d'), None).answer, Some(2));
+        assert_eq!(s.handle_key(KeyCombo::new(Key::Return), None).answer, Some(1));
+        assert_eq!(s.handle_key(KeyCombo::new(Key::Escape), None).answer, Some(2));
+    }
+
+    #[test]
+    fn tab_moves_the_focus_ring_in_drawn_order_and_space_presses_the_focused_button() {
+        let s = save_alert();
+        // drawn top to bottom: Save (default), Don't Save, Cancel
+        assert_eq!(s.next_focus(None, false), Some(1));
+        let tab = KeyCombo::new(Key::Tab);
+        let a = s.handle_key(tab, None);
+        assert_eq!(a, SheetKey { answer: None, focus: Some(1) });
+        let b = s.handle_key(tab, a.focus);
+        assert_eq!(b.focus, Some(3));
+        let c = s.handle_key(tab, b.focus);
+        assert_eq!(c.focus, Some(2));
+        assert_eq!(s.handle_key(tab, c.focus).focus, Some(1), "wraps around");
+        let back = KeyCombo { shift: true, ..tab };
+        assert_eq!(s.handle_key(back, Some(1)).focus, Some(2));
+        assert_eq!(s.handle_key(back, None).focus, Some(2), "Shift+Tab with no focus lands on the last button");
+        // Space presses what has focus: Tab, Tab, Space is Don't Save
+        let on_dont_save = s.handle_key(tab, s.handle_key(tab, None).focus);
+        assert_eq!(s.handle_key(KeyCombo::new(Key::Space), on_dont_save.focus).answer, Some(3));
+        assert_eq!(s.handle_key(KeyCombo::new(Key::Space), None).answer, None, "no focus, nothing to press");
+        assert_eq!(s.clone().with_focus(Some(3)).focus, Some(3));
+        assert_eq!(s.with_focus(Some(99)).focus, None, "an id that is no button clears the focus");
     }
 
     #[test]

@@ -821,6 +821,42 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// On the Save This Message question Cmd+D is Don't Save, and Tab moves a focus ring over Don't Save, Cancel and Save
+    /// with Space pressing the focused one (Cancel here returns to the message).
+    #[test]
+    fn the_save_this_message_question_takes_cmd_d_and_tab_space() {
+        use bifrost_app::proto::{CHORD_FLAG, CHORD_META};
+        let dir = std::env::temp_dir().join(format!("bifrost-mail-question-keys-{}", std::process::id()));
+        let ctx = ctx(&dir);
+        let mut app = app_with_inbox(&ctx);
+        let ask = |app: &mut MailApp, ctx: &Ctx| {
+            app.with_window(ctx, |mail| {
+                mail.mail.open_compose(None);
+                true
+            });
+            let id = app.composes.active.expect("a compose window");
+            app.window_event(ctx, id, Input::Key(KeyInput::Text("dummy test text".into())));
+            app.window_event(ctx, id, Input::Key(KeyInput::Code(1)));
+            assert!(matches!(app.window.as_ref().unwrap().mail.sheet, Some(Sheet::Question(_))));
+            id
+        };
+        let id = ask(&mut app, &ctx);
+        assert_eq!(app.window.as_ref().unwrap().question_focus, None, "no ring until Tab");
+        app.window_event(&ctx, id, Input::Key(KeyInput::Code(9)));
+        assert_eq!(app.window.as_ref().unwrap().question_focus, Some(0), "Don't Save");
+        app.window_event(&ctx, id, Input::Key(KeyInput::Code(9)));
+        assert_eq!(app.window.as_ref().unwrap().question_focus, Some(1), "Cancel");
+        app.window_event(&ctx, id, Input::Key(KeyInput::Text(" ".into())));
+        assert!(matches!(app.window.as_ref().unwrap().mail.sheet, Some(Sheet::Compose(_))), "Space on Cancel returns to the message");
+        assert_eq!(app.window.as_ref().unwrap().question_focus, None);
+        // ask again: Cmd+D is Don't Save
+        app.window_event(&ctx, id, Input::Key(KeyInput::Code(1)));
+        assert!(matches!(app.window.as_ref().unwrap().mail.sheet, Some(Sheet::Question(_))));
+        app.window_event(&ctx, id, Input::Key(KeyInput::Code(CHORD_FLAG | 32 | (CHORD_META << 8))));
+        assert!(app.window.as_ref().map_or(true, |w| !matches!(w.mail.sheet, Some(Sheet::Question(_)))), "Cmd+D answered the question");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     /// The red button on a compose window with changes asks first: the window stays, as the question, and nothing is
     /// closed or opened again. Cancel returns to the message; an unchanged message closes with its window.
     #[test]

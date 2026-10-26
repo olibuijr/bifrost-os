@@ -251,6 +251,48 @@ enum Pending {
 struct CloseAlert {
     doc: DocId,
     alert: Alert,
+    /// The button Tab moved the focus ring to (an `AlertAction` id); `None` until the first Tab.
+    focus: Option<u32>,
+}
+
+/// What a key did to the close confirmation (`DocumentController::alert_key`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AlertKey {
+    /// The key pressed button `choice` (`alert::SAVE`, `CANCEL` or `DONT_SAVE`): the app answers with `answer_alert`.
+    Answer(u32),
+    /// Tab moved the focus ring: redraw the sheet.
+    Focus,
+    /// The key did nothing, and the sheet used it up all the same.
+    Ignored,
+}
+
+/// The `KeyCombo` of a key the shell delivered: named keys by their shell code, text by its character (Space is a key),
+/// and a chord by its evdev key with Cmd (Meta), Ctrl, Shift and Alt.
+pub fn key_combo(input: &crate::KeyInput) -> Option<bifrost_ui::keys::KeyCombo> {
+    use crate::proto::{CHORD_ALT, CHORD_CTRL, CHORD_META, CHORD_SHIFT};
+    use crate::KeyInput;
+    use bifrost_ui::keys::{Key, KeyCombo};
+    if let Some((evdev, bits)) = input.as_chord() {
+        let c = crate::wl::input::printable(evdev, crate::wl::input::Mods::default())?;
+        let key = if c == ' ' { Key::Space } else { Key::Char(c) };
+        return Some(KeyCombo { cmd: bits & CHORD_META != 0, ctrl: bits & CHORD_CTRL != 0, alt: bits & CHORD_ALT != 0, shift: bits & CHORD_SHIFT != 0, key });
+    }
+    let key = match input {
+        KeyInput::Code(1) | KeyInput::Code(27) => Key::Escape,
+        KeyInput::Code(13) => Key::Return,
+        KeyInput::Code(9) => Key::Tab,
+        KeyInput::Code(8) => Key::Delete,
+        KeyInput::Code(_) => return None,
+        KeyInput::Text(t) => {
+            let mut chars = t.chars();
+            match (chars.next(), chars.next()) {
+                (Some(' '), None) => Key::Space,
+                (Some(c), None) => Key::Char(c.to_ascii_lowercase()),
+                _ => return None,
+            }
+        }
+    };
+    Some(KeyCombo::new(key))
 }
 
 /// `NativeDocumentController` plus the per-document bookkeeping of `NativeDocument`.
@@ -597,7 +639,7 @@ impl<D: Document> DocumentController<D> {
             .action(alert::CANCEL, "Cancel", AlertStyle::Cancel)
             .action(alert::DONT_SAVE, "Don\u{2019}t Save", AlertStyle::Destructive);
         self.active = Some(id);
-        self.alert = Some(CloseAlert { doc: id, alert });
+        self.alert = Some(CloseAlert { doc: id, alert, focus: None });
         Vec::new()
     }
 
@@ -605,6 +647,28 @@ impl<D: Document> DocumentController<D> {
     /// `Alert::button_order`). `None` when no close is waiting.
     pub fn alert(&self) -> Option<&Alert> {
         self.alert.as_ref().map(|a| &a.alert)
+    }
+
+    /// The close confirmation as the kit's alert sheet, with the focus ring on the button Tab reached. Draw this, not
+    /// `alert().sheet()`, so the ring shows. `None` when no close is waiting.
+    pub fn alert_sheet(&self) -> Option<bifrost_ui::sheet::Sheet> {
+        self.alert.as_ref().map(|a| a.alert.sheet().with_focus(a.focus))
+    }
+
+    /// A key press while the close confirmation is up: Return presses Save, Escape and Cmd+. Cancel, Cmd+D Don't Save,
+    /// Tab moves the focus ring, Space presses the focused button. `None` when no close is waiting (the key is not the
+    /// confirmation's). An answer is only returned, never applied: the app calls `answer_alert` with it.
+    pub fn alert_key(&mut self, input: &crate::KeyInput) -> Option<AlertKey> {
+        let a = self.alert.as_mut()?;
+        let Some(combo) = key_combo(input) else { return Some(AlertKey::Ignored) };
+        let out = a.alert.sheet().handle_key(combo, a.focus);
+        let moved = out.focus != a.focus;
+        a.focus = out.focus;
+        Some(match out.answer {
+            Some(choice) => AlertKey::Answer(choice),
+            None if moved => AlertKey::Focus,
+            None => AlertKey::Ignored,
+        })
     }
 
     /// The document the waiting close confirmation is for, so an app with a window per document shows the alert as a
@@ -1529,6 +1593,38 @@ mod tests {
         c.close(&m, id);
         assert_eq!(c.answer_alert(&m, alert::DONT_SAVE), vec![Notice::Closed(id)]);
         assert!(c.is_empty());
+    }
+
+    #[test]
+    fn cmd_d_in_the_close_alert_chooses_dont_save_and_tab_space_walks_the_buttons() {
+        use crate::proto::{CHORD_FLAG, CHORD_META};
+        let m = Mock::new("closekeys");
+        let mut c = DocumentController::<Text>::new();
+        let id = c.new_document();
+        c.mark_edited(id);
+        assert_eq!(c.alert_key(&crate::KeyInput::Code(13)), None, "no alert, not the confirmation's key");
+        c.close(&m, id);
+        assert_eq!(c.alert_sheet().unwrap().focus, None, "no ring until Tab");
+        // Cmd+D is the chord on evdev key 32 with Meta
+        let cmd_d = crate::KeyInput::Code(CHORD_FLAG | 32 | (CHORD_META << 8));
+        assert_eq!(c.alert_key(&cmd_d), Some(AlertKey::Answer(alert::DONT_SAVE)));
+        assert_eq!(c.answer_alert(&m, alert::DONT_SAVE), vec![Notice::Closed(id)]);
+        // Return still saves and Escape cancels
+        let id = c.new_document();
+        c.mark_edited(id);
+        c.close(&m, id);
+        assert_eq!(c.alert_key(&crate::KeyInput::Code(13)), Some(AlertKey::Answer(alert::SAVE)));
+        assert_eq!(c.alert_key(&crate::KeyInput::Code(1)), Some(AlertKey::Answer(alert::CANCEL)));
+        // Tab: Save, then Don't Save (the order the buttons are drawn); Space presses the focused one
+        let (tab, space) = (crate::KeyInput::Code(9), crate::KeyInput::Text(" ".into()));
+        assert_eq!(c.alert_key(&space), Some(AlertKey::Ignored), "Space with no focus presses nothing");
+        assert_eq!(c.alert_key(&tab), Some(AlertKey::Focus));
+        assert_eq!(c.alert_sheet().unwrap().focus, Some(alert::SAVE));
+        assert_eq!(c.alert_key(&tab), Some(AlertKey::Focus));
+        assert_eq!(c.alert_sheet().unwrap().focus, Some(alert::DONT_SAVE));
+        assert_eq!(c.alert_key(&space), Some(AlertKey::Answer(alert::DONT_SAVE)));
+        assert_eq!(c.answer_alert(&m, alert::DONT_SAVE), vec![Notice::Closed(id)]);
+        assert!(c.alert_sheet().is_none());
     }
 
     #[test]
