@@ -12,6 +12,8 @@ use std::path::{Path, PathBuf};
 
 /// Width of the profile list, in points.
 pub const SIDE_PT: f32 = 248.0;
+/// The largest share of the window the profile list takes when the window is narrow.
+const SIDE_MAX_FRAC: f32 = 0.4;
 /// Height of one profile row in the list, in points.
 pub const ROW_PT: f32 = 44.0;
 /// Space above the first row of the list.
@@ -29,6 +31,20 @@ const TAB_GAP_PT: f32 = 6.0;
 pub const LINE_PT: f32 = 22.0;
 /// Width of the key column of the header and tag lists.
 pub const KEY_PT: f32 = 170.0;
+/// Padding inside the body card.
+pub const BODY_PAD_PT: f32 = 12.0;
+/// Largest side of the gamut chart, in points.
+pub const PLOT_MAX_PT: f32 = 420.0;
+/// Smallest side of the gamut chart, in points; below it the readout goes under the chart instead of beside it.
+const PLOT_MIN_PT: f32 = 160.0;
+/// Smallest side of the chart when the readout sits under it, in points.
+const PLOT_STACK_MIN_PT: f32 = 96.0;
+/// Gap between the gamut chart and its readout, in points.
+pub const PLOT_GAP_PT: f32 = 24.0;
+/// Narrowest the gamut readout may be beside the chart, in points: the key column and an "x 0.6400   y 0.3300" value.
+const READOUT_MIN_PT: f32 = 240.0;
+/// Height of the readout rows (four primaries, a gap, the area and the sRGB ratio) when it sits under the chart.
+const READOUT_ROWS_PT: f32 = 7.0 * LINE_PT;
 /// Largest file the window reads, in bytes. A profile is normally under a megabyte; a larger file is refused.
 pub const MAX_BYTES: u64 = 64 * 1024 * 1024;
 
@@ -218,12 +234,45 @@ impl ColourUtility {
         });
     }
 
+    /// Width of the profile list: `SIDE_PT`, less in a narrow window so the detail column keeps room for its tabs.
+    pub fn side_w(&self) -> f32 {
+        if self.size.0 > 0.0 {
+            SIDE_PT.min(self.size.0 * SIDE_MAX_FRAC)
+        } else {
+            SIDE_PT
+        }
+    }
+
     pub fn content_x(&self) -> f32 {
-        SIDE_PT + PAD_PT
+        self.side_w() + PAD_PT
     }
 
     pub fn content_w(&self) -> f32 {
-        (self.size.0 - SIDE_PT - 2.0 * PAD_PT).max(0.0)
+        (self.size.0 - self.side_w() - 2.0 * PAD_PT).max(0.0)
+    }
+
+    /// Width of one panel tab: `TAB_W_PT`, less when the four tabs do not fit the detail column.
+    pub fn tab_w(&self) -> f32 {
+        let n = Panel::ALL.len() as f32;
+        ((self.content_w() - (n - 1.0) * TAB_GAP_PT) / n).clamp(0.0, TAB_W_PT)
+    }
+
+    /// The gamut chart's side, and whether the readout sits under it because the column is too narrow for the two
+    /// side by side.
+    pub fn gamut_layout(&self) -> (f32, bool) {
+        let body = self.body_rect();
+        let w = (body.w - 2.0 * BODY_PAD_PT).max(0.0);
+        let h = (body.h - BODY_PAD_PT - 4.0).max(0.0);
+        let side = h.min(w * 0.62).min(PLOT_MAX_PT);
+        if w - side - PLOT_GAP_PT >= READOUT_MIN_PT {
+            return (side, false);
+        }
+        let beside = (w - PLOT_GAP_PT - READOUT_MIN_PT).min(h);
+        if beside >= PLOT_MIN_PT {
+            return (beside, false);
+        }
+        let stacked = w.min(PLOT_MAX_PT).min(h - READOUT_ROWS_PT - PLOT_GAP_PT / 2.0).max(PLOT_STACK_MIN_PT.min(w));
+        (stacked, true)
     }
 
     pub fn title_y(&self) -> f32 {
@@ -231,14 +280,14 @@ impl ColourUtility {
     }
 
     pub fn sidebar_rect(&self) -> Rect {
-        Rect { x: 0.0, y: UNIFIED_BAR_PT, w: SIDE_PT, h: (self.size.1 - UNIFIED_BAR_PT).max(0.0) }
+        Rect { x: 0.0, y: UNIFIED_BAR_PT, w: self.side_w(), h: (self.size.1 - UNIFIED_BAR_PT).max(0.0) }
     }
 
     pub fn sidebar(&self) -> SourceList {
         let mut items = vec![SidebarItem::header("")];
         for (index, found) in self.found.iter().enumerate() {
             let name = found.path.file_name().and_then(|n| n.to_str()).unwrap_or("profile");
-            items.push(SidebarItem::row(index as u32 + 1, name).with_symbol("folder").with_subtitle(found.group.title()));
+            items.push(SidebarItem::row(index as u32 + 1, name).with_symbol("doc").with_subtitle(found.group.title()));
         }
         let mut list = SourceList::new(items, ROW_PT, LIST_TOP_PT);
         list.two_line_h = ROW_PT;
@@ -249,14 +298,14 @@ impl ColourUtility {
     /// The rectangle of profile row `index`, moved by the list's scroll.
     #[cfg(test)]
     pub fn row_rect(&self, index: usize) -> Rect {
-        Rect { x: 0.0, y: UNIFIED_BAR_PT + LIST_TOP_PT + index as f32 * ROW_PT - self.side_scroll, w: SIDE_PT, h: ROW_PT }
+        Rect { x: 0.0, y: UNIFIED_BAR_PT + LIST_TOP_PT + index as f32 * ROW_PT - self.side_scroll, w: self.side_w(), h: ROW_PT }
     }
 
     pub fn tab_rect(&self, panel: Panel) -> Rect {
         Rect {
-            x: self.content_x() + panel.index() as f32 * (TAB_W_PT + TAB_GAP_PT),
+            x: self.content_x() + panel.index() as f32 * (self.tab_w() + TAB_GAP_PT),
             y: UNIFIED_BAR_PT + TABS_DY_PT,
-            w: TAB_W_PT,
+            w: self.tab_w(),
             h: TAB_H_PT,
         }
     }
@@ -271,7 +320,7 @@ impl ColourUtility {
         if y < UNIFIED_BAR_PT {
             return Target::Nothing;
         }
-        if x < SIDE_PT {
+        if x < self.side_w() {
             let bounds = self.sidebar_rect();
             if let Some(id) = self.sidebar().hit(bounds, self.side_scroll, x, y) {
                 return Target::Row(id.saturating_sub(1) as usize);
@@ -370,6 +419,30 @@ mod tests {
         assert_eq!(w.hit(tab.x + 2.0, tab.y + 2.0), Target::Tab(Panel::Gamut));
         assert_eq!(w.hit(w.body_rect().x + 4.0, w.body_rect().y + 4.0), Target::Body);
         assert_eq!(w.hit(10.0, 4.0), Target::Nothing);
+    }
+
+    #[test]
+    fn tabs_fit_a_narrow_window() {
+        let mut w = window_with(1);
+        for width in [1000.0, 700.0, 430.0] {
+            w.size = (width, 500.0);
+            let last = w.tab_rect(Panel::Gamut);
+            assert!(last.x + last.w <= width, "the last tab ends at {} in a {width} pt window", last.x + last.w);
+            assert!(w.tab_rect(Panel::Header).x >= w.side_w());
+        }
+    }
+
+    #[test]
+    fn gamut_readout_moves_under_the_chart_when_narrow() {
+        let mut w = window_with(1);
+        w.size = (1000.0, 700.0);
+        assert!(!w.gamut_layout().1);
+        w.size = (966.0, 577.0);
+        assert!(!w.gamut_layout().1);
+        w.size = (430.0, 470.0);
+        let (side, stacked) = w.gamut_layout();
+        assert!(stacked);
+        assert!(side <= w.body_rect().w - 2.0 * BODY_PAD_PT);
     }
 
     #[test]

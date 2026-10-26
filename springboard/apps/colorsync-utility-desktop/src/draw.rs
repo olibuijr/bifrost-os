@@ -3,7 +3,7 @@
 //! per string in `TextCache`. The gamut is drawn as dots on the CIE 1931 xy chart.
 
 use crate::model::{self, Severity, SPECTRAL_LOCUS, SRGB_AREA};
-use crate::window::{ColourUtility, Current, Panel, KEY_PT, LINE_PT, SIDE_PT};
+use crate::window::{ColourUtility, Current, Panel, BODY_PAD_PT, KEY_PT, LINE_PT, PLOT_GAP_PT};
 use bifrost_app::controls::Rect;
 use bifrost_app::kit::ui::system::{CONTROL_ACCENT, SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_RED};
 use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT, MAC_SUBHEAD_PT, SEGMENT_ON, SEPARATOR_C};
@@ -12,16 +12,17 @@ use bifrost_app::widgets;
 
 /// Corner radius of plates and cards, in points. The desktop's flat corners stop at 6.
 const CARD_R: f32 = 6.0;
-/// Padding inside the body card.
-const BODY_PAD_PT: f32 = 12.0;
-/// Largest side of the gamut chart, in points.
-const PLOT_MAX_PT: f32 = 420.0;
 /// The chart spans x from 0 to this and y from 0 to the next value (CIE 1931 xy).
 const PLOT_X_MAX: f64 = 0.8;
 const PLOT_Y_MAX: f64 = 0.9;
-/// Width of the tag and verification labels, and of the readout's key column, in points.
+/// Width of the tag and verification labels, in points.
 const LABEL_COL_PT: f32 = 80.0;
-const READOUT_KEY_PT: f32 = 80.0;
+/// Width of the gamut readout's key column, in points: wide enough for "Against sRGB".
+const READOUT_KEY_PT: f32 = 104.0;
+/// Height of one line of the gamut notes, in points.
+const NOTE_LINE_PT: f32 = 14.0;
+/// The line of the readout where the notes start.
+const NOTES_LINE: usize = 8;
 
 /// The text area of the body: `x` and `w` bound the lines, `top` is where the first line starts (already moved by the
 /// scroll), and only the part from `clip` to `bottom` is on screen.
@@ -86,7 +87,7 @@ pub fn paint(w: &ColourUtility, labels: &mut TextCache, s: &mut Surface, ui: &Ui
     s.fill_rrect(0.0, 0.0, s.w as f32, s.h as f32, 0.0, CONTENT_BG.now());
     let side = w.sidebar_rect();
     widgets::source_list(s, ui, side, &w.sidebar(), w.side_scroll, None);
-    rule(s, ui, SIDE_PT, side.y, 0.0, side.h);
+    rule(s, ui, w.side_w(), side.y, 0.0, side.h);
     paint_detail(w, labels, s, ui);
 }
 
@@ -114,7 +115,8 @@ fn paint_detail(w: &ColourUtility, labels: &mut TextCache, s: &mut Surface, ui: 
         let selected = panel == w.panel;
         fill(s, ui, r, CARD_R, if selected { SEGMENT_ON.now() } else { CARD_BG.now() });
         let color = if selected { LABEL.now() } else { LABEL_2.now() };
-        text(labels, s, ui, panel.title(), MAC_CALLOUT_PT, Weight::Regular, color, r.x + 12.0, r.y + r.h / 2.0, r.w - 24.0);
+        let pad = (r.w * 0.115).min(12.0);
+        text(labels, s, ui, panel.title(), MAC_CALLOUT_PT, Weight::Regular, color, r.x + pad, r.y + r.h / 2.0, r.w - 2.0 * pad);
     }
 
     let body = w.body_rect();
@@ -132,7 +134,7 @@ fn paint_detail(w: &ColourUtility, labels: &mut TextCache, s: &mut Surface, ui: 
         Panel::Header => paint_header(labels, s, ui, c, area),
         Panel::Tags => paint_tags(labels, s, ui, c, area),
         Panel::Verify => paint_verify(labels, s, ui, c, area),
-        Panel::Gamut => paint_gamut(labels, s, ui, c, area),
+        Panel::Gamut => paint_gamut(w, labels, s, ui, c, area),
     }
 }
 
@@ -229,7 +231,7 @@ fn plural(n: usize, word: &str) -> String {
 
 /// The gamut: the CIE 1931 xy chart with the spectral locus, the sRGB primaries for reference, the profile's primaries
 /// and white point, and the readout beside it.
-fn paint_gamut(labels: &mut TextCache, s: &mut Surface, ui: &Ui, c: &Current, a: Area) {
+fn paint_gamut(w: &ColourUtility, labels: &mut TextCache, s: &mut Surface, ui: &Ui, c: &Current, a: Area) {
     if c.profile.is_none() {
         return paint_error(labels, s, ui, c, a);
     }
@@ -240,7 +242,7 @@ fn paint_gamut(labels: &mut TextCache, s: &mut Surface, ui: &Ui, c: &Current, a:
         return;
     };
 
-    let side = (a.bottom - a.top - 4.0).min(a.w * 0.62).min(PLOT_MAX_PT).max(0.0);
+    let (side, stacked) = w.gamut_layout();
     let (px, py) = (a.x, a.top);
     fill(s, ui, Rect { x: px, y: py, w: side, h: side }, 0.0, CONTENT_BG.now());
     let map = |x: f64, y: f64| -> (f32, f32) {
@@ -284,28 +286,43 @@ fn paint_gamut(labels: &mut TextCache, s: &mut Surface, ui: &Ui, c: &Current, a:
     let (wx, wy) = map(g.white.0, g.white.1);
     dot(s, ui, wx, wy, 2.5, LABEL.now());
 
-    // the readout beside the chart
-    let rx = px + side + 24.0;
-    let rw = (a.x + a.w - rx).max(0.0);
-    let rows = [("Red", g.red), ("Green", g.green), ("Blue", g.blue), ("White", g.white)];
-    for (i, (name, p)) in rows.iter().enumerate() {
-        let mid = a.mid(i);
-        text(labels, s, ui, name, MAC_BODY_PT, Weight::Regular, LABEL_2.now(), rx, mid, READOUT_KEY_PT);
-        let value = format!("x {:.4}   y {:.4}", p.0, p.1);
-        text(labels, s, ui, &value, MAC_BODY_PT, Weight::Regular, LABEL.now(), rx + READOUT_KEY_PT, mid, rw - READOUT_KEY_PT);
-    }
+    // the readout beside the chart, or under it when the column is narrow; a row that does not fit is left out
+    let (rx, ry, rw) = if stacked {
+        (a.x, py + side + PLOT_GAP_PT / 2.0, a.w)
+    } else {
+        let rx = px + side + PLOT_GAP_PT;
+        (rx, py, (a.x + a.w - rx).max(0.0))
+    };
+    let ra = Area { x: rx, w: rw, top: ry, ..a };
+    let fits = |line: usize| ra.top + (line + 1) as f32 * LINE_PT <= ra.bottom;
     let area = g.area();
     let ratio = format!("{:.0} %", area / SRGB_AREA * 100.0);
     let area_text = format!("{area:.4} on the xy chart");
-    text(labels, s, ui, "Area", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), rx, a.mid(5), READOUT_KEY_PT);
-    text(labels, s, ui, &area_text, MAC_BODY_PT, Weight::Regular, LABEL.now(), rx + READOUT_KEY_PT, a.mid(5), rw - READOUT_KEY_PT);
-    text(labels, s, ui, "Against sRGB", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), rx, a.mid(6), READOUT_KEY_PT);
-    text(labels, s, ui, &ratio, MAC_BODY_PT, Weight::Regular, LABEL.now(), rx + READOUT_KEY_PT, a.mid(6), rw - READOUT_KEY_PT);
+    let mut rows: Vec<(usize, &str, String)> = Vec::new();
+    for (i, (name, p)) in [("Red", g.red), ("Green", g.green), ("Blue", g.blue), ("White", g.white)].iter().enumerate() {
+        rows.push((i, *name, format!("x {:.4}   y {:.4}", p.0, p.1)));
+    }
+    rows.push((5, "Area", area_text));
+    rows.push((6, "Against sRGB", ratio));
+    for (line, name, value) in rows {
+        if !fits(line) {
+            continue;
+        }
+        let mid = ra.mid(line);
+        text(labels, s, ui, name, MAC_BODY_PT, Weight::Regular, LABEL_2.now(), rx, mid, READOUT_KEY_PT - 8.0);
+        text(labels, s, ui, &value, MAC_BODY_PT, Weight::Regular, LABEL.now(), rx + READOUT_KEY_PT, mid, rw - READOUT_KEY_PT);
+    }
     let notes = [
         "The chart is CIE 1931 xy with the spectral locus. The grey triangle is sRGB.",
         "The colorants are D50-adapted, so the sRGB ratio is an estimate.",
     ];
-    for (i, note) in notes.iter().enumerate() {
-        text(labels, s, ui, note, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), rx, a.mid(8 + i), rw);
+    let mut y = ra.top + NOTES_LINE as f32 * LINE_PT;
+    for note in notes {
+        for line in ui.wrap_capped(note, MAC_FOOTNOTE_PT, Weight::Regular, ui.pt(rw), 3) {
+            if y + NOTE_LINE_PT <= ra.bottom {
+                text(labels, s, ui, &line, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), rx, y + NOTE_LINE_PT / 2.0, rw);
+            }
+            y += NOTE_LINE_PT;
+        }
     }
 }
