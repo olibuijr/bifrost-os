@@ -207,10 +207,13 @@ impl App for FolderActionsApp {
 
     fn draw(&mut self, ctx: &Ctx, s: &mut Surface, _t: f64) -> Damage {
         let u = &ctx.ui;
+        // The window colour, never pure black (`DETAIL_BG` is the pane behind cards).
         s.fill_rect(0, 0, s.w, s.h, ui::CONTENT_BG.now());
         self.window = (s.w as f32 / u.pt(1.0), s.h as f32 / u.pt(1.0));
-        let l = Layout::from_points(self.window.0, self.window.1, 0.0, 0.0);
-        self.col = l.readable();
+        let mut l = Layout::from_points(self.window.0, self.window.1, 0.0, 0.0);
+        // No sidebar here: the form is centred in the whole window instead of right of an empty column.
+        l.sidebar = 0.0;
+        self.col = model::form_column(self.window.0, self.window.1);
         widgets::large_title(s, u, &l, "Folder Actions", 40.0);
         let g = self.geo();
 
