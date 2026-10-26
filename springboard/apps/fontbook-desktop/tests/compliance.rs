@@ -24,7 +24,7 @@ const APP_ID: &str = "is.olibuijr.fontbook.desktop";
 const SNAP_NAME: &str = "fontbook-desktop";
 const EXPECT_SIDEBAR: bool = true;  // source_list in the source
 const EXPECT_TOOLBAR: bool = false;  // widgets::toolbar in the source
-const EXPECT_SEARCH: bool = false;  // search_field in the source
+const EXPECT_SEARCH: bool = true;  // search_field in the source
 /// An app must draw a frame on start.
 const FRAME_REQUIRED: bool = true;
 /// Fraction of 1/4-size pixels allowed to differ from the golden (static UI).
