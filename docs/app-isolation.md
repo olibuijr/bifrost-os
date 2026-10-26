@@ -52,6 +52,11 @@ need the privileged-helper path, which this entitlement does not give. The share
 cut off from the network, which is why only first-party system apps may hold it: `Policy::with_entitlements` honours it only
 for an `is.olibuijr.*` id of kind `system-app`, and it is never read from `permissions`.
 
+`entitlements = ["hardware-info"]` on a first-party `system-app` (System Information) binds the host `/sys` read-only
+(`app_policy::sysfs_args`), so the app reads the DMI, PCI, block, network and power facts of the machine. Without it a
+sandboxed app has no `/sys` and every such page reads "Nothing was detected". It is honoured only by
+`Policy::with_entitlements` for an `is.olibuijr.*` id of kind `system-app`, and is never read from `permissions`.
+
 `entitlements = ["endpoint-security"]` on a first-party `system-app` lets the app subscribe to file open, exec, modify and
 close events of the whole computer, and to allow or deny an open or exec before it happens (the `endpoint-security`
 shell service, `bifrost_app::endpoint_security`). The sandbox gets nothing extra: the root half (`bifrost-privd`, fanotify,
