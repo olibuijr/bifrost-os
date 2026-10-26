@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.14.0
+
+- Upstream lightcraft v0.14.0.
+  ## What's Changed
+  * fix: document the deliberate buffer leak during thread teardown (SonarCloud) by @dylanmtaylor in https://github.com/storytold/lightcraft/pull/2700
+  * packaging: bash tests, named positional parameters and stderr errors (SonarCloud S7688/S7679/S7682/S7677) by @dylanmtaylor in https://github.com/storytold/lightcraft/pull/2655
+  * Packaging: pin the signing client and appimagetool, and check their hashes by @aiongg in https://github.com/storytold/lightcraft/pull/2413
+  * CI: one test binary per crate, line tables only, one WASM check by @aiongg in https://github.com/storytold/lightcraft/pull/2710
+
 ## 0.13.0
 
 - Upstream lightcraft v0.13.0.
