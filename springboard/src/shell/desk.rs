@@ -1581,8 +1581,9 @@ impl Desk {
 
     pub fn close(&mut self, i: usize) -> AppId {
         let w = self.wins.remove(i);
-        // the frame the user left the window at (the zoomed one goes back to the frame before zoom)
-        let r = if w.maximized { w.restore } else { w.r };
+        // the frame the user left the window at (a zoomed or full-screen one goes back to the frame before it, never
+        // the screen it covered: that opened the next window flush against the menu bar at its default size)
+        let r = if w.maximized || w.full { w.restore } else { w.r };
         self.closed_sizes.insert(w.app, (r.w, r.h));
         self.closed_origins.insert(w.app, (r.x, r.y));
         // the toplevel is gone; `open` asks the next one to map where this one was (`closed_origins`)
@@ -6239,6 +6240,13 @@ mod tests {
         d.toggle_zoom(&m, i);
         d.close(0);
         assert_eq!(d.closed_sizes.get(&AppId::Photos), Some(&(800, 500)));
+        // so is a full-screen one: size and origin are the windowed frame, not the screen
+        let i = d.open(&m, AppId::Photos, (900, 600));
+        d.place(&m, i, Rect { x: 200, y: 150, w: 800, h: 500 });
+        assert!(d.set_full_screen(&m, i, true));
+        d.close(0);
+        assert_eq!(d.closed_sizes.get(&AppId::Photos), Some(&(800, 500)));
+        assert_eq!(d.closed_origins.get(&AppId::Photos), Some(&(200, 150)));
     }
 
     /// W2-22: a borderless window's shape is where its pixels cover, row runs merged into rects.
