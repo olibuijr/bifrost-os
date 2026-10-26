@@ -138,7 +138,7 @@ impl TextEditApp {
         self.docs.file_name(id).is_none() && !self.docs.is_edited(id) && self.docs.get(id).is_some_and(|d| d.text.char_count() == 0)
     }
 
-    fn shown(&self, id: DocId) -> bool {
+    pub(crate) fn shown(&self, id: DocId) -> bool {
         self.current_doc == Some(id) || self.views.iter().any(|v| v.doc == Some(id))
     }
 
@@ -173,18 +173,29 @@ impl TextEditApp {
         true
     }
 
+    /// Brings the window that shows `doc` to the front and makes it the one being handled (a document opened again, or chosen
+    /// in Open Recent while it is open). False when no window shows it.
+    pub(crate) fn raise_doc(&mut self, ctx: &Ctx, doc: DocId) -> bool {
+        let window = if self.current_doc == Some(doc) {
+            self.current
+        } else {
+            match self.views.iter().find(|v| v.doc == Some(doc)).map(|v| v.window) {
+                Some(window) => window,
+                None => return false,
+            }
+        };
+        self.enter(window);
+        ctx.raise_window(window);
+        true
+    }
+
     /// Places a document that has no window yet.
     fn place(&mut self, ctx: &Ctx, doc: DocId, how: Place) {
         if self.docs.get(doc).is_none() {
             return;
         }
-        if self.current_doc == Some(doc) {
-            return;
-        }
         // a file opened again: its window comes forward instead of a second copy
-        let parked = self.views.iter().find(|v| v.doc == Some(doc)).map(|v| v.window);
-        if let Some(window) = parked {
-            self.enter(window);
+        if self.raise_doc(ctx, doc) {
             return;
         }
         match self.current_doc {
@@ -294,8 +305,21 @@ impl TextEditApp {
         } else if !self.docs.is_empty() {
             ctx.show_main_window();
         }
+        // the shell names the main window from the document state, so that reports the main window's document, not the
+        // active one: the active document's window is listed under its own title already (the Window menu listed it twice)
+        let main_doc = self.main_doc();
+        self.docs.set_state_doc(main_doc);
         self.sync_titles(ctx);
         self.sync_text_state(ctx);
+    }
+
+    /// The document the main window shows.
+    fn main_doc(&self) -> Option<DocId> {
+        if self.current.is_main() {
+            self.current_doc
+        } else {
+            self.views.iter().find(|v| v.window.is_main()).and_then(|v| v.doc)
+        }
     }
 
     /// The shell's titles of the document windows follow their documents (renamed, saved, edited).
@@ -414,6 +438,40 @@ mod tests {
         assert_eq!(app.docs.active(), Some(first));
         assert_eq!(app.window_title(), "Untitled");
         assert_eq!(ctx.windows().list().len(), 2, "the main window and the new one");
+    }
+
+    /// The shell names the main window from the document state, so with a second window in front the state is still the
+    /// main window's document: the Window menu listed the front document twice under the same name.
+    #[test]
+    fn the_document_state_names_the_main_windows_document() {
+        let ctx = window(1200, 780);
+        let mut app = TextEditApp::new();
+        app.configure(&ctx);
+        assert!(app.menu_action(&ctx, item::NEW));
+        assert_eq!(app.docs.display_name(app.docs.active().unwrap()).as_deref(), Some("Untitled 2"), "the second window is in front");
+        ctx.take_sent();
+        app.docs.sync(&ctx);
+        let titles: Vec<String> = ctx.take_sent().into_iter().filter_map(|m| if let ToShell::DocumentState { title, .. } = m { Some(title) } else { None }).collect();
+        assert!(!titles.iter().any(|t| t == "Untitled 2"), "the main window is not named after the front document: {titles:?}");
+    }
+
+    /// A document that is already open comes forward when it is opened or chosen again, instead of staying behind.
+    #[test]
+    fn a_document_that_is_already_open_is_raised() {
+        let ctx = window(1200, 780);
+        let mut app = TextEditApp::new();
+        app.configure(&ctx);
+        let first = app.docs.active().unwrap();
+        app.menu_action(&ctx, item::NEW);
+        let w2 = app.current;
+        assert!(!w2.is_main());
+        ctx.take_sent();
+        assert!(app.raise_doc(&ctx, first), "the first document is shown in the main window");
+        assert!(ctx.take_sent().iter().any(|m| matches!(m, ToShell::WindowRaise { window: 0 })), "the main window is raised");
+        assert_eq!(app.current, WindowId::MAIN);
+        let second = app.docs.ids()[1];
+        assert!(app.raise_doc(&ctx, second));
+        assert!(ctx.take_sent().iter().any(|m| matches!(m, ToShell::WindowRaise { window } if *window == w2.0)), "so is the second");
     }
 
     /// Typing goes to the document of the window it is typed in; each window keeps its own page.

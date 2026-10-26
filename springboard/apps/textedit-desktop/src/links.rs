@@ -30,7 +30,7 @@ pub fn url(id: u16) -> Option<String> {
     TABLE.lock().unwrap_or_else(|e| e.into_inner()).get(at).cloned()
 }
 
-/// The address to store for what the user typed or a file named, or `None` when it is not one Text Editor links to.
+/// The address to store for what the user typed or a file named, or `None` when it is not one TextEdit links to.
 /// Web, file transfer, mail and phone addresses are accepted; a bare host name becomes a web address and a bare mail
 /// address a mail link. Schemes that run code or read local files, blanks and characters that break the file formats are
 /// refused.
@@ -108,7 +108,7 @@ fn is_mail_address(text: &str) -> bool {
         && !host.contains("..")
 }
 
-/// The address of an RTF hyperlink field instruction (`HYPERLINK "address"`), when it is one Text Editor links to.
+/// The address of an RTF hyperlink field instruction (`HYPERLINK "address"`), when it is one TextEdit links to.
 pub fn from_field_instruction(instruction: &str) -> Option<String> {
     let text = instruction.trim();
     if !text.get(..9)?.eq_ignore_ascii_case("hyperlink") {

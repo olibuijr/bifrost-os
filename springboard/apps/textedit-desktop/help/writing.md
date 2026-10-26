@@ -9,7 +9,7 @@ Choose New Document in the File menu. Each document opens in its own window, and
 A document is either Rich Text, which keeps fonts, sizes and colours, or Plain Text, which keeps only the characters. Choose Make Plain Text or Make Rich Text in the Format menu to change it. Make Plain Text asks first, then removes the formatting and attachments and shows the text in a fixed-width font.
 
 ## Save and open {#save}
-Save writes the document to its file. Open shows the files you can open in Text Editor. Plain text files keep their encoding; choose Plain Text Encoding in the Format menu to pick another one.
+Save writes the document to its file. Open shows the files you can open in TextEdit. Plain text files keep their encoding; choose Plain Text Encoding in the Format menu to pick another one.
 
 ## Select text {#select}
 Click to place the caret and drag to select. Double-click selects a word and triple-click a paragraph; drag after a double or triple click to select by whole words or paragraphs. With the keyboard, Shift with the arrow keys, Home or End extends the selection, Alt with an arrow moves by word, and Cmd with Left or Right moves to the start or end of the line.

@@ -1,5 +1,5 @@
 id = "is.olibuijr.textedit.desktop"
-name = "Text Editor"
+name = "TextEdit"
 version = "1.13.10"
 exec = "bifrost-textedit"
 icon = "icon.png"

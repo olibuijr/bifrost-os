@@ -1,4 +1,4 @@
-//! The text model of Text Editor: styled characters, the selection, undo and redo, formatting, counts and the find and
+//! The text model of TextEdit: styled characters, the selection, undo and redo, formatting, counts and the find and
 //! replace rules. Pure Rust with no shell types, so the rules are tested without the shell or a window.
 //!
 //! A paragraph ends with a `'\n'` cell. Alignment is a paragraph property, stored on every cell of the paragraph

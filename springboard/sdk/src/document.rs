@@ -262,6 +262,8 @@ pub struct DocumentController<D: Document> {
     pending: HashMap<u32, Pending>,
     alert: Option<CloseAlert>,
     sent: Option<(String, bool, String)>,
+    /// The document the shell's window state follows when it is not the active one (see `set_state_doc`).
+    state_doc: Option<DocId>,
     /// autosave delay in ms; `AUTOSAVE_DELAY_MS` unless changed
     pub autosave_delay: f64,
     /// the saved versions of every open document, kept under `document-<id>`; each save adds one (see `on_saved`)
@@ -277,7 +279,7 @@ impl<D: Document> Default for DocumentController<D> {
 
 impl<D: Document> DocumentController<D> {
     pub fn new() -> Self {
-        DocumentController { docs: Vec::new(), active: None, next_id: 0, recents: Vec::new(), pending: HashMap::new(), alert: None, sent: None, autosave_delay: AUTOSAVE_DELAY_MS, revisions: RevisionStore::default(), now: 0.0 }
+        DocumentController { docs: Vec::new(), active: None, next_id: 0, recents: Vec::new(), pending: HashMap::new(), alert: None, sent: None, state_doc: None, autosave_delay: AUTOSAVE_DELAY_MS, revisions: RevisionStore::default(), now: 0.0 }
     }
 
     // ---- the document list ----
@@ -306,6 +308,13 @@ impl<D: Document> DocumentController<D> {
         if self.entry(id).is_some() {
             self.active = Some(id);
         }
+    }
+    /// The document whose title, edited flag and file name `sync` reports to the shell, instead of the active one's. An
+    /// app with a window per document sets the main window's document: the shell labels the main window with this state
+    /// (the Window menu, the close light), and the other windows by their own titles, so the active document's state
+    /// would list it twice and leave the main window's document unnamed. `None` follows the active document again.
+    pub fn set_state_doc(&mut self, id: Option<DocId>) {
+        self.state_doc = id;
     }
     /// `displayName`: "Untitled", "Untitled 2" or the file name.
     pub fn display_name(&self, id: DocId) -> Option<String> {
@@ -975,7 +984,8 @@ impl<D: Document> DocumentController<D> {
     /// Sends the active document's title, edited flag and file name to the shell when they changed (the dirty dot in the
     /// close light and " - Edited" in the title bar). `tick` and `handle` call it; call it after your own edits too.
     pub fn sync(&mut self, host: &dyn DocumentHost) {
-        let state = match self.active.and_then(|id| self.entry(id)) {
+        let shown = self.state_doc.filter(|id| self.entry(*id).is_some()).or(self.active);
+        let state = match shown.and_then(|id| self.entry(id)) {
             Some(e) => (e.title(), e.edited(), if e.untitled.is_none() { e.name.clone() } else { String::new() }),
             None => (String::new(), false, String::new()),
         };
