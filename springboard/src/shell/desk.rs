@@ -513,6 +513,11 @@ pub struct Desk {
     /// last frames of windows that are closing: (depth in `frames`, frame), drawn until the close effect ends
     #[cfg(feature = "desktop-wayland")]
     ghosts: Vec<(usize, crate::bare::wayland::WindowFrame)>,
+    /// the frames the last `take_wayland_windows` handed to the window server, without their pixels (the presenter
+    /// holds those), in stacking order: `frames` is emptied by every present, so a window that starts closing finds
+    /// its last frame here (`Shell::desk_keep_ghost`). Replaced on every present, so it never outlives the windows.
+    #[cfg(feature = "desktop-wayland")]
+    presented: Vec<crate::bare::wayland::WindowFrame>,
     /// an open or focus asked for the front window to be raised over native clients
     pub(super) raise_front: bool,
     /// windows brought forward together (Bring All to Front, a hidden app shown, the Apps grid closing): the window
@@ -2031,6 +2036,7 @@ impl Shell {
             // Lock/overlays destroy the backend's windows; rebuilding must send
             // complete pixels rather than a cached unchanged-window sentinel.
             if frames.is_empty() { d.window_cache.clear(); d.body_cache.clear(); }
+            d.presented = frames.iter().map(|f| crate::bare::wayland::WindowFrame { pixels: None, ..f.clone() }).collect();
             frames
         }).unwrap_or_default()
     }
@@ -2782,10 +2788,17 @@ impl Shell {
         let Some(id) = win_id(app) else { return };
         let Some(d) = self.desk.as_mut() else { return };
         if !d.fx.get(id).is_some_and(|f| f.effect == window_fx::Effect::Close) { return; }
-        let Some(z) = d.frames.iter().position(|f| f.id == id) else { return };
-        let mut frame = d.frames[z].clone();
+        // `frames` holds this tick's frames only until the next present takes them; after that the last presented
+        // frame is the one the window server still shows
+        let (z, mut frame) = match d.frames.iter().position(|f| f.id == id) {
+            Some(z) => (z, d.frames[z].clone()),
+            None => match d.presented.iter().position(|f| f.id == id) { Some(z) => (z, d.presented[z].clone()), None => return },
+        };
         frame.damage.all();
         frame.fx = bifrost_render::glass::Fx::IDENTITY;
+        // the toplevel is already placed and mapped: nothing to move or map again
+        frame.origin = None;
+        frame.position = None;
         d.ghosts.push((z, frame));
     }
 
@@ -6629,6 +6642,39 @@ mod tests {
         let i = d.index_of(placed).unwrap();
         d.close(i);
         assert!(!d.placed.contains(&placed));
+    }
+
+    /// O1: `take_wayland_windows` empties the desk's frames on every present, so a window that starts closing found no
+    /// frame to keep and the close effect had nothing to draw. It keeps the frame the last present took (without
+    /// pixels: the presenter holds them), and a present after the window is gone keeps nothing of it.
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn a_closing_window_keeps_the_frame_the_last_present_took_for_its_close_effect() {
+        let mut sh = crate::shell::tests::desktop_shell();
+        let m = sh.desk_metrics();
+        let app = AppId::Settings;
+        {
+            let d = sh.desk.as_mut().unwrap();
+            d.wins.clear();
+            d.open(&m, app, (600, 400));
+        }
+        let id = win_id(app).unwrap();
+        let r = sh.desk.as_ref().unwrap().wins.iter().find(|w| w.app == app).map(|w| w.r).unwrap();
+        let frame = crate::bare::wayland::WindowFrame { id, title: "", x: r.x, y: r.y, width: r.w as usize, height: r.h as usize, pixels: Some(std::sync::Arc::from(vec![0u32; 4])), damage: crate::gfx::Damage::new(1, 1), maximized: false, fullscreen: false, title_height: 0, drag_height: 0, no_drag: Vec::new(), floating: false, fx: bifrost_render::glass::Fx::IDENTITY, opaque: true, origin: Some((1, 2)), position: Some((3, 4)), min_size: (0, 0), input: None };
+        sh.desk.as_mut().unwrap().frames = vec![frame];
+        assert_eq!(sh.take_wayland_windows().len(), 1);
+        assert!(sh.desk.as_ref().unwrap().frames.is_empty(), "the present took the frames");
+        sh.desk_close_app(app);
+        let d = sh.desk.as_ref().unwrap();
+        assert!(d.fx.get(id).is_some_and(|f| f.effect == window_fx::Effect::Close), "the close effect started");
+        assert_eq!(d.ghosts.len(), 1, "the closing window keeps its last frame for the effect");
+        let (z, ghost) = &d.ghosts[0];
+        assert_eq!((*z, ghost.id, ghost.x, ghost.y, ghost.width, ghost.height), (0, id, r.x, r.y, r.w as usize, r.h as usize));
+        assert!(ghost.pixels.is_none(), "the presenter still holds the pixels");
+        assert_eq!((ghost.origin, ghost.position), (None, None), "a kept frame places nothing again");
+        // the next present has no frame of the closed window to remember
+        assert!(sh.take_wayland_windows().is_empty());
+        assert!(sh.desk.as_ref().unwrap().presented.is_empty(), "nothing of the closed window outlives its present");
     }
 
     /// E2E11 3: an app moving its mapped window (`WindowMove`) makes the next frame ask the window server to move the
