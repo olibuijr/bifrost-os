@@ -4,6 +4,8 @@
 //! Delete. Import reads a CSV with site, account and password columns (Open With on a .csv file); Export writes every
 //! login to `~/Downloads/passwords.csv` with mode 0600. Pure logic (search, kinds, CSV, generator) is in `model.rs`.
 //!
+//! File > New Password (Cmd+N) opens a sheet that saves a login.
+//!
 //! Secrets stay in the shell's keychain: the app reads one at a time, only when an item is revealed, copied,
 //! exported or replaced, and it never writes a secret to the log or the status line. The shell asks for the passcode
 //! before it shows a password in Settings; this app shows a revealed secret when the user asks for it.
@@ -13,11 +15,13 @@ mod model;
 use bifrost_app::keychain::Error as KeychainError;
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::controls::Rect;
+use bifrost_app::item_sheet::{ItemSheet, Outcome};
+use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::kit::ui::{self, Weight};
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::pasteboard::NativePasteboard;
 use bifrost_app::passwords::{kind_of, name_of, Kind};
-use bifrost_app::{keychain_groups, passwords, widgets, App, Ctx, Input, KeyInput, TouchKind};
+use bifrost_app::{keychain_groups, passwords, widgets, App, AppMenu, AppMenuItem, Ctx, Input, KeyInput, TouchKind};
 use bifrost_core::json::Json;
 use model::{Entry, Item};
 use std::collections::HashMap;
@@ -40,6 +44,9 @@ const EXPORT_BTN: (f32, f32) = (PAD_PT + 72.0, 64.0);
 const TABS: [(Kind, &str, f32, f32); 3] = [(Kind::Login, "Logins", PAD_PT, 80.0), (Kind::SecureNote, "Notes", PAD_PT + 84.0, 72.0), (Kind::Certificate, "Certificates", PAD_PT + 160.0, 108.0)];
 const DETAIL_BTNS: [(&str, f32, f32); 4] = [("Reveal", 0.0, 80.0), ("Copy", 88.0, 64.0), ("Generate", 160.0, 84.0), ("Delete", 252.0, 72.0)];
 
+/// File > New Password.
+const MENU_NEW: u32 = 1;
+
 /// What a service request was for, so its reply can be handled.
 enum Pending {
     List,
@@ -50,6 +57,7 @@ enum Pending {
     Import { entry: Entry },
     ImportUpdate,
     Export { service: String, account: String },
+    Add,
 }
 
 #[derive(Default)]
@@ -67,9 +75,46 @@ struct PasswordsApp {
     imported: usize,
     import_failed: usize,
     status: String,
+    /// The New Password sheet while it is open; it blocks the window.
+    adding: Option<ItemSheet>,
 }
 
 impl PasswordsApp {
+    /// Opens the New Password sheet.
+    fn open_add(&mut self) -> bool {
+        if self.adding.is_some() {
+            return false;
+        }
+        self.adding = Some(ItemSheet::new("New Password", &[("Website", "example.com", false), ("User Name", "Account name", false), ("Password", "", true)]));
+        true
+    }
+
+    /// Input while the New Password sheet is open: it takes every press and key.
+    fn adding_event(&mut self, ctx: &Ctx, ev: Input) -> bool {
+        let parent = Rect { x: 0.0, y: 0.0, w: ctx.cfg.w as f32 / ctx.ui.s, h: ctx.cfg.h as f32 / ctx.ui.s };
+        let Some(sheet) = self.adding.as_mut() else { return false };
+        let outcome = match ev {
+            Input::Touch { kind: TouchKind::Down, x, y, .. } => sheet.press(parent, UNIFIED_BAR_PT, x / ctx.ui.s, y / ctx.ui.s),
+            Input::Key(KeyInput::Text(text)) => sheet.type_text(&text),
+            Input::Key(KeyInput::Code(code)) => sheet.code(code),
+            _ => Outcome::None,
+        };
+        match outcome {
+            Outcome::None => false,
+            Outcome::Redraw => true,
+            Outcome::Cancel => {
+                self.adding = None;
+                true
+            }
+            Outcome::Add(values) => {
+                self.adding = None;
+                let id = passwords::save(ctx, &values[0], &values[1], &values[2]);
+                self.pending.insert(id, Pending::Add);
+                true
+            }
+        }
+    }
+
     fn ask_list(&mut self, ctx: &Ctx) {
         let id = passwords::list(ctx);
         self.pending.insert(id, Pending::List);
@@ -280,7 +325,22 @@ impl App for PasswordsApp {
         }
     }
 
+    fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
+        vec![AppMenu {
+            title: "File".into(),
+            items: vec![AppMenuItem::new(MENU_NEW, "New Password\u{2026}").key("cmd+n").enabled(self.adding.is_none())],
+        }]
+    }
+
+    fn menu_action(&mut self, _ctx: &Ctx, id: u32) -> bool {
+        id == MENU_NEW && self.open_add()
+    }
+
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
+        // a file opened from outside still imports behind the sheet
+        if self.adding.is_some() && !matches!(ev, Input::Open(_)) {
+            return self.adding_event(ctx, ev);
+        }
         match ev {
             Input::Touch { kind: TouchKind::Down, x, y, .. } => {
                 let (x, y) = (x / ctx.ui.s, y / ctx.ui.s);
@@ -423,6 +483,15 @@ impl App for PasswordsApp {
                     self.status = format!("Could not update a login: {e}");
                 }
             },
+            Pending::Add => match passwords::decode_password(result) {
+                Ok(_) => {
+                    self.set_tab(Kind::Login);
+                    self.status = "Password added.".into();
+                    self.ask_list(ctx);
+                }
+                Err(KeychainError::DuplicateItem) => self.status = "A login for that website and user name already exists.".into(),
+                Err(e) => self.status = format!("Could not add the password: {e}"),
+            },
             Pending::Export { service, account } => {
                 match passwords::decode_password(result) {
                     Ok(password) => self.export_rows.push(Entry { site: service, account, password }),
@@ -548,6 +617,9 @@ impl App for PasswordsApp {
             let width = w as f32 / scale - PAD_PT * 2.0;
             let img = ui.text(&ui.fit(&self.status, ui::MAC_FOOTNOTE_PT, ui.pt(width)), ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::LABEL_2.now());
             s.blit_colored(&img, pi(PAD_PT), pi(h as f32 / scale - 24.0), ui::LABEL_2.now(), 255);
+        }
+        if let Some(sheet) = &self.adding {
+            sheet.draw(s, ui, Rect { x: 0.0, y: 0.0, w: w as f32 / scale, h: h as f32 / scale }, UNIFIED_BAR_PT);
         }
         let mut d = Damage::new(w, h);
         d.all();

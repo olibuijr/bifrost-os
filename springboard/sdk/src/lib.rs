@@ -125,6 +125,7 @@ pub mod package_layout;
 pub mod keychain;
 pub mod folder_actions;
 pub mod keychain_groups;
+pub mod item_sheet;
 pub mod keychain_query;
 pub mod passwords;
 pub mod password_suggest;
