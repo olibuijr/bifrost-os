@@ -12,7 +12,8 @@ mod model;
 
 use bifrost_app::keychain::Error as KeychainError;
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
-use bifrost_app::controls::Rect;
+use bifrost_app::controls::{Rect, TextField};
+use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::kit::ui::{self, Weight};
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::pasteboard::NativePasteboard;
@@ -27,17 +28,19 @@ use std::path::PathBuf;
 const LIST_PT: f32 = 300.0;
 const BAR_Y_PT: f32 = 12.0;
 const BAR_H_PT: f32 = 28.0;
-const TABS_Y_PT: f32 = 46.0;
-const TABS_H_PT: f32 = 26.0;
-const SEARCH_Y_PT: f32 = 80.0;
+/// The kind tabs sit just under the unified bar's window-drag band, so every part of them takes a click.
+const TABS_Y_PT: f32 = UNIFIED_BAR_PT + 4.0;
+const TABS_H_PT: f32 = 24.0;
+const SEARCH_Y_PT: f32 = TABS_Y_PT + TABS_H_PT + 8.0;
+const SEARCH_H_PT: f32 = 26.0;
 const HEADER_PT: f32 = 124.0;
 const ROW_PT: f32 = 44.0;
 const PAD_PT: f32 = 12.0;
 /// Bar button hit boxes in the list header (x start, width) and in the detail column.
 const IMPORT_BTN: (f32, f32) = (PAD_PT, 64.0);
 const EXPORT_BTN: (f32, f32) = (PAD_PT + 72.0, 64.0);
-/// The kind tabs under the bar: the kind, its label, and its hit box (x start, width).
-const TABS: [(Kind, &str, f32, f32); 3] = [(Kind::Login, "Logins", PAD_PT, 80.0), (Kind::SecureNote, "Notes", PAD_PT + 84.0, 72.0), (Kind::Certificate, "Certificates", PAD_PT + 160.0, 108.0)];
+/// The kind tabs under the bar, in order: one segmented control across the list column.
+const TABS: [(Kind, &str); 3] = [(Kind::Login, "Logins"), (Kind::SecureNote, "Notes"), (Kind::Certificate, "Certificates")];
 const DETAIL_BTNS: [(&str, f32, f32); 4] = [("Reveal", 0.0, 80.0), ("Copy", 88.0, 64.0), ("Generate", 160.0, 84.0), ("Delete", 252.0, 72.0)];
 
 /// What a service request was for, so its reply can be handled.
@@ -57,7 +60,7 @@ struct PasswordsApp {
     items: Vec<Item>,
     listed: bool,
     tab: Kind,
-    query: String,
+    query: TextField,
     selected: Option<(String, String)>,
     revealed: Option<String>,
     pending: HashMap<u32, Pending>,
@@ -249,12 +252,19 @@ fn write_private(path: &std::path::Path, data: &[u8]) -> std::io::Result<()> {
     Ok(())
 }
 
+/// The segmented control's bounds in the list column, in points.
+fn tabs_bounds() -> Rect {
+    Rect { x: PAD_PT, y: TABS_Y_PT, w: LIST_PT - 2.0 * PAD_PT, h: TABS_H_PT }
+}
+
+/// The search field's bounds in the list column, in points.
+fn search_bounds() -> Rect {
+    Rect { x: PAD_PT, y: SEARCH_Y_PT, w: LIST_PT - 2.0 * PAD_PT, h: SEARCH_H_PT }
+}
+
 /// The kind tab at point `(x, y)` in the list column, if any.
 fn tab_at(x: f32, y: f32) -> Option<Kind> {
-    if !(TABS_Y_PT..TABS_Y_PT + TABS_H_PT).contains(&y) {
-        return None;
-    }
-    TABS.iter().find(|(_, _, bx, bw)| (*bx..bx + bw).contains(&x)).map(|(kind, _, _, _)| *kind)
+    bifrost_app::controls::sheet::segment_hit(tabs_bounds(), TABS.len(), x, y).map(|i| TABS[i].0)
 }
 
 /// The bar button at point `(x, y)` in the detail column, if any.
@@ -298,6 +308,10 @@ impl App for PasswordsApp {
                     }
                     if let Some(kind) = tab_at(x, y) {
                         self.set_tab(kind);
+                        return true;
+                    }
+                    if bifrost_app::controls::search::hits_clear(search_bounds(), !self.query.is_empty(), x, y) {
+                        self.query.clear();
                         return true;
                     }
                     let (shown, list) = self.source_list();
@@ -467,27 +481,17 @@ impl App for PasswordsApp {
         // positions for blit_colored, which takes signed pixels
         let pi = |v: f32| (v * scale) as i32;
         let (w, h) = (s.w, s.h);
-        s.fill_rect(0, 0, w, h, ui::DETAIL_BG.now());
+        s.fill_rect(0, 0, w, h, ui::CONTENT_BG.now());
         // list column with its bar, kind tabs and search field
         s.fill_rect(0, 0, p(LIST_PT), h, ui::SIDEBAR_BG.now());
         for (label, x) in [("Import", IMPORT_BTN.0), ("Export", EXPORT_BTN.0)] {
             let img = ui.text(label, ui::MAC_BODY_PT, Weight::Regular, ui::LINK);
             s.blit_colored(&img, pi(x + 4.0), pi(BAR_Y_PT + 6.0), ui::LINK, 255);
         }
-        for (kind, label, x, width) in TABS {
-            let on = kind == self.tab;
-            let colour = if on { ui::LABEL.now() } else { ui::LINK };
-            if on {
-                s.fill_rect(p(x), p(TABS_Y_PT), p(width), p(TABS_H_PT), ui::ROW_PRESSED.now());
-            }
-            let img = ui.text(label, ui::MAC_BODY_PT, Weight::Regular, colour);
-            s.blit_colored(&img, pi(x + 6.0), pi(TABS_Y_PT + 5.0), colour, 255);
-        }
-        let search = if self.query.is_empty() { "Search".to_string() } else { self.query.clone() };
-        let search_colour = if self.query.is_empty() { ui::LABEL_2.now() } else { ui::LABEL.now() };
-        s.fill_rect(p(PAD_PT), p(SEARCH_Y_PT), p(LIST_PT - 2.0 * PAD_PT), p(26.0), ui::FIELD_BG.now());
-        let img = ui.text(&ui.fit(&search, ui::MAC_BODY_PT, ui.pt(LIST_PT - 4.0 * PAD_PT)), ui::MAC_BODY_PT, Weight::Regular, search_colour);
-        s.blit_colored(&img, pi(PAD_PT + 8.0), pi(SEARCH_Y_PT + 5.0), search_colour, 255);
+        let labels: Vec<&str> = TABS.iter().map(|(_, label)| *label).collect();
+        let selected = TABS.iter().position(|(kind, _)| *kind == self.tab).unwrap_or(0);
+        widgets::segmented(s, ui, tabs_bounds(), &labels, selected, true);
+        widgets::search_field(s, ui, &self.query, search_bounds(), "Search", true);
         let (shown, list) = self.source_list();
         let bounds = Rect { x: 0.0, y: HEADER_PT, w: LIST_PT, h: h as f32 / scale - HEADER_PT };
         widgets::source_list(s, ui, bounds, &list, 0.0, None);
@@ -578,5 +582,28 @@ mod private_export_tests {
         assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
         assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1, "no temporary export remains");
         std::fs::remove_dir_all(dir).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod layout_tests {
+    use super::*;
+
+    #[test]
+    fn tabs_sit_below_the_drag_band_and_hit_by_segment() {
+        let b = tabs_bounds();
+        assert!(b.y >= UNIFIED_BAR_PT, "the tabs must not sit in the window-drag band");
+        let third = b.w / 3.0;
+        let mid_y = b.y + b.h / 2.0;
+        assert_eq!(tab_at(b.x + third * 0.5, mid_y), Some(Kind::Login));
+        assert_eq!(tab_at(b.x + third * 1.5, mid_y), Some(Kind::SecureNote));
+        assert_eq!(tab_at(b.x + third * 2.5, mid_y), Some(Kind::Certificate));
+        assert_eq!(tab_at(b.x + third * 0.5, b.y - 2.0), None);
+    }
+
+    #[test]
+    fn search_field_sits_between_the_tabs_and_the_list() {
+        let (t, s) = (tabs_bounds(), search_bounds());
+        assert!(s.y >= t.y + t.h && s.y + s.h <= HEADER_PT);
     }
 }
