@@ -2497,6 +2497,8 @@ impl Shell {
             Out::Backspace => KeyInput::Code(8),
             Out::Enter => KeyInput::Code(13),
             Out::Named("Tab") => KeyInput::Code(9),
+            // Shift+Tab is the chord on Tab (evdev 15), as the SDK's views and sheets read it
+            Out::Named("BackTab") => KeyInput::chord(15, CHORD_SHIFT),
             Out::Named(name) if super::kb_input::function_key_code(name).is_some() => KeyInput::Code(u32::from(super::kb_input::function_key_code(name).unwrap_or(0))),
             Out::Named("Left") => KeyInput::Code(37),
             Out::Named("Up") => KeyInput::Code(38),

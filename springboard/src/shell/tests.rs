@@ -3456,6 +3456,43 @@
         assert!(!sh.hw_nav(106,CHORD_ALT));
     }
 
+    /// Shift+Tab reaches an SDK app as the chord on Tab (evdev 15) with Shift, so a view or sheet steps its focus back; plain Tab
+    /// is still the plain key. Cmd+Backspace and Cmd+Delete are chords with Meta, never the bare delete.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn shift_tab_and_cmd_delete_reach_the_sdk_app_with_their_modifiers() {
+        use bifrost_proto::{KeyInput,ToApp,CHORD_META,CHORD_SHIFT};
+        use hwkeys::HwKeys;
+        let (mine,theirs)=bifrost_proto::sys::socketpair_pair().unwrap();
+        let host=apphost::AppHost::with_channel("fixture",mine,None,bifrost_proto::Configure{w:100,h:100,scale:1.,safe_top:0.,safe_bottom:0.,dark:true,text_scale:1.,reduce_motion:false});
+        let mut sh=desktop_shell();sh.anim=None;
+        sh.ext.push(Some(host));sh.ext_fg=Some(0);sh.screen=Screen::App(AppId::External(0));
+        let sent=||{
+            let mut all=Vec::new();
+            while let bifrost_proto::sys::Recv::Packet(packet,_)=theirs.recv(false).unwrap(){all.push(ToApp::decode(&packet).unwrap());}
+            all
+        };
+        let _=sent();
+        // the physical key: Shift held, Tab is typed as BackTab, not as Tab
+        let mut keys=HwKeys::default();
+        keys.key_front(42,true,false,false);
+        let out=keys.typed(15).expect("Shift+Tab types");
+        assert_eq!(out,keyboard::Out::Named("BackTab"));
+        sh.hw_type(out,1.0);
+        assert_eq!(sent(),vec![ToApp::Key(KeyInput::chord(15,CHORD_SHIFT))],"Shift+Tab keeps its Shift");
+        sh.hw_type(keyboard::Out::Named("Tab"),2.0);
+        assert_eq!(sent(),vec![ToApp::Key(KeyInput::Code(9))],"plain Tab is unchanged");
+        // Cmd+Backspace and Cmd+Delete: chords with Meta on the evdev key
+        let mut keys=HwKeys::default();
+        keys.key_front(125,true,false,false);
+        assert_eq!(keys.chord_mods(14),Some(CHORD_META));
+        assert!(sh.hw_chord(14,CHORD_META));
+        assert_eq!(sent(),vec![ToApp::Key(KeyInput::chord(14,CHORD_META))],"Cmd+Backspace");
+        assert_eq!(keys.chord_mods(111),Some(CHORD_META));
+        assert!(sh.hw_chord(111,CHORD_META));
+        assert_eq!(sent(),vec![ToApp::Key(KeyInput::chord(111,CHORD_META))],"Cmd+Delete");
+    }
+
     /// Cmd+Q quits the front app and Cmd+W only closes its window. The decision (`desktop_bar::quit_step`) is pure: a window server
     /// toplevel of a running SDK app quits the app, a native or Linux app closes all its windows (as the Dock's Quit does), and a
     /// window of the shell's own desk quits its app or, for a built-in window, closes as before.

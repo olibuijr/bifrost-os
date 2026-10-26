@@ -754,7 +754,9 @@ impl HwKeys {
             Typed::Char(c) => Out::Text(c.to_string()),
             Typed::Backspace => Out::Backspace,
             Typed::Enter => Out::Enter,
-            Typed::Tab | Typed::BackTab => Out::Named("Tab"),
+            Typed::Tab => Out::Named("Tab"),
+            // Shift+Tab: `hw_type` gives it to the places that step backwards, and treats it as Tab elsewhere
+            Typed::BackTab => Out::Named("BackTab"),
             Typed::Escape => Out::Named("Escape"),
             Typed::Up => Out::Named("Up"),
             Typed::Down => Out::Named("Down"),
@@ -1151,6 +1153,10 @@ impl Shell {
     }
 
     pub fn hw_type(&mut self, out: Out, t: f64) -> Vec<Effect> {
+        // Shift+Tab is Tab to every sheet, panel and field below; only an SDK app (as the Shift+Tab chord) and Settings (focus
+        // steps back) hear the difference, where the screen match at the end restores it
+        let back_tab = out == Out::Named("BackTab");
+        let out = if back_tab { Out::Named("Tab") } else { out };
         let mut woke = vec![];
         if !self.screen_on {
             // a locked desktop whose display went dark (idle) wakes on a key, as the reference Mac does, and the key goes to
@@ -1242,6 +1248,13 @@ impl Shell {
             _ if self.assistant.is_shown() => self.assistant_key(out, t),
             _ if self.quicksearch.is_shown() => self.compose_search_key(out, t),
             Screen::App(AppId::Terminal | AppId::External(_)) => {
+                // an SDK app gets Shift+Tab with its Shift (the chord on Tab), which steps focus back; a Wayland client behind the
+                // input method and the Help viewer keep Tab
+                let out = if back_tab && matches!(self.screen, Screen::App(AppId::External(_))) && !self.im.active && self.help_viewer.is_none() {
+                    Out::Named("BackTab")
+                } else {
+                    out
+                };
                 self.type_out(out, t);
                 vec![]
             }
@@ -1880,6 +1893,9 @@ mod tests {
         assert_eq!(k.typed(57), Some(Out::Text(" ".into())));
         assert_eq!(k.typed(103), Some(Out::Named("Up")));
         assert_eq!(k.typed(15), Some(Out::Named("Tab")));
+        k.key(KEY_LEFTSHIFT, true);
+        assert_eq!(k.typed(15), Some(Out::Named("BackTab")), "Shift+Tab is its own key, not Tab");
+        k.key(KEY_LEFTSHIFT, false);
         assert_eq!(k.typed(116), None, "power is not text");
     }
 
