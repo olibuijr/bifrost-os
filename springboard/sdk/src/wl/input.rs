@@ -171,10 +171,15 @@ pub fn printable(code: u32, mods: Mods) -> Option<char> {
 }
 
 /// The `KeyInput` for a key press, or None for keys that send nothing (modifiers, unknown keys). Printable keys are
-/// text; with Ctrl, Alt or Meta held they are chords on the evdev key. Other keys use the shell's key codes.
+/// text; with Ctrl, Alt or Meta held they are chords on the evdev key. Shift+Tab, and Backspace or forward Delete with Ctrl,
+/// Alt or Meta, are chords too, so the modifier reaches the app (focus steps back; Cmd+Backspace deletes to the line start).
+/// Other keys use the shell's key codes.
 pub fn translate_key(code: u32, mods: Mods) -> Option<KeyInput> {
     let chord_held = mods.ctrl || mods.alt || mods.meta;
     if printable(code, Mods::default()).is_some() && chord_held {
+        return Some(KeyInput::chord(code, mods.chord_bits()));
+    }
+    if (code == KEY_TAB && mods.shift) || (matches!(code, KEY_BACKSPACE | KEY_DELETE) && chord_held) {
         return Some(KeyInput::chord(code, mods.chord_bits()));
     }
     if let Some(c) = printable(code, mods) {
@@ -613,6 +618,22 @@ mod tests {
         assert_eq!(translate_key(31, alt_meta).and_then(|k| k.as_chord()), Some((31, CHORD_ALT | CHORD_META)));
         // Chords on named keys stay plain codes.
         assert_eq!(translate_key(KEY_LEFT, ctrl), Some(KeyInput::Code(37)));
+    }
+
+    #[test]
+    fn shift_tab_and_modified_deletes_keep_their_modifiers() {
+        let shift = Mods { shift: true, ..Mods::default() };
+        // Shift+Tab is the chord on Tab, which the views read as "focus back"
+        assert_eq!(translate_key(KEY_TAB, shift), Some(KeyInput::chord(KEY_TAB, CHORD_SHIFT)));
+        assert_eq!(translate_key(KEY_TAB, Mods::default()), Some(KeyInput::Code(9)), "plain Tab is unchanged");
+        // Cmd+Backspace and Cmd+Delete reach the app as chords with CHORD_META
+        let meta = Mods { meta: true, ..Mods::default() };
+        assert_eq!(translate_key(KEY_BACKSPACE, meta), Some(KeyInput::chord(KEY_BACKSPACE, CHORD_META)));
+        assert_eq!(translate_key(KEY_DELETE, meta), Some(KeyInput::chord(KEY_DELETE, CHORD_META)));
+        let alt = Mods { alt: true, ..Mods::default() };
+        assert_eq!(translate_key(KEY_BACKSPACE, alt), Some(KeyInput::chord(KEY_BACKSPACE, CHORD_ALT)));
+        assert_eq!(translate_key(KEY_BACKSPACE, shift), Some(KeyInput::Code(8)), "Shift alone does not make Backspace a chord");
+        assert_eq!(translate_key(KEY_BACKSPACE, Mods::default()), Some(KeyInput::Code(8)));
     }
 
     #[test]

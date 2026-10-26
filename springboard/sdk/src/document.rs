@@ -273,8 +273,14 @@ pub fn key_combo(input: &crate::KeyInput) -> Option<bifrost_ui::keys::KeyCombo> 
     use crate::KeyInput;
     use bifrost_ui::keys::{Key, KeyCombo};
     if let Some((evdev, bits)) = input.as_chord() {
-        let c = crate::wl::input::printable(evdev, crate::wl::input::Mods::default())?;
-        let key = if c == ' ' { Key::Space } else { Key::Char(c) };
+        // Tab (Shift+Tab steps the focus back) and Backspace (Cmd+Delete is a sheet's Don't Save) arrive as chords too
+        let key = match crate::wl::input::printable(evdev, crate::wl::input::Mods::default()) {
+            Some(' ') => Key::Space,
+            Some(c) => Key::Char(c),
+            None if evdev == 15 => Key::Tab,
+            None if evdev == 14 => Key::Delete,
+            None => return None,
+        };
         return Some(KeyCombo { cmd: bits & CHORD_META != 0, ctrl: bits & CHORD_CTRL != 0, alt: bits & CHORD_ALT != 0, shift: bits & CHORD_SHIFT != 0, key });
     }
     let key = match input {
@@ -1625,6 +1631,30 @@ mod tests {
         assert_eq!(c.alert_key(&space), Some(AlertKey::Answer(alert::DONT_SAVE)));
         assert_eq!(c.answer_alert(&m, alert::DONT_SAVE), vec![Notice::Closed(id)]);
         assert!(c.alert_sheet().is_none());
+    }
+
+    #[test]
+    fn cmd_delete_and_shift_tab_reach_the_close_alert_as_chords() {
+        use crate::proto::{CHORD_META, CHORD_SHIFT};
+        let m = Mock::new("closechords");
+        let mut c = DocumentController::<Text>::new();
+        let id = c.new_document();
+        c.mark_edited(id);
+        c.close(&m, id);
+        let combo = key_combo(&crate::KeyInput::chord(14, CHORD_META)).expect("Cmd+Backspace is a combo");
+        assert!(combo.cmd && !combo.shift);
+        assert_eq!(combo.key, bifrost_ui::keys::Key::Delete);
+        // Cmd+Delete is the sheet's Don't Save
+        assert_eq!(c.alert_key(&crate::KeyInput::chord(14, CHORD_META)), Some(AlertKey::Answer(alert::DONT_SAVE)));
+        let combo = key_combo(&crate::KeyInput::chord(15, CHORD_SHIFT)).expect("Shift+Tab is a combo");
+        assert!(combo.shift && combo.key == bifrost_ui::keys::Key::Tab);
+        // Tab twice reaches Don't Save; Shift+Tab steps back to Save
+        let tab = crate::KeyInput::Code(9);
+        assert_eq!(c.alert_key(&tab), Some(AlertKey::Focus));
+        assert_eq!(c.alert_key(&tab), Some(AlertKey::Focus));
+        assert_eq!(c.alert_sheet().unwrap().focus, Some(alert::DONT_SAVE));
+        assert_eq!(c.alert_key(&crate::KeyInput::chord(15, CHORD_SHIFT)), Some(AlertKey::Focus));
+        assert_eq!(c.alert_sheet().unwrap().focus, Some(alert::SAVE));
     }
 
     #[test]
