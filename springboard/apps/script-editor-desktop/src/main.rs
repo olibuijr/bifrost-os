@@ -7,7 +7,7 @@ mod runner;
 mod view;
 
 use bifrost_app::controls::{Node, Rect as ControlRect, Role};
-use bifrost_app::document::{alert, is_menu_id, DocId, DocumentController, DocumentHost, Notice};
+use bifrost_app::document::{is_menu_id, AlertKey, DocId, DocumentController, DocumentHost, Notice};
 use bifrost_app::kit::canvas::{Canvas, RectF};
 use bifrost_app::kit::ui::{
     Ui, Weight, CAPSULE_BG, CARD_BG, DETAIL_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_CALLOUT_PT,
@@ -34,7 +34,6 @@ const POLL_WAKE_SECS: f64 = 0.1;
 const KEY_BACKSPACE: u32 = 8;
 const KEY_TAB: u32 = 9;
 const KEY_RETURN: u32 = 13;
-const KEY_ESCAPE: u32 = 27;
 const KEY_END: u32 = 35;
 const KEY_HOME: u32 = 36;
 const KEY_LEFT: u32 = 37;
@@ -91,7 +90,7 @@ impl ScriptEditorApp {
     /// The close confirmation as the kit's alert sheet (`Alert::sheet`): it hangs from the unified title bar, Save is the
     /// accent-filled default (Return) and Cancel answers Escape. `None` while no close waits for an answer.
     fn close_sheet(&self) -> Option<bifrost_app::controls::sheet::Sheet> {
-        self.docs.alert().map(|a| a.sheet())
+        self.docs.alert_sheet()
     }
 
     /// The window the close confirmation covers (points) and the height of the title bar it hangs from.
@@ -408,12 +407,13 @@ impl App for ScriptEditorApp {
     }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
-        // the close confirmation is a sheet over the whole window: Return saves, Escape cancels, nothing else gets through
+        // the close confirmation is a sheet over the whole window: Return saves, Escape cancels, Cmd+D is Don't Save, Tab
+        // moves the focus ring and Space presses the focused button; nothing else gets through
         if self.docs.alert().is_some() {
             return match ev {
-                Input::Key(KeyInput::Code(code)) if code & CHORD_FLAG == 0 => match code {
-                    KEY_RETURN => self.answer_close(ctx, alert::SAVE),
-                    1 | KEY_ESCAPE => self.answer_close(ctx, alert::CANCEL),
+                Input::Key(key) => match self.docs.alert_key(&key) {
+                    Some(AlertKey::Answer(choice)) => self.answer_close(ctx, choice),
+                    Some(AlertKey::Focus) => true,
                     _ => false,
                 },
                 Input::Touch { kind: TouchKind::Down, x, y, .. } => {
@@ -550,6 +550,7 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bifrost_app::document::alert;
 
     fn app_with(text: &str) -> ScriptEditorApp {
         let mut app = ScriptEditorApp::new();

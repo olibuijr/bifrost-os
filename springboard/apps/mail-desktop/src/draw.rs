@@ -1517,6 +1517,18 @@ impl MailWindow {
         put_centred(s, &mut self.labels, ui, "Cancel", MAC_BODY_PT, Weight::Regular, LABEL.now(), cr[0] + cr[2] / 2.0, cr[1] + cr[3] / 2.0);
         s.fill_rrect(pr[0], pr[1], pr[2], pr[3], ui.pt(RADIUS_PT), colors::SYSTEM_BLUE.now());
         put_centred(s, &mut self.labels, ui, action, MAC_BODY_PT, Weight::Semibold, WHITE, pr[0] + pr[2] / 2.0, pr[1] + pr[3] / 2.0);
+        // the keyboard focus ring of the question's button Tab reached (Don't Save, Cancel, Save)
+        if let (Sheet::Question(_), Some(focus)) = (sheet, self.question_focus) {
+            let button = match focus {
+                0 => l.discard,
+                1 => Some(cr),
+                _ => Some(pr),
+            };
+            if let Some(b) = button {
+                let p = ui.pt(1.0);
+                widgets::focus_ring(&mut *s, ui, bifrost_app::controls::Rect { x: b[0] / p, y: b[1] / p, w: b[2] / p, h: b[3] / p }, RADIUS_PT);
+            }
+        }
     }
 }
 

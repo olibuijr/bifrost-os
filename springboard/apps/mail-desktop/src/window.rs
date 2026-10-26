@@ -178,6 +178,8 @@ const KEY_V: u32 = 47;
 const KEY_A: u32 = 30;
 const KEY_C: u32 = 46;
 const KEY_X: u32 = 45;
+/// evdev D: Cmd+D is Don't Save on the Save This Message question.
+const KEY_D: u32 = 32;
 const KEY_BACKSPACE_CHORD: u32 = 14;
 /// The evdev codes of Up and Down Arrow, as they arrive in a chord (Shift-Up, Shift-Down; the manifest's `edit_keys`).
 const KEY_UP_CHORD: u32 = 103;
@@ -315,6 +317,9 @@ pub struct MailWindow {
     /// The sheet slot belongs to a compose window (`compose_windows`): its message fills that window, and `w` x `h` is
     /// that window's size, not the main window's.
     pub in_compose_window: bool,
+    /// The button of the Save This Message question that Tab moved the focus ring to, left to right: Don't Save, Cancel,
+    /// Save. `None` until Tab; Space presses it.
+    pub question_focus: Option<u8>,
     /// The Previous, Next and Done buttons of the find bar where they were drawn last frame.
     pub find_hits: Option<[Rect; 3]>,
     /// Where the open message's text starts in the reader's scrolled content, the height of a line, and the height of the
@@ -674,6 +679,7 @@ impl MailWindow {
             remote_memo: None,
             sending: false,
             in_compose_window: false,
+            question_focus: None,
             find_hits: None,
             reader_metrics: (0.0, 0.0, 0.0),
             press: None,
@@ -961,6 +967,24 @@ impl MailWindow {
             }
             return self.find_key(k);
         }
+        if matches!(self.mail.sheet, Some(Sheet::Question(_))) {
+            // the question has no fields behind it: Tab moves the focus ring over its three buttons, Space presses the
+            // focused one, and no other text reaches the hidden message
+            match &k {
+                KeyInput::Code(KEY_TAB) => self.question_focus = Some(self.question_focus.map_or(0, |f| (f + 1) % 3)),
+                KeyInput::Text(s) if s == " " => match self.question_focus {
+                    Some(0) => self.discard_question(),
+                    Some(1) => self.cancel_sheet(),
+                    Some(_) => self.submit(ctx),
+                    None => {}
+                },
+                _ => {}
+            }
+            if matches!(&k, KeyInput::Code(KEY_TAB) | KeyInput::Text(_)) {
+                self.dirty = true;
+                return true;
+            }
+        }
         self.ensure_address_book(ctx);
         // the suggestions under a recipient field: the arrows move through them, Return and Tab take the highlighted
         // one, Escape closes the list
@@ -1149,6 +1173,12 @@ impl MailWindow {
         let primary = mods & (CHORD_CTRL | CHORD_META) != 0;
         if key == KEY_V && primary {
             return self.paste();
+        }
+        // Cmd+D on the Save This Message question is Don't Save
+        if key == KEY_D && mods & CHORD_META != 0 && mods & (CHORD_ALT | CHORD_CTRL) == 0 && matches!(self.mail.sheet, Some(Sheet::Question(_))) {
+            self.discard_question();
+            self.dirty = true;
+            return true;
         }
         if self.mail.sheet.is_none() {
             // Shift-Up and Shift-Down Arrow extend the selection in the message list from its anchor
@@ -1427,6 +1457,7 @@ impl MailWindow {
 
     /// Cancel on a sheet: a question goes back to the message it asked about; any other sheet closes.
     fn cancel_sheet(&mut self) {
+        self.question_focus = None;
         match self.mail.sheet.take() {
             Some(Sheet::Question(compose)) => self.mail.sheet = Some(Sheet::Compose(compose)),
             _ => self.mail.close_sheet(),
@@ -1435,6 +1466,7 @@ impl MailWindow {
 
     /// Save This Message: the message is saved to Drafts and its window closes.
     fn save_question(&mut self, compose: &Compose) {
+        self.question_focus = None;
         self.save_draft(compose);
         self.mail.sheet_done = true;
         self.mail.close_sheet();
@@ -1442,6 +1474,7 @@ impl MailWindow {
 
     /// Don't Save: the message and its saved copy in Drafts are dropped, and the window closes.
     fn discard_question(&mut self) {
+        self.question_focus = None;
         if let Some(Sheet::Question(compose)) = self.mail.sheet.clone() {
             self.discard_draft(&compose);
         }

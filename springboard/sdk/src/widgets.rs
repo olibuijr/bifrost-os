@@ -1319,6 +1319,9 @@ pub fn sheet(s: &mut dyn Canvas, ui: &Ui, parent: Rect, titlebar_h: f32, sheet: 
     for (id, rect) in &l.buttons {
         if let Some(b) = sheet.buttons.iter().find(|b| b.id == *id) {
             sheet_button(s, ui, *rect, b, pressed == Some(*id), radius);
+            if sheet.focus == Some(*id) {
+                focus_ring(s, ui, *rect, radius);
+            }
         }
     }
     let btn_top = l.buttons.first().map(|(_, r)| r.y).unwrap_or(l.panel.bottom() - SHEET_PAD_PT);

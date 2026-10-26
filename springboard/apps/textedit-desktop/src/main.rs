@@ -35,7 +35,7 @@ mod zipdoc;
 use bifrost_app::controls::undo::ChangeCount;
 use bifrost_app::controls::nav::ToolbarLayout;
 use bifrost_app::controls::Node;
-use bifrost_app::document::{is_menu_id, item, DocId, DocumentController, DocumentHost, Notice};
+use bifrost_app::document::{is_menu_id, item, AlertKey, DocId, DocumentController, DocumentHost, Notice};
 use bifrost_app::kit::canvas::Canvas;
 use bifrost_app::pasteboard::NativePasteboard;
 use bifrost_app::kit::ui::Ui;
@@ -1828,7 +1828,7 @@ impl TextEditApp {
     /// The close confirmation of this window's document as the kit's alert sheet (`Alert::sheet`, E2E9 6): it hangs
     /// from the title bar, its title wraps instead of being cut, and Save is the accent-filled default (Return).
     fn close_sheet(&self) -> Option<bifrost_app::controls::sheet::Sheet> {
-        self.docs.alert().filter(|_| self.close_alert_here()).map(|a| a.sheet())
+        self.docs.alert_sheet().filter(|_| self.close_alert_here())
     }
 
     /// The Make Plain Text confirmation as the kit's alert sheet (E2E11 6), hung from the title bar like the close
@@ -2934,6 +2934,13 @@ impl TextEditApp {
                 Command::Undo => self.perform(ctx, Action::Undo),
                 Command::Redo => self.perform(ctx, Action::Redo),
             },
+            // the close confirmation: Return saves, Escape cancels, Cmd+D is Don't Save, Tab moves the focus ring and Space
+            // presses the focused button; other keys do nothing behind the sheet
+            Input::Key(key) if self.close_alert_here() => match self.docs.alert_key(&key) {
+                Some(AlertKey::Answer(choice)) => self.perform(ctx, Action::CloseAnswer(choice as u8)),
+                Some(AlertKey::Focus) => true,
+                _ => false,
+            },
             Input::Key(KeyInput::Text(s)) => self.type_into(&s),
             Input::Key(KeyInput::Code(code)) => {
                 if code & CHORD_FLAG != 0 {
@@ -2956,15 +2963,6 @@ impl TextEditApp {
                         Some(select::ChordAction::Page { down, shift }) => self.page_move(ctx, down, shift),
                         Some(select::ChordAction::Delete(key)) => self.delete_key(ctx, key),
                         None => false,
-                    };
-                }
-                // the close confirmation: Return saves, Escape cancels, other keys do nothing behind the sheet
-                if self.close_alert_here() {
-                    use bifrost_app::document::alert;
-                    return match code {
-                        13 => self.perform(ctx, Action::CloseAnswer(alert::SAVE as u8)),
-                        1 | 27 => self.perform(ctx, Action::CloseAnswer(alert::CANCEL as u8)),
-                        _ => false,
                     };
                 }
                 // the properties panel takes the keys while it is open
