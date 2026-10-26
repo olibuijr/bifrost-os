@@ -1994,8 +1994,10 @@ pub fn desktop_dock_page(m: &Model<'_>, d: &DeskPrefs) -> Spec {
         ]),
         Group::new(vec![
             Item::new("Automatically Hide and Show").switch(m.dock.autohide, Action::Toggle(Toggle::DockAutohide)),
-            Item::new("Show Suggested and Recent Apps").switch(m.opts.dock_recents, Action::Toggle(Toggle::DockRecents)),
         ]).footer("The dock slides away until you move the pointer to its edge."),
+        Group::new(vec![
+            Item::new("Show Suggested and Recent Apps").switch(m.opts.dock_recents, Action::Toggle(Toggle::DockRecents)),
+        ]).footer("Up to three recently used apps that are not kept in the dock appear in it."),
         Group::new(vec![Item::new("Hot Corners").link(PageId::HotCorners)]),
     ] }
 }

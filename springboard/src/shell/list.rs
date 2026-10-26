@@ -127,6 +127,9 @@ const SWATCH_ROW_PT: f32 = 66.0;
 /// the top of the pictures and dots below the row's top edge, and of the name below them
 const CHOICE_TOP_PT: f32 = 12.0;
 const CAPTION_GAP_PT: f32 = 4.0;
+/// the least room kept between a row's label and its pictures or dots, and how far they may shrink to keep it
+const CHOICE_LABEL_GAP_PT: f32 = 12.0;
+const CHOICE_MIN_SCALE: f32 = 0.5;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Tint {
@@ -889,18 +892,26 @@ impl ListPage {
                     Tint::Red => RED,
                     Tint::Dim => SECONDARY,
                 };
-                // the value keeps its natural width (up to half the row); the label gets the rest
-                let value_img = (!item.value.is_empty() && !pane.sidebar).then(|| ui.text(&ui.fit(&item.value, MAC_BODY_PT, value_w), MAC_BODY_PT, Weight::Regular, SECONDARY));
+                let badge_w = if item.badge > 0 { super::notify::list::badge_image(ui, item.badge).w as f32 } else { 0.0 };
+                let accessory = if pane.sidebar { 0.0 } else { accessory_room(ui, item, chevron.w as f32, check.w as f32, badge_w) };
+                let (icon_pt, _, gap_pt) = row_icon(pane.sidebar);
+                let leading = if has_leading(item) { ui.pt(icon_pt + gap_pt) } else { 0.0 } + if item.leading_check { ui.pt(LEADING_CHECK_PT) } else { 0.0 };
+                // the value keeps its natural width, up to half the row, or more when the label is short enough to leave the room
+                // (a long processor name beside "Processor"); the label gets the rest
+                let value_cap = if item.value.is_empty() || pane.sidebar {
+                    value_w
+                } else {
+                    let label_natural = ui.text(&item.label, MAC_BODY_PT, Weight::Regular, WHITE).w as f32;
+                    value_w.max(cw - ui.pt(2.0 * TEXT_INSET_PT) - leading - accessory - label_natural - ui.pt(16.0))
+                };
+                let value_img = (!item.value.is_empty() && !pane.sidebar).then(|| ui.text(&ui.fit(&item.value, MAC_BODY_PT, value_cap), MAC_BODY_PT, Weight::Regular, SECONDARY));
                 let popup_img = item.popup.as_ref().filter(|_| !pane.sidebar).map(|p| {
                     let chosen = p.choices.get(p.selected).map_or("", String::as_str);
                     ui.text(&ui.fit(chosen, MAC_BODY_PT, value_w), MAC_BODY_PT, Weight::Regular, WHITE)
                 });
                 let value_room = value_img.as_ref().map_or(0.0, |v| v.w as f32 + ui.pt(8.0)) + popup_img.as_ref().map_or(0.0, |p| p.w as f32 + ui.pt(POPUP_CHEV_PT + POPUP_GAP_PT));
-                let badge_w = if item.badge > 0 { super::notify::list::badge_image(ui, item.badge).w as f32 } else { 0.0 };
-                let accessory = if pane.sidebar { 0.0 } else { accessory_room(ui, item, chevron.w as f32, check.w as f32, badge_w) };
-                let (icon_pt, _, gap_pt) = row_icon(pane.sidebar);
                 // the label stops before the value and the trailing control and wraps instead of running under them
-                let label_w = cw - ui.pt(2.0 * TEXT_INSET_PT) - if has_leading(item) { ui.pt(icon_pt + gap_pt) } else { 0.0 } - if item.leading_check { ui.pt(LEADING_CHECK_PT) } else { 0.0 } - value_room - accessory;
+                let label_w = cw - ui.pt(2.0 * TEXT_INSET_PT) - leading - value_room - accessory;
                 // the app's icon at the icon token; a built-in app has none and leaves the slot blank
                 let icon_img = item.app_icon.as_ref().filter(|_| has_leading(item)).and_then(|id| { let px = ui.pt(icon_pt).round() as usize; super::apphost::icon_image(id, px).or_else(|| super::apps::builtin_icon(id, px)) });
                 images.push(RowImages {
@@ -1203,7 +1214,7 @@ impl ListPage {
         }
         if let (Body::Tiles | Body::Swatches(_), Some(seg)) = (&item.body, &item.segments) {
             // a picture or a dot chooses; the rest of the row (its label) does nothing
-            let (x0, pitch, w) = self.choice_strip(ui, item, seg.choices.len());
+            let (x0, pitch, w) = self.choice_strip(ui, item, seg.choices.len(), self.label_px(r.g, r.i));
             let k = ((x - x0) / pitch).floor();
             if x >= x0 && k >= 0.0 && (k as usize) < seg.choices.len() && x - x0 - k * pitch <= w {
                 return Some(Hit::Segment(r.g, r.i, k as usize));
@@ -1487,7 +1498,7 @@ impl ListPage {
                     ly += label.h as f32;
                 }
                 if let Some(seg) = &item.segments {
-                    self.draw_choices(s, ui, item, seg, &self.images[k].captions, ry);
+                    self.draw_choices(s, ui, item, seg, &self.images[k].captions, ry, self.label_px(g, i));
                 }
             }
             Body::Row => {
@@ -1601,21 +1612,31 @@ impl ListPage {
     }
 
     /// Where a row's pictures or dots sit: (left x of the first, pitch from one to the next, width of one) in page px. They
-    /// end at the row's right inset.
-    fn choice_strip(&self, ui: &Ui, item: &Item, n: usize) -> (f32, f32, f32) {
+    /// end at the row's right inset. In a pane too narrow to fit them beside the label (`label_w` px wide) they shrink,
+    /// down to half size, so the label stays whole.
+    fn choice_strip(&self, ui: &Ui, item: &Item, n: usize, label_w: f32) -> (f32, f32, f32) {
         let (w, gap) = match item.body {
             Body::Tiles => (ui.pt(TILE_W_PT), ui.pt(TILE_GAP_PT)),
             _ => (ui.pt(DOT_PT), ui.pt(DOT_GAP_PT)),
         };
         let right = self.w as f32 - self.margin - ui.pt(TEXT_INSET_PT);
         let n = n.max(1) as f32;
+        let full = n * w + (n - 1.0) * gap;
+        let room = right - (self.margin + ui.pt(TEXT_INSET_PT) + label_w + ui.pt(CHOICE_LABEL_GAP_PT));
+        let scale = if full > room { (room / full).clamp(CHOICE_MIN_SCALE, 1.0) } else { 1.0 };
+        let (w, gap) = (w * scale, gap * scale);
         (right - n * w - (n - 1.0) * gap, w + gap, w)
     }
 
+    /// The widest line of a row's label, in px.
+    fn label_px(&self, g: usize, i: usize) -> f32 {
+        self.images[self.row_index(g, i)].label.iter().map(|l| l.w as f32).fold(0.0, f32::max)
+    }
+
     /// Draws a row's pictures (`Body::Tiles`) or dots (`Body::Swatches`) with their names, the chosen one marked.
-    fn draw_choices(&self, s: &mut Surface, ui: &Ui, item: &Item, seg: &Popup, captions: &[Image], ry: f32) {
+    fn draw_choices(&self, s: &mut Surface, ui: &Ui, item: &Item, seg: &Popup, captions: &[Image], ry: f32, label_w: f32) {
         use bifrost_render::ui::{CARD_BG as CARD, SIDEBAR_BG as DESK, SYSTEM_GREEN, SYSTEM_RED, SYSTEM_YELLOW};
-        let (x0, pitch, w) = self.choice_strip(ui, item, seg.choices.len());
+        let (x0, pitch, w) = self.choice_strip(ui, item, seg.choices.len(), label_w);
         let top = ry + ui.pt(CHOICE_TOP_PT);
         let accent = bifrost_render::appearance::accent_now();
         let caption = |s: &mut Surface, img: &Image, cx: f32, y: f32, on: bool| {
@@ -1623,7 +1644,7 @@ impl ListPage {
         };
         match &item.body {
             Body::Tiles => {
-                let h = ui.pt(TILE_H_PT);
+                let h = w * TILE_H_PT / TILE_W_PT;
                 let rad = ui.pt(6.0);
                 for k in 0..seg.choices.len() {
                     let x = x0 + k as f32 * pitch;
@@ -2219,7 +2240,7 @@ mod tests {
         let page = ListPage::new(&ui, spec, 1200, 1920, None);
         for (i, n) in [(0usize, 3usize), (1, 3)] {
             let item = page.item(0, i);
-            let (x0, pitch, w) = page.choice_strip(&ui, item, n);
+            let (x0, pitch, w) = page.choice_strip(&ui, item, n, page.label_px(0, i));
             let (_, ry, _, _) = page.row_rect(&ui, 0, i);
             let y = ry + ui.pt(CHOICE_TOP_PT) + w.min(ui.pt(TILE_H_PT)) / 2.0;
             for k in 0..n {
@@ -2231,6 +2252,32 @@ mod tests {
         assert_eq!(page.item(0, 0).height_pt(), TILES_ROW_PT);
         let mut px = vec![0u32; 1200 * 1920];
         page.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut px, y0: 0 }, &ui, None, 1e9);
+    }
+
+    /// In a pane too narrow for the pictures beside the label, they shrink rather than cover the label.
+    #[test]
+    fn pictures_and_dots_keep_clear_of_the_row_label() {
+        let ui = crate::shell::tests::ui();
+        use crate::shell::pages::Pick;
+        let names = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let spec = Spec {
+            id: PageId::Appearance,
+            title: "Appearance".into(),
+            large: false,
+            groups: vec![Group::new(vec![
+                Item::tiles("Appearance", names(&["Light", "Dark", "Auto"]), 0, Action::Pick(Pick::Appearance(0))),
+                Item::swatches("Colour", vec![1; 9], names(&["Multicolour"; 9]), 0, Action::Pick(Pick::Accent(0))),
+            ])],
+        };
+        for w in [ui.pt(330.0) as i32, ui.pt(400.0) as i32, 1200] {
+            let page = ListPage::new(&ui, spec.clone(), w, 1920, None);
+            for (i, n) in [(0usize, 3usize), (1, 9)] {
+                let (x0, _, tile) = page.choice_strip(&ui, page.item(0, i), n, page.label_px(0, i));
+                let (lx, _) = leading_x(&ui, page.margin, page.item(0, i), false);
+                let full = ui.pt(if i == 0 { TILE_W_PT } else { DOT_PT });
+                assert!(x0 >= lx + page.label_px(0, i) || tile <= full * (CHOICE_MIN_SCALE + 0.001), "row {i} at {w}px: the label stays whole or the pictures are at their smallest");
+            }
+        }
     }
 
     #[test]
