@@ -5635,6 +5635,25 @@ remap it. Tests: proto `reopen_and_ordering_out_the_main_window_have_their_tags`
 `a_main_window_the_app_ordered_out_stays_closed_until_the_app_is_activated`, textedit
 `closing_the_last_document_closes_the_main_window_and_a_reopen_shows_an_untitled`.
 
+Close requests (`windowShouldClose:`). Apple parity gap closed: the red light and Cmd+W of an SDK app's main window made the
+shell send `Quit` (direct route) or only drop the window, so a document app could not ask "Save changes?". An app that
+overrides `App::handles_close_request` (default `false`) announces `ToShell::CloseRequests {on: true}` (tag 0x256) once; the
+shell then sends `ToApp::CloseRequest` (tag 0x255, `App::close_requested(ctx)`) for the light, Cmd+W and the window server's
+close request instead (`Shell::desk_close_requested`), and leaves the window, the app and its process alone. The default
+`close_requested` orders the main window out. A document app calls `DocumentController::close` for the document the window
+shows: a clean one closes now, an edited one raises its save sheet and closes on Save or Don't Save (Cancel keeps it), and
+with the last document closed the app orders the window out (`close_main_window`) and keeps running, as the reference does.
+Quit (Dock, Cmd+Q, shutdown) is never vetoed, and an app that did not opt in closes as before. Script Editor and TextEdit opt
+in (TextEdit's other windows already asked through `window_closed`). Gap: on the direct route the window cannot be unmapped, so
+the order-out that answers a close request quits the app instead (`apphost::order_out_quits`), as the light did before;
+File > Close of the last document there still leaves the empty window. A Cancel on the sheet leaves no state to undo, but a
+hung app never answers, so Force Quit is the way out. Tests: proto `close_requests_have_their_tags`, app_windows
+`an_app_opts_in_to_close_requests_and_the_default_answer_orders_the_window_out`, apphost
+`an_app_opts_in_to_close_requests_with_the_message` and `only_the_answer_to_a_close_request_on_the_direct_route_quits_the_app`,
+shell `the_close_control_asks_an_app_that_opted_in_and_never_vetoes_quit`, script editor
+`the_close_control_closes_a_clean_script_and_asks_about_an_edited_one`, textedit
+`the_close_request_on_the_main_window_asks_about_an_edited_document`.
+
 Units (2026-10-23, E2E follow-up). `WindowTouch` and an extra window's pointer events are in the window's **points**, while
 the main window's `ToApp::Touch` is in surface pixels. An app that hit-tests an extra window in px, or hands its touches to code
 written for the main window, scales them first: `app_windows::window_touch_in_px(ev, ctx.ui.pt(1.0))` returns the touch in px

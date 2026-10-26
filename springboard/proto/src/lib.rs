@@ -645,6 +645,12 @@ pub enum ToApp {
     /// Search, an open) while its main window was closed, and the shell has put the main window back. A document app
     /// that closed its last document shows a new one. An app built before this message ignores it. Tag 0x254.
     Reopen,
+    /// The person pressed the close control of the main window (the red light, Cmd+W) and the app announced
+    /// `ToShell::CloseRequests { on: true }`: the shell does not quit it. The app closes what the window shows (a document
+    /// app raises its save sheet for an edited document, `DocumentController::close`) and orders the window out itself
+    /// (`close_main_window`), or keeps it. An app that did not opt in never gets it; its close control acts as before.
+    /// `windowShouldClose:`. Tag 0x255.
+    CloseRequest,
     Resume,
     Suspend,
     Quit,
@@ -1044,6 +1050,10 @@ pub enum ToShell {
     /// `ProcessInfo.enableSuddenTermination` / `disableSuddenTermination`: whether the shell may SIGKILL the app
     /// at once on quit, logout or shutdown, with no Quit round trip. Sent only when the state flips. 0x160.
     SuddenTermination { enabled: bool },
+    /// The app wants `ToApp::CloseRequest` when the main window's close control is used, instead of the shell closing the
+    /// window (and quitting a direct app) at once: a document app with unsaved changes asks "Save changes?" first. Sent
+    /// once, at start, by an app that overrides `App::handles_close_request`. Tag 0x256.
+    CloseRequests { on: bool },
     /// `ProcessInfo.beginActivity` / `endActivity`: the union of the `ActivityOptions` bits of the app's live
     /// activities (0 = none). While `USER_INITIATED` or `LATENCY_CRITICAL` is set the shell does not suspend the app
     /// when it leaves the foreground. Sent only when the union changes. 0x161.
@@ -1380,6 +1390,10 @@ mod tag {
     pub const WINDOW_INPUT: u32 = 0x250;
     /// Shell -> app: the app was activated with its main window closed (`ToApp::Reopen`).
     pub const REOPEN: u32 = 0x254;
+    /// Shell -> app: the main window's close control was used (`ToApp::CloseRequest`).
+    pub const CLOSE_REQUEST: u32 = 0x255;
+    /// App -> shell: the app answers the main window's close control itself (`ToShell::CloseRequests`).
+    pub const CLOSE_REQUESTS: u32 = 0x256;
 
     pub const HELLO: u32 = 0x101;
     pub const BUFFERS: u32 = 0x102;
@@ -1878,6 +1892,7 @@ impl ToApp {
                 window_input_encode(&mut b, input);
             }
             ToApp::Reopen => u32_(&mut b, tag::REOPEN),
+            ToApp::CloseRequest => u32_(&mut b, tag::CLOSE_REQUEST),
             ToApp::Resume => u32_(&mut b, tag::RESUME),
             ToApp::Suspend => u32_(&mut b, tag::SUSPEND),
             ToApp::AxSet { id, action } => {
@@ -2070,6 +2085,7 @@ impl ToApp {
                 ToApp::WindowInput { window, input: window_input_decode(&mut r)? }
             }
             tag::REOPEN => ToApp::Reopen,
+            tag::CLOSE_REQUEST => ToApp::CloseRequest,
             tag::RESUME => ToApp::Resume,
             tag::SUSPEND => ToApp::Suspend,
             tag::CONTEXT=>{let x=r.f32()?;let y=r.f32()?;if !x.is_finite()||!y.is_finite(){return Err(DecodeError::BadValue);}ToApp::Context{x,y}},
@@ -2370,6 +2386,10 @@ impl ToShell {
             ToShell::SuddenTermination { enabled } => {
                 u32_(&mut b, tag::SUDDEN_TERMINATION);
                 b.push(*enabled as u8);
+            }
+            ToShell::CloseRequests { on } => {
+                u32_(&mut b, tag::CLOSE_REQUESTS);
+                b.push(*on as u8);
             }
             ToShell::Activity { options } => {
                 u32_(&mut b, tag::ACTIVITY);
@@ -2799,6 +2819,7 @@ impl ToShell {
                 flags: r.u32()?,
             }),
             tag::SUDDEN_TERMINATION => ToShell::SuddenTermination { enabled: r.u8()? != 0 },
+            tag::CLOSE_REQUESTS => ToShell::CloseRequests { on: r.u8()? != 0 },
             tag::ACTIVITY => ToShell::Activity { options: r.u32()? },
             tag::WINDOW_LEVEL => ToShell::WindowLevel(WindowLevel::from_wire(r.u8()?).ok_or(DecodeError::BadValue)?),
             tag::WINDOW_LEVEL_OF => {
@@ -3096,6 +3117,18 @@ mod tests {
         assert_eq!(ToShell::decode(&close.encode()), Ok(close));
     }
 
+    /// An app that handles the close control itself announces it (tag 0x256) and then hears `CloseRequest` (tag 0x255).
+    #[test]
+    fn close_requests_have_their_tags() {
+        let bytes = ToApp::CloseRequest.encode();
+        assert_eq!(&bytes[..4], &0x255u32.to_le_bytes());
+        assert_eq!(ToApp::decode(&bytes), Ok(ToApp::CloseRequest));
+        let opt_in = ToShell::CloseRequests { on: true }.encode();
+        assert_eq!(&opt_in[..4], &0x256u32.to_le_bytes());
+        assert_eq!(ToShell::decode(&opt_in), Ok(ToShell::CloseRequests { on: true }));
+        assert_eq!(ToShell::decode(&ToShell::CloseRequests { on: false }.encode()), Ok(ToShell::CloseRequests { on: false }));
+    }
+
     #[test]
     fn to_app_round_trips() {
         let cfg = Configure { w: 1200, h: 1920, scale: 1.5625, safe_top: 24.0, safe_bottom: 20.0, dark: true, text_scale: 1.1, reduce_motion: false };
@@ -3112,6 +3145,7 @@ mod tests {
             ToApp::KeyboardConfig(KeyboardConfig { layout: KeyboardLayout::Floating, return_key: ReturnKey::Send, flags: kbflags::PREDICTIVE | kbflags::SHOWN, languages: 3, language: 1 }),
             ToApp::Activate(u64::MAX),
             ToApp::Reopen,
+            ToApp::CloseRequest,
             ToApp::Resume,
             ToApp::Suspend,
             ToApp::Quit,
@@ -3397,6 +3431,8 @@ mod ax_tree_tests {
             ToShell::InputAccessory(vec![]),
             ToShell::SuddenTermination { enabled: true },
             ToShell::SuddenTermination { enabled: false },
+            ToShell::CloseRequests { on: true },
+            ToShell::CloseRequests { on: false },
             ToShell::Activity { options: 0x3 },
             ToShell::Activity { options: 0 },
             ToShell::WindowLevel(WindowLevel::Floating),

@@ -933,6 +933,20 @@ mod tests {
         assert_eq!(deliver_window(&mut Fake::default(), &ctx, &ToApp::Reopen, 0.0), None, "the run loop handles Reopen");
     }
 
+    /// An app does not ask for the close control unless it says so, and one that does not override `close_requested` has
+    /// its main window ordered out by the default (the shell has not closed it itself).
+    #[test]
+    fn an_app_opts_in_to_close_requests_and_the_default_answer_orders_the_window_out() {
+        use crate::App;
+        let ctx = crate::runtime::test_ctx();
+        let mut app = WheelFake::default();
+        assert!(!app.handles_close_request(), "no opt-in by default: the close control acts as before");
+        assert!(app.close_requested(&ctx));
+        assert!(!ctx.windows().main_shown());
+        assert_eq!(ctx.take_sent(), vec![ToShell::WindowClose { id: 0 }]);
+        assert_eq!(deliver_window(&mut app, &ctx, &ToApp::CloseRequest, 0.0), None, "the run loop handles CloseRequest");
+    }
+
     #[test]
     fn messages_that_are_not_about_a_window_are_left_to_the_run_loop() {
         let ctx = crate::runtime::test_ctx();

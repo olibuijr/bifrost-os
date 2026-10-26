@@ -660,6 +660,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
     let mut open = true;
     let mut commands_seen = None;
     let mut pointer_interest_sent = 0u32;
+    let mut close_requests_sent = false;
     let mut undo_titles_seen: (String, String) = Default::default();
     let mut menus_seen: Vec<crate::proto::AppMenu> = Vec::new();
     let mut controls_seen = Vec::new();
@@ -906,6 +907,12 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                         need_frame |= app.reopen(c);
                     }
                 }
+                // the main window's close control, for an app that announced `CloseRequests`: it decides (a save sheet)
+                ToApp::CloseRequest => {
+                    if let Some(c) = &ctx {
+                        need_frame |= app.close_requested(c);
+                    }
+                }
                 ToApp::Resume => {
                     active = true;
                     if let Some(c) = &ctx {
@@ -1140,6 +1147,11 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
         if interest != pointer_interest_sent {
             pointer_interest_sent = interest;
             let _ = chan.send(&ToShell::PointerInterest { mask: interest }.encode(), &[]);
+        }
+        // an app that answers the main window's close control itself says so once; the shell asks it instead of quitting it
+        if !close_requests_sent && app.handles_close_request() {
+            close_requests_sent = true;
+            let _ = chan.send(&ToShell::CloseRequests { on: true }.encode(), &[]);
         }
         for activity in pending_activity.drain(..) {
             need_frame |= app.continue_activity(c, activity);

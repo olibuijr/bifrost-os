@@ -553,6 +553,43 @@ mod tests {
         assert!(ctx.windows().main_shown());
     }
 
+    /// The red button on the main window is a close request, not a quit: a clean Untitled closes and the window is ordered out
+    /// (the app keeps running); an edited document keeps its window and asks, Cancel keeps it, Don't Save closes it.
+    #[test]
+    fn the_close_request_on_the_main_window_asks_about_an_edited_document() {
+        use bifrost_app::document::alert;
+        let ctx = window(1200, 780);
+        let mut app = TextEditApp::new();
+        assert!(app.handles_close_request(), "the app opts in");
+        app.configure(&ctx);
+        let first = app.docs.active().unwrap();
+        app.type_into("unsaved");
+        assert!(app.docs.is_edited(first));
+        ctx.take_sent();
+        assert!(app.close_requested(&ctx));
+        assert_eq!(app.docs.alert_doc(), Some(first), "the confirmation waits for an answer");
+        assert_eq!(app.docs.len(), 1, "the edited document is still open");
+        assert!(ctx.windows().main_shown());
+        assert!(!ctx.take_sent().iter().any(|m| matches!(m, ToShell::WindowClose { .. })), "the window stays up");
+        // Cancel keeps the document and the window
+        app.menu_action(&ctx, Action::CloseAnswer(alert::CANCEL as u8).id().unwrap());
+        assert!(app.docs.alert_doc().is_none());
+        assert_eq!(app.docs.len(), 1);
+        assert!(ctx.windows().main_shown());
+        // asked again, Don't Save closes the document and the window goes; the app keeps running
+        app.close_requested(&ctx);
+        ctx.take_sent();
+        app.menu_action(&ctx, Action::CloseAnswer(alert::DONT_SAVE as u8).id().unwrap());
+        assert!(app.docs.is_empty());
+        assert!(!ctx.windows().main_shown(), "the main window is ordered out");
+        // a clean Untitled needs no answer
+        assert!(app.reopen(&ctx));
+        ctx.take_sent();
+        app.close_requested(&ctx);
+        assert!(app.docs.is_empty() && app.docs.alert_doc().is_none());
+        assert!(ctx.take_sent().iter().any(|m| matches!(m, ToShell::WindowClose { id: 0 })), "the main window is ordered out");
+    }
+
     /// The shell closing a clean document window closes its document.
     #[test]
     fn the_red_button_on_a_document_window_closes_its_document() {
