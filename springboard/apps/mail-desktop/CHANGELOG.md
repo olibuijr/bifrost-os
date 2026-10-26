@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.15
+
+- The Save This Message question takes Cmd+D for Don't Save, and Tab and Space reach every button.
+
 ## 0.17.14
 
 - Saving a draft with a half-typed recipient no longer puts an address error in the message list.

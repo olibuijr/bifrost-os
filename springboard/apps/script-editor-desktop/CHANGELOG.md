@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.11
+
+- The save sheet takes Cmd+D for Don't Save, and Tab shows a focus ring that Space presses.
+
 ## 0.1.10
 
 - The red close button closes the active script and asks before closing an edited one.

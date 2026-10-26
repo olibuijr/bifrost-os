@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.19.9
+
+- Cmd+Z restores a deleted event for five minutes after the Undo bar fades.
+
 ## 1.19.8
 
 - After picking a day of a neighbouring month, a click selects the day drawn in its cell, and Cmd+Z restores a deleted event.

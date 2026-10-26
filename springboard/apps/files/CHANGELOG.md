@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.34.9
+
+- Arrow keys move the selection in icon, list and column views, and Cmd+Up from Applications goes to the computer.
+
 ## 1.34.8
 
 - The Get Info window draws its contents instead of staying transparent.

@@ -547,7 +547,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-calendar"
-version = "1.19.8"
+version = "1.19.9"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -674,7 +674,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-files"
-version = "1.34.8"
+version = "1.34.9"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -799,7 +799,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-mail"
-version = "0.17.14"
+version = "0.17.15"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -983,7 +983,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-script-editor"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "bifrost-app",
  "springboard",
@@ -1037,7 +1037,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-textedit"
-version = "1.13.11"
+version = "1.13.12"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
