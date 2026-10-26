@@ -6,12 +6,17 @@
 pub const SIDEBAR_PT: f32 = 260.0;
 pub const PAD_PT: f32 = 12.0;
 pub const SEARCH_H_PT: f32 = 28.0;
-pub const FILTER_TOP_PT: f32 = 46.0;
+/// The unified title and toolbar band of this full-size window: the shell draws the traffic lights over it and a press
+/// in it moves the window unless it lands on a control the app publishes (`App::controls`).
+pub const BAND_PT: f32 = bifrost_app::layout::UNIFIED_BAR_PT;
+/// The sidebar content starts below the band, clear of the traffic lights.
+pub const SEARCH_TOP_PT: f32 = BAND_PT + 4.0;
+pub const FILTER_TOP_PT: f32 = SEARCH_TOP_PT + SEARCH_H_PT + 6.0;
 pub const FILTER_H_PT: f32 = 26.0;
 /// The first row of the timeline.
-pub const LIST_TOP_PT: f32 = 82.0;
+pub const LIST_TOP_PT: f32 = FILTER_TOP_PT + FILTER_H_PT + 8.0;
 pub const ROW_H_PT: f32 = 58.0;
-pub const HEADER_H_PT: f32 = 52.0;
+pub const HEADER_H_PT: f32 = BAND_PT;
 pub const BUTTON_H_PT: f32 = 26.0;
 pub const BUTTON_W_PT: f32 = 96.0;
 pub const BUTTON_GAP_PT: f32 = 8.0;
@@ -65,7 +70,7 @@ impl Layout {
     }
 
     pub fn search(&self) -> Rect {
-        Rect { x: PAD_PT, y: PAD_PT, w: SIDEBAR_PT - 2.0 * PAD_PT, h: SEARCH_H_PT }
+        Rect { x: PAD_PT, y: SEARCH_TOP_PT, w: SIDEBAR_PT - 2.0 * PAD_PT, h: SEARCH_H_PT }
     }
 
     pub fn filter(&self) -> Rect {
@@ -176,14 +181,14 @@ mod tests {
         assert_eq!(l.hit(10.0, LIST_TOP_PT + ROW_H_PT + 1.0, 0, 3), Hit::Row(1));
         assert_eq!(l.hit(10.0, LIST_TOP_PT + ROW_H_PT + 1.0, 5, 8), Hit::Row(6), "scrolled list");
         assert_eq!(l.hit(10.0, LIST_TOP_PT + 2.0 * ROW_H_PT + 1.0, 0, 2), Hit::None, "past the last entry");
-        assert_eq!(l.hit(20.0, 20.0, 0, 3), Hit::Search);
+        assert_eq!(l.hit(20.0, SEARCH_TOP_PT + 2.0, 0, 3), Hit::Search);
     }
 
     #[test]
     fn filter_and_search_are_in_the_sidebar_header() {
         let l = Layout::new(900.0, 600.0);
         assert_eq!(l.hit(20.0, FILTER_TOP_PT + 2.0, 0, 0), Hit::Filter);
-        assert_eq!(l.hit(20.0, PAD_PT + 2.0, 0, 0), Hit::Search);
+        assert_eq!(l.hit(20.0, SEARCH_TOP_PT + 2.0, 0, 0), Hit::Search);
     }
 
     #[test]
@@ -196,6 +201,34 @@ mod tests {
         assert_eq!(l.hit(new.x + 1.0, new.y + 1.0, 0, 0), Hit::New);
         assert_eq!(l.hit(bookmark.x + 1.0, bookmark.y + 1.0, 0, 0), Hit::Bookmark);
         assert_eq!(l.hit(delete.x + 1.0, delete.y + 1.0, 0, 0), Hit::Delete);
+    }
+
+    #[test]
+    fn new_entry_button_is_hit_where_it_is_drawn() {
+        // the drawn button rectangle (`Layout::buttons`) at several window sizes, at its corners and its centre
+        for (w, h) in [(900.0, 600.0), (640.0, 400.0), (1280.0, 720.0)] {
+            let l = Layout::new(w, h);
+            let [new, ..] = l.buttons();
+            assert!(new.x > SIDEBAR_PT, "the button sits in the editor pane at {w}x{h}");
+            for (x, y) in [(new.x + 0.5, new.y + 0.5), (new.x + new.w / 2.0, new.y + new.h / 2.0), (new.x + new.w - 0.5, new.y + new.h - 0.5)] {
+                assert_eq!(l.hit(x, y, 0, 0), Hit::New, "({x}, {y}) at {w}x{h}");
+            }
+            // and not beside it
+            assert_ne!(l.hit(new.x - 1.0, new.y + 1.0, 0, 0), Hit::New);
+            assert_ne!(l.hit(new.x + 1.0, new.y + new.h + 1.0, 0, 0), Hit::New);
+        }
+    }
+
+    #[test]
+    fn sidebar_controls_sit_below_the_traffic_light_band() {
+        let l = Layout::new(900.0, 600.0);
+        assert!(l.search().y >= BAND_PT, "the search field must not sit under the traffic lights");
+        assert!(l.filter().y >= BAND_PT);
+        assert!(LIST_TOP_PT > l.filter().y + l.filter().h);
+        // the header buttons stay in the band, so the app has to publish them for the shell to deliver the press
+        for b in l.buttons() {
+            assert!(b.y + b.h <= BAND_PT);
+        }
     }
 
     #[test]

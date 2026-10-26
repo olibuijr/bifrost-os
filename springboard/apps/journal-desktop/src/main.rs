@@ -16,7 +16,8 @@ use bifrost_app::kit::ui::{
 };
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::widgets::{self, Material};
-use bifrost_app::{App, Ctx, Input, KeyInput, TouchKind};
+use bifrost_app::controls::{Node, Role};
+use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Input, KeyInput, TouchKind};
 use layout::{Hit, Layout, Rect};
 use model::{Day, Journal};
 use std::path::{Path, PathBuf};
@@ -28,6 +29,20 @@ const RADIUS_PT: f32 = m::ICON_RADIUS;
 const LINE_PT: f32 = 18.0;
 /// How far a touch must move before it scrolls the timeline instead of selecting a row (points).
 const DRAG_PT: f32 = 6.0;
+
+/// Ids of the published controls (`App::controls`).
+const CTL_SEARCH: u64 = 1;
+const CTL_FILTER: u64 = 2;
+const CTL_NEW: u64 = 3;
+const CTL_BOOKMARK: u64 = 4;
+const CTL_DELETE: u64 = 5;
+const CTL_PHOTO_FIELD: u64 = 6;
+const CTL_ATTACH: u64 = 7;
+
+/// `AppMenuItem` ids for `menu_action` (0 is reserved for separators).
+const MENU_NEW: u32 = 1;
+const MENU_BOOKMARK: u32 = 2;
+const MENU_DELETE: u32 = 3;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Focus {
@@ -216,6 +231,65 @@ impl JournalApp {
         self.focus = Focus::Editor;
         self.status = "New entry for today.".into();
         self.save();
+    }
+
+    /// The header buttons, the search and filter fields and the photo bar as controls, in points. The header buttons
+    /// sit in the top band of the full-size window, where the shell moves the window on a press unless the press lands
+    /// on a published control: without these nodes New Entry never received its click.
+    fn control_nodes(&self, layout: &Layout) -> Vec<Node> {
+        let has = self.journal.selected.is_some();
+        let bookmarked = self.selected_entry().is_some_and(|e| e.bookmarked);
+        let [new, bookmark, delete] = layout.buttons();
+        let node = |id: u64, role: Role, label: &str, value: String, r: Rect, enabled: bool| Node {
+            id,
+            role,
+            label: label.into(),
+            value,
+            bounds: controls_rect(r),
+            enabled,
+        };
+        vec![
+            node(CTL_SEARCH, Role::TextField, "Search", self.search.text().to_string(), layout.search(), true),
+            node(CTL_FILTER, Role::Button, if self.journal.bookmarks_only { "Showing Bookmarks" } else { "All Entries" }, String::new(), layout.filter(), true),
+            node(CTL_NEW, Role::Button, "New Entry", String::new(), new, true),
+            node(CTL_BOOKMARK, Role::Button, if bookmarked { "Bookmarked" } else { "Bookmark" }, String::new(), bookmark, has),
+            node(CTL_DELETE, Role::Button, "Delete", String::new(), delete, has),
+            node(CTL_PHOTO_FIELD, Role::TextField, "Photo path", self.photo_path.text().to_string(), layout.photo_field(), true),
+            node(CTL_ATTACH, Role::Button, "Attach Photo", String::new(), layout.attach(), has),
+        ]
+    }
+
+    /// A published control was pressed (accessibility, `bifrost pc midget tap-window`).
+    fn activate(&mut self, id: u64) -> bool {
+        match id {
+            CTL_SEARCH => self.focus = Focus::Search,
+            CTL_FILTER => {
+                self.journal.bookmarks_only = !self.journal.bookmarks_only;
+                self.refilter();
+            }
+            CTL_NEW => self.new_entry(),
+            CTL_BOOKMARK => self.toggle_bookmark(),
+            CTL_DELETE => self.delete_selected(),
+            CTL_PHOTO_FIELD => self.focus = Focus::PhotoField,
+            CTL_ATTACH => self.attach_photo(),
+            _ => return false,
+        }
+        true
+    }
+
+    /// The File menu; it merges into the shell's File menu. Cmd+N reaches the app only through an item with that key.
+    fn file_menu(&self) -> AppMenu {
+        let has = self.journal.selected.is_some();
+        let bookmarked = self.selected_entry().is_some_and(|e| e.bookmarked);
+        AppMenu {
+            title: "File".into(),
+            items: vec![
+                AppMenuItem::new(MENU_NEW, "New Entry").key("cmd+n"),
+                AppMenuItem::new(MENU_BOOKMARK, if bookmarked { "Remove Bookmark" } else { "Bookmark Entry" }).key("cmd+d").enabled(has),
+                AppMenuItem::separator(),
+                AppMenuItem::new(MENU_DELETE, "Delete Entry").key("cmd+backspace").enabled(has),
+            ],
+        }
     }
 
     fn toggle_bookmark(&mut self) {
@@ -587,8 +661,27 @@ impl App for JournalApp {
         self.clamp_top(visible);
     }
 
+    fn controls(&self, ctx: &Ctx) -> Vec<Node> {
+        self.control_nodes(&layout_of(ctx))
+    }
+
+    fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
+        vec![self.file_menu()]
+    }
+
+    fn menu_action(&mut self, _ctx: &Ctx, id: u32) -> bool {
+        match id {
+            MENU_NEW => self.new_entry(),
+            MENU_BOOKMARK => self.toggle_bookmark(),
+            MENU_DELETE => self.delete_selected(),
+            _ => return false,
+        }
+        true
+    }
+
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
         match ev {
+            Input::Activate(id) => self.activate(id),
             Input::Touch { kind, x, y, .. } => self.touch(ctx, kind, x, y),
             Input::Key(key) => self.key(&key),
             _ => false,
@@ -625,4 +718,83 @@ impl App for JournalApp {
 
 fn main() {
     bifrost_app::run(JournalApp::new());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn app_in(name: &str) -> JournalApp {
+        let dir = std::env::temp_dir().join(format!("bifrost-journal-test-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut app = JournalApp::new();
+        app.data_dir = dir;
+        app.loaded = true;
+        app
+    }
+
+    #[test]
+    fn new_entry_shows_in_the_timeline_and_is_selected() {
+        let mut app = app_in("new");
+        assert!(app.timeline().is_empty());
+        app.new_entry();
+        let timeline = app.timeline();
+        assert_eq!(timeline.len(), 1);
+        assert_eq!(app.journal.selected, Some(timeline[0]));
+        assert!(app.selected_entry().is_some_and(|e| e.text.is_empty()));
+        // a second entry is added, not merged, and becomes the selection
+        app.new_entry();
+        assert_eq!(app.timeline().len(), 2);
+        let _ = std::fs::remove_dir_all(&app.data_dir);
+    }
+
+    #[test]
+    fn new_entry_clears_a_search_and_the_bookmarks_filter_that_would_hide_it() {
+        let mut app = app_in("filter");
+        app.search.set_text("harbour");
+        app.journal.query = "harbour".into();
+        app.journal.bookmarks_only = true;
+        app.new_entry();
+        assert_eq!(app.timeline().len(), 1);
+        assert!(app.search.text().is_empty());
+        assert!(!app.journal.bookmarks_only);
+        let _ = std::fs::remove_dir_all(&app.data_dir);
+    }
+
+    #[test]
+    fn new_entry_is_reachable_by_click_control_and_cmd_n() {
+        let layout = Layout::new(1280.0, 720.0);
+        let mut app = app_in("paths");
+        // the click: the published control covers the drawn button, and that point hit-tests as New
+        let nodes = app.control_nodes(&layout);
+        let node = nodes.iter().find(|n| n.id == CTL_NEW).expect("a New Entry control");
+        let b = node.bounds;
+        assert_eq!(layout.hit(b.x + b.w / 2.0, b.y + b.h / 2.0, 0, 0), Hit::New);
+        assert!(node.enabled);
+        assert!(b.y + b.h <= layout::BAND_PT, "in the band the shell moves the window unless the control is published");
+        assert!(app.activate(CTL_NEW));
+        assert_eq!(app.timeline().len(), 1);
+        // Cmd+N: File > New Entry carries the key
+        let file = app.file_menu();
+        assert_eq!(file.title, "File");
+        let item = file.items.iter().find(|i| i.id == MENU_NEW).expect("File > New Entry");
+        assert_eq!(item.title, "New Entry");
+        assert_eq!(item.key, "cmd+n");
+        let _ = std::fs::remove_dir_all(&app.data_dir);
+    }
+
+    #[test]
+    fn every_header_button_is_published() {
+        let layout = Layout::new(1280.0, 720.0);
+        let app = app_in("published");
+        let nodes = app.control_nodes(&layout);
+        let [new, bookmark, delete] = layout.buttons();
+        for (id, rect) in [(CTL_NEW, new), (CTL_BOOKMARK, bookmark), (CTL_DELETE, delete), (CTL_SEARCH, layout.search())] {
+            let node = nodes.iter().find(|n| n.id == id).expect("published");
+            assert_eq!((node.bounds.x, node.bounds.y, node.bounds.w, node.bounds.h), (rect.x, rect.y, rect.w, rect.h));
+        }
+        // with no entry, Bookmark and Delete are disabled but New Entry is not
+        assert!(nodes.iter().find(|n| n.id == CTL_NEW).unwrap().enabled);
+        assert!(!nodes.iter().find(|n| n.id == CTL_DELETE).unwrap().enabled);
+    }
 }
