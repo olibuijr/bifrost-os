@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.5
+
+- Unmount is disabled for the running system volume, in the toolbar and the menu.
+
 ## 0.8.4
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.

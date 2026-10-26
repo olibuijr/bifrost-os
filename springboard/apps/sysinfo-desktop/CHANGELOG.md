@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.8
+
+- Graphics, Storage and the Overview read the hardware facts (new hardware-info entitlement); uniform sidebar; a minimum window size.
+
 ## 0.9.7
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.
