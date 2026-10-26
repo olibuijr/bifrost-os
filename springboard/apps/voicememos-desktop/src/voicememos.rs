@@ -11,7 +11,7 @@ use bifrost_app::kit::ui::{home_zone, CARD_BG, CONTROL_PRESSED, CONTENT_BG, FIEL
 use bifrost_app::controls::values::Slider;
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::layout::{Layout, SIDEBAR_FRACTION, SIDEBAR_MAX_PT, SIDEBAR_MIN_PT};
-use bifrost_app::kit::ui::{DISPLAY_SMALL_PT, MAC_CALLOUT_PT, MAC_LARGE_TITLE_PT, MAC_TITLE3_PT};
+use bifrost_app::kit::ui::{DISPLAY_SMALL_PT, MAC_CALLOUT_PT, MAC_LARGE_TITLE_PT, MAC_TITLE2_PT, MAC_TITLE3_PT};
 use bifrost_app::controls::search;
 use bifrost_app::controls::TextField as QueryField;
 use bifrost_app::kit::{Event, Surface, TextCache, Ui, Weight};
@@ -664,6 +664,23 @@ impl VoiceMemos {
         places.extend(self.folders.iter().cloned().map(Scope::Folder));
         places.push(Scope::Deleted);
         places
+    }
+
+    /// The sidebar's large title for `name` in a column `max_px` wide: the largest title style at which the whole
+    /// name fits, or the smallest style with the name truncated when none does. Returns the text and its size in points.
+    fn sidebar_title(ui: &Ui, name: &str, max_px: f32) -> (String, f32) {
+        const STEPS: [f32; 4] = [MAC_LARGE_TITLE_PT, MAC_TITLE1_PT, MAC_TITLE2_PT, MAC_TITLE3_PT];
+        if let Some(&pt) = STEPS.iter().find(|&&pt| ui.measure(name, pt, Weight::Bold) <= max_px) {
+            return (name.to_string(), pt);
+        }
+        let pt = STEPS[STEPS.len() - 1];
+        let mut text = ui.fit(name, pt, max_px);
+        while text.chars().count() > 1 && ui.measure(&text, pt, Weight::Bold) > max_px {
+            text.pop();
+            text.pop();
+            text.push('…');
+        }
+        (text, pt)
     }
 
     /// The name of a place, as the sidebar and the large title show it.
@@ -2380,8 +2397,11 @@ impl VoiceMemos {
         let list_top = ui.pt(LIST_ROWS_TOP);
         s.fill_rect(0, 0, side as usize, list_top as usize - 1, SIDEBAR_BG.now());
         s.fill_rect(0, bottom as usize, side as usize, (self.h as f32 - bottom) as usize, SIDEBAR_BG.now());
-        let title = ui.fit(&Self::place_title(&self.scope), MAC_LARGE_TITLE_PT, side - ui.pt(3.0 * SPACE_XL));
-        widgets::large_title(s, ui, &self.sidebar_layout(ui), &title, UNIFIED_BAR_PT);
+        // the large title steps down the type scale until the whole name fits the column (a long place name such as
+        // Recently Deleted must not end in an ellipsis in a narrow sidebar), and truncates only below the smallest step
+        let (title_x, title_w) = self.sidebar_layout(ui).readable();
+        let (title, title_pt) = Self::sidebar_title(ui, &Self::place_title(&self.scope), ui.pt(title_w));
+        self.text(s, ui, &title, title_pt, Weight::Bold, LABEL.now(), ui.pt(title_x), ui.pt(UNIFIED_BAR_PT));
         widgets::search_field(s, ui, &self.query, self.search_rect(ui), "Search", self.search_focused);
         if self.visible.is_empty() {
             // under the places and the "Recordings" header
@@ -2539,6 +2559,24 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("voicememos-ui-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         (VoiceMemos::new(&ui, 1200, 1920, dir.clone(), Wall::default(), &dir), ui)
+    }
+
+    #[test]
+    fn the_sidebar_title_shrinks_before_it_truncates() {
+        let (_, ui) = app("title");
+        let name = VoiceMemos::place_title(&Scope::Deleted);
+        // a column the full-size title overflows but a smaller style fits: the whole name, at a smaller size
+        let narrow = ui.measure(&name, MAC_LARGE_TITLE_PT, Weight::Bold) - ui.pt(1.0);
+        let (text, pt) = VoiceMemos::sidebar_title(&ui, &name, narrow);
+        assert_eq!(text, name);
+        assert!(pt < MAC_LARGE_TITLE_PT);
+        // wide enough: the large title
+        let (text, pt) = VoiceMemos::sidebar_title(&ui, &name, ui.pt(1000.0));
+        assert_eq!((text.as_str(), pt), (name.as_str(), MAC_LARGE_TITLE_PT));
+        // too narrow for any style: truncated at the smallest, and never wider than the column
+        let tiny = ui.measure(&name, MAC_TITLE3_PT, Weight::Bold) / 2.0;
+        let (text, pt) = VoiceMemos::sidebar_title(&ui, &name, tiny);
+        assert!(text.ends_with('…') && ui.measure(&text, pt, Weight::Bold) <= tiny);
     }
 
     #[test]
