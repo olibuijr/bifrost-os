@@ -21,14 +21,60 @@ pub(crate) fn is_store_dir(path: &Path) -> bool {
 /// folder (`<dir>/<id>`). System packages and broken installs are left out, as the Dock leaves them out.
 pub(crate) fn installed_rows(dir: &Path) -> Vec<Entry> {
     let Some(root) = dir.parent() else { return vec![] };
+    let mut icons = ICON_FILES.lock().unwrap_or_else(|p| p.into_inner());
     springboard::shell::apphost::scan(root)
         .into_iter()
         .map(|app| {
             let mtime = std::fs::metadata(&app.dir).and_then(|m| m.modified()).ok().and_then(|m| m.duration_since(UNIX_EPOCH).ok()).map_or(0, |d| d.as_secs() as i64);
             let name = app.manifest.name.clone();
-            Entry { kind: fs::kind_of(&name, false), path: dir.join(&app.manifest.id), name, is_dir: false, size: 0, mtime, items: None }
+            icons.insert(app.manifest.id.clone(), app.icon_path());
+            // an app is an Application of the size of its package, not a "Document" of 0 bytes
+            Entry { kind: fs::Kind::Application, path: dir.join(&app.manifest.id), name, is_dir: false, size: package_size(&app.dir, 4), mtime, items: None }
         })
         .collect()
+}
+
+/// The icon file of each app the Applications place listed (`installed_rows`), by app id: this process has no registry
+/// of installed apps to ask, so the rows remember where each package keeps its icon.
+static ICON_FILES: std::sync::Mutex<std::collections::BTreeMap<String, PathBuf>> = std::sync::Mutex::new(std::collections::BTreeMap::new());
+
+/// The bytes under a package folder, `depth` levels deep (a package is a binary, an icon and a few assets).
+fn package_size(dir: &Path, depth: u8) -> u64 {
+    let Ok(rd) = std::fs::read_dir(dir) else { return 0 };
+    rd.flatten()
+        .map(|e| match e.metadata() {
+            Ok(m) if m.is_dir() && depth > 0 => package_size(&e.path(), depth - 1),
+            Ok(m) if m.is_file() => m.len(),
+            _ => 0,
+        })
+        .sum()
+}
+
+/// The icon of a listing entry: an app of the Applications place draws its own icon, anything else (and an app whose
+/// icon cannot be read) the icon of its kind.
+pub(crate) fn entry_icon(s: &mut Surface, rect: (f32, f32, f32, f32), e: &Entry) {
+    if e.kind == fs::Kind::Application {
+        let (x, y, w, h) = rect;
+        let side = w.min(h).round();
+        let icon = app_id_of(e).and_then(|id| {
+            let file = ICON_FILES.lock().unwrap_or_else(|p| p.into_inner()).get(&id).cloned()?;
+            springboard::shell::apphost::icon_image_at(&id, &file, side as usize)
+        });
+        if let Some(img) = icon {
+            s.blit(&img, (x + (w - img.w as f32) / 2.0).round() as i32, (y + (h - img.h as f32) / 2.0).round() as i32, 255, 255);
+            return;
+        }
+    }
+    icons::entry(s, rect, e.kind);
+}
+
+/// `entry_icon` on the accent selection plate (a folder turns white there; an app icon needs no change).
+pub(crate) fn entry_icon_on_accent(s: &mut Surface, rect: (f32, f32, f32, f32), e: &Entry) {
+    if e.kind == fs::Kind::Application {
+        entry_icon(s, rect, e);
+    } else {
+        icons::entry_on_accent(s, rect, e.kind);
+    }
 }
 
 /// The app id of an Applications row: its path is `<store>/<id>` (`installed_rows`).
@@ -62,6 +108,9 @@ mod tests {
         assert_eq!(names, ["Calculator", "Files"]);
         assert_eq!(rows[0].path, apps.join("is.olibuijr.calculator.desktop"));
         assert!(!rows[0].is_dir, "an app is one item, not a folder to browse into");
+        assert!(rows.iter().all(|e| e.kind == fs::Kind::Application), "an app is an Application, not a Document");
+        assert!(rows.iter().all(|e| e.size > 0), "an app has the size of its package");
+        assert_eq!(fs::kind_description(&rows[0].name, false, rows[0].kind), "Application");
         let _ = std::fs::remove_dir_all(&root);
     }
 

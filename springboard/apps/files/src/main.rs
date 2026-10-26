@@ -304,22 +304,49 @@ impl Files {
         f
     }
 }
-impl App for Files {
-    fn id(&self) -> &str {
-        "is.olibuijr.files.desktop"
-    }
-    fn main_menu(&self, _ctx: &Ctx) -> Vec<bifrost_app::AppMenu> {
+impl Files {
+    /// The items Files adds to the File menu (the shell merges them into its own).
+    pub(crate) fn file_menu_items(&self) -> Vec<bifrost_app::AppMenuItem> {
         // File > Quick Look (the same panel as the context menu's Preview): the shell merges an app menu titled File
         // into its own File menu, and the item needs a selection
         let quick_look = bifrost_app::AppMenuItem::new(MENU_QUICK_LOOK, "Quick Look").enabled(!self.selected_paths().is_empty());
         // File > New Folder (Shift+Cmd+N): the toolbar has no New Folder button; the folder menus have it too
         let new_folder = bifrost_app::AppMenuItem::new(MENU_NEW_FOLDER, "New Folder").key("cmd+shift+n").enabled(!self.in_recents() && !self.in_bin());
-        vec![bifrost_app::AppMenu { title: "File".into(), items: vec![new_folder, quick_look] }]
+        // the item actions of the context menu, with the same keys (Finder's File menu lists them too); not while a name
+        // is being typed, where the chords are the field's
+        let (has, single, typing) = (!self.selection.is_empty(), self.selection.len() == 1, self.naming.is_some());
+        let (in_bin, in_recents) = (self.in_bin(), self.in_recents());
+        let files_ok = has && !typing && !in_bin && !in_recents;
+        let trash = if in_bin {
+            bifrost_app::AppMenuItem::new(MENU_PUT_BACK, "Put Back").enabled(has && !typing)
+        } else {
+            bifrost_app::AppMenuItem::new(MENU_TRASH, "Move to Trash").key("cmd+backspace").enabled(has && !typing)
+        };
+        vec![
+            new_folder,
+            bifrost_app::AppMenuItem::separator(),
+            quick_look,
+            bifrost_app::AppMenuItem::new(MENU_INFO, "Get Info").key("cmd+i").enabled(single && !typing),
+            bifrost_app::AppMenuItem::new(MENU_RENAME, "Rename").enabled(single && !typing && !in_bin),
+            bifrost_app::AppMenuItem::new(MENU_DUPLICATE, "Duplicate").key("cmd+d").enabled(files_ok),
+            bifrost_app::AppMenuItem::new(MENU_ALIAS, "Make Alias").key("ctrl+cmd+a").enabled(files_ok),
+            bifrost_app::AppMenuItem::separator(),
+            trash,
+        ]
+    }
+}
+impl App for Files {
+    fn id(&self) -> &str {
+        "is.olibuijr.files.desktop"
+    }
+    fn main_menu(&self, _ctx: &Ctx) -> Vec<bifrost_app::AppMenu> {
+        vec![bifrost_app::AppMenu { title: "File".into(), items: self.file_menu_items() }]
     }
     fn menu_action(&mut self, _ctx: &Ctx, id: u32) -> bool {
         match id {
             MENU_QUICK_LOOK => self.quick_look(),
             MENU_NEW_FOLDER if !self.in_recents() && !self.in_bin() => self.new_folder(),
+            MENU_INFO | MENU_RENAME | MENU_DUPLICATE | MENU_ALIAS | MENU_TRASH | MENU_PUT_BACK => return self.context_action(id),
             _ => return false,
         }
         true
@@ -1021,6 +1048,22 @@ mod tests {
         files.query_changed();
         assert!(files.hits.is_none());
         assert_eq!(files.visible().len(), files.listing.len());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+    #[test]
+    fn the_file_menu_lists_the_item_actions_with_their_keys() {
+        let dir = temp("filemenu");
+        std::fs::write(dir.join("notes.txt"), "hello").unwrap();
+        let mut files = fixture(fs::list(&dir).unwrap());
+        files.select_only(0);
+        let row = |files: &Files, title: &str| files.file_menu_items().into_iter().find(|i| i.title == title).map(|i| (i.key, i.enabled));
+        assert_eq!(row(&files, "Move to Trash"), Some(("cmd+backspace".into(), true)));
+        assert_eq!(row(&files, "Get Info"), Some(("cmd+i".into(), true)));
+        assert_eq!(row(&files, "Duplicate"), Some(("cmd+d".into(), true)));
+        assert_eq!(row(&files, "Make Alias"), Some(("ctrl+cmd+a".into(), true)));
+        assert_eq!(row(&files, "Rename"), Some((String::new(), true)));
+        files.selection.clear();
+        assert_eq!(row(&files, "Move to Trash").map(|r| r.1), Some(false), "nothing selected, nothing to trash");
         let _ = std::fs::remove_dir_all(&dir);
     }
     #[test]

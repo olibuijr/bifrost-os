@@ -681,7 +681,7 @@ impl Files {
         let Some(field) = self.naming.as_ref().filter(|(p, _)| *p == e.path).map(|(_, f)| f) else {
             return false;
         };
-        icons::entry(s, (ui.pt(x0 + 8.), ui.pt(y + 5.), ui.pt(SPACE_XL), ui.pt(SPACE_XL)), e.kind);
+        applications::entry_icon(s, (ui.pt(x0 + 8.), ui.pt(y + 5.), ui.pt(SPACE_XL), ui.pt(SPACE_XL)), e);
         bifrost_app::widgets::text_field(s, ui, field, Rect { x: x0 + 32., y: y + 2., w: (self.vo.col_w - 40.).max(40.), h: 24. }, "", true);
         true
     }

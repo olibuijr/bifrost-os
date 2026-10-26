@@ -15,6 +15,8 @@ pub enum Kind {
     Video,
     Audio,
     Archive,
+    /// An installed app (the Applications place lists them; never chosen by an extension).
+    Application,
     Other,
 }
 
@@ -28,6 +30,7 @@ impl Kind {
             Kind::Video => "Video",
             Kind::Audio => "Audio",
             Kind::Archive => "Archive",
+            Kind::Application => "Application",
             Kind::Other => "Document",
         }
     }

@@ -2008,6 +2008,13 @@ impl Drop for AppHost {
 /// The built-in Calculator's package id (Search answers open it when installed).
 pub const CALCULATOR: &str = "is.olibuijr.calculator";
 
+/// An app's icon at `size` px from the package icon file at `icon_path` (`App::icon_path`), for a process that scanned the
+/// store itself (the Files app's Applications place) and so has no registry to look `id` up in. Cached like `icon_image`.
+pub fn icon_image_at(id: &str, icon_path: &Path, size: usize) -> Option<std::sync::Arc<crate::gfx::Image>> {
+    let (variant, _) = bifrost_render::icon_doc::current_style();
+    bifrost_render::icon_doc::app_icon(id, icon_path, size as f32, 1.0, variant)
+}
+
 /// An installed app's icon at `size` px, from its package (`None` for built-in ids).
 pub fn icon_image(id: &str, size: usize) -> Option<crate::gfx::Image> {
     let registered = installed();
