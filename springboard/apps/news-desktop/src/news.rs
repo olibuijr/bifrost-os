@@ -206,7 +206,7 @@ impl News {
             bar: None,
             reading,
             facts: String::new(),
-            online: true,
+            online: effective_online(true, bifrost_app::testing::pinned()),
             top_changed: true,
             notice: None,
             text_step: reader_size::DEFAULT_STEP,
@@ -234,6 +234,7 @@ impl News {
     /// Records the shell's network path. Going online refetches every feed at once; going offline stops fetches
     /// and picture loads, and the cached headlines and saved pages stay readable.
     pub fn set_online(&mut self, online: bool) {
+        let online = effective_online(online, bifrost_app::testing::pinned());
         if self.online == online {
             return;
         }
@@ -932,9 +933,23 @@ impl News {
     }
 }
 
+/// Whether feeds may be fetched: the shell's network path, except under the testing kit (`BIFROST_TEST_PIN=1`), where the
+/// app stays offline so a snapshot shows the "You are offline" state and never live headlines.
+fn effective_online(path_online: bool, pinned: bool) -> bool {
+    path_online && !pinned
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_testing_pin_keeps_the_app_offline() {
+        assert!(effective_online(true, false));
+        assert!(!effective_online(false, false));
+        assert!(!effective_online(true, true), "pinned: no feed is fetched");
+        assert!(!effective_online(false, true));
+    }
 
     #[test]
     fn default_feeds_are_icelandic() {
