@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.13.0
+
+- Upstream filmcraft v0.13.0.
+  ## What's Changed
+  * i18n test: leave installed right-to-left faces out of the Japanese check by @FredApps in https://github.com/storytold/filmcraft/pull/2576
+  * CI: run cargo xtask ci on pull requests and pushes to main by @FredApps in https://github.com/storytold/filmcraft/pull/2563
+  * M8: Fujifilm F-Log, F-Log2 and F-Log2 C colour spaces (F-Gamut / F-Gamut C) by @melchiaaronzedek in https://github.com/storytold/filmcraft/pull/2819
+  * Require session-token authentication for desktop control requests by @coderabbitai[bot] in https://github.com/storytold/filmcraft/pull/2764
+
 ## 0.12.0
 
 - Upstream filmcraft v0.12.0.
