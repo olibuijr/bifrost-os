@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.14.0
+
+- Upstream pdfcraft v0.14.0.
+  ## What's Changed
+  * fix(cos): one decode budget per page walk, so repeated stream references cannot multiply decoding by @aiongg in https://github.com/storytold/pdfcraft/pull/4114
+  * fix(cos, content, filters, crypt, model, render, print, a11y): bound the work that repeated keys, streams and page values multiply by @aiongg in https://github.com/storytold/pdfcraft/pull/4128
+  * fix(limits): bound the decoding and listing work that repeated references and small inputs multiply by @aiongg in https://github.com/storytold/pdfcraft/pull/4117
+  * fix(js, xfa): bound the text and work that form scripts and XFA data can multiply by @aiongg in https://github.com/storytold/pdfcraft/pull/4121
+
 ## 0.13.0
 
 - Upstream pdfcraft v0.13.0.
