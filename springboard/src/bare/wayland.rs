@@ -1635,11 +1635,11 @@ fn enter_hover(pressed:bool,xy:(f32,f32),offset:(f32,f32),t:f64)->Option<Event> 
 fn keep_refocus(refocus:Option<(u32,u32)>,pressed:u32)->Option<(u32,u32)> { refocus.filter(|(_,entered)|*entered!=pressed) }
 /// Whether chrome surface `id` takes the keyboard from the window in front while it is open: id 3 is Search, id 6 the
 /// assistant panel, id 8 the Apps grid, id 9 Overview and id 11 the screenshot session (Space and Escape are its keys),
-/// id 15 the system sheets and alerts, id 14 the Force Quit, About and Log Out card (Esc, Return and the arrows are its
+/// id 15 the system sheets and alerts, id 5 Notification Center (Esc closes it), id 14 the Force Quit, About and Log Out card (Esc, Return and the arrows are its
 /// keys; without this they would reach the app in front, which is the hung one); id 13, the Cmd+Tab strip, never does.
 fn takes_keyboard(id:u32)->bool {
     use crate::shell::chrome_ids as c;
-    matches!(id,c::SEARCH|c::ASSISTANT|c::APP_GRID|c::OVERVIEW|c::CAPTURE|c::UTILITY|c::MODAL)
+    matches!(id,c::SEARCH|c::ASSISTANT|c::APP_GRID|c::OVERVIEW|c::CAPTURE|c::UTILITY|c::MODAL|c::NOTIFICATION_CENTER)
 }
 /// How long after a keyboard-taking chrome layer closed a focus without a press counts as the window server's hand-back
 /// of the keyboard (ms): the hand-back arrives within a round trip of the layer's destruction; a later focus is the
@@ -1820,6 +1820,7 @@ mod tests {
     #[test]
     fn a_focus_without_a_press_just_after_a_keyboard_layer_closed_is_a_hand_back() {
         assert!(takes_keyboard(3) && takes_keyboard(8), "Search and the Apps grid take the keyboard");
+        assert!(takes_keyboard(5), "Notification Center takes the keyboard so Esc closes it");
         assert!(!takes_keyboard(13) && !takes_keyboard(0), "the Cmd+Tab strip and the menu bar do not");
         assert!(matches!(unpressed_focus(5, Some(1000.0), 1040.0), WindowEvent::HandBack(5)));
         assert!(matches!(unpressed_focus(5, Some(1000.0), 1000.0 + HAND_BACK_MS + 1.0), WindowEvent::ServerFocus(5)), "too late: the window server's own focus");

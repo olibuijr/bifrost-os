@@ -41,6 +41,31 @@ pub use super::list::{GROUP_GAP_PT, MARGIN_PT, RADIUS_PT, ROW_PT};
 pub use super::list::HIGHLIGHT;
 /// The rows Search offers as "Settings" results, by their names.
 pub const PAGES: [&str; 10] = ["Wi-Fi", "Display & Brightness", "Wallpaper", "About", "Battery", "Focus", "Do Not Disturb", "Notifications", "Accessibility", "AssistiveTouch"];
+/// The pane a Settings row name stands for (`PAGES` and the sidebar rows Search and the agent socket name directly).
+pub(crate) fn named_page(name: &str) -> Option<PageId> {
+    Some(match name {
+        "Network" => PageId::Network,
+        "Assistant" => PageId::Assistant,
+        "Ethernet" => PageId::Ethernet,
+        "Wi-Fi" => PageId::Wifi,
+        "Bluetooth" => PageId::Bluetooth,
+        "Location Services" => PageId::LocationServices,
+        "Display & Brightness" => PageId::Display,
+        "Night Shift" => PageId::NightShift,
+        "Wallpaper" => PageId::Wallpaper,
+        "Screen Saver" => PageId::ScreenSaver,
+        "About" => PageId::About,
+        "Battery" => PageId::Battery,
+        "Focus" | "Do Not Disturb" => PageId::Focus,
+        "Notifications" => PageId::Notifications,
+        "Software Update" => PageId::SoftwareUpdate,
+        "Fonts" => PageId::Fonts,
+        "Appearance" => PageId::Appearance,
+        "Keyboard" => PageId::Keyboard,
+        "Accessibility" | "AssistiveTouch" => PageId::Accessibility,
+        _ => return None,
+    })
+}
 /// The push/pop slide, as NativeNavigationController times it.
 pub const PUSH_MS: f64 = 350.0;
 /// How far the page underneath slides left while one is pushed over it.
@@ -1614,27 +1639,9 @@ impl Settings {
     /// Jumps to the page a row name stands for (rows without a page of
     /// their own show the root), dropping any sheet; Wi-Fi starts a scan.
     pub fn open_page(&mut self, ui: &Ui, name: &str, t: f64) -> Vec<Effect> {
-        let id = match name {
-            "Network" => PageId::Network,
-            "Assistant" => PageId::Assistant,
-            "Ethernet" => PageId::Ethernet,
-            "Wi-Fi" => PageId::Wifi,
-            "Bluetooth" => PageId::Bluetooth,
-            "Location Services" => PageId::LocationServices,
-            "Display & Brightness" => PageId::Display,
-            "Night Shift" => PageId::NightShift,
-            "Wallpaper" => PageId::Wallpaper,
-            "Screen Saver" => PageId::ScreenSaver,
-            "About" => PageId::About,
-            "Battery" => PageId::Battery,
-            "Focus" | "Do Not Disturb" => PageId::Focus,
-            "Notifications" => PageId::Notifications,
-            "Software Update" => PageId::SoftwareUpdate,
-            "Fonts" => PageId::Fonts,
-            "Appearance" => PageId::Appearance,
-            "Keyboard" => PageId::Keyboard,
-            "Accessibility" | "AssistiveTouch" => PageId::Accessibility,
-            _ => match settings_search::alias(name).or_else(|| settings_search::find_page(&self.build_index(), name)) {
+        let id = match named_page(name) {
+            Some(id) => id,
+            None => match settings_search::alias(name).or_else(|| settings_search::find_page(&self.build_index(), name)) {
                 Some(id) => id,
                 None => {
                     self.reset_overlays();
