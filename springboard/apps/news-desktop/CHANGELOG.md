@@ -2,6 +2,7 @@
 
 ## 1.6.12
 
+- Filed under the News category.
 - Stays offline under the testing pin, so its snapshot is stable.
 
 ## 1.6.11

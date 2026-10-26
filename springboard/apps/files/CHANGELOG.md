@@ -1,3 +1,9 @@
+# Changelog
+
+## 1.34.6
+
+- File menu has Move to Trash, Get Info, Rename and Duplicate; Applications shows app icons and Kind Application; Get Info permissions fit.
+
 ## 1.33.1 — 2026-10-19
 
 - While a search is active the four view buttons collapse into one view pop-up, so the whole "Searching ..." title fits.

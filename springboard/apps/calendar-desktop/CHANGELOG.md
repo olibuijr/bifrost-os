@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.19.6
+
+- Clicking a day from a neighbouring month in the month grid keeps the shown month.
+
 ## 1.19.5
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.
