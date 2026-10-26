@@ -6,17 +6,22 @@
 mod model;
 
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
-use bifrost_app::controls::Rect;
+use bifrost_app::controls::{Node, Rect, Role};
 use bifrost_app::kit::ui::{self, Weight};
 use bifrost_app::kit::{Damage, Surface, Ui};
 use bifrost_app::keychain_groups::{self, Row};
+use bifrost_app::layout::UNIFIED_BAR_PT;
+use bifrost_app::proto::AxAction;
 use bifrost_app::{widgets, App, Ctx, Input, TouchKind};
 use bifrost_core::json::Json;
 use std::collections::HashMap;
 
-/// Geometry in points. The sidebar is on the left; the header holds the group title and the Delete button.
+/// Geometry in points. The sidebar is on the left; the unified bar above the items holds the group title and the
+/// Delete button. The sidebar rows and the items start below that bar (the traffic lights sit in its left end).
 const SIDE_PT: f32 = 220.0;
-const HEADER_PT: f32 = 56.0;
+const HEADER_PT: f32 = UNIFIED_BAR_PT;
+/// The accessibility id of the Delete button, published through `App::controls` because the bar is a drag zone.
+const B_DELETE: u64 = 1;
 const ROW_PT: f32 = 44.0;
 const PAD_PT: f32 = 12.0;
 const DELETE_W_PT: f32 = 72.0;
@@ -24,7 +29,7 @@ const DELETE_H_PT: f32 = 26.0;
 
 /// The Delete button's top-left corner, relative to the content column of width `content_w`.
 fn delete_at(content_w: f32) -> (f32, f32) {
-    (content_w - PAD_PT - DELETE_W_PT, PAD_PT)
+    (content_w - PAD_PT - DELETE_W_PT, (HEADER_PT - DELETE_H_PT) / 2.0)
 }
 
 /// What a service request was for, so its reply can be handled.
@@ -77,6 +82,11 @@ impl KeychainAccessApp {
         self.ask_list(ctx);
     }
 
+    /// The sidebar column's bounds and the scroll that starts its rows below the unified bar, in points.
+    fn sidebar_geometry(height_pt: f32) -> (Rect, f32) {
+        (Rect { x: 0.0, y: 0.0, w: SIDE_PT, h: height_pt }, -HEADER_PT)
+    }
+
     fn sidebar(&self) -> SourceList {
         let rows = self
             .groups
@@ -121,11 +131,18 @@ impl App for KeychainAccessApp {
     }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
+        if let Input::Activate(id) = ev {
+            if id == B_DELETE && self.selected.is_some() {
+                self.delete_selected(ctx);
+                return true;
+            }
+            return false;
+        }
         let Input::Touch { kind: TouchKind::Down, x, y, .. } = ev else { return false };
         let (x, y) = (x / ctx.ui.s, y / ctx.ui.s);
         if x < SIDE_PT {
-            let bounds = Rect { x: 0.0, y: 0.0, w: SIDE_PT, h: ctx.cfg.h as f32 / ctx.ui.s };
-            return match self.sidebar().hit(bounds, 0.0, x, y) {
+            let (bounds, scroll) = Self::sidebar_geometry(ctx.cfg.h as f32 / ctx.ui.s);
+            return match self.sidebar().hit(bounds, scroll, x, y) {
                 Some(i) if (i as usize) < self.groups.len() => {
                     self.select_group(ctx, i as usize);
                     true
@@ -152,6 +169,21 @@ impl App for KeychainAccessApp {
             }
         }
         false
+    }
+
+    fn ax_set(&mut self, ctx: &Ctx, id: u64, action: AxAction) -> bool {
+        match action {
+            AxAction::Press => self.event(ctx, Input::Activate(id)),
+            _ => false,
+        }
+    }
+
+    /// Delete is in the unified bar, a window-drag zone, so it is published as a control to be clickable.
+    fn controls(&self, ctx: &Ctx) -> Vec<Node> {
+        let content_w = ctx.cfg.w as f32 / ctx.ui.s - SIDE_PT;
+        let (dx, dy) = delete_at(content_w);
+        let bounds = Rect { x: SIDE_PT + dx, y: dy, w: DELETE_W_PT, h: DELETE_H_PT };
+        vec![Node { id: B_DELETE, role: Role::Button, label: "Delete".into(), value: String::new(), bounds, enabled: self.selected.is_some() }]
     }
 
     fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
@@ -209,13 +241,14 @@ impl App for KeychainAccessApp {
         let (w, h) = (s.w, s.h);
         let height_pt = h as f32 / scale;
         let content_w = w as f32 / scale - SIDE_PT;
-        s.fill_rect(0, 0, w, h, ui::DETAIL_BG.now());
-        // sidebar of groups
-        s.fill_rect(0, 0, p(SIDE_PT), h, ui::SIDEBAR_BG.now());
-        let bounds = Rect { x: 0.0, y: 0.0, w: SIDE_PT, h: height_pt };
-        widgets::source_list(s, ui, bounds, &self.sidebar(), 0.0, None);
+        // the content colour, never pure black (`DETAIL_BG` is the pane behind cards)
+        s.fill_rect(0, 0, w, h, ui::CONTENT_BG.now());
+        // sidebar of groups: the column runs the full height, its rows start below the traffic lights' bar
+        let (bounds, scroll) = Self::sidebar_geometry(height_pt);
+        widgets::source_list(s, ui, bounds, &self.sidebar(), scroll, None);
         s.fill_rect(p(SIDE_PT - 1.0), 0, 1, h, ui::SEPARATOR_C.now());
-        // header: the group title and Delete
+        // the unified bar over the content column: the group title and Delete
+        widgets::toolbar_band(s, ui, Rect { x: SIDE_PT, y: 0.0, w: content_w, h: HEADER_PT });
         let title = self.current().map(model::title).unwrap_or_else(|| "Keychain Access".to_string());
         let heading = ui.text(
             &ui.fit(&title, ui::MAC_TITLE2_PT, ui.pt(content_w - 2.0 * PAD_PT - DELETE_W_PT)),
@@ -223,7 +256,7 @@ impl App for KeychainAccessApp {
             Weight::Regular,
             ui::LABEL.now(),
         );
-        s.blit_colored(&heading, pi(SIDE_PT + PAD_PT), pi(PAD_PT), ui::LABEL.now(), 255);
+        s.blit_colored(&heading, pi(SIDE_PT + PAD_PT), (p(HEADER_PT) as i32 - heading.h as i32) / 2, ui::LABEL.now(), 255);
         let (dx, dy) = delete_at(content_w);
         let colour = if self.selected.is_some() { ui::DESTRUCTIVE } else { ui::LABEL_2.now() };
         let label = ui.text("Delete", ui::MAC_BODY_PT, Weight::Regular, colour);
@@ -278,4 +311,28 @@ impl App for KeychainAccessApp {
 
 fn main() {
     bifrost_app::run(KeychainAccessApp::default());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn app() -> KeychainAccessApp {
+        KeychainAccessApp { groups: vec!["is.bifrost.account".into(), "is.bifrost.passwords".into()], ..Default::default() }
+    }
+
+    #[test]
+    fn the_first_sidebar_row_starts_below_the_traffic_lights_bar() {
+        let (bounds, scroll) = KeychainAccessApp::sidebar_geometry(600.0);
+        let list = app().sidebar();
+        assert_eq!(list.hit(bounds, scroll, 40.0, HEADER_PT - 4.0), None, "the bar is not a row");
+        assert_eq!(list.hit(bounds, scroll, 40.0, HEADER_PT + 4.0), Some(0));
+        assert!(list.item_rect(0, bounds, scroll).y >= UNIFIED_BAR_PT);
+    }
+
+    #[test]
+    fn delete_sits_inside_the_unified_bar() {
+        let (_, dy) = delete_at(400.0);
+        assert!(dy >= 0.0 && dy + DELETE_H_PT <= UNIFIED_BAR_PT);
+    }
 }
