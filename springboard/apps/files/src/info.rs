@@ -144,6 +144,16 @@ impl Files {
         }
         self.revision += 1;
     }
+    /// A tag change the person made, undoable with Cmd+Z: runs `change` on the index and, when it changed the colours
+    /// of any of `paths`, records the tags they had before as one undo step.
+    pub(crate) fn edit_tags(&mut self, paths: &[PathBuf], change: impl FnOnce(&mut TagIndex)) {
+        let before: Vec<(PathBuf, Vec<Tag>)> = paths.iter().map(|p| (p.clone(), self.tag_index.tags(p))).collect();
+        self.with_tags(change);
+        let changed: Vec<(PathBuf, Vec<Tag>)> = before.into_iter().filter(|(p, old)| self.tag_index.tags(p) != *old).collect();
+        if !changed.is_empty() {
+            self.push_undo(Undo::Tags(changed));
+        }
+    }
     pub(crate) fn open_tags(&mut self) {
         if self.selection.is_empty() {
             return;
@@ -161,7 +171,7 @@ impl Files {
             return;
         }
         let all = paths.iter().all(|p| self.tag_index.has(p, tag));
-        self.with_tags(|index| {
+        self.edit_tags(&paths, |index| {
             for p in &paths {
                 if index.has(p, tag) == all {
                     index.toggle(p, tag);

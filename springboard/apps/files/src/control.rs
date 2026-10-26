@@ -627,7 +627,7 @@ impl Files {
                 let paths = self.ctl_targets(paths)?;
                 let changes = edit.set.is_some() || !edit.add.is_empty() || !edit.remove.is_empty() || !edit.toggle.is_empty();
                 if changes {
-                    self.with_tags(|index| {
+                    self.edit_tags(&paths, |index| {
                         for p in &paths {
                             if let Some(set) = &edit.set {
                                 index.clear(p);
