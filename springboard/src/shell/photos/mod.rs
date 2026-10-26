@@ -3096,17 +3096,17 @@ impl Photos {
             } else {
                 let cy = (top + bottom) / 2.0;
                 let (title, hint) = match (self.album, &self.filter) {
-                    _ if !self.search.is_empty() => ("No Results", "Nothing matches your search. Tap the title to change it."),
-                    (_, Some(_)) => ("No Photos", "Nothing matches the date filter. Tap the title to change it."),
+                    _ if !self.search.is_empty() => ("No Results", "Nothing matches your search. Click the title to change it."),
+                    (_, Some(_)) => ("No Photos", "Nothing matches the date filter. Click the title to change it."),
                     (Album::All, _) => ("No Photos", "Screenshots and pictures you save appear here."),
                     (Album::Recents, _) => ("No Recent Photos", "Pictures from the last 30 days appear here."),
-                    (Album::Favorites, _) => ("No Favorites", "Tap the heart on a photo to add it to Favorites."),
+                    (Album::Favorites, _) => ("No Favorites", "Click the heart on a photo to add it to Favorites."),
                     (Album::Screenshots, _) => ("No Screenshots", "Screenshots you take appear here."),
                     (Album::Trash, _) => ("No Recently Deleted Photos", "Deleted photos wait here for 30 days."),
                     (Album::Hidden, _) => ("No Hidden Photos", "Photos you hide from All Photos appear here."),
                     (Album::Duplicates, _) => ("No Duplicates", "Pictures that are the same file appear here."),
                     (Album::Places, _) => ("No Places", "Photos with a location in their file appear here."),
-                    (Album::User(_), _) => ("No Photos", "Open a photo and tap Album to add it here."),
+                    (Album::User(_), _) => ("No Photos", "Open a photo and click Album to add it here."),
                     (Album::Smart(_), _) => ("No Photos", "No photo matches the rules of this smart album."),
                     (Album::Memory(_), _) => ("No Photos", "This memory has no photos left."),
                 };

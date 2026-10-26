@@ -60,9 +60,12 @@ fn zoom_and_filter_commands_follow_the_grid() {
     p.command(&ui, PhotoCommand::ZoomOut, 0.0);
     assert_eq!(p.cols(), 5);
     p.command(&ui, PhotoCommand::FavouritesOnly, 0.0);
-    assert_eq!(p.search(), "is:favorite");
+    assert_eq!(p.album(), Album::Favorites, "View > Favorites opens the Favorites album like the sidebar row");
+    assert_eq!(p.search(), "", "it is not a search");
     assert!(p.command_checked(PhotoCommand::FavouritesOnly));
+    assert!(!p.command_checked(PhotoCommand::ShowAll));
     p.command(&ui, PhotoCommand::ShowAll, 0.0);
+    assert_eq!(p.album(), Album::All);
     assert_eq!(p.search(), "");
 }
 
