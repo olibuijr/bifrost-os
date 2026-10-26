@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.13.8
+
+- An unsaved Untitled document autosaved at Quit opens again, still edited, at the next launch; the Preferences menu is now Settings.
+
 ## 1.13.7
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.

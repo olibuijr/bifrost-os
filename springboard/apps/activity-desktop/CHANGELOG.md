@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.9
+
+- Process names longer than 15 characters are shown whole, read from the command line.
+
 ## 0.10.8
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.
