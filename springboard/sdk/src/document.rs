@@ -295,6 +295,23 @@ pub fn key_combo(input: &crate::KeyInput) -> Option<bifrost_ui::keys::KeyCombo> 
     Some(KeyCombo::new(key))
 }
 
+/// A key press on a sheet an app keeps itself (Disk Utility, Notes, Sticky Notes): the same keys as the close
+/// confirmation (`Sheet::handle_key`). Return presses the default button, Escape and Cmd+. Cancel, Cmd+D the Don't Save
+/// (or Delete) button, Tab moves the focus ring (kept in `sheet.focus`, which the sheet draws) and Space presses the
+/// focused button. `Answer` carries the id of the button pressed; the app runs it and drops the sheet. A key the shell
+/// cannot map to a combo does nothing (`Ignored`).
+pub fn sheet_key(sheet: &mut bifrost_ui::sheet::Sheet, input: &crate::KeyInput) -> AlertKey {
+    let Some(combo) = key_combo(input) else { return AlertKey::Ignored };
+    let out = sheet.handle_key(combo, sheet.focus);
+    let moved = out.focus != sheet.focus;
+    sheet.focus = out.focus;
+    match out.answer {
+        Some(choice) => AlertKey::Answer(choice),
+        None if moved => AlertKey::Focus,
+        None => AlertKey::Ignored,
+    }
+}
+
 /// `NativeDocumentController` plus the per-document bookkeeping of `NativeDocument`.
 pub struct DocumentController<D: Document> {
     docs: Vec<Entry<D>>,
@@ -1625,6 +1642,27 @@ mod tests {
         assert_eq!(c.alert_key(&space), Some(AlertKey::Answer(alert::DONT_SAVE)));
         assert_eq!(c.answer_alert(&m, alert::DONT_SAVE), vec![Notice::Closed(id)]);
         assert!(c.alert_sheet().is_none());
+    }
+
+    #[test]
+    fn sheet_key_drives_a_sheet_an_app_keeps_itself() {
+        use crate::proto::{CHORD_FLAG, CHORD_META};
+        use bifrost_ui::sheet::{ButtonRole, Sheet, SheetButton};
+        let mut sheet = Sheet::alert(
+            "Delete this note?",
+            "",
+            vec![SheetButton::new(1, "Cancel", ButtonRole::Cancel), SheetButton::new(2, "Delete", ButtonRole::Destructive)],
+        );
+        let (tab, space) = (crate::KeyInput::Code(9), crate::KeyInput::Text(" ".into()));
+        assert_eq!(sheet_key(&mut sheet, &space), AlertKey::Ignored, "Space with no focus presses nothing");
+        assert_eq!(sheet_key(&mut sheet, &crate::KeyInput::Code(13)), AlertKey::Ignored, "no default button");
+        assert_eq!(sheet_key(&mut sheet, &tab), AlertKey::Focus);
+        assert_eq!(sheet.focus, Some(2), "the ring is kept in the sheet, which draws it");
+        assert_eq!(sheet_key(&mut sheet, &space), AlertKey::Answer(2));
+        assert_eq!(sheet_key(&mut sheet, &crate::KeyInput::Code(1)), AlertKey::Answer(1), "Escape cancels");
+        let cmd_d = crate::KeyInput::Code(CHORD_FLAG | 32 | (CHORD_META << 8));
+        assert_eq!(sheet_key(&mut sheet, &cmd_d), AlertKey::Answer(2), "Cmd+D presses Delete");
+        assert_eq!(sheet_key(&mut sheet, &crate::KeyInput::Code(40)), AlertKey::Ignored, "a key with no combo does nothing");
     }
 
     #[test]
