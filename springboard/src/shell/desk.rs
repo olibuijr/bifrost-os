@@ -1698,7 +1698,7 @@ impl Desk {
 
 /// Dock icon rectangles (px) for `n` icons and the capsule behind them.
 /// The Calendar app's package id: its Dock tile shows today's weekday and date over the package icon.
-const CALENDAR_TILE: &str = "is.olibuijr.calendar.desktop";
+pub(super) const CALENDAR_TILE: &str = "is.olibuijr.calendar.desktop";
 
 /// The weekday and day of the month on the Calendar tile: ("Mon", "12") for Monday the 12th.
 pub(super) fn calendar_face_text(wday: i32, mday: i32) -> (&'static str, String) {
@@ -4618,17 +4618,18 @@ impl Shell {
     }
 
     /// The Calendar tile's face. The package icon is a fixed picture, so the Dock repaints its paper and sets today's
-    /// weekday (red) over the day number (black), as the Dock shows the date. `(x, y, w, h)` is the tile.
-    fn calendar_tile_face(&self, s: &mut Surface, scale: f32, (x, y, w, h): (f32, f32, f32, f32), (wday, mday): (i32, i32)) {
+    /// weekday (red) over the day number (black), as the Dock shows the date. `(x, y, w, h)` is the tile; `alpha`
+    /// (0 to 255) fades the face with the icon under it, as the Launchpad grid animates in and out.
+    pub(super) fn calendar_tile_face(&self, s: &mut Surface, scale: f32, (x, y, w, h): (f32, f32, f32, f32), (wday, mday): (i32, i32), alpha: u32) {
         let (day, num) = calendar_face_text(wday, mday);
         // the paper covers the baked picture between the squircle's rounded sides
-        s.fill_rrect(x + w * 0.16, y, w * 0.68, h, 0.0, WHITE);
+        s.fill_rrect(x + w * 0.16, y, w * 0.68, h, 0.0, rgba(255, 255, 255, alpha.min(255) as u8));
         let cx = x + w / 2.0;
         self.label(day, 0.2 * h / scale, Weight::Semibold, SYSTEM_RED, |im| {
-            s.blit(im, (cx - im.w as f32 / 2.0) as i32, (y + 0.06 * h) as i32, 255, 255);
+            s.blit(im, (cx - im.w as f32 / 2.0) as i32, (y + 0.06 * h) as i32, 255, alpha);
         });
         self.label(&num, 0.5 * h / scale, Weight::Regular, BLACK, |im| {
-            s.blit(im, (cx - im.w as f32 / 2.0) as i32, (y + 0.34 * h) as i32, 255, 255);
+            s.blit(im, (cx - im.w as f32 / 2.0) as i32, (y + 0.34 * h) as i32, 255, alpha);
         });
     }
 
@@ -4780,7 +4781,7 @@ impl Shell {
                 desk.with_scaled_icon(key, base, r.w as usize, r.h as usize, |icon| s.blit(icon, r.x, r.y, 255, if pressed { 150 } else { 255 }));
             }
             if apps()[i].icon == CALENDAR_TILE {
-                self.calendar_tile_face(s, ui.s, (r.x as f32, r.y as f32, r.w as f32, r.h as f32), (self.info.wday, self.info.mday));
+                self.calendar_tile_face(s, ui.s, (r.x as f32, r.y as f32, r.w as f32, r.h as f32), (self.info.wday, self.info.mday), 255);
             }
             let id = apps()[i].id;
             #[cfg(feature = "desktop-wayland")]
