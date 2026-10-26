@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.17
+
+- No toolbar tool looks selected while no document is open.
+
 ## 0.11.16
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.

@@ -1,6 +1,6 @@
 id = "is.olibuijr.stickies.desktop"
 name = "Sticky Notes"
-version = "0.10.4"
+version = "0.10.5"
 exec = "bifrost-stickies"
 icon = "icon.png"
 min_shell = "0.4.84"

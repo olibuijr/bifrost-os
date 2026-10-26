@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.7
+
+- The Add Alarm sheet hangs centred from the toolbar; world map labels no longer overlap.
+
 ## 1.6.6
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.

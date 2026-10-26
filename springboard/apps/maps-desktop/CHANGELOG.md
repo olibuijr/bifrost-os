@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.6
+
+- Automatic units follow the Settings region, so Iceland shows metric scales.
+
 ## 0.7.5
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.

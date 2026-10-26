@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.10
+
+- The window is opaque and New Entry creates an entry.
+
 ## 0.1.9
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.

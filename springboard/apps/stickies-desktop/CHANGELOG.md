@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.5
+
+- The welcome note fits its text; a long note scrolls with the caret and shows overflow cues.
+
 ## 0.10.4
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.13.6
+
+- The board is a dark canvas with light ink in Dark appearance.
+
 ## 1.13.5
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.

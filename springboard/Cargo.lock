@@ -578,7 +578,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-clock"
-version = "1.6.6"
+version = "1.6.7"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -701,7 +701,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-freeform"
-version = "1.13.5"
+version = "1.13.6"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -752,7 +752,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-journal"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -808,7 +808,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-maps"
-version = "0.7.5"
+version = "0.7.6"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -894,7 +894,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-photobooth"
-version = "0.5.9"
+version = "0.5.10"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -975,7 +975,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-screenshot"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -1008,7 +1008,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-stickies"
-version = "0.10.4"
+version = "0.10.5"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -1018,7 +1018,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-stocks"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -1072,7 +1072,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-viewer"
-version = "0.11.16"
+version = "0.11.17"
 dependencies = [
  "bifrost-app",
  "bifrost-core",

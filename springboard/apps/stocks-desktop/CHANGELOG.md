@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.5
+
+- The price chart colour follows the change since the previous close, matching the header and list.
+
 ## 0.2.4
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.

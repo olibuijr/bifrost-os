@@ -1,6 +1,6 @@
 id = "is.olibuijr.clock.desktop"
 name = "Clock"
-version = "1.6.6"
+version = "1.6.7"
 exec = "bifrost-clock"
 icon = "icon.png"
 min_shell = "0.4.84"
