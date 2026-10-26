@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.16.0
+
+- Upstream photocraft v0.16.0.
+  ## What's Changed
+  * Reuse filled-shape effect maps while moving styled groups by @kotulsky in https://github.com/storytold/photocraft/pull/8993
+  * fix(ui-egui): a click on the bottom layer's Smart Filters selects them again (#8764) by @drunkeninja42 in https://github.com/storytold/photocraft/pull/8974
+  * security(paint): cap spaced steps and procedural primitives by @dylanmtaylor in https://github.com/storytold/photocraft/pull/8957
+  * i18n(zh-hans): translate status messages and preview labels by @IgnatAi401 in https://github.com/storytold/photocraft/pull/8872
+
 ## 0.15.1
 
 - Upstream photocraft v0.15.1.
