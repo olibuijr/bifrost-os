@@ -491,6 +491,22 @@ mod tests {
     }
 
     #[test]
+    fn the_readout_panel_stays_inside_the_window() {
+        let mut m = meter(20, 20, (3, 4));
+        for (w, h) in [(1000.0, 640.0), (600.0, 380.0), (384.0, 300.0), (300.0, 300.0)] {
+            m.size = (w, h);
+            let p = m.panel_rect();
+            assert!(p.x + p.w <= w, "{w}x{h}: the panel ends at {} past the window", p.x + p.w);
+        }
+    }
+
+    #[test]
+    fn the_configured_pixel_size_becomes_points() {
+        assert_eq!(crate::size_pt(1200, 780, 1.5), (800.0, 520.0));
+        assert_eq!(crate::size_pt(600, 400, 1.0), (600.0, 400.0));
+    }
+
+    #[test]
     fn the_loupe_is_a_square_that_fits_the_window() {
         let mut m = ColorMeter::new(Box::new(crate::source::ShellSource::default()));
         m.size = (1000.0, 640.0);
