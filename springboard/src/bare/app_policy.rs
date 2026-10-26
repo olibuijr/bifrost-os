@@ -89,7 +89,7 @@ impl From<PolicyError> for io::Error {
 
 /// Every name an entitlement query accepts: the manifest permissions and the first-party entitlements, in the order
 /// [`Policy::held`] lists them.
-pub const ENTITLEMENT_NAMES: [&str; 19] = [
+pub const ENTITLEMENT_NAMES: [&str; 20] = [
     "network",
     "storage",
     "audio",
@@ -109,11 +109,16 @@ pub const ENTITLEMENT_NAMES: [&str; 19] = [
     "remote-desktop",
     bifrost_core::log::ENTITLEMENT,
     SYSTEM_MONITOR_ENTITLEMENT,
+    HARDWARE_INFO_ENTITLEMENT,
 ];
 
 /// `entitlements = ["system-monitor"]` on a first-party `system-app` (Activity Monitor): the sandbox shares the host PID
 /// and network namespaces and sees `/proc` read-only, so the app can list every process and socket of the machine.
 pub const SYSTEM_MONITOR_ENTITLEMENT: &str = "system-monitor";
+
+/// `entitlements = ["hardware-info"]` on a first-party `system-app` (System Information): the sandbox binds the host
+/// `/sys` read-only, so the app can read the DMI, PCI, block, network and power facts it reports. Nothing is writable.
+pub const HARDWARE_INFO_ENTITLEMENT: &str = "hardware-info";
 
 /// First-party app identities allowed to declare capture device permissions.
 pub const CAMERA_APP_ID: &str = "is.olibuijr.photobooth.desktop";
@@ -168,6 +173,9 @@ pub struct Policy {
     /// `entitlements = ["system-monitor"]` on a first-party `system-app`: host PID and network namespaces, host `/proc`
     /// read-only (see [`namespace_args`]). Set through `with_entitlements`, never from `permissions`.
     pub system_monitor: bool,
+    /// `entitlements = ["hardware-info"]` on a first-party `system-app`: host `/sys` read-only (see [`sysfs_args`]).
+    /// Set through `with_entitlements`, never from `permissions`.
+    pub hardware_info: bool,
 }
 impl Policy {
     /// Applies manifest entitlements; each is honoured only for the package kind that may hold it.
@@ -177,6 +185,7 @@ impl Policy {
         let first_party_system = id.starts_with("is.olibuijr.") && kind == crate::shell::kinds::SYSTEM_APP;
         self.log_store = first_party_system && entitlements.iter().any(|e| e == bifrost_core::log::ENTITLEMENT);
         self.system_monitor = first_party_system && entitlements.iter().any(|e| e == SYSTEM_MONITOR_ENTITLEMENT);
+        self.hardware_info = first_party_system && entitlements.iter().any(|e| e == HARDWARE_INFO_ENTITLEMENT);
         self
     }
     /// Whether the policy holds the named permission or entitlement, spelled as in the manifest. An unknown name is
@@ -201,6 +210,7 @@ impl Policy {
             "gpu" => self.gpu,
             "remote-desktop" => self.remote,
             SYSTEM_MONITOR_ENTITLEMENT => self.system_monitor,
+            HARDWARE_INFO_ENTITLEMENT => self.hardware_info,
             other => other == bifrost_core::log::ENTITLEMENT && self.log_store,
         }
     }
@@ -352,6 +362,16 @@ fn proc_args(policy: Policy) -> Vec<&'static str> {
     }
 }
 
+/// The sandbox arguments for the sysfs an app may read: all of `/sys` read-only for `hardware-info`, nothing otherwise
+/// (`gpu` and `native` apps get their own sysfs paths in [`gpu_args`]).
+fn sysfs_args(policy: Policy) -> Vec<&'static str> {
+    if policy.hardware_info {
+        vec!["--ro-bind", "/sys", "/sys"]
+    } else {
+        Vec::new()
+    }
+}
+
 /// Construct a fail-closed sandbox. Only the selected package, app data and
 /// declared resources are mounted; no system/session bus is exposed to apps.
 pub fn command(
@@ -392,6 +412,7 @@ pub fn command(
         c.arg("--disable-userns");
     }
     c.args(proc_args(policy));
+    c.args(sysfs_args(policy));
     c.args([
         "--ro-bind",
         "/usr",
@@ -875,6 +896,19 @@ mod tests {
         }
         let proc = proc_args(policy);
         assert_eq!(proc, ["--ro-bind", "/proc", "/proc"], "host /proc, read-only");
+    }
+
+    #[test]
+    fn hardware_info_reads_sysfs_read_only_and_only_for_a_first_party_system_app() {
+        let declared = [HARDWARE_INFO_ENTITLEMENT.to_string()];
+        let policy = Policy::default().with_entitlements("is.olibuijr.sysinfo.desktop", "system-app", &declared);
+        assert!(policy.hardware_info && policy.holds("hardware-info") && policy.held() == vec!["hardware-info"]);
+        assert_eq!(sysfs_args(policy), ["--ro-bind", "/sys", "/sys"]);
+        let base = Policy::default();
+        assert!(sysfs_args(base).is_empty(), "a plain app sees no sysfs");
+        assert!(!base.with_entitlements("com.example.info", "system-app", &declared).hardware_info, "a store id cannot take it");
+        assert!(!base.with_entitlements("is.olibuijr.sysinfo.desktop", "app", &declared).hardware_info, "an ordinary kind cannot take it");
+        assert!(Policy::from_permissions("is.olibuijr.sysinfo.desktop", &declared).is_err(), "never a permission");
     }
 
     #[test]
