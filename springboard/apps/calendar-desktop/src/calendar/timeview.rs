@@ -113,10 +113,11 @@ impl Calendar {
 
     /// Steps by the active view's unit.
     pub(super) fn step_view(&mut self, dir: i32) {
+        let month = self.month_date();
         self.selected = match self.view {
             View::Day => self.selected.shift_days(dir),
             View::Week => self.selected.shift_days(7 * dir),
-            View::Month => self.selected.shift_months(dir),
+            View::Month => month.shift_months(dir),
             View::Year => self.selected.shift_months(12 * dir),
         };
     }

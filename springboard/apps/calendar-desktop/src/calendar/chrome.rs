@@ -438,7 +438,10 @@ impl Calendar {
             ("Search".to_string(), format!(" {}", lookup::count_label(self.search_hits.len())))
         } else {
             match self.view {
-                View::Month => (MONTHS[(self.selected.month - 1) as usize].to_string(), format!(" {}", self.selected.year)),
+                View::Month => {
+                    let m = self.month_date();
+                    (MONTHS[(m.month - 1) as usize].to_string(), format!(" {}", m.year))
+                }
                 View::Year => (self.selected.year.to_string(), String::new()),
                 _ => (self.range_label(), String::new()),
             }
