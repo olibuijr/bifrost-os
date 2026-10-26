@@ -10,6 +10,8 @@ use crate::images::{self, BlankSpec, ImageFormat};
 use crate::model::{self, Kind, Node};
 use crate::partition;
 use crate::window::DiskUtility;
+use bifrost_app::document::{self, AlertKey};
+use bifrost_app::KeyInput;
 use bifrost_core::disk_format::{PartitionSpec, Personality, RaidLevel, Scheme};
 use bifrost_core::disk_request::DiskRequest;
 
@@ -326,9 +328,30 @@ impl DiskUtility {
                 }
                 changed
             }
-            9 => self.form.as_mut().is_some_and(|f| f.form.focus_next()),
+            9 => self.form.as_mut().is_some_and(|f| f.form.tab()),
             13 => self.submit_form(),
             1 | 27 => {
+                self.form = None;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// A key press while a form is open. Text, Backspace, Tab, Return and Escape are the editing keys of `form_code`; the
+    /// rest go through the sheet's keys (`Sheet::handle_key`): Cmd+. cancels and Space presses the button Tab reached.
+    pub fn form_key(&mut self, input: &KeyInput) -> bool {
+        let Some(open) = self.form.as_ref() else { return false };
+        let pressing = open.form.button_focus.is_some() && *input == KeyInput::Text(" ".into());
+        match input {
+            KeyInput::Text(text) if !pressing => return self.form_text(text),
+            KeyInput::Code(code @ (1 | 8 | 9 | 13 | 27)) => return self.form_code(*code),
+            _ => {}
+        }
+        let mut sheet = open.form.sheet();
+        match document::sheet_key(&mut sheet, input) {
+            AlertKey::Answer(FORM_OK) => self.submit_form(),
+            AlertKey::Answer(FORM_CANCEL) => {
                 self.form = None;
                 true
             }
@@ -900,5 +923,45 @@ mod tests {
         assert_eq!(row_text(&w.nodes[1]), "sdb1 \u{b7} 4.0 GB \u{b7} GAMES");
         assert_eq!(row_text(&w.nodes[0]), "sdb \u{b7} 8.0 GB \u{b7} Stick");
         assert_eq!(row_text(&w.nodes[2]), "sdb2 \u{b7} 3.0 GB");
+    }
+
+    #[test]
+    fn tab_walks_from_the_last_field_to_the_buttons_and_space_presses_the_one_it_reached() {
+        use bifrost_app::proto::{CHORD_FLAG, CHORD_META};
+        let (tab, space) = (KeyInput::Code(9), KeyInput::Text(" ".into()));
+        let mut w = stick();
+        w.selected = Some("sdb1".into());
+        w.open_rename_form();
+        assert!(w.wants_keyboard());
+        assert!(w.form_key(&space), "Space types while a field has the focus");
+        assert!(w.form_key(&KeyInput::Code(8)));
+        assert!(w.form_key(&tab));
+        let open = w.form.as_ref().unwrap();
+        assert_eq!(open.form.button_focus, Some(FORM_OK), "past the only field the ring lands on OK");
+        assert_eq!(open.form.sheet().focus, Some(FORM_OK), "and the sheet draws it");
+        assert!(!w.wants_keyboard());
+        let before = w.form.as_ref().unwrap().form.value(0);
+        assert!(!w.form_key(&KeyInput::Text("x".into())), "typing goes nowhere while a button has the ring");
+        assert_eq!(w.form.as_ref().unwrap().form.value(0), before);
+        assert!(w.form_key(&tab));
+        assert_eq!(w.form.as_ref().unwrap().form.button_focus, Some(FORM_CANCEL));
+        assert!(w.form_key(&tab));
+        assert_eq!(w.form.as_ref().unwrap().form.button_focus, None, "after the last button the ring returns to the field");
+        assert!(w.wants_keyboard());
+        // Tab twice more and Space presses Cancel
+        assert!(w.form_key(&tab) && w.form_key(&tab));
+        assert!(w.form_key(&space));
+        assert!(w.form.is_none() && w.sheet.is_none(), "Space on Cancel closes the form");
+        // Cmd+. cancels as well
+        w.open_rename_form();
+        let cmd_period = KeyInput::Code(CHORD_FLAG | 52 | (CHORD_META << 8));
+        assert!(w.form_key(&cmd_period));
+        assert!(w.form.is_none() && w.sheet.is_none());
+        // Space on OK submits it
+        w.open_rename_form();
+        assert!(w.form_key(&KeyInput::Text("2".into())));
+        assert!(w.form_key(&tab));
+        assert!(w.form_key(&space));
+        assert!(w.form.is_none() && w.sheet.is_some(), "OK goes on to the confirmation");
     }
 }
