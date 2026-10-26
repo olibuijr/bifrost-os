@@ -389,6 +389,19 @@ impl TextEditApp {
         }
     }
 
+    /// The documents a launch starts with: the untitled ones autosaved when the app last quit (Cmd+Q saves nothing else
+    /// and asks nothing, so the text comes back edited, as the reference's Untitled documents do), or one new Untitled
+    /// when there are none.
+    fn start_documents(&mut self, host: &dyn DocumentHost) {
+        let restored = self.docs.restore(host);
+        if restored.is_empty() {
+            let id = self.docs.new_document();
+            self.apply_new_defaults(id);
+        } else {
+            self.after_documents(&restored);
+        }
+    }
+
     /// Writes the settings to the preferences.
     fn save_options(&self, ctx: &Ctx) {
         for (key, value) in self.opts.entries() {
@@ -2538,7 +2551,7 @@ impl TextEditApp {
     /// preferences too.
     fn preferences_menu(&self) -> AppMenu {
         let mut items = vec![
-            menu_item(Action::ShowSettings, "Preferences\u{2026}", "cmd+,", true),
+            menu_item(Action::ShowSettings, "Settings\u{2026}", "cmd+,", true),
             AppMenuItem::submenu("New Documents"),
             menu_item(Action::NewPlain(false), "Rich Text", "", true).checked(!self.opts.new_plain).depth(1),
             menu_item(Action::NewPlain(true), "Plain Text", "", true).checked(self.opts.new_plain).depth(1),
@@ -2555,7 +2568,7 @@ impl TextEditApp {
             items.push(menu_item(Action::DefaultFont(index), view::family_name(index), "", true).checked(self.opts.default_font == index).depth(1));
         }
         items.push(menu_item(Action::MarkupAsCode, "Show RTF and HTML Files as Code", "", true).checked(self.opts.markup_as_code));
-        AppMenu { title: "Preferences".into(), items }
+        AppMenu { title: "Settings".into(), items }
     }
 
     /// File: the document controller's items, then Print and Page Setup.
@@ -2667,8 +2680,7 @@ impl App for TextEditApp {
         // a window starts with an untitled document, as a new document would. Not while the main window is ordered out
         // after the last document closed: a later configure (appearance, scale) must not bring a window back
         if self.docs.is_empty() && ctx.windows().main_shown() {
-            let id = self.docs.new_document();
-            self.apply_new_defaults(id);
+            self.start_documents(ctx);
         }
         self.sync_windows(ctx);
     }
@@ -3190,7 +3202,7 @@ impl TextEditApp {
             let layout = properties::list_layout(geom.width, geom.body_top, prefs::Setting::ALL.len());
             let buttons = view::list_buttons(ui, &layout, Action::SettingsDone);
             let rows: Vec<(&str, String)> = prefs::Setting::ALL.iter().map(|s| (s.label(), s.value(&self.opts))).collect();
-            view::draw_list(canvas, ui, &layout, "Preferences", &rows, &buttons);
+            view::draw_list(canvas, ui, &layout, "Settings", &rows, &buttons);
         }
         if self.encodings_panel {
             let layout = properties::list_layout(geom.width, geom.body_top, encoding::ALL.len());
@@ -3319,6 +3331,65 @@ mod tests {
         assert!(is_formatting(Action::Highlight(2)));
         assert!(is_formatting(Action::PasteStyle));
         assert!(!is_formatting(Action::CopyStyle));
+    }
+
+    /// A host with a data directory and nothing else: enough for the controller's autosave copies.
+    struct DirHost(std::path::PathBuf);
+
+    impl DocumentHost for DirHost {
+        fn open_panel(&self, _o: &OpenOptions) -> u32 {
+            0
+        }
+        fn save_panel(&self, _n: &str, _f: &[&str]) -> u32 {
+            0
+        }
+        fn save_in_place(&self, _g: bifrost_app::proto::GrantId) -> u32 {
+            0
+        }
+        fn commit(&self, _r: u32) {}
+        fn abort(&self, _r: u32) {}
+        fn reopen(&self, _g: bifrost_app::proto::GrantId) -> u32 {
+            0
+        }
+        fn release(&self, _g: bifrost_app::proto::GrantId) {}
+        fn set_document_state(&self, _t: &str, _e: bool, _r: &str) {}
+        fn data_dir(&self) -> std::path::PathBuf {
+            self.0.clone()
+        }
+        fn pref(&self, _k: &str) -> Option<String> {
+            None
+        }
+        fn set_pref(&self, _k: &str, _v: &str) {}
+    }
+
+    /// Cmd+Q asks nothing: the unsaved Untitled is autosaved as the app quits (`suspend`) and the next launch opens it
+    /// again, edited, instead of a blank document.
+    #[test]
+    fn an_unsaved_untitled_document_comes_back_on_the_next_launch() {
+        let dir = std::env::temp_dir().join(format!("bifrost-textedit-restore-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let host = DirHost(dir.clone());
+        let mut app = TextEditApp::new();
+        app.start_documents(&host);
+        let id = app.docs.active().unwrap();
+        *app.docs.get_mut(id).unwrap() = doc("repro unsaved text");
+        app.docs.mark_edited(id);
+        app.docs.suspend(&host);
+
+        let mut next = TextEditApp::new();
+        next.start_documents(&host);
+        assert_eq!(next.docs.len(), 1, "the restored document replaces the blank one");
+        let back = next.docs.active().unwrap();
+        assert!(next.docs.is_edited(back), "closing it still asks");
+        assert_eq!(active_doc(&next.docs).unwrap().text.text(), "repro unsaved text");
+
+        // with nothing autosaved a launch starts with one blank Untitled
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut fresh = TextEditApp::new();
+        fresh.start_documents(&DirHost(dir));
+        assert_eq!(fresh.docs.len(), 1);
+        assert!(!fresh.docs.is_edited(fresh.docs.active().unwrap()));
     }
 
     fn app_with_plain(bytes: &[u8]) -> TextEditApp {
