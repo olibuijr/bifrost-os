@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.17.0
+
+- Upstream effectcraft v0.17.0.
+  ## What's Changed
+  * svg: bound raster surfaces and handle duplicate gradient stops by @dylanmtaylor in https://github.com/storytold/effectcraft/pull/2190
+  * ui: bound queued synthetic input gestures by @dylanmtaylor in https://github.com/storytold/effectcraft/pull/2197
+  * text: bound layout and variable font metadata by @dylanmtaylor in https://github.com/storytold/effectcraft/pull/2193
+  * pdf: bound image sample and mask allocations by @dylanmtaylor in https://github.com/storytold/effectcraft/pull/2191
+
 ## 0.16.0
 
 - Upstream effectcraft v0.16.0.
