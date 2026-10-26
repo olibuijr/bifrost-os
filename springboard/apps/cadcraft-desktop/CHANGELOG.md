@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.13.0
+
+- Upstream cadcraft v0.13.0.
+  ## What's Changed
+  * docs: document security limits and regression guarantees by @skylartaylor in https://github.com/storytold/cadcraft/pull/1963
+  * chore(deps): bump the cargo-dependencies group across 1 directory with 17 updates by @dependabot[bot] in https://github.com/storytold/cadcraft/pull/1957
+  * web: allow browser zoom in the viewport meta (SonarCloud Web:S7926) by @dylanmtaylor in https://github.com/storytold/cadcraft/pull/1974
+  * packaging: use [[ ]] tests, named locals and explicit returns in shell scripts (SonarCloud S7688/S7679/S7682) by @dylanmtaylor in https://github.com/storytold/cadcraft/pull/1972
+
 ## 0.12.0
 
 - Upstream cadcraft v0.12.0.
