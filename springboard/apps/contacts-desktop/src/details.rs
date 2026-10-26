@@ -7,7 +7,8 @@
 //! <id><TAB><code><TAB><value>
 //! ```
 //!
-//! `code` is a field's code (`nickname`, `job`, ...) or `company`, whose value is `1`. Text is escaped the way
+//! `code` is a field's code (`nickname`, `job`, ...), `company`, whose value is `1`, or `family`, the family name the
+//! card was saved with (the store keeps one name, so a family name of several words is only known from this). Text is escaped the way
 //! `values.txt` escapes it. Pure std.
 
 use crate::extras::{escape, unescape};
@@ -19,6 +20,7 @@ use std::path::Path;
 const HEADER: &str = "springboard-contact-details-v1";
 const MAX_BYTES: usize = 1024 * 1024;
 const COMPANY_CODE: &str = "company";
+const FAMILY_CODE: &str = "family";
 
 /// The fields a card can add through Card > Add Field.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -92,6 +94,8 @@ impl Detail {
 pub struct CardDetails {
     /// Card > Mark as a Company: the card shows its company as the name.
     pub company: bool,
+    /// The family name the card was saved with, empty when the name's last word is it. See `names::split_with`.
+    pub family: String,
     values: BTreeMap<Detail, String>,
 }
 
@@ -118,7 +122,7 @@ impl CardDetails {
 
     /// True when the card has no field and is not marked as a company.
     pub fn is_empty(&self) -> bool {
-        !self.company && self.values.is_empty()
+        !self.company && self.family.is_empty() && self.values.is_empty()
     }
 
     /// The fields the card filled in, in `Detail::ALL` order.
@@ -140,6 +144,11 @@ impl Details {
     /// The nickname of a contact, empty when it has none.
     pub fn nickname(&self, id: u64) -> &str {
         self.0.get(&id).map_or("", |d| d.get(Detail::Nickname))
+    }
+
+    /// The family name a contact was saved with, empty when it has none recorded.
+    pub fn family(&self, id: u64) -> &str {
+        self.0.get(&id).map_or("", |d| d.family.as_str())
     }
 
     /// Whether the contact is marked as a company.
@@ -180,6 +189,9 @@ impl Details {
             if details.company {
                 out.push_str(&format!("{id}\t{COMPANY_CODE}\t1\n"));
             }
+            if !details.family.is_empty() {
+                out.push_str(&format!("{id}\t{FAMILY_CODE}\t{}\n", escape(&details.family)));
+            }
             for (detail, value) in details.filled() {
                 out.push_str(&format!("{id}\t{}\t{}\n", detail.code(), escape(value)));
             }
@@ -202,6 +214,8 @@ pub fn parse(text: &str) -> Option<Details> {
         let mut card = out.of(id);
         if code == COMPANY_CODE {
             card.company = value == "1";
+        } else if code == FAMILY_CODE {
+            card.family = unescape(value).trim().to_string();
         } else if let Some(detail) = Detail::from_code(code) {
             card.set(detail, &unescape(value));
         } else {
@@ -306,6 +320,20 @@ mod tests {
         assert!(text.contains("7\tcompany\t1\n"), "{text}");
         assert!(text.contains("7\trelated\tBo\\\\Berg\n"), "{text}");
         assert_eq!(parse(&text), Some(details));
+    }
+
+    #[test]
+    fn the_family_name_round_trips_and_counts_as_a_detail() {
+        let mut details = Details::default();
+        let mut card = CardDetails::default();
+        card.family = "Test person".into();
+        assert!(!card.is_empty(), "a card with only a family name keeps its entry");
+        details.set(4, card);
+        let text = details.to_text();
+        assert!(text.contains("4\tfamily\tTest person\n"), "{text}");
+        let read = parse(&text).unwrap();
+        assert_eq!(read.family(4), "Test person");
+        assert_eq!(read.family(5), "");
     }
 
     #[test]

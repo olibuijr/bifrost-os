@@ -17,6 +17,24 @@ pub fn split(name: &str) -> (&str, &str) {
     }
 }
 
+/// Splits a name into (given, family) where the card's recorded family name starts. The name is stored as one string, so
+/// a family name of several words ("van Dyke") is only known from the `family` the editor recorded; when `family` is
+/// empty, or the name does not end with it after a space, this is [`split`].
+pub fn split_with<'a>(name: &'a str, family: &str) -> (&'a str, &'a str) {
+    let (name, family) = (name.trim(), family.trim());
+    if name == family {
+        return (name, "");
+    }
+    if !family.is_empty() {
+        if let Some(given) = name.strip_suffix(family) {
+            if given.ends_with(char::is_whitespace) {
+                return (given.trim(), name[given.len()..].trim());
+            }
+        }
+    }
+    split(name)
+}
+
 /// The ASCII letter a Latin letter sorts as, with its accent removed. `None` for anything else.
 pub fn base(c: char) -> Option<char> {
     let c = c.to_lowercase().next()?;
@@ -80,7 +98,12 @@ pub fn compare(a: &str, b: &str) -> Ordering {
 
 /// The section letter of a name: its family name's first letter, upper case. Other names share the `#` section.
 pub fn section(display: &str) -> char {
-    let (given, family) = split(display);
+    section_with(display, "")
+}
+
+/// [`section`] for a card whose family name was recorded (see [`split_with`]).
+pub fn section_with(display: &str, family: &str) -> char {
+    let (given, family) = split_with(display, family);
     let word = if family.is_empty() { given } else { family };
     let Some(first) = word.chars().next() else { return '#' };
     if let Some(letter) = base(first) {
@@ -106,7 +129,12 @@ pub enum NameOrder {
 /// The name as the list and the card show it: "Ada Lovelace" in first-name order, or "Lovelace, Ada" in last-name
 /// order. A name with only one part is shown as it is.
 pub fn shown(name: &str, order: NameOrder) -> String {
-    let (given, family) = split(name);
+    shown_with(name, "", order)
+}
+
+/// [`shown`] for a card whose family name was recorded (see [`split_with`]).
+pub fn shown_with(name: &str, family: &str, order: NameOrder) -> String {
+    let (given, family) = split_with(name, family);
     match order {
         NameOrder::LastFirst if !given.is_empty() && !family.is_empty() => format!("{family}, {given}"),
         _ => name.trim().to_string(),
@@ -115,14 +143,14 @@ pub fn shown(name: &str, order: NameOrder) -> String {
 
 /// The title a card is shown under: the company when the card is marked as a company, the nickname when the person
 /// prefers nicknames and the card has one, and otherwise the name in the chosen order. `name` is the card's display name.
-pub fn title(name: &str, company: &str, nickname: &str, is_company: bool, prefer_nicknames: bool, order: NameOrder) -> String {
+pub fn title(name: &str, family: &str, company: &str, nickname: &str, is_company: bool, prefer_nicknames: bool, order: NameOrder) -> String {
     let (company, nickname) = (company.trim(), nickname.trim());
     if is_company && !company.is_empty() {
         company.to_string()
     } else if prefer_nicknames && !nickname.is_empty() {
         nickname.to_string()
     } else {
-        shown(name, order)
+        shown_with(name, family, order)
     }
 }
 
@@ -133,11 +161,11 @@ mod tests {
     #[test]
     fn the_title_prefers_the_company_flag_then_the_nickname_then_the_name() {
         let order = NameOrder::LastFirst;
-        assert_eq!(title("Ada Lovelace", "Analytical Ltd", "Countess", true, true, order), "Analytical Ltd");
-        assert_eq!(title("Ada Lovelace", "Analytical Ltd", "Countess", false, true, order), "Countess");
-        assert_eq!(title("Ada Lovelace", "Analytical Ltd", "Countess", false, false, order), "Lovelace, Ada");
-        assert_eq!(title("Ada Lovelace", "", "", true, true, order), "Lovelace, Ada", "a company flag without a company changes nothing");
-        assert_eq!(title("Ada Lovelace", "", "  ", false, true, NameOrder::FirstLast), "Ada Lovelace");
+        assert_eq!(title("Ada Lovelace", "", "Analytical Ltd", "Countess", true, true, order), "Analytical Ltd");
+        assert_eq!(title("Ada Lovelace", "", "Analytical Ltd", "Countess", false, true, order), "Countess");
+        assert_eq!(title("Ada Lovelace", "", "Analytical Ltd", "Countess", false, false, order), "Lovelace, Ada");
+        assert_eq!(title("Ada Lovelace", "", "", "", true, true, order), "Lovelace, Ada", "a company flag without a company changes nothing");
+        assert_eq!(title("Ada Lovelace", "", "", "  ", false, true, NameOrder::FirstLast), "Ada Lovelace");
     }
 
     fn sorted(names: &[&str]) -> Vec<String> {
@@ -182,6 +210,16 @@ mod tests {
         assert_eq!(section("Acme"), 'A', "a one-word name sorts by that word");
         assert_eq!(section("Taxi 1800"), '#', "a family name that starts with a digit goes under #");
         assert_eq!(section(""), '#');
+    }
+
+    #[test]
+    fn a_recorded_family_name_keeps_its_words_together() {
+        assert_eq!(split_with("QA Testperson edited", "Testperson edited"), ("QA", "Testperson edited"));
+        assert_eq!(section_with("QA Testperson edited", "Testperson edited"), 'T');
+        assert_eq!(section("QA Testperson edited"), 'E', "without the record the last word is the family name");
+        assert_eq!(split_with("Ada Lovelace", "Berg"), ("Ada", "Lovelace"), "a stale record falls back to the last space");
+        assert_eq!(split_with("Lovelace", "Lovelace"), ("Lovelace", ""), "the family name needs a given name before it");
+        assert_eq!(shown_with("Jan van Dyke", "van Dyke", NameOrder::LastFirst), "van Dyke, Jan");
     }
 
     #[test]

@@ -477,11 +477,12 @@ fn sort_label(order: SortOrder) -> &'static str {
 }
 
 /// The given and family parts a contact sorts by. A company marked on its card sorts by its company name, which is one
-/// part (so the family part repeats it). Other contacts split their display name at the last space.
-fn sort_parts(c: &Contact, company: Option<&str>) -> (String, String) {
+/// part (so the family part repeats it). Other contacts split their display name at the family name the card was saved
+/// with (`family`), or at the last space when none was recorded.
+fn sort_parts(c: &Contact, company: Option<&str>, family: &str) -> (String, String) {
     let (given, family) = match company {
         Some(name) => (name, ""),
-        None => names::split(c.display_name()),
+        None => names::split_with(c.display_name(), family),
     };
     if family.is_empty() {
         (given.to_string(), given.to_string())
@@ -493,12 +494,13 @@ fn sort_parts(c: &Contact, company: Option<&str>) -> (String, String) {
 /// Orders two contacts for the list. `Keep Order` keeps the identifier order. The family and given names are split
 /// at the last space; `company_a` and `company_b` are the company names of contacts marked as companies, which sort by
 /// that name. The collation is the app's own (see `names`), so accents and Icelandic letters sort as before.
-fn compare_contacts(order: SortOrder, a: &Contact, b: &Contact, company_a: Option<&str>, company_b: Option<&str>) -> Ordering {
+/// `family_a` and `family_b` are the recorded family names (empty when none).
+fn compare_contacts(order: SortOrder, a: &Contact, b: &Contact, company_a: Option<&str>, company_b: Option<&str>, family_a: &str, family_b: &str) -> Ordering {
     if order == SortOrder::None {
         return a.id.cmp(&b.id);
     }
-    let (ag, af) = sort_parts(a, company_a);
-    let (bg, bf) = sort_parts(b, company_b);
+    let (ag, af) = sort_parts(a, company_a, family_a);
+    let (bg, bf) = sort_parts(b, company_b, family_b);
     let by_given = names::key(&ag).cmp(&names::key(&bg)).then(names::key(&af).cmp(&names::key(&bf)));
     let by_family = names::key(&af).cmp(&names::key(&bf)).then(names::key(&ag).cmp(&names::key(&bg)));
     let by_name = match order {
@@ -900,6 +902,7 @@ impl Contacts {
     fn title_of(&self, c: &Contact) -> String {
         names::title(
             c.display_name(),
+            self.details.family(c.id),
             &c.company,
             self.details.nickname(c.id),
             self.details.is_company(c.id),
@@ -1694,7 +1697,11 @@ impl Contacts {
             .filter(|c| self.details.is_company(c.id) && !c.company.trim().is_empty())
             .map(|c| (c.id, c.company.trim().to_string()))
             .collect();
-        self.contacts.sort_by(|a, b| compare_contacts(order, a, b, companies.get(&a.id).map(String::as_str), companies.get(&b.id).map(String::as_str)));
+        let details = &self.details;
+        self.contacts.sort_by(|a, b| {
+            let (company_a, company_b) = (companies.get(&a.id).map(String::as_str), companies.get(&b.id).map(String::as_str));
+            compare_contacts(order, a, b, company_a, company_b, details.family(a.id), details.family(b.id))
+        });
         self.rows.clear();
         let mut top = 0.0;
         let mut previous = None;
@@ -1704,10 +1711,12 @@ impl Contacts {
                 continue;
             }
             let name = companies.get(&self.contacts[i].id).map_or(self.contacts[i].display_name(), String::as_str);
+            // A company has no recorded family name; its name is one part.
+            let family = if companies.contains_key(&self.contacts[i].id) { "" } else { self.details.family(self.contacts[i].id) };
             let letter = match order {
                 // The given name leads the sort, so its first word gives the section.
-                SortOrder::GivenName => names::section(names::split(name).0.split_whitespace().next().unwrap_or(name)),
-                _ => names::section(name),
+                SortOrder::GivenName => names::section(names::split_with(name, family).0.split_whitespace().next().unwrap_or(name)),
+                _ => names::section_with(name, family),
             };
             let section = (previous != Some(letter)).then_some(letter);
             if section.is_some() {
@@ -1757,7 +1766,7 @@ impl Contacts {
         }
         let contact = id.and_then(|id| self.contacts.iter().find(|c| c.id == id)).cloned().unwrap_or_default();
         let name = contact.name.trim();
-        let (first, last) = names::split(name);
+        let (first, last) = names::split_with(name, id.map_or("", |id| self.details.family(id)));
         for (field, text) in self.fields.iter_mut().zip([
             first.trim(),
             last.trim(),
@@ -1854,6 +1863,11 @@ impl Contacts {
     fn save_card_details(&mut self, id: u64) {
         let mut card = CardDetails::default();
         card.company = self.edit_company;
+        // The store keeps one name; record a family name of several words so the list still sections by all of it.
+        let (first, last) = (self.fields[0].trim(), self.fields[1].trim());
+        if !first.is_empty() && last.contains(char::is_whitespace) {
+            card.family = last.to_string();
+        }
         for (k, detail) in Detail::ALL.into_iter().enumerate() {
             if !self.detail_shown[k] {
                 continue;
@@ -4303,6 +4317,24 @@ mod tests {
     }
 
     #[test]
+    fn a_family_name_of_several_words_sections_under_its_first_letter() {
+        let path = file_with("family", &[contact(1, "QA Testperson edited"), contact(2, "Anna As")]);
+        let ui = test_ui();
+        let mut app = Contacts::new(&ui, 1200, 780, path.clone());
+        let sections: String = app.rows.iter().filter_map(|r| r.section).collect();
+        assert_eq!(sections, "AE", "without a record the last word is the family name");
+        let mut card = CardDetails::default();
+        card.family = "Testperson edited".into();
+        app.details.set(1, card);
+        app.rebuild(&ui);
+        let sections: String = app.rows.iter().filter_map(|r| r.section).collect();
+        assert_eq!(sections, "AT", "the recorded family name gives the section");
+        app.edit_contact(&ui, Some(1));
+        assert_eq!((app.fields[0].trim(), app.fields[1].trim()), ("QA", "Testperson edited"), "the editor splits at the family name");
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
     fn favorites_filter_shows_only_starred_contacts() {
         let starred = Contact { favorite: true, ..contact(3, "Cara Cole") };
         let path = file_with("favorites", &[contact(1, "Anna As"), starred]);
@@ -4461,9 +4493,9 @@ mod tests {
     fn the_sort_order_decides_which_name_leads() {
         let zoe = contact(1, "Zoe Ann");
         let adam = contact(2, "Adam Zed");
-        assert_eq!(compare_contacts(SortOrder::FamilyName, &zoe, &adam, None, None), Ordering::Less, "Ann sorts before Zed");
-        assert_eq!(compare_contacts(SortOrder::GivenName, &zoe, &adam, None, None), Ordering::Greater, "Adam sorts before Zoe");
-        assert_eq!(compare_contacts(SortOrder::None, &zoe, &adam, None, None), Ordering::Less, "identifier order");
+        assert_eq!(compare_contacts(SortOrder::FamilyName, &zoe, &adam, None, None, "", ""), Ordering::Less, "Ann sorts before Zed");
+        assert_eq!(compare_contacts(SortOrder::GivenName, &zoe, &adam, None, None, "", ""), Ordering::Greater, "Adam sorts before Zoe");
+        assert_eq!(compare_contacts(SortOrder::None, &zoe, &adam, None, None, "", ""), Ordering::Less, "identifier order");
     }
 
     #[test]
@@ -4471,16 +4503,16 @@ mod tests {
         let acme = contact(3, "Jon Smith");
         let bravo = contact(4, "Ann Berg");
         assert_eq!(
-            compare_contacts(SortOrder::FamilyName, &acme, &bravo, Some("Acme"), None),
+            compare_contacts(SortOrder::FamilyName, &acme, &bravo, Some("Acme"), None, "", ""),
             Ordering::Less,
             "the company Acme sorts before the person Ann Berg, whose family name is Berg"
         );
         assert_eq!(
-            compare_contacts(SortOrder::FamilyName, &acme, &bravo, None, None),
+            compare_contacts(SortOrder::FamilyName, &acme, &bravo, None, None, "", ""),
             Ordering::Greater,
             "without the company flag Jon Smith sorts after Ann Berg"
         );
-        assert_eq!(compare_contacts(SortOrder::FamilyName, &acme, &bravo, Some("Zeta"), None), Ordering::Greater, "Zeta sorts after Berg");
+        assert_eq!(compare_contacts(SortOrder::FamilyName, &acme, &bravo, Some("Zeta"), None, "", ""), Ordering::Greater, "Zeta sorts after Berg");
     }
 
     #[test]
