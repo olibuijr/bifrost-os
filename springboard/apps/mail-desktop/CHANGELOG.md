@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.12
+
+- The red close button on an edited message asks before discarding it, and a toolbar search field filters the list as you type (Cmd+F).
+
 ## 0.17.11
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.17.5
+
+- A family name of several words stays together for sections, sorting and editing.
+
 ## 1.17.4
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.

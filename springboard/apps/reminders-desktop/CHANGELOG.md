@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.8
+
+- Return keeps the new-reminder field open for the next item, List > Delete List... removes a list, and only one Print item uses Cmd+P.
+
 ## 1.20.7
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.

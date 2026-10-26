@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.34.7
+
+- Get Info from the menu bar opens its own window.
+
 ## 1.34.6
 
 - File menu has Move to Trash, Get Info, Rename and Duplicate; Applications shows app icons and Kind Application; Get Info permissions fit.

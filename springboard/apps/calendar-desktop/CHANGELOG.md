@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.19.7
+
+- Cmd+Z restores a deleted event while the Undo bar is shown.
+
 ## 1.19.6
 
 - Clicking a day from a neighbouring month in the month grid keeps the shown month.
