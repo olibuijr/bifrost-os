@@ -2619,6 +2619,14 @@ impl TextEditApp {
     }
 }
 
+/// Whether a dragged item is a file TextEdit opens as a document: a text, rich text or other text-typed file (a picture
+/// is inserted into the page instead).
+fn is_document_file(item: &dnd::DragItem) -> bool {
+    matches!(item.payload, dnd::Payload::File { .. })
+        && dnd::image_format_of(item).is_none()
+        && item.types.iter().any(|t| bifrost_app::controls::uttype::conforms(t, "public.text"))
+}
+
 impl App for TextEditApp {
     fn rpc_methods(&self) -> Vec<&'static str> {
         vec!["service.new_window_with_text", "service.open_selected_file"]
@@ -2675,8 +2683,8 @@ impl App for TextEditApp {
         self.opts = Options::read(&|key| DocumentHost::pref(ctx, key));
         self.spelling.enabled = self.opts.spell_enabled;
         document::set_markup_as_code(self.opts.markup_as_code);
-        // pictures dropped from Files or another app land in this window (see `drag`)
-        dnd::register_types(ctx, &["public.image"]);
+        // pictures dropped from Files or another app land in this window, and text documents open (see `drag`)
+        dnd::register_types(ctx, &["public.image", "public.text"]);
         // a window starts with an untitled document, as a new document would. Not while the main window is ordered out
         // after the last document closed: a later configure (appearance, scale) must not bring a window back
         if self.docs.is_empty() && ctx.windows().main_shown() {
@@ -2858,15 +2866,20 @@ impl App for TextEditApp {
         changed
     }
 
-    /// A picture dragged over the window is accepted when it is a picture and the page can take it (rich text, editable).
-    /// On the drop the files arrive as documents (see `picture_event`); the drop is answered here.
+    /// A picture dragged over the window is accepted when it is a picture and the page can take it (rich text, editable);
+    /// a text or rich text file is accepted always and opens as a document of its own, as a drop on the Dock icon does.
+    /// On the drop the files arrive as documents (see `picture_event`, else the document controller opens them as inbound
+    /// files); the drop is answered here.
     fn drag(&mut self, ctx: &Ctx, ev: dnd::Event) -> bool {
         let dnd::Event::Dest { session, phase, items, .. } = ev else { return false };
         let pictures = items.iter().any(|item| dnd::image_format_of(item).is_some());
-        let takes = pictures && active_doc(&self.docs).is_some_and(|d| d.rich && !d.read_only);
+        let pictures = pictures && active_doc(&self.docs).is_some_and(|d| d.rich && !d.read_only);
+        let takes_documents = items.iter().any(is_document_file);
+        let takes = pictures || takes_documents;
         match phase {
             DragPhase::Entered | DragPhase::Updated => {
-                if takes && !self.drop_sessions.contains(&session) {
+                // only a picture drop is inserted here; a document drop is left to the document controller
+                if pictures && !self.drop_sessions.contains(&session) {
                     if self.drop_sessions.len() >= 16 {
                         self.drop_sessions.remove(0);
                     }
@@ -3299,6 +3312,19 @@ mod tests {
     use super::*;
     use bifrost_app::document::Document;
     use text::{Cell, Style};
+
+    fn file_item(name: &str) -> dnd::DragItem {
+        dnd::DragItem::new(dnd::Payload::File { grant: [0; 16], name: name.into() })
+    }
+
+    #[test]
+    fn a_dropped_text_file_opens_as_a_document_and_a_picture_or_other_file_does_not() {
+        assert!(is_document_file(&file_item("qa note.rtf")));
+        assert!(is_document_file(&file_item("notes.txt")));
+        assert!(!is_document_file(&file_item("photo.png")), "a picture is inserted, not opened");
+        assert!(!is_document_file(&file_item("archive.zip")));
+        assert!(!is_document_file(&dnd::DragItem::new(dnd::Payload::Text("hi".into()))), "dragged text is not a file");
+    }
 
     fn doc(s: &str) -> TextDocument {
         let mut d = TextDocument::untitled();
