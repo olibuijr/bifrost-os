@@ -347,7 +347,8 @@ impl DiskUtility {
                         let open = self.sheet.as_ref().is_some_and(|p| p.requests.is_empty());
                         if let (true, Some(node)) = (open, self.nodes.iter().find(|n| n.name == name).cloned()) {
                             let extra = model::extra_rows(&pairs);
-                            self.sheet = Some(Pending { sheet: info_sheet(&format!("Info for {name}"), &model::info_lines(&node, &extra)), requests: Vec::new() });
+                            let focus = self.sheet.as_ref().and_then(|p| p.sheet.focus);
+                            self.sheet = Some(Pending { sheet: info_sheet(&format!("Info for {name}"), &model::info_lines(&node, &extra)).with_focus(focus), requests: Vec::new() });
                             changed = true;
                         }
                     }
@@ -496,6 +497,21 @@ impl DiskUtility {
         self.error = None;
         self.notice = None;
         self.sheet = Some(Pending { sheet: Sheet::alert(&title, &message, buttons), requests: vec![(SHEET_CONFIRM, request)] });
+    }
+
+    /// A key press while the confirmation or Get Info sheet is open: Return presses the default button, Escape and Cmd+.
+    /// Cancel, Tab moves the focus ring and Space presses the focused button (`Sheet::handle_key`). The sheet takes every key.
+    pub fn sheet_key(&mut self, input: &bifrost_app::KeyInput) -> bool {
+        use bifrost_app::document::{sheet_key, AlertKey};
+        let Some(pending) = self.sheet.as_mut() else { return false };
+        match sheet_key(&mut pending.sheet, input) {
+            AlertKey::Answer(id) => {
+                let t = self.now;
+                self.activate(Target::Sheet(id), t)
+            }
+            AlertKey::Focus => true,
+            AlertKey::Ignored => false,
+        }
     }
 
     /// The sheet's answer. Cancel closes it; another button starts the request it names.
@@ -1122,5 +1138,34 @@ mod tests {
         w.selected = Some("sdb1".into());
         assert!(w.ask_menu(Ask::Partition(2)));
         assert!(w.form.is_none() && w.error.is_some());
+    }
+
+    #[test]
+    fn the_confirmation_sheet_takes_the_sheet_keys_with_a_focus_ring() {
+        use bifrost_app::proto::{CHORD_FLAG, CHORD_META};
+        use bifrost_app::KeyInput;
+        let mut w = one_stick();
+        w.selected = Some("sdb1".into());
+        let (tab, space, esc) = (KeyInput::Code(9), KeyInput::Text(" ".into()), KeyInput::Code(1));
+        // Cmd+. is the chord on evdev key 52 with Meta
+        let cmd_period = KeyInput::Code(CHORD_FLAG | 52 | (CHORD_META << 8));
+        assert!(w.activate(Target::Toolbar(B_FIRST_AID), 1.0));
+        assert!(!w.sheet_key(&space), "Space with no focus presses nothing");
+        assert!(w.sheet.is_some());
+        assert!(w.sheet_key(&tab) && w.sheet.as_ref().unwrap().sheet.focus == Some(SHEET_REPAIR), "the ring starts on the default button");
+        assert!(w.sheet_key(&tab) && w.sheet.as_ref().unwrap().sheet.focus == Some(SHEET_VERIFY));
+        assert!(w.sheet_key(&cmd_period), "Cmd+. is Cancel");
+        assert!(w.sheet.is_none() && w.job.is_none());
+        assert!(w.activate(Target::Toolbar(B_FIRST_AID), 1.0));
+        assert!(w.sheet_key(&esc) && w.sheet.is_none(), "Escape is Cancel");
+        // Tab to Cancel (the last button), then Space presses it
+        assert!(w.activate(Target::Toolbar(B_FIRST_AID), 1.0));
+        for _ in 0..3 {
+            assert!(w.sheet_key(&tab));
+        }
+        assert_eq!(w.sheet.as_ref().unwrap().sheet.focus, Some(SHEET_CANCEL));
+        assert!(w.sheet_key(&space));
+        assert!(w.sheet.is_none() && w.job.is_none(), "Cancel starts nothing");
+        assert!(!w.sheet_key(&esc), "no sheet, no key");
     }
 }

@@ -1546,3 +1546,55 @@ fn undo_of_a_delete_takes_the_reminder_back_out_of_recently_deleted() {
     assert_eq!(app.kept_count, 0);
     cleanup(&path);
 }
+
+#[test]
+fn the_clear_and_purge_alerts_take_return_cmd_period_cmd_d_and_the_tab_focus_ring() {
+    use bifrost_app::KeyInput;
+    use bifrost_proto::{CHORD_FLAG, CHORD_META};
+    // Cmd+. is the chord on evdev key 52 with Meta, Cmd+D the one on key 32
+    let cmd_period = KeyInput::Code(CHORD_FLAG | 52 | (CHORD_META << 8));
+    let cmd_d = KeyInput::Code(CHORD_FLAG | 32 | (CHORD_META << 8));
+    let (tab, space, ret) = (KeyInput::Code(9), KeyInput::Text(" ".into()), KeyInput::Code(13));
+    let (mut app, ui, path) = list_with_completed("completed-clear-keys");
+    render(&mut app, &ui);
+    assert_eq!(app.alert_key(&ui, &ret, 90.0), None, "no alert, not its key");
+    app.activate(&ui, Target::ClearAsk, 100.0);
+    assert!(app.clear_ask);
+    assert_eq!(app.clear_sheet().unwrap().focus, None, "no ring until Tab");
+    assert_eq!(app.alert_key(&ui, &space, 101.0), Some(false), "Space with no focus presses nothing");
+    assert_eq!(app.alert_key(&ui, &KeyInput::Text("x".into()), 102.0), Some(false), "the alert takes every key");
+    // Tab: Clear (the default, drawn first), then Cancel; Space presses Cancel
+    assert_eq!(app.alert_key(&ui, &tab, 110.0), Some(true));
+    assert_eq!(app.clear_sheet().unwrap().focus, Some(completed::ASK_CLEAR));
+    assert_eq!(app.alert_key(&ui, &tab, 111.0), Some(true));
+    assert_eq!(app.clear_sheet().unwrap().focus, Some(completed::ASK_CANCEL));
+    assert_eq!(app.alert_key(&ui, &space, 112.0), Some(true));
+    assert!(!app.clear_ask && app.data.items.len() == 3, "Space on Cancel keeps the completed reminders");
+    // Cmd+. cancels
+    app.activate(&ui, Target::ClearAsk, 120.0);
+    assert_eq!(app.clear_sheet().unwrap().focus, None, "the ring starts over");
+    assert_eq!(app.alert_key(&ui, &cmd_period, 121.0), Some(true));
+    assert!(!app.clear_ask && app.data.items.len() == 3);
+    // Return is Clear
+    app.activate(&ui, Target::ClearAsk, 130.0);
+    assert_eq!(app.alert_key(&ui, &ret, 131.0), Some(true));
+    assert!(!app.clear_ask && app.data.items.len() == 1, "Return clears the completed reminders");
+    cleanup(&path);
+
+    // the purge alert: Delete is destructive, so Return does not answer it; Cmd+D presses a plain Delete
+    let (mut app, ui, path) = self::app("purge-alert-keys");
+    add(&mut app, &ui, "Gone", 0.0);
+    app.selected = Some(id_of(&app, "Gone"));
+    assert!(app.delete_selected(&ui, 10.0));
+    app.activate(&ui, Target::Deleted, 20.0);
+    let row = app.deleted.as_ref().expect("the page is open")[0].row;
+    assert!(app.ask_purge(purge::Purge::One(row)));
+    assert_eq!(app.alert_key(&ui, &ret, 30.0), Some(false), "Return does not answer a destructive button");
+    assert!(app.purge_ask.is_some());
+    assert_eq!(app.alert_key(&ui, &cmd_period, 31.0), Some(true));
+    assert!(app.purge_ask.is_none() && app.kept_count == 1, "Cmd+. keeps it");
+    assert!(app.ask_purge(purge::Purge::One(row)));
+    assert_eq!(app.alert_key(&ui, &cmd_d, 40.0), Some(true));
+    assert!(app.purge_ask.is_none() && app.kept_count == 0, "Cmd+D presses Delete");
+    cleanup(&path);
+}

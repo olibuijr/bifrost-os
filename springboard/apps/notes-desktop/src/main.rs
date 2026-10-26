@@ -818,6 +818,10 @@ impl App for NotesApp {
                 n.chord(&ctx.ui, KEY_Z, mods, now)
             }
             Input::Key(k) => {
+                // the Delete Permanently alert is modal and takes the sheet keys
+                if n.erase_open() {
+                    return n.erase_key(&ctx.ui, &k, bifrost_app::proto::sys::now_ms());
+                }
                 if let Some((key, mods)) = k.as_chord() {
                     use bifrost_app::proto::{CHORD_ALT, CHORD_CTRL, CHORD_META, CHORD_SHIFT};
                     if key == KEY_O && mods & (CHORD_CTRL | CHORD_META) != 0 && mods & (CHORD_SHIFT | CHORD_ALT) == 0 {

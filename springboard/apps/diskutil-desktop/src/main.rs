@@ -19,11 +19,11 @@ mod window;
 
 use bifrost_app::controls::Node;
 use bifrost_app::kit::{Damage, Surface};
-use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
+use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, DocumentEvent, Input, TouchKind};
 use crate::actions::Action;
 use bifrost_core::disk_format::Personality;
 use bifrost_core::json::Json;
-use window::{Ask, DiskUtility, Target, B_DETACH, REFRESH_S, SHEET_CANCEL};
+use window::{Ask, DiskUtility, Target, B_DETACH, REFRESH_S};
 
 /// Menu item ids.
 const MENU_DETACH: u32 = 1;
@@ -284,16 +284,11 @@ impl DiskUtility {
                     }
                 }
             }
-            Input::Key(KeyInput::Text(text)) => self.form_text(&text),
-            Input::Key(KeyInput::Code(code)) => {
+            Input::Key(key) => {
                 if self.form.is_some() {
-                    self.form_code(code)
-                } else if self.sheet.is_some() && matches!(code, 1 | 27) {
-                    // Escape answers a confirmation with Cancel
-                    let t = self.now;
-                    self.activate(Target::Sheet(SHEET_CANCEL), t)
+                    self.form_key(&key)
                 } else {
-                    false
+                    self.sheet_key(&key)
                 }
             }
             // a published control (accessibility, `bifrost pc midget tap-window`): the same action as a click

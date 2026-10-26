@@ -581,6 +581,8 @@ pub struct Notes {
     context: Vec<Act>,
     /// the id of the note in Recently Deleted that Delete Note or Delete Permanently asks about: the alert is up
     erase_ask: Option<String>,
+    /// the alert's button that has the keyboard focus ring (Tab moves it, Space presses it); `None` until Tab
+    erase_focus: Option<u32>,
     /// Cmd+B (or another character style) inside a run of that style, with nothing selected: the run is split at
     /// `pending_at` by the next typing there, which goes in plain. Nothing is inserted until then, so no empty marker
     /// pair is left in the note when the caret moves on or nothing is typed
@@ -884,6 +886,7 @@ impl Notes {
             copied: None,
             context: vec![],
             erase_ask: None,
+            erase_focus: None,
             split: None,
         };
         n.search.focused = false;
@@ -2275,6 +2278,7 @@ impl Notes {
     fn ask_erase(&mut self, i: usize) {
         self.menu = None;
         self.erase_ask = Some(self.notes[i].id.clone());
+        self.erase_focus = None;
         self.dirty = true;
     }
 
@@ -2300,7 +2304,28 @@ impl Notes {
     /// under it and full-width stacked buttons (Delete, destructive, on top; Cancel under it).
     fn erase_sheet(&self) -> Option<Sheet> {
         self.erase_ask.as_ref()?;
-        Some(erase_alert().sheet())
+        Some(erase_alert().sheet().with_focus(self.erase_focus))
+    }
+
+    /// Whether the Delete Permanently alert is up, so it takes the keyboard (`erase_key`).
+    pub fn erase_open(&self) -> bool {
+        self.erase_ask.is_some()
+    }
+
+    /// A key press while the alert is up, through the kit's sheet keys (`Sheet::handle_key`): Escape and Cmd+. cancel,
+    /// Cmd+D presses Delete, Tab moves the focus ring (drawn on the button) and Space presses the focused button. Return
+    /// answers nothing: Delete is destructive, so it is never the default. True when a frame is needed.
+    pub fn erase_key(&mut self, ui: &Ui, key: &bifrost_app::KeyInput, t: f64) -> bool {
+        use bifrost_app::document::{sheet_key, AlertKey};
+        let Some(mut sheet) = self.erase_sheet() else { return false };
+        match sheet_key(&mut sheet, key) {
+            AlertKey::Answer(ERASE_DELETE) => self.run(ui, Act::EraseConfirmed, t),
+            AlertKey::Answer(_) => self.erase_ask = None,
+            AlertKey::Focus => self.erase_focus = sheet.focus,
+            AlertKey::Ignored => return false,
+        }
+        self.dirty = true;
+        true
     }
 
     /// The window in points (the alert's parent) and the height of its title bar, which the alert hangs from.
@@ -5968,6 +5993,46 @@ mod tests {
         n.run(&ui, Act::EraseConfirmed, 420.0);
         assert!(n.erase_sheet().is_none() && n.editing().is_none());
         assert!(!dir.join(folders::TRASH).join("1.md").exists(), "erased from disk");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_delete_alert_takes_cmd_d_cmd_period_and_the_tab_focus_ring() {
+        use bifrost_app::proto::{CHORD_FLAG, CHORD_META};
+        use bifrost_app::KeyInput;
+        // Cmd+D is the chord on evdev key 32 with Meta, Cmd+. the one on key 52
+        let cmd_d = KeyInput::Code(CHORD_FLAG | 32 | (CHORD_META << 8));
+        let cmd_period = KeyInput::Code(CHORD_FLAG | 52 | (CHORD_META << 8));
+        let (tab, space, ret) = (KeyInput::Code(9), KeyInput::Text(" ".into()), KeyInput::Code(13));
+        let ui = ui();
+        let dir = scratch("erase-alert-keys");
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut n = seeded(&ui, &dir);
+        n.delete_row(&ui, 0, 100.0);
+        n.run(&ui, Act::View(View::Trash), 200.0);
+        n.open_note(&ui, n.shown[0], false, 300.0);
+        let note = dir.join(folders::TRASH).join("1.md");
+        assert!(!n.erase_key(&ui, &space, 399.0), "no alert, not its key");
+        n.run(&ui, Act::EraseNote, 400.0);
+        assert!(n.erase_open());
+        assert_eq!(n.erase_sheet().unwrap().focus, None, "no ring until Tab");
+        assert!(!n.erase_key(&ui, &ret, 410.0) && n.erase_open(), "Return never answers the destructive Delete");
+        assert!(!n.erase_key(&ui, &space, 411.0), "Space with no focus presses nothing");
+        // Tab: Delete (drawn first), then Cancel
+        assert!(n.erase_key(&ui, &tab, 420.0));
+        assert_eq!(n.erase_sheet().unwrap().focus, Some(ERASE_DELETE));
+        assert!(n.erase_key(&ui, &tab, 421.0));
+        assert_eq!(n.erase_sheet().unwrap().focus, Some(ERASE_CANCEL));
+        assert!(n.erase_key(&ui, &space, 422.0) && !n.erase_open(), "Space on Cancel closes the alert");
+        assert!(note.exists(), "and keeps the note");
+        // Cmd+. cancels
+        n.run(&ui, Act::EraseNote, 430.0);
+        assert!(n.erase_key(&ui, &cmd_period, 431.0) && !n.erase_open() && note.exists());
+        // the ring starts over each time the alert opens, and Cmd+D presses Delete
+        n.run(&ui, Act::EraseNote, 440.0);
+        assert_eq!(n.erase_sheet().unwrap().focus, None);
+        assert!(n.erase_key(&ui, &cmd_d, 441.0));
+        assert!(!n.erase_open() && !note.exists(), "Cmd+D erases the note");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

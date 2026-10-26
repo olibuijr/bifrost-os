@@ -580,6 +580,10 @@ impl App for RemindersApp {
             },
             Input::ContextAction(id) => a.context_action(&ctx.ui, id, bifrost_proto::sys::now_ms()),
             Input::Key(k) => {
+                // the Clear and purge alerts take the sheet keys
+                if let Some(used) = a.alert_key(&ctx.ui, &k, bifrost_proto::sys::now_ms()) {
+                    return used;
+                }
                 if let Some((key, mods)) = k.as_chord() {
                     a.chord(&ctx.ui, key, mods, bifrost_proto::sys::now_ms());
                     self.sync_keyboard(ctx);
