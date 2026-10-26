@@ -201,6 +201,39 @@ fn cmd_backspace_deletes_the_selected_reminder_and_escape_cancels_the_editor() {
 }
 
 #[test]
+fn delete_and_backspace_delete_the_selected_reminder_and_escape_closes_details_from_a_field() {
+    let (mut app, ui, path) = app("delete-key");
+    for (i, n) in ["A", "B", "C"].iter().enumerate() {
+        add(&mut app, &ui, n, i as f64 * 10.0);
+    }
+    app.screen = Screen::Items;
+    app.rebuild(&ui);
+    app.key(&ui, Out::Backspace, 30.0);
+    assert_eq!(titles(&app).len(), 3, "nothing selected, nothing deleted");
+    app.key(&ui, Out::Named("Down"), 31.0);
+    let id = app.selected_item().unwrap();
+    app.key(&ui, Out::Named("Delete"), 32.0);
+    assert_eq!(titles(&app).len(), 2, "Delete removes the selected reminder");
+    assert!(app.data.items.iter().all(|r| r.id != id));
+    assert!(app.undo.is_some(), "the undo bar offers it back");
+    app.key(&ui, Out::Named("Down"), 33.0);
+    app.key(&ui, Out::Backspace, 34.0);
+    assert_eq!(titles(&app).len(), 1, "Backspace removes it too");
+    // in a text field Backspace edits the text and never deletes the reminder
+    let row = app.rows.iter().position(|r| matches!(r, Row::Item { .. })).unwrap();
+    app.activate(&ui, Target::Info(row), 40.0);
+    assert!(app.details_popover());
+    app.set_focus(Some(Field::Title), 41.0);
+    app.key(&ui, Out::Backspace, 42.0);
+    app.key(&ui, Out::Named("Delete"), 43.0);
+    assert_eq!(app.data.items.len(), 1);
+    // Escape closes the popover even while a field in it has focus
+    assert!(app.escape(&ui, 44.0));
+    assert!(app.editor.is_none() && !app.details_popover());
+    cleanup(&path);
+}
+
+#[test]
 fn undo_bar_names_the_change_and_lasts_at_least_five_seconds() {
     let (mut app, ui, path) = app("undo-labels");
     add(&mut app, &ui, "Milk", 0.0);

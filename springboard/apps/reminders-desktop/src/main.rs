@@ -585,7 +585,7 @@ impl App for RemindersApp {
                     self.sync_keyboard(ctx);
                     return true;
                 }
-                if k == KeyInput::Code(1) {
+                if matches!(k, KeyInput::Code(1) | KeyInput::Code(27)) {
                     let used = a.escape(&ctx.ui, bifrost_proto::sys::now_ms());
                     self.sync_keyboard(ctx);
                     return used;
@@ -594,6 +594,7 @@ impl App for RemindersApp {
                     KeyInput::Text(s) => Some(Out::Text(s)),
                     KeyInput::Code(8) => Some(Out::Backspace),
                     KeyInput::Code(13) => Some(Out::Enter),
+                    KeyInput::Code(46) => Some(Out::Named("Delete")),
                     KeyInput::Code(37) => Some(Out::Named("Left")),
                     KeyInput::Code(38) => Some(Out::Named("Up")),
                     KeyInput::Code(39) => Some(Out::Named("Right")),
