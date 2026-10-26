@@ -1098,6 +1098,9 @@ impl Shell {
         // (the previous frame's rect too, through `desk_regions`), and the frame after it leaves clears its last one;
         // without it every slide-out frame was painted over the one before and the smeared card stayed (W5-4)
         if let Some(r)=self.banner_damage_rect(self.desk_t){v.push(r);}
+        // the drag image follows the pointer over the wallpaper: each frame clears where it was (`desk_regions`) and where it
+        // is, and the frame after the drop clears the last one; without it every position stayed painted (a fan of icons)
+        if let Some(r)=self.dnd_rect(){v.push(r);}
         Some(v)
     }
     pub(super) fn draw_desktop_bar(&self,s:&mut Surface) {
