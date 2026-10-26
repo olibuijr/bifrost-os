@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.12.1
+
+- Upstream gridcraft v0.12.1.
+  ## What's Changed
+  * Romanian: translate Options|Editing and 22 newer strings by @vioreltus in https://github.com/storytold/gridcraft/pull/2233
+  * Keep '!' in structured-reference columns intact on XLSX save by @Silvertree2010 in https://github.com/storytold/gridcraft/pull/2244
+  * ui: a too-wide number in a repeat-fill format shows #### by @pick2510 in https://github.com/storytold/gridcraft/pull/2260
+  * run --script: a line's unknown key stops the run (#2256) by @Hamza0101 in https://github.com/storytold/gridcraft/pull/2266
+
 ## 0.11.1
 
 - Upstream gridcraft v0.11.1.
