@@ -18,6 +18,7 @@ use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_L, SPACE_M, SPACE_S, SPACE_XL};
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_LARGE_TITLE_PT, MAC_SUBHEAD_PT, MAC_TITLE1_PT};
 use crate::feed::{self, Item};
 use crate::reader_size;
+use crate::services;
 use crate::wire;
 use bifrost_app::kit::ui::{home_zone, CARD_BG, CONTENT_BG, LABEL, LABEL_2, SEPARATOR_C};
 use bifrost_app::kit::{Event, Surface, TextCache, Ui, Weight};
@@ -249,14 +250,12 @@ impl News {
         std::mem::take(&mut self.top_changed)
     }
 
-    /// Rebuilds the visible list: the chosen feed, or all feeds interleaved.
+    /// Rebuilds the visible list: the chosen feed, or today's items from all feeds.
     fn rebuild(&mut self) {
         self.rows.clear();
         self.list = match self.tab {
-            0 => {
-                let longest = self.items.iter().map(Vec::len).max().unwrap_or(0);
-                (0..longest).flat_map(|i| self.items.iter().filter_map(move |f| f.get(i).cloned())).collect()
-            }
+            // Today: the day's headlines from every feed, newest first
+            0 => feed::today_list(&self.items, (services::now_secs() / 86_400.0).floor() as i64),
             READING_TAB => wire::rows(&self.reading),
             tab => self.items.get(tab - FEED_TAB).cloned().unwrap_or_default(),
         };
