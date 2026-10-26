@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.11
+
+- New Entry works from its button and File > New Entry (Cmd+N); the sidebar sits below the window buttons.
+
 ## 0.1.10
 
 - The window is opaque and New Entry creates an entry.
