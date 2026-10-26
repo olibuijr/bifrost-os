@@ -498,7 +498,7 @@ impl HwKeys {
         self.alt > 0
     }
 
-    /// The modifier keys held now, as `NSEvent.modifierFlags`: every press the shell forwards to an app carries them, so a
+    /// The modifier keys held now, as the reference event modifier flags: every press the shell forwards to an app carries them, so a
     /// click can be a Shift-click or a Cmd-click. AltGr types characters and is not Option; Caps Lock counts while it is on.
     pub fn modifier_flags(&self) -> bifrost_proto::ModifierFlags {
         bifrost_proto::ModifierFlags::from_held(self.shift > 0, self.ctrl > 0, self.alt > self.altgr, self.meta > 0, self.caps)
@@ -1072,7 +1072,7 @@ impl Shell {
     pub fn hw_builtin_chord(&mut self, code: u16, mods: u32, t: f64) -> bool {
         const KEY_LEFTBRACE: u16 = 26;
         const KEY_RIGHTBRACE: u16 = 27;
-        // Cmd+Return in Search shows the selected file in its folder (Show in Finder on the reference platform)
+        // Cmd+Return in Search shows the selected file in its folder (Show in the file manager on the reference platform)
         if code == KEY_ENTER && mods == CHORD_META && self.screen_on && !self.card_alert_up() && self.quicksearch_reveal(t) {
             self.last_input = t;
             return true;
@@ -1299,7 +1299,7 @@ impl Shell {
     /// Esc: closes the topmost thing (Control Center, Search, the switcher), else steps back in
     /// the app on screen, else leaves it. The terminal and hosted apps get the Escape key itself.
     fn hw_back(&mut self, t: f64) -> Vec<Effect> {
-        // the open Quick Look panel is the topmost thing: Escape closes it (and tells the app that opened it) before
+        // the open Preview panel is the topmost thing: Escape closes it (and tells the app that opened it) before
         // anything under it hears the key
         if self.quick_look_key(1, true).is_some() {
             return vec![];

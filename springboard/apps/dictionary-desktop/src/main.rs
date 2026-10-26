@@ -522,7 +522,7 @@ impl DictionaryApp {
     }
 
     /// Shows `word` now when the dictionaries are loaded, else keeps it for `configure` to show once they are, so a
-    /// look-up that starts the app (Spotlight's dictionary hit, Open in Dictionary) lands on its word. True when the
+    /// look-up that starts the app (Search's dictionary hit, Open in Dictionary) lands on its word. True when the
     /// screen needs a frame.
     fn show_or_queue(&mut self, word: &str) -> bool {
         if self.library.is_some() {
@@ -535,7 +535,7 @@ impl DictionaryApp {
         false
     }
 
-    /// Shows the word asked for before the dictionaries were loaded (cold launch from Spotlight or another app), once
+    /// Shows the word asked for before the dictionaries were loaded (cold launch from Search or another app), once
     /// they are. True when it was shown.
     fn show_pending(&mut self) -> bool {
         if self.library.is_none() {
@@ -736,7 +736,7 @@ impl DictionaryApp {
         self.side_scroll.offset() - bifrost_app::layout::UNIFIED_BAR_PT
     }
 
-    /// The toolbar's text size pull-down (`NSMenuToolbarItem`): its menu opens under the button, at (`x`, `y`) points, and
+    /// The toolbar's text size pull-down (the reference menu toolbar item): its menu opens under the button, at (`x`, `y`) points, and
     /// the choice comes back as `Input::ContextAction` with the View menu's ids.
     fn open_text_size_menu(&self, ctx: &Ctx, x: f32, y: f32) {
         let s = ctx.ui.pt(1.0);
@@ -933,7 +933,7 @@ impl DictionaryApp {
                 let word = self.shown.as_ref().map(|s| s.word.clone()).unwrap_or_else(|| self.query.to_string());
                 self.look_up(&word)
             }
-            // Up and Down move the sidebar's selection and show that word (`NSTableView`'s arrow keys)
+            // Up and Down move the sidebar's selection and show that word (the reference table view's arrow keys)
             KeyInput::Code(code @ (38 | 40)) => self.step_sidebar(if *code == 38 { -1 } else { 1 }),
             KeyInput::Code(1 | 27) => {
                 if self.query.is_empty() && self.shown.is_none() {

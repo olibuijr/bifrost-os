@@ -1,5 +1,5 @@
 //! The Services menu and Look Up on the desktop. The selection is the front window's, as the reference's services act
-//! on the front app's selection (`NSServicesMenuRequestor`): an external app is asked for it (`ToApp::SelectionRequest`,
+//! on the front app's selection (the reference services requestor): an external app is asked for it (`ToApp::SelectionRequest`,
 //! answered by the SDK from the focused text field or by the app's own `App::selected_text`), and when it says nothing
 //! is selected, or does not answer in time, the word at its caret is taken. The clipboard is never the selection: a
 //! stale copy is not what the person pointed at. `bifrost_ui::services_menu` models which services take the selection

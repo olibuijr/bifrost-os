@@ -201,7 +201,7 @@ pub mod entity_index;
 // action intents (Wi-Fi, wallpaper); not wired to Search yet
 #[allow(dead_code)]
 pub mod settings_actions;
-pub mod spotlight_scope;
+pub mod search_scope;
 pub mod settings_search;
 pub mod screensaver;
 pub mod hot_corners;
@@ -896,7 +896,7 @@ pub struct Shell {
     /// the touchscreen fingers that are down, so the pointer stream does not report them twice (`touch_frames`)
     touch_contacts: touch_frames::Contacts,
     /// the modifier keys the hardware keyboard holds now (`HwKeys::modifier_flags`), set on every key event; each press
-    /// forwarded to an external app carries them (`ToApp::Touch::mods`, `NSEvent.modifierFlags`)
+    /// forwarded to an external app carries them (`ToApp::Touch::mods`, the reference event modifier flags)
     key_mods: bifrost_proto::ModifierFlags,
     /// the held modifier keys are to be forgotten (the session was restored: the presses before it went elsewhere), taken by
     /// the input loop with `take_key_reset`
@@ -1545,7 +1545,7 @@ impl Shell {
     }
 
     /// Desktop motion that needs frames by itself: window effects and the dock's bounce, show/hide and slide.
-    /// Overlays that are only visible (Control Center, the keyboard, Spotlight...) redraw through `dirty` when they
+    /// Overlays that are only visible (Control Center, the keyboard, Search...) redraw through `dirty` when they
     /// change; counting them here redrew a static lock screen at the full frame rate.
     fn desk_moving(&self) -> bool {
         let t = self.desk_t;

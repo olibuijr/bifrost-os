@@ -3,7 +3,7 @@
 //! between pages, Esc or a click outside to close. The wallpaper and the windows stay visible around the panel (the
 //! exported surface is masked to the capsule and the panel).
 //!
-//! Reordering: with a pointer (the desktop), dragging an icon picks it up at once, as the reference's Launchpad does;
+//! Reordering: with a pointer (the desktop), dragging an icon picks it up at once, as the reference's Applications grid does;
 //! on a touch screen a press held for `HOLD_MS` picks it up (it lifts under the finger even before it moves), so a
 //! plain swipe there still pages. A drag that starts on empty space pages everywhere. While an icon is held the
 //! others make room at the slot under the pointer, holding it at the panel's left or right edge turns the page, and
@@ -1081,7 +1081,7 @@ mod tests {
     #[test]
     fn a_pointer_drag_lifts_at_once_and_a_touch_only_after_the_hold() {
         let slop = 8.0;
-        assert!(lifts(true, 40.0, 20.0, slop), "a mouse drag on an icon picks it up (Launchpad)");
+        assert!(lifts(true, 40.0, 20.0, slop), "a mouse drag on an icon picks it up (Applications grid)");
         assert!(!lifts(true, 40.0, 4.0, slop), "a click that barely moves does not");
         assert!(lifts(true, HOLD_MS, 0.0, slop));
         assert!(!lifts(false, 40.0, 300.0, slop), "a quick swipe on a touch screen pages");

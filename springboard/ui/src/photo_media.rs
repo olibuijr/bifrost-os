@@ -78,9 +78,9 @@ pub fn pair_moving(items: &[Item]) -> Vec<Pair> {
     pairs
 }
 
-/// The Apple content identifier in an Apple iOS maker note (the EXIF maker note of a still): tag 0x0011 of the IFD that
+/// The vendor content identifier in a vendor maker note (the EXIF maker note of a still): tag 0x0011 of the IFD that
 /// follows the 14-byte header ("Apple iOS", a zero, then 0x00 0x01 and the byte order), with offsets from the start of
-/// the note. The movie of a Live Photo carries the same string. None when the note is not Apple's or has no identifier.
+/// the note. The movie of a Live Photo carries the same string. None when the note is not the vendor's or has no identifier.
 pub fn apple_content_id(note: &[u8]) -> Option<String> {
     if !note.starts_with(b"Apple iOS\0") {
         return None;
@@ -219,7 +219,7 @@ mod tests {
         file
     }
 
-    /// An Apple maker note carrying the identifier `id` as tag 0x0011 (the value is stored after the IFD).
+    /// A vendor maker note carrying the identifier `id` as tag 0x0011 (the value is stored after the IFD).
     fn maker_note(id: &str) -> Vec<u8> {
         let mut note = b"Apple iOS\0\0\x01MM".to_vec();
         note.extend_from_slice(&1u16.to_be_bytes());

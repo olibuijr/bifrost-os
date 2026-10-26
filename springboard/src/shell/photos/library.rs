@@ -91,7 +91,7 @@ pub fn duplicate(path: &Path) -> std::io::Result<PathBuf> {
 /// How much of a movie is read to find its content identifier (a Live Photo clip is a few megabytes).
 const MOVIE_LIMIT: u64 = 64 * 1024 * 1024;
 
-/// The Live Photo content identifier of a file: the Apple maker note of a JPEG, or the metadata of a movie. None for
+/// The Live Photo content identifier of a file: the reference vendor's maker note of a JPEG, or the metadata of a movie. None for
 /// any other file and for files without one.
 pub fn content_id(path: &Path) -> Option<String> {
     use std::io::Read;

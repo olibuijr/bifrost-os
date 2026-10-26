@@ -1,6 +1,6 @@
 //! On-device live recognition for apps, through the shell's `speech_recognizer` service (see
 //! `springboard/src/shell/services/recognizer.rs`). The shell captures the microphone and runs the whisper element, so
-//! no audio leaves the machine. The recognition types an app uses are the same as for Apple's recognizer:
+//! no audio leaves the machine. The recognition types an app uses are the same as for the reference recognizer:
 //! [`SFSpeechAudioBufferRecognitionRequest`] and [`SFSpeechRecognitionResult`] from [`speech_recognizer`].
 //!
 //! ```ignore

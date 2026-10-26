@@ -1,5 +1,5 @@
 //! The Applications place: the store apps installed under `<shell data>/apps/<id>/current/`, listed by the names the
-//! Dock and Launchpad show (the folder itself is named by app ids, which is not what a person looks for).
+//! Dock and the Applications grid show (the folder itself is named by app ids, which is not what a person looks for).
 //!
 //! The list is read-only, like Recents: nothing is created, pasted or dropped into it. Opening a row (double-click,
 //! Return, File > Open) launches the app through the shell (`workspace::open_application`, by id), or brings it to the

@@ -1,4 +1,4 @@
-//! New Finder Window (⌘N, or File > New Window in the empty-area menu): a second Files window with its own folder
+//! New Files Window (⌘N, or File > New Window in the empty-area menu): a second Files window with its own folder
 //! view. The window is a whole `Files` of its own, so its folder, selection and view never move the main window's.
 //! Keys and menus stay with the main window; a new window takes touches, draws, and is dropped when the shell closes it.
 use crate::*;

@@ -307,12 +307,12 @@ impl Files {
 impl Files {
     /// The items Files adds to the File menu (the shell merges them into its own).
     pub(crate) fn file_menu_items(&self) -> Vec<bifrost_app::AppMenuItem> {
-        // File > Quick Look (the same panel as the context menu's Preview): the shell merges an app menu titled File
+        // File > Preview (the same panel as the context menu's Preview): the shell merges an app menu titled File
         // into its own File menu, and the item needs a selection
-        let quick_look = bifrost_app::AppMenuItem::new(MENU_QUICK_LOOK, "Quick Look").enabled(!self.selected_paths().is_empty());
+        let quick_look = bifrost_app::AppMenuItem::new(MENU_QUICK_LOOK, "Preview").enabled(!self.selected_paths().is_empty());
         // File > New Folder (Shift+Cmd+N): the toolbar has no New Folder button; the folder menus have it too
         let new_folder = bifrost_app::AppMenuItem::new(MENU_NEW_FOLDER, "New Folder").key("cmd+shift+n").enabled(!self.in_recents() && !self.in_bin());
-        // the item actions of the context menu, with the same keys (Finder's File menu lists them too); not while a name
+        // the item actions of the context menu, with the same keys (the reference file manager's File menu lists them too); not while a name
         // is being typed, where the chords are the field's
         let (has, single, typing) = (!self.selection.is_empty(), self.selection.len() == 1, self.naming.is_some());
         let (in_bin, in_recents) = (self.in_bin(), self.in_recents());

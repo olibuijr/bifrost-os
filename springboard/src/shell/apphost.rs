@@ -1228,7 +1228,7 @@ impl AppHost {
         true
     }
 
-    /// A press, drag or release for the app's main window, with the modifier keys held (`NSEvent.modifierFlags`).
+    /// A press, drag or release for the app's main window, with the modifier keys held (the reference event modifier flags).
     pub fn touch(&mut self, kind: TouchKind, id: u32, x: f32, y: f32, t_ms: u32, mods: bifrost_proto::ModifierFlags) {
         self.send(&ToApp::Touch { kind, id, x, y, t_ms, mods });
     }

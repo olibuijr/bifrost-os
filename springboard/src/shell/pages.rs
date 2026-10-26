@@ -98,7 +98,7 @@ pub enum PageId {
     InterfaceScale,
     Appearance,
     Privacy,
-    Spotlight,
+    Search,
     /// Privacy › Analytics & Diagnostics
     Diagnostics,
     /// Privacy › App Permissions: which installed apps may use the camera, microphone or screen
@@ -263,7 +263,7 @@ pub enum Toggle {
     FourFinger,
     CornerSwipe,
     /// Settings > Search: a kind of result Search lists, switched on or off
-    SpotlightCategory(super::spotlight_scope::Category),
+    SearchCategory(super::search_scope::Category),
     /// App Permissions: the app at this index (of `apphost::installed()`) may use this media type
     Permission(Media, usize),
     /// App Permissions > Location: the app at this index may use location while it is in use
@@ -293,7 +293,7 @@ pub enum Pick {
     /// Mouse > Secondary Click: index into `mouse_page::SECONDARY_BUTTON`
     MouseSecondary(usize),
     /// Settings > Search > Privacy: stop excluding the folder at this index
-    SpotlightExclude(usize),
+    SearchExclude(usize),
     /// Settings > Backup > Backup Destination: the index into `backup_page::destination_choices`
     BackupDestination(usize),
     /// Keyboard > Modifier Keys: the modifier key (index into `kb_input::REMAPPABLE`) sends the choice (index into `kb_input::REMAP_TARGETS`)
@@ -924,7 +924,7 @@ const SIDEBAR_GROUPS: &[&[PageId]] = &[
         PageId::MenuBar,
         PageId::ControlCentre,
         PageId::Assistant,
-        PageId::Spotlight,
+        PageId::Search,
         PageId::Wallpaper,
         PageId::ScreenSaver,
     ],
@@ -1044,7 +1044,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                 Item::new("Screen Saver").icon(Icon::Wallpaper).value(if o.screensaver_minutes == 0 { "Never" } else { super::screensaver::saver_name(o.screensaver_module) }).link(PageId::ScreenSaver),
                 power,
                 Item::new("Privacy").icon(Icon::Privacy).link(PageId::Privacy),
-                Item::new("Search").icon(Icon::Search).link(PageId::Spotlight),
+                Item::new("Search").icon(Icon::Search).link(PageId::Search),
                 Item::new("Lock Screen").icon(Icon::Passcode).link(PageId::LockScreen),
             ];
             // the numeric passcode is a tablet's lock; a desktop signs in with its account password, which Lock Screen
@@ -1780,11 +1780,11 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         PageId::Storage | PageId::Graphics | PageId::StartupDisk | PageId::Passcode | PageId::Passwords | PageId::InternetAccounts | PageId::Account | PageId::Developer | PageId::Backup | PageId::ScreenTime | PageId::StDowntime | PageId::StLimits | PageId::StAllowed => page("", false, vec![]),
         // built by `notify_page::spec`
         PageId::Notifications | PageId::NotificationApp | PageId::NightShift | PageId::WakeSchedule => page("Notifications", false, vec![]),
-        PageId::Spotlight => {
-            use super::spotlight_scope::Category;
-            let scope = &o.spotlight;
-            let kinds = Category::ALL.into_iter().map(|c| Item::new(c.title()).switch(scope.allows(c), Action::Toggle(Toggle::SpotlightCategory(c)))).collect();
-            let folders: Vec<Item> = scope.excluded().iter().enumerate().map(|(i, f)| Item::new(f.display().to_string()).action(Action::Pick(Pick::SpotlightExclude(i)))).collect();
+        PageId::Search => {
+            use super::search_scope::Category;
+            let scope = &o.search_scope;
+            let kinds = Category::ALL.into_iter().map(|c| Item::new(c.title()).switch(scope.allows(c), Action::Toggle(Toggle::SearchCategory(c)))).collect();
+            let folders: Vec<Item> = scope.excluded().iter().enumerate().map(|(i, f)| Item::new(f.display().to_string()).action(Action::Pick(Pick::SearchExclude(i)))).collect();
             let folders = if folders.is_empty() { vec![Item::new("No Excluded Folders").tint(Tint::Dim)] } else { folders };
             page(
                 "Search",

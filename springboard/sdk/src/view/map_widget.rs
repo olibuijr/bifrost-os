@@ -1,4 +1,4 @@
-//! Embedded map view (the SwiftUI `Map` content that the MapKit overlay module adds): a [`View`] that shows the map
+//! Embedded map view (the reference declarative UI toolkit's `Map` content that the MapKit overlay module adds): a [`View`] that shows the map
 //! tiles around a camera inside an app window, with annotation pins, drag to pan and the keyboard to zoom.
 //!
 //! The camera, the gestures and the annotation model are `bifrost_app::maps::MapView` and [`MapItem`]; the tiles are

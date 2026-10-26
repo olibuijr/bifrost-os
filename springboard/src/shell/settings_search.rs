@@ -240,7 +240,7 @@ fn walked(id: PageId) -> bool {
     )
 }
 
-/// A group header as a result's label: "SHOW SCROLL BARS" reads "Show scroll bars" (the macOS sentence case of a
+/// A group header as a result's label: "SHOW SCROLL BARS" reads "Show scroll bars" (the reference platform's sentence case of a
 /// section title).
 fn header_label(header: &str) -> String {
     let lower = header.trim().to_lowercase();

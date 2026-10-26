@@ -339,7 +339,7 @@ pub struct Calendar {
     open_request: Option<u64>,
     last_tap: Option<u64>,
     /// The click count of the press in progress, kept by the kit's counter with the system's double-click interval and
-    /// slop (`ClickCounter`), as `NSEvent.clickCount` is: a double-click is two presses, not two releases, in time.
+    /// slop (`ClickCounter`), as the reference event's click count is: a double-click is two presses, not two releases, in time.
     clicks: bifrost_app::controls::text::ClickCounter,
     click_count: u8,
     /// Replies and invitations waiting for Mail (`rsvp.rs`); the app takes them with `take_outgoing`.

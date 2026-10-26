@@ -3345,10 +3345,10 @@ impl Settings {
                         }
                         vec![]
                     }
-                    Pick::SpotlightExclude(k) => {
-                        if self.opts.spotlight.remove_excluded(k) {
+                    Pick::SearchExclude(k) => {
+                        if self.opts.search_scope.remove_excluded(k) {
                             self.opts.save(prefs);
-                            super::spotlight_scope::install(self.opts.spotlight.clone());
+                            super::search_scope::install(self.opts.search_scope.clone());
                         }
                         vec![]
                     }
@@ -3847,11 +3847,11 @@ impl Settings {
                 }
                 None => false,
             },
-            Toggle::SpotlightCategory(c) => {
-                let on = !self.opts.spotlight.allows(c);
-                self.opts.spotlight.set_allowed(c, on);
+            Toggle::SearchCategory(c) => {
+                let on = !self.opts.search_scope.allows(c);
+                self.opts.search_scope.set_allowed(c, on);
                 self.opts.save(prefs);
-                super::spotlight_scope::install(self.opts.spotlight.clone());
+                super::search_scope::install(self.opts.search_scope.clone());
                 on
             }
             Toggle::BatteryPercent => flip(&mut self.opts.battery_percent),

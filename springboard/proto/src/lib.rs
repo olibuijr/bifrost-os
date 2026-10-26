@@ -121,26 +121,26 @@ pub const CHORD_SHIFT: u32 = 2;
 pub const CHORD_ALT: u32 = 4;
 pub const CHORD_META: u32 = 8;
 
-/// The modifier keys held when a pointer press or touch happened (`NSEvent.modifierFlags`). The shell sets them from its
+/// The modifier keys held when a pointer press or touch happened (the reference event modifier flags). The shell sets them from its
 /// live keyboard state on every `ToApp::Touch` and `ToApp::WindowTouch`, so a click can be a Shift-click (extend a
-/// selection) or a Cmd-click (toggle one item). The bits are the reference's `NSEventModifierFlags` raw values; a bit
+/// selection) or a Cmd-click (toggle one item). The bits are the reference platform's modifier-flag raw values; a bit
 /// this crate does not name is dropped on decode.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct ModifierFlags(u32);
 
 impl ModifierFlags {
     pub const EMPTY: ModifierFlags = ModifierFlags(0);
-    /// `NSEventModifierFlagCapsLock`: Caps Lock is on.
+    /// Caps Lock is on.
     pub const CAPS_LOCK: ModifierFlags = ModifierFlags(1 << 16);
-    /// `NSEventModifierFlagShift`
+    /// Shift.
     pub const SHIFT: ModifierFlags = ModifierFlags(1 << 17);
-    /// `NSEventModifierFlagControl`
+    /// Control.
     pub const CONTROL: ModifierFlags = ModifierFlags(1 << 18);
-    /// `NSEventModifierFlagOption` (Alt)
+    /// Option (Alt).
     pub const OPTION: ModifierFlags = ModifierFlags(1 << 19);
-    /// `NSEventModifierFlagCommand` (Meta, Super)
+    /// Command (Meta, Super).
     pub const COMMAND: ModifierFlags = ModifierFlags(1 << 20);
-    /// `NSEventModifierFlagDeviceIndependentFlagsMask` restricted to the flags above.
+    /// The device-independent flags mask, restricted to the flags above.
     pub const ALL: ModifierFlags = ModifierFlags(0x1f << 16);
 
     /// The wire value.
@@ -593,11 +593,11 @@ impl WindowLevel {
 pub mod window_flags {
     /// The app wants `ToApp::WindowTitleDoubleClick` instead of the shell's zoom when the title bar is double-clicked.
     pub const TITLE_DOUBLE_CLICK: u32 = 1;
-    /// A window opened without a position is cascaded from the app's other windows, as AppKit's
-    /// `cascadeTopLeftFromPoint:` places a new document window: the first one beside (or over the trailing side of) the
+    /// A window opened without a position is cascaded from the app's other windows, as the reference toolkit's
+    /// cascade call places a new document window: the first one beside (or over the trailing side of) the
     /// main window, each later one a title bar's height down and right of the one opened before it.
     pub const CASCADE: u32 = 2;
-    /// The window's content runs under the title bar (`NSWindowStyleMaskFullSizeContentView`), as the app's main window
+    /// The window's content runs under the title bar (the reference full-size-content window style), as the app's main window
     /// does with `window = "full-size"`: the shell draws only the traffic lights over it and no title row, because the
     /// app draws its own unified title and toolbar row (a second document window of an editor).
     pub const FULL_SIZE: u32 = 4;
@@ -760,8 +760,8 @@ pub enum ToApp {
     ServiceReply { request: u32, ok: bool, body: String },
     /// An event a system service pushes to the app (JSON `body`). Tag 0x1d3.
     ServiceEvent { service: String, event: String, body: String },
-    /// The shell asks for the selected text of the app's focused view (`NSServicesMenuRequestor`
-    /// `writeSelectionToPasteboard:`), for Look Up and the Services menu. Answered with `ToShell::SelectionReply`
+    /// The shell asks for the selected text of the app's focused view (the reference services requestor
+    /// write-selection call), for Look Up and the Services menu. Answered with `ToShell::SelectionReply`
     /// carrying the same `request`. Tag 0x1d4.
     SelectionRequest { request: u32 },
     /// A dragging session moves over the app's window (`NativeDraggingDestination`); `x`, `y` are window-local points.
@@ -951,7 +951,7 @@ pub enum ToShell {
     /// the screen. `flags` is a `window_flags` set. Tag 0x240.
     WindowOpen { id: u32, title: String, w: f32, h: f32, position: Option<(f32, f32)>, flags: u32 },
     /// Several windows: close window `id`. The shell drops its frames. Id 0 orders the main window out
-    /// (`NSWindow.orderOut`, a document app's last document closed): the desk drops it and the app keeps running with no
+    /// (ordering the window out, a document app's last document closed): the desk drops it and the app keeps running with no
     /// window until it is activated again (`ToApp::Reopen`) or asks for it back with `WindowOpen` id 0.
     WindowClose { id: u32 },
     /// Several windows: the window's title.
@@ -992,14 +992,14 @@ pub enum ToShell {
     ContextMenu {x:f32,y:f32,items:Vec<ContextItem>},
     /// The app's dock badge (`NativeDockTile.badgeLabel`): a short label such as an unread count; empty clears it.
     SetBadge { label: String },
-    /// Enter (`on`) or leave full screen for the app's window (`NSWindow.toggleFullScreen`). Answered by `ToApp::FullScreen`.
+    /// Enter (`on`) or leave full screen for the app's window (the reference window's full-screen toggle). Answered by `ToApp::FullScreen`.
     SetFullScreen { on: bool },
-    /// The content size, in points, the app wants for its main window (`NSWindow.setContentSize`). The shell keeps the
+    /// The content size, in points, the app wants for its main window (the reference window's set-content-size call). The shell keeps the
     /// window's top-left corner, holds the size to the window's limits and the work area, and animates the change as it
     /// animates a zoom; the app hears the new size as an ordinary configure. A zoomed or full-screen window keeps its frame
     /// and takes the size as the one it goes back to. Tag 0x252.
     SetContentSize { w: f32, h: f32 },
-    /// The main window's content size limits in points (`NSWindow.contentMinSize`, `contentMaxSize`); `None` falls back
+    /// The main window's content size limits in points (the reference window's content minimum and maximum sizes); `None` falls back
     /// to the manifest's `min_size` / `max_size`. They hold for as long as the app runs. Tag 0x253.
     SetContentLimits { min: Option<(f32, f32)>, max: Option<(f32, f32)> },
     /// Sent only by the keyboard system app.
@@ -1064,7 +1064,7 @@ pub enum ToShell {
     /// activities (0 = none). While `USER_INITIATED` or `LATENCY_CRITICAL` is set the shell does not suspend the app
     /// when it leaves the foreground. Sent only when the union changes. 0x161.
     Activity { options: u32 },
-    /// `NSWindow.level` for the app's window: `Floating` keeps it above the normal windows (the Calculator's
+    /// The reference window level for the app's window: `Floating` keeps it above the normal windows (the Calculator's
     /// Always on Top, Stickies' Float on Top). Sent when it changes; the shell keeps it while the app lives. Tag 0x165.
     WindowLevel(WindowLevel),
     /// The level of one of the app's extra windows (`WindowOpen`'s id). Id 0 is the main window and is refused by the
@@ -1074,7 +1074,7 @@ pub enum ToShell {
     /// to the screen. Tag 0x246.
     WindowMove { window: u32, x: f32, y: f32 },
     /// Several windows: bring window `window` (0 is the main window) to the front and give it key focus
-    /// (`NSWindow.makeKeyAndOrderFront`), as the Window menu does. A document app opening a document that is already open
+    /// (the reference window's make-key-and-order-front call), as the Window menu does. A document app opening a document that is already open
     /// raises its window. An unknown window is ignored. Tag 0x258.
     WindowRaise { window: u32 },
     /// Several windows: collapse window `window` to its title bar (`collapsed`) or expand it back. Tag 0x247.

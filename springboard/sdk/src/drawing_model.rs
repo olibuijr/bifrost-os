@@ -293,7 +293,7 @@ impl BezierPath {
         ctx.stroke(&self.path, color, self.line_width);
         ctx.restore();
     }
-    /// `fill()` with a shadow under the shape (`NSShadow` set before the fill).
+    /// `fill()` with a shadow under the shape (a shadow set before the fill).
     pub fn fill_with_shadow(&self, ctx: &mut GraphicsContext, color: u32, shadow: &ShadowStyle) {
         ctx.save();
         ctx.add_shadow(Some(shadow.effect()));

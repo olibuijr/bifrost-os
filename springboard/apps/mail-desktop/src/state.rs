@@ -841,7 +841,7 @@ pub struct Mail {
     /// The UID of the message open in the reader: the selected message, or the one clicked last into a selection of
     /// several (`selection`).
     pub open: Option<u32>,
-    /// The messages selected together with Cmd-click and Shift-click (`NSTableView` multiple selection), in the order
+    /// The messages selected together with Cmd-click and Shift-click (the reference table view's multiple selection), in the order
     /// they were selected. Empty while one message or none is selected: `open` is the selection then. Never one long.
     selection: Vec<u32>,
     /// The message a Shift-click or Shift-arrow extends the selection from: the last one clicked on its own.
@@ -1077,7 +1077,7 @@ impl Mail {
 
     /// Shows mailbox `name` of the shown account. The selection and rows of the mailbox left are kept. A mailbox listed
     /// before shows its last rows at once, with the message it had selected, and the listing asked for next refreshes
-    /// them in place (as macOS Mail keeps a list and a selection per mailbox).
+    /// them in place (as the reference mail app keeps a list and a selection per mailbox).
     pub fn show_mailbox(&mut self, name: &str) {
         self.remember_selection();
         self.stash_rows();

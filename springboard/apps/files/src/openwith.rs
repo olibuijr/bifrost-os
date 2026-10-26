@@ -1,5 +1,5 @@
 //! Open With: the apps that declare the focused file's type, as the shell's launch service names them, the default
-//! marked and first. A click on an app opens the file in it (`workspace::open_with`, `NSWorkspace.open(_:withApplicationAt:)`);
+//! marked and first. A click on an app opens the file in it (`workspace::open_with`, the reference workspace's open-with call);
 //! the default itself is chosen in Settings > General > Default Apps.
 use crate::*;
 use bifrost_app::launch_services::Candidate;

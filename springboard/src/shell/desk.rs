@@ -179,7 +179,7 @@ pub fn origin_hint(placed: &std::collections::HashSet<AppId>, app: AppId, x: i32
 }
 
 /// The top-left corner (px) of a window of `size` cascaded from `from`, another window of the same app
-/// (`window_flags::CASCADE`, AppKit's `cascadeTopLeftFromPoint:`), kept inside the work area `a`. From the main window
+/// (`window_flags::CASCADE`, the reference toolkit's cascade call), kept inside the work area `a`. From the main window
 /// (`from_main`) it goes beside the main window's trailing edge when it fits there, and otherwise over the main window's
 /// trailing side one `step` down, so the leading columns (a sidebar, a message list) stay in view. A window about as
 /// wide as the main window (less than a `step` narrower) has no trailing side to sit on: that put a second document
@@ -368,10 +368,10 @@ fn double_click_ms() -> f64 {
 /// enough that a window the window server focuses later (a dialog, an app's own activation) is followed again.
 pub(super) const FRONT_INTENT_MS: f64 = 3000.0;
 
-/// The app the shell is bringing to the front (Spotlight, the Apps grid, the Dock, `open-app`): opened at `since`
+/// The app the shell is bringing to the front (Search, the Apps grid, the Dock, `open-app`): opened at `since`
 /// (shell ms). While it stands (`Shell::desk_front_intent`) a focus the window server gives another window on its own
-/// (a hand-back as Spotlight's exclusive keyboard goes, a keyboard enter, an activating configure) is not followed, and
-/// the shell asks the window server again to activate the app's window once it is mapped (E2E6 Spotlight).
+/// (a hand-back as Search's exclusive keyboard goes, a keyboard enter, an activating configure) is not followed, and
+/// the shell asks the window server again to activate the app's window once it is mapped (E2E6 Search).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) struct FrontIntent {
     pub app: AppId,
@@ -1402,7 +1402,7 @@ impl Desk {
     pub fn open(&mut self, m: &Metrics, app: AppId, size: (i32, i32)) -> usize {
         self.windowless_front.set(None);
         if let Some(i) = self.index_of(app) {
-            // opening a hidden app (the Dock, Cmd+Tab, Spotlight) activates it: its windows come back in the order Hide
+            // opening a hidden app (the Dock, Cmd+Tab, Search) activates it: its windows come back in the order Hide
             // left them, the one that was in front in front, not the main window over its viewer (E2E N2)
             if app == app.parent() && self.hidden.iter().any(|a| a.parent() == app) {
                 if let Some(front) = self.show_hidden_app(app) {
@@ -1458,7 +1458,7 @@ impl Desk {
         Rect { x: 0, y: 0, w: m.w, h: m.h }
     }
 
-    /// The app's own resize of window `i` to a content size in points (`ToShell::SetContentSize`, `NSWindow.setContentSize`).
+    /// The app's own resize of window `i` to a content size in points (`ToShell::SetContentSize`, the reference window's set-content-size call).
     /// The top-left corner stays where it is (moved only as far as the work area needs); the size is held to the app's
     /// limits (a fixed-size window takes it as asked: only the person cannot resize it) and to the work area. A zoomed
     /// or full-screen window keeps its frame and takes the size as the one it goes back to. Returns whether the frame
@@ -2170,12 +2170,12 @@ impl Shell {
             // window server focuses them as they come: raising here would rewrite the shell's stack, so the order the unlock
             // restacks to (`desk_restack_after_unlock`) is the one from before the lock
             WindowEvent::ServerFocus(_) | WindowEvent::HandBack(_) if self.desk_lock_holds_order() => trace("window server focus ignored: locked or unlocking"),
-            // The app the shell is bringing to the front (Spotlight, the Apps grid, the Dock) stays in front against the
+            // The app the shell is bringing to the front (Search, the Apps grid, the Dock) stays in front against the
             // window server's own focus of another window: the keyboard it hands back to the window it knows in front as
             // the exclusive layer goes (Settings over a Calculator that drew its first frame but has no toplevel yet), the
             // topmost toplevel it picks (Mail while Calendar starts), or a late keyboard enter of the window that was in
             // front (Weather over Settings). Raising that window here put it over the app just opened in the shell's own
-            // stack, so the app's toplevel then mapped behind it without the keyboard (E2E6 Spotlight). Once the intended
+            // stack, so the app's toplevel then mapped behind it without the keyboard (E2E6 Search). Once the intended
             // window is drawn the window server is asked to activate it again.
             WindowEvent::ServerFocus(_) | WindowEvent::HandBack(_) if self.desk_front_intent().is_some_and(|want| want.parent() != app.parent()) => {
                 let want = self.desk_front_intent().unwrap_or(app);
@@ -2191,7 +2191,7 @@ impl Shell {
             // lift the window over the lock (Lock Screen from the System menu closes the menu in the same turn); an extra window
             // focuses the app that opened it, because the routing sites match the parent (`desk_refocus` does the same)
             // the app just launched above it (no frame yet, so no toplevel) stays the front app: the focus the window
-            // server hands back as Spotlight or the Apps grid closes went to the window it still knows in front (E2E6 1).
+            // server hands back as Search or the Apps grid closes went to the window it still knows in front (E2E6 1).
             // Only that hand-back: a press on the window below (a `Focus`) is the person's choice and raises it
             WindowEvent::HandBack(_) if self.desk_launching_above(i) => trace("hand-back ignored: the app above it is launching"),
             // the active app closed its last window and stays active with none (`Desk::windowless_front`): the focus the
@@ -3451,7 +3451,7 @@ impl Shell {
                     let i = d.open(&m, app, size);
                     d.wins[i].full_size = own_title_row;
                     if cascade {
-                        // from the app's newest other extra window, else from its main window (AppKit's cascade)
+                        // from the app's newest other extra window, else from its main window (the reference toolkit's cascade)
                         let newest = d.wins.iter().filter_map(|o| match o.app {
                             AppId::ExternalWindow(s, other) if s == slot && other != id16 => Some((other, o.r)),
                             _ => None,
@@ -3732,7 +3732,7 @@ impl Shell {
                     }
                     self.desk.as_mut()?.grab = Some(Grab::DockDrag{from:k,entry:list[k],rect:press[k],x,y,at_x:x,at_y:y,moved:false});
                     // a click puts the name away until the pointer moves (it would otherwise come back once the press ends,
-                    // over Launchpad or Mission Control, with the pointer still on the icon)
+                    // over the Applications grid or the window overview, with the pointer still on the icon)
                     self.desk.as_mut()?.dock_label_off = Some((x, y));
                     self.desk.as_mut()?.dock_drop = None;
                     // an app that already has a window comes forward on the press, not after the release
@@ -4186,7 +4186,7 @@ impl Shell {
 
     /// True when the shown windows above window `i` are all still launching (`desk_window_launching`), at least one of
     /// them: the window server has no toplevel for them yet, so `i` is the front it knows, and a focus it hands back to
-    /// `i` (Spotlight or the Apps grid closing, a menu closing) is not a choice of the person to put `i` over the app
+    /// `i` (Search or the Apps grid closing, a menu closing) is not a choice of the person to put `i` over the app
     /// that was just opened (E2E6 1).
     #[cfg(feature = "desktop-wayland")]
     pub(super) fn desk_launching_above(&self, i: usize) -> bool {
@@ -4687,7 +4687,7 @@ impl Shell {
 
     /// The Calendar tile's face. The package icon is a fixed picture, so the Dock repaints its paper and sets today's
     /// weekday (red) over the day number (black), as the Dock shows the date. `(x, y, w, h)` is the tile; `alpha`
-    /// (0 to 255) fades the face with the icon under it, as the Launchpad grid animates in and out.
+    /// (0 to 255) fades the face with the icon under it, as the Applications grid animates in and out.
     pub(super) fn calendar_tile_face(&self, s: &mut Surface, scale: f32, (x, y, w, h): (f32, f32, f32, f32), (wday, mday): (i32, i32), alpha: u32) {
         let (day, num) = calendar_face_text(wday, mday);
         // the paper covers the baked picture between the squircle's rounded sides
@@ -8156,7 +8156,7 @@ mod launch_front_tests {
     }
 }
 
-/// E2E6 Spotlight: whatever Spotlight, the Apps grid, the Dock or `open-app` opens is the front window and keeps the
+/// E2E6 Search: whatever Search, the Apps grid, the Dock or `open-app` opens is the front window and keeps the
 /// keyboard, whatever focus the window server gives other windows on its own while the app maps (`FrontIntent`).
 #[cfg(all(test, feature = "desktop-wayland"))]
 mod spotlight_front_tests {
@@ -8174,7 +8174,7 @@ mod spotlight_front_tests {
     }
 
     /// Settings in front, Calculator launched: the window server's own focus of Settings (its keyboard enter or an
-    /// activating configure, not only the hand-back as Spotlight goes) does not lift Settings over the launch.
+    /// activating configure, not only the hand-back as Search goes) does not lift Settings over the launch.
     #[test]
     fn a_launch_over_a_built_in_stays_in_front_through_the_window_servers_focus() {
         let mut sh = desktop_shell();
@@ -8196,7 +8196,7 @@ mod spotlight_front_tests {
         assert_eq!(front(&sh), (Some(AppId::Settings), Screen::App(AppId::Settings)), "the window server's later focus is followed again");
     }
 
-    /// Weather (an external app's window) in front, Settings opened from Spotlight: the keyboard the window server hands
+    /// Weather (an external app's window) in front, Settings opened from Search: the keyboard the window server hands
     /// back to Weather does not put Weather over Settings, and Settings, drawn already, is activated again.
     #[test]
     fn a_built_in_opened_over_an_external_app_stays_in_front_and_is_activated_again() {
