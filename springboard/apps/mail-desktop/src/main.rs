@@ -345,6 +345,26 @@ impl App for MailApp {
         d
     }
 
+    /// The red button of an extra window comes to the app first: a compose window asks Save This Message, Don't Save,
+    /// Cancel for a message with changes instead of the shell dropping it.
+    fn handles_close_request(&self) -> bool {
+        true
+    }
+
+    fn window_close_requested(&mut self, ctx: &Ctx, window: WindowId) -> bool {
+        if window.is_main() {
+            ctx.close_main_window();
+            return true;
+        }
+        if let Some(mail) = &mut self.window {
+            if self.composes.owns(window) {
+                return self.composes.close_requested(ctx, mail, window) | self.sync(ctx);
+            }
+        }
+        // a viewer window closes at once
+        ctx.close_window(window).is_ok() && self.window_closed(ctx, window)
+    }
+
     fn window_closed(&mut self, ctx: &Ctx, window: WindowId) -> bool {
         let before = self.viewers.len();
         self.viewers.retain(|v| v.id != window);
@@ -798,6 +818,30 @@ mod tests {
         // Escape closes the message, asking first because it has text
         app.window_event(&ctx, id, Input::Key(KeyInput::Code(1)));
         assert!(matches!(app.window.as_ref().unwrap().mail.sheet, Some(Sheet::Question(_))), "Save This Message, Don't Save, Cancel");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The red button on a compose window with changes asks first: the window stays, as the question, and nothing is
+    /// closed or opened again. Cancel returns to the message; an unchanged message closes with its window.
+    #[test]
+    fn the_red_button_on_a_compose_window_with_text_asks_before_closing() {
+        let dir = std::env::temp_dir().join(format!("bifrost-mail-compose-red-{}", std::process::id()));
+        let ctx = ctx(&dir);
+        let mut app = app_with_inbox(&ctx);
+        assert!(app.handles_close_request());
+        app.with_window(&ctx, |mail| {
+            mail.mail.open_compose(None);
+            true
+        });
+        let id = app.composes.active.expect("a compose window");
+        app.window_event(&ctx, id, Input::Key(KeyInput::Text("dummy test text".into())));
+        ctx.take_sent();
+        assert!(app.window_close_requested(&ctx, id));
+        assert!(matches!(app.window.as_ref().unwrap().mail.sheet, Some(Sheet::Question(_))), "Save This Message, Don't Save, Cancel");
+        assert!(ctx.windows().get(id).is_some(), "the window waits for the answer");
+        assert_eq!(app.composes.slots.len(), 1);
+        let sent = ctx.take_sent();
+        assert!(!sent.iter().any(|m| matches!(m, bifrost_app::proto::ToShell::WindowClose { .. } | bifrost_app::proto::ToShell::WindowOpen { .. })), "{sent:?}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
