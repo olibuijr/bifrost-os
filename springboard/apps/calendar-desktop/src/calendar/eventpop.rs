@@ -294,7 +294,7 @@ impl Calendar {
                 let (col, minute) = self.grid_at(ui, x, y)?;
                 Some((*self.view_days().get(col)?, slot_minute(minute)))
             }
-            Target::Day(day) if self.view == View::Month => Some((Date { day, ..self.selected }, 9 * 60)),
+            Target::Day(day) if self.view == View::Month => Some((Date { day, ..self.month_date() }, 9 * 60)),
             Target::Pick(date) if self.view == View::Month => Some((date, 9 * 60)),
             _ => None,
         }

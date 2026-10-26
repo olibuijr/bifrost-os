@@ -1098,13 +1098,23 @@ impl Calendar {
     /// Desktop chords (Cmd or Ctrl; evdev keys): N new event, T today, 1 to 4 for Day, Week,
     /// Month and Year. Not while an event is open. False when unused here.
     pub fn chord(&mut self, ui: &Ui, key: u32, mods: u32, t: f64) -> bool {
-        use bifrost_app::proto::{CHORD_ALT, CHORD_CTRL, CHORD_META};
+        use bifrost_app::proto::{CHORD_ALT, CHORD_CTRL, CHORD_META, CHORD_SHIFT};
         if mods & (CHORD_CTRL | CHORD_META) == 0 || mods & CHORD_ALT != 0 || self.editor.is_some() || self.sheet_open() || self.event_pop.is_some() {
             return false;
         }
         let target = match key {
             49 => {
                 self.open(ui, None);
+                self.dirty = true;
+                return true;
+            }
+            // Cmd+Z reaches the app as the key when the shell has not yet heard that Undo is on offer (the delete and
+            // the shortcut come within one frame), so the chord restores the deleted event as the Edit command does
+            44 if mods & CHORD_SHIFT == 0 => {
+                if self.undo.is_none() {
+                    return false;
+                }
+                self.undo_delete(ui, t);
                 self.dirty = true;
                 return true;
             }
@@ -1160,6 +1170,8 @@ impl Calendar {
             self.mini_shown = None;
         }
         // a pick below keeps the month and a step starts from it; every other move of the view leaves it behind
+        // (a Day click still needs the month the grid showed, so it is read before the anchor goes)
+        let shown = self.month_date();
         if !matches!(target, Target::Pick(_) | Target::Prev | Target::Next) {
             self.month_anchor = None;
         }
@@ -1197,7 +1209,7 @@ impl Calendar {
                 self.scroll.jump_top();
             }
             Target::Day(day) => {
-                self.selected = Date { day, ..self.month_date() };
+                self.selected = Date { day, ..shown };
                 self.scroll.jump_top();
             }
             Target::Add => self.open(ui, None),
