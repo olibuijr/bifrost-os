@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.9
+
+- The delete-list message names the button it asks you to press.
+
 ## 1.20.8
 
 - Return keeps the new-reminder field open for the next item, List > Delete List... removes a list, and only one Print item uses Cmd+P.

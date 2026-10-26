@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.13.11
+
+- The Window menu lists each document once, Open Recent brings an open document forward, File has one Print, the menu bar says TextEdit, and a text file dropped on the window opens.
+
 ## 1.13.10
 
 - The red close button on a second document window asks about that document, like Cmd+W.

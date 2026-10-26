@@ -799,7 +799,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-mail"
-version = "0.17.12"
+version = "0.17.13"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -874,7 +874,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-notes"
-version = "1.24.9"
+version = "1.24.10"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -930,7 +930,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-reminders"
-version = "1.20.8"
+version = "1.20.9"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -1037,7 +1037,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-textedit"
-version = "1.13.10"
+version = "1.13.11"
 dependencies = [
  "bifrost-app",
  "bifrost-core",

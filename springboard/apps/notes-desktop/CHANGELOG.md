@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.24.10
+
+- Pasted text no longer gets a stray # at the end, and the Share button opens the Share menu.
+
 ## 1.24.9
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.

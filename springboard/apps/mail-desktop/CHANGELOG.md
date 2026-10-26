@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.13
+
+- A message with no recipient can be saved as a draft, the compose window shows its title once, and the save question explains itself.
+
 ## 0.17.12
 
 - The red close button on an edited message asks before discarding it, and a toolbar search field filters the list as you type (Cmd+F).
