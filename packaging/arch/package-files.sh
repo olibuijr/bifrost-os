@@ -155,6 +155,8 @@ package_bifrost_files() {
   install -Dm644 "$here/tmpfiles-bifrost-audio.conf" "$pkgdir/usr/lib/tmpfiles.d/bifrost-audio.conf"
   # same-uid processes (Term, apps) must not be able to ptrace the shell, which holds the session token
   install -Dm644 "$here/sysctl-bifrost.conf" "$pkgdir/usr/lib/sysctl.d/60-bifrost.conf"
+  # e1000e NICs hang under heavy TX with TSO/GSO on: NetworkManager connection defaults switch them off (no ethtool needed)
+  install -Dm644 "$here/networkmanager/50-bifrost-e1000e.conf" "$pkgdir/usr/lib/NetworkManager/conf.d/50-bifrost-e1000e.conf"
   install -Dm755 "$here/seed-data" "$pkgdir/usr/lib/springboard/seed-data"
   # System assets (UI fonts, app icons, wallpapers): the package owns /usr/share/springboard/system-assets, a path no
   # earlier install has a file at, so an update can change them and pacman finds no conflict. PC_SYSTEM_ASSETS is the
