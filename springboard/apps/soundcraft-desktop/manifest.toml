@@ -1,6 +1,6 @@
 id = "ai.storyteller.soundcraft"
 name = "SoundCraft"
-version = "0.12.1"
+version = "0.13.1"
 exec = "soundcraft"
 icon = "icon.png"
 min_shell = "0.4.97"

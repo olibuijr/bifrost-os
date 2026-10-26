@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.13.1
+
+- Upstream soundcraft v0.13.1.
+  ## What's Changed
+  * chore(deps): bump the cargo-dependencies group across 1 directory with 11 updates by @dependabot[bot] in https://github.com/storytold/soundcraft/pull/767
+  * style: normalize the prores DCT basis literals (SonarCloud rust:S7454) by @dylanmtaylor in https://github.com/storytold/soundcraft/pull/962
+  * style: use [[ ]], named locals and explicit returns in packaging scripts (SonarCloud S7688/S7679/S7682) by @dylanmtaylor in https://github.com/storytold/soundcraft/pull/950
+  * Use chrono instead of hand-rolled UTC conversion by @dylanmtaylor in https://github.com/storytold/soundcraft/pull/844
+
 ## 0.12.1
 
 - Upstream soundcraft v0.12.1.
