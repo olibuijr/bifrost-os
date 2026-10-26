@@ -216,10 +216,20 @@ impl Draft {
     /// Checks the addresses and that there is at least one recipient, then renders the message with CRLF line
     /// endings. `message_id` and `unix` come from the caller so rendering stays deterministic.
     pub fn render(&self, message_id: &str, unix: i64) -> Result<String, String> {
+        self.render_with(message_id, unix, true)
+    }
+
+    /// Renders the message for Drafts: as [`Draft::render`], but a message that has no recipient yet is saved all the
+    /// same (a draft is unfinished by nature); only Send needs a recipient.
+    pub fn render_draft(&self, message_id: &str, unix: i64) -> Result<String, String> {
+        self.render_with(message_id, unix, false)
+    }
+
+    fn render_with(&self, message_id: &str, unix: i64, needs_recipient: bool) -> Result<String, String> {
         if !valid_address(&self.from) {
             return Err("the sender address is not valid".into());
         }
-        if self.to.is_empty() {
+        if needs_recipient && self.to.is_empty() {
             return Err("add at least one recipient".into());
         }
         for addr in self.to.iter().chain(&self.cc).chain(&self.bcc).chain(&self.reply_to) {
@@ -230,7 +240,9 @@ impl Draft {
         let mut out = String::new();
         out.push_str(&format!("Date: {}\r\n", rfc2822_date(unix)));
         out.push_str(&format!("From: {}\r\n", self.from));
-        out.push_str(&format!("To: {}\r\n", self.to.join(", ")));
+        if !self.to.is_empty() {
+            out.push_str(&format!("To: {}\r\n", self.to.join(", ")));
+        }
         if !self.cc.is_empty() {
             out.push_str(&format!("Cc: {}\r\n", self.cc.join(", ")));
         }
@@ -708,6 +720,15 @@ mod tests {
         assert!(text.contains("In-Reply-To: <abc@mail.example>\r\n"));
         assert!(text.contains("References: <root@mail.example> <mid@x> <abc@mail.example>\r\n"));
         assert!(text.ends_with("\r\n\r\nJá\r\n.dot line\r\n"));
+    }
+
+    #[test]
+    fn a_draft_without_a_recipient_is_saved_but_not_sent() {
+        let draft = Draft { from: "me@example.com".into(), body: "Just a body".into(), ..Draft::default() };
+        assert!(draft.render("<x@y>", 0).is_err(), "Send needs a recipient");
+        let saved = draft.render_draft("<x@y>", 0).expect("Drafts keep a message that has no recipient yet");
+        assert!(!saved.contains("To:"), "{saved}");
+        assert!(saved.contains("Just a body"));
     }
 
     #[test]

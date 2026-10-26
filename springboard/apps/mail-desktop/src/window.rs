@@ -1460,7 +1460,7 @@ impl MailWindow {
     /// signs in, else a file in the data directory.
     pub fn save_draft(&mut self, compose: &Compose) {
         let key = compose.draft_id.clone();
-        let raw = match self.mail.draft_for_save(compose).render(&key, now_unix()) {
+        let raw = match self.mail.draft_for_save(compose).render_draft(&key, now_unix()) {
             Ok(raw) => raw,
             Err(e) => {
                 self.mail.status = e;
