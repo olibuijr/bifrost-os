@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.13.10
+
+- The red close button on a second document window asks about that document, like Cmd+W.
+
 ## 1.13.9
 
 - The red close button asks before closing an edited document.
