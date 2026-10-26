@@ -121,6 +121,8 @@ struct TextEditApp {
     image_request: Option<u32>,
     /// Format > Make Plain Text is asking to remove the attachments first
     plain_sheet: bool,
+    /// the confirmation's button that has the focus ring (Tab moves it); `None` until Tab
+    plain_focus: Option<u32>,
     drop_sessions: Vec<u32>,
     /// File > Show Properties: the document being edited and the panel's draft, while the panel is open
     props: Option<(DocId, properties::Panel)>,
@@ -366,6 +368,7 @@ impl TextEditApp {
             export_request: None,
             image_request: None,
             plain_sheet: false,
+            plain_focus: None,
             drop_sessions: Vec::new(),
             text_published: None,
             caret_published: None,
@@ -1101,6 +1104,7 @@ impl TextEditApp {
                 // styles and attachments are lost), as the reference asks "Convert this document to plain text?"
                 if doc.rich && !doc.text.cells().is_empty() {
                     self.plain_sheet = true;
+                    self.plain_focus = None;
                     return true;
                 }
                 let was_rich = doc.rich;
@@ -1834,7 +1838,21 @@ impl TextEditApp {
     /// The Make Plain Text confirmation as the kit's alert sheet (E2E11 6), hung from the title bar like the close
     /// confirmation: stacked full-width buttons, OK the default on top. `None` while it is not up.
     fn plain_alert_sheet(&self) -> Option<bifrost_app::controls::sheet::Sheet> {
-        self.plain_sheet.then(|| view::plain_alert(active_doc(&self.docs).is_some_and(|d| d.text.has_attachments())).sheet())
+        self.plain_sheet.then(|| view::plain_alert(active_doc(&self.docs).is_some_and(|d| d.text.has_attachments())).sheet().with_focus(self.plain_focus))
+    }
+
+    /// A key press while the Make Plain Text confirmation is up (`Sheet::handle_key`); it takes every key.
+    fn plain_key(&mut self, ctx: &Ctx, key: &KeyInput) -> bool {
+        let Some(mut sheet) = self.plain_alert_sheet() else { return false };
+        match bifrost_app::document::sheet_key(&mut sheet, key) {
+            AlertKey::Answer(view::PLAIN_OK) => self.perform(ctx, Action::PlainDone),
+            AlertKey::Answer(_) => self.perform(ctx, Action::PlainCancel),
+            AlertKey::Focus => {
+                self.plain_focus = sheet.focus;
+                true
+            }
+            AlertKey::Ignored => false,
+        }
     }
 
     /// The Make Plain Text confirmation's touches: its buttons; the rest of the window is blocked while it is up.
@@ -2941,6 +2959,9 @@ impl TextEditApp {
                 Some(AlertKey::Focus) => true,
                 _ => false,
             },
+            // the Make Plain Text confirmation takes the same sheet keys: Return is OK, Escape and Cmd+. cancel, Tab moves
+            // the focus ring and Space presses the focused button; other keys do nothing behind it
+            Input::Key(key) if self.plain_sheet => self.plain_key(ctx, &key),
             Input::Key(KeyInput::Text(s)) => self.type_into(&s),
             Input::Key(KeyInput::Code(code)) => {
                 if code & CHORD_FLAG != 0 {
@@ -3014,13 +3035,6 @@ impl TextEditApp {
                 }
                 if self.spelling_panel && code == 27 {
                     return self.perform(ctx, Action::SpellingDone);
-                }
-                if self.plain_sheet {
-                    return match code {
-                        13 => self.perform(ctx, Action::PlainDone),
-                        1 | 27 => self.perform(ctx, Action::PlainCancel),
-                        _ => false,
-                    };
                 }
                 if self.line.is_some() {
                     return match code {
@@ -4039,6 +4053,38 @@ mod tests {
         assert_eq!(format.dropped_items(), 0);
         let out = bifrost_app::proto::app_menu_packets(&[app.file_menu(), app.edit_menu(), format.clone(), app.view_menu()]);
         assert!(out.dropped.is_empty(), "{:?}", out.dropped);
+    }
+
+    /// The Make Plain Text confirmation takes the kit's sheet keys: Return OK, Escape and Cmd+. Cancel, Tab and Space.
+    #[test]
+    fn the_make_plain_text_sheet_takes_return_escape_cmd_period_and_the_tab_focus_ring() {
+        let ctx = window(1200, 780);
+        let mut app = app_with_text("Hello", 0..0);
+        let (tab, space) = (|| Input::Key(KeyInput::Code(9)), || Input::Key(KeyInput::Text(" ".into())));
+        assert!(app.perform(&ctx, Action::MakePlain) && app.plain_sheet);
+        assert!(!app.event(&ctx, Input::Key(KeyInput::Text("x".into()))), "typing goes nowhere behind the sheet");
+        assert!(!app.event(&ctx, space()), "Space with no focus presses nothing");
+        assert_eq!(app.plain_alert_sheet().unwrap().focus, None, "no ring until Tab");
+        // Cmd+. (evdev key 52) cancels
+        assert!(app.event(&ctx, Input::Key(KeyInput::chord(52, CHORD_META))));
+        assert!(!app.plain_sheet && active_doc(&app.docs).unwrap().rich);
+        // Escape cancels
+        app.perform(&ctx, Action::MakePlain);
+        assert!(app.event(&ctx, Input::Key(KeyInput::Code(1))));
+        assert!(!app.plain_sheet && active_doc(&app.docs).unwrap().rich);
+        // Tab: OK, then Cancel; Space presses the focused one
+        app.perform(&ctx, Action::MakePlain);
+        assert!(app.event(&ctx, tab()));
+        assert_eq!(app.plain_alert_sheet().unwrap().focus, Some(view::PLAIN_OK));
+        assert!(app.event(&ctx, tab()));
+        assert_eq!(app.plain_alert_sheet().unwrap().focus, Some(view::PLAIN_CANCEL));
+        assert!(app.event(&ctx, space()));
+        assert!(!app.plain_sheet && active_doc(&app.docs).unwrap().rich, "Space on Cancel keeps the rich text");
+        // the ring starts over; Return is OK
+        app.perform(&ctx, Action::MakePlain);
+        assert_eq!(app.plain_alert_sheet().unwrap().focus, None);
+        assert!(app.event(&ctx, Input::Key(KeyInput::Code(13))));
+        assert!(!app.plain_sheet && !active_doc(&app.docs).unwrap().rich, "Return converts");
     }
 
     /// E2E10 finding 7: Make Plain Text converted at once and left the text in Helvetica.
