@@ -976,6 +976,10 @@ dependencies = [
 [[package]]
 name = "bifrost-screenshot"
 version = "0.1.5"
+dependencies = [
+ "bifrost-app",
+ "bifrost-core",
+]
 
 [[package]]
 name = "bifrost-script-editor"
