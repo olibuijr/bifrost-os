@@ -280,6 +280,30 @@ fn grid_and_home_chrome_hit_regions_are_bounded() {
 }
 
 #[test]
+fn picking_a_neighbouring_month_day_keeps_the_month() {
+    let ui = crate::test_ui();
+    let temp = Temp::new();
+    let mut c = new(&ui, temp.file());
+    let (_, _, top, rh) = c.grid_geom(&ui);
+    // October 2026 starts on a Thursday: the first cell of the grid is September 27
+    let start = c.grid_start();
+    assert_eq!(start, date(2026, 9, 27));
+    c.activate(&ui, Target::Pick(date(2026, 9, 27)), 0.0);
+    assert_eq!(c.selected, date(2026, 9, 27));
+    assert_eq!(c.month_date().month, 10, "the page does not turn");
+    assert_eq!(c.grid_start(), start);
+    // the other days of October still select as days of the shown month
+    assert_eq!(c.hit(&ui, ui.pt(70.0), top + rh + ui.pt(10.0)), Some(Target::Day(4)));
+    // Next steps from the shown month, not from the picked day's
+    c.activate(&ui, Target::Next, 0.0);
+    assert_eq!(c.selected, date(2026, 11, 27));
+    // a change of the selected day by any other route follows that day again
+    c.activate(&ui, Target::Pick(date(2026, 12, 30)), 0.0);
+    c.selected = date(2026, 9, 3);
+    assert_eq!(c.month_date().month, 9);
+}
+
+#[test]
 fn all_day_order_and_event_id_wrap() {
     let mut events = vec![event(u64::MAX, "Last"), event(1, "First")];
     events[0].all_day = true;

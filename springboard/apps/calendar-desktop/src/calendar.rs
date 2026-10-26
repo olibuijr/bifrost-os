@@ -292,6 +292,9 @@ pub struct Calendar {
     last_slot: Option<(Date, u16)>,
     /// The month the sidebar's mini month was paged to; None follows the selected day (`minimonth.rs`).
     mini_shown: Option<Date>,
+    /// The month grid keeps its month when a day of a neighbouring month in its first or last week is picked: the day
+    /// selected by that pick and the month shown then. Valid only while that day stays selected (`month_date`).
+    month_anchor: Option<(Date, Date)>,
     /// A press in the Day or Week grid that becomes a drag if it is held, and the drag itself (`drag.rs`).
     press: Option<drag::Press>,
     drag: Option<drag::Drag>,
@@ -437,6 +440,7 @@ impl Calendar {
             cal_menu: None,
             last_slot: None,
             mini_shown: None,
+            month_anchor: None,
             press: None,
             drag: None,
             search_box: bifrost_app::controls::TextField::new(),
@@ -667,7 +671,16 @@ impl Calendar {
 
     /// The first day shown in the month grid (the first weekday on or before the 1st).
     fn grid_start(&self) -> Date {
-        self.week_of(Date { day: 1, ..self.selected })
+        self.week_of(Date { day: 1, ..self.month_date() })
+    }
+
+    /// A day of the month the month view shows: the selected day, or the same day number of the month it kept when a
+    /// leading or trailing day of a neighbouring month was picked (a click selects that day and does not turn the page).
+    pub(super) fn month_date(&self) -> Date {
+        match self.month_anchor {
+            Some((picked, month)) if picked == self.selected => Date { day: self.selected.day.min(month.month_len()), ..month },
+            _ => self.selected,
+        }
     }
 
     /// The events a day cell lists: up to as many lines as fit, the last one "n more" when some are left out.
@@ -761,6 +774,7 @@ impl Calendar {
         }
         let (left, cell, top, rh) = self.grid_geom(ui);
         if y >= top && x >= left {
+            let shown = self.month_date();
             let col = (((x - left) / cell) as i32).clamp(0, 6);
             let row = (((y - top) / rh) as i32).clamp(0, 5);
             let date = self.grid_start().shift_days(row * 7 + col);
@@ -770,7 +784,7 @@ impl Calendar {
                     return Some(Target::Row(e.id));
                 }
             }
-            if date.year == self.selected.year && date.month == self.selected.month {
+            if date.year == shown.year && date.month == shown.month {
                 return Some(Target::Day(date.day));
             }
             return Some(Target::Pick(date));
@@ -1145,6 +1159,10 @@ impl Calendar {
         if matches!(target, Target::Today | Target::Prev | Target::Next | Target::Pick(_) | Target::Day(_) | Target::MonthOf(_) | Target::GoConfirm) {
             self.mini_shown = None;
         }
+        // a pick below keeps the month and a step starts from it; every other move of the view leaves it behind
+        if !matches!(target, Target::Pick(_) | Target::Prev | Target::Next) {
+            self.month_anchor = None;
+        }
         match target {
             Target::SearchField => self.focus_search(),
             Target::SearchClear => self.clear_search(ui),
@@ -1166,7 +1184,12 @@ impl Calendar {
                     self.scroll.jump_top();
                 }
             }
-            Target::Pick(d) => self.selected = d,
+            Target::Pick(d) => {
+                let month = self.month_date();
+                let outside = self.view == View::Month && (d.year, d.month) != (month.year, month.month);
+                self.month_anchor = outside.then_some((d, Date { day: 1, ..month }));
+                self.selected = d;
+            }
             Target::MonthOf(m) => {
                 self.selected.month = m;
                 self.selected.day = self.selected.day.min(self.selected.month_len());
@@ -1174,7 +1197,7 @@ impl Calendar {
                 self.scroll.jump_top();
             }
             Target::Day(day) => {
-                self.selected.day = day;
+                self.selected = Date { day, ..self.month_date() };
                 self.scroll.jump_top();
             }
             Target::Add => self.open(ui, None),
@@ -1692,7 +1715,8 @@ impl Calendar {
             for col in 0..7 {
                 let date = start.shift_days(row * 7 + col);
                 let (x, y) = (left + cell * col as f32, top + rh * row as f32);
-                let in_month = date.month == self.selected.month && date.year == self.selected.year;
+                let shown = self.month_date();
+                let in_month = date.month == shown.month && date.year == shown.year;
                 if date == self.selected {
                     s.fill_rrect(x, y, cell, rh, 0.0, CARD_BG.now());
                 }
