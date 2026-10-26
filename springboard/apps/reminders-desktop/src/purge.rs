@@ -83,6 +83,7 @@ impl Reminders {
         };
         if ok {
             self.purge_ask = Some(purge);
+            self.ask_focus = None;
             self.dirty = true;
         }
         ok
@@ -111,7 +112,7 @@ impl Reminders {
             SheetButton::new(completed::ASK_CLEAR, button, ButtonRole::Destructive),
             SheetButton::new(completed::ASK_CANCEL, "Cancel", ButtonRole::Cancel),
         ];
-        Some(Sheet::alert(&purge_question(purge, &title, kept.len()), "This cannot be undone.", buttons))
+        Some(Sheet::alert(&purge_question(purge, &title, kept.len()), "This cannot be undone.", buttons).with_focus(self.ask_focus))
     }
 
     /// The alert's delete button: the asked-for kept reminders leave the store, and their pictures with them unless

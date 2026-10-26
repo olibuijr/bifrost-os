@@ -411,6 +411,8 @@ pub struct Reminders {
     list_scroll: f32,
     /// The completed strip's Clear alert is up (`completed.rs`).
     clear_ask: bool,
+    /// The Clear or purge alert's button that has the focus ring (Tab moves it, Space presses it); `None` until Tab.
+    ask_focus: Option<u32>,
     dirty: bool,
     error: bool,
     load_error: bool,
@@ -562,6 +564,7 @@ impl Reminders {
             drag: None,
             list_scroll: 0.0,
             clear_ask: false,
+            ask_focus: None,
             dirty: true,
             error: load_error,
             load_error,
@@ -2363,6 +2366,11 @@ impl Reminders {
         true
     }
 
+    /// A key press for the Clear or purge alert (`ask_key`): `None` when no alert is up, so the key is not its.
+    pub fn alert_key(&mut self, ui: &Ui, key: &bifrost_app::KeyInput, t: f64) -> Option<bool> {
+        self.asking().then(|| self.ask_key(ui, key, t))
+    }
+
     /// Escape: leaves a focused field first, then cancels the open editor.
     pub fn escape(&mut self, ui: &Ui, t: f64) -> bool {
         // Escape is the Clear and purge alerts' Cancel
@@ -2632,7 +2640,10 @@ impl Reminders {
                 }
             }
             Target::DetailsClose => self.close_details(ui, t),
-            Target::ClearAsk => self.clear_ask = self.completed_in_list() > 0,
+            Target::ClearAsk => {
+                self.clear_ask = self.completed_in_list() > 0;
+                self.ask_focus = None;
+            }
             Target::ClearConfirm => {
                 self.clear_ask = false;
                 self.clear_completed(ui, t);

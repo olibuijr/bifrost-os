@@ -115,7 +115,25 @@ impl Reminders {
         }
         let n = self.completed_in_list();
         let buttons = vec![SheetButton::new(ASK_CLEAR, "Clear", ButtonRole::Default), SheetButton::new(ASK_CANCEL, "Cancel", ButtonRole::Cancel)];
-        Some(Sheet::alert(&clear_question(n), "They are removed from this list. Edit > Undo puts them back.", buttons))
+        Some(Sheet::alert(&clear_question(n), "They are removed from this list. Edit > Undo puts them back.", buttons).with_focus(self.ask_focus))
+    }
+
+    /// A key press while the Clear or purge alert is up, through the kit's sheet keys (`Sheet::handle_key`): Return
+    /// presses the default Clear (the purge alert's Delete is destructive, so never Return), Escape and Cmd+. cancel,
+    /// Cmd+D presses a plain Delete, Tab moves the focus ring (drawn on the button) and Space presses the focused one.
+    /// The alert takes every key. True when a frame is needed.
+    pub(super) fn ask_key(&mut self, ui: &Ui, key: &bifrost_app::KeyInput, t: f64) -> bool {
+        use bifrost_app::document::{sheet_key, AlertKey};
+        let Some(mut sheet) = self.clear_sheet() else { return false };
+        match sheet_key(&mut sheet, key) {
+            AlertKey::Answer(ASK_CLEAR) if self.purge_ask.is_some() => self.activate(ui, Target::PurgeConfirm, t),
+            AlertKey::Answer(ASK_CLEAR) => self.activate(ui, Target::ClearConfirm, t),
+            AlertKey::Answer(_) => self.activate(ui, Target::ClearCancel, t),
+            AlertKey::Focus => self.ask_focus = sheet.focus,
+            AlertKey::Ignored => return false,
+        }
+        self.dirty = true;
+        true
     }
 
     /// The window in points (the sheet's parent) and its title bar's height.
