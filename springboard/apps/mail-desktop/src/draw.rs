@@ -423,16 +423,26 @@ fn field_height(ui: &Ui, label: &str) -> f32 {
     }
 }
 
+/// A compose sheet that fills its window draws no heading: the window's title bar says it already.
+fn sheet_is_untitled(sheet: &Sheet, fills: bool) -> bool {
+    fills && matches!(sheet, Sheet::Compose(_))
+}
+
+/// What the Save This Message? sheet tells the person.
+const QUESTION_TEXT: &str = "Do you want to save this message as a draft? A draft is kept in Drafts so you can finish it later.";
+
 /// The sheet's layout. `choices` is how many matches the sheet lists under its fields (Open Quickly); it is at most
 /// [`MAX_CHOICES`] and only the sheet that lists them takes any. `fills` lays the sheet out as the whole content of a
 /// window of its own (a compose window): the panel is the window, and the message field takes the height left over.
 /// Otherwise the sheet is a card centred over the main window.
 pub fn sheet_layout(ui: &Ui, w: f32, h: f32, sheet: &Sheet, choices: usize, fills: bool) -> SheetLayout {
     let form = sheet.form();
-    // the question sheet has buttons only
+    // the question sheet has buttons only, and floats as a card over the message it asks about (which stays in view)
     let shown: &[crate::state::Field] = if matches!(sheet, Sheet::Question(_)) { &[] } else { &form.fields };
+    let fills = fills && !matches!(sheet, Sheet::Question(_));
     let pad = ui.pt(SHEET_PAD_PT);
-    let head = ui.pt(SHEET_HEAD_PT);
+    // a compose window's title bar already names the message: its sheet has no heading of its own
+    let head = if sheet_is_untitled(sheet, fills) { pad } else { ui.pt(SHEET_HEAD_PT) };
     let foot = ui.pt(SHEET_FOOT_PT);
     let heights: Vec<f32> = shown.iter().map(|f| field_height(ui, f.label)).collect();
     let (note_h, files) = match sheet {
@@ -440,6 +450,8 @@ pub fn sheet_layout(ui: &Ui, w: f32, h: f32, sheet: &Sheet, choices: usize, fill
         Sheet::Compose(c) => (if c.signature.trim().is_empty() { 0.0 } else { ui.pt(NOTE_PT) }, c.attachments.len()),
         // Add Account: two lines for the progress of the lookup and what it found
         Sheet::Setup(_) => (2.0 * ui.pt(NOTE_PT), 0),
+        // Save This Message?: two lines that say what the choice does
+        Sheet::Question(_) => (2.0 * ui.pt(NOTE_PT), 0),
         _ => (0.0, 0),
     };
     let choices = match sheet {
@@ -873,6 +885,12 @@ impl MailWindow {
     pub fn draw_compose(&mut self, s: &mut Surface, ui: &Ui, sheet: &Sheet) {
         s.fill_rect(0, 0, s.w, s.h, CONTENT_BG.now());
         let (w, h) = (s.w as f32, s.h as f32);
+        if let Sheet::Question(compose) = sheet {
+            // the question is a card over the message, which stays in view behind it
+            self.draw_sheet(s, ui, &Sheet::Compose(compose.clone()), w, h, true);
+            self.draw_sheet(s, ui, sheet, w, h, false);
+            return;
+        }
         self.draw_sheet(s, ui, sheet, w, h, true);
     }
 
@@ -1332,7 +1350,9 @@ impl MailWindow {
         }
 
         let (title, action, form) = (sheet.title(), sheet.action(), sheet.form());
-        put_centred(s, &mut self.labels, ui, title, MAC_BODY_PT, Weight::Semibold, LABEL.now(), px_ + pw / 2.0, py + ui.pt(SHEET_HEAD_PT) / 2.0);
+        if !sheet_is_untitled(sheet, fills) {
+            put_centred(s, &mut self.labels, ui, title, MAC_BODY_PT, Weight::Semibold, LABEL.now(), px_ + pw / 2.0, py + ui.pt(SHEET_HEAD_PT) / 2.0);
+        }
 
         let pad = ui.pt(SPACE_S);
         let caret = ui.pt(1.0).max(1.0);
@@ -1415,6 +1435,12 @@ impl MailWindow {
             let line_h = error[3] / 2.0;
             for (k, line) in wrap(ui, &compose.error, error[2], MAC_FOOTNOTE_PT, Weight::Regular).iter().take(2).enumerate() {
                 put_mid(s, &mut self.labels, ui, line, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), error[0], error[1] + line_h * (k as f32 + 0.5));
+            }
+        }
+        if let (Sheet::Question(_), Some(note)) = (sheet, l.note) {
+            let line_h = note[3] / 2.0;
+            for (k, line) in wrap(ui, QUESTION_TEXT, note[2], MAC_FOOTNOTE_PT, Weight::Regular).iter().take(2).enumerate() {
+                put_centred(s, &mut self.labels, ui, line, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), note[0] + note[2] / 2.0, note[1] + line_h * (k as f32 + 0.5));
             }
         }
         if let (Sheet::Setup(_), Some(note)) = (sheet, l.note) {
@@ -1549,6 +1575,26 @@ mod tests {
         let failed = sheet_layout(&ui, w, h, &Sheet::Compose(compose), 0, true);
         let error = failed.error.expect("a line for the error");
         assert!(error[1] + error[3] <= failed.primary[1], "above the buttons");
+    }
+
+    /// A compose window's sheet has no heading of its own (the title bar names it), and the close question is a card
+    /// over the message with a line that explains the choice.
+    #[test]
+    fn the_compose_sheet_has_no_second_title_and_the_question_is_a_card() {
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        let ui = Ui::new(bifrost_app::kit::Font::parse(data).unwrap(), 1.5);
+        let mut mail = Mail::new(vec![]);
+        mail.open_compose(None);
+        let Some(Sheet::Compose(compose)) = mail.sheet.clone() else { unreachable!() };
+        let (w, h) = (1100.0, 1400.0);
+        let filled = sheet_layout(&ui, w, h, &Sheet::Compose(compose.clone()), 0, true);
+        let card = sheet_layout(&ui, w, h, &Sheet::Compose(compose.clone()), 0, false);
+        assert!(filled.fields[0][1] < card.fields[0][1] - card.panel[1], "the heading's room is gone in a compose window");
+        assert!(sheet_is_untitled(&Sheet::Compose(compose.clone()), true) && !sheet_is_untitled(&Sheet::Compose(compose.clone()), false));
+        let ask = sheet_layout(&ui, w, h, &Sheet::Question(compose), 0, true);
+        assert!(ask.panel[2] < w && ask.panel[3] < h, "a card, not the whole window: {:?}", ask.panel);
+        let note = ask.note.expect("a line that explains the choice");
+        assert!(note[1] + note[3] <= ask.primary[1], "above the buttons");
     }
 
     /// E2E8 finding 6: an all-CJK paragraph wraps between characters instead of running past the reading pane.
