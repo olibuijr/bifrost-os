@@ -359,7 +359,19 @@ impl NotesApp {
         self.import = Some(ctx.open_document(DocMode::Read, "Import to Notes", &["public.text", "public.html", "public.rtf"]));
     }
 
-    /// Share on the PC is Export (`NativeSavePanel`): the note goes to a file the user names, as Markdown.
+    /// Share: a note's text opens the shell's share menu under the Share button (Copy, Mail, Messages, ...); a note
+    /// already written to a file (Markdown, PDF, HTML) is exported through the save panel.
+    fn share(&mut self, ctx: &Ctx, item: springboard::shell::share::Item) {
+        let anchor = self.notes.as_ref().map(|n| n.share_anchor(&ctx.ui));
+        match (item, anchor) {
+            (springboard::shell::share::Item::Text { body, .. }, Some(anchor)) => {
+                let _ = bifrost_app::share::show_picker(ctx, &[bifrost_app::share::Payload::Text(body)], anchor);
+            }
+            (item, _) => self.export(ctx, item),
+        }
+    }
+
+    /// Export (`NativeSavePanel`): the note goes to a file the user names, as Markdown.
     fn export(&mut self, ctx: &Ctx, item: springboard::shell::share::Item) {
         let (name, bytes) = match item {
             springboard::shell::share::Item::Text { title, body } => {
@@ -755,7 +767,7 @@ impl App for NotesApp {
                 n.touch(&ctx.ui, Event::Down(x, y), t);
                 n.touch(&ctx.ui, Event::Up(x, y), t);
                 if let Some(item) = n.take_share() {
-                    self.export(ctx, item);
+                    self.share(ctx, item);
                 }
                 true
             }
@@ -785,9 +797,9 @@ impl App for NotesApp {
                 if let Some(url) = n.take_link() {
                     ctx.open_url(&url);
                 }
-                // no share sheet yet: Share exports the note through the save panel
+                // Share opens the shell's share menu (a file the menu wrote goes through the save panel)
                 if let Some(item) = share {
-                    self.export(ctx, item);
+                    self.share(ctx, item);
                 }
                 true
             }

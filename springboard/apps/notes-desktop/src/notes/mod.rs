@@ -1272,6 +1272,12 @@ impl Notes {
         self.bar_px(ui, chrome::B_SHARE)
     }
 
+    /// The Share button's rectangle in window points, where the share menu opens under it (the whole window's top
+    /// edge when the button is not on the bar).
+    pub fn share_anchor(&self, ui: &Ui) -> bifrost_app::controls::Rect {
+        self.bar_rect(ui, chrome::B_SHARE).unwrap_or(bifrost_app::controls::Rect { x: 0.0, y: 0.0, w: 0.0, h: 0.0 })
+    }
+
     /// The note the user just chose to share, if any.
     pub fn take_share(&mut self) -> Option<springboard::shell::share::Item> {
         self.share_req.take()
