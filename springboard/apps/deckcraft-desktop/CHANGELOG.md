@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.11.1
+
+- Upstream deckcraft v0.11.1.
+  ## What's Changed
+  * packaging: [[ ]] tests, named positional parameters, explicit returns and a default case (SonarCloud S7688, S7679, S7682, S131) by @dylanmtaylor in https://github.com/storytold/deckcraft/pull/1212
+  * Use chrono instead of hand-rolled UTC conversion by @dylanmtaylor in https://github.com/storytold/deckcraft/pull/1116
+  * CI: one test binary per crate, nextest, line tables only by @aiongg in https://github.com/storytold/deckcraft/pull/1213
+  * CI: shared gate workflow; FreeBSD nightly and on release by @aiongg in https://github.com/storytold/deckcraft/pull/1214
+
 ## 0.10.0
 
 - Upstream deckcraft v0.10.0.
