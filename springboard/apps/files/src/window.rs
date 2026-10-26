@@ -197,17 +197,64 @@ impl Files {
         }
     }
     pub(crate) fn go_up(&mut self) {
+        // Applications is the store's folder under the shell's data; its parent is the computer, never that storage
+        if applications::is_store_dir(&self.path) {
+            self.navigate(PathBuf::from("/"), true);
+            return;
+        }
         if let Some(parent) = self.path.parent().map(Path::to_path_buf) {
             self.navigate(parent, true)
         }
     }
-    pub(crate) fn move_focus(&mut self, down: bool) {
+    /// How many icons a line of the icon view holds.
+    pub(crate) fn grid_cols(&self) -> usize {
+        ((self.w - (self.side() + 16.)) / self.grid_w()).floor().max(1.) as usize
+    }
+    /// An arrow key (the codes 37 Left, 38 Up, 39 Right, 40 Down) in the item views. The icon view moves by one icon
+    /// across and by a line up and down; the list, columns and gallery views move by one row. In the list view Right
+    /// opens a folder inline and Left closes it; in the columns view Right goes into the folder and Left out of it.
+    pub(crate) fn arrow(&mut self, code: u32) {
         let v = self.visible();
-        let at = self.focus().and_then(|f| v.iter().position(|&j| j == f)).unwrap_or(0);
-        let next = if down { (at + 1).min(v.len().saturating_sub(1)) } else { at.saturating_sub(1) };
-        if let Some(&i) = v.get(next) {
-            self.select_only(i);
+        if v.is_empty() {
+            return;
         }
+        let forward = matches!(code, 39 | 40);
+        let Some(at) = self.focus().and_then(|f| v.iter().position(|&j| j == f)) else {
+            // nothing selected: the first item for a forward key, the last for a backward one
+            let first = if forward { v[0] } else { v[v.len() - 1] };
+            self.select_only(first);
+            self.reveal(first);
+            return;
+        };
+        let sideways = code == 37 || code == 39;
+        if self.columns && sideways {
+            if !forward {
+                self.go_up();
+            } else if self.rows.get(v[at]).is_some_and(|e| e.is_dir) {
+                self.open(v[at]);
+            }
+            return;
+        }
+        if self.is_list() && sideways {
+            let i = v[at];
+            let open = self.vo.expanded.contains(&self.rows[i].path);
+            if self.rows[i].is_dir && open != forward {
+                let keep = self.selected_paths();
+                self.toggle_expand(i);
+                self.reselect(&keep);
+            }
+            return;
+        }
+        let step = if self.grid && !self.vo.gallery && !sideways { self.grid_cols() } else { 1 };
+        let last = v.len() - 1;
+        let next = if forward {
+            // a short last line is reached from the line above, not skipped over
+            if at + step <= last { at + step } else if at / step < last / step { last } else { at }
+        } else {
+            at.checked_sub(step).unwrap_or(at)
+        };
+        self.select_only(v[next]);
+        self.reveal(v[next]);
     }
     pub(crate) fn toggle_hidden(&mut self) {
         self.show_hidden = !self.show_hidden;
@@ -529,5 +576,69 @@ impl Files {
     /// Recents, Tags, Smart Folders and Applications are stand-in lists; nothing can be created or pasted into them.
     pub(crate) fn in_recents(&self) -> bool {
         self.path == Path::new(fs::RECENTS) || self.path.starts_with(TAGGED) || smart::folder_index(&self.path).is_some() || provider::is_path(&self.path) || applications::is_store_dir(&self.path)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests::{fixture, folder};
+
+    fn items(n: usize) -> Files {
+        let mut files = fixture((0..n).map(|i| folder(&format!("item{i:02}"))).collect());
+        files.path = applications::store_dir();
+        files
+    }
+
+    #[test]
+    fn arrows_move_the_icon_selection_across_and_by_line() {
+        let mut files = items(11);
+        let cols = files.grid_cols();
+        assert!(cols >= 2 && cols < 10, "the fixture window holds several icons a line: {cols}");
+        files.select_only(1);
+        files.arrow(39);
+        assert_eq!(files.selection, vec![2], "Right is the next icon");
+        files.arrow(37);
+        files.arrow(37);
+        assert_eq!(files.selection, vec![0], "Left is the previous icon");
+        files.arrow(37);
+        assert_eq!(files.selection, vec![0], "nothing before the first");
+        files.arrow(40);
+        assert_eq!(files.selection, vec![cols], "Down is the icon under it");
+        files.arrow(38);
+        assert_eq!(files.selection, vec![0], "Up is the icon over it");
+        files.arrow(38);
+        assert_eq!(files.selection, vec![0], "Up on the first line stays");
+        // a short last line is reached from the line above, and Down on it stays
+        files.select_only(10 / cols * cols - 1);
+        files.arrow(40);
+        assert_eq!(files.selection, vec![10]);
+        files.arrow(40);
+        assert_eq!(files.selection, vec![10]);
+    }
+
+    #[test]
+    fn arrows_with_no_selection_start_at_the_ends_and_rows_step_by_one() {
+        let mut files = items(5);
+        files.arrow(39);
+        assert_eq!(files.selection, vec![0]);
+        files.selection.clear();
+        files.arrow(37);
+        assert_eq!(files.selection, vec![4]);
+        files.grid = false;
+        files.select_only(1);
+        files.arrow(40);
+        assert_eq!(files.selection, vec![2], "the list view steps a row");
+        files.arrow(38);
+        files.arrow(38);
+        assert_eq!(files.selection, vec![0]);
+    }
+
+    #[test]
+    fn up_from_applications_goes_to_the_computer_not_the_store_storage() {
+        let mut files = items(1);
+        assert!(applications::is_store_dir(&files.path));
+        files.go_up();
+        assert_eq!(files.path, PathBuf::from("/"));
     }
 }
