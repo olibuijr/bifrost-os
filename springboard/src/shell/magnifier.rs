@@ -130,8 +130,13 @@ impl Magnifier {
     /// Opens the first camera when the app comes on screen.
     pub fn resume(&mut self) {
         if self.state == State::Idle {
-            self.worker = Some(Worker::spawn(v4l2::probe().into_iter().next().map(|c| c.path).unwrap_or_default()));
-            self.state = State::Live;
+            match v4l2::probe().into_iter().next() {
+                Some(c) => {
+                    self.worker = Some(Worker::spawn(c.path));
+                    self.state = State::Live;
+                }
+                None => self.state = State::Unavailable("No camera found".into()),
+            }
             self.frozen = false;
             self.dirty = true;
         }
@@ -444,5 +449,12 @@ mod tests {
         assert!(!m.streaming());
         assert!(m.describe().contains("magnifier_state=idle"));
         assert!(m.next_wake(0.0).is_none());
+    }
+
+    #[test]
+    fn start_errors_are_plain_language() {
+        let why = crate::shell::camera::describe_error("No such file or directory (os error 2)");
+        assert_eq!(why, "No camera found");
+        assert!(!crate::shell::camera::describe_error("weird (os error 5)").contains("os error"));
     }
 }
