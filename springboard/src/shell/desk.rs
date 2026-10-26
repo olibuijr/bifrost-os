@@ -6654,6 +6654,51 @@ mod tests {
         assert!(!d.placed.contains(&placed));
     }
 
+    /// O2: a press that lands on the body of a window behind another one raises it and is the app's press as well: the
+    /// app hears Down, then the drag's Moves, then Up, so a drag that starts on an item of a background window begins
+    /// (the first click of a window is delivered, as `acceptsFirstMouse` does for a drag source).
+    #[test]
+    fn a_press_that_raises_a_background_window_still_reaches_its_app_as_a_drag() {
+        use crate::shell::Screen;
+        use bifrost_proto::{ToApp, TouchKind};
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.anim = None;
+        let (mine, peer) = bifrost_proto::sys::socketpair_pair().unwrap();
+        let cfg = bifrost_proto::Configure { w: 100, h: 100, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
+        sh.ext.push(Some(apphost::AppHost::with_channel("fixture", mine, None, cfg)));
+        let slot = (sh.ext.len() - 1) as u8;
+        let (back, front) = (AppId::External(slot), AppId::Terminal);
+        let m = sh.desk_metrics();
+        {
+            let d = sh.desk.as_mut().unwrap();
+            d.wins.clear();
+            d.open(&m, back, (500, 400));
+            d.open(&m, front, (500, 400));
+            // side by side, so the press on the first lands on nothing of the second
+            let a = Desk::area(&m);
+            for (app, x) in [(back, a.x + 10), (front, a.x + a.w - 510)] {
+                let i = d.index_of(app).unwrap();
+                d.wins[i].r = Rect { x, y: a.y + 10, w: 500, h: 400 };
+                d.wins[i].restore = d.wins[i].r;
+            }
+        }
+        sh.screen = Screen::App(front);
+        let w = *sh.desk.as_ref().unwrap().wins.iter().find(|w| w.app == back).unwrap();
+        let b = w.body(&m);
+        let (x, y) = ((b.x + b.w / 2) as f32, (b.y + b.h / 2) as f32);
+        sh.desk_event(Event::Down(x, y), 100.);
+        assert_eq!(sh.desk.as_ref().unwrap().front().map(|w| w.app), Some(back), "the press raises the window");
+        assert_eq!(sh.screen, Screen::App(back));
+        assert!(matches!(sh.desk.as_ref().unwrap().grab, Some(Grab::Content(a, _)) if a == back), "and the press is the app's");
+        sh.desk_event(Event::Move(x + 12., y + 9.), 116.);
+        sh.desk_event(Event::Up(x + 12., y + 9.), 132.);
+        let mut kinds = Vec::new();
+        while let Ok(bifrost_proto::sys::Recv::Packet(p, _)) = peer.recv(false) {
+            if let Ok(ToApp::Touch { kind, .. }) = ToApp::decode(&p) { kinds.push(kind); }
+        }
+        assert_eq!(kinds, vec![TouchKind::Down, TouchKind::Move, TouchKind::Up], "the app hears the whole drag");
+    }
+
     /// O8: the active app that closed its last window keeps the menu bar, so the window under it must not draw as the
     /// active one (key traffic lights, title and shadow): no window is active until a window is raised or opened.
     #[test]
