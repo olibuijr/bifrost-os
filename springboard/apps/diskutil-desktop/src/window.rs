@@ -583,17 +583,51 @@ impl DiskUtility {
         !self.busy() && self.selected_node().is_some_and(|n| n.kind == Kind::Disk && n.removable)
     }
 
+    /// Whether a row is selected and no action is running: Get Info and the commands below build on it.
+    pub fn has_selection(&self) -> bool {
+        !self.busy() && self.selected_node().is_some()
+    }
+
+    /// Whether the selected row can be erased: any row but the running system's (see `selected_is_system`). The
+    /// toolbar and the Disk menu both ask this, so they always agree.
+    pub fn can_erase(&self) -> bool {
+        self.has_selection() && !self.selected_is_system()
+    }
+
+    /// Whether First Aid can run on the selected row; the same rule as Erase.
+    pub fn can_first_aid(&self) -> bool {
+        self.can_erase()
+    }
+
+    /// Whether the selected row can be restored over; the same rule as Erase.
+    pub fn can_restore(&self) -> bool {
+        self.can_erase()
+    }
+
+    /// Whether the selected row can be renamed: a row with a file system.
+    pub fn can_rename(&self) -> bool {
+        self.has_selection() && self.selected_node().is_some_and(|n| n.fs_type.is_some())
+    }
+
+    /// Whether the selected row can be partitioned: a whole disk that is not the running system's.
+    pub fn can_partition(&self) -> bool {
+        self.can_erase() && self.selected_node().is_some_and(|n| n.kind == Kind::Disk)
+    }
+
+    /// Whether Detach can run: the selected row is a disk image, and no action is running.
+    pub fn can_detach(&self) -> bool {
+        !self.busy() && self.selected_image()
+    }
+
     /// The toolbar for the current state. Actions need a selected row and no running action.
     pub fn toolbar(&self) -> Toolbar {
-        let idle = !self.busy();
-        let node = self.selected_node();
         Toolbar::new(vec![
             ToolbarItem::button(B_MOUNT, "Mount").enabled(self.can_mount()),
             ToolbarItem::button(B_UNMOUNT, "Unmount").enabled(self.can_unmount()),
             ToolbarItem::button(B_EJECT, "Eject").enabled(self.can_eject()),
-            ToolbarItem::button(B_DETACH, "Detach").enabled(idle && self.selected_image()),
-            ToolbarItem::button(B_ERASE, "Erase").enabled(idle && node.is_some() && !self.selected_is_system()),
-            ToolbarItem::button(B_FIRST_AID, "First Aid").enabled(idle && node.is_some() && !self.selected_is_system()),
+            ToolbarItem::button(B_DETACH, "Detach").enabled(self.can_detach()),
+            ToolbarItem::button(B_ERASE, "Erase").enabled(self.can_erase()),
+            ToolbarItem::button(B_FIRST_AID, "First Aid").enabled(self.can_first_aid()),
             ToolbarItem::flexible_space(),
             ToolbarItem::icon(B_REFRESH, "Refresh", "arrow.clockwise"),
         ])
@@ -864,6 +898,25 @@ mod tests {
         assert!(w.selected_mounted(), "the system volume can still be shown in Files");
         let bar = w.toolbar();
         assert!(!bar.items.iter().find(|i| i.id == B_UNMOUNT).is_some_and(|i| i.enabled));
+    }
+
+    #[test]
+    fn erase_and_the_other_disk_commands_follow_one_predicate_each() {
+        let mut w = DiskUtility::new();
+        w.nodes = vec![
+            Node { name: "sdb".into(), removable: true, size: 8_000_000_000, ..Node::default() },
+            Node { name: "sdb1".into(), kind: Kind::Partition, parent: Some("sdb".into()), fs_type: Some("vfat".into()), ..Node::default() },
+        ];
+        let enabled = |w: &DiskUtility, id: u32| w.toolbar().items.iter().find(|i| i.id == id).is_some_and(|i| i.enabled);
+        assert!(!w.can_erase() && !enabled(&w, B_ERASE), "nothing selected");
+        w.selected = Some("sdb".into());
+        assert!(w.can_erase() && enabled(&w, B_ERASE), "a whole disk can be erased");
+        assert!(w.can_first_aid() && w.can_restore() && w.can_partition() && !w.can_rename());
+        w.selected = Some("sdb1".into());
+        assert!(w.can_erase() && w.can_rename() && !w.can_partition(), "a partition is erased and renamed, not partitioned");
+        w.job = Some(Job { verb: "Erasing", name: "sdb1".into(), rx: std::sync::mpsc::channel().1, commit: None });
+        assert!(!w.can_erase() && !w.can_first_aid() && !w.can_restore() && !w.can_rename() && !w.can_partition() && !w.has_selection());
+        assert!(!enabled(&w, B_ERASE) && !enabled(&w, B_FIRST_AID));
     }
 
     #[test]
