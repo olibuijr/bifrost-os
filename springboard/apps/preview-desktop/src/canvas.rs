@@ -506,7 +506,30 @@ impl Layout {
 
 /// The shared Golden Gate toolbar model and the exact layout used to draw it and publish its controls.
 pub fn toolbar(ui: &Ui, lay: &Layout, open: bool, tool: Tool, side: Side) -> (Toolbar, ToolbarLayout) {
-    let mut items: Vec<ToolbarItem> = Action::toolbar()
+    let mut items = toolbar_items(open, tool, side);
+    let scale = ui.pt(1.0).max(0.001);
+    let bounds = bifrost_app::controls::Rect {
+        x: lay.side as f32 / scale,
+        y: 0.0,
+        w: (lay.w - lay.side).max(0) as f32 / scale,
+        h: lay.bar.max(0) as f32 / scale,
+    };
+    // Preserve the old narrow-window behavior: actions that do not fit remain available from the menus, rather than
+    // exposing the kit's overflow affordance without an app-specific overflow menu.
+    let full = Toolbar::new(items.clone());
+    let first = widgets::toolbar_layout(ui, bounds, &full);
+    if !first.overflow.is_empty() {
+        items = items.into_iter().filter(|item| !first.overflow.contains(&item.id)).collect();
+    }
+    let bar = Toolbar::new(items);
+    let layout = widgets::toolbar_layout(ui, bounds, &bar);
+    (bar, layout)
+}
+
+/// The toolbar buttons with their glyphs, groups, enabled and selected state. Every button acts on the open document,
+/// so with none open they are all disabled and none shows the selected plate.
+fn toolbar_items(open: bool, tool: Tool, side: Side) -> Vec<ToolbarItem> {
+    Action::toolbar()
         .iter()
         .copied()
         .map(|action| {
@@ -540,26 +563,10 @@ pub fn toolbar(ui: &Ui, lay: &Layout, open: bool, tool: Tool, side: Side) -> (To
                 Action::ShowOutline => side == Side::Outline,
                 _ => false,
             };
-            item.enabled(open).selected(selected)
+            // a disabled button never shows the selected plate: with no document the bar must read as inactive
+            item.enabled(open).selected(selected && open)
         })
-        .collect();
-    let scale = ui.pt(1.0).max(0.001);
-    let bounds = bifrost_app::controls::Rect {
-        x: lay.side as f32 / scale,
-        y: 0.0,
-        w: (lay.w - lay.side).max(0) as f32 / scale,
-        h: lay.bar.max(0) as f32 / scale,
-    };
-    // Preserve the old narrow-window behavior: actions that do not fit remain available from the menus, rather than
-    // exposing the kit's overflow affordance without an app-specific overflow menu.
-    let full = Toolbar::new(items.clone());
-    let first = widgets::toolbar_layout(ui, bounds, &full);
-    if !first.overflow.is_empty() {
-        items = items.into_iter().filter(|item| !first.overflow.contains(&item.id)).collect();
-    }
-    let bar = Toolbar::new(items);
-    let layout = widgets::toolbar_layout(ui, bounds, &bar);
-    (bar, layout)
+        .collect()
 }
 
 /// The thumbnail rows in content coordinates: (top, height) for each page, with the gap before.
@@ -1413,6 +1420,16 @@ mod tests {
             assert_eq!(Action::from_id(a.id()), Some(*a));
         }
         assert_eq!(Action::from_id(999), None);
+    }
+
+    #[test]
+    fn toolbar_is_inactive_until_a_document_is_open() {
+        let closed = toolbar_items(false, Tool::Pan, Side::Pages);
+        assert!(!closed.is_empty());
+        assert!(closed.iter().all(|i| !i.enabled && !i.selected), "no control is live without a document");
+        let open = toolbar_items(true, Tool::Pan, Side::Pages);
+        assert!(open.iter().all(|i| i.enabled));
+        assert!(open.iter().any(|i| i.selected));
     }
 
     #[test]
