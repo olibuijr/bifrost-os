@@ -147,7 +147,7 @@ mod tests {
         assert_eq!(first_visible(14, 7, 8), 0, "the last row still fits");
         assert_eq!(first_visible(14, 8, 8), 1, "one line past the bottom scrolls one line");
         assert_eq!(first_visible(14, 13, 8), 6, "the end shows the last rows");
-        assert_eq!(first_visible(14, 3, 0), 0, "a zero-row body is treated as one row");
+        assert_eq!(first_visible(14, 3, 0), 3, "a zero-row body is treated as one row: the caret line shows");
     }
 
     fn spans<'a>(text: &'a str, ls: &[Line]) -> Vec<&'a str> {
