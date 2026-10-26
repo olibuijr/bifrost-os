@@ -287,7 +287,7 @@ impl ColourUtility {
         let mut items = vec![SidebarItem::header("")];
         for (index, found) in self.found.iter().enumerate() {
             let name = found.path.file_name().and_then(|n| n.to_str()).unwrap_or("profile");
-            items.push(SidebarItem::row(index as u32 + 1, name).with_symbol("folder").with_subtitle(found.group.title()));
+            items.push(SidebarItem::row(index as u32 + 1, name).with_symbol("doc").with_subtitle(found.group.title()));
         }
         let mut list = SourceList::new(items, ROW_PT, LIST_TOP_PT);
         list.two_line_h = ROW_PT;
