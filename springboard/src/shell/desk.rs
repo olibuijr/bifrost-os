@@ -3092,6 +3092,16 @@ impl Shell {
         self.dirty = true;
     }
 
+    /// The window that draws as the active one (key traffic lights and title, the large shadow): the topmost shown window,
+    /// unless the active app has no window (`desk_windowless_front`), when none does: the window under it belongs to
+    /// another app, which is not the active one.
+    pub(super) fn desk_active_window_index(&self) -> Option<usize> {
+        if self.desk_windowless_front().is_some() {
+            return None;
+        }
+        self.desk.as_ref().and_then(|d| d.wins.iter().rposition(|w| !w.minimized && !d.unmapped.contains(&w.app)))
+    }
+
     /// The active app that has no window (`Desk::windowless_front`) while that still holds: its process runs and none
     /// of its windows (main or extra) is on the desk. The screen, the menu bar and the application menu follow it.
     pub(super) fn desk_windowless_front(&self) -> Option<AppId> {
@@ -4297,7 +4307,7 @@ impl Shell {
             desk.body_cache.retain(|app,_| desk.wins.iter().zip(&fading).any(|(w, f)| (!w.minimized || *f) && w.app == *app));
         }
         self.desk_refresh_unmapped();
-        let front = self.desk.as_ref().and_then(|d| d.wins.iter().rposition(|w| !w.minimized && !d.unmapped.contains(&w.app)));
+        let front = self.desk_active_window_index();
         for i in 0..count {
             let Some(win) = self.desk.as_ref().and_then(|d| d.wins.get(i).copied()) else { break };
             let w = &win;
@@ -6642,6 +6652,41 @@ mod tests {
         let i = d.index_of(placed).unwrap();
         d.close(i);
         assert!(!d.placed.contains(&placed));
+    }
+
+    /// O8: the active app that closed its last window keeps the menu bar, so the window under it must not draw as the
+    /// active one (key traffic lights, title and shadow): no window is active until a window is raised or opened.
+    #[test]
+    fn no_window_draws_active_while_a_windowless_app_is_in_front() {
+        use crate::shell::Screen;
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.anim = None;
+        let (mine, _peer) = bifrost_proto::sys::socketpair_pair().unwrap();
+        let cfg = bifrost_proto::Configure { w: 100, h: 100, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
+        sh.ext.push(Some(apphost::AppHost::with_channel("fixture", mine, None, cfg)));
+        let slot = (sh.ext.len() - 1) as u8;
+        let (main, other) = (AppId::External(slot), AppId::Terminal);
+        let m = sh.desk_metrics();
+        {
+            let d = sh.desk.as_mut().unwrap();
+            d.wins.clear();
+            d.open(&m, other, (900, 600));
+            d.open(&m, main, (600, 400));
+        }
+        sh.screen = Screen::App(main);
+        let at = |sh: &Shell, app| sh.desk.as_ref().unwrap().index_of(app);
+        assert_eq!(sh.desk_active_window_index(), at(&sh, main), "with a window in front it is the active one");
+        sh.desk_order_main_out(slot);
+        assert_eq!(sh.desk_windowless_front(), Some(main));
+        assert_eq!(sh.desk_active_window_index(), None, "the window under the windowless app is not active");
+        // a window raised takes the front again, and with it the active look
+        {
+            let d = sh.desk.as_mut().unwrap();
+            let i = d.index_of(other).unwrap();
+            d.raise(i);
+        }
+        assert_eq!(sh.desk_windowless_front(), None);
+        assert_eq!(sh.desk_active_window_index(), at(&sh, other));
     }
 
     /// O1: `take_wayland_windows` empties the desk's frames on every present, so a window that starts closing found no
