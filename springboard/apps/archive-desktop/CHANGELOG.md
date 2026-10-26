@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.12
+
+- File > Print... no longer appears, since Archive has nothing to print.
+
 ## 0.2.11
 
 - An Open button and File > Open (Cmd+O); the content clears the window buttons; a centred empty state on the standard background.

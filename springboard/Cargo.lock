@@ -349,7 +349,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-archive"
-version = "0.2.11"
+version = "0.2.12"
 dependencies = [
  "bifrost-app",
  "flate2",
@@ -444,7 +444,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-audio-setup"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "bifrost-app",
  "bifrost-audio-hal",
@@ -610,7 +610,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-colour-utility"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -665,7 +665,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-diskutil"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -726,7 +726,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-grapher"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "bifrost-app",
  "springboard",
@@ -865,7 +865,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-news"
-version = "1.6.11"
+version = "1.6.12"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -983,7 +983,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-script-editor"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "bifrost-app",
  "springboard",
@@ -1037,7 +1037,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-textedit"
-version = "1.13.8"
+version = "1.13.9"
 dependencies = [
  "bifrost-app",
  "bifrost-core",

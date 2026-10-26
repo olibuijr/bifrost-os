@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.13.9
+
+- The red close button asks before closing an edited document.
+
 ## 1.13.8
 
 - An unsaved Untitled document autosaved at Quit opens again, still edited, at the next launch; the Preferences menu is now Settings.

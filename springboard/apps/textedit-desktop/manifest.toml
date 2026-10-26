@@ -1,6 +1,6 @@
 id = "is.olibuijr.textedit.desktop"
 name = "Text Editor"
-version = "1.13.8"
+version = "1.13.9"
 exec = "bifrost-textedit"
 icon = "icon.png"
 min_shell = "0.10.37"

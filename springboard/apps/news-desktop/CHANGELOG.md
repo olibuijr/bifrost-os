@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.12
+
+- Stays offline under the testing pin, so its snapshot is stable.
+
 ## 1.6.11
 
 - Today lists only today's stories, newest first.

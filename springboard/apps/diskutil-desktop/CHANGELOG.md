@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.6
+
+- The menu and toolbar share one enabled state per disk command, File > Print... is gone, and the layout uses points on scaled displays.
+
 ## 0.8.5
 
 - Unmount is disabled for the running system volume, in the toolbar and the menu.

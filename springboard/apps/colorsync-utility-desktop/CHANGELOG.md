@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.10
+
+- The layout uses points instead of pixels on scaled displays.
+
 ## 0.1.9
 
 - The Gamut readouts move under the chart in a narrow window; profiles use a document icon and empty fields show a dash.

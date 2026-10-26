@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.13
+
+- The layout uses points instead of pixels on scaled displays.
+
 ## 0.1.12
 
 - One add control instead of two.

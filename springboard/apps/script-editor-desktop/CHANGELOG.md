@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.10
+
+- The red close button closes the active script and asks before closing an edited one.
+
 ## 0.1.9
 
 - Close (Cmd+W) asks to save an edited script; an unsaved script autosaved at Quit opens again at the next launch.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.8
+
+- The layout uses points instead of pixels on scaled displays.
+
 ## 0.1.7
 
 - A new equation from + takes the typing; existing equations are left alone.
