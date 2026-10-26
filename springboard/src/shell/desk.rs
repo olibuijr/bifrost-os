@@ -6740,6 +6740,10 @@ mod tests {
     #[cfg(feature = "desktop-wayland")]
     #[test]
     fn a_closing_window_keeps_the_frame_the_last_present_took_for_its_close_effect() {
+        // window effects run only under the window server
+        let _lock = crate::test_support::global_lock();
+        let saved = std::env::var_os("SPRINGBOARD_WAYLAND");
+        std::env::set_var("SPRINGBOARD_WAYLAND", "1");
         let mut sh = crate::shell::tests::desktop_shell();
         let m = sh.desk_metrics();
         let app = AppId::Settings;
@@ -6765,6 +6769,7 @@ mod tests {
         // the next present has no frame of the closed window to remember
         assert!(sh.take_wayland_windows().is_empty());
         assert!(sh.desk.as_ref().unwrap().presented.is_empty(), "nothing of the closed window outlives its present");
+        if let Some(v) = saved { std::env::set_var("SPRINGBOARD_WAYLAND", v) } else { std::env::remove_var("SPRINGBOARD_WAYLAND") };
     }
 
     /// E2E11 3: an app moving its mapped window (`WindowMove`) makes the next frame ask the window server to move the
