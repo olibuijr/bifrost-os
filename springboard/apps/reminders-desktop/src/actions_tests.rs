@@ -1167,6 +1167,7 @@ fn deleting_a_list_asks_first_and_the_more_button_and_right_click_open_its_menu(
     assert!(app.data.lists.iter().any(|l| l.id == work), "the first press only asks");
     assert!(app.list_edit.as_ref().unwrap().confirm_delete);
     assert_eq!(app.notice.as_deref(), Some(delete_list_question(1).as_str()));
+    assert!(app.notice.as_deref().unwrap().contains(CONFIRM_DELETE_LIST), "the caption names the button it asks you to press");
     app.activate(&ui, Target::Cancel, 12.0);
     app.activate(&ui, Target::ListInfo(work), 13.0);
     assert!(!app.list_edit.as_ref().unwrap().confirm_delete, "a new form asks again");
