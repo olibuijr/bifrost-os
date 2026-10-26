@@ -390,4 +390,10 @@ mod tests {
         let remove = g.toolbar().items.into_iter().find(|i| i.id == B_REMOVE).unwrap();
         assert!(!remove.enabled);
     }
+
+    #[test]
+    fn the_configured_pixel_size_becomes_points() {
+        assert_eq!(crate::size_pt(1250, 750, 1.5625), (800.0, 480.0));
+        assert_eq!(crate::size_pt(600, 400, 1.0), (600.0, 400.0));
+    }
 }

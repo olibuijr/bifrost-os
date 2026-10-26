@@ -22,6 +22,12 @@ const PANEL_KEYS: [&str; 4] = ["cmd+1", "cmd+2", "cmd+3", "cmd+4"];
 const KEY_UP: u32 = 38;
 const KEY_DOWN: u32 = 40;
 
+/// The window size in points, from the configured size in pixels and the display scale.
+fn size_pt(w_px: u32, h_px: u32, scale: f32) -> (f32, f32) {
+    let scale = scale.max(f32::EPSILON);
+    (w_px as f32 / scale, h_px as f32 / scale)
+}
+
 impl ColourUtility {
     /// What a tap or a click on `target` does. True when the window needs a new frame.
     fn activate(&mut self, target: Target) -> bool {
@@ -40,7 +46,8 @@ impl App for ColourUtility {
 
     fn configure(&mut self, ctx: &Ctx) {
         ctx.enable_sudden_termination(); // keeps no unsaved state: every profile is read again from its file
-        self.size = (ctx.cfg.w as f32, ctx.cfg.h as f32);
+        // `cfg` is in pixels, the layout in points: a scaled window would otherwise lay out wider than it is
+        self.size = size_pt(ctx.cfg.w, ctx.cfg.h, ctx.ui.pt(1.0));
         if !self.loaded {
             self.loaded = true;
             self.reload();

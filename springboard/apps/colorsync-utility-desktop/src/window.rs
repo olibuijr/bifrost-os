@@ -491,4 +491,10 @@ mod tests {
     fn read_refuses_a_missing_file() {
         assert!(read_bounded(Path::new("/nonexistent/none.icc")).is_err());
     }
+
+    #[test]
+    fn the_configured_pixel_size_becomes_points() {
+        assert_eq!(crate::size_pt(1250, 750, 1.5625), (800.0, 480.0));
+        assert_eq!(crate::size_pt(600, 400, 1.0), (600.0, 400.0));
+    }
 }
