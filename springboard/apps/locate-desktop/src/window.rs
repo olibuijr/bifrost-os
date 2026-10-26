@@ -6,6 +6,7 @@
 use bifrost_app::control::{RpcError, INVALID_PARAMS};
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::controls::Rect;
+use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_TITLE3_PT, SEPARATOR_C};
 use bifrost_app::kit::{Surface, TextCache, Ui, Weight};
 use bifrost_app::widgets;
@@ -121,13 +122,18 @@ impl LocateWindow {
         list
     }
 
+    /// The part of the sidebar its rows are drawn and hit in: below the unified bar band of the traffic lights.
+    fn sidebar_rows(height_pt: f32) -> Rect {
+        let band = UNIFIED_BAR_PT.clamp(0.0, height_pt.max(0.0));
+        Rect { x: 0.0, y: band, w: SIDEBAR_PT, h: height_pt - band }
+    }
+
     /// The section under a point in points, when the sidebar is there.
     pub fn section_at(&self, x: f32, y: f32, height_pt: f32) -> Option<Section> {
         if x >= SIDEBAR_PT {
             return None;
         }
-        let bounds = Rect { x: 0.0, y: 0.0, w: SIDEBAR_PT, h: height_pt };
-        self.sidebar().hit(bounds, 0.0, x, y).and_then(section_of)
+        self.sidebar().hit(Self::sidebar_rows(height_pt), 0.0, x, y).and_then(section_of)
     }
 
     /// A control request from a script or the assistant. Returns the JSON reply; locate and play sound are queued.
@@ -156,8 +162,9 @@ impl LocateWindow {
         let (w_pt, h_pt) = (s.w as f32 / ui.pt(1.0), s.h as f32 / ui.pt(1.0));
         self.width_pt = w_pt;
         fill(s, ui, 0.0, 0.0, w_pt, h_pt, CONTENT_BG.now());
+        // the column's material runs the full height; the rows start under the traffic lights' band
         let bounds = Rect { x: 0.0, y: 0.0, w: SIDEBAR_PT, h: h_pt };
-        widgets::source_list(s, ui, bounds, &self.sidebar(), 0.0, None);
+        widgets::source_list_in(s, ui, bounds, &self.sidebar(), -UNIFIED_BAR_PT, None, Some(Self::sidebar_rows(h_pt)));
         fill(s, ui, SIDEBAR_PT - 1.0, 0.0, 1.0, h_pt, SEPARATOR_C.now());
 
         let x = SIDEBAR_PT + INSET_PT;
@@ -165,9 +172,12 @@ impl LocateWindow {
         let section = self.panel.section;
         self.line(ui, s, section.title(), MAC_TITLE3_PT, LABEL.now(), x, TOP_PT, max);
         let mut y = TOP_PT + LINE_PT * 2.0;
-        for line in self.body(section) {
-            self.line(ui, s, &line, MAC_BODY_PT, LABEL.now(), x, y, max);
-            y += LINE_PT;
+        for paragraph in self.body(section) {
+            // a paragraph wraps to the content width rather than being cut off
+            for line in ui.wrap(&paragraph, MAC_BODY_PT, Weight::Regular, ui.pt(max.max(0.0))) {
+                self.line(ui, s, &line, MAC_BODY_PT, LABEL.now(), x, y, max);
+                y += LINE_PT;
+            }
         }
         self.draw_controls(ui, s);
         if self.panel.needs_onboarding() {
@@ -260,6 +270,18 @@ mod tests {
         }
         assert_eq!(section_of(0), None);
         assert_eq!(section_of(9), None);
+    }
+
+    #[test]
+    fn every_sidebar_row_is_hit_below_the_traffic_lights_band() {
+        let w = LocateWindow::new(true);
+        let h = 600.0;
+        let row_h = 28.0;
+        for (i, s) in Section::ALL.iter().enumerate() {
+            let y = UNIFIED_BAR_PT + row_h * (i as f32 + 0.5);
+            assert_eq!(w.section_at(40.0, y, h), Some(*s));
+        }
+        assert_eq!(w.section_at(40.0, UNIFIED_BAR_PT / 2.0, h), None, "the band is the window-drag zone");
     }
 
     #[test]
