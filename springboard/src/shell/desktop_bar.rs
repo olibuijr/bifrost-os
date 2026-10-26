@@ -342,7 +342,7 @@ pub(super) fn app_item_parent(menu:&bifrost_proto::AppMenu,item:usize)->Option<u
 /// Rows of one level of app menu `mi` (`app_level_items`).
 #[cfg(feature = "desktop-wayland")]
 fn app_level_rows(slot:u8,mi:u8,menu:&bifrost_proto::AppMenu,header:Option<usize>)->Vec<Row> {
-    app_level_items(menu,header).into_iter().filter(|&k|!menu.items[k].prints&&!menu.items[k].no_print).map(|k|{
+    app_level_items(menu,header).into_iter().filter(|&k|!menu.items[k].prints&&!menu.items[k].no_print&&!is_settings_item(&menu.items[k])).map(|k|{
         let i=&menu.items[k];
         if i.submenu&&!i.separator {
             let text=format!("{}{}",if i.checked{"\u{2713} "}else{""},i.title);
@@ -364,6 +364,17 @@ fn app_item_row(slot:u8,i:&bifrost_proto::AppMenuItem)->Row {
 #[cfg(feature = "desktop-wayland")]
 pub(super) fn app_print_row(slot:u8,menus:&[bifrost_proto::AppMenu])->Option<Row> {
     menus.iter().flat_map(|m|m.items.iter()).find(|i|i.prints&&!i.separator&&!i.submenu).map(|i|app_item_row(slot,&bifrost_proto::AppMenuItem{depth:0,checked:false,..i.clone()}))
+}
+/// An app's own Settings… item (`cmd+,` on an enabled top-level item): the shell shows it in the application menu, where the
+/// reference keeps it (HIG "The menu bar", App menu), and leaves it out of the app's own menus.
+#[cfg(feature = "desktop-wayland")]
+fn is_settings_item(i:&bifrost_proto::AppMenuItem)->bool {
+    i.depth==0&&i.enabled&&i.id!=0&&!i.separator&&!i.submenu&&i.key.eq_ignore_ascii_case("cmd+,")
+}
+/// What the application menu's Settings… runs for an app that declares its own Settings… item, `None` without one.
+#[cfg(feature = "desktop-wayland")]
+pub(super) fn app_settings_action(slot:u8,menus:&[bifrost_proto::AppMenu])->Option<Action> {
+    menus.iter().flat_map(|m|m.items.iter()).find(|i|is_settings_item(i)).map(|i|Action::AppMenu(slot,i.id))
 }
 /// Whether the app declared it has nothing to print (`AppMenuItem::no_print`): the shell then leaves its File > Print… out.
 #[cfg(feature = "desktop-wayland")]
@@ -805,7 +816,11 @@ impl Shell {
                 } else if app_hides_print(self.app_menus()) {drop_shell_print_row(&mut rows);}
             }
             let merged:Vec<Row>=self.app_menus().iter().enumerate().filter(|(_,m)|shell_menu(&m.title)==Some(menu)).flat_map(|(i,m)|app_menu_rows(slot,i as u8,m)).collect();
-            if !merged.is_empty() {if !rows.is_empty(){rows.insert(0,Row::separator());}for r in merged.into_iter().rev(){rows.insert(0,r);}}
+            // Edit keeps the shell's Undo, Cut, Copy, Paste and Select All first (the reference's order); the app's own items
+            // (Find, Spelling and Grammar, ...) follow them. The other menus put the app's items first.
+            if menu==Menu::Edit {
+                if !merged.is_empty() {if !rows.is_empty(){rows.push(Row::separator());}rows.extend(merged);}
+            } else if !merged.is_empty() {if !rows.is_empty(){rows.insert(0,Row::separator());}for r in merged.into_iter().rev(){rows.insert(0,r);}}
         }
         rows
     }
@@ -1654,6 +1669,10 @@ impl Shell {
     /// opens its own; the desktop (no app in front) opens System Settings. None for an app with no settings: the row is left out.
     pub(super) fn front_app_settings(&self)->Option<Action> {
         if self.front_app()==FrontApp::Nothing {return Some(Action::Settings(""));}
+        // an app with a Settings… item of its own (cmd+,) runs that one
+        if let FrontApp::Desk(AppId::External(slot))=self.front_app() {
+            if let Some(action)=app_settings_action(slot,self.app_menus()) {return Some(action);}
+        }
         let slot=self.front_installed_slot()?;
         let has=super::apphost::installed().get(slot).is_some_and(|a|!a.manifest.settings_panes.is_empty());
         (has&&slot<=u8::MAX as usize).then(||Action::AppSettings(slot as u8))
