@@ -21,7 +21,7 @@ pub struct Header {
 }
 impl Header {
     pub fn new(width: f32, scale: f32, count: usize) -> Self {
-        let reserve = 252.0 * scale;
+        let reserve = 276.0 * scale;
         let available = (width - reserve - 96.0 * scale).max(0.0);
         let tab_w = if count == 0 {
             0.0
@@ -34,7 +34,7 @@ impl Header {
             plus,
             ssh: plus + 44.0 * scale,
             sys: width - reserve,
-            app: width - 132.0 * scale,
+            app: width - 156.0 * scale,
             more: width - 44.0 * scale,
             scale,
             count,
@@ -121,6 +121,13 @@ mod tests {
             assert_eq!(g.hit(g.more + 10.0, 1200.0), Some(HeaderHit::Menu));
             assert!(g.ssh + 52.0 * g.scale <= g.sys + 0.1);
         }
+    }
+    #[test]
+    fn meter_badges_have_room_for_tag_and_value() {
+        let g = Header::new(1200.0, 1.0, 3);
+        // SYS badge 114 pt and APP badge 106 pt must fit inside their slots.
+        assert!(g.sys + 114.0 * g.scale <= g.app);
+        assert!(g.app + 106.0 * g.scale <= g.more);
     }
     #[test]
     fn panels_keep_margins_and_clear_the_keyboard() {

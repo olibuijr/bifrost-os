@@ -363,3 +363,24 @@ fn button(s: &mut Surface, ui: &Ui, label: &str, rect: (f32, f32, f32, f32), sel
         255,
     );
 }
+/// A bar button on the tab strip: an inset rounded plate, so "+" and "SSH" read as
+/// controls and not as extra tabs.
+fn bar_button(s: &mut Surface, ui: &Ui, label: &str, slot: (f32, f32, f32, f32), selected: bool) {
+    let (x, y, w, _) = slot;
+    let inset = ui.pt(4.0);
+    let plate = (x + inset, y + ui.pt(9.0), (w - inset * 2.0).max(0.0), ui.pt(22.0));
+    s.fill_rrect(plate.0, plate.1, plate.2, plate.3, ui.pt(6.0), BADGE);
+    let img = ui.text(
+        label,
+        13.0,
+        Weight::Medium,
+        if selected { ACCENT } else { WHITE },
+    );
+    s.blit(
+        &img,
+        (plate.0 + (plate.2 - img.w as f32) / 2.0).round() as i32,
+        (plate.1 + (plate.3 - img.h as f32) / 2.0).round() as i32,
+        255,
+        255,
+    );
+}
