@@ -521,6 +521,8 @@ pub struct ListPage {
     gen: u64,
     /// the pop-up menu open on a row, if any
     open: Option<OpenPopup>,
+    /// the row that has the keyboard focus (Tab in a Settings pane): it shows the focus ring
+    focus: Option<(usize, usize)>,
 }
 
 /// Where a page sits: the phone's full-width column or an bifrost split-view pane.
@@ -953,6 +955,7 @@ impl ListPage {
             flipped,
             scroll,
             open: None,
+            focus: None,
             search_y,
             margin: m,
             nav_pt: pane.nav_pt,
@@ -1162,6 +1165,71 @@ impl ListPage {
     pub fn row_centre(&self, ui: &Ui, g: usize, i: usize) -> (f32, f32) {
         let (x, y, w, h) = self.row_rect(ui, g, i);
         (x + w / 2.0, y + h / 2.0)
+    }
+
+    /// The rows the keyboard can focus, top to bottom: those that do something when pressed (switches, pop-up buttons, links,
+    /// checkmarks, buttons), sliders, and segmented, picture and dot rows.
+    pub fn focusable(&self) -> Vec<(usize, usize)> {
+        self.rows
+            .iter()
+            .filter(|r| {
+                let it = self.item(r.g, r.i);
+                it.tint != Tint::Dim && (it.tappable() || matches!(it.body, Body::Slider { .. }) || it.segments.is_some())
+            })
+            .map(|r| (r.g, r.i))
+            .collect()
+    }
+
+    /// Gives row (g, i) the keyboard focus ring, or takes it away (None).
+    pub fn set_focus(&mut self, focus: Option<(usize, usize)>) {
+        if self.focus != focus {
+            self.focus = focus;
+            self.gen = next_gen();
+        }
+    }
+
+    /// The row with the focus ring.
+    pub fn focus(&self) -> Option<(usize, usize)> {
+        self.focus
+    }
+
+    /// Scrolls just far enough that row (g, i) is in view, below the bar and above the bottom edge.
+    pub fn reveal_row(&mut self, ui: &Ui, g: usize, i: usize) {
+        let (_, y, _, h) = self.row_rect(ui, g, i);
+        let (top, bottom) = (self.nav_bottom(ui) + ui.pt(8.0), self.h as f32 - ui.pt(8.0));
+        let off = self.scroll.offset();
+        if y < top {
+            self.scroll.jump_to((off - (top - y)).max(0.0));
+        } else if y + h > bottom {
+            self.scroll.jump_to(off + (y + h - bottom));
+        }
+        self.gen = next_gen();
+    }
+
+    /// A slider row's value, 0 to 1.
+    pub fn slider_value(&self, g: usize, i: usize) -> Option<f32> {
+        match self.item(g, i).body {
+            Body::Slider { value, .. } => Some(value),
+            _ => None,
+        }
+    }
+
+    /// A segmented, picture or dot row's chosen segment and how many there are.
+    pub fn choice_state(&self, g: usize, i: usize) -> Option<(usize, usize)> {
+        self.item(g, i).segments.as_ref().map(|seg| (seg.selected, seg.choices.len()))
+    }
+
+    /// Moves the highlight of the open pop-up menu (`dir` 1 down, -1 up).
+    pub fn popup_step(&mut self, dir: i32) {
+        if let Some(p) = &mut self.open {
+            p.menu.step(dir);
+            self.gen = next_gen();
+        }
+    }
+
+    /// The highlighted choice of the open pop-up menu.
+    pub fn popup_choice(&self) -> Option<usize> {
+        self.open.as_ref().and_then(|p| p.menu.activate()).map(|k| k as usize)
     }
 
     /// The (group, item) of the first row whose label is `label`.
@@ -1393,6 +1461,7 @@ impl ListPage {
             self.draw_card(s, ui, sb, dy);
         }
         self.draw_scroller(s, ui);
+        self.draw_focus_ring(s, ui);
         self.draw_popup(s, ui, pressed);
         if let (Some(title), None) = (&self.title_large, &self.sidebar) {
             // fades out as it slides under the bar, while the inline title fades in
@@ -1407,6 +1476,17 @@ impl ListPage {
             blur_strip(s, self.nav_bottom(ui) as usize, ui.pt(10.0) as usize);
         }
         self.nav.draw(s, ui, self.w, alpha, if self.spec.large || self.header.as_ref().is_some_and(|h| !h.compact) { alpha } else { 1.0 });
+    }
+
+    /// The keyboard focus ring round the focused row: the kit's geometry (`sheet::focus_ring_rect`), outside the row.
+    fn draw_focus_ring(&self, s: &mut Surface, ui: &Ui) {
+        let Some((g, i)) = self.focus.filter(|&(g, i)| self.rows.iter().any(|r| r.g == g && r.i == i)) else { return };
+        let (x, y, w, h) = self.row_rect(ui, g, i);
+        if y + h < self.nav_bottom(ui) || y > self.h as f32 {
+            return;
+        }
+        let g = ui.pt(bifrost_ui::sheet::FOCUS_RING_PT);
+        s.stroke_rrect(x - g, y - g, w + 2.0 * g, h + 2.0 * g, ui.pt(RADIUS_PT) + g, ui.pt(2.0), bifrost_render::appearance::accent_now());
     }
 
     /// Settings > Appearance > Show scroll bars: Always keeps the overlay knob drawn at the trailing edge while the list

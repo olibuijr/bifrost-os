@@ -310,6 +310,18 @@ impl Loads {
     }
 }
 
+/// Where the keyboard is in the split window (see `Settings::cycle_focus`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Stop {
+    Search,
+    Sidebar,
+    /// the nth focusable control of the detail pane
+    Pane(usize),
+}
+
+/// How far a Left or Right key moves a focused slider, as a part of its track.
+const SLIDER_KEY_STEP: f32 = 0.1;
+
 pub struct Settings {
     /// the detail pane's width (the whole frame in the phone layout)
     w: i32,
@@ -477,6 +489,9 @@ pub struct Settings {
     /// the sidebar's selected row shows the keyboard focus ring: Tab or an arrow key moved the focus there, and a touch
     /// takes it away (the sidebar has the keyboard whenever the search field has not)
     side_ring: bool,
+    /// the detail pane's focused control (page, group, item): Tab from the sidebar moves the keyboard there, Tab and
+    /// Shift+Tab step through the pane's controls, Space and Return press the focused one. It is void once the page changes.
+    pane_focus: Option<(PageId, usize, usize)>,
     /// what Search finds, while it has a query (see `settings_search::index`)
     index: Option<Vec<settings_search::Entry>>,
     /// the page of each hit for the query it was found for (`hit_pages`), kept by `requery` so the sidebar's draw does
@@ -719,6 +734,7 @@ impl Settings {
             st_gate: None,
             search: Search::new(ui, w),
             side_ring: false,
+            pane_focus: None,
             index: None,
             hits: (String::new(), Vec::new()),
             hit_open: None,
@@ -1007,6 +1023,7 @@ impl Settings {
             self.stack[k] = entry;
         }
         self.sync_forward();
+        self.sync_pane_ring();
     }
 
     fn rebuild_sidebar(&mut self, ui: &Ui) {
@@ -2018,6 +2035,8 @@ impl Settings {
         }
         if matches!(ev, Event::Down(..)) {
             self.side_ring = false;
+            self.pane_focus = None;
+            self.sync_pane_ring();
         }
         let (ev, x, y) = if self.side_w > 0 {
             if matches!(ev, Event::Down(..)) {
@@ -2434,6 +2453,8 @@ impl Settings {
     }
 
     pub fn key(&mut self, ui: &Ui, out: Out, t: f64) -> Vec<Effect> {
+        // Shift+Tab steps the split window's keyboard back; in a sheet, a picker or the single column it is Tab, as before
+        let out = if out == Out::Named("BackTab") && !(self.side_w > 0 && !self.overlay_open()) { Out::Named("Tab") } else { out };
         if let Some(p) = &mut self.zone_picker {
             p.key(ui, out, t);
             return vec![];
@@ -2442,11 +2463,9 @@ impl Settings {
             // Up and Down step through the hits, opening each; Return opens the highlighted hit, else the first (the
             // field keeps its query, so the results stay in the sidebar)
             let hits = self.hit_pages();
-            // Tab leaves the field for the sidebar, which keeps the query's results
-            if matches!(out, Out::Named("Tab")) && self.side_w > 0 {
-                self.search.focus(false, t);
-                self.side_ring = true;
-                return vec![];
+            // Tab leaves the field for the sidebar, which keeps the query's results; Shift+Tab for the pane's last control
+            if matches!(out, Out::Named("Tab" | "BackTab")) && self.side_w > 0 {
+                return self.cycle_focus(ui, out == Out::Named("Tab"), t);
             }
             if let Out::Named(dir @ ("Up" | "Down")) = out {
                 // the sidebar keeps the results beside the page they open; the single column has them on its root only
@@ -2468,8 +2487,11 @@ impl Settings {
             return vec![];
         }
         if self.sheet.is_none() && !self.overlay_open() {
-            if let Out::Named(name @ ("Up" | "Down" | "Tab")) = out {
-                return self.sidebar_key(ui, name, t);
+            match out {
+                Out::Named(tab @ ("Tab" | "BackTab")) => return self.cycle_focus(ui, tab == "Tab", t),
+                Out::Named(name @ ("Up" | "Down")) if self.valid_pane_focus().is_some() => return self.pane_step(ui, name == "Down"),
+                Out::Named(name @ ("Up" | "Down")) => return self.sidebar_key(ui, name, t),
+                _ => {}
             }
         }
         let submit = self.sheet.as_mut().is_some_and(|sh| sh.edit(ui, out, t));
@@ -2480,19 +2502,147 @@ impl Settings {
         }
     }
 
+    /// Tab (`forward`) or Shift+Tab moves the keyboard round the window: the sidebar, the detail pane's controls from the top,
+    /// then the search field, and back to the sidebar. Each stop shows its focus ring (the field has its own). The pane has
+    /// no stop when its page has no control to press. Only the split layout has more than one place for the keyboard.
+    fn cycle_focus(&mut self, ui: &Ui, forward: bool, t: f64) -> Vec<Effect> {
+        if self.side_w == 0 || self.sidebar.is_none() {
+            return vec![];
+        }
+        // an open pop-up menu holds the keyboard until it is chosen from or dismissed
+        if self.list().is_some_and(ListPage::popup_open) {
+            return vec![];
+        }
+        let controls = self.list().map(ListPage::focusable).unwrap_or_default();
+        let n = controls.len();
+        // where the keyboard is now: the search field, a pane control (by its place among them), else the sidebar
+        let here = if self.search.active {
+            Stop::Search
+        } else {
+            match self.valid_pane_focus().and_then(|f| controls.iter().position(|c| *c == f)) {
+                Some(k) => Stop::Pane(k),
+                None => Stop::Sidebar,
+            }
+        };
+        let next = match (here, forward) {
+            (Stop::Search, true) => Stop::Sidebar,
+            (Stop::Sidebar, true) if n > 0 => Stop::Pane(0),
+            (Stop::Sidebar, true) => Stop::Search,
+            (Stop::Pane(k), true) if k + 1 < n => Stop::Pane(k + 1),
+            (Stop::Pane(_), true) => Stop::Search,
+            (Stop::Search, false) if n > 0 => Stop::Pane(n - 1),
+            (Stop::Search, false) => Stop::Sidebar,
+            (Stop::Sidebar, false) => Stop::Search,
+            (Stop::Pane(0), false) => Stop::Sidebar,
+            (Stop::Pane(k), false) => Stop::Pane(k - 1),
+        };
+        self.search.focus(next == Stop::Search, t);
+        self.side_ring = next == Stop::Sidebar;
+        self.pane_focus = match next {
+            Stop::Pane(k) => Some((self.page(), controls[k].0, controls[k].1)),
+            _ => None,
+        };
+        self.sync_pane_ring();
+        if let Stop::Pane(k) = next {
+            if let Some(p) = self.list_mut() {
+                p.reveal_row(ui, controls[k].0, controls[k].1);
+            }
+        }
+        vec![]
+    }
+
+    /// The pane control with the keyboard focus, when it is still on the page that was focused, is still a control, and the
+    /// keyboard is not in the search field or an overlay.
+    fn valid_pane_focus(&self) -> Option<(usize, usize)> {
+        let (id, g, i) = self.pane_focus?;
+        if id != self.page() || self.search.active || self.overlay_open() {
+            return None;
+        }
+        self.list()?.focusable().contains(&(g, i)).then_some((g, i))
+    }
+
+    /// Shows the focus ring on the page's focused control, or on none.
+    fn sync_pane_ring(&mut self) {
+        let focus = self.valid_pane_focus();
+        if let Some(p) = self.list_mut() {
+            p.set_focus(focus);
+        }
+    }
+
+    /// Down and Up while the pane has the keyboard: the next or previous control, stopping at the ends (Tab goes round).
+    /// With a pop-up menu open they move its highlight instead.
+    fn pane_step(&mut self, ui: &Ui, down: bool) -> Vec<Effect> {
+        let Some(page) = self.list() else { return vec![] };
+        if page.popup_open() {
+            if let Some(p) = self.list_mut() {
+                p.popup_step(if down { 1 } else { -1 });
+            }
+            return vec![];
+        }
+        let controls = page.focusable();
+        let Some(k) = self.valid_pane_focus().and_then(|f| controls.iter().position(|c| *c == f)) else { return vec![] };
+        let k = if down { (k + 1).min(controls.len() - 1) } else { k.saturating_sub(1) };
+        self.pane_focus = Some((self.page(), controls[k].0, controls[k].1));
+        self.sync_pane_ring();
+        if let Some(p) = self.list_mut() {
+            p.reveal_row(ui, controls[k].0, controls[k].1);
+        }
+        vec![]
+    }
+
+    /// A key for the window, with the preferences a press may change: while the detail pane has the keyboard, Space and
+    /// Return press its focused control (a switch flips, a pop-up button opens its menu, a link opens its page, a segmented
+    /// row steps to its next segment) and Left and Right nudge a slider or step a segmented row. Every other key is `key`'s.
+    pub fn key_with_prefs(&mut self, ui: &Ui, prefs: &mut Prefs, out: Out, t: f64) -> Vec<Effect> {
+        let Some((g, i)) = self.valid_pane_focus() else { return self.key(ui, out, t) };
+        let press = matches!(&out, Out::Enter) || matches!(&out, Out::Text(s) if s == " ");
+        let step = match out {
+            Out::Named("Left") => Some(false),
+            Out::Named("Right") => Some(true),
+            _ => None,
+        };
+        let Some(page) = self.list() else { return self.key(ui, out, t) };
+        // an open pop-up menu takes Space and Return (they choose the highlighted item); Up and Down are `key`'s
+        if page.popup_open() {
+            return match (press, page.popup_choice()) {
+                (true, Some(k)) => {
+                    let fx = self.activate(ui, prefs, Hit::Choice(k), t);
+                    self.sync_pane_ring();
+                    fx
+                }
+                (true, None) => vec![],
+                _ => self.key(ui, out, t),
+            };
+        }
+        let fx = if let (Some(up), Some(v)) = (step, page.slider_value(g, i)) {
+            // a slider moves a tenth of its track a key, as a release (so the value is saved)
+            let (tx, _, tw) = page.track(ui, g, i);
+            let v = (v + if up { SLIDER_KEY_STEP } else { -SLIDER_KEY_STEP }).clamp(0.0, 1.0);
+            self.slide(ui, prefs, g, i, tx + v * tw, true)
+        } else if let (true, Some((sel, n))) = (step.is_some() || press, page.choice_state(g, i)) {
+            let k = match step {
+                Some(true) => (sel + 1).min(n - 1),
+                Some(false) => sel.saturating_sub(1),
+                None => (sel + 1) % n.max(1),
+            };
+            self.activate(ui, prefs, Hit::Segment(g, i, k), t)
+        } else if press {
+            self.activate(ui, prefs, Hit::Row(g, i), t)
+        } else {
+            return self.key(ui, out, t);
+        };
+        self.sync_pane_ring();
+        fx
+    }
+
     /// Keys while the sidebar has the keyboard (the window opens that way, and Tab leaves the search field for it): Up
-    /// and Down move the selection to the previous or next pane and open it, and Tab moves the focus to the search field.
-    /// While Search shows results the arrows step over the hits as in the field. The focus ring shows from the first key.
+    /// and Down move the selection to the previous or next pane and open it. While Search shows results the arrows step
+    /// over the hits as in the field. The focus ring shows from the first key.
     fn sidebar_key(&mut self, ui: &Ui, name: &str, t: f64) -> Vec<Effect> {
         if self.side_w == 0 || self.sidebar.is_none() {
             return vec![];
         }
         self.side_ring = true;
-        if name == "Tab" {
-            self.search.focus(true, t);
-            self.side_ring = false;
-            return vec![];
-        }
         let down = name == "Down";
         let hits = self.hit_pages();
         let fx = if !hits.is_empty() {
@@ -5681,26 +5831,101 @@ mod e2e_w3_tests {
         assert_eq!(st.search.query(), "", "typing with the sidebar focused does not reach the search field");
     }
 
-    /// Tab moves the keyboard between the sidebar and the search field, each with its focus ring.
+    /// Tab moves the keyboard from the sidebar through the detail pane's controls to the search field and back, each stop with
+    /// its focus ring; Shift+Tab goes the other way round.
     #[test]
-    fn tab_cycles_focus_between_the_sidebar_and_the_search_field() {
+    fn tab_cycles_focus_through_the_sidebar_the_pane_and_the_search_field() {
         let ui = crate::shell::tests::ui();
         let (mut st, _) = split(&ui);
-        let pages = st.sidebar_list().expect("sidebar").push_pages();
-        st.select(&ui, pages[0], 0.0);
+        st.select(&ui, PageId::Display, 0.0);
         settle(&mut st, &ui);
+        let controls = st.list().expect("list").focusable();
+        assert!(controls.len() >= 3, "Display has a slider, links and a switch to focus: {controls:?}");
         assert!(!st.side_ring, "no ring before a key is used");
+        // Tab from the sidebar: the pane's first control, with the ring on its row
         st.key(&ui, Out::Named("Tab"), 0.0);
-        assert!(st.search.active && st.text_focused(), "Tab from the sidebar focuses the search field (its own ring)");
-        assert!(!st.side_ring);
+        assert_eq!(st.valid_pane_focus(), Some(controls[0]), "Tab from the sidebar focuses the pane's first control");
+        assert_eq!(st.list().unwrap().focus(), Some(controls[0]), "its row shows the ring");
+        assert!(!st.side_ring && !st.search.active);
+        // Tab steps through the controls in order
+        for c in &controls[1..] {
+            st.key(&ui, Out::Named("Tab"), 0.0);
+            assert_eq!(st.valid_pane_focus(), Some(*c));
+        }
+        // past the last control: the search field (its own ring), the pane's ring gone
+        st.key(&ui, Out::Named("Tab"), 0.0);
+        assert!(st.search.active && st.text_focused(), "Tab from the last control focuses the search field");
+        assert_eq!(st.valid_pane_focus(), None);
+        assert_eq!(st.list().unwrap().focus(), None, "the pane's ring is gone");
         st.key(&ui, Out::Text("disp".into()), 0.0);
         assert_eq!(st.search.query(), "disp", "typing goes to the field");
         st.key(&ui, Out::Named("Tab"), 0.0);
         assert!(!st.search.active && !st.text_focused(), "Tab from the field returns to the sidebar");
         assert!(st.side_ring, "the sidebar's selected row shows the ring");
         assert_eq!(st.search.query(), "disp", "the query is kept");
-        st.key(&ui, Out::Named("Tab"), 0.0);
-        assert!(st.search.active, "and Tab goes round to the field again");
+        // Shift+Tab: back to the field, then to the pane's last control, up to the first, and out to the sidebar
+        st.key(&ui, Out::Named("BackTab"), 0.0);
+        assert!(st.search.active, "Shift+Tab from the sidebar focuses the search field");
+        st.key(&ui, Out::Named("BackTab"), 0.0);
+        assert_eq!(st.valid_pane_focus(), controls.last().copied(), "Shift+Tab from the field focuses the pane's last control");
+        for c in controls[..controls.len() - 1].iter().rev() {
+            st.key(&ui, Out::Named("BackTab"), 0.0);
+            assert_eq!(st.valid_pane_focus(), Some(*c));
+        }
+        st.key(&ui, Out::Named("BackTab"), 0.0);
+        assert!(st.side_ring && st.valid_pane_focus().is_none(), "Shift+Tab from the first control returns to the sidebar");
+    }
+
+    /// Space and Return press the focused control, Down and Up step between controls, Left and Right nudge a slider, and a touch
+    /// takes the focus away.
+    #[test]
+    fn the_pane_control_with_the_focus_is_pressed_by_space_and_return() {
+        let ui = crate::shell::tests::ui();
+        let (mut st, mut prefs) = split(&ui);
+        st.select(&ui, PageId::Display, 0.0);
+        settle(&mut st, &ui);
+        let (bg, bi) = st.list().unwrap().find("Bold Text").expect("the Bold Text row");
+        let controls = st.list().unwrap().focusable();
+        let n = controls.len();
+        for _ in 0..=n {
+            if st.valid_pane_focus() == Some((bg, bi)) {
+                break;
+            }
+            st.key_with_prefs(&ui, &mut prefs, Out::Named("Tab"), 0.0);
+        }
+        assert_eq!(st.valid_pane_focus(), Some((bg, bi)), "Tab reached the switch");
+        assert!(!st.options().bold_text);
+        st.key_with_prefs(&ui, &mut prefs, Out::Text(" ".into()), 1.0);
+        assert!(st.options().bold_text, "Space flips the focused switch");
+        assert_eq!(st.valid_pane_focus(), Some((bg, bi)), "the focus stays on the row");
+        assert_eq!(st.list().unwrap().focus(), Some((bg, bi)), "and the rebuilt page still shows the ring");
+        st.key_with_prefs(&ui, &mut prefs, Out::Enter, 2.0);
+        assert!(!st.options().bold_text, "Return flips it back");
+        // Up and Down step between controls without leaving the pane
+        let k = controls.iter().position(|c| *c == (bg, bi)).unwrap();
+        st.key_with_prefs(&ui, &mut prefs, Out::Named("Up"), 3.0);
+        assert_eq!(st.valid_pane_focus(), Some(controls[k - 1]));
+        assert_eq!(st.side_selected(), PageId::Display, "Up in the pane does not move the sidebar's selection");
+        st.key_with_prefs(&ui, &mut prefs, Out::Named("Down"), 3.0);
+        assert_eq!(st.valid_pane_focus(), Some((bg, bi)));
+        // Left and Right nudge the brightness slider (the first control)
+        for _ in 0..n {
+            if st.valid_pane_focus() == Some(controls[0]) {
+                break;
+            }
+            st.key_with_prefs(&ui, &mut prefs, Out::Named("Up"), 4.0);
+        }
+        assert_eq!(st.valid_pane_focus(), Some(controls[0]));
+        let before = st.brightness();
+        let (key, expected) = if before > 0.5 { ("Left", before - 0.1) } else { ("Right", before + 0.1) };
+        let fx = st.key_with_prefs(&ui, &mut prefs, Out::Named(key), 5.0);
+        assert!((st.brightness() - expected).abs() < 0.01, "{key} moves the slider a tenth: {before} -> {}", st.brightness());
+        assert!(fx.contains(&Effect::Brightness(st.brightness())));
+        // a touch takes the focus away
+        let x = st.side_w as f32 + 40.0;
+        tap(&mut st, &ui, &mut prefs, x, 400.0);
+        assert_eq!(st.valid_pane_focus(), None, "a touch removes the keyboard focus from the pane");
+        assert_eq!(st.list().unwrap().focus(), None);
     }
 
     /// The ring has a row to surround, a touch takes it away, and arrows over search results step the hits from the sidebar.

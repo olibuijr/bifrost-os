@@ -1264,7 +1264,11 @@ impl Shell {
                 self.begin_unlock(0.0, t);
                 vec![]
             }
-            Screen::App(app) if self.anim.is_none() => self.hw_type_app(app, out, t),
+            Screen::App(app) if self.anim.is_none() => {
+                // Settings steps its focus back on Shift+Tab; no other built-in app tells it from Tab
+                let out = if back_tab && app == AppId::Settings { Out::Named("BackTab") } else { out };
+                self.hw_type_app(app, out, t)
+            }
             _ => return vec![],
         };
         self.last_input = t;
@@ -1276,7 +1280,7 @@ impl Shell {
         match app {
             AppId::Settings => {
                 if let Some(s) = self.settings.as_mut() {
-                    return s.key(&self.ui, out, t);
+                    return s.key_with_prefs(&self.ui, &mut self.prefs, out, t);
                 }
             }
             AppId::Browser => {
