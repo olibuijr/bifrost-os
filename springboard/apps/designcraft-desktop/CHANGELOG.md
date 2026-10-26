@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.13.0
+
+- Upstream designcraft v0.13.0.
+  ## What's Changed
+  * CI: one test binary per crate, nextest, line tables only by @aiongg in https://github.com/storytold/designcraft/pull/1642
+  * fix: keep package temp files owner-writable (SonarCloud rust:S2612) by @dylanmtaylor in https://github.com/storytold/designcraft/pull/1658
+  * web: let the browser zoom the page (SonarCloud Web:S7926) by @dylanmtaylor in https://github.com/storytold/designcraft/pull/1641
+  * packaging: harden shell scripts (SonarCloud S7688/S7679/S7682/S131) by @dylanmtaylor in https://github.com/storytold/designcraft/pull/1640
+
 ## 0.12.0
 
 - Upstream designcraft v0.12.0.
