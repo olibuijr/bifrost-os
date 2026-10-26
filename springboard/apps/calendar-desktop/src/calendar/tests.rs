@@ -304,6 +304,50 @@ fn picking_a_neighbouring_month_day_keeps_the_month() {
 }
 
 #[test]
+fn a_day_of_the_shown_month_after_a_neighbouring_pick_selects_that_day() {
+    let ui = crate::test_ui();
+    let temp = Temp::new();
+    let mut c = new(&ui, temp.file());
+    let (_, _, top, rh) = c.grid_geom(&ui);
+    // October 2026: the greyed 1 Nov of the last row is picked, the grid stays on October
+    c.activate(&ui, Target::Pick(date(2026, 11, 1)), 0.0);
+    assert_eq!(c.month_date().month, 10);
+    // the 28th is in the last row but one (row 4, column 2 of the grid starting on 27 Sep)
+    let (left, cell, ..) = c.grid_geom(&ui);
+    let (x, y) = (left + 2.5 * cell, top + 4.0 * rh + ui.pt(10.0));
+    assert_eq!(c.grid_start().shift_days(4 * 7 + 2), date(2026, 10, 28));
+    assert_eq!(c.hit(&ui, x, y), Some(Target::Day(28)));
+    assert_eq!(c.slot_of(&ui, Target::Day(28), x, y), Some((date(2026, 10, 28), 9 * 60)), "a double-click slot is in the shown month");
+    c.activate(&ui, Target::Day(28), 1.0);
+    assert_eq!(c.selected, date(2026, 10, 28), "the click selects the date drawn in the cell");
+    assert_eq!(c.month_date(), date(2026, 10, 28));
+    assert_eq!(c.grid_start(), date(2026, 9, 27), "the grid still shows October");
+    // a new event starts on the selected day
+    c.open(&ui, None);
+    assert_eq!(c.editor.as_ref().map(|d| d.event.date), Some(date(2026, 10, 28)));
+}
+
+#[test]
+fn cmd_z_as_a_key_restores_a_deleted_event_too() {
+    use bifrost_app::proto::{CHORD_META, CHORD_SHIFT};
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    store::save(&temp.file(), &[event(7, "Dentist")]).unwrap();
+    let mut c = new(&ui, temp.file());
+    assert!(!c.chord(&ui, 44, CHORD_META, 0.0), "nothing to undo yet");
+    c.picked = Some(7);
+    c.key(&ui, Out::Backspace, 1.0);
+    assert!(c.events.is_empty() && c.undo.is_some(), "deleted with the Undo bar up");
+    assert!(!c.chord(&ui, 44, CHORD_META | CHORD_SHIFT, 1.5), "Shift+Cmd+Z is Redo, not Undo");
+    assert!(c.undo.is_some());
+    // the shell sends the chord when it has not yet heard that the app takes the Undo command
+    assert!(c.chord(&ui, 44, CHORD_META, 2.0));
+    assert_eq!(c.events.len(), 1, "restored");
+    assert_eq!(store::load(&temp.file()).unwrap().len(), 1, "restored on disk");
+    assert!(c.undo.is_none());
+}
+
+#[test]
 fn all_day_order_and_event_id_wrap() {
     let mut events = vec![event(u64::MAX, "Last"), event(1, "First")];
     events[0].all_day = true;
