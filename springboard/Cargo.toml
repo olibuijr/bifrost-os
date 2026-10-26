@@ -126,6 +126,22 @@ required-features = ["desktop-wayland"]
 name = "parity_sdk-tests-11"
 required-features = ["desktop-wayland"]
 
+[[test]]
+name = "parity_sdk-complete-09"
+required-features = ["desktop-wayland"]
+
+[[test]]
+name = "parity_sdk-complete-17"
+required-features = ["desktop-wayland"]
+
+[[test]]
+name = "parity_sdk-complete-25"
+required-features = ["desktop-wayland"]
+
+[[test]]
+name = "parity_sdk-complete-46"
+required-features = ["desktop-wayland"]
+
 [[bin]]
 name = "bootweave"
 path = "bootweave/supervisor.rs"
