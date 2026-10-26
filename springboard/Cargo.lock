@@ -884,7 +884,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-passwords"
-version = "0.2.13"
+version = "0.2.14"
 dependencies = [
  "bifrost-app",
  "bifrost-core",

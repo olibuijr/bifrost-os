@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.14
+
+- Import, Export and a New Password button sit in a toolbar clear of the window buttons, and every bar button responds.
+
 ## 0.2.13
 
 - New Password (Cmd+N) adds a login; one segmented control for the kinds; the detail pane uses the window background.
