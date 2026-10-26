@@ -1870,7 +1870,7 @@ impl super::Shell {
 
     /// Draws the panel's content over the popup background (`draw_desktop_popup` drew the material).
     pub(super) fn draw_doc_panel(&self, s: &mut crate::gfx::Surface, x: usize, y: usize, _w: usize, _h: usize) {
-        use super::ui::{Weight, DETAIL_BG, FIELD_BG, LABEL, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, SECONDARY, SELECTION, SEPARATOR_C, SPACE_S, WHITE};
+        use super::ui::{Weight, CONTENT_BG, FIELD_BG, LABEL, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, SECONDARY, SELECTION, SEPARATOR_C, SPACE_S, WHITE};
         let Some(p) = self.doc_panel.as_ref() else { return };
         // the focus rings and the default button follow the user's accent colour
         let accent = bifrost_render::appearance::accent_now();
@@ -1895,7 +1895,7 @@ impl super::Shell {
         let field = |s: &mut crate::gfx::Surface, r: &R, buf: &bifrost_ui::text::TextBuffer, focused: bool, placeholder: &str, capsule: bool| {
             let (fx, fy, fw, fh) = px(r);
             let rad = if capsule { fh / 2.0 } else { radius };
-            s.fill_rrect(fx, fy, fw, fh, rad, if capsule { FIELD_BG.now() } else { DETAIL_BG.now() });
+            s.fill_rrect(fx, fy, fw, fh, rad, if capsule { FIELD_BG.now() } else { CONTENT_BG.now() });
             if focused {
                 s.stroke_rrect(fx, fy, fw, fh, rad, ui.pt(1.0), accent);
             }
@@ -1974,7 +1974,7 @@ impl super::Shell {
         }
 
         let (lx, ly, lw, lh) = px(&l.list);
-        s.fill_rrect(lx, ly, lw, lh, radius, DETAIL_BG.now());
+        s.fill_rrect(lx, ly, lw, lh, radius, CONTENT_BG.now());
         s.stroke_rrect(lx, ly, lw, lh, radius, ui.pt(1.0), SEPARATOR_C.now());
         // New Folder: the name field takes the first row while it is open
         if let Some(name) = &p.creating {
@@ -1991,7 +1991,7 @@ impl super::Shell {
                 // the item's file-type icon over the name; the name sits on a selection plate when chosen
                 let (rx, ry, rw, _) = px(&r);
                 let side = ui.pt(ICON_PT);
-                self.draw_file_icon(s, e, rx + (rw - side) / 2.0, ry + ui.pt(6.0), side, DETAIL_BG.now());
+                self.draw_file_icon(s, e, rx + (rw - side) / 2.0, ry + ui.pt(6.0), side, CONTENT_BG.now());
                 let name_r = R { x: r.x + 2.0, y: r.y + 62.0, w: r.w - 4.0, h: 22.0 };
                 if selected {
                     let (nx, ny, nw, nh) = px(&name_r);
@@ -2007,7 +2007,7 @@ impl super::Shell {
                 // a small file-type icon, then the name after it
                 let (rx, ry, _, rh) = px(&r);
                 let side = ui.pt(ROW_ICON_PT);
-                self.draw_file_icon(s, e, rx + ui.pt(SPACE_S), ry + (rh - side) / 2.0, side, if selected { SELECTION.now() } else { DETAIL_BG.now() });
+                self.draw_file_icon(s, e, rx + ui.pt(SPACE_S), ry + (rh - side) / 2.0, side, if selected { SELECTION.now() } else { CONTENT_BG.now() });
                 let after = SPACE_S + ROW_ICON_PT;
                 text(s, &R { x: r.x + after, w: r.w - 24.0 - after, ..r }, SPACE_S, &e.name, MAC_BODY_PT, Weight::Regular, color);
                 if e.dir {

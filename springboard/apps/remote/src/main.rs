@@ -7,7 +7,7 @@ use bifrost_app::kit::{Damage,Surface};
 use bifrost_app::layout::Layout;
 use bifrost_app::network_path::Path;
 use bifrost_app::widgets;
-use springboard::shell::ui::{Weight,WHITE,TINT,DETAIL_BG,LABEL,LABEL_2,FIELD_BG,MAC_TITLE2_PT,MAC_TITLE3_PT,MAC_BODY_PT};
+use springboard::shell::ui::{Weight,WHITE,TINT,CONTENT_BG,LABEL,LABEL_2,FIELD_BG,MAC_TITLE2_PT,MAC_TITLE3_PT,MAC_BODY_PT};
 use nearby::Nearby;
 use std::{path::PathBuf,process::Command};
 /// Nearby list: at most this many rows are drawn, each `ROW_H` points tall, starting at `ROWS_Y`.
@@ -81,7 +81,7 @@ impl App for Remote {
  false
  }
  fn draw(&mut self,ctx:&Ctx,s:&mut Surface,_:f64)->Damage {
- let u=&ctx.ui;s.fill_rect(0,0,s.w,s.h,DETAIL_BG.now());
+ let u=&ctx.ui;s.fill_rect(0,0,s.w,s.h,CONTENT_BG.now());
  // Full-size window: the top 52 pt band holds the traffic lights, so the large title starts below it, on the
  // leading edge of the readable column (the content below uses the same x).
  let l=Layout::from_points(s.w as f32/u.pt(1.),s.h as f32/u.pt(1.),0.,0.);
