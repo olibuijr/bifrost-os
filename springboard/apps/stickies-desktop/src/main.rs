@@ -534,12 +534,14 @@ impl StickiesApp {
     }
 
     fn key(&mut self, ctx: &Ctx, key: &KeyInput) -> bool {
-        if let Some(confirm) = &self.confirm {
-            // Escape answers Cancel; the sheet takes every other key so nothing reaches the notes under it
-            if let (KeyInput::Code(1 | 27), Some(id)) = (key, confirm.sheet.cancel_button()) {
-                return self.answer(id);
-            }
-            return false;
+        if let Some(confirm) = &mut self.confirm {
+            // the sheet's keys (`Sheet::handle_key`): Escape and Cmd+. answer Cancel, Cmd+D Delete, Tab moves the focus
+            // ring and Space presses the focused button; it takes every other key so nothing reaches the notes under it
+            return match bifrost_app::document::sheet_key(&mut confirm.sheet, key) {
+                bifrost_app::document::AlertKey::Answer(id) => self.answer(id),
+                bifrost_app::document::AlertKey::Focus => true,
+                bifrost_app::document::AlertKey::Ignored => false,
+            };
         }
         if self.colour_entry.is_some() {
             return self.colour_key(key);
@@ -1771,6 +1773,38 @@ mod tests {
         assert_eq!(app.board.as_ref().unwrap().notes.len(), 2);
         assert!(app.redo());
         assert_eq!(app.board.as_ref().unwrap().notes.len(), 1);
+    }
+
+    #[test]
+    fn the_confirmation_takes_cmd_d_cmd_period_and_the_tab_focus_ring() {
+        use bifrost_app::proto::CHORD_FLAG;
+        // Cmd+D is the chord on evdev key 32 with Meta, Cmd+. the one on key 52
+        let cmd_d = KeyInput::Code(CHORD_FLAG | 32 | (CHORD_META << 8));
+        let cmd_period = KeyInput::Code(CHORD_FLAG | 52 | (CHORD_META << 8));
+        let (tab, space) = (KeyInput::Code(9), KeyInput::Text(" ".into()));
+        let ctx = ctx_in(&std::env::temp_dir());
+        let mut app = app_with(&["keep", "drop"]);
+        let drop = app.board.as_ref().unwrap().notes[1].id;
+        app.confirm = Some(Confirm::delete(drop, "drop"));
+        assert!(!app.key(&ctx, &KeyInput::Text("x".into())), "every other key is used up");
+        assert!(app.key(&ctx, &cmd_period));
+        assert!(app.confirm.is_none() && app.board.as_ref().unwrap().notes.len() == 2, "Cmd+. cancels");
+        app.confirm = Some(Confirm::delete(drop, "drop"));
+        assert!(app.key(&ctx, &cmd_d));
+        assert!(app.confirm.is_none() && app.board.as_ref().unwrap().notes.len() == 1, "Cmd+D deletes");
+        // Tab: Delete (the button drawn first), then Cancel; Space presses the focused one
+        let kept = app.board.as_ref().unwrap().notes[0].id;
+        app.confirm = Some(Confirm::delete(kept, "keep"));
+        assert!(!app.key(&ctx, &space), "Space with no focus presses nothing");
+        assert!(app.key(&ctx, &tab));
+        assert_eq!(app.confirm.as_ref().unwrap().sheet.focus, Some(SHEET_DELETE));
+        assert!(app.key(&ctx, &tab));
+        assert_eq!(app.confirm.as_ref().unwrap().sheet.focus, Some(SHEET_CANCEL));
+        assert!(app.key(&ctx, &space));
+        assert!(app.confirm.is_none() && app.board.as_ref().unwrap().notes.len() == 1, "Space on Cancel keeps the note");
+        app.confirm = Some(Confirm::delete(kept, "keep"));
+        assert!(app.key(&ctx, &tab) && app.key(&ctx, &space));
+        assert!(app.board.as_ref().unwrap().notes.is_empty(), "Space on Delete deletes");
     }
 
     #[test]
