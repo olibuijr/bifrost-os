@@ -2085,6 +2085,14 @@ impl Reminders {
                     self.toggle_item(ui, id);
                 }
             }
+            // Delete and Backspace delete the selected reminder, as Cmd+Backspace does (the undo bar offers it back)
+            Out::Backspace | Out::Named("Delete") => {
+                if let Some(id) = chosen {
+                    if self.delete_item(id, t) {
+                        self.rebuild(ui);
+                    }
+                }
+            }
             _ => {}
         }
         self.dirty = true;
@@ -2360,6 +2368,11 @@ impl Reminders {
         // Escape is the Clear and purge alerts' Cancel
         if self.asking() {
             self.activate(ui, Target::ClearCancel, t);
+            return true;
+        }
+        // Escape closes the Details popover whatever field is focused in it, dropping its edits, as it closes a popover
+        if self.details_popover() {
+            self.activate(ui, Target::Cancel, t);
             return true;
         }
         if self.focus.is_some() {
@@ -2886,6 +2899,10 @@ impl Reminders {
             return;
         }
         let Some(f) = self.focus else { return };
+        // the forward Delete key has no meaning in a field here (Backspace edits it)
+        if matches!(out, Out::Named("Delete")) {
+            return;
+        }
         // Return in a form's name field is Done, as on the stock app (E2E W2-21: New Reminder and New List)
         if matches!(out, Out::Enter) && f == Field::Title && matches!(self.screen, Screen::Editor | Screen::ListEditor) {
             // a new reminder's field stays open after Return so several can be typed in a row, as on the stock app;
