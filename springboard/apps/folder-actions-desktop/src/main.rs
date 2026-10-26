@@ -207,7 +207,7 @@ impl App for FolderActionsApp {
 
     fn draw(&mut self, ctx: &Ctx, s: &mut Surface, _t: f64) -> Damage {
         let u = &ctx.ui;
-        s.fill_rect(0, 0, s.w, s.h, ui::DETAIL_BG.now());
+        s.fill_rect(0, 0, s.w, s.h, ui::CONTENT_BG.now());
         self.window = (s.w as f32 / u.pt(1.0), s.h as f32 / u.pt(1.0));
         let l = Layout::from_points(self.window.0, self.window.1, 0.0, 0.0);
         self.col = l.readable();
