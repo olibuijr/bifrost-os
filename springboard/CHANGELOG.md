@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.10.43 — 2026-10-26
+
+The open items of the handoff list, fixed by nine fixers and checked on Midget.
+
+- Windows: the close animation plays again (the closing window keeps its last presented frame); no window draws as active while an app with no window is in front.
+- Keyboard: Shift+Tab and Cmd+Delete reach apps with their modifiers, so Shift+Tab steps a sheet's focus ring back and Cmd+Delete is Don't Save in a close alert; Tab in Settings moves through the detail pane's controls (Space and Return press them, arrows step sliders and segments).
+- Sheets: `bifrost_app::document::sheet_key` gives an app's own sheets Cmd+., Cmd+D, the Tab focus ring and Space; Disk Utility, Notes, Stickies, TextEdit and Reminders use it.
+- Accent colour: focus rings, selections, checked controls, progress fills and the menu highlight follow Settings > Appearance > Accent; in Light the default blue is the light systemBlue.
+- Now Playing shows artwork an app sends (Music's album art, Voice Memos' icon) in Control Center, the menu bar and on the lock screen.
+- Files: Open With > Other… lists every installed app; Undo restores tag colours. The SDK's `copy_item` removes a partial copy when it fails.
+- Clean names: the name guard reports no platform or product names in the code. Steadier media player tests.
+
 ## 0.10.42 — 2026-10-26
 
 Fixes from five bug-fix waves on Midget: the shell and built-in apps, the core apps in depth, cross-app workflows, a regression pass in Light and Dark, and keyboard-only use.
