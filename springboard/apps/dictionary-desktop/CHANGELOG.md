@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.9
+
+- The sidebar shows a hint before the first search.
+
 ## 0.6.8
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.

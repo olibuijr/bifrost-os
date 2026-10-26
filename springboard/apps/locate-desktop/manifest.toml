@@ -1,6 +1,6 @@
 id = "is.olibuijr.locate.desktop"
 name = "Locate"
-version = "0.4.8"
+version = "0.4.9"
 exec = "bifrost-locate"
 icon = "icon.png"
 min_shell = "0.4.84"

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.12
+
+- One add control instead of two.
+
 ## 0.1.11
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.

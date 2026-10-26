@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.8
+
+- New Item (Cmd+N); the detail pane uses the window background and the sidebar starts below the window buttons.
+
 ## 0.1.7
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.

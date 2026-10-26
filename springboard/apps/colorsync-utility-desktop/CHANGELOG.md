@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.9
+
+- The Gamut readouts move under the chart in a narrow window; profiles use a document icon and empty fields show a dash.
+
 ## 0.1.8
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.

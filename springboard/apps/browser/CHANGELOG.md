@@ -1,3 +1,9 @@
+# Changelog
+
+## 0.17.7
+
+- Icons a page cannot draw are hidden instead of shown as black squares.
+
 ## 0.17.2 — 2026-10-20
 
 - Nothing else changed: this release only rewords the notes for the start page.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.5
+
+- The map scale bar no longer overlaps the axis label.
+
 ## 1.9.4
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.

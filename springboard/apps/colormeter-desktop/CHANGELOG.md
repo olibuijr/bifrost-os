@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.10
+
+- The inspector fits inside the window.
+
 ## 0.5.9
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.

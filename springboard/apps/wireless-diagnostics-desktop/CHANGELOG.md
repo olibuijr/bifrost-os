@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.11
+
+- A missing Wi-Fi adapter is explained in plain words instead of a raw error.
+
 ## 0.1.10
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.

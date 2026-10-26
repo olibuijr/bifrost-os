@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.9
+
+- The sidebar starts below the window buttons, text wraps, and Items responds to clicks.
+
 ## 0.4.8
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.

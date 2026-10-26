@@ -444,7 +444,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-audio-setup"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "bifrost-app",
  "bifrost-audio-hal",
@@ -527,7 +527,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-browser"
-version = "0.17.6"
+version = "0.17.7"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -601,7 +601,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-colormeter"
-version = "0.5.9"
+version = "0.5.10"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -610,7 +610,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-colour-utility"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -655,7 +655,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-dictionary"
-version = "0.6.8"
+version = "0.6.9"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -691,7 +691,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-fontbook"
-version = "0.6.13"
+version = "0.6.14"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -726,7 +726,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-grapher"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "bifrost-app",
  "springboard",
@@ -770,7 +770,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-keychain-access"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -790,7 +790,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-locate"
-version = "0.4.8"
+version = "0.4.9"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -865,7 +865,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-news"
-version = "1.6.10"
+version = "1.6.11"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -884,7 +884,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-passwords"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -1091,7 +1091,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-weather"
-version = "1.9.4"
+version = "1.9.5"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -1104,7 +1104,7 @@ version = "0.1.0"
 
 [[package]]
 name = "bifrost-wireless-diagnostics"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "bifrost-app",
  "springboard",

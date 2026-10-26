@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.13
+
+- New Password (Cmd+N) adds a login; one segmented control for the kinds; the detail pane uses the window background.
+
 ## 0.2.12
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.14
+
+- A toolbar with search, and a New Collection row.
+
 ## 0.6.13
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.

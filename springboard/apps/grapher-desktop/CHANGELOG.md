@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.7
+
+- A new equation from + takes the typing; existing equations are left alone.
+
 ## 0.1.6
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.

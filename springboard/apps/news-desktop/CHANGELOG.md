@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.11
+
+- Today lists only today's stories, newest first.
+
 ## 1.6.10
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.
