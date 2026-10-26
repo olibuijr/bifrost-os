@@ -661,16 +661,17 @@ fn fill_disc(s: &mut Surface, cx: f32, cy: f32, r: f32, color: u32) {
     }
 }
 
-/// Draws `text` centred on `cx` (px), with its baseline box top at `y` (px).
+/// Draws `text` centred on `cx` (px), with its baseline box top at `y` (px). The text is rendered white and tinted by
+/// `blit_colored`; rendering it in `color` as well would apply the colour twice and darken it.
 fn label_centred(s: &mut Surface, ui: &Ui, text: &str, pt: f32, color: u32, cx: f32, y: f32, max_px: f32) {
     let fitted = ui.fit(text, pt, max_px);
-    let img = ui.text(&fitted, pt, Weight::Regular, color);
+    let img = ui.text(&fitted, pt, Weight::Regular, WHITE);
     s.blit_colored(&img, (cx - img.w as f32 / 2.0) as i32, y as i32, color, 255);
 }
 
 fn label_at(s: &mut Surface, ui: &Ui, text: &str, pt: f32, color: u32, x: f32, y: f32, max_px: f32) {
     let fitted = ui.fit(text, pt, max_px);
-    let img = ui.text(&fitted, pt, Weight::Regular, color);
+    let img = ui.text(&fitted, pt, Weight::Regular, WHITE);
     s.blit_colored(&img, x as i32, y as i32, color, 255);
 }
 
