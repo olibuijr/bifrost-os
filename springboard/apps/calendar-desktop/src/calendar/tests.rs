@@ -312,10 +312,10 @@ fn a_day_of_the_shown_month_after_a_neighbouring_pick_selects_that_day() {
     // October 2026: the greyed 1 Nov of the last row is picked, the grid stays on October
     c.activate(&ui, Target::Pick(date(2026, 11, 1)), 0.0);
     assert_eq!(c.month_date().month, 10);
-    // the 28th is in the last row but one (row 4, column 2 of the grid starting on 27 Sep)
+    // the 28th is in the last row but one (row 4, column 3 of the grid starting on 27 Sep)
     let (left, cell, ..) = c.grid_geom(&ui);
-    let (x, y) = (left + 2.5 * cell, top + 4.0 * rh + ui.pt(10.0));
-    assert_eq!(c.grid_start().shift_days(4 * 7 + 2), date(2026, 10, 28));
+    let (x, y) = (left + 3.5 * cell, top + 4.0 * rh + ui.pt(10.0));
+    assert_eq!(c.grid_start().shift_days(4 * 7 + 3), date(2026, 10, 28));
     assert_eq!(c.hit(&ui, x, y), Some(Target::Day(28)));
     assert_eq!(c.slot_of(&ui, Target::Day(28), x, y), Some((date(2026, 10, 28), 9 * 60)), "a double-click slot is in the shown month");
     c.activate(&ui, Target::Day(28), 1.0);
