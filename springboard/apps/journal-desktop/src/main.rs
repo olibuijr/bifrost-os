@@ -11,7 +11,7 @@ use bifrost_app::controls::prefs_layout::m;
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::kit::canvas::{Canvas, RectF};
 use bifrost_app::kit::ui::{
-    Ui, Weight, FIELD_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT,
+    Ui, Weight, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT,
     MENU_HIGHLIGHT_TEXT, SEPARATOR_C, SYSTEM_ORANGE, SYSTEM_RED,
 };
 use bifrost_app::kit::{Damage, Surface};
@@ -605,7 +605,11 @@ impl App for JournalApp {
         self.visible = layout.visible_rows();
         let timeline = self.timeline();
         let ui = &ctx.ui;
+        // an opaque ground first: a pixel the app leaves transparent shows the window behind and, because the shell
+        // shapes a window to what it drew, passes clicks through to it (New Entry never got the click)
+        canvas.fill_rect(RectF::new(0.0, 0.0, w as f32, h as f32), CONTENT_BG.now());
         self.draw_navigation(canvas, ui, &layout, &timeline);
+        canvas.fill_rect(RectF::new(ui.pt(layout::SIDEBAR_PT) - 1.0, 0.0, 1.0, h as f32), SEPARATOR_C.now());
         self.draw_header(canvas, ui, &layout);
         self.draw_editor(canvas, ui, &layout);
         self.draw_photo_bar(canvas, ui, &layout);
