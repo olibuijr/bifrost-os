@@ -90,6 +90,14 @@ pub fn line_of(lines: &[Line], caret: usize) -> usize {
     lines.len().saturating_sub(1)
 }
 
+/// The first line shown when only `rows` of `total` lines fit the body: the body scrolls just far enough to keep the
+/// caret's line (`caret_line`) in view, and shows the top while the caret is within the first `rows` lines.
+pub fn first_visible(total: usize, caret_line: usize, rows: usize) -> usize {
+    let rows = rows.max(1);
+    let last_first = total.saturating_sub(rows);
+    (caret_line + 1).saturating_sub(rows).min(last_first)
+}
+
 /// The distance from the line's left edge to byte `caret` (clamped into the line).
 pub fn x_of(line: &Line, caret: usize, measure: Measure) -> f32 {
     let at = caret.clamp(line.start, line.end);
@@ -130,6 +138,16 @@ mod tests {
     /// One unit per character of the text.
     fn units(text: &str) -> impl Fn(usize, usize) -> f32 + '_ {
         move |a, b| text[a..b].chars().count() as f32
+    }
+
+    #[test]
+    fn first_visible_follows_the_caret_line() {
+        assert_eq!(first_visible(5, 0, 8), 0, "everything fits");
+        assert_eq!(first_visible(14, 0, 8), 0, "the caret at the top shows the top");
+        assert_eq!(first_visible(14, 7, 8), 0, "the last row still fits");
+        assert_eq!(first_visible(14, 8, 8), 1, "one line past the bottom scrolls one line");
+        assert_eq!(first_visible(14, 13, 8), 6, "the end shows the last rows");
+        assert_eq!(first_visible(14, 3, 0), 0, "a zero-row body is treated as one row");
     }
 
     fn spans<'a>(text: &'a str, ls: &[Line]) -> Vec<&'a str> {

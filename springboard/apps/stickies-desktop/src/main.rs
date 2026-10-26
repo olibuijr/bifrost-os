@@ -130,6 +130,8 @@ const SHEET_DELETE: u32 = 2;
 
 /// The text of the note the first launch opens.
 const WELCOME_TEXT: &str = "Make a note of it!\n\nSticky Notes keeps small notes on your desktop: reminders, lists, or text you use often.\n\n\u{2022} To add another note, choose File, New Sticky Note.\n\n\u{2022} To collapse a note, double-click its title bar.\n\nYour notes are here again when you open Sticky Notes.";
+/// The size of the welcome note in points: tall enough for all of its text, so the first note is never clipped.
+const WELCOME_SIZE_PT: (f32, f32) = (260.0, 320.0);
 /// Stacking offset of each new note, so new notes do not land on each other.
 const CASCADE_PT: f32 = 24.0;
 const CASCADE_STEPS: usize = 8;
@@ -1462,7 +1464,10 @@ impl App for StickiesApp {
             let mut board = store::load(&ctx.data_dir);
             if first && board.notes.is_empty() {
                 let (x, y) = Self::cascade_position(&board);
-                board.add_text(WELCOME_TEXT, x, y, Self::now());
+                let id = board.add_text(WELCOME_TEXT, x, y, Self::now());
+                if let Some(note) = board.find_mut(id) {
+                    note.resize(WELCOME_SIZE_PT.0, WELCOME_SIZE_PT.1);
+                }
                 self.dirty = true;
             }
             self.board = Some(board);
