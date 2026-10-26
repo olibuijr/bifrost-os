@@ -2700,6 +2700,22 @@ impl App for TextEditApp {
         true
     }
 
+    /// The red button on a document window asks as Cmd+W in it does: that window's document closes as File > Close closes
+    /// it (a clean one with its window, an edited one raises the confirmation on that window and keeps both until it is
+    /// answered). A window this app does not know is ignored, never answered with the main window's document.
+    fn window_close_requested(&mut self, ctx: &Ctx, window: bifrost_app::app_windows::WindowId) -> bool {
+        if window.is_main() {
+            return self.close_requested(ctx);
+        }
+        self.enter(window);
+        if self.current != window {
+            return false;
+        }
+        self.routed = true;
+        self.menu_action(ctx, item::CLOSE);
+        true
+    }
+
     /// Activated (Dock, the app switcher, Search) with no window open, after the last document closed: the shell has put
     /// the main window back, and it shows a new Untitled. The reference shows its open panel here when the iCloud
     /// document picker is on; this editor starts with an Untitled on launch, so a reopen does the same (E2E12 2).

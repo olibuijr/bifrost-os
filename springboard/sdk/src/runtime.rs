@@ -913,6 +913,12 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                         need_frame |= app.close_requested(c);
                     }
                 }
+                // the close control of one of its extra windows: the app decides for that window as for the main one
+                ToApp::WindowCloseRequest { id } => {
+                    if let Some(c) = &ctx {
+                        need_frame |= app.window_close_requested(c, crate::app_windows::WindowId(id));
+                    }
+                }
                 ToApp::Resume => {
                     active = true;
                     if let Some(c) = &ctx {

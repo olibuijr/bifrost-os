@@ -1332,7 +1332,7 @@ impl AppHost {
         out
     }
 
-    fn handle(&mut self, msg: ToShell, fds: Vec<sys::Owned>, out: &mut Pumped) {
+    pub(super) fn handle(&mut self, msg: ToShell, fds: Vec<sys::Owned>, out: &mut Pumped) {
         match msg {
             ToShell::Hello { sdk_version, app_id } => {
                 if sdk_version != SDK_VERSION {
@@ -1627,7 +1627,7 @@ impl AppHost {
         }
     }
 
-    fn window_open(&self, id: u32) -> bool {
+    pub fn window_open(&self, id: u32) -> bool {
         self.windows.of_app(&self.id).iter().any(|w| w.id == id)
     }
 

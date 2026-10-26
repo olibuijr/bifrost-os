@@ -3222,11 +3222,21 @@ impl Shell {
     }
 
     /// The person closes a window (the red traffic light, Cmd+W, the window server's close request). An installed SDK app
-    /// that announced `ToShell::CloseRequests` is sent `ToApp::CloseRequest` for its main window and nothing else happens
-    /// here: it asks "Save changes?" for an edited document and orders the window out itself (`ToShell::WindowClose` id 0,
+    /// that announced `ToShell::CloseRequests` is sent `ToApp::CloseRequest` for its main window (`WindowCloseRequest` for
+    /// an extra window) and nothing else happens here: it asks "Save changes?" for an edited document and orders the window out itself (`ToShell::WindowClose` id 0,
     /// `desk_order_main_out`) when it is done, or keeps it on Cancel. Every other window and app closes as `desk_close_app`
     /// does. Quitting (Dock, Cmd+Q, shutdown) and the shell's own cleanups use `desk_close_app` and are never vetoed.
     pub(super) fn desk_close_requested(&mut self, app: AppId) {
+        // an extra window's close control asks the app about that window, as Cmd+W in it does (a save sheet for an edited
+        // document); closing it here took the window down before the app could answer, and the document came back in a
+        // new window behind the main one
+        if let AppId::ExternalWindow(slot, id) = app {
+            let asks = self.ext.get(slot as usize).and_then(Option::as_ref).is_some_and(|h| h.running() && h.close_requests && h.window_open(u32::from(id)));
+            if asks {
+                self.ext_send(slot as usize, &bifrost_proto::ToApp::WindowCloseRequest { id: u32::from(id) });
+                return;
+            }
+        }
         if let AppId::External(slot) = app {
             if self.ext.get(slot as usize).and_then(Option::as_ref).is_some_and(|h| h.running() && h.close_requests) {
                 self.ext_send(slot as usize, &bifrost_proto::ToApp::CloseRequest);

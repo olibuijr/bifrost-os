@@ -5650,7 +5650,7 @@ close request instead (`Shell::desk_close_requested`), and leaves the window, th
 `close_requested` orders the main window out. A document app calls `DocumentController::close` for the document the window
 shows: a clean one closes now, an edited one raises its save sheet and closes on Save or Don't Save (Cancel keeps it), and
 with the last document closed the app orders the window out (`close_main_window`) and keeps running, as the reference does.
-Quit (Dock, Cmd+Q, shutdown) is never vetoed, and an app that did not opt in closes as before. Script Editor and TextEdit opt
+The red light of an extra window of an opted-in app sends `ToApp::WindowCloseRequest {id}` (tag 0x257, `App::window_close_requested`; the default closes that window and tells `window_closed`) instead of dropping the window, so it asks as Cmd+W in that window does (TextEdit: save sheet on that window). Quit (Dock, Cmd+Q, shutdown) is never vetoed, and an app that did not opt in closes as before. Script Editor and TextEdit opt
 in (TextEdit's other windows already asked through `window_closed`). Gap: on the direct route the window cannot be unmapped, so
 the order-out that answers a close request quits the app instead (`apphost::order_out_quits`), as the light did before;
 File > Close of the last document there still leaves the empty window. A Cancel on the sheet leaves no state to undo, but a

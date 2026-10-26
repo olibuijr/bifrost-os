@@ -947,6 +947,24 @@ mod tests {
         assert_eq!(deliver_window(&mut app, &ctx, &ToApp::CloseRequest, 0.0), None, "the run loop handles CloseRequest");
     }
 
+    /// The red light of an extra window of an opted-in app arrives as `WindowCloseRequest`; the default answer closes that
+    /// window (and tells `window_closed`) and never the main one.
+    #[test]
+    fn the_default_answer_to_an_extra_window_close_request_closes_that_window() {
+        use crate::App;
+        let ctx = crate::runtime::test_ctx();
+        let mut app = WheelFake::default();
+        let id = ctx.open_window(WindowSpec::new("Ada", 480.0, 560.0)).unwrap();
+        ctx.take_sent();
+        assert!(!app.window_close_requested(&ctx, WindowId::MAIN), "the main window has its own request");
+        assert!(ctx.take_sent().is_empty());
+        app.window_close_requested(&ctx, id);
+        assert!(ctx.windows().get(id).is_none(), "the window is closed");
+        assert_eq!(ctx.take_sent(), vec![ToShell::WindowClose { id: id.0 }]);
+        assert!(!app.window_close_requested(&ctx, id), "a window that is gone is ignored");
+        assert_eq!(deliver_window(&mut app, &ctx, &ToApp::WindowCloseRequest { id: id.0 }, 0.0), None, "the run loop handles it");
+    }
+
     #[test]
     fn messages_that_are_not_about_a_window_are_left_to_the_run_loop() {
         let ctx = crate::runtime::test_ctx();

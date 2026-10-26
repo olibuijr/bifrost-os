@@ -3556,6 +3556,46 @@
         assert!(sent().contains(&ToApp::Quit),"Quit still reaches an app that handles the close control");
     }
 
+    /// The red light of an extra window of an app that opted in asks the app about that window (`WindowCloseRequest`) and
+    /// leaves the window on the desk; before, the shell dropped it and the app's save sheet came back in a new window behind
+    /// the main one. An app that did not opt in, or a window the app no longer has, closes as before.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn the_close_control_of_an_extra_window_asks_the_app_about_that_window() {
+        use bifrost_proto::{sys::Recv,ToApp,ToShell};
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        let (mine,theirs)=bifrost_proto::sys::socketpair_pair().unwrap();
+        let host=apphost::AppHost::with_channel("fixture",mine,None,bifrost_proto::Configure{w:100,h:100,scale:1.,safe_top:0.,safe_bottom:0.,dark:true,text_scale:1.,reduce_motion:false});
+        sh.ext.push(Some(host));
+        let sent=||{let mut v=Vec::new();while let Ok(Recv::Packet(p,_))=theirs.recv(false){v.push(ToApp::decode(&p).unwrap());}v};
+        let extra=AppId::ExternalWindow(0,1);
+        let m=sh.desk_metrics();
+        {
+            let mut out=apphost::Pumped::default();
+            sh.ext[0].as_mut().unwrap().handle(ToShell::WindowOpen{id:1,title:"Untitled 2".into(),w:300.,h:200.,position:None,flags:0},Vec::new(),&mut out);
+            let d=sh.desk.as_mut().unwrap();d.wins.clear();d.open(&m,AppId::External(0),(600,400));d.open(&m,extra,(300,200));
+        }
+        // no opt-in: the window closes at once and the app is told it closed
+        sh.desk_close_requested(extra);
+        assert_eq!(sent(),vec![ToApp::WindowClosed{id:1}],"an app that did not opt in has its window closed by the shell");
+        assert!(sh.desk.as_ref().unwrap().index_of(extra).is_none());
+        // opted in: the window stays and the app is asked about that window, not the main one
+        {
+            let mut out=apphost::Pumped::default();
+            sh.ext[0].as_mut().unwrap().handle(ToShell::WindowOpen{id:1,title:"Untitled 2".into(),w:300.,h:200.,position:None,flags:0},Vec::new(),&mut out);
+            sh.desk.as_mut().unwrap().open(&m,extra,(300,200));
+        }
+        sh.ext[0].as_mut().unwrap().close_requests=true;
+        sh.desk_close_requested(extra);
+        assert_eq!(sent(),vec![ToApp::WindowCloseRequest{id:1}],"the request names the window and is not the main window's CloseRequest");
+        assert!(sh.desk.as_ref().unwrap().index_of(extra).is_some(),"the window waits for the app's answer");
+        assert!(sh.desk.as_ref().unwrap().index_of(AppId::External(0)).is_some(),"the main window is untouched");
+        assert!(!sh.ext[0].as_ref().unwrap().close_pending,"an extra window's answer is no main-window order-out");
+        // a window the app no longer has closes on the desk without a request
+        sh.desk_close_requested(AppId::ExternalWindow(0,7));
+        assert!(sent().is_empty());
+    }
+
     /// Cmd+Q and the App menu's Quit close a built-in window as before: only an SDK app has a process to quit.
     #[cfg(feature="desktop-wayland")]
     #[test]

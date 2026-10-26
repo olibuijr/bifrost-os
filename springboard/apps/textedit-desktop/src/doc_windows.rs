@@ -590,6 +590,44 @@ mod tests {
         assert!(ctx.take_sent().iter().any(|m| matches!(m, ToShell::WindowClose { id: 0 })), "the main window is ordered out");
     }
 
+    /// The red button on a second document window asks as Cmd+W in it does: an edited document keeps its window and raises
+    /// the confirmation on it (no new window, nothing for the shell to drop), a clean one closes its window, and a window
+    /// the app does not know is ignored instead of closing the main window's document.
+    #[test]
+    fn the_red_button_on_an_edited_document_window_asks_and_keeps_that_window() {
+        use bifrost_app::document::alert;
+        let ctx = window(1200, 780);
+        let mut app = TextEditApp::new();
+        app.configure(&ctx);
+        app.menu_action(&ctx, item::NEW);
+        let w2 = app.current;
+        let second = app.docs.active().unwrap();
+        app.type_into("unsaved");
+        assert!(app.docs.is_edited(second));
+        ctx.take_sent();
+        assert!(app.window_close_requested(&ctx, w2));
+        assert_eq!(app.docs.alert_doc(), Some(second), "the confirmation is for the second window's document");
+        assert_eq!(app.docs.len(), 2, "nothing closed yet");
+        assert!(ctx.windows().get(w2).is_some(), "the window waits for the answer");
+        let sent = ctx.take_sent();
+        assert!(!sent.iter().any(|m| matches!(m, ToShell::WindowClose { .. } | ToShell::WindowOpen { .. })), "no window closed or reopened: {sent:?}");
+        // Cancel keeps both
+        app.menu_action(&ctx, Action::CloseAnswer(alert::CANCEL as u8).id().unwrap());
+        assert_eq!(app.docs.len(), 2);
+        assert!(ctx.windows().get(w2).is_some());
+        // Don't Save closes the document and its window; the main window stays
+        app.window_close_requested(&ctx, w2);
+        app.menu_action(&ctx, Action::CloseAnswer(alert::DONT_SAVE as u8).id().unwrap());
+        assert_eq!(app.docs.len(), 1);
+        assert!(ctx.windows().get(w2).is_none(), "the window closed");
+        assert!(ctx.windows().main_shown());
+        // an unknown window is not the main window's document
+        let before = app.docs.len();
+        assert!(!app.window_close_requested(&ctx, WindowId(99)));
+        assert_eq!(app.docs.len(), before);
+        assert!(app.docs.alert_doc().is_none());
+    }
+
     /// The shell closing a clean document window closes its document.
     #[test]
     fn the_red_button_on_a_document_window_closes_its_document() {

@@ -852,6 +852,14 @@ pub trait App {
         ctx.close_main_window();
         true
     }
+    /// The person used the close control (the red light) of the extra window `window` and `handles_close_request` is
+    /// `true` (`ToApp::WindowCloseRequest`): the shell has left the window up, as it does for Cmd+W in it. A document app
+    /// closes the document the window shows as for Cmd+W and closes the window once it may. The default closes the window
+    /// at once and tells `window_closed`, as the shell's own close did. True when the app needs a new frame.
+    fn window_close_requested(&mut self, ctx: &Ctx, window: app_windows::WindowId) -> bool {
+        let closed = !window.is_main() && ctx.close_window(window).is_ok();
+        closed && self.window_closed(ctx, window)
+    }
     /// The person dragged one of the app's windows (`ToApp::WindowMoved`): (x, y) is where it is now, in points relative to
     /// the visible desktop area. Keep it to restore later. True when the app needs a new frame.
     fn window_moved(&mut self, _ctx: &Ctx, _window: app_windows::WindowId, _x: f32, _y: f32) -> bool {

@@ -651,6 +651,12 @@ pub enum ToApp {
     /// (`close_main_window`), or keeps it. An app that did not opt in never gets it; its close control acts as before.
     /// `windowShouldClose:`. Tag 0x255.
     CloseRequest,
+    /// The person pressed the close control (the red light) of one of the app's extra windows `id` (not the main one) and
+    /// the app announced `ToShell::CloseRequests { on: true }`: the shell leaves the window up, as Cmd+W in it does. The app
+    /// closes the document the window shows (a save sheet for an edited one) and closes the window itself
+    /// (`Ctx::close_window`), or keeps it. Without the opt-in the shell closes the window at once (`WindowClosed`).
+    /// Tag 0x257.
+    WindowCloseRequest { id: u32 },
     Resume,
     Suspend,
     Quit,
@@ -1403,6 +1409,8 @@ mod tag {
     pub const CLOSE_REQUEST: u32 = 0x255;
     /// App -> shell: the app answers the main window's close control itself (`ToShell::CloseRequests`).
     pub const CLOSE_REQUESTS: u32 = 0x256;
+    /// Shell -> app: the close control of an extra window was used (`ToApp::WindowCloseRequest`).
+    pub const WINDOW_CLOSE_REQUEST: u32 = 0x257;
 
     pub const HELLO: u32 = 0x101;
     pub const BUFFERS: u32 = 0x102;
@@ -1902,6 +1910,10 @@ impl ToApp {
             }
             ToApp::Reopen => u32_(&mut b, tag::REOPEN),
             ToApp::CloseRequest => u32_(&mut b, tag::CLOSE_REQUEST),
+            ToApp::WindowCloseRequest { id } => {
+                u32_(&mut b, tag::WINDOW_CLOSE_REQUEST);
+                u32_(&mut b, *id);
+            }
             ToApp::Resume => u32_(&mut b, tag::RESUME),
             ToApp::Suspend => u32_(&mut b, tag::SUSPEND),
             ToApp::AxSet { id, action } => {
@@ -2095,6 +2107,7 @@ impl ToApp {
             }
             tag::REOPEN => ToApp::Reopen,
             tag::CLOSE_REQUEST => ToApp::CloseRequest,
+            tag::WINDOW_CLOSE_REQUEST => ToApp::WindowCloseRequest { id: r.u32()? },
             tag::RESUME => ToApp::Resume,
             tag::SUSPEND => ToApp::Suspend,
             tag::CONTEXT=>{let x=r.f32()?;let y=r.f32()?;if !x.is_finite()||!y.is_finite(){return Err(DecodeError::BadValue);}ToApp::Context{x,y}},
@@ -3136,6 +3149,10 @@ mod tests {
         assert_eq!(&opt_in[..4], &0x256u32.to_le_bytes());
         assert_eq!(ToShell::decode(&opt_in), Ok(ToShell::CloseRequests { on: true }));
         assert_eq!(ToShell::decode(&ToShell::CloseRequests { on: false }.encode()), Ok(ToShell::CloseRequests { on: false }));
+        // the close control of an extra window carries the window
+        let extra = ToApp::WindowCloseRequest { id: 3 }.encode();
+        assert_eq!(&extra[..4], &0x257u32.to_le_bytes());
+        assert_eq!(ToApp::decode(&extra), Ok(ToApp::WindowCloseRequest { id: 3 }));
     }
 
     #[test]
