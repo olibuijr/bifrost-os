@@ -122,9 +122,11 @@ impl Clock {
         line.add_lines(&terminator(&sun, rect));
         s.stroke_path(&line, &StrokeStyle { width: ui.pt(1.0), ..Default::default() }, &Affine::IDENTITY, LABEL_3.now());
         let r = ui.pt(DOT_R_PT);
-        let name_h = ui.pt(MAC_BODY_PT);
-        let time_dy = ui.pt(MAC_BODY_PT + SPACE_XXS);
-        let label_h = time_dy + (name_h + ui.pt(MAC_FOOTNOTE_PT)) / 2.0;
+        // the real line heights, so the boxes the labels are placed by cover what is drawn
+        let name_h = self.cache.line_h(ui, MAC_BODY_PT);
+        let time_h = self.cache.line_h(ui, MAC_FOOTNOTE_PT);
+        let time_dy = (name_h + time_h) / 2.0;
+        let label_h = name_h + time_h;
         let mut dots: Vec<Point> = Vec::new();
         let mut sizes: Vec<(f32, f32)> = Vec::new();
         let mut texts: Vec<(&'static str, String)> = Vec::new();

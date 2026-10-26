@@ -67,7 +67,8 @@ const PICKER_COL_PT: f32 = 100.0;
 const VISIBLE_ROWS: f32 = 7.0;
 const POP_W_PT: f32 = 318.0;
 const POP_H_PT: f32 = 540.0;
-const POP_Y_PT: f32 = 69.0;
+/// The sheet hangs from the toolbar's bottom edge, as a macOS sheet hangs from the title bar.
+const POP_Y_PT: f32 = UNIFIED_BAR_PT;
 const POP_ROW_PT: f32 = 32.0;
 const POP_PICKER_Y_PT: f32 = 156.0;
 const ROW_PT: f32 = 44.0;
@@ -688,8 +689,11 @@ impl Clock {
         (x0 + i as f32 * ui.pt(PICKER_COL_PT), ui.pt(PICKER_COL_PT), ui.pt(PICKER_Y_PT))
     }
 
+    /// The add-alarm sheet: centred on the window and hanging from the toolbar (narrower than the sheet, the window
+    /// keeps a gutter either side).
     fn popover(&self, ui: &Ui) -> (f32, f32, f32, f32) {
-        (self.w as f32 - ui.pt(20.0 + POP_W_PT), ui.pt(POP_Y_PT), ui.pt(POP_W_PT), ui.pt(POP_H_PT))
+        let w = ui.pt(POP_W_PT).min((self.w as f32 - 2.0 * ui.pt(SPACE_L)).max(0.0));
+        ((self.w as f32 - w) / 2.0, ui.pt(POP_Y_PT), w, ui.pt(POP_H_PT))
     }
 
     /// Add-alarm picker column `i` (0 hours, 1 minutes): (x, w, centre y).
@@ -2146,6 +2150,19 @@ pub(crate) mod tests {
         assert!(c.alarms().list.is_empty() && !c.editing);
         assert_eq!(Alarms::parse(&std::fs::read_to_string(path).unwrap()).list.len(), 0);
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// E2E finding: the Add Alarm sheet is centred on the window and hangs from the toolbar, not a panel at the right.
+    #[test]
+    fn the_add_alarm_sheet_is_centred_and_hangs_from_the_toolbar() {
+        let ui = ui();
+        let c = clock(&ui);
+        let (px, py, pw, _) = c.popover(&ui);
+        assert!((px + pw / 2.0 - c.w as f32 / 2.0).abs() < 1.0, "centred");
+        assert_eq!(py, ui.pt(UNIFIED_BAR_PT), "hangs from the toolbar");
+        let narrow = Clock::new(&ui, (ui.pt(POP_W_PT) / 2.0) as i32, 1920);
+        let (nx, _, nw, _) = narrow.popover(&ui);
+        assert!(nx >= 0.0 && nx + nw <= narrow.w as f32, "stays inside a narrow window");
     }
 
     #[test]
