@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.10
+
+- Delete and Backspace delete the selected reminder, and Esc closes the details popover.
+
 ## 1.20.9
 
 - The delete-list message names the button it asks you to press.

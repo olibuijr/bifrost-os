@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.34.8
+
+- The Get Info window draws its contents instead of staying transparent.
+
 ## 1.34.7
 
 - Get Info from the menu bar opens its own window.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.14
+
+- Saving a draft with a half-typed recipient no longer puts an address error in the message list.
+
 ## 0.17.13
 
 - A message with no recipient can be saved as a draft, the compose window shows its title once, and the save question explains itself.

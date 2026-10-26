@@ -1,6 +1,6 @@
 [package]
 name = "bifrost-calendar"
-version = "1.19.7"
+version = "1.19.8"
 edition = "2021"
 
 [dependencies]
