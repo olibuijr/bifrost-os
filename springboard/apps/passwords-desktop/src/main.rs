@@ -13,12 +13,13 @@
 mod model;
 
 use bifrost_app::keychain::Error as KeychainError;
+use bifrost_app::controls::nav::{Toolbar, ToolbarItem};
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
-use bifrost_app::controls::{Rect, TextField};
+use bifrost_app::controls::{Node, Rect, Role, TextField};
 use bifrost_app::item_sheet::{ItemSheet, Outcome};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::kit::ui::{self, Weight};
-use bifrost_app::kit::{Damage, Surface};
+use bifrost_app::kit::{Damage, Surface, Ui};
 use bifrost_app::pasteboard::NativePasteboard;
 use bifrost_app::passwords::{kind_of, name_of, Kind};
 use bifrost_app::{keychain_groups, passwords, widgets, App, AppMenu, AppMenuItem, Ctx, Input, KeyInput, TouchKind};
@@ -29,8 +30,6 @@ use std::path::PathBuf;
 
 /// Header and detail geometry in points.
 const LIST_PT: f32 = 300.0;
-const BAR_Y_PT: f32 = 12.0;
-const BAR_H_PT: f32 = 28.0;
 /// The kind tabs sit just under the unified bar's window-drag band, so every part of them takes a click.
 const TABS_Y_PT: f32 = UNIFIED_BAR_PT + 4.0;
 const TABS_H_PT: f32 = 24.0;
@@ -39,12 +38,18 @@ const SEARCH_H_PT: f32 = 26.0;
 const HEADER_PT: f32 = 124.0;
 const ROW_PT: f32 = 44.0;
 const PAD_PT: f32 = 12.0;
-/// Bar button hit boxes in the list header (x start, width) and in the detail column.
-const IMPORT_BTN: (f32, f32) = (PAD_PT, 64.0);
-const EXPORT_BTN: (f32, f32) = (PAD_PT + 72.0, 64.0);
+/// Toolbar button ids: the list column's bar (Import, Export, New Password) and the detail column's bar. They are also
+/// the accessibility ids of the controls published through `App::controls`, because the whole unified bar is a window-drag
+/// zone and a press there reaches the app only on a published control.
+const B_IMPORT: u32 = 1;
+const B_EXPORT: u32 = 2;
+const B_NEW: u32 = 3;
+const B_REVEAL: u32 = 10;
+const B_COPY: u32 = 11;
+const B_GENERATE: u32 = 12;
+const B_DELETE: u32 = 13;
 /// The kind tabs under the bar, in order: one segmented control across the list column.
 const TABS: [(Kind, &str); 3] = [(Kind::Login, "Logins"), (Kind::SecureNote, "Notes"), (Kind::Certificate, "Certificates")];
-const DETAIL_BTNS: [(&str, f32, f32); 4] = [("Reveal", 0.0, 80.0), ("Copy", 88.0, 64.0), ("Generate", 160.0, 84.0), ("Delete", 252.0, 72.0)];
 
 /// File > New Password.
 const MENU_NEW: u32 = 1;
@@ -145,6 +150,102 @@ impl PasswordsApp {
         });
         list.set_selected(selected.map(|i| i as u32));
         (shown, list)
+    }
+
+    /// The list column's toolbar: Import, Export and the New Password button, right of the traffic lights.
+    fn list_toolbar() -> Toolbar {
+        Toolbar::new(vec![
+            ToolbarItem::button(B_IMPORT, "Import"),
+            ToolbarItem::button(B_EXPORT, "Export"),
+            ToolbarItem::icon(B_NEW, "New Password", "plus"),
+        ])
+    }
+
+    /// The detail column's toolbar: the actions on the selected item (none while nothing is selected).
+    fn detail_toolbar(&self) -> Toolbar {
+        let Some((service, _)) = &self.selected else { return Toolbar::default() };
+        let mut items = vec![
+            ToolbarItem::button(B_REVEAL, if self.revealed.is_some() { "Hide" } else { "Reveal" }),
+            ToolbarItem::button(B_COPY, "Copy"),
+        ];
+        if kind_of(service) == Kind::Login {
+            items.push(ToolbarItem::button(B_GENERATE, "Generate"));
+        }
+        items.push(ToolbarItem::button(B_DELETE, "Delete"));
+        Toolbar::new(items)
+    }
+
+    /// Both toolbars with where they sit, for a window `w_pt` wide: the unified bar's list-column half and detail half.
+    fn toolbars(&self, w_pt: f32) -> [(Toolbar, Rect); 2] {
+        [(Self::list_toolbar(), list_bar()), (self.detail_toolbar(), detail_bar(w_pt))]
+    }
+
+    /// The toolbar button under `(x, y)` (points), if any.
+    fn button_at(&self, ui: &Ui, w_pt: f32, x: f32, y: f32) -> Option<u32> {
+        self.toolbars(w_pt).iter().find_map(|(bar, bounds)| widgets::toolbar_layout(ui, *bounds, bar).hit(x, y))
+    }
+
+    /// The toolbar buttons as published controls, in window points: the shell leaves a press on them to the app.
+    fn control_nodes(&self, ui: &Ui, w_pt: f32) -> Vec<Node> {
+        let mut nodes = Vec::new();
+        for (bar, bounds) in self.toolbars(w_pt) {
+            for (id, bounds) in widgets::toolbar_layout(ui, bounds, &bar).visible {
+                let Some(item) = bar.items.iter().find(|i| i.id == id) else { continue };
+                nodes.push(Node { id: id as u64, role: Role::Button, label: item.label.clone(), value: String::new(), bounds, enabled: item.enabled });
+            }
+        }
+        nodes
+    }
+
+    /// A toolbar button was pressed (a click, or the published control through accessibility).
+    fn press_button(&mut self, ctx: &Ctx, id: u32) -> bool {
+        match id {
+            B_IMPORT => {
+                self.status = "Open a .csv file with Passwords to import it.".into();
+                return true;
+            }
+            B_EXPORT => {
+                self.export(ctx);
+                return true;
+            }
+            B_NEW => return self.open_add(),
+            _ => {}
+        }
+        let Some((service, account)) = self.selected.clone() else { return false };
+        let is_login = kind_of(&service) == Kind::Login;
+        match id {
+            B_REVEAL if self.revealed.is_some() => {
+                self.revealed = None;
+            }
+            B_REVEAL => {
+                let id = passwords::fill(ctx, &service, &account);
+                self.pending.insert(id, Pending::Reveal);
+            }
+            B_COPY => match &self.revealed {
+                Some(p) => {
+                    copy_secret(ctx, p);
+                    self.status = "Copied.".into();
+                }
+                None => {
+                    let id = passwords::fill(ctx, &service, &account);
+                    self.pending.insert(id, Pending::Copy);
+                }
+            },
+            B_GENERATE if is_login => match model::generate() {
+                Ok(p) => {
+                    let id = passwords::update(ctx, &service, &account, &p);
+                    self.pending.insert(id, Pending::Generate);
+                    self.revealed = Some(p);
+                }
+                Err(e) => self.status = format!("Could not generate: {e}"),
+            },
+            B_DELETE => {
+                let id = passwords::remove(ctx, &service, &account);
+                self.pending.insert(id, Pending::Delete { service, account });
+            }
+            _ => return false,
+        }
+        true
     }
 
     fn select(&mut self, service: String, account: String) {
@@ -311,13 +412,14 @@ fn tab_at(x: f32, y: f32) -> Option<Kind> {
     bifrost_app::controls::sheet::segment_hit(tabs_bounds(), TABS.len(), x, y).map(|i| TABS[i].0)
 }
 
-/// The bar button at point `(x, y)` in the detail column, if any.
-fn detail_button(x: f32, y: f32) -> Option<&'static str> {
-    if !(BAR_Y_PT..BAR_Y_PT + BAR_H_PT).contains(&y) {
-        return None;
-    }
-    let base = LIST_PT + PAD_PT;
-    DETAIL_BTNS.iter().find(|(_, bx, bw)| (base + bx..base + bx + bw).contains(&x)).map(|(name, _, _)| *name)
+/// The unified bar over the list column, in window points; the traffic lights sit at its left end.
+fn list_bar() -> Rect {
+    Rect { x: 0.0, y: 0.0, w: LIST_PT, h: UNIFIED_BAR_PT }
+}
+
+/// The unified bar over the detail column of a window `w_pt` wide, in window points.
+fn detail_bar(w_pt: f32) -> Rect {
+    Rect { x: LIST_PT, y: 0.0, w: (w_pt - LIST_PT).max(0.0), h: UNIFIED_BAR_PT }
 }
 
 impl App for PasswordsApp {
@@ -351,73 +453,37 @@ impl App for PasswordsApp {
             return self.adding_event(ctx, ev);
         }
         match ev {
+            // a published toolbar control pressed (accessibility, `bifrost pc midget tap-window`)
+            Input::Activate(id) => u32::try_from(id).is_ok_and(|id| self.press_button(ctx, id)),
             Input::Touch { kind: TouchKind::Down, x, y, .. } => {
                 let (x, y) = (x / ctx.ui.s, y / ctx.ui.s);
-                if x < LIST_PT {
-                    if (BAR_Y_PT..BAR_Y_PT + BAR_H_PT).contains(&y) {
-                        if (IMPORT_BTN.0..IMPORT_BTN.0 + IMPORT_BTN.1).contains(&x) {
-                            self.status = "Open a .csv file with Passwords to import it.".into();
-                            return true;
-                        }
-                        if (EXPORT_BTN.0..EXPORT_BTN.0 + EXPORT_BTN.1).contains(&x) {
-                            self.export(ctx);
-                            return true;
-                        }
-                        return false;
-                    }
-                    if let Some(kind) = tab_at(x, y) {
-                        self.set_tab(kind);
-                        return true;
-                    }
-                    if bifrost_app::controls::search::hits_clear(search_bounds(), !self.query.is_empty(), x, y) {
-                        self.query.clear();
-                        return true;
-                    }
-                    let (shown, list) = self.source_list();
-                    let bounds = Rect { x: 0.0, y: HEADER_PT, w: LIST_PT, h: ctx.cfg.h as f32 / ctx.ui.s - HEADER_PT };
-                    if let Some(index) = list.hit(bounds, 0.0, x, y).map(|i| i as usize) {
-                        if let Some(item) = shown.get(index) {
-                            self.select(item.service.clone(), item.account.clone());
-                        }
-                        return true;
-                    }
+                let w_pt = ctx.cfg.w as f32 / ctx.ui.s;
+                if y < UNIFIED_BAR_PT {
+                    return match self.button_at(&ctx.ui, w_pt, x, y) {
+                        Some(id) => self.press_button(ctx, id),
+                        None => false,
+                    };
+                }
+                if x >= LIST_PT {
                     return false;
                 }
-                let Some((service, account)) = self.selected.clone() else { return false };
-                let is_login = kind_of(&service) == Kind::Login;
-                match detail_button(x, y) {
-                    Some("Reveal") if self.revealed.is_some() => {
-                        self.revealed = None;
-                    }
-                    Some("Reveal") => {
-                        let id = passwords::fill(ctx, &service, &account);
-                        self.pending.insert(id, Pending::Reveal);
-                    }
-                    Some("Copy") => match &self.revealed {
-                        Some(p) => {
-                            copy_secret(ctx, p);
-                            self.status = "Copied.".into();
-                        }
-                        None => {
-                            let id = passwords::fill(ctx, &service, &account);
-                            self.pending.insert(id, Pending::Copy);
-                        }
-                    },
-                    Some("Generate") if is_login => match model::generate() {
-                        Ok(p) => {
-                            let id = passwords::update(ctx, &service, &account, &p);
-                            self.pending.insert(id, Pending::Generate);
-                            self.revealed = Some(p);
-                        }
-                        Err(e) => self.status = format!("Could not generate: {e}"),
-                    },
-                    Some("Delete") => {
-                        let id = passwords::remove(ctx, &service, &account);
-                        self.pending.insert(id, Pending::Delete { service, account });
-                    }
-                    _ => return false,
+                if let Some(kind) = tab_at(x, y) {
+                    self.set_tab(kind);
+                    return true;
                 }
-                true
+                if bifrost_app::controls::search::hits_clear(search_bounds(), !self.query.is_empty(), x, y) {
+                    self.query.clear();
+                    return true;
+                }
+                let (shown, list) = self.source_list();
+                let bounds = Rect { x: 0.0, y: HEADER_PT, w: LIST_PT, h: ctx.cfg.h as f32 / ctx.ui.s - HEADER_PT };
+                if let Some(index) = list.hit(bounds, 0.0, x, y).map(|i| i as usize) {
+                    if let Some(item) = shown.get(index) {
+                        self.select(item.service.clone(), item.account.clone());
+                    }
+                    return true;
+                }
+                false
             }
             Input::Key(KeyInput::Text(text)) => {
                 self.query.push_str(&text);
@@ -439,6 +505,10 @@ impl App for PasswordsApp {
             }
             _ => false,
         }
+    }
+
+    fn controls(&self, ctx: &Ctx) -> Vec<Node> {
+        self.control_nodes(&ctx.ui, ctx.cfg.w as f32 / ctx.ui.s)
     }
 
     fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
@@ -552,9 +622,10 @@ impl App for PasswordsApp {
         s.fill_rect(0, 0, w, h, ui::CONTENT_BG.now());
         // list column with its bar, kind tabs and search field
         s.fill_rect(0, 0, p(LIST_PT), h, ui::SIDEBAR_BG.now());
-        for (label, x) in [("Import", IMPORT_BTN.0), ("Export", EXPORT_BTN.0)] {
-            let img = ui.text(label, ui::MAC_BODY_PT, Weight::Regular, ui::LINK);
-            s.blit_colored(&img, pi(x + 4.0), pi(BAR_Y_PT + 6.0), ui::LINK, 255);
+        // the unified bar: the detail half is a toolbar band, the list half is the sidebar; both clear the traffic lights
+        widgets::toolbar_band(s, ui, detail_bar(w as f32 / scale));
+        for (bar, bounds) in self.toolbars(w as f32 / scale) {
+            widgets::toolbar(s, ui, bounds, &bar, None);
         }
         let labels: Vec<&str> = TABS.iter().map(|(_, label)| *label).collect();
         let selected = TABS.iter().position(|(kind, _)| *kind == self.tab).unwrap_or(0);
@@ -574,18 +645,6 @@ impl App for PasswordsApp {
         match &self.selected {
             Some((service, account)) => {
                 let kind = kind_of(service);
-                for (name, bx, _) in DETAIL_BTNS {
-                    if name == "Generate" && kind != Kind::Login {
-                        continue;
-                    }
-                    let colour = match name {
-                        "Delete" => ui::DESTRUCTIVE,
-                        _ => ui::LINK,
-                    };
-                    let label = if name == "Reveal" && self.revealed.is_some() { "Hide" } else { name };
-                    let img = ui.text(label, ui::MAC_BODY_PT, Weight::Regular, colour);
-                    s.blit_colored(&img, pi(px + bx + 2.0), pi(BAR_Y_PT + 6.0), colour, 255);
-                }
                 let width = w as f32 / scale - px - PAD_PT;
                 let title = ui.text(&ui.fit(name_of(service), ui::MAC_TITLE2_PT, ui.pt(width)), ui::MAC_TITLE2_PT, Weight::Regular, ui::LABEL.now());
                 s.blit_colored(&title, pi(px), pi(HEADER_PT), ui::LABEL.now(), 255);
@@ -676,5 +735,81 @@ mod layout_tests {
     fn search_field_sits_between_the_tabs_and_the_list() {
         let (t, s) = (tabs_bounds(), search_bounds());
         assert!(s.y >= t.y + t.h && s.y + s.h <= HEADER_PT);
+    }
+
+    fn ui() -> Ui {
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        Ui::new(bifrost_app::kit::Font::parse(data).unwrap(), 1.0)
+    }
+
+    fn app_with_selection() -> PasswordsApp {
+        PasswordsApp { selected: Some(("example.com".into(), "me".into())), ..Default::default() }
+    }
+
+    fn lights_trailing() -> f32 {
+        bifrost_app::layout::traffic_lights_trailing()
+    }
+
+    #[test]
+    fn list_bar_buttons_clear_the_traffic_lights() {
+        let ui = ui();
+        let layout = widgets::toolbar_layout(&ui, list_bar(), &PasswordsApp::list_toolbar());
+        let ids: Vec<u32> = layout.visible.iter().map(|(id, _)| *id).collect();
+        assert_eq!(ids, vec![B_IMPORT, B_EXPORT, B_NEW], "Import, Export and New Password all fit in the list column");
+        assert!(layout.overflow.is_empty());
+        for (id, r) in &layout.visible {
+            assert!(r.x >= lights_trailing(), "button {id} starts at {} under the traffic lights (ends at {})", r.x, lights_trailing());
+            assert!(r.x + r.w <= LIST_PT, "button {id} fits in the list column");
+            assert!(r.y >= 0.0 && r.y + r.h <= UNIFIED_BAR_PT, "button {id} sits inside the unified bar");
+        }
+        // the buttons do not overlap each other
+        for (i, (_, a)) in layout.visible.iter().enumerate() {
+            for (_, b) in layout.visible.iter().skip(i + 1) {
+                assert!(a.x + a.w <= b.x || b.x + b.w <= a.x);
+            }
+        }
+    }
+
+    #[test]
+    fn detail_bar_buttons_sit_in_the_detail_column_inside_the_bar() {
+        let ui = ui();
+        let app = app_with_selection();
+        let layout = widgets::toolbar_layout(&ui, detail_bar(1200.0), &app.detail_toolbar());
+        let ids: Vec<u32> = layout.visible.iter().map(|(id, _)| *id).collect();
+        assert_eq!(ids, vec![B_REVEAL, B_COPY, B_GENERATE, B_DELETE]);
+        for (_, r) in &layout.visible {
+            assert!(r.x >= LIST_PT && r.y + r.h <= UNIFIED_BAR_PT);
+        }
+        // nothing selected: no detail buttons
+        assert!(PasswordsApp::default().detail_toolbar().items.is_empty());
+    }
+
+    #[test]
+    fn every_bar_button_is_published_and_hits_where_published() {
+        let ui = ui();
+        let app = app_with_selection();
+        let nodes = app.control_nodes(&ui, 1200.0);
+        for id in [B_IMPORT, B_EXPORT, B_NEW, B_REVEAL, B_COPY, B_DELETE] {
+            let node = nodes.iter().find(|n| n.id == id as u64).unwrap_or_else(|| panic!("button {id} is published"));
+            assert_eq!(node.role, Role::Button);
+            assert!(!node.label.is_empty() && node.enabled);
+            assert!(node.bounds.y + node.bounds.h <= UNIFIED_BAR_PT, "in the band the shell moves the window unless the control is published");
+            let (cx, cy) = (node.bounds.x + node.bounds.w / 2.0, node.bounds.y + node.bounds.h / 2.0);
+            assert_eq!(app.button_at(&ui, 1200.0, cx, cy), Some(id));
+        }
+        // the traffic lights themselves hit nothing
+        assert_eq!(app.button_at(&ui, 1200.0, 20.0, 20.0), None);
+        // no selection: the detail buttons are not published
+        let bare = PasswordsApp::default().control_nodes(&ui, 1200.0);
+        assert!(bare.iter().all(|n| n.id == B_IMPORT as u64 || n.id == B_EXPORT as u64 || n.id == B_NEW as u64));
+    }
+
+    #[test]
+    fn new_password_button_opens_the_sheet() {
+        let mut app = PasswordsApp::default();
+        assert!(app.open_add());
+        assert!(app.adding.is_some());
+        // a second press while the sheet is open does nothing
+        assert!(!app.open_add());
     }
 }
