@@ -24,9 +24,10 @@ fn lab_link() -> Option<(String, String)> {
     Some((mac, cidr))
 }
 
-/// A NetworkManager keyfile that pins the lab address on the NIC with this MAC (gateway titan, 10.99.0.1).
+/// A NetworkManager keyfile that pins the lab address on the NIC with this MAC (gateway titan, 10.99.0.1). The keyfile
+/// stores wake-on-lan as the flag integer (64 = magic packet); the name `magic` is rejected at every boot.
 fn lab_nmconnection(mac: &str, cidr: &str) -> String {
-    format!("[connection]\nid=lab\ntype=ethernet\nautoconnect=true\n\n[ethernet]\nmac-address={mac}\nwake-on-lan=magic\n\n[ipv4]\nmethod=manual\naddress1={cidr},10.99.0.1\ndns=1.1.1.1;\n\n[ipv6]\nmethod=ignore\n")
+    format!("[connection]\nid=lab\ntype=ethernet\nautoconnect=true\n\n[ethernet]\nmac-address={mac}\nwake-on-lan=64\n\n[ipv4]\nmethod=manual\naddress1={cidr},10.99.0.1\ndns=1.1.1.1;\n\n[ipv6]\nmethod=ignore\n")
 }
 
 /// Everything the user chose.
@@ -553,9 +554,10 @@ pub fn audio_modprobe() -> &'static str {
 }
 
 /// Boot-time raise of the sound card and xHCI interrupt threads (B1): SCHED_FIFO 50, so an audio or input
-/// interrupt is not queued behind the shell's own work. Needs threadirqs on the command line.
+/// interrupt is not queued behind the shell's own work. Needs threadirqs on the command line. systemd expands `$VAR`
+/// in `ExecStart`, so every shell `$` is written `$$` (otherwise the journal shows "Invalid environment variable name").
 pub fn irq_priority_unit() -> &'static str {
-    "[Unit]\nDescription=Raise the audio and USB interrupt threads\nAfter=systemd-modules-load.service\n\n[Service]\nType=oneshot\nRemainAfterExit=yes\nExecStart=/bin/sh -c 'for d in /proc/[0-9]*; do c=$(cat $d/comm 2>/dev/null) || continue; case \"$c\" in irq/*xhci*|irq/*snd*|irq/*hda*|irq/*HDA*) chrt -f -p 50 ${d#/proc/} 2>/dev/null;; esac; done'\n\n[Install]\nWantedBy=multi-user.target\n"
+    "[Unit]\nDescription=Raise the audio and USB interrupt threads\nAfter=systemd-modules-load.service\n\n[Service]\nType=oneshot\nRemainAfterExit=yes\nExecStart=/bin/sh -c 'for d in /proc/[0-9]*; do c=$$(cat $$d/comm 2>/dev/null) || continue; case \"$$c\" in irq/*xhci*|irq/*snd*|irq/*hda*|irq/*HDA*) chrt -f -p 50 $${d#/proc/} 2>/dev/null;; esac; done'\n\n[Install]\nWantedBy=multi-user.target\n"
 }
 
 /// sshd on the installed system: key or password logins for the user, never for root.
@@ -1312,7 +1314,7 @@ mod tests {
         assert!(k.contains("mac-address=00:23:24:dc:c8:40\n"));
         assert!(k.contains("method=manual\naddress1=10.99.0.200/24,10.99.0.1\n"));
         assert!(k.contains("[ipv6]\nmethod=ignore"));
-        assert!(k.contains("[ethernet]\nmac-address=00:23:24:dc:c8:40\nwake-on-lan=magic\n"), "the lab NIC wakes on a magic packet");
+        assert!(k.contains("[ethernet]\nmac-address=00:23:24:dc:c8:40\nwake-on-lan=64\n"), "the lab NIC wakes on a magic packet");
     }
 
     #[test]
@@ -1395,6 +1397,7 @@ mod tests {
         assert!(iso.contains(" threadirqs isolcpus=7 nohz_full=7 rcu_nocbs=7\n"));
         assert_eq!(audio_modprobe(), "options snd_hda_intel power_save=0\n");
         assert!(irq_priority_unit().contains("chrt -f -p 50") && irq_priority_unit().contains("irq/*xhci*"));
+        assert!(!irq_priority_unit().replace("$$", "").contains('$'), "a single $ is expanded by systemd in ExecStart");
     }
 
     #[test]
