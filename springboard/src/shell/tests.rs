@@ -3246,6 +3246,31 @@
         assert_eq!(bifrost_proto::ToApp::decode(&packet),Ok(bifrost_proto::ToApp::MenuAction(7)));
     }
 
+    /// An app that declares `AppMenuItem::no_print` (an archiver, a disk tool) has no File > Print… at all: the shell's
+    /// window-snapshot row and its separator are gone, the marker shows no row, and the app's other File items stay.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn an_app_that_cannot_print_hides_the_shells_print_row() {
+        use bifrost_proto::{AppMenu,AppMenuItem};
+        let mut sh=desktop_shell();sh.anim=None;
+        let (mine,_theirs)=bifrost_proto::sys::socketpair_pair().unwrap();
+        let mut host=apphost::AppHost::with_channel("fixture",mine,None,bifrost_proto::Configure{w:100,h:100,scale:1.,safe_top:0.,safe_bottom:0.,dark:true,text_scale:1.,reduce_motion:false});
+        host.app_menus=vec![AppMenu{title:"File".into(),items:vec![AppMenuItem::new(1,"Open\u{2026}").key("cmd+o")]}];
+        sh.ext.push(Some(host));sh.ext_fg=Some(0);sh.screen=Screen::App(AppId::External(0));
+        let texts=|sh:&Shell|sh.menu_rows(desktop_bar::Menu::File).iter().map(|r|r.text.clone()).collect::<Vec<_>>();
+        assert!(texts(&sh).iter().any(|t|t.starts_with("Print")),"an app that prints keeps the shell's Print…");
+        sh.ext[0].as_mut().unwrap().app_menus[0].items.push(AppMenuItem::no_print());
+        let file=texts(&sh);
+        assert!(!file.iter().any(|t|t.starts_with("Print")),"no Print… for an app that cannot print: {file:?}");
+        assert!(!file.last().is_some_and(|t|t.is_empty()),"no separator left dangling at the end: {file:?}");
+        assert_eq!(file[0],"Open\u{2026}","the app's own File items stay");
+        assert_eq!(file.iter().filter(|t|t.as_str()=="Open\u{2026}").count(),1);
+        assert_eq!(sh.menu_rows(desktop_bar::Menu::Custom(0)).len(),1,"the marker adds no row of its own");
+        // nor in a menu of the app's own
+        sh.ext[0].as_mut().unwrap().app_menus.push(AppMenu{title:"Tools".into(),items:vec![AppMenuItem::new(2,"Run"),AppMenuItem::no_print()]});
+        assert_eq!(sh.menu_rows(desktop_bar::Menu::Custom(1)).iter().map(|r|r.text.as_str()).collect::<Vec<_>>(),vec!["Run"]);
+    }
+
     #[cfg(feature="desktop-wayland")]
     #[test]
     fn app_published_menus_follow_the_app_name_and_send_the_chosen_item_back() {

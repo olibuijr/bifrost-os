@@ -342,7 +342,7 @@ pub(super) fn app_item_parent(menu:&bifrost_proto::AppMenu,item:usize)->Option<u
 /// Rows of one level of app menu `mi` (`app_level_items`).
 #[cfg(feature = "desktop-wayland")]
 fn app_level_rows(slot:u8,mi:u8,menu:&bifrost_proto::AppMenu,header:Option<usize>)->Vec<Row> {
-    app_level_items(menu,header).into_iter().filter(|&k|!menu.items[k].prints).map(|k|{
+    app_level_items(menu,header).into_iter().filter(|&k|!menu.items[k].prints&&!menu.items[k].no_print).map(|k|{
         let i=&menu.items[k];
         if i.submenu&&!i.separator {
             let text=format!("{}{}",if i.checked{"\u{2713} "}else{""},i.title);
@@ -364,6 +364,17 @@ fn app_item_row(slot:u8,i:&bifrost_proto::AppMenuItem)->Row {
 #[cfg(feature = "desktop-wayland")]
 pub(super) fn app_print_row(slot:u8,menus:&[bifrost_proto::AppMenu])->Option<Row> {
     menus.iter().flat_map(|m|m.items.iter()).find(|i|i.prints&&!i.separator&&!i.submenu).map(|i|app_item_row(slot,&bifrost_proto::AppMenuItem{depth:0,checked:false,..i.clone()}))
+}
+/// Whether the app declared it has nothing to print (`AppMenuItem::no_print`): the shell then leaves its File > Print… out.
+#[cfg(feature = "desktop-wayland")]
+pub(super) fn app_hides_print(menus:&[bifrost_proto::AppMenu])->bool {
+    menus.iter().flat_map(|m|m.items.iter()).any(|i|i.no_print)
+}
+/// Takes the shell's File > Print… (the window snapshot) out of `rows`, with the separator that set it apart.
+#[cfg(feature = "desktop-wayland")]
+fn drop_shell_print_row(rows:&mut Vec<Row>) {
+    rows.retain(|r|!(r.text=="Print\u{2026}"&&matches!(r.action,None|Some(Action::Print))));
+    if rows.last().is_some_and(|r|r.sep) {rows.pop();}
 }
 /// Rows of an app's context menu (`ToShell::ContextMenu`): a separator row for `ContextItem::separator`, a disabled item as a
 /// label (secondary ink), an enabled one as a choice that goes back to the app as `ToApp::ContextAction`, and a key
@@ -791,7 +802,7 @@ impl Shell {
             if menu==Menu::File {
                 if let Some(print)=app_print_row(slot,self.app_menus()) {
                     if let Some(r)=rows.iter_mut().find(|r|r.text=="Print\u{2026}"&&matches!(r.action,None|Some(Action::Print))) {*r=print;}
-                }
+                } else if app_hides_print(self.app_menus()) {drop_shell_print_row(&mut rows);}
             }
             let merged:Vec<Row>=self.app_menus().iter().enumerate().filter(|(_,m)|shell_menu(&m.title)==Some(menu)).flat_map(|(i,m)|app_menu_rows(slot,i as u8,m)).collect();
             if !merged.is_empty() {if !rows.is_empty(){rows.insert(0,Row::separator());}for r in merged.into_iter().rev(){rows.insert(0,r);}}

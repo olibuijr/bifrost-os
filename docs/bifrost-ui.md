@@ -717,6 +717,13 @@ Contacts uses it (File > Print… prints the contact list; Print Address Labels�
 `group_actions_lead_the_detail_bar_and_file_has_one_print`. Not matched yet: there is no app-side print panel hook
 (`printOperation(withSettings:)` handing the shell's print sheet the app's pages); the app runs its own `PrintOperation`.
 
+**An app that cannot print (`AppMenuItem::no_print`, 2026-10-26).** An app with nothing to print (Archive, Disk Utility)
+puts the marker `AppMenuItem::no_print()` in any of its menus (the `no_print` flag, bit 5 of the item flags on the wire; it
+shows no row and has no id). The shell then drops its own File > Print… and the separator before it
+(`desktop_bar::app_hides_print`), so Cmd+P is not offered either. An app that declares its own `print` item keeps that one.
+Apple's apps simply omit the item; ours had it added by the shell, so the opt-out is explicit. Tests: proto
+`the_apps_own_print_item_keeps_its_flag_over_the_wire`, shell `an_app_that_cannot_print_hides_the_shells_print_row`.
+
 ### App context menus (`Ctx::context_menu`, `NSMenu.popUpContextMenu`)
 
 A right click arrives as `Input::Context { x, y }` (window-local px). The app answers with

@@ -252,7 +252,7 @@ impl App for ArchiveApp {
     }
 
     fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
-        vec![AppMenu { title: "File".into(), items: vec![AppMenuItem::new(MENU_OPEN, "Open\u{2026}").key("cmd+o")] }]
+        vec![file_menu()]
     }
 
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
@@ -333,6 +333,11 @@ impl App for ArchiveApp {
     }
 }
 
+/// File: Open. An archiver has nothing to print, so it opts out of the shell's File > Print….
+fn file_menu() -> AppMenu {
+    AppMenu { title: "File".into(), items: vec![AppMenuItem::new(MENU_OPEN, "Open\u{2026}").key("cmd+o"), AppMenuItem::no_print()] }
+}
+
 fn main() {
     bifrost_app::run(ArchiveApp::default());
 }
@@ -359,6 +364,13 @@ mod tests {
         std::fs::remove_file(&path).unwrap();
         // a deleted file has no usable location
         assert!(granted_path(&file).is_err());
+    }
+
+    #[test]
+    fn the_file_menu_opts_out_of_print() {
+        let menu = file_menu();
+        assert!(menu.items.iter().any(|i| i.no_print), "no Print… for an archiver");
+        assert!(!menu.items.iter().any(|i| i.prints), "and no print command of its own");
     }
 
     #[test]

@@ -112,6 +112,8 @@ impl App for DiskUtility {
                     AppMenuItem::new(MENU_EJECT, "Eject").key("cmd+e").enabled(ejectable),
                     AppMenuItem::separator(),
                     AppMenuItem::new(MENU_SHOW_IN_FILES, "Show in Files").key("cmd+shift+r").enabled(mounted),
+                    // a disk tool has nothing to print: no File > Print… from the shell
+                    AppMenuItem::no_print(),
                 ],
             },
             AppMenu {
@@ -303,4 +305,25 @@ impl DiskUtility {
 
 fn main() {
     bifrost_app::run(DiskUtility::new());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bifrost_app::kit::{Font, Ui};
+    use bifrost_app::proto::Configure;
+
+    fn test_ctx() -> Ctx {
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        let cfg = Configure { w: 100, h: 100, scale: 1.0, safe_top: 0.0, safe_bottom: 0.0, dark: true, text_scale: 1.0, reduce_motion: false };
+        Ctx::testing(Ui::new(Font::parse(data).unwrap(), 1.0), cfg)
+    }
+
+    #[test]
+    fn the_file_menu_opts_out_of_print() {
+        let menus = DiskUtility::new().main_menu(&test_ctx());
+        let file = menus.iter().find(|m| m.title == "File").expect("File menu");
+        assert!(file.items.iter().any(|i| i.no_print), "no Print… for a disk tool");
+        assert!(!menus.iter().flat_map(|m| m.items.iter()).any(|i| i.prints), "and no print command of its own");
+    }
 }

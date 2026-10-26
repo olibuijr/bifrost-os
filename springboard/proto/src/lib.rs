@@ -1229,7 +1229,7 @@ fn encode_app_menu(m: &AppMenu, budget: usize) -> (Vec<u8>, usize) {
         u32_(&mut b, i.id);
         str_(&mut b, &title);
         str_(&mut b, &key);
-        b.push(i.enabled as u8 | (i.checked as u8) << 1 | (i.separator as u8) << 2 | (i.submenu as u8) << 3 | (i.prints as u8) << 4);
+        b.push(i.enabled as u8 | (i.checked as u8) << 1 | (i.separator as u8) << 2 | (i.submenu as u8) << 3 | (i.prints as u8) << 4 | (i.no_print as u8) << 5);
         b.push(i.depth.min(MAX_APP_MENU_DEPTH));
         n += 1;
     }
@@ -1299,17 +1299,26 @@ pub struct AppMenuItem {
     /// The shell then shows this item in place of its own File > Print… (the window snapshot) instead of next to it,
     /// and Cmd+P chooses it. See `AppMenuItem::print`. Bit 4 of the item flags on the wire.
     pub prints: bool,
+    /// The app cannot print: the shell leaves its File > Print… (and Cmd+P) out. A marker item with no row of its own
+    /// (`AppMenuItem::no_print`), declared in any menu. Bit 5 of the item flags on the wire.
+    pub no_print: bool,
 }
 
 impl AppMenuItem {
     pub fn new(id: u32, title: &str) -> Self {
-        AppMenuItem { id, title: title.into(), key: String::new(), enabled: true, checked: false, separator: false, submenu: false, depth: 0, prints: false }
+        AppMenuItem { id, title: title.into(), key: String::new(), enabled: true, checked: false, separator: false, submenu: false, depth: 0, prints: false, no_print: false }
     }
     /// The app's own File > Print… (`printDocument:`): titled "Print…" with Cmd+P, it replaces the shell's Print… row
     /// (which prints a snapshot of the window) while the app is in front. Put it in the app's "File" menu; it is shown
     /// where the shell's row was, at the end of File, whichever menu it is declared in.
     pub fn print(id: u32) -> Self {
         AppMenuItem { prints: true, ..AppMenuItem::new(id, "Print\u{2026}").key("cmd+p") }
+    }
+    /// Declares that the app has nothing to print (an archiver, a disk tool): the shell then drops its own File > Print…
+    /// row, which would print a snapshot of the window, and its Cmd+P. The item is a marker: it shows no row. An app that
+    /// declares its own `print` item keeps that one.
+    pub fn no_print() -> Self {
+        AppMenuItem { no_print: true, separator: true, enabled: false, ..AppMenuItem::new(0, "") }
     }
     pub fn separator() -> Self {
         AppMenuItem { separator: true, enabled: false, ..AppMenuItem::new(0, "") }
@@ -2737,10 +2746,10 @@ impl ToShell {
                         let key = r.str()?;
                         let flags = r.u8()?;
                         let depth = r.u8()?;
-                        if title.len() > 512 || key.len() > 128 || depth > MAX_APP_MENU_DEPTH || flags > 31 {
+                        if title.len() > 512 || key.len() > 128 || depth > MAX_APP_MENU_DEPTH || flags > 63 {
                             return Err(DecodeError::BadValue);
                         }
-                        items.push(AppMenuItem { id, title, key, enabled: flags & 1 != 0, checked: flags & 2 != 0, separator: flags & 4 != 0, submenu: flags & 8 != 0, depth, prints: flags & 16 != 0 });
+                        items.push(AppMenuItem { id, title, key, enabled: flags & 1 != 0, checked: flags & 2 != 0, separator: flags & 4 != 0, submenu: flags & 8 != 0, depth, prints: flags & 16 != 0, no_print: flags & 32 != 0 });
                     }
                     menus.push(AppMenu { title, items });
                 }
@@ -3362,11 +3371,15 @@ mod sys_tests {
         let packet = ToShell::AppMenus(vec![AppMenu { title: "File".into(), items: vec![print.clone().enabled(false), AppMenuItem::new(8, "Export")] }]);
         let bytes = packet.encode();
         assert_eq!(ToShell::decode(&bytes), Ok(packet));
-        // a flag byte past the five known bits is refused
+        // a marker item that hides the shell's Print… keeps its flag over the wire
+        let marker = ToShell::AppMenus(vec![AppMenu { title: "File".into(), items: vec![AppMenuItem::no_print()] }]);
+        assert_eq!(ToShell::decode(&marker.encode()), Ok(marker));
+        assert!(AppMenuItem::no_print().separator && !AppMenuItem::print(1).no_print, "a marker, not the app's own Print");
+        // a flag byte past the six known bits is refused
         let flags_at = 4 + 4 + (4 + 4) + 4 + 4 + (4 + "Print\u{2026}".len()) + (4 + 5);
         assert_eq!(bytes[flags_at], 16, "disabled, with the print bit");
         let mut bad = bytes.clone();
-        bad[flags_at] = 32;
+        bad[flags_at] = 64;
         assert_eq!(ToShell::decode(&bad), Err(DecodeError::BadValue));
     }
 }
