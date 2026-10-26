@@ -577,6 +577,26 @@ fn deleting_shows_an_undo_bar_that_restores_the_event() {
 }
 
 #[test]
+fn edit_menu_undo_restores_a_deleted_event() {
+    use bifrost_app::Command as Edit;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    store::save(&temp.file(), &[event(7, "Dentist")]).unwrap();
+    let mut c = new(&ui, temp.file());
+    assert!(!c.edit_commands(None).supports(Edit::Undo), "nothing to undo yet");
+    c.open(&ui, Some(7));
+    c.activate(&ui, Target::Delete, 1.0);
+    assert!(c.events.is_empty());
+    assert!(c.edit_commands(None).supports(Edit::Undo), "Cmd+Z is offered while the Undo bar is up");
+    assert!(c.edit_command(&ui, Edit::Undo, None, 2.0));
+    assert_eq!(c.events.len(), 1, "restored");
+    assert_eq!(store::load(&temp.file()).unwrap().len(), 1, "restored on disk");
+    assert!(c.undo.is_none());
+    assert!(!c.edit_commands(None).supports(Edit::Undo));
+    assert!(!c.edit_command(&ui, Edit::Undo, None, 3.0), "nothing left to undo");
+}
+
+#[test]
 fn the_undo_bar_lapses_after_five_seconds() {
     let temp = Temp::new();
     let ui = crate::test_ui();

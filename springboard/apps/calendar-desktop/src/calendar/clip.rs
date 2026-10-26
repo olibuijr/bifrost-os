@@ -133,6 +133,8 @@ impl Calendar {
             .with(Edit::Cut, have)
             .with(Edit::Copy, have)
             .with(Edit::Paste, !self.sheet_open() && pasteboard.is_some_and(pasteable))
+            // Cmd+Z puts a deleted (or cut) event back while its Undo bar is up
+            .with(Edit::Undo, !self.sheet_open() && self.undo.is_some())
     }
 
     /// Runs an Edit menu command. `pasteboard` is read by the app when the command arrives. True when it did something.
@@ -188,6 +190,10 @@ impl Calendar {
             Edit::Copy => self.copy_event(),
             Edit::Cut => self.cut_event(t),
             Edit::Paste => pasteboard.is_some_and(|text| self.paste_events(ui, text)),
+            Edit::Undo if self.undo.is_some() && !self.sheet_open() => {
+                self.undo_delete(ui, t);
+                true
+            }
             _ => false,
         }
     }
