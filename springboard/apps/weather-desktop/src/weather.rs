@@ -2087,7 +2087,8 @@ impl Weather {
             c.fill_rrect(ax + aw / 2.0 - mark / 2.0, ay + ah / 2.0 - mark / 2.0, mark, mark, mark / 2.0, LABEL.now());
             if let Some(bar) = view.camera().scale_bar(insights::SCALE_MAX_PT) {
                 let bw = ui.pt(bar.width_px as f32);
-                let (bx, by) = (ax + aw - ui.pt(SPACE_S) - bw, ay + ah - ui.pt(SPACE_M));
+                // top right: the longitude labels run along the bottom edge and the latitude labels down the left
+                let (bx, by) = (ax + aw - ui.pt(SPACE_S) - bw, ay + ui.pt(SPACE_M));
                 c.fill_rrect(bx, by, bw, ui.pt(3.0), 0.0, LABEL.now());
                 let text = insights::scale_text(bar.length_m, self.units);
                 self.put(&mut c, ui, &text, MAC_CAPTION1_PT, Weight::Regular, WHITE, Align::Right, bx - ui.pt(SPACE_XS), by + ui.pt(1.5));
