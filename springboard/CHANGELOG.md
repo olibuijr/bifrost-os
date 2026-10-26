@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 0.10.42 — 2026-10-26
+
+Fixes from five bug-fix waves on Midget: the shell and built-in apps, the core apps in depth, cross-app workflows, a regression pass in Light and Dark, and keyboard-only use.
+
+- Closing: the red button asks an app that opts in (`App::handles_close_request`, `window_close_requested`) instead of quitting it, so an edited document or message gets "Save changes?" from the red button on any of its windows. Quit and shutdown are never vetoed.
+- Menus: an app can declare it has nothing to print (`AppMenuItem::no_print`); an app's own Settings… (Cmd+,) moves to the application menu; Edit keeps Undo, Cut, Copy, Paste and Select All first.
+- Keyboard: Spotlight's Up and Down move the highlighted result (Cmd+Up/Down jump categories); Settings' sidebar follows Up and Down, and Tab moves a focus ring between it and the search field; save sheets take Cmd+D for Don't Save, and Tab and Space reach every button.
+- Windows: an app with only an extra window keeps its Dock tile; a closed window leaves no pixels for the next one; a file drag leaves no image trail on the desktop.
+- Spotlight shows one result per Settings pane; Esc closes Notification Center; the Dock's hover label clears after a click; Quick Look reads escaped file names and shows RTF text.
+- Settings: Appearance tiles no longer cover their labels, the auto-hide caption sits under its switch, About gives long values room.
+- Photos: View > Favorites opens the Favorites album; empty states say click. Magnifier and Terminal polish.
+- Networking: e1000e network cards ship with TSO and GSO off (NetworkManager default and the installer's lab keyfile).
+- Ships with the app fixes of the round: Files, Calendar, Contacts, Mail, Notes, Reminders, TextEdit, Script Editor, Archive, Disk Utility, Colour Utility, Audio Setup, Grapher and News.
+
 ## 0.10.41 — 2026-10-26
 
 Fixes from three app-by-app test waves on Midget (every system app not covered before).
