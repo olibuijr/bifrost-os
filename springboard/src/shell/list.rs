@@ -6,7 +6,7 @@
 use super::battery::Graph;
 use super::icons::{self, Icon, BLUE, RED};
 use super::pages::{Action, PageId};
-use super::ui::{home_zone, Ui, Weight, AVATAR_BG, AVATAR_FG, CARD_BG, DETAIL_BG, LABEL, LABEL_2, ROW_PRESSED, SECONDARY, SEPARATOR_C, WHITE, MAC_BODY_PT, MAC_HEADLINE_PT, MAC_TITLE3_PT, MATERIAL_MENU, MENU_HIGHLIGHT, MENU_RADIUS_PT};
+use super::ui::{home_zone, Ui, Weight, AVATAR_BG, AVATAR_FG, CARD_BG, DETAIL_BG, LABEL, LABEL_2, ROW_PRESSED, SECONDARY, SEPARATOR_C, WHITE, MAC_BODY_PT, MAC_HEADLINE_PT, MAC_TITLE3_PT, MATERIAL_MENU, menu_highlight, MENU_RADIUS_PT};
 use super::controls::{self, draw_slider, draw_switch, switch_progress, KNOB_PT, SWITCH_H_PT, SWITCH_MS, SWITCH_W_PT};
 use crate::deildu::scroll::Scroller;
 use crate::gfx::{pack, Image, Surface};
@@ -1452,7 +1452,7 @@ impl ListPage {
             let mid = ty + ui.pt(h) / 2.0;
             let picked = pressed == Some(Hit::Choice(k));
             if picked {
-                s.fill_rrect(x + ui.pt(4.0), ty, w - ui.pt(8.0), ui.pt(h), ui.pt(5.0), MENU_HIGHLIGHT);
+                s.fill_rrect(x + ui.pt(4.0), ty, w - ui.pt(8.0), ui.pt(h), ui.pt(5.0), menu_highlight());
             }
             if item.checked {
                 s.blit_colored(&self.check, (x + ui.pt(8.0)) as i32, (mid - self.check.h as f32 / 2.0) as i32, bifrost_render::appearance::accent_now(), 255);

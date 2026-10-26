@@ -8,7 +8,7 @@
 use super::cache::TextCache;
 use super::camera::{fit, Worker, POLL_MS, PREVIEW_MAX_W};
 use super::switcher::draw_scaled;
-use super::ui::{home_zone, Ui, Weight, BLACK, FILL, FILL_PRESSED, SECONDARY, SYSTEM_YELLOW, TINT, TRACK, WHITE};
+use super::ui::{home_zone, Ui, Weight, BLACK, FILL, FILL_PRESSED, SECONDARY, SYSTEM_YELLOW, accent_now, TRACK, WHITE};
 use super::Event;
 use crate::gfx::{pack, Image, Surface};
 use crate::layout::Rect;
@@ -368,7 +368,7 @@ impl Magnifier {
         let ty = sy + (sh - th) / 2.0;
         let frac = (self.zoom - ZOOM_MIN) / (ZOOM_MAX - ZOOM_MIN);
         s.fill_rrect(tx, ty, tw, th, RADIUS, TRACK);
-        s.fill_rrect(tx, ty, tw * frac, th, RADIUS, TINT);
+        s.fill_rrect(tx, ty, tw * frac, th, RADIUS, accent_now());
         let k = ui.pt(28.0);
         s.fill_rrect(tx + tw * frac - k / 2.0, sy + (sh - k) / 2.0, k, k, RADIUS, WHITE);
         let zoom_text = format!("{:.1}×", self.zoom);
@@ -381,7 +381,7 @@ impl Magnifier {
             let r = self.filter_rect(ui, i);
             let on = self.filter == Filter::ALL[i];
             if on {
-                s.fill_rrect(r.0 + ui.pt(2.0), r.1 + ui.pt(2.0), r.2 - ui.pt(4.0), r.3 - ui.pt(4.0), RADIUS, TINT);
+                s.fill_rrect(r.0 + ui.pt(2.0), r.1 + ui.pt(2.0), r.2 - ui.pt(4.0), r.3 - ui.pt(4.0), RADIUS, accent_now());
             }
             self.label(s, ui, Filter::ALL[i].label(), 15.0, WHITE, r);
         }

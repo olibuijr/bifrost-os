@@ -10,7 +10,7 @@
 use super::photo_pick::{self, Filter, Pick, Toggle};
 use super::photos::thumbs::{self, DiskCache};
 use super::photos::{edit, exif, video};
-use super::ui::{Ui, Weight, CARD_BG, FIELD_BG, GRAY_DIM, LABEL, LABEL_2, LINK, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_TITLE3_PT, SEPARATOR, TINT, WHITE};
+use super::ui::{Ui, Weight, CARD_BG, FIELD_BG, GRAY_DIM, LABEL, LABEL_2, LINK, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_TITLE3_PT, SEPARATOR, accent_now, WHITE};
 use super::Event;
 use crate::gfx::{rgba, Image, Surface};
 use std::cell::RefCell;
@@ -368,7 +368,7 @@ impl PhotoPickSheet {
         for (i, tab) in self.pick.tabs().into_iter().enumerate() {
             let r = self.tab_rect(ui, &g, i);
             let on = self.pick.tab() == tab;
-            s.fill_rrect(r.0, r.1, r.2, r.3, r.3 / 2.0, if on { TINT } else { FIELD_BG.now() });
+            s.fill_rrect(r.0, r.1, r.2, r.3, r.3 / 2.0, if on { accent_now() } else { FIELD_BG.now() });
             let label = tab.map_or("All", Filter::label);
             put(s, ui, label, MAC_BODY_PT, Weight::Semibold, if on { WHITE } else { LABEL.now() }, r, true);
         }
@@ -388,7 +388,7 @@ impl PhotoPickSheet {
         put(s, ui, "Cancel", MAC_BODY_PT, Weight::Regular, LINK, self.cancel_rect(ui, &g), false);
         let add = self.add_rect(ui, &g);
         let ready = !self.pick.selected().is_empty();
-        s.fill_rrect(add.0, add.1, add.2, add.3, add.3 / 2.0, if ready { TINT } else { FIELD_BG.now() });
+        s.fill_rrect(add.0, add.1, add.2, add.3, add.3 / 2.0, if ready { accent_now() } else { FIELD_BG.now() });
         put(s, ui, "Add", MAC_BODY_PT, Weight::Semibold, if ready { WHITE } else { GRAY_DIM }, add, true);
         let mid_x = g.card.0 + g.pad + ui.pt(CANCEL_W_PT);
         let mid_w = add.0 - mid_x - ui.pt(TAB_GAP_PT);
@@ -430,10 +430,10 @@ impl PhotoPickSheet {
             }
             if let Some(order) = self.pick.order_of(&e.id) {
                 let ring = ui.pt(RING_PT);
-                s.stroke_rrect(cx, cy, g.cell, g.cell, radius, ring, TINT);
+                s.stroke_rrect(cx, cy, g.cell, g.cell, radius, ring, accent_now());
                 let dot = ui.pt(DOT_PT);
                 let (dx, dy) = (cx + g.cell - dot - ui.pt(5.0), cy + ui.pt(5.0));
-                s.fill_rrect(dx, dy, dot, dot, dot / 2.0, TINT);
+                s.fill_rrect(dx, dy, dot, dot, dot / 2.0, accent_now());
                 if self.pick.limit != 1 {
                     put(s, ui, &order.to_string(), MAC_FOOTNOTE_PT, Weight::Semibold, WHITE, (dx, dy, dot, dot), true);
                 }

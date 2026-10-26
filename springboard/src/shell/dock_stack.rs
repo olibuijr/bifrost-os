@@ -618,7 +618,7 @@ impl super::Shell {
     /// (`draw_menu_level` drew it); the fan has no panel: its icons and name capsules float over the desktop. The
     /// keyboard selection (`stack_key`) is drawn on the menu highlight.
     pub(super) fn draw_stack_popover(&self, s: &mut Surface) {
-        use super::ui::{Weight, LABEL, LINK, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, MENU_HIGHLIGHT, MENU_HIGHLIGHT_TEXT, MENU_SOLID, SECONDARY, SEPARATOR_C};
+        use super::ui::{Weight, LABEL, LINK, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, menu_highlight, MENU_HIGHLIGHT_TEXT, MENU_SOLID, SECONDARY, SEPARATOR_C};
         use bifrost_ui::prefs_layout::m;
         let (Some(l), Some(d)) = (self.stack_layout(), self.desk.as_ref()) else { return };
         let ui = &self.ui;
@@ -658,7 +658,7 @@ impl super::Shell {
                     let chosen = sel == Some(Hit::Item(i));
                     if chosen {
                         let inset = ui.pt(2.0);
-                        s.fill_rrect(cx + inset, cy + inset, cw - 2.0 * inset, ch - 2.0 * inset, radius, MENU_HIGHLIGHT);
+                        s.fill_rrect(cx + inset, cy + inset, cw - 2.0 * inset, ch - 2.0 * inset, radius, menu_highlight());
                     }
                     let top = cy + ui.pt(4.0);
                     icon(s, (cx + (cw - size) / 2.0, top, size, size), item);
@@ -673,7 +673,7 @@ impl super::Shell {
                 s.fill_rect(ox as usize, oy as usize, ow as usize, 1, edge);
                 let open_c = if sel == Some(Hit::Open) {
                     let inset = ui.pt(4.0);
-                    s.fill_rrect(ox - inset, oy + inset, ow + 2.0 * inset, oh - 2.0 * inset, radius, MENU_HIGHLIGHT);
+                    s.fill_rrect(ox - inset, oy + inset, ow + 2.0 * inset, oh - 2.0 * inset, radius, menu_highlight());
                     MENU_HIGHLIGHT_TEXT
                 } else {
                     LINK
@@ -689,7 +689,7 @@ impl super::Shell {
                 // takes too); the selected one on the menu highlight
                 let capsule = |s: &mut Surface, r: R, text: &str, color: u32, chosen: bool| {
                     let (text, (cx, cy, cw, ch)) = self.fan_capsule(r, text);
-                    let (fill, color) = if chosen { (MENU_HIGHLIGHT, MENU_HIGHLIGHT_TEXT) } else { (MENU_SOLID.now(), color) };
+                    let (fill, color) = if chosen { (menu_highlight(), MENU_HIGHLIGHT_TEXT) } else { (MENU_SOLID.now(), color) };
                     s.fill_rrect(cx, cy, cw, ch, ch / 2.0, fill);
                     self.label(&text, MAC_CALLOUT_PT, Weight::Regular, color, |im| s.blit(im, (cx + ui.pt(8.0)) as i32, (cy + (ch - im.h as f32) / 2.0) as i32, 255, 255));
                 };

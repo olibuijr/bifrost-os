@@ -4,7 +4,7 @@
 //! colour follows the state; the accessibility label names the biometric kind.
 use super::controls::{focus_ring, is_activate, node};
 use super::{View, ViewBase, ViewEvent};
-use crate::kit::ui::{CAPSULE_BG, CONTROL_PRESSED, LABEL_2, SYSTEM_GREEN, TINT};
+use crate::kit::ui::{CAPSULE_BG, CONTROL_PRESSED, LABEL_2, SYSTEM_GREEN, accent_now};
 use crate::kit::{Event, Ui};
 use bifrost_render::canvas::{Canvas, RectF};
 use bifrost_ui::auth_view::{AuthView, BiometryKind, ControlSize, Event as AuthEvent, ViewState};
@@ -77,7 +77,7 @@ impl View for LocalAuthenticationView {
         let f = self.base.frame;
         let fill = match self.model.state() {
             ViewState::Succeeded => SYSTEM_GREEN,
-            ViewState::Evaluating => TINT,
+            ViewState::Evaluating => accent_now(),
             ViewState::Failed | ViewState::LockedOut => LABEL_2.now(),
             ViewState::Idle => {
                 if self.pressed {

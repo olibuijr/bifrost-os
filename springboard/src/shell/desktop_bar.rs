@@ -1212,7 +1212,7 @@ impl Shell {
             if row.search{self.draw_help_field(s,x,y,w,top,rh,&row.text);continue;}
             if row.header{self.label(&row.text,10.,Weight::Regular,SECONDARY,|im|s.blit(im,x as i32+self.ui.pt(lead) as i32,(y as f32+self.ui.pt(top+rh/2.)-im.h as f32/2.) as i32,255,255));continue;}
             let hi=sel==Some(i)&&row.action.is_some();
-            if hi{s.fill_rrect(x as f32+self.ui.pt(5.),y as f32+self.ui.pt(top),w as f32-self.ui.pt(10.),self.ui.pt(rh),self.ui.pt(8.),super::ui::MENU_HIGHLIGHT);}
+            if hi{s.fill_rrect(x as f32+self.ui.pt(5.),y as f32+self.ui.pt(top),w as f32-self.ui.pt(10.),self.ui.pt(rh),self.ui.pt(8.),super::ui::menu_highlight());}
             let mid=y as f32+self.ui.pt(top+rh/2.);
             if hi&&self.help_search.marker {if let Some(im)=self.ui.symbols.render(crate::symbols::Symbol::ChevronRight,self.ui.pt(10.),super::ui::MENU_HIGHLIGHT_TEXT) {s.blit(&im,x as i32+self.ui.pt(6.) as i32,(mid-im.h as f32/2.) as i32,255,255);}}
             let ink=if row.action.is_some(){if hi{super::ui::MENU_HIGHLIGHT_TEXT}else{LABEL.now()}}else{SECONDARY};

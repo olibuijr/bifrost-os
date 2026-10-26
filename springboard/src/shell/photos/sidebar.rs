@@ -10,7 +10,7 @@
 
 use super::*;
 use super::{Album, Target};
-use crate::shell::ui::{CARD_BG, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LINK, MAC_BODY_PT, MAC_GROUP_HEADER_PT, MAC_TITLE3_PT, MATERIAL_SIDEBAR, MATERIAL_SIDEBAR_SOLID, MATERIAL_TITLEBAR_SOLID, SEPARATOR_C, SIDEBAR_SELECTED, TINT};
+use crate::shell::ui::{CARD_BG, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LINK, MAC_BODY_PT, MAC_GROUP_HEADER_PT, MAC_TITLE3_PT, MATERIAL_SIDEBAR, MATERIAL_SIDEBAR_SOLID, MATERIAL_TITLEBAR_SOLID, SEPARATOR_C, SIDEBAR_SELECTED, accent_now};
 use bifrost_ui::prefs_layout::{self, m, Frame};
 use bifrost_ui::Rect;
 use std::cell::{Cell, RefCell};
@@ -563,7 +563,7 @@ impl Photos {
             }
             let cy = y + rh / 2.0;
             let icon_x = x + ui.pt(m::SIDEBAR_ICON_X - m::SIDEBAR_INSET + m::SIDEBAR_ICON / 2.0);
-            side_icon(s, row, (icon_x, cy), ui.pt(m::SIDEBAR_ICON) * 0.8, ui.pt(1.3), if on { WHITE } else { TINT });
+            side_icon(s, row, (icon_x, cy), ui.pt(m::SIDEBAR_ICON) * 0.8, ui.pt(1.3), if on { WHITE } else { accent_now() });
             let (text, ink) = match row {
                 Row::Album(album) => (self.side_title(album), if on { WHITE } else { LABEL.now() }),
                 Row::NewAlbum => ("New Album".to_string(), LINK),

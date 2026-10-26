@@ -17,7 +17,7 @@ mod sheet;
 
 use super::cache::TextCache;
 use super::glyphs::{arc, disc, paint, ring, segment};
-use super::ui::{home_zone, Ui, Weight, CARD_RADIUS_PT, CAPSULE_RADIUS, SECONDARY, STORY_HUES, TINT, WHITE};
+use super::ui::{home_zone, Ui, Weight, CARD_RADIUS_PT, CAPSULE_RADIUS, SECONDARY, STORY_HUES, TINT, accent_now, WHITE};
 use super::ui::{CONTENT_BG, CARD_BG, SEPARATOR_C, LABEL, FIELD_BG, MATERIAL_HUD_SOLID, MATERIAL_TITLEBAR_SOLID};
 use super::keyboard::Out;
 use super::Event;
@@ -1747,10 +1747,10 @@ impl AppStore {
                 let c = (x + w / 2.0, mid);
                 let bounds = (c.0 - r - 4.0, mid - r - 4.0, 2.0 * r + 8.0, 2.0 * r + 8.0);
                 paint(s, bounds, sep(), ring(c, r, ui.pt(2.5)));
-                paint(s, bounds, TINT, arc(c, r, ui.pt(2.5), 0.0, (f.max(0.02)) * std::f32::consts::TAU - 0.0001));
+                paint(s, bounds, accent_now(), arc(c, r, ui.pt(2.5), 0.0, (f.max(0.02)) * std::f32::consts::TAU - 0.0001));
                 let q = r * 0.42;
-                paint(s, bounds, TINT, segment((c.0 - q, c.1 - q), (c.0 + q, c.1 + q), ui.pt(0.1)));
-                s.fill_rrect(c.0 - q, c.1 - q, 2.0 * q, 2.0 * q, ui.pt(2.0), TINT);
+                paint(s, bounds, accent_now(), segment((c.0 - q, c.1 - q), (c.0 + q, c.1 + q), ui.pt(0.1)));
+                s.fill_rrect(c.0 - q, c.1 - q, 2.0 * q, 2.0 * q, ui.pt(2.0), accent_now());
             }
             _ => {
                 let label = match b {
@@ -1762,7 +1762,7 @@ impl AppStore {
                 s.fill_rrect(x, y, w, h, CAPSULE_RADIUS, fill);
                 let size = if b == Btn::NeedsUpdate { 11.0 } else { 15.0 };
                 let lw = ui.measure(label, size, Weight::Bold);
-                self.put(s, ui, label, size, Weight::Bold, TINT, false, x + (w - lw) / 2.0, mid);
+                self.put(s, ui, label, size, Weight::Bold, accent_now(), false, x + (w - lw) / 2.0, mid);
             }
         }
     }
@@ -1831,7 +1831,7 @@ impl AppStore {
                     let cw = w / names.len() as f32;
                     for (i, name) in names.iter().enumerate() {
                         let on = self.category.map_or(i == 0, |c| c + 1 == i);
-                        let (fill, ink) = if on { (TINT, WHITE) } else { (cell(), SECONDARY) };
+                        let (fill, ink) = if on { (accent_now(), WHITE) } else { (cell(), SECONDARY) };
                         let cx = x + i as f32 * cw;
                         c.fill_rrect(cx + ui.pt(2.0), y + ui.pt(8.0), cw - ui.pt(4.0), ui.pt(34.0), CAPSULE_RADIUS, fill);
                         let label = ui.fit(name, 14.0, cw - ui.pt(14.0));
@@ -1897,9 +1897,9 @@ impl AppStore {
             return;
         }
         let (cx, cy, r) = (self.w as f32 - x - ui.pt(16.0), y + ui.pt(70.0), ui.pt(15.5));
-        paint(s, (cx - r - 4.0, cy - r - 4.0, 2.0 * r + 8.0, 2.0 * r + 8.0), TINT, ring((cx, cy), r, ui.pt(2.0)));
-        s.fill_rrect(cx - ui.pt(5.0), cy - ui.pt(11.0), ui.pt(10.0), ui.pt(10.0), ui.pt(5.0), TINT);
-        s.fill_rrect(cx - ui.pt(9.0), cy + ui.pt(2.0), ui.pt(18.0), ui.pt(9.0), ui.pt(4.5), TINT);
+        paint(s, (cx - r - 4.0, cy - r - 4.0, 2.0 * r + 8.0, 2.0 * r + 8.0), accent_now(), ring((cx, cy), r, ui.pt(2.0)));
+        s.fill_rrect(cx - ui.pt(5.0), cy - ui.pt(11.0), ui.pt(10.0), ui.pt(10.0), ui.pt(5.0), accent_now());
+        s.fill_rrect(cx - ui.pt(9.0), cy + ui.pt(2.0), ui.pt(18.0), ui.pt(9.0), ui.pt(4.5), accent_now());
         s.fill_rect(x as usize, (y + ui.pt(95.0)) as usize, (self.w as f32 - 2.0 * x) as usize, 1, sep());
     }
 
@@ -2164,7 +2164,7 @@ impl AppStore {
         let current = if self.page.is_some() { self.page.as_ref().map(|p| p.back).unwrap_or(self.tab) } else { self.tab };
         let badge = self.update_count();
         for (i, (tab, name)) in TABS.iter().enumerate() {
-            let col = if *tab == current { TINT } else { SECONDARY };
+            let col = if *tab == current { accent_now() } else { SECONDARY };
             let cx = cw * i as f32 + cw / 2.0;
             let cy = by + ui.pt(17.0);
             tab_glyph(s, ui, *tab, (cx, cy), col);
@@ -2219,7 +2219,7 @@ impl AppStore {
                 s.fill_rrect(x, y, w, h, ui.pt(9.0), SIDEBAR_SELECTED);
             }
             let mid = y + h / 2.0;
-            side_glyph(s, ui, *tab, (x + ui.pt(16.0), mid), if on { WHITE } else { TINT });
+            side_glyph(s, ui, *tab, (x + ui.pt(16.0), mid), if on { WHITE } else { accent_now() });
             self.put(s, ui, name, MAC_BODY_PT, Weight::Regular, if on { WHITE } else { label() }, false, x + ui.pt(34.0), mid);
             if *tab == Tab::Updates && badge > 0 {
                 let n = badge.min(99).to_string();
@@ -2285,7 +2285,7 @@ impl AppStore {
             let tw = ui.measure(text, size, weight);
             self.put(s, ui, text, size, weight, color, false, mid - tw / 2.0, y);
         }
-        s.fill_rrect(buy.0, buy.1, buy.2, buy.3, CAPSULE_RADIUS, TINT);
+        s.fill_rrect(buy.0, buy.1, buy.2, buy.3, CAPSULE_RADIUS, accent_now());
         s.fill_rrect(cancel.0, cancel.1, cancel.2, cancel.3, CAPSULE_RADIUS, fill());
         for (text, r, ink) in [("Buy", buy, WHITE), ("Cancel", cancel, TINT)] {
             let tw = ui.measure(text, 17.0, Weight::Semibold);

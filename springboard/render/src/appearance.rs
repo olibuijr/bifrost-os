@@ -677,6 +677,23 @@ mod scheme_tests {
         set_accent(keep);
     }
 
+    #[test]
+    fn selections_and_menu_highlights_follow_the_accent_while_tint_and_link_stay_system_blue() {
+        let _g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let keep = accent();
+        set_accent(Accent::Green);
+        jump_to(false);
+        assert_eq!(crate::ui::accent_now(), Accent::Green.colours().0);
+        assert_eq!(crate::ui::menu_highlight(), Accent::Green.colours().0, "the menu highlight is the accent");
+        // TINT and LINK are the literal systemBlue (text links and bar buttons), whatever the accent
+        assert_eq!(crate::ui::TINT, pack(10, 132, 255, 255));
+        assert_eq!(crate::ui::LINK, crate::ui::TINT);
+        assert_ne!(crate::ui::menu_highlight(), crate::ui::TINT);
+        set_accent(Accent::Blue);
+        assert_eq!(crate::ui::menu_highlight(), crate::ui::TINT, "Blue is the default accent in Dark");
+        set_accent(keep);
+    }
+
     use crate::gfx::pack;
     use std::sync::Mutex;
 

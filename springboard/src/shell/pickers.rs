@@ -4,7 +4,7 @@
 
 use super::list::ROW_PT;
 use super::music::icons;
-use super::ui::{Ui, Weight, LABEL_2, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, MENU_HIGHLIGHT, MENU_HIGHLIGHT_TEXT, MENU_RADIUS_PT, MENU_TINT, SECONDARY, TINT, WHITE};
+use super::ui::{Ui, Weight, LABEL_2, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, menu_highlight, MENU_HIGHLIGHT_TEXT, MENU_RADIUS_PT, MENU_TINT, SECONDARY, accent_now, WHITE};
 use crate::gfx::Surface;
 use bifrost_ui::route_picker::Destination;
 use bifrost_ui::Rect;
@@ -60,7 +60,7 @@ pub fn draw_media_picker(s: &mut Surface, ui: &Ui, panel: Rect, rows: &[PickerRo
         }
         let ink = if row.enabled { WHITE } else { SECONDARY };
         if row.chosen {
-            check(s, (r.x + ui.pt(PAD_PT) + ui.pt(CHECK_PT) / 2.0, r.y + r.h / 2.0), ui.pt(12.0), TINT);
+            check(s, (r.x + ui.pt(PAD_PT) + ui.pt(CHECK_PT) / 2.0, r.y + r.h / 2.0), ui.pt(12.0), accent_now());
         }
         let tx = (r.x + ui.pt(PAD_PT + CHECK_PT)) as i32;
         let title = ui.text(&row.title, MAC_HEADLINE_PT, Weight::Medium, ink);
@@ -85,7 +85,7 @@ pub fn draw_route_menu(s: &mut Surface, ui: &Ui, panel: Rect, rows: &[Destinatio
         let hovered = hover == Some(i);
         let ink = if hovered { MENU_HIGHLIGHT_TEXT } else { WHITE };
         if hovered {
-            s.fill_rrect(r.x + ui.pt(4.0), r.y, r.w - ui.pt(8.0), r.h, ui.pt(5.0), MENU_HIGHLIGHT);
+            s.fill_rrect(r.x + ui.pt(4.0), r.y, r.w - ui.pt(8.0), r.h, ui.pt(5.0), menu_highlight());
         }
         if row.active {
             check(s, (r.x + ui.pt(PAD_PT) + ui.pt(CHECK_PT) / 2.0, r.y + r.h / 2.0), ui.pt(12.0), ink);
