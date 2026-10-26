@@ -185,12 +185,15 @@ impl Drop for Worker {
     }
 }
 
-/// A short, readable reason for a failed start.
-fn describe_error(e: &str) -> String {
+/// A short, plain-language reason for a failed start; the raw error goes to the log.
+pub(crate) fn describe_error(e: &str) -> String {
+    eprintln!("springboard: camera: {e}");
     if e.contains("in use") || e.contains("busy") {
         "The camera is in use by another process".into()
+    } else if e.contains("No such file") || e.contains("os error 2") || e.contains("os error 19") {
+        "No camera found".into()
     } else {
-        format!("Could not start the camera ({e})")
+        "The camera could not be started".into()
     }
 }
 
