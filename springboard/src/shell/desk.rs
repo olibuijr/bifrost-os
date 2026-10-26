@@ -417,6 +417,8 @@ pub struct Desk {
     /// hover label fade: when `dock_hover` last changed (ms) and the slot that was hovered before
     pub(super) dock_label_ms:f64,
     pub(super) dock_label_last:Option<usize>,
+    /// where a press on a Dock icon silenced the hover label: the label stays away until the pointer moves from here
+    pub(super) dock_label_off:Option<(f32,f32)>,
     /// launch bounces: (`desk_dock` list entry, start in seconds) until the app's first window maps
     pub(super) dock_bounce:Vec<(usize,f64)>,
     /// the outer size each app's window had when it was last closed (the window comes back at it when reopened)
@@ -3667,6 +3669,9 @@ impl Shell {
                         return Some(vec![]);
                     }
                     self.desk.as_mut()?.grab = Some(Grab::DockDrag{from:k,entry:list[k],rect:press[k],x,y,at_x:x,at_y:y,moved:false});
+                    // a click puts the name away until the pointer moves (it would otherwise come back once the press ends,
+                    // over Launchpad or Mission Control, with the pointer still on the icon)
+                    self.desk.as_mut()?.dock_label_off = Some((x, y));
                     self.desk.as_mut()?.dock_drop = None;
                     // an app that already has a window comes forward on the press, not after the release
                     if let Some(a) = apps().get(list[k]).map(|a| Self::dock_app(a.id)) {
@@ -4810,7 +4815,7 @@ impl Shell {
         // the hover label fades in and out (Reduce Motion: it just appears); an open Dock menu or stack hides it, as the
         // reference does, so it never shows through the stack (E2E8 7)
         let (label_slot, label_alpha) = self.dock_label_state(t);
-        if let Some(k) = label_slot.filter(|_| desk.grab.is_none() && !self.dock_label_hidden_by_menu()) {
+        if let Some(k) = label_slot.filter(|_| desk.grab.is_none() && desk.dock_label_off.is_none() && !self.dock_label_hidden_by_menu()) {
             if let (Some(r), Some(&i)) = (rects.get(k), list.get(k)) {
                 let name = self.dock_label_text(i);
                 if !name.is_empty() && label_alpha > 0.0 {

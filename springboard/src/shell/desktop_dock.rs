@@ -75,6 +75,7 @@ impl Shell {
    let hov=if in_zone{self.dock_hit(bar,&rects,x,y,now)}else{None};
    self.dock_set_hover(hov,t);
    let d=self.desk.as_mut().unwrap();
+   if d.dock_label_off.is_some_and(|p|p!=(x,y)){d.dock_label_off=None;self.dirty=true;}
    if edge||in_zone||menu {d.dock_hide_at=None;dock_reveal(d,now);if !d.dock_visible{self.dirty=true;}}
    else if d.dock_autohides()&&d.dock_hide_at.is_none(){d.dock_hide_at=Some(t+550.);}
    return Some(vec![]);
@@ -446,6 +447,20 @@ fn dock_reveal(d:&mut super::desk::Desk,now:f64){
   sh.desktop_menu=Some(Menu::Stack);assert!(sh.dock_label_hidden_by_menu());
   sh.desktop_menu=Some(Menu::Dock);assert!(sh.dock_label_hidden_by_menu());
   sh.desktop_menu=None;assert!(!sh.dock_label_hidden_by_menu());
+ }
+ /// A click on an icon puts its name away: it stays away over a resting pointer and returns once the pointer moves.
+ #[test]
+ fn a_click_silences_the_hover_label_until_the_pointer_moves(){
+  let mut sh=desktop(1280,800);
+  {let p=&mut sh.desk.as_mut().unwrap().dock_preferences;p.position=Position::Bottom;p.magnification=false;}
+  let m=sh.desk_metrics();let(_,_,rest)=sh.desk_dock(&m);
+  let(x,y)=((rest[1].x+rest[1].w/2) as f32,(rest[1].y+rest[1].h/2) as f32);
+  sh.desktop_pointer(x,y,false,1000.);
+  sh.desk.as_mut().unwrap().dock_label_off=Some((x,y));
+  sh.desktop_pointer(x,y,false,1100.);
+  assert!(sh.desk.as_ref().unwrap().dock_label_off.is_some(),"a pointer at rest keeps the label away");
+  sh.desktop_pointer(x+3.,y,false,1200.);
+  assert!(sh.desk.as_ref().unwrap().dock_label_off.is_none(),"a moved pointer brings it back");
  }
  fn desktop(w:i32,h:i32)->Shell{
   let mut sh=crate::shell::tests::desktop_shell();sh.w=w;sh.h=h;
