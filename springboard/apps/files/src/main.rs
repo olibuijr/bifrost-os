@@ -1144,6 +1144,33 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
     #[test]
+    fn undo_restores_the_tags_an_edit_changed() {
+        let dir = temp("tagundo");
+        std::fs::write(dir.join("a.txt"), "a").unwrap();
+        let mut files = fixture(vec![]);
+        files.home = dir.clone();
+        files.path = dir.clone();
+        files.rows = fs::list(&dir).unwrap();
+        files.listing = files.rows.clone();
+        files.select_only(0);
+        let a = dir.join("a.txt");
+        files.toggle_tag(Tag::Red);
+        files.toggle_tag(Tag::Blue);
+        assert_eq!(files.file_undo_titles().0, "Undo Tags");
+        // Cmd+Z takes Blue off again, then Red; the sidecar follows
+        files.undo_file_op();
+        assert_eq!(files.tag_index.tags(&a), vec![Tag::Red]);
+        assert_eq!(TagIndex::load(&sidecar_path(&dir)).tags(&a), vec![Tag::Red]);
+        files.undo_file_op();
+        assert!(files.tag_index.tags(&a).is_empty());
+        assert!(files.undo.is_empty());
+        assert!(files.notice.is_none());
+        // a change that changes nothing records nothing
+        files.edit_tags(&[a.clone()], |_| {});
+        assert!(files.undo.is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+    #[test]
     fn tagged_listing_and_drop_targets() {
         let dir = temp("drop");
         std::fs::create_dir_all(dir.join("Documents")).unwrap();
