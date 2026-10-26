@@ -952,6 +952,9 @@ impl MailWindow {
             return self.chord(&ctx.ui, key, mods);
         }
         if self.mail.sheet.is_none() {
+            if self.mail.search_focused && self.search_key(ctx, &k) {
+                return true;
+            }
             // Up and Down Arrow move the selection in the message list (the find bar takes no arrows)
             if let KeyInput::Code(code @ (KEY_UP | KEY_DOWN)) = k {
                 return self.step_selection(&ctx.ui, code == KEY_DOWN);
@@ -1054,6 +1057,34 @@ impl MailWindow {
 
     /// Keys for the find bar over the reader, when no sheet is open: text goes to the search, Return steps to the next
     /// match, Escape closes the bar. False when the bar is not open (the key is not Mail's).
+    /// A key while the toolbar's search field has the keyboard: typing filters the list live, Return also asks the
+    /// server, Escape clears the text and then leaves the field. False for a key the field does not take (the arrows).
+    fn search_key(&mut self, _ctx: &Ctx, k: &KeyInput) -> bool {
+        match k {
+            KeyInput::Text(s) => {
+                let text: String = s.chars().filter(|c| !c.is_control()).collect();
+                self.mail.type_search(&text);
+                self.list_scroll = Scroller::new();
+            }
+            KeyInput::Code(KEY_BACKSPACE) => {
+                self.mail.backspace_search();
+                self.list_scroll = Scroller::new();
+            }
+            KeyInput::Code(KEY_RETURN) => self.search_server(),
+            KeyInput::Code(KEY_ESCAPE) => {
+                if self.mail.search_shown().is_empty() {
+                    self.mail.search_focused = false;
+                } else {
+                    self.mail.set_search_text(String::new());
+                    self.list_scroll = Scroller::new();
+                }
+            }
+            KeyInput::Code(_) => return false,
+        }
+        self.dirty = true;
+        true
+    }
+
     fn find_key(&mut self, k: KeyInput) -> bool {
         if self.mail.find.is_none() || self.mail.open.is_none() {
             return false;
@@ -1201,6 +1232,13 @@ impl MailWindow {
 
     pub fn paste(&mut self) -> bool {
         let Some(text) = clipboard::text() else { return false };
+        if self.mail.sheet.is_none() && self.mail.search_focused {
+            let text: String = text.chars().filter(|c| !c.is_control()).collect();
+            self.mail.type_search(&text);
+            self.list_scroll = Scroller::new();
+            self.dirty = true;
+            return true;
+        }
         if self.mail.sheet.is_none() {
             // pasting into the find bar
             let Some(bar) = self.mail.find.as_mut().filter(|_| self.mail.open.is_some()) else { return false };
@@ -1610,7 +1648,12 @@ impl MailWindow {
                     self.move_open_to(&target);
                 }
             }
-            MENU_FIND => self.mail.open_search(),
+            // Cmd+F puts the cursor in the toolbar's search field, as in the reference Mail
+            MENU_FIND => {
+                if self.mail.sheet.is_none() {
+                    self.mail.search_focused = true;
+                }
+            }
             MENU_SAVE => self.save_attachments(ctx),
             MENU_SHOW_ALL => self.mail.apply_search(""),
             MENU_THREADS => {
@@ -3343,10 +3386,14 @@ impl MailWindow {
 
     fn tap(&mut self, ctx: &Ctx, x: f32, y: f32, t: f64, mods: ModifierFlags) -> bool {
         let hit = self.hit(&ctx.ui, x, y);
+        // a click anywhere but the toolbar's search field takes the keyboard from it
+        let was_searching = std::mem::take(&mut self.mail.search_focused);
+        self.dirty |= was_searching && !matches!(hit, crate::draw::Hit::Search);
         // every click counts, so a click elsewhere in between breaks a double-click; `t` is milliseconds
         let scale = ctx.ui.pt(1.0).max(f32::EPSILON);
         let clicks = self.clicks.press(t, x / scale, y / scale);
         match hit {
+            crate::draw::Hit::Search => self.mail.search_focused = true,
             crate::draw::Hit::Button(button) => match button {
                 crate::draw::Button::Refresh => self.refresh_selected(),
                 crate::draw::Button::Compose => self.compose(),
@@ -3455,7 +3502,7 @@ impl MailWindow {
             crate::draw::Hit::Cancel => self.cancel_sheet(),
             crate::draw::Hit::Discard => self.discard_question(),
             crate::draw::Hit::Primary => self.submit(ctx),
-            crate::draw::Hit::None => return false,
+            crate::draw::Hit::None => return was_searching,
         }
         self.dirty = true;
         true
@@ -3501,7 +3548,7 @@ fn picker_focused(mail: &Mail) -> bool {
 fn edit_enabled(mail: &Mail) -> (bool, bool, bool, bool) {
     let Some(form) = mail.sheet.as_ref().map(Sheet::form) else {
         // the message list takes Select All (every message it shows)
-        return (!mail.visible_lines().is_empty(), false, false, mail.open.is_some() && mail.find.is_some());
+        return (!mail.visible_lines().is_empty(), false, false, mail.search_focused || (mail.open.is_some() && mail.find.is_some()));
     };
     let typed = !picker_focused(mail);
     let has_text = typed && form.fields.get(form.focus).is_some_and(|f| !f.value.is_empty());

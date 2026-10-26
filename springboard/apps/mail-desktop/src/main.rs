@@ -845,6 +845,45 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// Cmd+F puts the cursor in the toolbar's search field (no Find sheet), typing filters the list live, a click away
+    /// leaves the field, and Escape clears the text first.
+    #[test]
+    fn find_focuses_the_toolbar_search_field_and_typing_filters_live() {
+        let dir = std::env::temp_dir().join(format!("bifrost-mail-search-field-{}", std::process::id()));
+        let ctx = ctx(&dir);
+        let mut app = app_with_inbox(&ctx);
+        assert_eq!(app.window.as_ref().unwrap().mail.visible_rows().len(), 2);
+        app.menu_action(&ctx, bifrost_mail::window::MENU_FIND);
+        let mail = &app.window.as_ref().unwrap().mail;
+        assert!(mail.search_focused, "Find focuses the field");
+        assert!(mail.sheet.is_none(), "no Find sheet opens");
+        app.event(&ctx, Input::Key(KeyInput::Text("fund".into())));
+        let mail = &app.window.as_ref().unwrap().mail;
+        assert_eq!(mail.search_shown(), "fund");
+        assert_eq!(mail.visible_rows().len(), 1, "the list filters as the text grows");
+        app.event(&ctx, Input::Key(KeyInput::Text(" ".into())));
+        assert_eq!(app.window.as_ref().unwrap().mail.search_shown(), "fund ", "a space typed in the field stays");
+        // Escape clears the text, a second one leaves the field
+        app.event(&ctx, Input::Key(KeyInput::Code(1)));
+        let mail = &app.window.as_ref().unwrap().mail;
+        assert_eq!((mail.search_shown(), mail.search_focused, mail.visible_rows().len()), ("", true, 2));
+        app.event(&ctx, Input::Key(KeyInput::Code(1)));
+        assert!(!app.window.as_ref().unwrap().mail.search_focused);
+        // the field is in the toolbar: a click on it focuses it, a click on the list leaves it
+        let mail = app.window.as_ref().unwrap();
+        let x = (0..800).rev().step_by(4).find(|x| matches!(mail.hit(&ctx.ui, *x as f32, 20.0), Hit::Search)).expect("a search field in the toolbar") as f32;
+        for kind in [TouchKind::Down, TouchKind::Up] {
+            app.event(&ctx, Input::Touch { kind, id: 0, x, y: 20.0, t: 10.0, mods: bifrost_app::ModifierFlags::EMPTY });
+        }
+        assert!(app.window.as_ref().unwrap().mail.search_focused);
+        let (rx, ry) = row_point(&app, &ctx.ui, 9);
+        for kind in [TouchKind::Down, TouchKind::Up] {
+            app.event(&ctx, Input::Touch { kind, id: 0, x: rx, y: ry, t: 500.0, mods: bifrost_app::ModifierFlags::EMPTY });
+        }
+        assert!(!app.window.as_ref().unwrap().mail.search_focused);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     /// E2E N9: a compose window that closes (here an empty message's Escape) gives the main window its own size back, so
     /// a click in the sidebar picks a mailbox instead of landing on a list row of the compose window's narrow layout.
     #[test]
