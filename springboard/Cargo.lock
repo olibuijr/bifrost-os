@@ -665,7 +665,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-diskutil"
-version = "0.8.6"
+version = "0.8.7"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -674,7 +674,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-files"
-version = "1.34.9"
+version = "1.34.10"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -856,7 +856,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-music"
-version = "1.14.4"
+version = "1.14.5"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -874,7 +874,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-notes"
-version = "1.24.10"
+version = "1.24.11"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -930,7 +930,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-reminders"
-version = "1.20.10"
+version = "1.20.11"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -983,7 +983,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-script-editor"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "bifrost-app",
  "springboard",
@@ -1008,7 +1008,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-stickies"
-version = "0.10.5"
+version = "0.10.6"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -1037,7 +1037,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-textedit"
-version = "1.13.12"
+version = "1.13.13"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -1082,7 +1082,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-voicememos"
-version = "1.11.5"
+version = "1.11.6"
 dependencies = [
  "bifrost-app",
  "bifrost-core",

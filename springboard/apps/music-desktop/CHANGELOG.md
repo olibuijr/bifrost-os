@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.14.5
+
+- Sends the playing song's artwork to Now Playing in Control Center, the menu bar and the lock screen.
+
 ## 1.14.4
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.

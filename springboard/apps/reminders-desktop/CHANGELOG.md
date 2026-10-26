@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.11
+
+- The Clear and Recently Deleted alerts take Return, Cmd+., Cmd+D, the Tab focus ring and Space.
+
 ## 1.20.10
 
 - Delete and Backspace delete the selected reminder, and Esc closes the details popover.

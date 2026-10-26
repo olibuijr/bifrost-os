@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.11.6
+
+- Shows its icon as Now Playing artwork while a memo plays.
+
 ## 1.11.5
 
 - The sidebar title shrinks to fit instead of being cut off.

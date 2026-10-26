@@ -1,6 +1,6 @@
 [package]
 name = "bifrost-notes"
-version = "1.24.10"
+version = "1.24.11"
 edition = "2021"
 
 [lib]

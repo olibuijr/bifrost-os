@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.24.11
+
+- The Delete Permanently alert takes Cmd+D, Cmd+., the Tab focus ring and Space.
+
 ## 1.24.10
 
 - Pasted text no longer gets a stray # at the end, and the Share button opens the Share menu.

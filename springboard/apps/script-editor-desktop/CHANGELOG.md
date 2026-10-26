@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.12
+
+- Listed under Open With for shell scripts and plain text.
+
 ## 0.1.11
 
 - The save sheet takes Cmd+D for Don't Save, and Tab shows a focus ring that Space presses.

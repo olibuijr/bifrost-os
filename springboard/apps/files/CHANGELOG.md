@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.34.10
+
+- Open With > Other… lists every installed app; Undo restores tag colours.
+
 ## 1.34.9
 
 - Arrow keys move the selection in icon, list and column views, and Cmd+Up from Applications goes to the computer.

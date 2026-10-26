@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.7
+
+- Confirmation and form sheets take Return, Cmd+., the Tab focus ring and Space.
+
 ## 0.8.6
 
 - The menu and toolbar share one enabled state per disk command, File > Print... is gone, and the layout uses points on scaled displays.

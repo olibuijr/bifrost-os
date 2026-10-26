@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.13.13
+
+- The Make Plain Text sheet takes Cmd+., the Tab focus ring and Space; Shift+Tab and Cmd+Delete work in the close alert.
+
 ## 1.13.12
 
 - The save sheet takes Cmd+D for Don't Save, and Tab shows a focus ring that Space presses.

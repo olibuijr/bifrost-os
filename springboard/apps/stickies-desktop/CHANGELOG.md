@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.6
+
+- The delete confirmation takes Cmd+D, Cmd+., the Tab focus ring and Space.
+
 ## 0.10.5
 
 - The welcome note fits its text; a long note scrolls with the caret and shows overflow cues.
