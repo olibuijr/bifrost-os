@@ -513,6 +513,11 @@ pub struct Desk {
     /// last frames of windows that are closing: (depth in `frames`, frame), drawn until the close effect ends
     #[cfg(feature = "desktop-wayland")]
     ghosts: Vec<(usize, crate::bare::wayland::WindowFrame)>,
+    /// the frames the last `take_wayland_windows` handed to the window server, without their pixels (the presenter
+    /// holds those), in stacking order: `frames` is emptied by every present, so a window that starts closing finds
+    /// its last frame here (`Shell::desk_keep_ghost`). Replaced on every present, so it never outlives the windows.
+    #[cfg(feature = "desktop-wayland")]
+    presented: Vec<crate::bare::wayland::WindowFrame>,
     /// an open or focus asked for the front window to be raised over native clients
     pub(super) raise_front: bool,
     /// windows brought forward together (Bring All to Front, a hidden app shown, the Apps grid closing): the window
@@ -2031,6 +2036,7 @@ impl Shell {
             // Lock/overlays destroy the backend's windows; rebuilding must send
             // complete pixels rather than a cached unchanged-window sentinel.
             if frames.is_empty() { d.window_cache.clear(); d.body_cache.clear(); }
+            d.presented = frames.iter().map(|f| crate::bare::wayland::WindowFrame { pixels: None, ..f.clone() }).collect();
             frames
         }).unwrap_or_default()
     }
@@ -2782,10 +2788,17 @@ impl Shell {
         let Some(id) = win_id(app) else { return };
         let Some(d) = self.desk.as_mut() else { return };
         if !d.fx.get(id).is_some_and(|f| f.effect == window_fx::Effect::Close) { return; }
-        let Some(z) = d.frames.iter().position(|f| f.id == id) else { return };
-        let mut frame = d.frames[z].clone();
+        // `frames` holds this tick's frames only until the next present takes them; after that the last presented
+        // frame is the one the window server still shows
+        let (z, mut frame) = match d.frames.iter().position(|f| f.id == id) {
+            Some(z) => (z, d.frames[z].clone()),
+            None => match d.presented.iter().position(|f| f.id == id) { Some(z) => (z, d.presented[z].clone()), None => return },
+        };
         frame.damage.all();
         frame.fx = bifrost_render::glass::Fx::IDENTITY;
+        // the toplevel is already placed and mapped: nothing to move or map again
+        frame.origin = None;
+        frame.position = None;
         d.ghosts.push((z, frame));
     }
 
@@ -3077,6 +3090,16 @@ impl Shell {
             None => Screen::Home,
         };
         self.dirty = true;
+    }
+
+    /// The window that draws as the active one (key traffic lights and title, the large shadow): the topmost shown window,
+    /// unless the active app has no window (`desk_windowless_front`), when none does: the window under it belongs to
+    /// another app, which is not the active one.
+    pub(super) fn desk_active_window_index(&self) -> Option<usize> {
+        if self.desk_windowless_front().is_some() {
+            return None;
+        }
+        self.desk.as_ref().and_then(|d| d.wins.iter().rposition(|w| !w.minimized && !d.unmapped.contains(&w.app)))
     }
 
     /// The active app that has no window (`Desk::windowless_front`) while that still holds: its process runs and none
@@ -4284,7 +4307,7 @@ impl Shell {
             desk.body_cache.retain(|app,_| desk.wins.iter().zip(&fading).any(|(w, f)| (!w.minimized || *f) && w.app == *app));
         }
         self.desk_refresh_unmapped();
-        let front = self.desk.as_ref().and_then(|d| d.wins.iter().rposition(|w| !w.minimized && !d.unmapped.contains(&w.app)));
+        let front = self.desk_active_window_index();
         for i in 0..count {
             let Some(win) = self.desk.as_ref().and_then(|d| d.wins.get(i).copied()) else { break };
             let w = &win;
@@ -6629,6 +6652,119 @@ mod tests {
         let i = d.index_of(placed).unwrap();
         d.close(i);
         assert!(!d.placed.contains(&placed));
+    }
+
+    /// O2: a press that lands on the body of a window behind another one raises it and is the app's press as well: the
+    /// app hears Down, then the drag's Moves, then Up, so a drag that starts on an item of a background window begins
+    /// (the first click of a window is delivered, as `acceptsFirstMouse` does for a drag source).
+    #[test]
+    fn a_press_that_raises_a_background_window_still_reaches_its_app_as_a_drag() {
+        use crate::shell::Screen;
+        use bifrost_proto::{ToApp, TouchKind};
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.anim = None;
+        let (mine, peer) = bifrost_proto::sys::socketpair_pair().unwrap();
+        let cfg = bifrost_proto::Configure { w: 100, h: 100, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
+        sh.ext.push(Some(apphost::AppHost::with_channel("fixture", mine, None, cfg)));
+        let slot = (sh.ext.len() - 1) as u8;
+        let (back, front) = (AppId::External(slot), AppId::Terminal);
+        let m = sh.desk_metrics();
+        {
+            let d = sh.desk.as_mut().unwrap();
+            d.wins.clear();
+            d.open(&m, back, (500, 400));
+            d.open(&m, front, (500, 400));
+            // side by side, so the press on the first lands on nothing of the second
+            let a = Desk::area(&m);
+            for (app, x) in [(back, a.x + 10), (front, a.x + a.w - 510)] {
+                let i = d.index_of(app).unwrap();
+                d.wins[i].r = Rect { x, y: a.y + 10, w: 500, h: 400 };
+                d.wins[i].restore = d.wins[i].r;
+            }
+        }
+        sh.screen = Screen::App(front);
+        let w = *sh.desk.as_ref().unwrap().wins.iter().find(|w| w.app == back).unwrap();
+        let b = w.body(&m);
+        let (x, y) = ((b.x + b.w / 2) as f32, (b.y + b.h / 2) as f32);
+        sh.desk_event(Event::Down(x, y), 100.);
+        assert_eq!(sh.desk.as_ref().unwrap().front().map(|w| w.app), Some(back), "the press raises the window");
+        assert_eq!(sh.screen, Screen::App(back));
+        assert!(matches!(sh.desk.as_ref().unwrap().grab, Some(Grab::Content(a, _)) if a == back), "and the press is the app's");
+        sh.desk_event(Event::Move(x + 12., y + 9.), 116.);
+        sh.desk_event(Event::Up(x + 12., y + 9.), 132.);
+        let mut kinds = Vec::new();
+        while let Ok(bifrost_proto::sys::Recv::Packet(p, _)) = peer.recv(false) {
+            if let Ok(ToApp::Touch { kind, .. }) = ToApp::decode(&p) { kinds.push(kind); }
+        }
+        assert_eq!(kinds, vec![TouchKind::Down, TouchKind::Move, TouchKind::Up], "the app hears the whole drag");
+    }
+
+    /// O8: the active app that closed its last window keeps the menu bar, so the window under it must not draw as the
+    /// active one (key traffic lights, title and shadow): no window is active until a window is raised or opened.
+    #[test]
+    fn no_window_draws_active_while_a_windowless_app_is_in_front() {
+        use crate::shell::Screen;
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.anim = None;
+        let (mine, _peer) = bifrost_proto::sys::socketpair_pair().unwrap();
+        let cfg = bifrost_proto::Configure { w: 100, h: 100, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
+        sh.ext.push(Some(apphost::AppHost::with_channel("fixture", mine, None, cfg)));
+        let slot = (sh.ext.len() - 1) as u8;
+        let (main, other) = (AppId::External(slot), AppId::Terminal);
+        let m = sh.desk_metrics();
+        {
+            let d = sh.desk.as_mut().unwrap();
+            d.wins.clear();
+            d.open(&m, other, (900, 600));
+            d.open(&m, main, (600, 400));
+        }
+        sh.screen = Screen::App(main);
+        let at = |sh: &Shell, app| sh.desk.as_ref().unwrap().index_of(app);
+        assert_eq!(sh.desk_active_window_index(), at(&sh, main), "with a window in front it is the active one");
+        sh.desk_order_main_out(slot);
+        assert_eq!(sh.desk_windowless_front(), Some(main));
+        assert_eq!(sh.desk_active_window_index(), None, "the window under the windowless app is not active");
+        // a window raised takes the front again, and with it the active look
+        {
+            let d = sh.desk.as_mut().unwrap();
+            let i = d.index_of(other).unwrap();
+            d.raise(i);
+        }
+        assert_eq!(sh.desk_windowless_front(), None);
+        assert_eq!(sh.desk_active_window_index(), at(&sh, other));
+    }
+
+    /// O1: `take_wayland_windows` empties the desk's frames on every present, so a window that starts closing found no
+    /// frame to keep and the close effect had nothing to draw. It keeps the frame the last present took (without
+    /// pixels: the presenter holds them), and a present after the window is gone keeps nothing of it.
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn a_closing_window_keeps_the_frame_the_last_present_took_for_its_close_effect() {
+        let mut sh = crate::shell::tests::desktop_shell();
+        let m = sh.desk_metrics();
+        let app = AppId::Settings;
+        {
+            let d = sh.desk.as_mut().unwrap();
+            d.wins.clear();
+            d.open(&m, app, (600, 400));
+        }
+        let id = win_id(app).unwrap();
+        let r = sh.desk.as_ref().unwrap().wins.iter().find(|w| w.app == app).map(|w| w.r).unwrap();
+        let frame = crate::bare::wayland::WindowFrame { id, title: "", x: r.x, y: r.y, width: r.w as usize, height: r.h as usize, pixels: Some(std::sync::Arc::from(vec![0u32; 4])), damage: crate::gfx::Damage::new(1, 1), maximized: false, fullscreen: false, title_height: 0, drag_height: 0, no_drag: Vec::new(), floating: false, fx: bifrost_render::glass::Fx::IDENTITY, opaque: true, origin: Some((1, 2)), position: Some((3, 4)), min_size: (0, 0), input: None };
+        sh.desk.as_mut().unwrap().frames = vec![frame];
+        assert_eq!(sh.take_wayland_windows().len(), 1);
+        assert!(sh.desk.as_ref().unwrap().frames.is_empty(), "the present took the frames");
+        sh.desk_close_app(app);
+        let d = sh.desk.as_ref().unwrap();
+        assert!(d.fx.get(id).is_some_and(|f| f.effect == window_fx::Effect::Close), "the close effect started");
+        assert_eq!(d.ghosts.len(), 1, "the closing window keeps its last frame for the effect");
+        let (z, ghost) = &d.ghosts[0];
+        assert_eq!((*z, ghost.id, ghost.x, ghost.y, ghost.width, ghost.height), (0, id, r.x, r.y, r.w as usize, r.h as usize));
+        assert!(ghost.pixels.is_none(), "the presenter still holds the pixels");
+        assert_eq!((ghost.origin, ghost.position), (None, None), "a kept frame places nothing again");
+        // the next present has no frame of the closed window to remember
+        assert!(sh.take_wayland_windows().is_empty());
+        assert!(sh.desk.as_ref().unwrap().presented.is_empty(), "nothing of the closed window outlives its present");
     }
 
     /// E2E11 3: an app moving its mapped window (`WindowMove`) makes the next frame ask the window server to move the
