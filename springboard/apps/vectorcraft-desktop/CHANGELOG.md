@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.17.0
+
+- Upstream vectorcraft v0.17.0.
+  ## What's Changed
+  * Brushes: one output budget across tracks, tiles and copies (#3594) by @saad-mughal435 in https://github.com/storytold/vectorcraft/pull/3731
+  * Docs: the Shape Builder parity line paraphrases the combine page by @dotCooCoo in https://github.com/storytold/vectorcraft/pull/3679
+  * G4: paragraph Auto Leading drives the Leading field, leading nudge and placeholder fill by @bflatastic in https://github.com/storytold/vectorcraft/pull/3733
+  * G4: hanging punctuation keeps its amounts under Glyph Scaling and burasagari by @bflatastic in https://github.com/storytold/vectorcraft/pull/3736
+
 ## 0.16.0
 
 - Upstream vectorcraft v0.16.0.
