@@ -193,9 +193,26 @@ pub fn text_lines(bytes: &[u8]) -> Vec<String> {
         .collect()
 }
 
-/// The path of a `file://` URL, or None for any other scheme.
-pub fn local_path(url: &str) -> Option<&str> {
-    url.strip_prefix("file://").filter(|p| p.starts_with('/'))
+/// The path of a `file://` URL, percent-decoded (`%20` is a space, `%C3%BE` is a letter), or None for any other
+/// scheme. Apps send the URL escaped, so the path is never read from the raw text. A broken escape stays as written.
+pub fn local_path(url: &str) -> Option<String> {
+    let raw = url.strip_prefix("file://").filter(|p| p.starts_with('/'))?.as_bytes();
+    let mut out = Vec::with_capacity(raw.len());
+    let mut i = 0;
+    while i < raw.len() {
+        let escaped = (raw[i] == b'%').then(|| raw.get(i + 1..i + 3)).flatten().and_then(|h| std::str::from_utf8(h).ok()).and_then(|h| u8::from_str_radix(h, 16).ok());
+        match escaped {
+            Some(b) => {
+                out.push(b);
+                i += 3;
+            }
+            None => {
+                out.push(raw[i]);
+                i += 1;
+            }
+        }
+    }
+    Some(String::from_utf8_lossy(&out).into_owned())
 }
 
 /// Reads at most `limit` bytes of `path`.
@@ -494,7 +511,7 @@ pub enum Body {
 pub fn load_body(item: Option<&PreviewItem>) -> Body {
     let Some(item) = item else { return Body::Empty };
     let Some(path) = local_path(&item.url) else { return Body::Info("No preview for this item.".into()) };
-    let p = Path::new(path);
+    let p = Path::new(&path);
     let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
     let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
     match kind_for_path(p) {
@@ -516,6 +533,8 @@ pub fn load_body(item: Option<&PreviewItem>) -> Body {
         Kind::Video => Body::Info("Video file. Open it in a video player to watch it.".into()),
         Kind::Font => Body::Info(format!("Font file {name}. Install it to use the face in documents.")),
         Kind::Text => match read_limited(p, MAX_TEXT_BYTES) {
+            // rich text shows its words, not its markup
+            Ok(buf) if ext == "rtf" => Body::Text(text_lines(crate::thumbs::text::rtf_text(&buf).as_bytes())),
             Ok(buf) => Body::Text(text_lines(&buf)),
             Err(_) => Body::Info("This file cannot be read.".into()),
         },
@@ -525,8 +544,8 @@ pub fn load_body(item: Option<&PreviewItem>) -> Body {
 
 /// The body for an item whose thumbnail has only an icon: which app plays or reads it, or that it has no preview.
 pub fn fallback_body(item: &PreviewItem) -> Body {
-    let name = local_path(&item.url).and_then(|p| Path::new(p).file_name()).and_then(|n| n.to_str()).unwrap_or("");
-    Body::Info(match kind_for(name) {
+    let name = local_path(&item.url).and_then(|p| Path::new(&p).file_name().map(|n| n.to_string_lossy().into_owned())).unwrap_or_default();
+    Body::Info(match kind_for(&name) {
         Kind::Pdf => "PDF document. Open it in Books to read it.".into(),
         Kind::Audio => "Audio file. Open it in Music to play it.".into(),
         Kind::Video => "Video file. Open it in a video player to watch it.".into(),
@@ -729,7 +748,7 @@ impl Panel {
     /// the current item is that file and its body waits. True when the body changed.
     pub fn thumbnail(&mut self, file: &str, picture: Option<Image>) -> bool {
         let body = match self.current() {
-            Some(item) if local_path(&item.url) == Some(file) && matches!(self.body, Body::Loading) => match picture {
+            Some(item) if local_path(&item.url).as_deref() == Some(file) && matches!(self.body, Body::Loading) => match picture {
                 Some(im) => Body::Image(im),
                 None => fallback_body(item),
             },
@@ -768,7 +787,7 @@ impl Panel {
     /// file is shown instead. Returns true when the body changed. An image's body waits for the thumbnails service
     /// again, so the caller asks for `wanted` next.
     pub fn generator_fallback(&mut self, file: &str) -> bool {
-        let waits = matches!(self.body, Body::Loading) && self.current().and_then(|i| local_path(&i.url)) == Some(file);
+        let waits = matches!(self.body, Body::Loading) && self.current().and_then(|i| local_path(&i.url)).as_deref() == Some(file);
         if !waits {
             return false;
         }
@@ -786,7 +805,7 @@ impl Panel {
         self.face = None;
         self.dirty = true;
         let url = self.current().map(|i| (i.url.clone(), i.title.clone()));
-        let path = self.current().and_then(|i| local_path(&i.url)).map(str::to_string);
+        let path = self.current().and_then(|i| local_path(&i.url));
         let item = self.current().cloned();
         let claimed = generators && path.as_deref().is_some_and(|p| self.generators.for_file(Path::new(p).file_name().and_then(|n| n.to_str()).unwrap_or("")).is_some());
         self.body = match path.as_deref() {
@@ -813,7 +832,7 @@ impl Panel {
         };
         self.info = path.as_deref().filter(|p| kind_for_path(Path::new(p)) == Kind::Image).and_then(|p| preview_info::picture_info_for(Path::new(p)));
         self.wanted = match (&self.body, url) {
-            (Body::Loading, Some((u, _))) => local_path(&u).map(str::to_string),
+            (Body::Loading, Some((u, _))) => local_path(&u),
             _ => None,
         };
     }
@@ -1310,7 +1329,7 @@ impl Shell {
 
         // a picture's information line, else the URL of an item that has a title of its own, centred under the body in
         // secondary grey
-        let caption = p.info.clone().or_else(|| p.current().filter(|i| !i.title.is_empty() && !i.url.is_empty()).map(|i| i.url.clone()));
+        let caption = p.info.clone().or_else(|| p.current().filter(|i| !i.title.is_empty() && !i.url.is_empty()).map(|i| local_path(&i.url).unwrap_or_else(|| i.url.clone())));
         if let Some(text) = caption {
             let c = g.caption;
             let url = ui.fit(&text, MAC_FOOTNOTE_PT, c.w as f32);
@@ -1489,7 +1508,9 @@ mod tests {
 
     #[test]
     fn only_file_urls_are_read() {
-        assert_eq!(local_path("file:///tmp/a.txt"), Some("/tmp/a.txt"));
+        assert_eq!(local_path("file:///tmp/a.txt").as_deref(), Some("/tmp/a.txt"));
+        assert_eq!(local_path("file:///tmp/QA%20note%2050%25%C3%BE.rtf").as_deref(), Some("/tmp/QA note 50%\u{fe}.rtf"));
+        assert_eq!(local_path("file:///tmp/100%/a%2").as_deref(), Some("/tmp/100%/a%2"), "a broken escape stays as written");
         assert_eq!(local_path("https://example.com/a.png"), None);
         assert_eq!(local_path("file://relative"), None);
         assert!(matches!(load_body(Some(&item("https://example.com/x.txt", ""))), Body::Info(_)));
@@ -1505,6 +1526,14 @@ mod tests {
         let url = format!("file://{}", f.display());
         match load_body(Some(&item(&url, "note"))) {
             Body::Text(lines) => assert_eq!(lines, ["hello", "world"]),
+            _ => panic!("text body expected"),
+        }
+        // an escaped URL (a space in the name) reads the same file, and rich text shows its words
+        let rich = dir.join("QA note.rtf");
+        std::fs::write(&rich, "{\\rtf1\\ansi{\\fonttbl{\\f0 Helvetica;}}\\f0 Hello\\par World}").unwrap();
+        let escaped = format!("file://{}/QA%20note.rtf", dir.display());
+        match load_body(Some(&item(&escaped, "QA note.rtf"))) {
+            Body::Text(lines) => assert_eq!(lines.join("|").trim(), "Hello|World"),
             _ => panic!("text body expected"),
         }
         let gone = format!("file://{}/missing.txt", dir.display());
