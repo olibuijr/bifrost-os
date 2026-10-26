@@ -342,11 +342,17 @@ impl App for Files {
     fn main_menu(&self, _ctx: &Ctx) -> Vec<bifrost_app::AppMenu> {
         vec![bifrost_app::AppMenu { title: "File".into(), items: self.file_menu_items() }]
     }
-    fn menu_action(&mut self, _ctx: &Ctx, id: u32) -> bool {
+    fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
         match id {
             MENU_QUICK_LOOK => self.quick_look(),
             MENU_NEW_FOLDER if !self.in_recents() && !self.in_bin() => self.new_folder(),
-            MENU_INFO | MENU_RENAME | MENU_DUPLICATE | MENU_ALIAS | MENU_TRASH | MENU_PUT_BACK => return self.context_action(id),
+            MENU_INFO | MENU_RENAME | MENU_DUPLICATE | MENU_ALIAS | MENU_TRASH | MENU_PUT_BACK => {
+                let changed = self.context_action(id);
+                // Get Info from the menu bar (cmd+i) opens its own window here; only `event` did, so the panel
+                // stayed in the browser window until the next click
+                self.open_info_window(ctx);
+                return changed;
+            }
             _ => return false,
         }
         true
@@ -1077,6 +1083,7 @@ mod tests {
         assert_eq!(info.name, "notes.txt");
         assert!(info.rows.contains(&("Kind", "Plain Text".to_string())));
         assert!(info.rows.iter().any(|(label, value)| *label == "Size" && value.contains("5 bytes")));
+        assert!(files.info_wanted, "Get Info asks for its own window; the entry points open it with a Ctx");
         // the chord opens it too, and a click closes it
         files.info = None;
         assert!(files.chord(23, CHORD_META));
