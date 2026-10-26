@@ -6,7 +6,7 @@ use super::alerts::{ALERT_MINUTES, REPEAT_RULES};
 use super::extras::{self, Extra};
 use super::ics::{self, IcsEvent};
 use super::store::{self, CalendarEvent};
-use super::{recur, Calendar, Date, UNDO_MS};
+use super::{recur, Calendar, Date};
 use bifrost_app::{Command as Edit, Commands};
 use springboard::shell::keyboard::Out;
 use springboard::shell::ui::Ui;
@@ -133,7 +133,7 @@ impl Calendar {
             .with(Edit::Cut, have)
             .with(Edit::Copy, have)
             .with(Edit::Paste, !self.sheet_open() && pasteboard.is_some_and(pasteable))
-            // Cmd+Z puts a deleted (or cut) event back while its Undo bar is up
+            // Cmd+Z puts a deleted (or cut) event back for a while after the delete, also once the Undo bar has faded
             .with(Edit::Undo, !self.sheet_open() && self.undo.is_some())
     }
 
@@ -194,6 +194,10 @@ impl Calendar {
                 self.undo_delete(ui, t);
                 true
             }
+            Edit::Undo => {
+                eprintln!("springboard: calendar: Undo with nothing to undo");
+                false
+            }
             _ => false,
         }
     }
@@ -229,7 +233,7 @@ impl Calendar {
                 self.undo_extra = self.extras.events.remove(&id);
                 self.save_extras();
                 self.notice = Some(format!("Cut {}", removed.title));
-                self.undo = Some((removed, t + UNDO_MS));
+                self.offer_undo(removed, t);
                 self.picked = None;
                 true
             }
