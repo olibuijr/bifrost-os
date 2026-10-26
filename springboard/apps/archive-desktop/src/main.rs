@@ -6,11 +6,19 @@
 mod archive;
 
 use archive::{Op, Outcome};
+use bifrost_app::controls::nav::{Toolbar, ToolbarItem};
+use bifrost_app::controls::{Node, Rect, Role};
 use bifrost_app::dispatch::{DispatchQueue, Qos};
+use bifrost_app::glyphs::glyph;
 use bifrost_app::kit::ui::{self, Weight};
 use bifrost_app::kit::{Damage, Surface};
-use bifrost_app::{App, Ctx, Input};
+use bifrost_app::layout::UNIFIED_BAR_PT;
+use bifrost_app::proto::AxAction;
+use bifrost_app::widgets;
+use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, DocumentEvent, Input, OpenOptions, TouchKind};
 use std::collections::VecDeque;
+use std::fs::File;
+use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -18,8 +26,13 @@ use std::sync::{Arc, Mutex};
 /// Layout in points: the window padding and the row height of the history list.
 const PAD_PT: f32 = 16.0;
 const ROW_PT: f32 = 22.0;
-const HEADER_PT: f32 = 56.0;
 const BAR_PT: f32 = 8.0;
+/// Side of the empty state's glyph and the space between its glyph, title and hint.
+const EMPTY_GLYPH_PT: f32 = 64.0;
+const EMPTY_GAP_PT: f32 = 10.0;
+/// The toolbar's Open button and the File > Open menu item.
+const B_OPEN: u32 = 1;
+const MENU_OPEN: u32 = 1;
 /// Finished jobs kept in the history list.
 const HISTORY: usize = 12;
 /// How often the window polls the worker while a job runs, in ms.
@@ -28,6 +41,16 @@ const POLL_MS: f64 = 100.0;
 struct Request {
     op: Op,
     path: PathBuf,
+}
+
+/// The absolute path of a file the open panel granted, read back from `/proc/self/fd` (the grant is a descriptor,
+/// not a path). Refused for a file that has no usable path.
+fn granted_path(file: &File) -> Result<PathBuf, String> {
+    let link = std::fs::read_link(format!("/proc/self/fd/{}", file.as_raw_fd())).map_err(|e| format!("The location could not be read: {e}."))?;
+    match link.to_str() {
+        Some(t) if link.is_absolute() && !t.ends_with(" (deleted)") => Ok(link),
+        _ => Err(format!("The location {} cannot be used.", link.display())),
+    }
 }
 
 /// A job on the worker thread: its progress counters and the result once it finishes.
@@ -43,6 +66,8 @@ struct ArchiveApp {
     queue: VecDeque<Request>,
     running: Option<Running>,
     history: Vec<String>,
+    /// The open panel request in flight.
+    panel: Option<u32>,
 }
 
 fn name_of(path: &Path) -> String {
@@ -124,6 +149,36 @@ impl ArchiveApp {
     }
 }
 
+impl ArchiveApp {
+    fn note(&mut self, line: String) {
+        self.history.insert(0, line);
+        self.history.truncate(HISTORY);
+    }
+
+    /// File > Open and the toolbar button: the open panel for an archive to expand or a folder to compress.
+    fn show_panel(&mut self, ctx: &Ctx) {
+        let options = OpenOptions { title: "Open".into(), directories: true, ..OpenOptions::default() };
+        self.panel = Some(ctx.open_panel(&options));
+    }
+
+    /// Queues what an opened path asks for, or records why it cannot be handled.
+    fn open_path(&mut self, path: &Path) {
+        match request_for(path) {
+            Ok(req) => self.enqueue(req),
+            Err(e) => self.note(e),
+        }
+    }
+
+    fn toolbar() -> Toolbar {
+        Toolbar::new(vec![ToolbarItem::button(B_OPEN, "Open\u{2026}")])
+    }
+
+    /// The unified title and toolbar row the traffic lights share, in points for a window `w_pt` wide.
+    fn bar_rect(w_pt: f32) -> Rect {
+        Rect { x: 0.0, y: 0.0, w: w_pt, h: UNIFIED_BAR_PT }
+    }
+}
+
 impl App for ArchiveApp {
     fn id(&self) -> &str {
         "is.olibuijr.archive.desktop"
@@ -134,16 +189,77 @@ impl App for ArchiveApp {
         ctx.enable_sudden_termination();
     }
 
-    fn event(&mut self, _ctx: &Ctx, ev: Input) -> bool {
-        let Input::Open(path) = ev else { return false };
-        match request_for(Path::new(&path)) {
-            Ok(req) => self.enqueue(req),
-            Err(e) => {
-                self.history.insert(0, e);
-                self.history.truncate(HISTORY);
+    fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
+        match ev {
+            Input::Open(path) => {
+                self.open_path(Path::new(&path));
+                true
+            }
+            // a click on the toolbar's Open button, on release over the button
+            Input::Touch { kind: TouchKind::Up, x, y, .. } => {
+                let scale = ctx.ui.pt(1.0);
+                let bar = Self::bar_rect(ctx.cfg.w as f32 / scale);
+                let layout = widgets::toolbar_layout(&ctx.ui, bar, &Self::toolbar());
+                if layout.hit(x / scale, y / scale) == Some(B_OPEN) {
+                    self.show_panel(ctx);
+                }
+                false
+            }
+            // the published control (accessibility, `bifrost pc midget tap-window`)
+            Input::Activate(id) if id == B_OPEN as u64 => {
+                self.show_panel(ctx);
+                false
+            }
+            _ => false,
+        }
+    }
+
+    fn ax_set(&mut self, ctx: &Ctx, id: u64, action: AxAction) -> bool {
+        match action {
+            AxAction::Press => self.event(ctx, Input::Activate(id)),
+            _ => false,
+        }
+    }
+
+    fn controls(&self, ctx: &Ctx) -> Vec<Node> {
+        let bar = Self::bar_rect(ctx.cfg.w as f32 / ctx.ui.pt(1.0));
+        let layout = widgets::toolbar_layout(&ctx.ui, bar, &Self::toolbar());
+        layout.visible.into_iter().map(|(id, bounds)| Node { id: id as u64, role: Role::Button, label: "Open".into(), value: String::new(), bounds, enabled: true }).collect()
+    }
+
+    fn document(&mut self, _ctx: &Ctx, ev: DocumentEvent) -> bool {
+        let docs = match ev {
+            DocumentEvent::Opened(doc) if self.panel == Some(doc.request) => vec![doc],
+            DocumentEvent::OpenedMany { request, docs } if self.panel == Some(request) => docs,
+            DocumentEvent::Failed { request, code } if self.panel == Some(request) => {
+                self.panel = None;
+                if code == bifrost_app::proto::DocErrorCode::Cancelled {
+                    return false;
+                }
+                self.note(format!("The open panel refused: {code:?}."));
+                return true;
+            }
+            _ => return false,
+        };
+        self.panel = None;
+        for doc in docs {
+            match granted_path(&doc.file) {
+                Ok(path) => self.open_path(&path),
+                Err(e) => self.note(format!("Could not open {}: {e}", doc.name)),
             }
         }
         true
+    }
+
+    fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
+        vec![AppMenu { title: "File".into(), items: vec![AppMenuItem::new(MENU_OPEN, "Open\u{2026}").key("cmd+o")] }]
+    }
+
+    fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
+        if id == MENU_OPEN {
+            self.show_panel(ctx);
+        }
+        false
     }
 
     fn tick(&mut self, _ctx: &Ctx, _t: f64) -> bool {
@@ -162,15 +278,14 @@ impl App for ArchiveApp {
         let pi = |v: f32| (v * scale) as i32;
         let (w, h) = (s.w, s.h);
         let width_pt = w as f32 / scale - 2.0 * PAD_PT;
-        s.fill_rect(0, 0, w, h, ui::DETAIL_BG.now());
+        s.fill_rect(0, 0, w, h, ui::CONTENT_BG.now());
 
-        let title = ui.text("Archive", ui::MAC_TITLE2_PT, Weight::Regular, ui::LABEL.now());
-        s.blit_colored(&title, pi(PAD_PT), pi(PAD_PT), ui::LABEL.now(), 255);
-        let hint = "Open an archive to expand it, or a folder to compress it to .zip.";
-        let img = ui.text(&ui.fit(hint, ui::MAC_FOOTNOTE_PT, ui.pt(width_pt)), ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::LABEL_2.now());
-        s.blit_colored(&img, pi(PAD_PT), pi(PAD_PT + 26.0), ui::LABEL_2.now(), 255);
+        // the unified bar the traffic lights share, with the Open button right of them
+        let bar = Self::bar_rect(w as f32 / scale);
+        widgets::toolbar_band(s, ui, bar);
+        widgets::toolbar(s, ui, bar, &Self::toolbar(), None);
 
-        let mut y = HEADER_PT;
+        let mut y = UNIFIED_BAR_PT + PAD_PT;
         if let Some(run) = &self.running {
             let verb = if run.req.op == Op::Expand { "Expanding" } else { "Compressing" };
             let line = format!("{verb} {}", name_of(&run.req.path));
@@ -190,8 +305,19 @@ impl App for ArchiveApp {
             y += ROW_PT;
         }
         if self.history.is_empty() && self.running.is_none() {
-            let img = ui.text("Nothing has been done yet.", ui::MAC_BODY_PT, Weight::Regular, ui::LABEL_2.now());
-            s.blit_colored(&img, pi(PAD_PT), pi(y), ui::LABEL_2.now(), 255);
+            // empty state: a glyph, a title and the hint, centred in the content below the bar
+            let title = ui.text("No Archive Open", ui::MAC_TITLE2_PT, Weight::Regular, ui::LABEL_2.now());
+            let hint_text = "Open an archive to expand it, or a folder to compress it to .zip.";
+            let hint = ui.text(&ui.fit(hint_text, ui::MAC_FOOTNOTE_PT, ui.pt(width_pt)), ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::LABEL_3.now());
+            let (glyph_h, gap) = (pi(EMPTY_GLYPH_PT), pi(EMPTY_GAP_PT));
+            let block = glyph_h + gap + title.h as i32 + gap / 2 + hint.h as i32;
+            let top = pi(UNIFIED_BAR_PT) + (h as i32 - pi(UNIFIED_BAR_PT) - block) / 2;
+            let cx = w as i32 / 2;
+            let bounds = Rect { x: cx as f32 / scale - EMPTY_GLYPH_PT / 2.0, y: top as f32 / scale, w: EMPTY_GLYPH_PT, h: EMPTY_GLYPH_PT };
+            glyph(s, ui, "archivebox", bounds, ui::LABEL_3.now());
+            let ty = top + glyph_h + gap;
+            s.blit_colored(&title, cx - title.w as i32 / 2, ty, ui::LABEL_2.now(), 255);
+            s.blit_colored(&hint, cx - hint.w as i32 / 2, ty + title.h as i32 + gap / 2, ui::LABEL_3.now(), 255);
         }
         for line in &self.history {
             if y > h as f32 / scale {
@@ -222,6 +348,22 @@ mod tests {
         assert!(matches!(request_for(Path::new("/x/photos.zip")), Ok(Request { op: Op::Expand, .. })));
         assert!(matches!(request_for(Path::new("/x/photos.tar.gz")), Ok(Request { op: Op::Expand, .. })));
         assert!(request_for(Path::new("/x/notes.txt")).is_err());
+    }
+
+    #[test]
+    fn a_granted_file_reads_back_its_path() {
+        let path = std::env::temp_dir().join(format!("archive-granted-{}.zip", std::process::id()));
+        std::fs::write(&path, b"x").unwrap();
+        let file = File::open(&path).unwrap();
+        assert_eq!(granted_path(&file).unwrap(), path.canonicalize().unwrap());
+        std::fs::remove_file(&path).unwrap();
+        // a deleted file has no usable location
+        assert!(granted_path(&file).is_err());
+    }
+
+    #[test]
+    fn the_content_starts_below_the_traffic_lights() {
+        assert!(UNIFIED_BAR_PT > bifrost_app::layout::traffic_lights_band().1);
     }
 
     #[test]

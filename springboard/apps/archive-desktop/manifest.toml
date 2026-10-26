@@ -7,6 +7,6 @@ min_shell = "0.6.5"
 summary = "Expands zip, tar, gzip, bzip2, xz and zstd archives, and compresses folders to zip, with progress."
 category = "Utilities"
 architecture = "x86_64-linux"
-permissions = ["storage"]
+permissions = ["storage", "documents"]
 window = "full-size"
 handles = ["public.zip-archive:default", "public.tar-archive:default", "org.gnu.gnu-zip-archive:default", "org.tukaani.xz-archive:default", "public.bzip2-archive:default"]
