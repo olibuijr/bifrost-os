@@ -450,6 +450,12 @@ impl Ctx {
         Ok(())
     }
 
+    /// Brings one of the app's windows (the main window too) to the front with key focus, as choosing it in the Window menu
+    /// does (`makeKeyAndOrderFront`). A window that is not open is ignored by the shell.
+    pub fn raise_window(&self, id: crate::app_windows::WindowId) {
+        self.send(ToShell::WindowRaise { window: id.0 });
+    }
+
     /// Collapses one of the app's windows to its title bar, or expands it back (the shell keeps the height it had).
     pub fn set_window_collapsed(&self, id: crate::app_windows::WindowId, collapsed: bool) -> Result<(), crate::app_windows::WindowError> {
         self.windows.borrow_mut().set_collapsed(id, collapsed)?;

@@ -3481,8 +3481,12 @@ impl Shell {
         let mut asks = Vec::new();
         let mut main_moves = Vec::new();
         let mut main_orders = Vec::new();
+        let mut raises = Vec::new();
         for (slot, host) in self.ext.iter_mut().enumerate() {
             let Some(h) = host else { continue };
+            if let Some(window) = h.take_raise() {
+                raises.push((slot as u8, window));
+            }
             if let Some(p) = h.take_main_move() {
                 main_moves.push((slot as u8, p));
             }
@@ -3503,6 +3507,10 @@ impl Shell {
             if let Ok(id16) = u16::try_from(id) {
                 changed |= self.ext_window_place(AppId::ExternalWindow(slot, id16), pending, collapsed);
             }
+        }
+        // a window the app asked to bring to the front (`WindowRaise`)
+        for (slot, window) in raises {
+            changed |= self.desk_raise_app_window(slot, window);
         }
         // the main window moves where its app asked (`WindowMove` with window 0); its collapse is the desk's own
         for (slot, p) in main_moves {
@@ -3637,6 +3645,21 @@ impl Shell {
         self.desk_drop_extra_window(slot, id);
         self.desk_refocus();
         self.dirty = true;
+    }
+
+    /// Raises the window of an app that asked for it (`ToShell::WindowRaise`): an extra window by its id, 0 is the app's main
+    /// window. False when the window is not on the desk.
+    fn desk_raise_app_window(&mut self, slot: u8, window: u32) -> bool {
+        if window == 0 {
+            let Some(d) = self.desk.as_mut() else { return false };
+            let Some(i) = d.index_of(AppId::External(slot)) else { return false };
+            d.raise(i);
+            d.raise_front = true;
+            self.desk_refocus();
+            self.dirty = true;
+            return true;
+        }
+        u16::try_from(window).is_ok_and(|id| self.desk_focus_extra_window(slot, id))
     }
 
     /// Raises an extra window (Window menu, Dock app menu). False when the window is not on the desk.

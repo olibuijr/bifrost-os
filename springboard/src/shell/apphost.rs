@@ -732,6 +732,9 @@ pub struct AppHost {
     /// desktop area): a document app moving a document into its main window keeps that document's frame. The desk
     /// applies it once (`take_main_move`).
     main_move: Option<(f32, f32)>,
+    /// The window the app asked to bring to the front (`ToShell::WindowRaise`, 0 is the main window), applied once by the
+    /// desk (`take_raise`).
+    raise: Option<u32>,
     /// The app ordered its main window out (`WindowClose` id 0, its last document closed) or asked for it back
     /// (`WindowOpen` id 0): `Some(false)` and `Some(true)`, applied once by the desk (`take_main_order`). The app keeps
     /// running either way; only activating it reopens a main window it ordered out (`ToApp::Reopen`).
@@ -883,6 +886,7 @@ impl AppHost {
             fallback: false,
             windows: WindowTable::new(),
             main_move: None,
+            raise: None,
             main_order: None,
             main_ordered_out: false,
             key_window: 0,
@@ -1504,6 +1508,10 @@ impl AppHost {
                     out.chrome();
                 }
             }
+            ToShell::WindowRaise { window } => {
+                self.raise = Some(window);
+                out.chrome();
+            }
             ToShell::WindowCollapse { window, collapsed } => {
                 if self.windows.set_collapsed(&self.id, window, collapsed) {
                     out.chrome();
@@ -1711,6 +1719,11 @@ impl AppHost {
     /// The position the app asked its main window to move to (`ToShell::WindowMove` with window 0), once.
     pub fn take_main_move(&mut self) -> Option<(f32, f32)> {
         self.main_move.take()
+    }
+
+    /// The window the app asked to bring to the front (`ToShell::WindowRaise`), once.
+    pub fn take_raise(&mut self) -> Option<u32> {
+        self.raise.take()
     }
 
     /// Whether the app asked for its main window to be ordered out (`Some(false)`) or back in (`Some(true)`), once.
