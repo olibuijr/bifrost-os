@@ -3181,11 +3181,14 @@ impl Reminders {
 #[path = "actions_tests.rs"]
 mod actions_tests;
 
+/// What the list's Delete button reads once pressed; the caption names it, so the two agree.
+pub(crate) const CONFIRM_DELETE_LIST: &str = "Confirm Delete List";
+
 /// What a first press on a list's Delete says: the list goes with its reminders.
 pub(crate) fn delete_list_question(reminders: usize) -> String {
     match reminders {
-        0 => "Delete this list? Press Delete List again to delete it.".to_string(),
-        1 => "Delete this list and its reminder? Press Delete List again to delete them.".to_string(),
-        n => format!("Delete this list and its {n} reminders? Press Delete List again to delete them."),
+        0 => format!("Delete this list? Press {CONFIRM_DELETE_LIST} to delete it."),
+        1 => format!("Delete this list and its reminder? Press {CONFIRM_DELETE_LIST} to delete both."),
+        n => format!("Delete this list and its {n} reminders? Press {CONFIRM_DELETE_LIST} to delete them all."),
     }
 }

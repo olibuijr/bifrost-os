@@ -619,7 +619,7 @@ impl Reminders {
                     (false, Some(EditMode::Group)) => "Delete Group",
                     (false, Some(EditMode::Smart)) => "Delete Smart List",
                     // pressed once: the button asks before the list and its reminders go
-                    (false, _) if self.list_edit.as_ref().is_some_and(|e| e.confirm_delete) => "Confirm Delete List",
+                    (false, _) if self.list_edit.as_ref().is_some_and(|e| e.confirm_delete) => crate::app::CONFIRM_DELETE_LIST,
                     (false, _) => "Delete List",
                 };
                 self.center(c, ui, label, MAC_BODY_PT, Weight::Regular, DESTRUCTIVE, x + w / 2.0, y + h / 2.0);
