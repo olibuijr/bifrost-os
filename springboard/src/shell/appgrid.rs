@@ -934,6 +934,10 @@ impl AppGrid {
         if self.ensure_icon(sh, app, size) {
             if let Some(img) = self.icons.get(&(app, size)) {
                 s.blit(img, ix as i32, cy as i32, 255, alpha);
+                // the package icon is a fixed picture: the grid shows today's date on Calendar as the Dock does
+                if apps().get(app).is_some_and(|a| a.icon == super::desk::CALENDAR_TILE) {
+                    sh.calendar_tile_face(s, sh.ui.s, (ix, cy, size as f32, size as f32), (sh.info.wday, sh.info.mday), alpha);
+                }
             }
         }
         let name = apps().get(app).map_or("", |a| a.name);
