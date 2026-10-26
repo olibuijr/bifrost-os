@@ -384,7 +384,7 @@ impl Files {
         if e.is_dir {
             widgets::folder_icon(s, ui, Rect { x, y, w: side, h: side }, folder_emblem(&self.home, &e.path));
         } else {
-            icons::entry(s, (ui.pt(x + side * 0.1), ui.pt(y + side * 0.06), ui.pt(side * 0.8), ui.pt(side * 0.86)), e.kind);
+            applications::entry_icon(s, (ui.pt(x + side * 0.1), ui.pt(y + side * 0.06), ui.pt(side * 0.8), ui.pt(side * 0.86)), e);
         }
     }
     fn centred(&self, s: &mut Surface, ui: &Ui, label: &str, pt: f32, color: u32, cx: f32, y: f32, max: f32) {

@@ -50,9 +50,9 @@ impl RowState {
 pub(crate) fn column_row(s: &mut Surface, ui: &Ui, e: &Entry, x0: f32, y: f32, cw: f32, state: RowState) {
     let icon = (ui.pt(x0 + 8.), ui.pt(y + 5.), ui.pt(SPACE_XL), ui.pt(SPACE_XL));
     if state == RowState::Active {
-        icons::entry_on_accent(s, icon, e.kind);
+        applications::entry_icon_on_accent(s, icon, e);
     } else {
-        icons::entry(s, icon, e.kind);
+        applications::entry_icon(s, icon, e);
     }
     text(s, ui, &e.name, 13., state.ink(), x0 + 32., y + 6., cw - 56.);
     if e.is_dir {

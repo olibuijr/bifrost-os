@@ -90,9 +90,11 @@ pub(crate) fn set_mode(path: &Path, mode: u32) -> std::io::Result<()> {
 }
 
 /// The grid's geometry in points: a label column, three check columns, and a heading row above three rows.
-pub(crate) const CELL_W: f32 = 76.;
+/// The whole grid (`LABEL_W` + three `CELL_W`) fits the Get Info window between its 20 pt margins (`INFO_WINDOW_W`), so the
+/// last heading, "Execute", is not cut at the window edge.
+pub(crate) const CELL_W: f32 = 72.;
 pub(crate) const CELL_H: f32 = 26.;
-const LABEL_W: f32 = 130.;
+const LABEL_W: f32 = 84.;
 
 /// Total height of the grid (heading plus three rows).
 pub(crate) const GRID_H: f32 = CELL_H * 4.;
@@ -242,6 +244,13 @@ mod tests {
         assert_eq!(cell_at(20., 100., 20. + LABEL_W + 5., 100. + 5.), None, "the heading row");
         assert_eq!(cell_at(20., 100., 20. + LABEL_W + 3. * CELL_W + 1., 100. + CELL_H + 1.), None, "right of the grid");
         assert_eq!(cell_at(20., 100., 20. + LABEL_W + 1., 100. + GRID_H + 1.), None, "below the grid");
+    }
+
+    #[test]
+    fn the_grid_fits_the_get_info_window_with_its_margins() {
+        let (x, _, w, _) = cell_rect(20., 0., Who::Others, Access::Execute);
+        assert!(x + w + 20. <= info_window::INFO_WINDOW_W, "the Execute column ends inside the window, with the left margin mirrored");
+        assert!(LABEL_W >= 60., "room for the Owner, Group and Others labels");
     }
 
     #[test]

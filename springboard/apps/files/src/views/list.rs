@@ -62,10 +62,10 @@ impl Files {
             let open = self.vo.expanded.contains(&e.path);
             triangle(s, ui, self.side() + 4. + indent, y + 12., if open { 1 } else { 0 }, if selected { WHITE } else { LABEL_2.now() });
         }
-        icons::entry(
+        applications::entry_icon(
             s,
             (ui.pt(self.side() + 18. + indent), ui.pt(y + 7.), ui.pt(SPACE_XL), ui.pt(SPACE_XL)),
-            e.kind,
+            e,
         );
         tag_dots(s, ui, &self.tag_index, &e.path, w - 452., y + 11.);
         self.paint_badges(ui, s, &e.path, self.side() + 18. + indent + SPACE_XL - 2., y + 14.);
