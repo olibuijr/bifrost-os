@@ -641,7 +641,8 @@ fn edit_menu_undo_restores_a_deleted_event() {
 }
 
 #[test]
-fn the_undo_bar_lapses_after_five_seconds() {
+fn the_undo_bar_lapses_after_five_seconds_but_cmd_z_keeps_working() {
+    use bifrost_app::Command as Edit;
     let temp = Temp::new();
     let ui = crate::test_ui();
     store::save(&temp.file(), &[event(8, "Gone")]).unwrap();
@@ -649,10 +650,93 @@ fn the_undo_bar_lapses_after_five_seconds() {
     c.open(&ui, Some(8));
     c.activate(&ui, Target::Delete, 1000.0);
     c.tick(&ui, 5999.0);
-    assert!(c.undo.is_some());
+    assert!(c.undo_bar_up());
     c.tick(&ui, 6000.0);
-    assert!(c.undo.is_none(), "gone after five seconds");
+    assert!(!c.undo_bar_up(), "the bar is gone after five seconds");
     assert!(c.events.is_empty(), "the delete stands");
+    assert_ne!(c.hit(&ui, ui.pt(60.0), c.undo_rect(&ui).1 + ui.pt(10.0)), Some(Target::UndoDelete), "no button under the faded bar");
+    assert!(c.edit_commands(None).supports(Edit::Undo), "but Edit > Undo still has the event");
+    assert!(c.edit_command(&ui, Edit::Undo, None, 9000.0));
+    assert_eq!(c.events.len(), 1, "restored");
+    assert!(c.undo.is_none());
+}
+
+#[test]
+fn undo_is_dropped_after_the_keep_time() {
+    use bifrost_app::proto::CHORD_META;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    store::save(&temp.file(), &[event(8, "Gone")]).unwrap();
+    let mut c = new(&ui, temp.file());
+    c.open(&ui, Some(8));
+    c.activate(&ui, Target::Delete, 1000.0);
+    c.tick(&ui, 1000.0 + UNDO_KEEP_MS - 1.0);
+    assert!(c.undo.is_some());
+    c.tick(&ui, 1000.0 + UNDO_KEEP_MS);
+    assert!(c.undo.is_none() && c.undo_extra.is_none(), "forgotten after the keep time");
+    assert!(!c.chord(&ui, 44, CHORD_META, 1000.0 + UNDO_KEEP_MS + 1.0));
+    assert!(c.events.is_empty());
+}
+
+#[test]
+fn a_deleted_event_whose_id_was_reused_comes_back_under_a_new_id() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    store::save(&temp.file(), &[event(1, "First"), event(2, "Second")]).unwrap();
+    let mut c = new(&ui, temp.file());
+    c.picked = Some(2);
+    c.key(&ui, Out::Backspace, 1000.0);
+    // the store hands out the highest id plus one, which is the deleted event's id again
+    let mut reused = event(2, "Third");
+    reused.date = date(2026, 10, 5);
+    c.events.push(reused);
+    c.undo_delete(&ui, 2000.0);
+    assert_eq!(c.events.len(), 3, "both events are there");
+    let mut ids: Vec<u64> = c.events.iter().map(|e| e.id).collect();
+    ids.sort_unstable();
+    ids.dedup();
+    assert_eq!(ids.len(), 3, "with their own ids");
+    assert_eq!(store::load(&temp.file()).unwrap().len(), 3, "saved");
+    assert!(c.undo.is_none());
+}
+
+/// E2E on Midget: a click selects the event, Backspace deletes it, and Cmd+Z comes a little later, as Edit > Undo and as the
+/// chord the shell falls back to. The app's clock is CLOCK_MONOTONIC in ms (days of uptime), and `tick` runs in between.
+#[test]
+fn cmd_z_restores_a_clicked_and_deleted_event_on_the_runtime_clock() {
+    use bifrost_app::proto::CHORD_META;
+    use bifrost_app::Command as Edit;
+    let ui = crate::test_ui();
+    let up = 301_234_567.0;
+    for lag in [800.0, 6000.0] {
+        for via_chord in [false, true] {
+            let temp = Temp::new();
+            store::save(&temp.file(), &[event(7, "Dentist"), event(8, "Lunch")]).unwrap();
+            let mut c = new(&ui, temp.file());
+            tap_event(&mut c, &ui, 7, up);
+            assert_eq!(c.picked, Some(7), "the click selects the event");
+            assert!(!c.edit_commands(None).supports(Edit::Undo), "nothing to undo yet");
+            c.key(&ui, Out::Backspace, up + 400.0);
+            assert!(c.events.iter().all(|e| e.id != 7), "Backspace deleted it");
+            assert!(c.undo_bar_up());
+            // the runtime wakes and ticks on its own clock until the key comes
+            let mut t = up + 400.0;
+            while t < up + 400.0 + lag {
+                t += 250.0;
+                c.tick(&ui, t);
+            }
+            assert!(c.edit_commands(None).supports(Edit::Undo), "Cmd+Z is on offer after {lag} ms");
+            assert_eq!(c.undo_bar_up(), lag < 5000.0, "the bar follows the five seconds");
+            if via_chord {
+                assert!(c.chord(&ui, 44, CHORD_META, t), "the chord restores it ({lag} ms)");
+            } else {
+                assert!(c.edit_command(&ui, Edit::Undo, None, t), "the command restores it ({lag} ms)");
+            }
+            assert!(c.events.iter().any(|e| e.id == 7), "restored ({lag} ms, chord {via_chord})");
+            assert_eq!(store::load(&temp.file()).unwrap().len(), 2, "restored on disk");
+            assert!(c.undo.is_none() && !c.undo_bar_up());
+        }
+    }
 }
 
 #[test]

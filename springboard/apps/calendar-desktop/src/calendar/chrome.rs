@@ -280,7 +280,7 @@ impl Calendar {
             if self.view == View::Month {
                 nodes.extend(self.grid_nodes(ui));
             }
-            if self.undo.is_some() {
+            if self.undo_bar_up() {
                 nodes.push(self.undo_node(ui));
             }
         }

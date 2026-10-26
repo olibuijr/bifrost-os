@@ -86,6 +86,9 @@ const CELL_LINE: f32 = 16.0;
 const CELL_HEAD: f32 = 28.0;
 /// How long the Undo bar stays after a delete.
 const UNDO_MS: f64 = 5000.0;
+/// How long Cmd+Z and Edit > Undo still bring a deleted event back: the bar is only a hint, not the Undo command, so a
+/// Cmd+Z that comes after it has faded (a slow typist, a remote session) restores the event all the same.
+const UNDO_KEEP_MS: f64 = 300_000.0;
 const MONTHS: [&str; 12] = [
     "January",
     "February",
@@ -359,8 +362,10 @@ pub struct Calendar {
     /// The desktop's settings (`prefs.rs`): week numbers (the toggle is desktop-only, with `file_export`), the zoom of
     /// the hour grid, the first weekday and the defaults for a new event.
     prefs: prefs::Prefs,
-    /// The last deleted event and when its Undo bar lapses.
+    /// The last deleted event and when Cmd+Z stops bringing it back (`UNDO_KEEP_MS` after the delete).
     undo: Option<(CalendarEvent, f64)>,
+    /// When the Undo bar for `undo` fades (`UNDO_MS` after the delete); `None` once it has, with the event still undoable.
+    undo_bar: Option<f64>,
     storage_blocked: bool,
     text_style: (f32, bool),
     dirty: bool,
@@ -427,6 +432,7 @@ impl Calendar {
             file_export: false,
             prefs,
             undo: None,
+            undo_bar: None,
             storage_blocked,
             text_style: (ui.text_scale, ui.bold),
             editor: None,
@@ -718,7 +724,7 @@ impl Calendar {
             }
             return self.layer_at(ui, x + self.x0, y).map(Target::Layer);
         }
-        if self.editor.is_none() && self.undo.is_some() && within(x, y, self.undo_rect(ui)) {
+        if self.editor.is_none() && self.undo_bar_up() && within(x, y, self.undo_rect(ui)) {
             return Some(Target::UndoDelete);
         }
         if x < 0.0 || y < ui.pt(top_inset() + bifrost_app::layout::UNIFIED_BAR_PT) || y >= self.bottom(ui) {
@@ -945,8 +951,19 @@ impl Calendar {
         (ui.pt(SPACE_XL), self.bottom(ui) - ui.pt(56.0), self.w as f32 - ui.pt(SPACE_HUGE), ui.pt(44.0))
     }
 
+    /// Offers Undo for an event just deleted or cut: the bar shows for `UNDO_MS`, Cmd+Z works for `UNDO_KEEP_MS`.
+    fn offer_undo(&mut self, event: CalendarEvent, t: f64) {
+        self.undo = Some((event, t + UNDO_KEEP_MS));
+        self.undo_bar = Some(t + UNDO_MS);
+    }
+
+    /// Whether the Undo bar is showing (and its button takes presses).
+    pub(super) fn undo_bar_up(&self) -> bool {
+        self.undo.is_some() && self.undo_bar.is_some()
+    }
+
     fn draw_undo(&mut self, s: &mut Surface, ui: &Ui) {
-        if self.undo.is_none() {
+        if !self.undo_bar_up() {
             return;
         }
         let (x, y, w, h) = self.undo_rect(ui);
@@ -956,13 +973,19 @@ impl Calendar {
         self.centre(s, ui, "Undo", MAC_BODY_PT, Weight::Semibold, accent(), x + w - ui.pt(SPACE_HUGE), y + h / 2.0);
     }
 
-    /// Puts the deleted event back (saved again) while its Undo bar is up.
+    /// Puts the deleted event back (saved again), from the Undo bar or Cmd+Z, for `UNDO_KEEP_MS` after the delete.
     fn undo_delete(&mut self, ui: &Ui, t: f64) {
-        let Some((event, until)) = self.undo.take() else { return };
+        let Some((mut event, keep)) = self.undo.take() else { return };
+        let bar = self.undo_bar.take();
         if self.events.len() >= store::MAX_EVENTS {
             self.error = Some("Calendar is full".into());
-            self.undo = Some((event, until));
+            self.undo = Some((event, keep));
+            self.undo_bar = bar;
             return;
+        }
+        // the id of the deleted event may have gone to a new one since (the store hands out the highest id plus one)
+        if self.events.iter().any(|e| e.id == event.id) {
+            event.id = store::next_id(&self.events);
         }
         let mut events = self.events.clone();
         events.push(event.clone());
@@ -982,7 +1005,7 @@ impl Calendar {
             Err(e) => {
                 eprintln!("springboard: calendar: {e}");
                 self.error = Some("Could not save. Your edit is still here.".into());
-                self.undo = Some((event, t + UNDO_MS));
+                self.offer_undo(event, t);
             }
         }
     }
@@ -1075,7 +1098,13 @@ impl Calendar {
                 self.selected = event.date;
                 self.error = None;
                 self.picked = (!delete).then_some(event.id);
-                self.undo = removed.map(|e| (e, t + UNDO_MS));
+                match removed {
+                    Some(e) => self.offer_undo(e, t),
+                    None => {
+                        self.undo = None;
+                        self.undo_bar = None;
+                    }
+                }
                 // an event the account organises, with invitees, goes to them again (`rsvp::invite_attendees`)
                 if !delete && existing {
                     self.invite_attendees(&original, &event);
@@ -1112,6 +1141,7 @@ impl Calendar {
             // the shortcut come within one frame), so the chord restores the deleted event as the Edit command does
             44 if mods & CHORD_SHIFT == 0 => {
                 if self.undo.is_none() {
+                    eprintln!("springboard: calendar: Cmd+Z with nothing to undo");
                     return false;
                 }
                 self.undo_delete(ui, t);
@@ -1599,8 +1629,15 @@ impl Calendar {
     }
 
     pub fn tick(&mut self, ui: &Ui, t: f64) -> bool {
-        if self.undo.as_ref().is_some_and(|(_, until)| t >= *until) {
+        // the bar fades first; the event stays undoable (Cmd+Z, Edit > Undo) until `UNDO_KEEP_MS`
+        if self.undo_bar.is_some_and(|until| t >= until) {
+            self.undo_bar = None;
+            self.dirty = true;
+        }
+        if self.undo.as_ref().is_some_and(|(_, keep)| t >= *keep) {
             self.undo = None;
+            self.undo_extra = None;
+            self.undo_bar = None;
             self.dirty = true;
         }
         // Include the final animation frame, after tick clears its motion.
@@ -1626,8 +1663,8 @@ impl Calendar {
                 as f64
                 * 1000.0;
         let mut due = midnight;
-        if let Some((_, until)) = &self.undo {
-            due = due.min(*until);
+        if let Some((_, keep)) = &self.undo {
+            due = due.min(self.undo_bar.map_or(*keep, |until| until.min(*keep)));
         }
         if let Some(alert) = self.alert_wake() {
             due = due.min(alert);

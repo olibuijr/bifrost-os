@@ -173,7 +173,7 @@ impl Calendar {
                 self.save_extras();
                 self.error = None;
                 self.notice = None;
-                self.undo = Some((removed, t + super::UNDO_MS));
+                self.offer_undo(removed, t);
                 self.picked = None;
                 self.last_tap = None;
                 let gone: Vec<u32> = self.panes.iter().filter(|p| p.editor.as_ref().is_some_and(|d| d.event.id == id)).map(|p| p.window).collect();
