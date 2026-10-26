@@ -2454,6 +2454,21 @@ impl Reminders {
         self.menu_request.take()
     }
 
+    /// List > Delete List...: the open list can go when another list is left to show. Like the sidebar menu's row.
+    pub fn can_delete_list(&self) -> bool {
+        self.open_list().is_some() && self.data.lists.len() > 1 && !self.has_draft()
+    }
+
+    /// List > Delete List...: opens the open list's form with Delete pressed once, so it asks before the list and its
+    /// reminders go (the second press, in the form, deletes).
+    pub fn delete_open_list(&mut self, ui: &Ui, t: f64) -> bool {
+        let Some(id) = self.open_list().filter(|_| self.can_delete_list()) else { return false };
+        self.activate(ui, Target::ListInfo(id), t);
+        self.activate(ui, Target::Delete, t);
+        self.dirty = true;
+        true
+    }
+
     /// Runs the row `id` chosen from a list's menu. True when something changed.
     pub fn context_action(&mut self, ui: &Ui, id: u32, t: f64) -> bool {
         if std::mem::take(&mut self.menu_kept) {
@@ -2873,8 +2888,17 @@ impl Reminders {
         let Some(f) = self.focus else { return };
         // Return in a form's name field is Done, as on the stock app (E2E W2-21: New Reminder and New List)
         if matches!(out, Out::Enter) && f == Field::Title && matches!(self.screen, Screen::Editor | Screen::ListEditor) {
+            // a new reminder's field stays open after Return so several can be typed in a row, as on the stock app;
+            // Done (the button) and Escape still close the form
+            let next_list = self.editor.as_ref().filter(|e| e.id.is_none()).map(|e| e.draft.list);
             self.set_focus(None, t);
             self.activate(ui, Target::Save, t);
+            if let (Some(list), true) = (next_list, self.editor.is_none() && self.screen == Screen::Items) {
+                self.open_editor(ui, None, t);
+                if let Some(e) = &mut self.editor {
+                    e.draft.list = list;
+                }
+            }
             return;
         }
         if matches!(out, Out::Hide | Out::Enter) {

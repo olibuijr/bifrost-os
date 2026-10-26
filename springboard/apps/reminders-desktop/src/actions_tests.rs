@@ -1115,8 +1115,14 @@ fn return_in_the_name_field_commits_new_reminder_and_new_list() {
     app.activate(&ui, Target::New, 0.0);
     app.key(&ui, Out::Text("Call Anna".into()), 1.0);
     app.key(&ui, Out::Enter, 2.0);
-    assert!(app.editor.is_none(), "Return is Done");
     assert_eq!(titles(&app), ["Call Anna"]);
+    // the new-reminder field stays open and focused, so a second reminder can be typed straight away
+    assert!(app.editor.as_ref().is_some_and(|e| e.id.is_none()), "Return keeps a fresh new reminder open");
+    app.key(&ui, Out::Text("Call Bo".into()), 2.5);
+    app.key(&ui, Out::Enter, 2.6);
+    assert_eq!(titles(&app), ["Call Anna", "Call Bo"]);
+    app.activate(&ui, Target::Cancel, 2.7);
+    assert!(app.editor.is_none());
     let lists = app.data.lists.len();
     app.activate(&ui, Target::NewList, 3.0);
     app.key(&ui, Out::Text("Errands".into()), 4.0);
@@ -1165,6 +1171,13 @@ fn deleting_a_list_asks_first_and_the_more_button_and_right_click_open_its_menu(
     app.activate(&ui, Target::ListInfo(work), 13.0);
     assert!(!app.list_edit.as_ref().unwrap().confirm_delete, "a new form asks again");
     app.activate(&ui, Target::Cancel, 14.0);
+
+    // List > Delete List... does the same from the menu bar: it asks, then the form's Delete removes the list
+    assert!(app.can_delete_list(), "a list is open and another remains");
+    assert!(app.delete_open_list(&ui, 15.0));
+    assert!(app.data.lists.iter().any(|l| l.id == work), "the menu item only asks");
+    assert!(app.list_edit.as_ref().is_some_and(|e| e.confirm_delete));
+    app.activate(&ui, Target::Cancel, 16.0);
 
     // the toolbar's "..." is a menu, not List Info
     app.activate(&ui, Target::List(work), 20.0);

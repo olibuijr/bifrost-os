@@ -60,6 +60,7 @@ const MENU_SAVE_AS: u32 = 25;
 const MENU_BOLD: u32 = 26;
 const MENU_BULLETS: u32 = 27;
 const MENU_NUMBERS: u32 = 28;
+const MENU_DELETE_LIST: u32 = 29;
 /// Item ids of the menus that list things: the base plus the position in the list.
 const MENU_MARK_BASE: u32 = 20;
 const MENU_SORT_BASE: u32 = 30;
@@ -275,6 +276,8 @@ impl App for RemindersApp {
         lists.push(AppMenuItem::new(MENU_NEW_SECTION, "New Section").enabled(list));
         lists.push(AppMenuItem::new(MENU_AUTOCATEGORIZE, "Auto-Categorize").enabled(list));
         lists.push(AppMenuItem::separator());
+        lists.push(AppMenuItem::new(MENU_DELETE_LIST, "Delete List...").key("cmd+shift+backspace").enabled(a.can_delete_list()));
+        lists.push(AppMenuItem::separator());
         lists.push(AppMenuItem::new(MENU_SAVE_TEMPLATE, "Save List as Template").enabled(list));
         lists.extend(from_template);
         lists.extend(delete_template);
@@ -300,7 +303,8 @@ impl App for RemindersApp {
                     AppMenuItem::new(MENU_NEW_SMART, "New Smart List...").enabled(on_items),
                     AppMenuItem::new(MENU_IMPORT, "Import List...").key("cmd+o").enabled(on_items),
                     AppMenuItem::new(MENU_SAVE_AS, "Save List As...").enabled(list),
-                    AppMenuItem::new(MENU_PRINT, "Print List...").key("cmd+p").enabled(a.can_print()),
+                    // the app's own Print replaces the shell's File > Print row, so the menu has one Cmd+P item
+                    AppMenuItem::print(MENU_PRINT).enabled(a.can_print()),
                 ],
             },
             AppMenu { title: "View".into(), items: view },
@@ -371,6 +375,7 @@ impl App for RemindersApp {
                 true
             }
             MENU_DELETE => a.delete_selected(ui, t),
+            MENU_DELETE_LIST => a.delete_open_list(ui, t),
             MENU_FIND => {
                 a.find(ui, t);
                 true
