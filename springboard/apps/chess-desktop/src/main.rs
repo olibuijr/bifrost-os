@@ -13,6 +13,7 @@ use bifrost_app::kit::canvas::{Canvas, RectF};
 use bifrost_app::kit::ui::{Ui, Weight, CARD_BG, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, MATERIAL_SELECTION, ROW_PRESSED, SEGMENT_ON, SYSTEM_YELLOW, WHITE, BLACK};
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::widgets;
+use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Input, TouchKind};
 use game::{describe, Game};
 use moves::Move;
@@ -76,7 +77,20 @@ fn to_points(ctx: &Ctx, x: f32, y: f32) -> (f32, f32) {
     (x / scale, y / scale)
 }
 
-/// The letter a piece is drawn with. Pawns have no letter in notation, so they are drawn as "P".
+/// The solid chess symbol of a piece (U+265A to U+265F), drawn in the piece's colour with an outline.
+fn symbol(kind: Kind) -> char {
+    match kind {
+        Kind::King => '\u{265A}',
+        Kind::Queen => '\u{265B}',
+        Kind::Rook => '\u{265C}',
+        Kind::Bishop => '\u{265D}',
+        Kind::Knight => '\u{265E}',
+        Kind::Pawn => '\u{265F}',
+    }
+}
+
+/// The letter a piece falls back to when no symbol font has its symbol. Pawns have no letter in notation, so they
+/// are drawn as "P".
 fn glyph(kind: Kind) -> &'static str {
     match kind {
         Kind::Pawn => "P",
@@ -107,17 +121,22 @@ fn button(canvas: &mut dyn Canvas, ui: &Ui, hits: &mut Vec<Hit>, r: Rect, text: 
     }
 }
 
-/// One piece on its square: the letter in its colour with a thin outline in the other colour, so it reads on both
-/// square colours.
+/// One piece on its square: the chess symbol (the letter where no symbol font has it) in its colour with a thin
+/// outline in the other colour, so it reads on both square colours.
 fn draw_piece(canvas: &mut dyn Canvas, ui: &Ui, piece: Piece, square: Rect) {
     let (ink, outline) = match piece.colour {
         Colour::White => (WHITE, BLACK),
         Colour::Black => (BLACK, WHITE),
     };
-    let pt = square.w * 0.62;
-    let text = glyph(piece.kind);
-    let img = ui.text(text, pt, Weight::Bold, ink);
-    let edge = ui.text(text, pt, Weight::Bold, outline);
+    let px = ui.pt(square.w * 0.8);
+    let (img, edge) = match (ui.symbols.render_char(symbol(piece.kind), px, ink), ui.symbols.render_char(symbol(piece.kind), px, outline)) {
+        (Some(img), Some(edge)) => (img, edge),
+        _ => {
+            let pt = square.w * 0.62;
+            let text = glyph(piece.kind);
+            (ui.text(text, pt, Weight::Bold, ink), ui.text(text, pt, Weight::Bold, outline))
+        }
+    };
     let left = ui.pt(square.x) + (ui.pt(square.w) - img.w as f32) / 2.0;
     let top = ui.pt(square.y) + (ui.pt(square.h) - img.h as f32) / 2.0;
     for (dx, dy) in [(-1.0f32, 0.0f32), (1.0, 0.0), (0.0, -1.0), (0.0, 1.0)] {
@@ -421,12 +440,14 @@ impl App for ChessApp {
         self.hits.clear();
         canvas.fill_rect(RectF::new(0.0, 0.0, cw as f32, ch as f32), CONTENT_BG.now());
 
-        let board = (height - 2.0 * PAD).min(width - PANEL_W - 3.0 * PAD).max(160.0);
+        // the unified bar holds the traffic lights and is the window-drag zone: the board and the panel start below it
+        let top = UNIFIED_BAR_PT;
+        let board = (height - top - PAD).min(width - PANEL_W - 3.0 * PAD).max(160.0);
         let square = board / 8.0;
-        self.draw_board(canvas, ui, PAD, PAD, square);
+        self.draw_board(canvas, ui, PAD, top, square);
         let panel_x = PAD + board + PAD;
         let panel_w = (width - panel_x - PAD).max(120.0);
-        self.draw_panel(canvas, ui, panel_x, PAD, panel_w, height);
+        self.draw_panel(canvas, ui, panel_x, top, panel_w, height);
 
         let mut d = Damage::new(cw as usize, ch as usize);
         d.all();
@@ -491,4 +512,24 @@ fn restore_game(contents: &str) -> Option<(Option<Level>, Game)> {
 
 fn main() {
     bifrost_app::run(ChessApp::new());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_piece_has_its_own_solid_chess_symbol() {
+        let kinds = [Kind::King, Kind::Queen, Kind::Rook, Kind::Bishop, Kind::Knight, Kind::Pawn];
+        let mut seen: Vec<char> = kinds.iter().map(|k| symbol(*k)).collect();
+        assert!(seen.iter().all(|c| ('\u{265A}'..='\u{265F}').contains(c)));
+        seen.sort();
+        seen.dedup();
+        assert_eq!(seen.len(), kinds.len());
+    }
+
+    #[test]
+    fn the_board_starts_below_the_traffic_lights() {
+        assert!(UNIFIED_BAR_PT > bifrost_app::layout::traffic_lights_band().1);
+    }
 }
