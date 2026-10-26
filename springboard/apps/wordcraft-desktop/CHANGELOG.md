@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.11.0
+
+- Upstream wordcraft v0.11.0.
+  ## What's Changed
+  * Restrict Editing: the file commands, the user name and the post-check by @matstrange in https://github.com/storytold/wordcraft/pull/3285
+  * The inspector's removals are tracked, and a version snapshot belongs to its document by @matstrange in https://github.com/storytold/wordcraft/pull/3286
+  * test: mark the portal test's blocking sleep as intentional (SonarCloud rust:S7488) by @dylanmtaylor in https://github.com/storytold/wordcraft/pull/3989
+  * Engine: no dead-code warnings on wasm by @MichaelMuClaude in https://github.com/storytold/wordcraft/pull/3542
+
 ## 0.10.0
 
 - Upstream wordcraft v0.10.0.
