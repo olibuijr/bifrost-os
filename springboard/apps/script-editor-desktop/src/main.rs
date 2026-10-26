@@ -7,7 +7,7 @@ mod runner;
 mod view;
 
 use bifrost_app::controls::{Node, Rect as ControlRect, Role};
-use bifrost_app::document::{is_menu_id, DocId, DocumentController};
+use bifrost_app::document::{alert, is_menu_id, DocId, DocumentController, DocumentHost, Notice};
 use bifrost_app::kit::canvas::{Canvas, RectF};
 use bifrost_app::kit::ui::{
     Ui, Weight, CAPSULE_BG, CARD_BG, DETAIL_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_CALLOUT_PT,
@@ -34,6 +34,7 @@ const POLL_WAKE_SECS: f64 = 0.1;
 const KEY_BACKSPACE: u32 = 8;
 const KEY_TAB: u32 = 9;
 const KEY_RETURN: u32 = 13;
+const KEY_ESCAPE: u32 = 27;
 const KEY_END: u32 = 35;
 const KEY_HOME: u32 = 36;
 const KEY_LEFT: u32 = 37;
@@ -76,6 +77,50 @@ impl ScriptEditorApp {
                 true
             }
             None => false,
+        }
+    }
+
+    /// The documents a launch starts with: the untitled scripts autosaved when the app last quit (the red button and Cmd+Q
+    /// save nothing else and ask nothing, so the text comes back edited), or one new Untitled when there are none.
+    fn start_documents(&mut self, host: &dyn DocumentHost) {
+        if self.docs.restore(host).is_empty() {
+            self.docs.new_document();
+        }
+    }
+
+    /// The close confirmation as the kit's alert sheet (`Alert::sheet`): it hangs from the unified title bar, Save is the
+    /// accent-filled default (Return) and Cancel answers Escape. `None` while no close waits for an answer.
+    fn close_sheet(&self) -> Option<bifrost_app::controls::sheet::Sheet> {
+        self.docs.alert().map(|a| a.sheet())
+    }
+
+    /// The window the close confirmation covers (points) and the height of the title bar it hangs from.
+    fn sheet_parent(&self) -> (ControlRect, f32) {
+        (ControlRect { x: 0.0, y: 0.0, w: self.size.0, h: self.size.1 }, bifrost_app::layout::UNIFIED_BAR_PT)
+    }
+
+    /// The close confirmation was answered: Save saves and then closes, Don't Save closes now, Cancel keeps the document.
+    fn answer_close(&mut self, ctx: &Ctx, choice: u32) -> bool {
+        let notices = self.docs.answer_alert(ctx, choice);
+        self.after_notices(ctx, &notices);
+        true
+    }
+
+    /// The close confirmation's touches: its buttons answer it, and the rest of the window is blocked while it is up.
+    fn touch_close_alert(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
+        let Some(sheet) = self.close_sheet() else { return false };
+        let (parent, bar) = self.sheet_parent();
+        match sheet.hit(parent, bar, 1.0, px, py) {
+            bifrost_app::controls::sheet::Hit::Button(id) => self.answer_close(ctx, id),
+            _ => true,
+        }
+    }
+
+    /// With the last document closed the window goes too and the app keeps running, as File > Close does on the
+    /// reference; `reopen` makes a new Untitled when the person comes back.
+    fn after_notices(&mut self, ctx: &Ctx, notices: &[Notice]) {
+        if notices.iter().any(|n| matches!(n, Notice::Closed(_))) && self.docs.is_empty() {
+            ctx.close_main_window();
         }
     }
 
@@ -175,6 +220,11 @@ impl ScriptEditorApp {
         fill(c, ui, R { x: 0.0, y: lay.output.y, w: lay.width, h: 1.0 }, SEPARATOR_C.now());
         self.draw_output(ui, c, &lay);
         self.draw_status(ui, c, &lay);
+        // the close confirmation, over everything else in the window
+        if let Some(sheet) = self.close_sheet() {
+            let (parent, bar) = self.sheet_parent();
+            widgets::sheet(c, ui, parent, bar, &sheet, 1.0, None);
+        }
     }
 
     fn draw_buttons(&self, ui: &Ui, c: &mut dyn Canvas, lay: &Layout) {
@@ -314,12 +364,37 @@ impl App for ScriptEditorApp {
     fn configure(&mut self, ctx: &Ctx) {
         let p = ctx.ui.pt(1.0);
         self.size = (ctx.cfg.w as f32 / p, ctx.cfg.h as f32 / p);
-        if self.docs.is_empty() {
-            self.docs.new_document();
+        // the untitled scripts autosaved when the app last quit come back edited; a window with none starts a new one. Not
+        // while the main window is ordered out after the last document closed
+        if self.docs.is_empty() && ctx.windows().main_shown() {
+            self.start_documents(ctx);
         }
     }
 
+    /// Activated with no window open, after the last document closed: the window shows a new Untitled.
+    fn reopen(&mut self, _ctx: &Ctx) -> bool {
+        if self.docs.is_empty() {
+            self.docs.new_document();
+        }
+        true
+    }
+
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
+        // the close confirmation is a sheet over the whole window: Return saves, Escape cancels, nothing else gets through
+        if self.docs.alert().is_some() {
+            return match ev {
+                Input::Key(KeyInput::Code(code)) if code & CHORD_FLAG == 0 => match code {
+                    KEY_RETURN => self.answer_close(ctx, alert::SAVE),
+                    1 | KEY_ESCAPE => self.answer_close(ctx, alert::CANCEL),
+                    _ => false,
+                },
+                Input::Touch { kind: TouchKind::Down, x, y, .. } => {
+                    let p = ctx.ui.pt(1.0);
+                    self.touch_close_alert(ctx, x / p, y / p)
+                }
+                _ => false,
+            };
+        }
         match ev {
             Input::Command(Command::Paste) => match clipboard::text() {
                 Some(text) => self.edit(|d| d.buffer.insert(&text)),
@@ -391,7 +466,9 @@ impl App for ScriptEditorApp {
 
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
         if is_menu_id(id) {
-            return self.docs.menu_action(ctx, id).is_some();
+            let Some(notices) = self.docs.menu_action(ctx, id) else { return false };
+            self.after_notices(ctx, &notices);
+            return true;
         }
         match id {
             MENU_RUN => self.run_script(),
@@ -401,7 +478,9 @@ impl App for ScriptEditorApp {
     }
 
     fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
-        self.docs.handle(ctx, ev).is_some()
+        let Some(notices) = self.docs.handle(ctx, ev) else { return false };
+        self.after_notices(ctx, &notices);
+        true
     }
 
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
@@ -480,6 +559,83 @@ mod tests {
         let mut app = app;
         app.last = Some(Report { stdout: String::new(), stderr: String::new(), outcome: Outcome::Exited(2) });
         assert_eq!(app.status_text(), "Exited with status 2");
+    }
+
+    /// A host with a data directory and nothing else: enough for the controller's autosave copies.
+    struct DirHost(std::path::PathBuf);
+
+    impl DocumentHost for DirHost {
+        fn open_panel(&self, _o: &bifrost_app::OpenOptions) -> u32 {
+            0
+        }
+        fn save_panel(&self, _n: &str, _f: &[&str]) -> u32 {
+            0
+        }
+        fn save_in_place(&self, _g: bifrost_app::proto::GrantId) -> u32 {
+            0
+        }
+        fn commit(&self, _r: u32) {}
+        fn abort(&self, _r: u32) {}
+        fn reopen(&self, _g: bifrost_app::proto::GrantId) -> u32 {
+            0
+        }
+        fn release(&self, _g: bifrost_app::proto::GrantId) {}
+        fn set_document_state(&self, _t: &str, _e: bool, _r: &str) {}
+        fn data_dir(&self) -> std::path::PathBuf {
+            self.0.clone()
+        }
+        fn pref(&self, _k: &str) -> Option<String> {
+            None
+        }
+        fn set_pref(&self, _k: &str, _v: &str) {}
+    }
+
+    fn temp_dir(tag: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("bifrost-script-editor-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// File > Close on an edited script raises the confirmation as an alert sheet (Save the default, Cancel on Escape)
+    /// instead of closing or doing nothing; Cancel keeps the script, Don't Save closes it.
+    #[test]
+    fn closing_an_edited_script_asks_before_it_goes() {
+        let host = DirHost(temp_dir("close"));
+        let mut app = app_with("echo test item");
+        assert!(app.close_sheet().is_none());
+        let notices = app.docs.menu_action(&host, bifrost_app::document::item::CLOSE).unwrap();
+        assert!(notices.is_empty(), "the script is not closed yet");
+        assert_eq!(app.docs.len(), 1);
+        let sheet = app.close_sheet().expect("the confirmation is a sheet");
+        assert_eq!(sheet.default_button(), Some(alert::SAVE));
+        assert_eq!(sheet.cancel_button(), Some(alert::CANCEL));
+        // Cancel: the script and its text stay
+        assert!(app.docs.answer_alert(&host, alert::CANCEL).is_empty());
+        assert!(app.close_sheet().is_none());
+        assert_eq!(app.active_text(), "echo test item");
+        // Don't Save: the script closes
+        app.docs.menu_action(&host, bifrost_app::document::item::CLOSE).unwrap();
+        let notices = app.docs.answer_alert(&host, alert::DONT_SAVE);
+        assert!(matches!(notices.as_slice(), [Notice::Closed(_)]));
+        assert!(app.docs.is_empty());
+    }
+
+    /// The red button quits the app, which autosaves the edited Untitled; the next launch opens it again.
+    #[test]
+    fn an_unsaved_script_comes_back_on_the_next_launch() {
+        let host = DirHost(temp_dir("restore"));
+        let mut app = app_with("echo test item");
+        app.docs.suspend(&host);
+        let mut next = ScriptEditorApp::new();
+        next.start_documents(&host);
+        assert_eq!(next.active_text(), "echo test item");
+        assert!(next.docs.is_edited(next.docs.active().unwrap()));
+        // with nothing autosaved a launch starts one empty script
+        let mut fresh = ScriptEditorApp::new();
+        fresh.start_documents(&DirHost(temp_dir("fresh")));
+        assert_eq!(fresh.docs.len(), 1);
+        assert_eq!(fresh.active_text(), "");
     }
 
     #[test]
