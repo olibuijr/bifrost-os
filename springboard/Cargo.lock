@@ -358,7 +358,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-assistant"
-version = "1.4.6"
+version = "1.4.7"
 dependencies = [
  "bifrost-app",
  "bifrost-assistant-client",
@@ -556,7 +556,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-chess"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "bifrost-app",
  "springboard",
@@ -683,7 +683,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-folder-actions"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -830,7 +830,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-messages"
-version = "0.7.6"
+version = "0.7.7"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -940,7 +940,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-remote"
-version = "0.2.6"
+version = "0.2.7"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -983,7 +983,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-script-editor"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "bifrost-app",
  "springboard",
@@ -1082,7 +1082,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-voicememos"
-version = "1.11.4"
+version = "1.11.5"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -4460,7 +4460,7 @@ dependencies = [
 
 [[package]]
 name = "springboard"
-version = "0.10.40"
+version = "0.10.41"
 dependencies = [
  "bifrost-assistant-client",
  "bifrost-audio-driver",

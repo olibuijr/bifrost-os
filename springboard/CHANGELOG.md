@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.10.41 — 2026-10-26
+
+Fixes from three app-by-app test waves on Midget (every system app not covered before).
+
+- Open and Save panels use the window background instead of a pure black list.
+- A window closed while in full screen reopens at its windowed frame; the Applications grid's Calendar icon shows today's date.
+- System Information may read the hardware facts (new first-party `hardware-info` entitlement: `/sys` read-only), so Graphics, Storage and the Overview are filled in.
+- SDK: `item_sheet`, a small add-item sheet (Keychain Access and Passwords use it).
+- Chess symbols draw from the symbol font (`Symbols::render_char`).
+- The installer writes the interrupt-priority unit with `$$` (no journal warning at boot) and the lab NIC's wake-on-lan as the keyfile integer.
+- Ships with the app fixes of the round: TextEdit, Activity Monitor, Journal, Freeform, Stocks, Maps, Clock, Photo Booth, Viewer, Sticky Notes, Screenshot, Archive, Disk Utility, System Information, Grapher, Keychain Access, Passwords, Locate, Colour Utility, Digital Color Meter, Wireless Diagnostics, News, Browser, Fonts, Dictionary, Weather, Audio Setup, Script Editor, Folder Actions Setup, Chess, Messages, Assistant, Remote and Voice Memos.
+
 ## 0.10.40 — 2026-10-25
 
 - Background windows: an app behind other windows is told its new window size and redraws at it (also while suspended), the shell never paints black past an app's frame, and a window that was in full screen at shutdown comes back at its normal frame instead of filling the screen.

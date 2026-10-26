@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.11.5
+
+- The sidebar title shrinks to fit instead of being cut off.
+
 ## 1.11.4
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.8
+
+- The form is centred on the window background, with no empty column.
+
 ## 0.1.7
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.

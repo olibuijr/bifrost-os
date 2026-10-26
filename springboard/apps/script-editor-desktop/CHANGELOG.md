@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.9
+
+- Close (Cmd+W) asks to save an edited script; an unsaved script autosaved at Quit opens again at the next launch.
+
 ## 0.1.8
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.

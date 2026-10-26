@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.7
+
+- The empty-state text is hidden while the Settings sheet covers it.
+
 ## 1.4.6
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.

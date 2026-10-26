@@ -1,3 +1,9 @@
+# Changelog
+
+## 0.2.7
+
+- The window uses the standard background instead of pure black.
+
 ## 0.2.2 — 2026-10-19
 
 - The web viewer uses the system font; it no longer bundles a font BifrOSt may not redistribute.

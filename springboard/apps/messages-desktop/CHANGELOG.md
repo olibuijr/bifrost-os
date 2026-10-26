@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.7
+
+- The empty-state text is hidden while the sign-in sheet covers it.
+
 ## 0.7.6
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.

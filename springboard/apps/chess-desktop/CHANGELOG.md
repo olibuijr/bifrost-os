@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.6
+
+- Pieces are drawn as chess symbols, and the board starts below the window buttons.
+
 ## 0.1.5
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.
