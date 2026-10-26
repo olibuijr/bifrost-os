@@ -474,6 +474,9 @@ pub struct Settings {
     st_gate: Option<(Lock, StEdit)>,
     /// the search field over the root page
     search: Search,
+    /// the sidebar's selected row shows the keyboard focus ring: Tab or an arrow key moved the focus there, and a touch
+    /// takes it away (the sidebar has the keyboard whenever the search field has not)
+    side_ring: bool,
     /// what Search finds, while it has a query (see `settings_search::index`)
     index: Option<Vec<settings_search::Entry>>,
     /// the page of each hit for the query it was found for (`hit_pages`), kept by `requery` so the sidebar's draw does
@@ -715,6 +718,7 @@ impl Settings {
             st_edge: None,
             st_gate: None,
             search: Search::new(ui, w),
+            side_ring: false,
             index: None,
             hits: (String::new(), Vec::new()),
             hit_open: None,
@@ -2012,6 +2016,9 @@ impl Settings {
         if self.transition.is_some() {
             return vec![];
         }
+        if matches!(ev, Event::Down(..)) {
+            self.side_ring = false;
+        }
         let (ev, x, y) = if self.side_w > 0 {
             if matches!(ev, Event::Down(..)) {
                 self.side_touch = x < self.side_w as f32 && !self.overlay_open();
@@ -2435,6 +2442,12 @@ impl Settings {
             // Up and Down step through the hits, opening each; Return opens the highlighted hit, else the first (the
             // field keeps its query, so the results stay in the sidebar)
             let hits = self.hit_pages();
+            // Tab leaves the field for the sidebar, which keeps the query's results
+            if matches!(out, Out::Named("Tab")) && self.side_w > 0 {
+                self.search.focus(false, t);
+                self.side_ring = true;
+                return vec![];
+            }
             if let Out::Named(dir @ ("Up" | "Down")) = out {
                 // the sidebar keeps the results beside the page they open; the single column has them on its root only
                 if self.side_w > 0 && !hits.is_empty() {
@@ -2454,12 +2467,58 @@ impl Settings {
             }
             return vec![];
         }
+        if self.sheet.is_none() && !self.overlay_open() {
+            if let Out::Named(name @ ("Up" | "Down" | "Tab")) = out {
+                return self.sidebar_key(ui, name, t);
+            }
+        }
         let submit = self.sheet.as_mut().is_some_and(|sh| sh.edit(ui, out, t));
         if submit {
             self.join(ui, t)
         } else {
             vec![]
         }
+    }
+
+    /// Keys while the sidebar has the keyboard (the window opens that way, and Tab leaves the search field for it): Up
+    /// and Down move the selection to the previous or next pane and open it, and Tab moves the focus to the search field.
+    /// While Search shows results the arrows step over the hits as in the field. The focus ring shows from the first key.
+    fn sidebar_key(&mut self, ui: &Ui, name: &str, t: f64) -> Vec<Effect> {
+        if self.side_w == 0 || self.sidebar.is_none() {
+            return vec![];
+        }
+        self.side_ring = true;
+        if name == "Tab" {
+            self.search.focus(true, t);
+            self.side_ring = false;
+            return vec![];
+        }
+        let down = name == "Down";
+        let hits = self.hit_pages();
+        let fx = if !hits.is_empty() {
+            match step_hit(&hits, self.highlighted_hit(&hits), down) {
+                Some(id) => self.open_page_id(ui, id, t),
+                None => vec![],
+            }
+        } else {
+            let pages = self.sidebar.as_ref().map(|sb| sb.push_pages()).unwrap_or_default();
+            let next = match pages.iter().position(|p| *p == self.side_selected()) {
+                Some(at) if down => pages.get(at + 1),
+                Some(at) => at.checked_sub(1).and_then(|k| pages.get(k)),
+                None if down => pages.first(),
+                None => pages.last(),
+            };
+            match next.copied() {
+                Some(id) => self.select(ui, id, t),
+                None => vec![],
+            }
+        };
+        let selected = self.side_selected();
+        if let Some(sb) = &mut self.sidebar {
+            sb.select(selected);
+            sb.reveal_selected(ui);
+        }
+        fx
     }
 
     fn join(&mut self, ui: &Ui, t: f64) -> Vec<Effect> {
@@ -4161,6 +4220,12 @@ impl Settings {
                 s.copy(img.view(), 0, 0);
             }
         }
+        // the keyboard focus ring on the selected row, over the cached column (the field has its own while it is typed in)
+        if self.side_ring && !self.search.active && self.sheet.is_none() {
+            if let Some(sb) = &self.sidebar {
+                sb.draw_selected_ring(s, ui);
+            }
+        }
         // the sidebar's search field is live, so it draws over the cached column
         if let Some(frame) = self.sidebar.as_ref().and_then(|sb| sb.search_frame(ui)) {
             self.search.draw_field(s, ui, frame, t);
@@ -5579,6 +5644,86 @@ mod e2e_w3_tests {
         assert!(!hits.contains(&PageId::Sounds));
         assert_eq!(st.highlighted_hit(&hits), None, "the Bluetooth hit is not shown, so it is not highlighted");
         assert!(!hits.contains(&st.side_selected()), "no hit row is highlighted beside Sound");
+    }
+
+    /// The sidebar has the keyboard when the window opens: Up and Down move the selection over its rows and open each
+    /// pane (the ends stay put), and the keys that type go nowhere.
+    #[test]
+    fn up_and_down_move_the_sidebar_selection() {
+        let ui = crate::shell::tests::ui();
+        let (mut st, _) = split(&ui);
+        let pages = st.sidebar_list().expect("sidebar").push_pages();
+        assert!(pages.len() >= 3, "the sidebar has rows to step over: {pages:?}");
+        st.select(&ui, pages[0], 0.0);
+        settle(&mut st, &ui);
+        assert!(!st.search.active && !st.text_focused(), "the sidebar, not the search field, has the keyboard");
+        st.key(&ui, Out::Named("Down"), 0.0);
+        settle(&mut st, &ui);
+        assert_eq!(st.side_selected(), pages[1], "Down selects the next row");
+        assert_eq!(st.stack().first(), Some(&pages[1]), "and opens its pane");
+        st.key(&ui, Out::Named("Down"), 0.0);
+        settle(&mut st, &ui);
+        assert_eq!(st.side_selected(), pages[2]);
+        st.key(&ui, Out::Named("Up"), 0.0);
+        settle(&mut st, &ui);
+        assert_eq!(st.side_selected(), pages[1], "Up goes back one");
+        st.key(&ui, Out::Named("Up"), 0.0);
+        st.key(&ui, Out::Named("Up"), 0.0);
+        settle(&mut st, &ui);
+        assert_eq!(st.side_selected(), pages[0], "the first row stays selected");
+        assert_eq!(st.stack().first(), Some(&pages[0]));
+        let last = *pages.last().unwrap();
+        st.select(&ui, last, 0.0);
+        settle(&mut st, &ui);
+        st.key(&ui, Out::Named("Down"), 0.0);
+        assert_eq!(st.side_selected(), last, "the last row stays selected");
+        st.key(&ui, Out::Text("x".into()), 0.0);
+        assert_eq!(st.search.query(), "", "typing with the sidebar focused does not reach the search field");
+    }
+
+    /// Tab moves the keyboard between the sidebar and the search field, each with its focus ring.
+    #[test]
+    fn tab_cycles_focus_between_the_sidebar_and_the_search_field() {
+        let ui = crate::shell::tests::ui();
+        let (mut st, _) = split(&ui);
+        let pages = st.sidebar_list().expect("sidebar").push_pages();
+        st.select(&ui, pages[0], 0.0);
+        settle(&mut st, &ui);
+        assert!(!st.side_ring, "no ring before a key is used");
+        st.key(&ui, Out::Named("Tab"), 0.0);
+        assert!(st.search.active && st.text_focused(), "Tab from the sidebar focuses the search field (its own ring)");
+        assert!(!st.side_ring);
+        st.key(&ui, Out::Text("disp".into()), 0.0);
+        assert_eq!(st.search.query(), "disp", "typing goes to the field");
+        st.key(&ui, Out::Named("Tab"), 0.0);
+        assert!(!st.search.active && !st.text_focused(), "Tab from the field returns to the sidebar");
+        assert!(st.side_ring, "the sidebar's selected row shows the ring");
+        assert_eq!(st.search.query(), "disp", "the query is kept");
+        st.key(&ui, Out::Named("Tab"), 0.0);
+        assert!(st.search.active, "and Tab goes round to the field again");
+    }
+
+    /// The ring has a row to surround, a touch takes it away, and arrows over search results step the hits from the sidebar.
+    #[test]
+    fn a_touch_clears_the_ring_and_arrows_step_search_hits_from_the_sidebar() {
+        let ui = crate::shell::tests::ui();
+        let (mut st, mut prefs) = split(&ui);
+        st.key(&ui, Out::Named("Down"), 0.0);
+        assert!(st.side_ring);
+        let (_, y, w, h) = st.sidebar_list().unwrap().selected_plate(&ui).expect("the selected row has a plate");
+        assert!(w > 0.0 && h > 0.0 && y + h > 0.0 && y < st.h as f32, "the ring has a row to surround: y {y} h {h}");
+        let x = st.side_w as f32 + 40.0;
+        tap(&mut st, &ui, &mut prefs, x, 400.0);
+        assert!(!st.side_ring, "a touch removes the keyboard ring");
+        st.search.active = true;
+        st.key(&ui, Out::Text("display".into()), 0.0);
+        let hits = st.hit_pages();
+        let last = *hits.last().expect("a match");
+        st.key(&ui, Out::Named("Tab"), 0.0);
+        assert!(!st.search.active);
+        st.key(&ui, Out::Named("Up"), 0.0);
+        settle(&mut st, &ui);
+        assert_eq!(st.side_selected(), last, "Up over the results opens the last hit");
     }
 
     /// Up in Search with no hit chosen yet opens the last hit (the first one's highlight is only a cue).
