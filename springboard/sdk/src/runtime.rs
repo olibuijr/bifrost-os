@@ -33,7 +33,7 @@ pub(crate) fn merge_tree(mut app: Vec<crate::proto::NodeExt>, links: &[bifrost_u
 /// What the shell sends the app besides configuration.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Input {
-    /// A press, drag or release (`t` in ms), with the modifier keys held at the time (`NSEvent.modifierFlags`): a Shift-click
+    /// A press, drag or release (`t` in ms), with the modifier keys held at the time (the reference event modifier flags): a Shift-click
     /// extends a selection and a Cmd-click toggles one item. Plain touches and synthesized presses carry none.
     Touch { kind: TouchKind, id: u32, x: f32, y: f32, t: f64, mods: crate::proto::ModifierFlags },
     Key(KeyInput),
@@ -413,7 +413,7 @@ impl Ctx {
         Ok(closed)
     }
 
-    /// Orders the main window out (`NSWindow.orderOut`): a document app whose last document closed has no window, as on
+    /// Orders the main window out (the reference window's order-out call): a document app whose last document closed has no window, as on
     /// the reference, and keeps running. The shell drops the main window from the desk and sends `ToApp::Reopen` (the
     /// app's `reopen`) when the person activates the app again; `show_main_window` brings it back sooner. Nothing is
     /// sent when it is already out.

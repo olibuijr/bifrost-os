@@ -57,7 +57,7 @@ impl WindowSpec {
         Self { title: title.to_string(), width, height, position: None, title_double_click: false, cascade: false, full_size: false }
     }
 
-    /// Asks for a full-size-content window, as AppKit's `NSWindowStyleMaskFullSizeContentView`: the app draws its own
+    /// Asks for a full-size-content window, as the reference toolkit's full-size-content window style does: the app draws its own
     /// title and toolbar row under the traffic lights, the way its main window does with `window = "full-size"` (a
     /// second document window looks like the first instead of carrying the shell's title row over the app's).
     pub fn full_size_content(mut self) -> Self {
@@ -65,7 +65,7 @@ impl WindowSpec {
         self
     }
 
-    /// Asks the shell to cascade the window from the app's own windows, as AppKit's `cascadeTopLeftFromPoint:` does
+    /// Asks the shell to cascade the window from the app's own windows, as the reference toolkit's cascade call does
     /// for a document window: the first one opens beside the main window (or over its trailing side when there is no
     /// room), each later one a title bar's height down and right of the window opened before it. A position given with
     /// [`WindowSpec::at`] wins.
@@ -146,7 +146,7 @@ impl AppWindows {
     }
 
     /// Whether the main window is on the desk. It stays in the registry (its id keeps serving `draw` and `event`) while
-    /// it is ordered out, as an `NSWindow` that is closed but not released.
+    /// it is ordered out, as a reference window that is closed but not released.
     pub fn main_shown(&self) -> bool {
         !self.main_out
     }

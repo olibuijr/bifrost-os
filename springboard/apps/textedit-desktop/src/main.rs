@@ -2730,7 +2730,7 @@ impl App for TextEditApp {
     }
 
     /// Activated (Dock, the app switcher, Search) with no window open, after the last document closed: the shell has put
-    /// the main window back, and it shows a new Untitled. The reference shows its open panel here when the iCloud
+    /// the main window back, and it shows a new Untitled. The reference shows its open panel here when the cloud-storage
     /// document picker is on; this editor starts with an Untitled on launch, so a reopen does the same (E2E12 2).
     fn reopen(&mut self, ctx: &Ctx) -> bool {
         if self.docs.is_empty() {

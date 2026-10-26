@@ -9,7 +9,7 @@ use std::thread;
 
 type Job = Box<dyn FnOnce() + Send + 'static>;
 
-/// `NSOperationQueue.defaultMaxConcurrentOperationCount`: no fixed limit, which here means one per CPU core.
+/// The reference operation queue's default concurrency: no fixed limit, which here means one per CPU core.
 pub const DEFAULT_MAX_CONCURRENT_OPERATIONS: usize = 0;
 
 struct State {

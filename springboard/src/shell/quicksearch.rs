@@ -1013,13 +1013,13 @@ fn compose(query: &str, calc: Option<Group>, top: Option<Group>, sections: Vec<G
     groups.extend(documents);
     groups.extend(files);
     groups.push(Group { title: "Search in Apps", hits: vec![Hit::Terminal(query.to_string())] });
-    scoped(groups, &super::spotlight_scope::current())
+    scoped(groups, &super::search_scope::current())
 }
 
 /// The category a hit is listed under in Settings > Search, and the path it names when it is a file. `None` for
 /// the hits that no switch controls (the Search in Apps action, the Top Hit's own kind, the calculator answer).
-fn hit_category(hit: &Hit) -> (Option<super::spotlight_scope::Category>, Option<&Path>) {
-    use super::spotlight_scope::Category as C;
+fn hit_category(hit: &Hit) -> (Option<super::search_scope::Category>, Option<&Path>) {
+    use super::search_scope::Category as C;
     match hit {
         Hit::App(_) | Hit::Shortcut { .. } => (Some(C::Applications), None),
         Hit::Settings(_) | Hit::SettingsIntent { .. } | Hit::SettingsAction { .. } | Hit::MediaTransport { .. } => (Some(C::Settings), None),
@@ -1036,7 +1036,7 @@ fn hit_category(hit: &Hit) -> (Option<super::spotlight_scope::Category>, Option<
 
 /// Drops the hits Settings > Search hides, and any group left empty. A group with no hits stays only when it was
 /// empty to begin with (the "Search in Apps" action is never hidden).
-fn scoped(groups: Vec<Group>, scope: &super::spotlight_scope::Scope) -> Vec<Group> {
+fn scoped(groups: Vec<Group>, scope: &super::search_scope::Scope) -> Vec<Group> {
     groups
         .into_iter()
         .filter_map(|mut g| {
@@ -3207,8 +3207,8 @@ mod tests {
     }
 
     #[test]
-    fn spotlight_scope_hides_switched_off_kinds_and_excluded_folders() {
-        use super::super::spotlight_scope::{Category, Scope};
+    fn search_scope_hides_switched_off_kinds_and_excluded_folders() {
+        use super::super::search_scope::{Category, Scope};
         let mut scope = Scope::default();
         scope.set_allowed(Category::Settings, false);
         scope.exclude(Path::new("/home/u/Private"));
@@ -3949,7 +3949,7 @@ mod file_actions_tests {
         assert_eq!(results("wi", &[])[0].hits, vec![Hit::Settings("Wi-Fi")]);
     }
 
-    /// E2E12 1: "AAPL" listed "Set Wallpaper to ..." in Shortcuts through scattered letters, in Spotlight and in Look
+    /// E2E12 1: "AAPL" listed "Set Wallpaper to ..." in Shortcuts through scattered letters, in Search and in Look
     /// Up's Search section. Every section but Applications (and Deildu) is strict; an app's name stays fuzzy.
     #[test]
     fn only_app_names_match_by_scattered_letters() {

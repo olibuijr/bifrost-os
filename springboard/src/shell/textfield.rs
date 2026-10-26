@@ -84,7 +84,7 @@ pub struct TextField {
     undo: Option<(String, usize)>,
     /// what Undo took away, for Ctrl+Shift+Z; any new edit drops it
     redo: Option<(String, usize)>,
-    /// whether the caret blinks over the placeholder while the field is empty (false for Spotlight, which shows only
+    /// whether the caret blinks over the placeholder while the field is empty (false for Search, which shows only
     /// the placeholder until typing starts)
     caret_while_empty: bool,
 }
@@ -116,7 +116,7 @@ impl TextField {
         }
     }
 
-    /// A field that shows only its placeholder while empty: the caret appears once there is text, as the Spotlight
+    /// A field that shows only its placeholder while empty: the caret appears once there is text, as Search
     /// field does.
     pub fn without_empty_caret(mut self) -> Self {
         self.caret_while_empty = false;
@@ -728,7 +728,7 @@ mod tests {
         let plain = field(&ui, false);
         assert!(plain.draws_caret(0.0), "an ordinary empty field blinks its caret over the placeholder");
         let mut spot = TextField::new(&ui, "Search", 17.0, false, 10).without_empty_caret();
-        assert!(!spot.draws_caret(0.0), "the empty Spotlight field shows only the placeholder");
+        assert!(!spot.draws_caret(0.0), "the empty Search field shows only the placeholder");
         spot.edit(&ui, &Out::Text("a".into()), 0.0);
         assert!(spot.draws_caret(0.0), "the caret appears with the first character");
         spot.set_text(&ui, "");

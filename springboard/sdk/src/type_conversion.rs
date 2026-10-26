@@ -1,6 +1,6 @@
 //! Conversion rules between document and content types: which way an app can turn content of one type into another,
 //! and whether the result loses anything. These are BifrOSt's own rules for the types in `bifrost_ui::uttype`, not
-//! Apple's catalogue of conversions, which is larger.
+//! the reference catalogue of conversions, which is larger.
 //!
 //! A pair converts with [`method`]. Content that already conforms to the target (a PNG to `public.image`) is
 //! `Identity`, and a listed rule applies to the exact pair. Pairs with no rule return None, and the app must refuse

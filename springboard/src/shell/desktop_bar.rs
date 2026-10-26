@@ -551,7 +551,7 @@ pub(super) fn changed_bar_rects(before:&[(Menu,f32,f32,String)],after:&[(Menu,f3
     merged.into_iter().map(|(a,b)|(a,0,b-a,height)).collect()
 }
 /// A document window's name in the Window menu, as its title bar reads: the reference lists an edited document's window
-/// with the "– Edited" its title carries (`NSWindow` `documentEdited`).
+/// with the "– Edited" its title carries (the reference window's document-edited flag).
 pub(super) fn window_menu_title(title: &str, edited: bool) -> String {
     if edited { format!("{title} \u{2013} Edited") } else { title.to_string() }
 }
@@ -1103,7 +1103,7 @@ impl Shell {
         for r in [self.cc_desk_rect(),self.center_desk_rect()].into_iter().flatten() {let (x,y,w,h)=r;v.push(((x-g).max(0.) as i32,(y-g).max(0.) as i32,(w+2.*g) as i32,(h+2.*g) as i32));}
         if let Some(((x,y,w,h),_))=self.quicksearch.desk_overlay(&self.ui,self.w){v.push((x as i32,y as i32,w as i32,h as i32));}
         if let Some(((x,y,w,h),_))=self.assistant.desk_overlay(&self.ui,self.w){v.push((x as i32,y as i32,w as i32,h as i32));}
-        // the Quick Look card floats over the windows: the GPU presenter keeps its region (cleared again once it closes)
+        // the Preview card floats over the windows: the GPU presenter keeps its region (cleared again once it closes)
         if let Some((x,y,w,h))=self.quick_look_rect(){v.push((x as i32,y as i32,w as i32,h as i32));}
         // the Cmd+Tab strip floats over the windows the same way (cleared again once it closes)
         if let Some((x,y,w,h))=self.cmdtab_rect(){v.push((x as i32,y as i32,w as i32,h as i32));}
@@ -1863,7 +1863,7 @@ impl Shell {
                 frames.push(crate::bare::wayland::ChromeFrame{shape:Vec::new(),dock:None,id:super::chrome_ids::ASSISTANT,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
             }
         }
-        // Quick Look: id 7, an overlay surface above every window (its keys come from the shell's own keyboard reader)
+        // Preview: id 7, an overlay surface above every window (its keys come from the shell's own keyboard reader)
         if let Some(((x,y,w,h),mask))=self.quick_look_overlay() {
             let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
             let mut image=Image{w,h,px:data};image.apply_mask(&mask);
@@ -1932,7 +1932,7 @@ impl Shell {
                 if l.image.w>0&&l.image.h>0 {frames.push(crate::bare::wayland::ChromeFrame{shape:Vec::new(),dock:None,id,x:l.x,y:l.y,width:l.image.w,height:l.image.h,pixels:l.image.px.clone(),input:l.input});}
             }
         }
-        // a tablet's on-screen keyboard: id 16 (7 is Quick Look), an overlay surface above every window from its resting top to the bottom
+        // a tablet's on-screen keyboard: id 16 (7 is Preview), an overlay surface above every window from its resting top to the bottom
         // edge (drawn only into the desktop frame, the windows covered it). It stays up for the whole slide: the frame
         // is clear above the sliding keyboard, so the surface keeps one size and the slide plays inside it.
         if self.desk_keyboard_visible() {

@@ -40,7 +40,7 @@ pub fn image(ctx: &Ctx, number: u32, options: ImageOptions) -> u32 {
     call(ctx, "image", obj(vec![("number", num(number)), ("options", options.to_json())]))
 }
 
-/// Stacks this app's window at `level` (`NSWindow.level`: a floating window stays above the normal windows and below
+/// Stacks this app's window at `level` (the reference window level: a floating window stays above the normal windows and below
 /// menus and panels). The shell keeps the level for as long as the app runs; it is `Normal` until the app asks.
 pub fn set_level(ctx: &Ctx, level: Level) {
     ctx.send_to_shell(crate::proto::ToShell::WindowLevel(level));
@@ -53,7 +53,7 @@ pub fn set_window_level(ctx: &Ctx, window: crate::app_windows::WindowId, level: 
     ctx.send_to_shell(crate::proto::ToShell::WindowLevelOf { id: window.0, level });
 }
 
-/// Resizes this app's main window to a content size of `w` x `h` points (`NSWindow.setContentSize`, or
+/// Resizes this app's main window to a content size of `w` x `h` points (the reference window's set-content-size call, or
 /// `setFrame:display:animate:` with the animation). The shell keeps the window's top-left corner, holds the size to the
 /// content limits ([`set_content_limits`], else the manifest's `min_size` / `max_size`) and the screen's work area, and
 /// animates the change like a zoom. The app then gets the new size as an ordinary configure, so it lays out from
@@ -68,7 +68,7 @@ pub fn set_content_size(ctx: &Ctx, w: f32, h: f32) {
     }
 }
 
-/// Sets this app's main window content limits in points (`NSWindow.contentMinSize` and `contentMaxSize`): the person
+/// Sets this app's main window content limits in points (the reference window's content minimum and maximum sizes): the person
 /// cannot resize the window outside them, and [`set_content_size`] is held to them. `None` uses the manifest's
 /// `min_size` / `max_size`. The limits hold for as long as the app runs. A limit that is not finite and positive is
 /// sent as `None`.

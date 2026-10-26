@@ -1,12 +1,12 @@
 # Spotlight scope (Settings > Spotlight)
 
-Code: `springboard/src/shell/spotlight_scope.rs` (the scope model), `spotindex.rs` (the Core Search index), the Spotlight
+Code: `springboard/src/shell/search_scope.rs` (the scope model), `spotindex.rs` (the Core Search index), the Spotlight
 page in `shell/pages.rs` and `settings.rs`.
 
 ## What the page controls
 
 - Which kinds of result Search lists. Each category is on by default. The categories are the `Scope` kinds in
-  `spotlight_scope.rs`, in the order the page lists them.
+  `search_scope.rs`, in the order the page lists them.
 - Folders that Search never lists. A folder is excluded together with everything under it.
 
 ## Storage

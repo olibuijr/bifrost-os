@@ -55,7 +55,7 @@ pub(crate) enum Effect {
     OpenApplication(String, String),
     /// Open (double-click, Cmd+O, the context menu's Open) and Open With: hand the files to the shell's workspace,
     /// which opens each in the default app for its type, or in the installed app named here
-    /// (`workspace::open_file` / `open_with`, `NSWorkspace.open(_:)` parity). Files asks the shell for a read grant
+    /// (`workspace::open_file` / `open_with`, the reference workspace's open call, same behaviour). Files asks the shell for a read grant
     /// per file first (`Ctx::grant_path`): the workspace names files by grant, never by path.
     OpenFiles(Vec<PathBuf>, Option<String>),
 }

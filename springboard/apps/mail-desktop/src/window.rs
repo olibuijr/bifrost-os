@@ -362,7 +362,7 @@ fn open_has_files(mail: &Mail) -> bool {
     mail.open.and_then(|uid| mail.attachments.get(&uid)).is_some_and(|files| !files.is_empty())
 }
 
-/// What a right-click on a message offers, in the order of macOS Mail's message context menu: the Message and Move menu
+/// What a right-click on a message offers, in the order of the reference mail app's message context menu: the Message and Move menu
 /// items that act on one message (`None` is a separator line).
 const CONTEXT_MENU: [Option<u32>; 21] = [
     Some(MENU_NEW_VIEWER),
@@ -901,7 +901,7 @@ impl MailWindow {
     }
 
     /// A press, drag or release at (`x`, `y`) with the modifier keys held for it: a click on a message with Cmd toggles it
-    /// in the selection and with Shift extends the selection from the anchor (`NSEvent.modifierFlags`).
+    /// in the selection and with Shift extends the selection from the anchor (the reference event modifier flags).
     pub fn touch(&mut self, ctx: &Ctx, kind: TouchKind, x: f32, y: f32, t: f64, mods: ModifierFlags) -> bool {
         match kind {
             TouchKind::Down => {
@@ -1633,7 +1633,7 @@ impl MailWindow {
         }
     }
 
-    /// A right-click at (`x`, `y`): on a message, it becomes the selection (as in macOS Mail) and its context menu opens
+    /// A right-click at (`x`, `y`): on a message, it becomes the selection (as in the reference mail app) and its context menu opens
     /// there; the choice comes back as a menu action (`Input::ContextAction`). False anywhere else or under a sheet.
     pub fn context(&mut self, ctx: &Ctx, x: f32, y: f32) -> bool {
         if self.mail.sheet.is_some() {

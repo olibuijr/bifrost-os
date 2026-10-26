@@ -1,4 +1,4 @@
-//! A managed object context over in-memory records (`NSManagedObjectContext`): objects are inserted, edited and
+//! A managed object context over in-memory records (the reference managed object context): objects are inserted, edited and
 //! deleted in a working copy, the context knows which objects changed since the last save, `save` makes the working
 //! copy the saved state, and `rollback` throws the working changes away. Fetches run over the working copy with the
 //! same [`FetchRequest`] the list views use.
@@ -84,7 +84,7 @@ impl<R: Clone + PartialEq + Record> ManagedContext<R> {
         self.faults.contains(&id)
     }
 
-    /// Loads a fault from the saved state (`NSManagedObject` faulting in). An object that is resident already is
+    /// Loads a fault from the saved state (the reference managed object's faulting in). An object that is resident already is
     /// returned as it is.
     pub fn fault_in(&mut self, id: ObjectId) -> Result<&R, ContextError> {
         if self.faults.remove(&id) {
@@ -229,7 +229,7 @@ impl<R: Clone + PartialEq + Record> ManagedContext<R> {
     }
 }
 
-/// Live results over a context (`NSFetchedResultsController`, the list a `@FetchRequest` keeps current): a fetch
+/// Live results over a context (the reference fetched-results controller, the list a fetch request keeps current): a fetch
 /// request and the rows it returned last time. `refresh` runs the request again over the context and reports whether
 /// the rows changed (an identity, a value or the order), so a view redraws only when it has to.
 #[derive(Clone, Debug, PartialEq)]

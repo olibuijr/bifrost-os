@@ -1,7 +1,15 @@
 //! Open With: the apps that declare the focused file's type, as the shell's launch service names them, the default
+<<<<<<< HEAD
 //! marked and first. A click on an app opens the file in it (`workspace::open_with`, `NSWorkspace.open(_:withApplicationAt:)`);
 //! the default itself is chosen in Settings > General > Default Apps. "Other…" at the end lists every installed app,
 //! as the reference's Open With > Other… does, for a file no installed app declares (an RTF only TextEdit names).
+||||||| f62164531
+//! marked and first. A click on an app opens the file in it (`workspace::open_with`, `NSWorkspace.open(_:withApplicationAt:)`);
+//! the default itself is chosen in Settings > General > Default Apps.
+=======
+//! marked and first. A click on an app opens the file in it (`workspace::open_with`, the reference workspace's open-with call);
+//! the default itself is chosen in Settings > General > Default Apps.
+>>>>>>> handoff/fix-names
 use crate::*;
 use bifrost_app::launch_services::Candidate;
 

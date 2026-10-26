@@ -327,7 +327,7 @@ pub trait View: 'static {
     fn dirty_rect(&self) -> Rect {
         self.base().frame
     }
-    /// Drag source (`NSDraggingSource`): `Some` when a press on this view (or a view inside it that does not take
+    /// Drag source (the reference dragging source): `Some` when a press on this view (or a view inside it that does not take
     /// the press) that moves past [`DRAG_SLOP`] begins a drag session with these items. The window cancels the control
     /// that held the press, and `ViewApp` starts the session ([`ViewApp::event`]).
     fn dnd_source(&self) -> Option<DragSpec> {

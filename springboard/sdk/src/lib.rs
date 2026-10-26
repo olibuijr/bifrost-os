@@ -86,7 +86,7 @@ pub mod font_descriptor;
 pub mod font_substitution;
 /// App-facing font objects, specs, the font manager, collections and fallback cascade.
 pub use bifrost_render::{fontinfo, fontobj};
-/// The installed font families (`fontprefs::installed`, `NSFontManager.availableFontFamilies`) for font panels.
+/// The installed font families (`fontprefs::installed`, the reference font manager family list) for font panels.
 pub use bifrost_render::fontprefs;
 pub mod screen_saver_defaults;
 pub mod screen_saver;
@@ -233,7 +233,7 @@ pub mod oauth_credential;
 pub mod workflow;
 pub use bifrost_ui::print;
 pub use bifrost_ui::print_pages;
-/// Plural categories, noun plurals and `^[2 apple](inflect: true)` grammar agreement (`bifrost_ui::inflection`).
+/// Plural categories, noun plurals and `^[2 pear](inflect: true)` grammar agreement (`bifrost_ui::inflection`).
 pub use bifrost_ui::inflection;
 pub use bifrost_ui::print_presets;
 pub use bifrost_ui::print_ranges;
@@ -893,7 +893,7 @@ pub trait App {
     fn text_input(&mut self, _ctx: &Ctx, _ev: crate::proto::ToApp) -> bool {
         false
     }
-    /// `NSServicesMenuRequestor` `writeSelectionToPasteboard:`: the text selected in the focused view, which Look Up
+    /// The reference services requestor's write-selection call: the text selected in the focused view, which Look Up
     /// (Ctrl+Cmd+D) and the Services menu act on (`ToApp::SelectionRequest`). `None` lets the SDK answer with the
     /// selection of the focused text field it last reported (`Ctx::text_state`, which `ViewApp` and the text kit send),
     /// so an app whose text lives in SDK text fields needs nothing here. An app that draws its own text (an editor, a
@@ -908,7 +908,7 @@ pub trait App {
     fn selection_rect(&mut self, _ctx: &Ctx) -> Option<(f32, f32, f32, f32)> {
         None
     }
-    /// IME and keyboard composition for `window`, the key window (`NSTextInputClient` of the window's first
+    /// IME and keyboard composition for `window`, the key window (the reference text input client of the window's first
     /// responder): `SetMarkedText`, `UnmarkText`, `DeleteSurrounding` and `AccentHold`, as `text_input` takes them. The
     /// shell sends them to the window that has the keys, so marked text (an input method's candidate, a held letter's
     /// accent list) lands in the window being typed in. The default sends the main window's to `text_input` and drops

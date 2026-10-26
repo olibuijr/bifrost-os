@@ -31,14 +31,14 @@ use bifrost_core::json::{self, Json};
 
 pub use crate::rule_match::{Action, LoadType, Request, ResourceType, Rule, RuleSet, Trigger, UrlFilter, Verdict};
 
-/// Rules one list may hold (`WKContentRuleListStore` allows 150,000).
+/// Rules one list may hold (the reference content rule list store allows 150,000).
 pub const MAX_RULES: usize = 150_000;
 /// Entries of one domain list.
 pub const MAX_DOMAINS: usize = 150;
 /// Longest list JSON the store compiles, bytes.
 pub const MAX_JSON_BYTES: usize = 50 * 1024 * 1024;
 
-/// Why a list did not compile (`WKErrorContentRuleListStoreCompileFailed`).
+/// Why a list did not compile (the reference store's compile-failed error).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ContentRuleError {
     /// Zero-based index of the rule at fault, when one is.

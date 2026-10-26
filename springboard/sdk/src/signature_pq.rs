@@ -8,7 +8,7 @@
 //! key; a signature made under one context does not verify under another.
 //!
 //! Not here: the official FIPS 204 known-answer vectors, which are not in the repo yet; see the `Post-quantum KEM and
-//! signatures` row in `docs/parity-matrix/data/apple-cryptokit.json`.
+//! signatures` row in the cryptography file under `docs/parity-matrix/data/`.
 
 use crate::entropy;
 use bifrost_core::mldsa::{self, Error as CoreError};

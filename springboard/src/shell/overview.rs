@@ -579,7 +579,7 @@ impl Overview {
         let Some(d) = sh.desk.as_mut() else { return };
         self.spaces.sync(&d.wins);
         self.foreign_before = foreign;
-        // entering Overview ends Show Desktop, as Mission Control does on Golden Gate: the windows put aside are shown
+        // entering Overview ends Show Desktop, as the reference window overview does on Golden Gate: the windows put aside are shown
         // as tiles and are back on the desktop when Overview closes
         d.bring_back_put_aside();
         self.front_before = d.front().map(|w| w.app);
@@ -2106,7 +2106,7 @@ mod tests {
         assert_eq!(tiles, vec![AppId::Settings, AppId::Terminal]);
     }
 
-    /// Overview right after Show Desktop shows the windows put aside (Mission Control ends Show Desktop), while a
+    /// Overview right after Show Desktop shows the windows put aside (the reference overview ends Show Desktop), while a
     /// window the person minimized stays in the Dock.
     #[test]
     fn overview_after_show_desktop_shows_the_windows_put_aside() {

@@ -981,7 +981,7 @@
     }
 
     /// E2E6 1: an app opened while it has drawn nothing yet (its process just started) is the front app, and the focus
-    /// the window server hands back to the window it still knows in front (Spotlight or the Apps grid closing takes its
+    /// the window server hands back to the window it still knows in front (Search or the Apps grid closing takes its
     /// exclusive keyboard away) does not put that window over it. Once the app is gone, the hand-back raises as before.
     /// Returns the front app and the screen after the hand-back.
     #[cfg(feature="desktop-wayland")]

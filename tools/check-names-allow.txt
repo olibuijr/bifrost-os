@@ -22,3 +22,30 @@ springboard/ui/src/lib.rs:spotlight_tool:existing public module path retained fo
 tools/bifrost.py:\b(macos|ipados)\b:stable reference-data selectors in the parity CLI
 springboard/src/shell/contactcontainers.rs:This Mac-like:a made-up container name in a rename test
 tools/parity/os_inventory.py:About This Mac:the reference feature name, as parity data
+*:UIDs:plural of UID (unique identifier: mail UIDs, device UIDs, card UIDs), not a toolkit class prefix
+springboard/src/shell/search_scope.rs:spotlight_(off|excluded):persisted settings.ini keys written by existing installs; renaming them would drop the saved choice
+springboard/cmd/src/mdutil.rs:spotlight_excluded:the same persisted settings key, named in a comment
+springboard/sdk/src/quicksearch.rs:hide_in_spotlight:existing public API name retained for search-index parity
+springboard/sdk/src/searchable_entity.rs:hide_in_spotlight:existing public API name retained for search-index parity
+springboard/src/shell/entity_index.rs:hide_in_spotlight:existing public API name retained for search-index parity
+springboard/src/shell/desk.rs:spotlight_front_tests|hand-back as Spotlight's keyboard goes:a test module name and its assertion message (code lines; desk.rs is edited by another change, comments only here)
+springboard/apps/files/src/views/options.rs:"apple":the fruit, a sort-order test entry name
+springboard/apps/locate-desktop/src/window.rs:"iphone":icon asset id of the Devices section (assets are keyed by it)
+springboard/apps/stocks-desktop/src/*.rs:Apple Inc\.:a listed company's name in quote sample data and a doc example
+springboard/src/shell/market_quotes.rs:Apple Inc\.:a listed company's name in quote sample data
+springboard/cmd/src/osacompile.rs:AppleScript:language selector accepted by the compatible command-line tool (-l AppleScript)
+springboard/cmd/src/osascript.rs:AppleScript:language selector accepted by the compatible command-line tool (-l AppleScript)
+springboard/render/src/qr_generate.rs:finder:the QR specification's term for the three corner squares
+springboard/sdk/src/image_generate.rs:finder:the QR specification's term for the three corner squares
+springboard/sdk/src/bundle_info.rs://Apple//DTD|www\.apple\.com:public identifier and URL of the property-list DTD in the file format header
+springboard/src/installer/plan.rs:Apple Inc\.:hardware vendor string read from the firmware (DMI)
+springboard/sdk/src/font_substitution.rs:apple chancery:name of a font to be substituted, as data
+springboard/ui/src/account_suggestions.rs:icloud\.com|iCloud Mail:third-party mail provider domain and name offered when adding an account
+springboard/ui/src/photo_media.rs:Apple iOS|apple_content_id|the_apple_identifier_is:signature at the start of the maker note in the photo file format, and the public function and test that read it
+springboard/ui/src/inflection.rs:[Aa]pples?:the fruit, in plural-agreement examples and tests
+springboard/ui/src/search_rank.rs:apple:the fruit, a ranking test term
+springboard/ui/src/proofread.rs:apple:the fruit, a grammar test sentence
+springboard/ui/src/dictation_commands.rs:[Aa]pples:the fruit, a dictation test sentence
+tools/build-iso.sh:hid_appletb_kbd|applespi:kernel module names (Linux drivers for the Touch Bar keyboard and SPI keyboard)
+springboard/src/bare/power.rs:apple\x3a\x3akbd_backlight:name of the Linux platform driver module for the backlight
+springboard/src/shell/photos/library.rs:apple_content_id:the public function that reads that maker note

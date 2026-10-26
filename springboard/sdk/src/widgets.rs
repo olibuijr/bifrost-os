@@ -575,7 +575,7 @@ pub fn source_list(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, list: &SourceList,
 
 /// `source_list` whose rows are drawn only inside `rows` (points), while the column's material still fills all of
 /// `bounds`: a full-size window's sidebar keeps its material under the traffic lights' band but a scrolled row never
-/// draws there (`NSScrollView`'s content insets under a unified toolbar). One pass, one Sidebar accessibility group.
+/// draws there (the reference scroll view's content insets under a unified toolbar). One pass, one Sidebar accessibility group.
 pub fn source_list_in(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, list: &SourceList, scroll: f32, pressed: Option<u32>, rows: Option<Rect>) {
     let (bx, by, bw, bh) = (ui.pt(bounds.x) as usize, ui.pt(bounds.y) as usize, ui.pt(bounds.w).ceil() as usize, ui.pt(bounds.h).ceil() as usize);
     if !window_material(s, ui, bounds, 0.0, Material::Sidebar, State::default()) {

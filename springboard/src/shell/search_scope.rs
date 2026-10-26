@@ -32,7 +32,7 @@ impl Category {
     /// Every category, in the order the page lists them.
     pub const ALL: [Category; 8] = [Category::Applications, Category::Settings, Category::Contacts, Category::CalendarEvents, Category::Files, Category::Documents, Category::Cities, Category::Calculator];
 
-    /// The row title on the Spotlight page.
+    /// The row title on the Search page.
     pub fn title(self) -> &'static str {
         match self {
             Category::Applications => "Applications",

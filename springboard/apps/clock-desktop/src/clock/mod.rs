@@ -67,7 +67,7 @@ const PICKER_COL_PT: f32 = 100.0;
 const VISIBLE_ROWS: f32 = 7.0;
 const POP_W_PT: f32 = 318.0;
 const POP_H_PT: f32 = 540.0;
-/// The sheet hangs from the toolbar's bottom edge, as a macOS sheet hangs from the title bar.
+/// The sheet hangs from the toolbar's bottom edge, as a sheet hangs from the title bar.
 const POP_Y_PT: f32 = UNIFIED_BAR_PT;
 const POP_ROW_PT: f32 = 32.0;
 const POP_PICKER_Y_PT: f32 = 156.0;

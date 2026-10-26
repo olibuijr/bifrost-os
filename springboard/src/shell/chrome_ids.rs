@@ -20,7 +20,7 @@ pub const CONTROL_CENTER: u32 = 4;
 pub const NOTIFICATION_CENTER: u32 = 5;
 /// The assistant panel.
 pub const ASSISTANT: u32 = 6;
-/// Quick Look.
+/// Preview.
 pub const QUICK_LOOK: u32 = 7;
 /// The Apps grid.
 pub const APP_GRID: u32 = 8;

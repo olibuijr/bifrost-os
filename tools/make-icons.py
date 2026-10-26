@@ -5,7 +5,7 @@ usage: tools/make-icons.py [--size PX --out DIR] [--only NAME,...] [--sheet FILE
 
 With no arguments it writes every icon where the build expects it:
   springboard/res/app-icons/<bundle id>.png   the 13 shell built-in icons at 1024 px; springboard/tools/pack.py
-                                              turns them into the icons/<bundle id>.raw the Dock and Launchpad load
+                                              turns them into the icons/<bundle id>.raw the Dock and the Applications grid load
   springboard/apps/<app>-desktop/icon.png     the desktop app icons that used to be copies of other makers' artwork,
                                               180 px RGBA like the other app icons
   springboard/res/settings-icons/<pane>.png   the 27 Settings pane tiles at 58 px RGBA (29 pt at 2x, 6.5 pt corners, as

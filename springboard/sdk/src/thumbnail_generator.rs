@@ -6,7 +6,7 @@
 //! - [`FileThumbnailRequest`], [`ThumbnailReply`] and [`answer_provider_call`] are the provider side
 //!   (`QLThumbnailProvider`, `QLFileThumbnailRequest`, `QLThumbnailReply`): an app that declares a `[[preview]]`
 //!   block for its file types in its manifest answers the shell's `preview.render` control call with the PNG it drew.
-//!   The shell asks it for the file's thumbnail (Files, Spotlight) as well as for the preview panel, and falls back to
+//!   The shell asks it for the file's thumbnail (Files, Search) as well as for the preview panel, and falls back to
 //!   the built-in provider when the app gives no picture.
 //!
 //! ```ignore

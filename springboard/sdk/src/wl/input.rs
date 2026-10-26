@@ -134,7 +134,7 @@ impl Mods {
         }
     }
 
-    /// The state as `NSEvent.modifierFlags` (Caps Lock counts while it is locked on).
+    /// The state as the reference event modifier flags (Caps Lock counts while it is locked on).
     pub fn flags(self) -> ModifierFlags {
         ModifierFlags::from_held(self.shift, self.ctrl, self.alt, self.meta, self.caps)
     }
@@ -481,7 +481,7 @@ impl Seat {
     }
 
     fn touch(&mut self, kind: TouchKind, x: f32, y: f32, t: f64) {
-        // a press carries the modifiers held at the time, as the shell's touches do (`NSEvent.modifierFlags`)
+        // a press carries the modifiers held at the time, as the shell's touches do (the reference event modifier flags)
         self.out.push(Input::Touch { kind, id: 0, x, y, t, mods: self.mods.flags() });
     }
 }

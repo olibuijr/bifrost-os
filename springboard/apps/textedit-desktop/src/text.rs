@@ -12,7 +12,7 @@ pub const FAMILIES: [&str; 3] = ["Helvetica", "Times", "Courier"];
 pub const FAMILY_NAMES: [&str; 3] = ["Arial", "Times New Roman", "Courier New"];
 
 /// Every family a document can use, by `Style::font` index: the three base families (`FAMILIES`), then the font families
-/// installed on the system and in the user's fonts folder, by name (`NSFontManager.availableFontFamilies`). At most 256.
+/// installed on the system and in the user's fonts folder, by name (the reference font manager's family list). At most 256.
 /// Tests see the base families only, so they do not depend on the machine's fonts.
 pub fn families() -> &'static [String] {
     &catalogue().0

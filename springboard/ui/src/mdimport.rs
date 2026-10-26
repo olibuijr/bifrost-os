@@ -1,4 +1,4 @@
-//! Spotlight importer plug-ins (`CSImporter`, the metadata importers): read a file's content and return the metadata the
+//! Search importer plug-ins (the reference metadata importers): read a file's content and return the metadata the
 //! search index stores, the title, a description and keywords. An importer declares the content type it handles; for a
 //! file the importer whose type is the closest ancestor of the file's type is used (see [`choose`]).
 //!
