@@ -747,6 +747,10 @@ pub struct AppHost {
     window_bufs: std::collections::BTreeMap<u32, WinBufs>,
     /// Buffers and frames that arrived for a window the table does not hold yet, oldest first (`Early`).
     early: std::collections::VecDeque<Early>,
+    /// Windows the shell closed (the red light, an app that does not ask) or refused: what the app still had in flight
+    /// for them when it heard (`WindowClosed`) is dropped, not kept as early pixels. Kept, it would show as the first frame
+    /// of the next window to open under that id. An id is forgotten when its window opens again.
+    shell_closed: std::collections::HashSet<u32>,
 }
 
 /// The `window` value of the manifest beside `exec` (empty for a classic title-bar window), `None` when there is none.
@@ -888,6 +892,7 @@ impl AppHost {
             key_window: 0,
             window_bufs: std::collections::BTreeMap::new(),
             early: std::collections::VecDeque::new(),
+            shell_closed: std::collections::HashSet::new(),
         }
     }
 
@@ -925,6 +930,7 @@ impl AppHost {
         self.windows.close_app(&self.id);
         self.window_bufs.clear();
         self.early.clear();
+        self.shell_closed.clear();
         true
     }
 
@@ -1478,8 +1484,10 @@ impl AppHost {
                 // no room for the window, or its id is taken: the app is told to drop it, so the two sides agree
                 if self.windows.open(&self.id, id, &title, w, h).is_err() {
                     self.early.retain(|e| e.window() != id);
+                    self.note_shell_closed(id);
                     self.send(&ToApp::WindowClosed { id });
                 } else {
+                    self.shell_closed.remove(&id);
                     if let Some((x, y)) = position {
                         self.windows.request_position(&self.id, id, x, y);
                     }
@@ -1535,6 +1543,9 @@ impl AppHost {
                     out.chrome();
                 }
             }
+            // sent before the app heard that the shell closed the window: nothing is left to show them in (the descriptors close
+            // as `fds` drops)
+            ToShell::WindowBuffers { id, .. } | ToShell::WindowFrame { id, .. } if self.shell_closed.contains(&id) && !self.window_open(id) => {}
             ToShell::WindowBuffers { id, w, h, generation } if !self.window_open(id) => self.keep_early(Early::Buffers { id, w, h, generation, fds }),
             ToShell::WindowFrame { id, buf, damage } if !self.window_open(id) => self.keep_early(Early::Frame { id, buf, damage }),
             ToShell::WindowBuffers { id, w, h, generation } => self.window_buffers(id, w, h, generation, fds),
@@ -1682,8 +1693,18 @@ impl AppHost {
             return false;
         }
         self.window_bufs.remove(&id);
+        self.note_shell_closed(id);
         self.send(&ToApp::WindowClosed { id });
         true
+    }
+
+    /// Remembers that the shell closed (or refused) window `id`, so pixels the app still sends for it are dropped.
+    fn note_shell_closed(&mut self, id: u32) {
+        // the ids are the app's own and few; a runaway app cannot grow the set
+        if self.shell_closed.len() >= 256 {
+            self.shell_closed.clear();
+        }
+        self.shell_closed.insert(id);
     }
 
     /// The shell resized one of the app's extra windows (points). False when the window is not open.
@@ -1782,6 +1803,7 @@ impl AppHost {
         self.windows.close_app(&self.id);
         self.window_bufs.clear();
         self.early.clear();
+        self.shell_closed.clear();
         bifrost_core::log::shell_logger("apphost").notice(format!("app {} exited {code}", self.id));
     }
 
@@ -3825,6 +3847,38 @@ mod window_table_tests {
         assert!(host.early.iter().all(|e| e.window() != 39), "what was kept for a window is used up when it opens");
         host.handle(ToShell::WindowClose { id: 1 }, Vec::new(), &mut out);
         assert!(host.window_frame(1).is_none());
+    }
+
+    /// Wave b2: a closed window's last frame came back. The app had pixels for the window in flight when the shell closed
+    /// it; they reached a window the table no longer held and were kept as "early" pixels (MA6) for the next window to
+    /// open under that id, which showed them as its first frame. A window the shell closed keeps nothing for its id.
+    #[test]
+    fn pixels_in_flight_for_a_window_the_shell_closed_are_not_the_first_frame_of_the_next_one() {
+        let (channel, _peer) = sys::socketpair_pair().unwrap();
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
+        let mut out = Pumped::default();
+        let bytes = 2 * 2 * 4;
+        let open = |host: &mut AppHost, out: &mut Pumped| host.handle(ToShell::WindowOpen { id: 5, title: "New Message".into(), w: 2.0, h: 2.0, position: None, flags: 0 }, Vec::new(), out);
+        open(&mut host, &mut out);
+        assert!(host.close_window_from_shell(5));
+        // the app drew before it heard of the close
+        let fds = vec![sys::shm_create("late-0", bytes).unwrap(), sys::shm_create("late-1", bytes).unwrap()];
+        host.handle(ToShell::WindowBuffers { id: 5, w: 2, h: 2, generation: 1 }, fds, &mut out);
+        host.handle(ToShell::WindowFrame { id: 5, buf: 0, damage: vec![[0, 0, 2, 2]] }, Vec::new(), &mut out);
+        assert!(host.early.is_empty(), "nothing is kept for a window the shell closed: {} kept", host.early.len());
+        // the id is used again by a new window: the old frame is not its first
+        open(&mut host, &mut out);
+        assert!(host.window_open(5));
+        assert!(host.window_frame(5).is_none() && !host.window_mapped(5), "the new window has drawn nothing yet");
+        // its own pixels are taken as usual
+        let fds = vec![sys::shm_create("fresh-0", bytes).unwrap(), sys::shm_create("fresh-1", bytes).unwrap()];
+        host.handle(ToShell::WindowBuffers { id: 5, w: 2, h: 2, generation: 2 }, fds, &mut out);
+        host.handle(ToShell::WindowFrame { id: 5, buf: 0, damage: vec![[0, 0, 2, 2]] }, Vec::new(), &mut out);
+        assert!(host.window_mapped(5));
+        // a window the app closed itself is not one the shell closed: pixels that precede its next open are still kept
+        host.handle(ToShell::WindowClose { id: 5 }, Vec::new(), &mut out);
+        host.handle(ToShell::WindowFrame { id: 5, buf: 0, damage: Vec::new() }, Vec::new(), &mut out);
+        assert_eq!(host.early.len(), 1);
     }
 
     #[test]

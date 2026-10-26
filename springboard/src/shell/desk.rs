@@ -1070,6 +1070,12 @@ impl Desk {
         self.wins.iter().position(|w| w.app == app)
     }
 
+    /// Whether `app` has any window on the desk: its main window or one of its extra windows. An app whose main window
+    /// was closed and that keeps a document window (Mail's compose window) still has one, though `index_of` finds none.
+    pub fn has_window_of(&self, app: AppId) -> bool {
+        self.wins.iter().any(|w| w.app.parent() == app.parent())
+    }
+
     pub fn front(&self) -> Option<&Win> {
         self.wins.iter().rev().find(|w| !w.minimized)
     }
@@ -6628,6 +6634,22 @@ mod tests {
         sh.desk.as_mut().unwrap().frames = vec![frame(r)];
         let out = sh.take_wayland_windows();
         assert_eq!(out[0].position, None, "asked once");
+    }
+
+    /// Wave b2: Mail's main window was closed while its compose window stayed open. The Dock showed no Mail tile or dot
+    /// for it (only the main window counted), so the lone compose window looked like a leftover frame of a dead app.
+    #[test]
+    fn an_app_with_only_an_extra_window_still_has_a_window_on_the_desk() {
+        let m = metrics();
+        let mut d = Desk::default();
+        d.open(&m, AppId::ExternalWindow(3, 2), (300, 200));
+        assert!(d.index_of(AppId::External(3)).is_none(), "its main window is gone");
+        assert!(d.has_window_of(AppId::External(3)), "the app still has the extra window");
+        assert!(d.has_window_of(AppId::ExternalWindow(3, 7)), "an extra window asks for its app");
+        assert!(!d.has_window_of(AppId::External(4)), "another app's windows do not count");
+        let i = d.index_of(AppId::ExternalWindow(3, 2)).unwrap();
+        d.close(i);
+        assert!(!d.has_window_of(AppId::External(3)), "closing the last window leaves the app with none");
     }
 
     #[test]

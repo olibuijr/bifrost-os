@@ -508,6 +508,9 @@ impl Display {
         for id in removed {
             let w = self.state.windows.remove(&id).unwrap();
             self.state.materials.remove(&id);
+            // the window server's per-surface objects go first, so none outlives the surface it was made for
+            if let Some(m)=w.mat {m.destroy();}
+            if let Some(b)=w.bg {b.destroy();}
             w.top.destroy(); w.xdg.destroy(); w.surface.destroy();
             for slot in w.slots { slot.buffer.destroy(); }
             if let Some(slots)=self.state.gpu_slots.remove(&(GPU_WINDOW+id)) {for s in slots {s.buffer.destroy();}}
