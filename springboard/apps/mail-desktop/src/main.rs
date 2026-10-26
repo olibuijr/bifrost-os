@@ -936,6 +936,33 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// A half-typed recipient is no error of the main window: autosave and closing keep the draft as typed, and the list
+    /// footer stays quiet (the "lead body is not a valid address" seen under the message list).
+    #[test]
+    fn a_draft_with_a_half_typed_recipient_leaves_the_list_footer_quiet() {
+        let dir = std::env::temp_dir().join(format!("bifrost-mail-draft-footer-{}", std::process::id()));
+        let ctx = ctx(&dir);
+        let mut app = app_with_account(&ctx);
+        app.with_window(&ctx, |mail| {
+            mail.mail.open_compose(None);
+            true
+        });
+        let id = app.composes.active.expect("a compose window");
+        app.window_event(&ctx, id, Input::Key(KeyInput::Text("lead body".into())));
+        assert_eq!(compose_field(&app, "To"), "lead body");
+        // the autosave of a changed message
+        app.composes.autosave(app.window.as_mut().unwrap(), 1000.0);
+        let status = &app.window.as_ref().unwrap().mail.status;
+        assert!(!status.contains("not a valid address"), "autosave: {status:?}");
+        // the red button, then Save This Message
+        assert!(app.window_close_requested(&ctx, id));
+        let Some(Sheet::Question(compose)) = app.window.as_ref().unwrap().mail.sheet.clone() else { panic!("the question is open") };
+        app.window.as_mut().unwrap().save_draft(&compose);
+        let status = &app.window.as_ref().unwrap().mail.status;
+        assert!(!status.contains("not a valid address"), "close: {status:?}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     /// A wheel event turned `dy` (negative: down) at (`x`, `y`).
     fn wheel(x: f32, y: f32, dy: f32) -> PointerEvent {
         use bifrost_app::pointer_events::Phase;
