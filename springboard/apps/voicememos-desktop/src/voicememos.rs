@@ -39,6 +39,25 @@ use bifrost_app::kit::ui::{SYSTEM_RED, TINT};
 
 const RED: u32 = SYSTEM_RED;
 const BLUE: u32 = TINT;
+/// The backdrop of the artwork Voice Memos publishes (straight RGB): the dark tile Control Center shows covers on.
+const ARTWORK_BACKDROP: [u8; 3] = [44, 44, 46];
+/// The bar heights of that artwork, 0 to 1: a recording's waveform, drawn as the app's icon.
+const ARTWORK_BARS: [f32; 13] = [0.22, 0.4, 0.62, 0.35, 0.85, 0.55, 1.0, 0.5, 0.8, 0.38, 0.6, 0.3, 0.18];
+
+/// The cover a playing recording shows on the media tile, the Now Playing detail, the menu bar extra and the lock card:
+/// a red waveform on a dark tile. A recording has no album art, so every memo shares this one; it is drawn once.
+fn memo_artwork() -> &'static now_playing::ArtworkImage {
+    static ART: std::sync::OnceLock<now_playing::ArtworkImage> = std::sync::OnceLock::new();
+    ART.get_or_init(|| {
+        let ink = [(RED & 255) as u8, (RED >> 8 & 255) as u8, (RED >> 16 & 255) as u8];
+        now_playing::ArtworkImage::waveform(96, &ARTWORK_BARS, ARTWORK_BACKDROP, ink)
+    })
+}
+
+/// The `publish` body for the session: its metadata and playback state, and the waveform cover.
+fn publish_body_for(session: &MediaSession) -> Option<Json> {
+    now_playing::publish_body(session).map(|body| now_playing::with_artwork(body, Some(memo_artwork())))
+}
 /// Round button plates (transport, editor buttons) and their pressed state, in the current appearance.
 fn plate() -> u32 { FIELD_BG.now() }
 fn plate_down() -> u32 { CONTROL_PRESSED.now() }
@@ -1009,7 +1028,7 @@ impl VoiceMemos {
         let Some(session) = self.session.as_mut() else { return };
         let state = if self.playing.is_some() { PlaybackState::Playing } else { PlaybackState::Paused };
         session.set_playback(state, self.position_ms.max(0.0) as u64);
-        if let Some(body) = now_playing::publish_body(session) {
+        if let Some(body) = publish_body_for(session) {
             self.wants.push(Want::Publish(body));
         }
     }
@@ -2845,6 +2864,11 @@ mod tests {
             .expect("a publish");
         assert_eq!(body.str_field("state").as_deref(), Some("playing"));
         assert_eq!(body.str_field("title").as_deref(), Some(memo.title.as_str()));
+        let cover = now_playing::ArtworkImage::from_json(body.get("artwork").expect("a cover")).expect("a readable cover");
+        assert_eq!((cover.width(), cover.height()), (96, 96));
+        assert!(cover.rgba().chunks_exact(4).any(|p| p[..3] == [(RED & 255) as u8, (RED >> 8 & 255) as u8, (RED >> 16 & 255) as u8]), "the waveform is in the app's red");
+        assert_eq!(&cover.rgba()[..4], &[ARTWORK_BACKDROP[0], ARTWORK_BACKDROP[1], ARTWORK_BACKDROP[2], 255], "on the dark tile");
+        assert!(body.encode().len() < 60_000, "a 96 px cover keeps the publish small");
         app.playing = None;
         app.end_playback();
         assert!(app.take_wants().iter().any(|w| matches!(w, Want::Withdraw)));

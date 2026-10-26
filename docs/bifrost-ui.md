@@ -6608,7 +6608,15 @@ the model is host-tested, but no shell or app drives it yet. Every row stays par
 - **Feedback (`bifrost_app::now_playing_feedback`)**: `feedback_body` publishes the like, dislike and bookmark toggles and an optional
   rating scale; `feedback_from_event` and `rate_from_event` decode the person's choice. The app applies the change to its own state
   before it republishes, so a refused command is not shown as done. The shell reads the `feedback` field of the publish body.
-- **Artwork**: `Artwork`, `Artwork::choose`, `aspect_fit` and `request_pixels` are modelled. Not wired: artwork does not reach the shell yet.
+- **Artwork**: `Artwork`, `Artwork::choose`, `aspect_fit` and `request_pixels` are modelled. The pixels cross the `now_playing`
+  service as `ArtworkImage` (`MPNowPlayingInfoPropertyArtwork`): straight RGBA8, at most `WIRE_SIDE_MAX` (128) px a side so a
+  publish stays under 90 KB of JSON (the service frame is 256 KB). `with_artwork` / `publish_with_artwork` add it to the publish
+  body (`{w, h, rgba: base64}`); `ArtworkImage::from_premultiplied` averages a larger decoded cover down and `waveform` draws a
+  stand-in tile. The shell crops it to a square and draws it on the Control Center media tile, the Now Playing detail, the menu
+  bar extra and the lock card with their existing corner radii, and falls back to the glyph when none was published or it cannot
+  be read (`services::now_playing::artwork_or_glyph`). Music sends the current song's cover (the Now Playing picture, else the
+  list thumbnail) and Voice Memos a waveform tile. Gaps against Apple: no `ArtworkProvider` callback with a requested size (the
+  app picks the size), no encoded-image (PNG or JPEG) artwork, no animated artwork, and not checked on Midget yet.
 - **Remote routing (`bifrost_app::remote_routing`)**: `action_for(command)` maps a shell command to a `RemoteAction` (skips map to none,
   since they use `SkipIntervalCommand`), `media_key(name)` maps hardware media keys, and `route(center, command)` passes the command to
   the app's `CommandCenter`. A switched-off or unhandled action is refused. No caller found.

@@ -2197,7 +2197,7 @@ impl Shell {
         self.music_control(target);
     }
 
-    /// Paints the media tile: the app's published session (artwork placeholder, title, artist and the transport row)
+    /// Paints the media tile: the app's published session (artwork or the glyph, title, artist and the transport row)
     /// when there is one, else what the audio service plays.
     fn draw_media_tile(&self, s: &mut Surface, rect: (f32, f32, f32, f32), alpha: u32, pressed: Option<Media>) {
         let Some(session) = now_playing::current() else {
@@ -2207,7 +2207,7 @@ impl Shell {
         let (x, y, w, h) = rect;
         let size = ui.pt(44.0);
         let r = Rect { x: (x + ui.pt(14.0)) as i32, y: (y + ui.pt(14.0)) as i32, w: size as i32, h: size as i32 };
-        draw_scaled(s, &icons::placeholder(64, 0.0), r, ui.pt(5.0), alpha);
+        draw_scaled(s, &now_playing::artwork_or_glyph(64), r, ui.pt(5.0), alpha);
         let title = session.content().map_or("Now Playing".to_string(), |c| c.title.clone());
         let artist = session.content().map(|c| c.subtitle()).unwrap_or_default();
         let tx = (x + ui.pt(14.0) + size + ui.pt(10.0)) as i32;

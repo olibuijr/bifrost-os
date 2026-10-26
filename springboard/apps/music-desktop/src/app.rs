@@ -143,7 +143,14 @@ impl MusicApp {
 
     /// Publishes the session to Control Center when its content, state or commands changed, or when a seek moved the
     /// position. A stopped session (no song) is withdrawn. Nothing is sent while playback runs normally.
-    fn publish_step(published: &mut Option<Published>, ctx: &Ctx, session: Option<&now_playing::MediaSession>, queue: &[now_playing::QueueEntry], now: f64) {
+    fn publish_step(
+        published: &mut Option<Published>,
+        ctx: &Ctx,
+        session: Option<&now_playing::MediaSession>,
+        queue: &[now_playing::QueueEntry],
+        artwork: Option<&now_playing::ArtworkImage>,
+        now: f64,
+    ) {
         let body = session.and_then(|s| now_playing::publish_queue_body(s, queue));
         let (Some(session), Some(body)) = (session, body) else {
             if published.take().is_some() {
@@ -155,13 +162,14 @@ impl MusicApp {
         let position = snap.position_ms as f64;
         let playing = matches!(snap.state, PlaybackState::Playing);
         let seekable = matches!(session.command_state(RemoteCommand::SeekTo), CommandState::Enabled);
-        let key = system::publish_key(&body);
+        // a new cover is a change the tile must show at once, like a new song
+        let key = format!("{}|art:{:x}", system::publish_key(&body), artwork.map_or(0, now_playing::ArtworkImage::fingerprint));
         let due = match published.as_ref() {
             None => true,
             Some(p) => p.key != key || (seekable && system::seeked(p.position_ms, p.at, now, p.playing, position)),
         };
         if due {
-            let _ = now_playing::publish_with_queue(ctx, session, queue);
+            let _ = now_playing::publish_with_artwork(ctx, session, queue, artwork);
             *published = Some(Published { key, position_ms: position, at: now, playing });
         }
     }
@@ -344,9 +352,13 @@ impl MusicApp {
         let busy = self.app.as_ref().is_some_and(|m| m.is_scanning());
         self.dock_step(ctx, busy);
         let now = self.clock();
+        if let Some(m) = self.app.as_mut() {
+            m.refresh_now_playing_artwork();
+        }
         let session = self.app.as_ref().and_then(|m| m.session());
         let queue = if session.is_some() { self.app.as_ref().map(|m| m.up_next_entries()).unwrap_or_default() } else { Vec::new() };
-        Self::publish_step(&mut self.published, ctx, session, &queue, now);
+        let artwork = self.app.as_ref().and_then(|m| m.now_playing_artwork());
+        Self::publish_step(&mut self.published, ctx, session, &queue, artwork, now);
     }
 }
 
@@ -775,26 +787,49 @@ mod tests {
     }
 
     #[test]
+    fn a_cover_rides_the_publish_and_a_new_cover_republishes() {
+        let ctx = test_ctx();
+        let mut published = None;
+        let session = song_session(5_000);
+        let red = now_playing::ArtworkImage::new(1, 1, vec![255, 0, 0, 255]).unwrap();
+        let blue = now_playing::ArtworkImage::new(1, 1, vec![0, 0, 255, 255]).unwrap();
+        MusicApp::publish_step(&mut published, &ctx, Some(&session), &[], None, 0.0);
+        let sent = calls(&ctx);
+        assert_eq!(sent.len(), 1);
+        assert!(!sent[0].2.contains("\"artwork\""), "no cover, no artwork field: the shell keeps its glyph");
+        // the cover loads: one more publish, now with the pixels
+        MusicApp::publish_step(&mut published, &ctx, Some(&session), &[], Some(&red), 1_000.0);
+        let sent = calls(&ctx);
+        assert_eq!(sent.len(), 1);
+        assert!(sent[0].2.contains("\"artwork\":{\"w\":1,\"h\":1,\"rgba\":\"/wAA/w==\"}"));
+        // the same cover again sends nothing, a different one does
+        MusicApp::publish_step(&mut published, &ctx, Some(&session), &[], Some(&red), 2_000.0);
+        assert!(calls(&ctx).is_empty());
+        MusicApp::publish_step(&mut published, &ctx, Some(&session), &[], Some(&blue), 3_000.0);
+        assert_eq!(calls(&ctx).len(), 1);
+    }
+
+    #[test]
     fn the_now_playing_tile_is_published_on_change_and_on_a_seek_only() {
         let ctx = test_ctx();
         let mut published = None;
         let first = song_session(5_000);
-        MusicApp::publish_step(&mut published, &ctx, Some(&first), &[], 0.0);
+        MusicApp::publish_step(&mut published, &ctx, Some(&first), &[], None, 0.0);
         // normal playback a second later: the position is where it should be, nothing is sent
-        MusicApp::publish_step(&mut published, &ctx, Some(&first), &[], 1_000.0);
+        MusicApp::publish_step(&mut published, &ctx, Some(&first), &[], None, 1_000.0);
         let sent = calls(&ctx);
         assert_eq!(sent.len(), 1);
         assert_eq!((sent[0].0.as_str(), sent[0].1.as_str()), (now_playing::SERVICE, "publish"));
         assert!(sent[0].2.contains("\"title\":\"Song\""));
         // a scrub to 90 s
         let scrubbed = song_session(90_000);
-        MusicApp::publish_step(&mut published, &ctx, Some(&scrubbed), &[], 1_000.0);
+        MusicApp::publish_step(&mut published, &ctx, Some(&scrubbed), &[], None, 1_000.0);
         let sent = calls(&ctx);
         assert_eq!(sent.len(), 1);
         assert!(sent[0].2.contains("90000"));
         // no song left: the session is withdrawn once
-        MusicApp::publish_step(&mut published, &ctx, None, &[], 2_000.0);
-        MusicApp::publish_step(&mut published, &ctx, None, &[], 3_000.0);
+        MusicApp::publish_step(&mut published, &ctx, None, &[], None, 2_000.0);
+        MusicApp::publish_step(&mut published, &ctx, None, &[], None, 3_000.0);
         assert_eq!(calls(&ctx), vec![(now_playing::SERVICE.to_string(), "clear".to_string(), "null".to_string())]);
     }
 

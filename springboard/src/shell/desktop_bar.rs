@@ -76,7 +76,7 @@ fn status_icon_lift(battery:bool,ethernet:bool)->f32 {if battery{0.}else if ethe
 #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
 pub(super) struct ContextMenu {pub slot:u8,pub x:f32,pub y:f32,pub items:Vec<bifrost_proto::ContextItem>}
 #[cfg(feature = "desktop-wayland")]
-pub(super) struct Row {pub(super) text:String,pub(super) action:Option<Action>,sep:bool,key:Option<String>,symbol:Option<crate::symbols::Symbol>,indent:bool,search:bool,header:bool}
+pub(super) struct Row {pub(super) text:String,pub(super) action:Option<Action>,sep:bool,key:Option<String>,symbol:Option<crate::symbols::Symbol>,indent:bool,search:bool,header:bool,art:bool}
 /// How an app's menu extra (`NativeStatusItem`) shows on the bar.
 #[cfg(any(test, feature = "desktop-wayland"))]
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -156,6 +156,11 @@ pub(super) struct MenuScrollState {pub(super) menu:Option<Menu>,pub(super) offse
 /// Height of the Help menu's search field, in pt.
 #[cfg(feature = "desktop-wayland")]
 const HELP_FIELD_PT:f32=30.;
+/// The Now Playing menu's cover row, and the cover's side inside it (the row less its padding), in pt.
+#[cfg(feature = "desktop-wayland")]
+const MENU_ART_ROW_PT:f32=52.;
+#[cfg(feature = "desktop-wayland")]
+const MENU_ART_PT:f32=40.;
 /// The gap between the menu bar and an open menu (Golden Gate).
 #[cfg(feature = "desktop-wayland")]
 const MENU_GAP_PT:f32=6.;
@@ -279,15 +284,16 @@ pub(super) fn in_safe_triangle(apex:(f32,f32),p:(f32,f32),sub:(f32,f32,f32,f32),
 }
 /// Top and height in pt (from the popup's top edge) of each row, and the popup's total height.
 #[cfg(feature = "desktop-wayland")]
-pub(super) fn menu_spans(rows:&[Row])->(Vec<(f32,f32)>,f32) {let mut y=MENU_PAD_PT;let v=rows.iter().map(|r|{let h=if r.sep{MENU_SEP_PT}else if r.search{HELP_FIELD_PT}else{MENU_ROW_PT};let s=(y,h);y+=h;s}).collect();(v,y+MENU_PAD_PT)}
+pub(super) fn menu_spans(rows:&[Row])->(Vec<(f32,f32)>,f32) {let mut y=MENU_PAD_PT;let v=rows.iter().map(|r|{let h=if r.sep{MENU_SEP_PT}else if r.art{MENU_ART_ROW_PT}else if r.search{HELP_FIELD_PT}else{MENU_ROW_PT};let s=(y,h);y+=h;s}).collect();(v,y+MENU_PAD_PT)}
 /// Key equivalents the shell really handles (`NativeMenuItem.keyEquivalent`), as `bifrost_ui::keys` combos; the menus show them
 /// in Golden Gate notation and `menu_key_equivalents_parse_and_do_not_conflict` checks the table.
 #[cfg(feature = "desktop-wayland")]
 pub(super) const MENU_KEYS:&[(&str,&str)]=&[("Close Window","cmd+w"),("Minimize","cmd+m"),("Minimize Window","cmd+m"),("Undo","cmd+z"),("Redo","cmd+shift+z"),("Cut","cmd+x"),("Copy","cmd+c"),("Paste","cmd+v"),("Select All","cmd+a"),("Quit","cmd+q"),("Lock Screen","ctrl+cmd+q"),("Force Quit\u{2026}","alt+cmd+escape"),("Log Out","shift+cmd+q"),("Settings…","cmd+,"),("Hide","cmd+h"),("Hide Others","alt+cmd+h"),("Search","cmd+space"),("App Switcher","cmd+tab"),("Back","escape"),("Print\u{2026}","cmd+p")];
 #[cfg(feature = "desktop-wayland")]
-impl Row {fn indented(mut self)->Self {self.indent=true;self} fn symbol(mut self,sym:crate::symbols::Symbol)->Self {self.symbol=Some(sym);self} fn key(mut self,combo:&str)->Self {self.key=bifrost_ui::keys::KeyCombo::parse(combo).map(|c|c.to_string());self} fn separator()->Self {Self{text:String::new(),action:None,sep:true,key:None,symbol:None,indent:false,search:false,header:false}} fn action(text:impl Into<String>,action:Action)->Self {Self{text:text.into(),action:Some(action),sep:false,key:None,symbol:None,indent:false,search:false,header:false}} fn label(text:impl Into<String>)->Self {Self{text:text.into(),action:None,sep:false,key:None,symbol:None,indent:false,search:false,header:false}}}
+impl Row {fn indented(mut self)->Self {self.indent=true;self} fn symbol(mut self,sym:crate::symbols::Symbol)->Self {self.symbol=Some(sym);self} fn key(mut self,combo:&str)->Self {self.key=bifrost_ui::keys::KeyCombo::parse(combo).map(|c|c.to_string());self} fn separator()->Self {Self{text:String::new(),action:None,sep:true,key:None,symbol:None,indent:false,search:false,header:false,art:false}} fn action(text:impl Into<String>,action:Action)->Self {Self{text:text.into(),action:Some(action),sep:false,key:None,symbol:None,indent:false,search:false,header:false,art:false}} fn label(text:impl Into<String>)->Self {Self{text:text.into(),action:None,sep:false,key:None,symbol:None,indent:false,search:false,header:false,art:false}}}
 #[cfg(feature = "desktop-wayland")]
-impl Row {fn search(text: impl Into<String>)->Self {Self{text:text.into(),action:None,sep:false,key:None,symbol:None,indent:false,search:true,header:false}} fn header(text: impl Into<String>)->Self {Self{text:text.into(),action:None,sep:false,key:None,symbol:None,indent:false,search:false,header:true}}}
+impl Row {fn search(text: impl Into<String>)->Self {Self{text:text.into(),action:None,sep:false,key:None,symbol:None,indent:false,search:true,header:false,art:false}} /// The Now Playing menu's first row when the session has a cover: the cover beside the title, taller than a text row.
+    fn artwork(text: impl Into<String>)->Self {Self{art:true,..Self::label(text)}} fn header(text: impl Into<String>)->Self {Self{text:text.into(),action:None,sep:false,key:None,symbol:None,indent:false,search:false,header:true,art:false}}}
 /// One row of a Photos menu: its title (with a check mark for a setting that is on), its key equivalent, and its
 /// action when the command can run now (greyed out otherwise).
 #[cfg(feature = "desktop-wayland")]
@@ -951,7 +957,7 @@ impl Shell {
             // the Bluetooth extra: the radio, then each paired or connected device (connect or disconnect), then its pane
             Menu::Bluetooth=>{let bt=&self.info.bt;let mut rows=vec![Row::action(if bt.on(){"Turn Bluetooth Off"}else{"Turn Bluetooth On"},Action::Bluetooth(crate::bare::bluetooth::Cmd::Enable(!bt.on())))];if bt.on(){rows.push(Row::separator());for d in bt.devices.iter().filter(|d|d.paired||d.connected).take(8) {if bt.busy.as_deref()==Some(d.addr.as_str()){rows.push(Row::label(format!("{}…",d.label())));}else{let cmd=if d.connected{crate::bare::bluetooth::Cmd::Disconnect(d.addr.clone())}else{crate::bare::bluetooth::Cmd::Connect(d.addr.clone())};rows.push(Row::action(format!("{} {}",if d.connected{"✓"}else{" "},d.label()),Action::Bluetooth(cmd)));}}}rows.push(Row::separator());rows.push(Row::action("Bluetooth Settings…",Action::Settings("Bluetooth")));rows},
             // title and position as labels, then the transport: an enabled row sends its remote command to the owner
-            Menu::NowPlaying=>super::now_playing_menu::panel().map(|p|{let mut rows=vec![Row::label(p.title),Row::label(p.position),Row::separator()];rows.extend(p.transport.into_iter().map(|(c,text,on)|if on {Row::action(text,Action::Media(c))} else {Row::label(text)}));rows}).unwrap_or_default(),
+            Menu::NowPlaying=>super::now_playing_menu::panel().map(|p|{let mut rows=vec![if p.artwork{Row::artwork(p.title)}else{Row::label(p.title)},Row::label(p.position),Row::separator()];rows.extend(p.transport.into_iter().map(|(c,text,on)|if on {Row::action(text,Action::Media(c))} else {Row::label(text)}));rows}).unwrap_or_default(),
             // the app's View: the Terminal's text sizes, then Enter Full Screen as every app's View ends; the Dock's settings
             // are not an app's (they live in the Dock's menu and Settings > Desktop & Dock)
             Menu::View=>{let mut v=Vec::new();if self.term_front(){v.extend([Row::action("Actual Size",Action::Term(TermKey::ActualSize)).key("cmd+0"),Row::action("Bigger",Action::Term(TermKey::Bigger)).key("cmd+="),Row::action("Smaller",Action::Term(TermKey::Smaller)).key("cmd+-"),Row::separator()]);}v.push(self.full_screen_row().key("ctrl+cmd+f"));v},
@@ -1210,6 +1216,11 @@ impl Shell {
             let top=top-sc.offset;
             if row.sep{s.fill_rect(x+self.ui.pt(12.) as usize,(y as f32+self.ui.pt(top+rh/2.)) as usize,w.saturating_sub(self.ui.pt(24.) as usize),1,super::ui::SEPARATOR_C.now());continue;}
             if row.search{self.draw_help_field(s,x,y,w,top,rh,&row.text);continue;}
+            if row.art{
+                // the cover at the text edge, the title centred beside it; the glyph stands in without a cover
+                let side=self.ui.pt(MENU_ART_PT) as i32;let ay=(y as f32+self.ui.pt(top+rh/2.)) as i32-side/2;
+                super::switcher::draw_scaled(s,&super::services::now_playing::artwork_or_glyph(64),crate::layout::Rect{x:x as i32+self.ui.pt(lead) as i32,y:ay,w:side,h:side},self.ui.pt(5.),255);
+                self.label(&row.text,13.,Weight::Regular,LABEL.now(),|im|s.blit(im,x as i32+self.ui.pt(lead+MENU_ART_PT+8.) as i32,(y as f32+self.ui.pt(top+rh/2.)-im.h as f32/2.) as i32,255,255));continue;}
             if row.header{self.label(&row.text,10.,Weight::Regular,SECONDARY,|im|s.blit(im,x as i32+self.ui.pt(lead) as i32,(y as f32+self.ui.pt(top+rh/2.)-im.h as f32/2.) as i32,255,255));continue;}
             let hi=sel==Some(i)&&row.action.is_some();
             if hi{s.fill_rrect(x as f32+self.ui.pt(5.),y as f32+self.ui.pt(top),w as f32-self.ui.pt(10.),self.ui.pt(rh),self.ui.pt(8.),super::ui::MENU_HIGHLIGHT);}
@@ -1283,12 +1294,12 @@ impl Shell {
     /// Menu width in px: at least 264 pt, wider when a title and its key equivalent would touch (menus size to their content).
     fn menu_width(&self,rows:&[Row])->usize {
         use std::hash::{Hash,Hasher};
-        let mut h=std::collections::hash_map::DefaultHasher::new();self.ui.pt(1.).to_bits().hash(&mut h);for r in rows{r.text.hash(&mut h);r.key.hash(&mut h);}
+        let mut h=std::collections::hash_map::DefaultHasher::new();self.ui.pt(1.).to_bits().hash(&mut h);for r in rows{r.text.hash(&mut h);r.key.hash(&mut h);r.art.hash(&mut h);}
         let key=h.finish();if let Some((k,w))=self.desktop_menu_width.get(){if k==key{return w;}}
         let width=self.menu_width_measured(rows);self.desktop_menu_width.set(Some((key,width)));width
     }
     fn menu_width_measured(&self,rows:&[Row])->usize {
-        let lead=if rows.iter().any(|r|r.symbol.is_some()){self.ui.pt(20.)}else{0.};let need=rows.iter().filter(|r|!r.search).map(|r|{let t=self.measure_chrome(&r.text,13.,Weight::Regular);let k=r.key.as_ref().map_or(0.,|k|self.ui.pt(24.)+self.measure_chrome(&shortcut_spaced(k),13.,Weight::Regular));t+k}).fold(0.,f32::max)+self.ui.pt(32.)+lead;
+        let lead=if rows.iter().any(|r|r.symbol.is_some()){self.ui.pt(20.)}else{0.};let need=rows.iter().filter(|r|!r.search).map(|r|{let t=self.measure_chrome(&r.text,13.,Weight::Regular)+if r.art{self.ui.pt(MENU_ART_PT+8.)}else{0.};let k=r.key.as_ref().map_or(0.,|k|self.ui.pt(24.)+self.measure_chrome(&shortcut_spaced(k),13.,Weight::Regular));t+k}).fold(0.,f32::max)+self.ui.pt(32.)+lead;
         need.max(self.ui.pt(264.)).ceil() as usize
     }
     /// The row under `rel` px below the popup's top edge (separators count as rows, but have no action).

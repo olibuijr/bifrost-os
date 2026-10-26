@@ -469,7 +469,7 @@ impl Shell {
         // Now Playing: the artwork, the title and artist, the progress and the transport
         if let Some((ax, ay, aw, ah)) = layout.art.map(up) {
             let r = Rect { x: ax as i32, y: ay as i32, w: aw as i32, h: ah as i32 };
-            draw_scaled(s, &icons::placeholder(256, 0.0), r, ui.pt(10.0), alpha);
+            draw_scaled(s, &now_playing::artwork_or_glyph(256), r, ui.pt(10.0), alpha);
         }
         if let Some((tx, ty, tw, _)) = layout.text.map(up) {
             let session = now_playing::current();
