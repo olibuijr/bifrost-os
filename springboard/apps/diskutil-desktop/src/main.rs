@@ -66,7 +66,8 @@ impl App for DiskUtility {
         let idle = !self.busy();
         let node = self.selected_node();
         let mountable = self.can_mount();
-        let mounted = self.can_unmount();
+        let unmountable = self.can_unmount();
+        let mounted = self.selected_mounted();
         let ejectable = self.can_eject();
         let has = idle && node.is_some();
         let renamable = has && node.is_some_and(|n| n.fs_type.is_some());
@@ -107,7 +108,7 @@ impl App for DiskUtility {
                     AppMenuItem::new(MENU_INFO, "Get Info").key("cmd+i").enabled(idle && node.is_some()),
                     AppMenuItem::separator(),
                     AppMenuItem::new(MENU_MOUNT, "Mount").key("cmd+m").enabled(mountable),
-                    AppMenuItem::new(MENU_UNMOUNT, "Unmount").key("cmd+u").enabled(mounted),
+                    AppMenuItem::new(MENU_UNMOUNT, "Unmount").key("cmd+u").enabled(unmountable),
                     AppMenuItem::new(MENU_EJECT, "Eject").key("cmd+e").enabled(ejectable),
                     AppMenuItem::separator(),
                     AppMenuItem::new(MENU_SHOW_IN_FILES, "Show in Files").key("cmd+shift+r").enabled(mounted),
