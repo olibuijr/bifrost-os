@@ -3521,6 +3521,41 @@
         assert!(sent().contains(&ToApp::Quit),"the app is asked to quit, so it can save its state");
     }
 
+    /// The close control of an SDK app that answers it itself (a document app with a save sheet) sends `CloseRequest` and
+    /// leaves the window, the process and the desk as they are; the app orders the window out once it has answered. An app
+    /// that did not opt in closes as before, and Quit is never vetoed.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn the_close_control_asks_an_app_that_opted_in_and_never_vetoes_quit() {
+        use bifrost_proto::{sys::Recv,ToApp};
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        let (mine,theirs)=bifrost_proto::sys::socketpair_pair().unwrap();
+        let host=apphost::AppHost::with_channel("fixture",mine,None,bifrost_proto::Configure{w:100,h:100,scale:1.,safe_top:0.,safe_bottom:0.,dark:true,text_scale:1.,reduce_motion:false});
+        sh.ext.push(Some(host));
+        let sent=||{let mut v=Vec::new();while let Ok(Recv::Packet(p,_))=theirs.recv(false){v.push(ToApp::decode(&p).unwrap());}v};
+        let app=AppId::External(0);
+        let m=sh.desk_metrics();
+        {let d=sh.desk.as_mut().unwrap();d.wins.clear();d.open(&m,app,(600,400));}
+        // no opt-in: the close control closes the window as it did, and sends no request
+        sh.desk_close_requested(app);
+        assert!(!sent().contains(&ToApp::CloseRequest),"an app that did not opt in is not asked");
+        assert!(sh.desk.as_ref().unwrap().index_of(app).is_none(),"its window closed");
+        // opted in: the window stays, the app is asked and keeps running
+        {let d=sh.desk.as_mut().unwrap();d.open(&m,app,(600,400));}
+        sh.ext[0].as_mut().unwrap().close_requests=true;
+        sh.desk_close_requested(app);
+        assert_eq!(sent(),vec![ToApp::CloseRequest],"the app gets the request and nothing else (no Quit)");
+        assert!(sh.desk.as_ref().unwrap().index_of(app).is_some(),"the window waits for the app's answer");
+        assert!(sh.ext[0].as_ref().is_some_and(|h|h.running()),"the app keeps running");
+        // the app answers by ordering its main window out
+        sh.desk_order_main_out(0);
+        assert!(sh.desk.as_ref().unwrap().index_of(app).is_none(),"the window goes when the app orders it out");
+        // Quit is not a close request
+        sh.desk_quit_app(0);
+        assert!(sh.ext[0].is_none());
+        assert!(sent().contains(&ToApp::Quit),"Quit still reaches an app that handles the close control");
+    }
+
     /// Cmd+Q and the App menu's Quit close a built-in window as before: only an SDK app has a process to quit.
     #[cfg(feature="desktop-wayland")]
     #[test]

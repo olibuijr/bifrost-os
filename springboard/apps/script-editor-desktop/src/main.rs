@@ -80,8 +80,8 @@ impl ScriptEditorApp {
         }
     }
 
-    /// The documents a launch starts with: the untitled scripts autosaved when the app last quit (the red button and Cmd+Q
-    /// save nothing else and ask nothing, so the text comes back edited), or one new Untitled when there are none.
+    /// The documents a launch starts with: the untitled scripts autosaved when the app last quit (Cmd+Q saves nothing else
+    /// and asks nothing, so the text comes back edited), or one new Untitled when there are none.
     fn start_documents(&mut self, host: &dyn DocumentHost) {
         if self.docs.restore(host).is_empty() {
             self.docs.new_document();
@@ -97,6 +97,19 @@ impl ScriptEditorApp {
     /// The window the close confirmation covers (points) and the height of the title bar it hangs from.
     fn sheet_parent(&self) -> (ControlRect, f32) {
         (ControlRect { x: 0.0, y: 0.0, w: self.size.0, h: self.size.1 }, bifrost_app::layout::UNIFIED_BAR_PT)
+    }
+
+    /// The main window's close control (`windowShouldClose:`): the active script closes as File > Close does. A clean one
+    /// closes at once; an edited one raises the confirmation and closes when it is answered with Save or Don't Save; Cancel
+    /// keeps it. Nothing happens while the confirmation is already up. The notices are for `after_notices`.
+    fn request_close(&mut self, host: &dyn DocumentHost) -> Vec<Notice> {
+        if self.docs.alert().is_some() {
+            return Vec::new();
+        }
+        match self.docs.active() {
+            Some(id) => self.docs.close(host, id),
+            None => Vec::new(),
+        }
     }
 
     /// The close confirmation was answered: Save saves and then closes, Don't Save closes now, Cancel keeps the document.
@@ -371,6 +384,21 @@ impl App for ScriptEditorApp {
         }
     }
 
+    /// The red button and Cmd+W ask the app instead of quitting it, so an edited script gets its "Save changes?" sheet.
+    fn handles_close_request(&self) -> bool {
+        true
+    }
+
+    fn close_requested(&mut self, ctx: &Ctx) -> bool {
+        let notices = self.request_close(ctx);
+        // no script open (the window is a leftover): it goes as the last script's window does
+        if self.docs.is_empty() {
+            ctx.close_main_window();
+        }
+        self.after_notices(ctx, &notices);
+        true
+    }
+
     /// Activated with no window open, after the last document closed: the window shows a new Untitled.
     fn reopen(&mut self, _ctx: &Ctx) -> bool {
         if self.docs.is_empty() {
@@ -621,7 +649,7 @@ mod tests {
         assert!(app.docs.is_empty());
     }
 
-    /// The red button quits the app, which autosaves the edited Untitled; the next launch opens it again.
+    /// Quitting the app (Cmd+Q) autosaves the edited Untitled; the next launch opens it again.
     #[test]
     fn an_unsaved_script_comes_back_on_the_next_launch() {
         let host = DirHost(temp_dir("restore"));
@@ -636,6 +664,34 @@ mod tests {
         fresh.start_documents(&DirHost(temp_dir("fresh")));
         assert_eq!(fresh.docs.len(), 1);
         assert_eq!(fresh.active_text(), "");
+    }
+
+    /// The red button asks instead of quitting: a clean script closes at once, an edited one raises the confirmation,
+    /// and a second press while it is up changes nothing.
+    #[test]
+    fn the_close_control_closes_a_clean_script_and_asks_about_an_edited_one() {
+        let host = DirHost(temp_dir("close-control"));
+        assert!(ScriptEditorApp::new().handles_close_request(), "the app opts in");
+        let mut app = app_with("echo test item");
+        assert!(app.request_close(&host).is_empty(), "an edited script is not closed yet");
+        assert!(app.close_sheet().is_some(), "the confirmation is up");
+        assert!(app.request_close(&host).is_empty(), "pressing again while it is up does nothing");
+        assert_eq!(app.docs.len(), 1);
+        // Cancel keeps the script
+        assert!(app.docs.answer_alert(&host, alert::CANCEL).is_empty());
+        assert_eq!(app.active_text(), "echo test item");
+        // Don't Save closes it, and that was the last script
+        app.request_close(&host);
+        let notices = app.docs.answer_alert(&host, alert::DONT_SAVE);
+        assert!(matches!(notices.as_slice(), [Notice::Closed(_)]));
+        assert!(app.docs.is_empty());
+        // a clean script closes with no question
+        let mut clean = ScriptEditorApp::new();
+        clean.docs.new_document();
+        let notices = clean.request_close(&host);
+        assert!(matches!(notices.as_slice(), [Notice::Closed(_)]));
+        assert!(clean.close_sheet().is_none() && clean.docs.is_empty());
+        assert!(clean.request_close(&host).is_empty(), "no script: nothing to close");
     }
 
     #[test]

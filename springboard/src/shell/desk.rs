@@ -2193,7 +2193,7 @@ impl Shell {
                 trace(if matches!(ev, WindowEvent::HandBack(_)) { "hand-back: raised" } else { "window server focus: raised" });
                 self.desk.as_mut().unwrap().raise(i); if !self.is_locked() { self.screen = Screen::App(app.parent()); } self.dirty = true;
             },
-            WindowEvent::Close(_) => self.desk_close_app(app),
+            WindowEvent::Close(_) => self.desk_close_requested(app),
             // a full-screen window keeps the zoom it goes back to (`set_full_screen`): the window server's maximize state
             // while it is full screen is not a zoom or an un-zoom of it (W3-6)
             WindowEvent::Maximized(_,maximized) => {let win=&mut self.desk.as_mut().unwrap().wins[i]; if win.maximized!=maximized && !win.full {if maximized {win.restore=win.r;}else{win.r=win.restore;}win.maximized=maximized;self.dirty=true;}},
@@ -3219,6 +3219,24 @@ impl Shell {
         self.desk_refocus();
     }
 
+    /// The person closes a window (the red traffic light, Cmd+W, the window server's close request). An installed SDK app
+    /// that announced `ToShell::CloseRequests` is sent `ToApp::CloseRequest` for its main window and nothing else happens
+    /// here: it asks "Save changes?" for an edited document and orders the window out itself (`ToShell::WindowClose` id 0,
+    /// `desk_order_main_out`) when it is done, or keeps it on Cancel. Every other window and app closes as `desk_close_app`
+    /// does. Quitting (Dock, Cmd+Q, shutdown) and the shell's own cleanups use `desk_close_app` and are never vetoed.
+    pub(super) fn desk_close_requested(&mut self, app: AppId) {
+        if let AppId::External(slot) = app {
+            if self.ext.get(slot as usize).and_then(Option::as_ref).is_some_and(|h| h.running() && h.close_requests) {
+                self.ext_send(slot as usize, &bifrost_proto::ToApp::CloseRequest);
+                if let Some(h) = self.ext.get_mut(slot as usize).and_then(Option::as_mut) {
+                    h.close_pending = true;
+                }
+                return;
+            }
+        }
+        self.desk_close_app(app);
+    }
+
     pub(super) fn desk_close_app(&mut self, app: AppId) {
         // an extra window's traffic light closes that window through its app; the app keeps running
         if let AppId::ExternalWindow(slot, id) = app {
@@ -3457,7 +3475,10 @@ impl Shell {
                 main_moves.push((slot as u8, p));
             }
             if let Some(shown) = h.take_main_order() {
-                main_orders.push((slot as u8, shown));
+                // the order-out answers a close request on the direct route: that window can only go with the app
+                let quits = !shown && apphost::order_out_quits(h.route(), h.close_pending);
+                h.close_pending = false;
+                main_orders.push((slot as u8, shown, quits));
             }
             let ids: Vec<u32> = h.windows.of_app(&h.id).iter().map(|w| w.id).collect();
             for id in ids {
@@ -3478,10 +3499,12 @@ impl Shell {
             changed |= self.ext_window_place(app, Some(p), collapsed);
         }
         // the main window ordered out (its app's last document closed) or back in (E2E12 2)
-        for (slot, shown) in main_orders {
+        for (slot, shown, quits) in main_orders {
             if shown {
                 let t = self.last_input;
                 self.desk_order_main_in(slot, t);
+            } else if quits {
+                self.desk_quit_app(slot);
             } else {
                 self.desk_order_main_out(slot);
             }
@@ -3812,7 +3835,7 @@ impl Shell {
                             || self.desk_reveal_at(x, y).is_some_and(|(ri, h)| ri == i && h == RevealHit::Light(l));
                         if on_light {
                             match l {
-                                Light::Close => self.desk_close_app(w.app),
+                                Light::Close => self.desk_close_requested(w.app),
                                 // a full-screen window does not minimize (its yellow light is dimmed, as the reference's is)
                                 Light::Minimize if w.full => {}
                                 Light::Minimize => {

@@ -837,6 +837,21 @@ pub trait App {
     fn reopen(&mut self, _ctx: &Ctx) -> bool {
         false
     }
+    /// Whether the app answers the close control of its main window itself (`windowShouldClose:`). The runtime tells the
+    /// shell once (`ToShell::CloseRequests`); the shell then sends `close_requested` for the red light and Cmd+W instead of
+    /// closing the window (which quits a direct app) at once. The default `false` keeps that: no request, no veto.
+    fn handles_close_request(&self) -> bool {
+        false
+    }
+    /// The person used the close control of the main window and `handles_close_request` is `true`. A document app calls
+    /// `DocumentController::close` for the document the window shows: a clean one closes now, an edited one raises its save
+    /// sheet and closes when it is answered with Save or Don't Save (Cancel keeps it), and with the last document closed
+    /// the app orders the window out (`Ctx::close_main_window`). The default closes the main window at once. True when the
+    /// app needs a new frame.
+    fn close_requested(&mut self, ctx: &Ctx) -> bool {
+        ctx.close_main_window();
+        true
+    }
     /// The person dragged one of the app's windows (`ToApp::WindowMoved`): (x, y) is where it is now, in points relative to
     /// the visible desktop area. Keep it to restore later. True when the app needs a new frame.
     fn window_moved(&mut self, _ctx: &Ctx, _window: app_windows::WindowId, _x: f32, _y: f32) -> bool {

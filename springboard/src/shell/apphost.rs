@@ -680,6 +680,13 @@ pub struct AppHost {
     last_open_url: Option<f64>,
     /// `ToShell::SuddenTermination`: the app allows being killed with no Quit round trip.
     pub sudden: bool,
+    /// `ToShell::CloseRequests`: the app answers the close control of its main window itself (a save sheet for an edited
+    /// document), so the shell sends `ToApp::CloseRequest` for it (`Shell::desk_close_requested`) instead of closing at once.
+    pub close_requests: bool,
+    /// A `ToApp::CloseRequest` was sent and the app has not ordered its main window out since. On the direct route the
+    /// app's toplevel cannot be unmapped (`desk_order_main_out`), so the order-out that answers the request quits the app, as
+    /// the close control did before apps could answer it (`order_out_quits`).
+    pub close_pending: bool,
     /// `ToShell::Activity`: the union of the app's live `ActivityOptions`; a user-initiated or latency-critical
     /// activity keeps the app from being suspended when it leaves the foreground.
     pub activity: u32,
@@ -855,6 +862,8 @@ impl AppHost {
             dock_menu: Vec::new(),
             quick_actions: Vec::new(),
             sudden: false,
+            close_requests: false,
+            close_pending: false,
             activity: 0,
             window_level: Default::default(),
             quit_at: None,
@@ -1442,6 +1451,7 @@ impl AppHost {
                 }
             }
             ToShell::SuddenTermination { enabled } => self.sudden = enabled,
+            ToShell::CloseRequests { on } => self.close_requests = on,
             ToShell::Activity { options } => {
                 self.activity = options;
                 crate::bare::sleep::note_app_activity(&self.id, options);
@@ -1924,6 +1934,13 @@ impl Route {
     pub fn expects_frames(self) -> bool {
         self == Route::Shm
     }
+}
+
+/// Whether an app's order-out of its main window quits it: only the answer to the close control (`close_pending`) of an app on
+/// the direct route, whose window the shell cannot take down any other way. Everywhere else the app keeps running without
+/// a window (`desk_order_main_out`).
+pub fn order_out_quits(route: Route, close_pending: bool) -> bool {
+    route == Route::Direct && close_pending
 }
 
 /// The route for an app the shell is about to launch, pure. Direct only when the shell itself runs with
@@ -4280,6 +4297,13 @@ mod route_tests {
     }
 
     #[test]
+    fn only_the_answer_to_a_close_request_on_the_direct_route_quits_the_app() {
+        assert!(order_out_quits(Route::Direct, true));
+        assert!(!order_out_quits(Route::Direct, false), "File > Close of the last document keeps the app running");
+        assert!(!order_out_quits(Route::Shm, true), "the shell drops the window itself on the shared-memory route");
+    }
+
+    #[test]
     fn a_direct_host_is_demoted_by_buffers_once_and_ignores_its_frames() {
         let (channel, _peer) = sys::socketpair_pair().unwrap();
         let mut host = AppHost::with_channel("fixture", channel, None, cfg());
@@ -4385,6 +4409,19 @@ mod route_tests {
         assert!(out.requests.is_empty(), "the level is not passed on to the shell's requests");
         host.handle(ToShell::WindowLevel(bifrost_proto::WindowLevel::Normal), Vec::new(), &mut out);
         assert_eq!(host.window_level, bifrost_proto::WindowLevel::Normal);
+        host.kill();
+    }
+
+    /// An app asks for the main window's close control with `CloseRequests`; until it does, the shell closes as before.
+    #[test]
+    fn an_app_opts_in_to_close_requests_with_the_message() {
+        let (mut host, _peer) = fixture_host();
+        let mut out = Pumped::default();
+        assert!(!host.close_requests, "no opt-in until the app says so");
+        host.handle(ToShell::CloseRequests { on: true }, Vec::new(), &mut out);
+        assert!(host.close_requests);
+        host.handle(ToShell::CloseRequests { on: false }, Vec::new(), &mut out);
+        assert!(!host.close_requests);
         host.kill();
     }
 

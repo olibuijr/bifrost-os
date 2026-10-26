@@ -1604,7 +1604,7 @@ impl Shell {
         // the active app with no window has nothing to close or minimize: the window under it is another app's
         if self.desk_windowless_front().is_some(){return Vec::new();}
         let Some(app)=self.desk.as_ref().and_then(|d|d.front()).map(|w|w.app) else {return Vec::new()};
-        if !minimize {self.desk_close_app(app);return Vec::new();}
+        if !minimize {self.desk_close_requested(app);return Vec::new();}
         let t=self.last_input;
         match self.desk.as_ref().and_then(|d|d.index_of(app)) {Some(i)=>self.desk_minimize_window(i,t),None=>self.desk_refocus()}
         Vec::new()

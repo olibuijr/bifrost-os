@@ -2685,6 +2685,21 @@ impl App for TextEditApp {
         self.sync_windows(ctx);
     }
 
+    /// The red button and Cmd+W on the main window ask the app instead of quitting it: the main window's document closes as
+    /// File > Close closes it. A clean one closes at once, an edited one raises the confirmation on the main window and
+    /// closes when it is answered with Save or Don't Save, and with the last document closed the window is ordered out
+    /// (`sync_windows`). The other windows close through `window_closed`.
+    fn handles_close_request(&self) -> bool {
+        true
+    }
+
+    fn close_requested(&mut self, ctx: &Ctx) -> bool {
+        self.enter(bifrost_app::app_windows::WindowId::MAIN);
+        self.routed = true;
+        self.menu_action(ctx, item::CLOSE);
+        true
+    }
+
     /// Activated (Dock, the app switcher, Search) with no window open, after the last document closed: the shell has put
     /// the main window back, and it shows a new Untitled. The reference shows its open panel here when the iCloud
     /// document picker is on; this editor starts with an Untitled on launch, so a reopen does the same (E2E12 2).
