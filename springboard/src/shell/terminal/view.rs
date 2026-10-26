@@ -50,8 +50,8 @@ impl Shell {
                 color,
             );
         }
-        button(s, ui, "+", (g.plus, top, ui.pt(44.0), row), false);
-        button(
+        bar_button(s, ui, "+", (g.plus, top, ui.pt(44.0), row), false);
+        bar_button(
             s,
             ui,
             "SSH",
@@ -75,7 +75,7 @@ impl Shell {
                 sys,
                 self.terminal_ui.system_used,
             ),
-            (g.app, ui.pt(82.0), "APP", rss, None),
+            (g.app, ui.pt(106.0), "APP", rss, None),
         ] {
             let y = top + ui.pt(9.0);
             let h = ui.pt(22.0);
