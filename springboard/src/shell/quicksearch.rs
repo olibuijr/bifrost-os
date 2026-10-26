@@ -1965,8 +1965,23 @@ impl QuickSearch {
     /// Moves the keyboard selection one row down (`step` 1) or up (-1) through the shown rows.
     fn move_selection(&mut self, ui: &Ui, step: isize) {
         let rows: Vec<(usize, usize)> = self.rows().into_iter().map(|(si, ri, _)| (si, ri)).collect();
-        self.selected = step_row(&rows, self.selected, step);
+        // Golden Gate: the Top Hit is highlighted before any arrow key, so Down leaves it for the second row
+        let cur = self.selected.or_else(|| rows.first().copied().filter(|_| self.mac));
+        self.selected = step_row(&rows, cur, step);
         self.reveal_selected(ui);
+    }
+
+    /// Cmd+Down / Cmd+Up: jumps to the first row of the next (`step` 1) or previous (-1) section, clamped to the ends.
+    /// True when Search is showing rows to jump through.
+    pub fn jump_section(&mut self, ui: &Ui, step: isize) -> bool {
+        let rows = self.rows();
+        let Some(&(first, _, _)) = rows.first() else { return false };
+        let cur = self.selected.map_or(first, |(si, _)| si);
+        let last = rows.last().map_or(first, |r| r.0);
+        let to = if step > 0 { rows.iter().map(|r| r.0).find(|&si| si > cur).unwrap_or(last) } else { rows.iter().map(|r| r.0).rev().find(|&si| si < cur).unwrap_or(first) };
+        self.selected = rows.iter().find(|r| r.0 == to).map(|r| (r.0, r.1));
+        self.reveal_selected(ui);
+        true
     }
 
     /// Golden Gate: scrolls the list the least that brings the selected row fully into the card.
@@ -2119,8 +2134,9 @@ impl QuickSearch {
             }
         }
         self.sections = sections;
-        self.selected = keep.and_then(|wanted| self.sections.iter().enumerate().find_map(|(si, s)| s.rows.iter().position(|(r, _)| *r == wanted).map(|ri| (si, ri))));
-        self.selected = None;
+        // a new query puts the highlight back on the Top Hit; a rebuild for the same query (late rows, another Dock) keeps
+        // the row the arrow keys are on
+        self.selected = keep.filter(|_| self.scroll_query == query).and_then(|wanted| self.sections.iter().enumerate().find_map(|(si, s)| s.rows.iter().position(|(r, _)| *r == wanted).map(|ri| (si, ri))));
         // a new query starts at the top; the same one (late rows, another Dock) keeps its place within the new bounds
         if self.scroll_query != query {
             self.scroll = 0.0;
@@ -2590,7 +2606,8 @@ impl QuickSearch {
                         y += rh;
                         continue;
                     }
-                    let top = self.mac && si == 0 && ri == 0;
+                    // the Top Hit's plate gives way to the row the arrow keys are on
+                    let top = self.mac && si == 0 && ri == 0 && self.selected.map_or(true, |at| at == (0, 0));
                     if top {
                         let pi = self.px(ui, MAC_PLATE_INSET_PT);
                         s.fill_rrect(cx + pi, y, cw - 2.0 * pi, rh, self.px(ui, MAC_PLATE_R_PT), a(SIDEBAR_PLATE.now())); // the reference: a neutral plate, not the accent
@@ -2960,6 +2977,16 @@ impl Shell {
             Some(hit) => self.quicksearch_act(hit, t),
             None => vec![],
         }
+    }
+
+    /// Cmd+Down / Cmd+Up in Search: jumps between the result categories. True when Search took the chord.
+    pub(super) fn quicksearch_jump(&mut self, step: isize) -> bool {
+        if !self.quicksearch.is_shown() {
+            return false;
+        }
+        self.quicksearch.jump_section(&self.ui, step);
+        self.dirty = true;
+        true
     }
 
     /// Cmd+Return in Search: shows the selected (or first) file in its folder in Files, as "Show in Folder" does. True
@@ -3978,6 +4005,10 @@ mod dock_and_scroll_tests {
     use crate::shell::keyboard::Out;
     use crate::shell::Event;
 
+    fn ui() -> Ui {
+        crate::shell::tests::ui()
+    }
+
     /// A desktop shell with Search open and "se" typed (several kinds of result).
     fn typed() -> Shell {
         let mut sh = crate::shell::tests::desktop_shell();
@@ -4083,6 +4114,66 @@ mod dock_and_scroll_tests {
             assert!(qs.row_rects(&sh.ui, sh.w).iter().any(|(a, r)| *a == at && (r.3 - row).abs() < 0.5), "the selected row shows whole");
         }
         assert_eq!(sh.quicksearch.scroll, 0.0, "the first row is back at the top");
+    }
+
+    /// Two rows (an app, then a Terminal search) in two sections, as "calc" lists them.
+    fn two_rows(q: &mut QuickSearch, u: &Ui) -> (Hit, Hit) {
+        let (a, b) = (Hit::App(AppId::Settings), Hit::Terminal("calc".into()));
+        let section = |title: &str, hit: &Hit| Section { header: u.text(title, 20.0, Weight::Semibold, WHITE), rows: vec![(hit.clone(), u.text("row", 13.0, Weight::Regular, WHITE))], subs: vec![None] };
+        q.sections = vec![section("Top Hit", &a), section("Search", &b)];
+        (a, b)
+    }
+
+    #[test]
+    fn down_then_return_opens_the_second_result() {
+        let u = ui();
+        for mac in [true, false] {
+            let mut q = QuickSearch::new(&u, 800.0, 1.0);
+            q.mac = mac;
+            let (first, second) = two_rows(&mut q, &u);
+            assert_eq!(q.key(&u, 800, Out::Enter, 0.0), Some(first.clone()), "no arrow yet: Return opens the Top Hit");
+            two_rows(&mut q, &u);
+            assert_eq!(q.key(&u, 800, Out::Named("Down"), 0.0), None);
+            if !mac {
+                // the bifrost has no pre-highlighted row: the first Down takes the first one
+                assert_eq!(q.selected, Some((0, 0)));
+                q.key(&u, 800, Out::Named("Down"), 0.0);
+            }
+            assert_eq!(q.selected, Some((1, 0)), "Down left the Top Hit for the second row (mac {mac})");
+            assert_eq!(q.key(&u, 800, Out::Enter, 0.0), Some(second), "Return opens the highlighted row");
+            q.key(&u, 800, Out::Named("Up"), 0.0);
+            assert_eq!(q.selected, Some((0, 0)));
+        }
+    }
+
+    #[test]
+    fn a_rebuild_for_the_same_query_keeps_the_arrow_selection() {
+        let mut sh = typed();
+        assert!(sh.quicksearch.rows().len() > 2);
+        sh.quicksearch.key(&sh.ui, sh.h, Out::Named("Down"), 3000.0);
+        let at = sh.quicksearch.selected.expect("Down selects a row");
+        assert_ne!(at, (0, 0), "the Top Hit is already highlighted, so Down goes past it");
+        let hit = sh.quicksearch.selected_hit();
+        sh.quicksearch.search(&sh.ui, sh.h);
+        assert_eq!(sh.quicksearch.selected, Some(at), "late rows or a new Dock do not reset the highlight");
+        assert_eq!(sh.quicksearch.selected_hit(), hit);
+        sh.quicksearch.key(&sh.ui, sh.h, Out::Text("t".into()), 3100.0);
+        assert_eq!(sh.quicksearch.selected, None, "a new query highlights the Top Hit again");
+    }
+
+    #[test]
+    fn cmd_down_and_up_jump_between_categories() {
+        let u = ui();
+        let mut q = QuickSearch::new(&u, 800.0, 1.0);
+        let (_, second) = two_rows(&mut q, &u);
+        assert!(q.jump_section(&u, 1));
+        assert_eq!(q.selected_hit(), Some(second));
+        assert!(q.jump_section(&u, 1));
+        assert_eq!(q.selected, Some((1, 0)), "clamped at the last category");
+        assert!(q.jump_section(&u, -1));
+        assert_eq!(q.selected, Some((0, 0)));
+        q.sections.clear();
+        assert!(!q.jump_section(&u, 1), "nothing to jump through");
     }
 
     #[test]
