@@ -1,16 +1,20 @@
 //! Keychain Access as an installed BifrOSt app in the full-size window: the keychain groups this app may read (its
 //! `keychain_groups` in manifest.toml) in a sidebar, and the items of the selected group with the account and the time
 //! each was last written. No secret is read or shown here. Delete removes the selected item after a second press.
+//! File > New Item (Cmd+N) opens a sheet that adds an item to the selected group.
 //! Pure logic (order, titles, dates) is in `model.rs`.
 
 mod model;
 
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::controls::Rect;
+use bifrost_app::item_sheet::{ItemSheet, Outcome};
+use bifrost_app::keychain::Error as KeychainError;
 use bifrost_app::kit::ui::{self, Weight};
 use bifrost_app::kit::{Damage, Surface, Ui};
 use bifrost_app::keychain_groups::{self, Row};
-use bifrost_app::{widgets, App, Ctx, Input, TouchKind};
+use bifrost_app::layout::UNIFIED_BAR_PT;
+use bifrost_app::{widgets, App, AppMenu, AppMenuItem, Ctx, Input, KeyInput, TouchKind};
 use bifrost_core::json::Json;
 use std::collections::HashMap;
 
@@ -22,6 +26,9 @@ const PAD_PT: f32 = 12.0;
 const DELETE_W_PT: f32 = 72.0;
 const DELETE_H_PT: f32 = 26.0;
 
+/// File > New Item.
+const MENU_NEW: u32 = 1;
+
 /// The Delete button's top-left corner, relative to the content column of width `content_w`.
 fn delete_at(content_w: f32) -> (f32, f32) {
     (content_w - PAD_PT - DELETE_W_PT, PAD_PT)
@@ -32,6 +39,7 @@ enum Pending {
     Groups,
     List { group: String },
     Delete { group: String },
+    Add { group: String },
 }
 
 #[derive(Default)]
@@ -45,6 +53,8 @@ struct KeychainAccessApp {
     armed: bool,
     pending: HashMap<u32, Pending>,
     status: String,
+    /// The New Item sheet while it is open; it blocks the window.
+    adding: Option<ItemSheet>,
 }
 
 impl KeychainAccessApp {
@@ -75,6 +85,43 @@ impl KeychainAccessApp {
         self.selected = None;
         self.armed = false;
         self.ask_list(ctx);
+    }
+
+    /// Opens the New Item sheet for the selected group.
+    fn open_add(&mut self) -> bool {
+        if self.adding.is_some() || self.current().is_none() {
+            return false;
+        }
+        self.adding = Some(ItemSheet::new("New Item", &[("Name", "Service or website", false), ("Account", "User name", false), ("Password", "", true)]));
+        true
+    }
+
+    /// Input while the New Item sheet is open: it takes every press and key.
+    fn adding_event(&mut self, ctx: &Ctx, ev: Input) -> bool {
+        let parent = Rect { x: 0.0, y: 0.0, w: ctx.cfg.w as f32 / ctx.ui.s, h: ctx.cfg.h as f32 / ctx.ui.s };
+        let Some(sheet) = self.adding.as_mut() else { return false };
+        let outcome = match ev {
+            Input::Touch { kind: TouchKind::Down, x, y, .. } => sheet.press(parent, UNIFIED_BAR_PT, x / ctx.ui.s, y / ctx.ui.s),
+            Input::Key(KeyInput::Text(text)) => sheet.type_text(&text),
+            Input::Key(KeyInput::Code(code)) => sheet.code(code),
+            _ => Outcome::None,
+        };
+        match outcome {
+            Outcome::None => false,
+            Outcome::Redraw => true,
+            Outcome::Cancel => {
+                self.adding = None;
+                true
+            }
+            Outcome::Add(values) => {
+                self.adding = None;
+                if let Some(group) = self.current().map(str::to_string) {
+                    let id = keychain_groups::add(ctx, &group, &values[0], &values[1], values[2].as_bytes());
+                    self.pending.insert(id, Pending::Add { group });
+                }
+                true
+            }
+        }
     }
 
     fn sidebar(&self) -> SourceList {
@@ -120,7 +167,21 @@ impl App for KeychainAccessApp {
         }
     }
 
+    fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
+        vec![AppMenu {
+            title: "File".into(),
+            items: vec![AppMenuItem::new(MENU_NEW, "New Item\u{2026}").key("cmd+n").enabled(self.adding.is_none() && self.current().is_some())],
+        }]
+    }
+
+    fn menu_action(&mut self, _ctx: &Ctx, id: u32) -> bool {
+        id == MENU_NEW && self.open_add()
+    }
+
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
+        if self.adding.is_some() {
+            return self.adding_event(ctx, ev);
+        }
         let Input::Touch { kind: TouchKind::Down, x, y, .. } = ev else { return false };
         let (x, y) = (x / ctx.ui.s, y / ctx.ui.s);
         if x < SIDE_PT {
@@ -182,6 +243,16 @@ impl App for KeychainAccessApp {
                 match keychain_groups::decode(result) {
                     Ok(_) => self.status = "Item deleted.".into(),
                     Err(e) => self.status = format!("Could not delete: {e}"),
+                }
+                if self.current() == Some(group.as_str()) {
+                    self.ask_list(ctx);
+                }
+            }
+            Pending::Add { group } => {
+                match keychain_groups::decode(result) {
+                    Ok(_) => self.status = "Item added.".into(),
+                    Err(KeychainError::DuplicateItem) => self.status = "An item with that name and account already exists.".into(),
+                    Err(e) => self.status = format!("Could not add: {e}"),
                 }
                 if self.current() == Some(group.as_str()) {
                     self.ask_list(ctx);
@@ -269,6 +340,9 @@ impl App for KeychainAccessApp {
                 ui::LABEL_2.now(),
             );
             s.blit_colored(&line, pi(SIDE_PT + PAD_PT), pi(height_pt - 24.0), ui::LABEL_2.now(), 255);
+        }
+        if let Some(sheet) = &self.adding {
+            sheet.draw(s, ui, Rect { x: 0.0, y: 0.0, w: w as f32 / scale, h: height_pt }, UNIFIED_BAR_PT);
         }
         let mut d = Damage::new(w, h);
         d.all();
