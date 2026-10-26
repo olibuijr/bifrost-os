@@ -223,8 +223,8 @@ pub struct TextArea {
     /// Markdown mode: the char ranges of the hidden emphasis markers. They take no width, and the caret steps, the
     /// deletes and the clicks pass over them as the reference's rich text has no such characters (`layout` keeps it)
     concealed: Vec<Range<usize>>,
-    /// Markdown mode: the hidden block markers at the start of heading paragraphs (`## `, `### `, a `# ` after the
-    /// first line), also in `concealed`. A caret anywhere from a marker's start to its end is at the heading's first
+    /// Markdown mode: the hidden block markers at the start of heading paragraphs (`## `, `### `, `# `, the title's
+    /// included), also in `concealed`. A caret anywhere from a marker's start to its end is at the heading's first
     /// visible char: typing goes in after the marker, so the line stays a heading (`past_lead`, `settle`)
     leads: Vec<Range<usize>>,
 }
@@ -605,6 +605,12 @@ impl TextArea {
             };
             for st in styles.iter_mut().take(hide) {
                 st.2 = 7;
+            }
+            // the title's marker is a hidden lead like a heading's: a click or Cmd+Left at the line start puts the caret
+            // after it, so a paste or typing there stays in the title instead of landing in front of the `# `
+            if hide > 0 && display.is_none() {
+                leads.push(start..start + hide);
+                concealed.push(start..start + hide);
             }
             let mut adv: Vec<f32> = if display.is_some() {
                 vec![0.0; chars.len()]
@@ -2366,6 +2372,14 @@ mod tests {
         let later = md_area(&ui, "Note\n# Heading");
         assert!(later.lines[1].adv[..2].iter().all(|&d| d == 0.0));
         assert_eq!(later.leads, vec![5..7]);
+        // the title's marker is a lead too: a click at the line start, then a paste, lands after it (no stray `#`)
+        assert_eq!(marked.leads, vec![0..2]);
+        let mut empty = md_area(&ui, "# ");
+        let (x, y) = (empty.lines[0].x_at(0), empty.lines[0].y + 2.0);
+        assert_eq!(empty.position_at(x, y), 2);
+        empty.set_caret(0);
+        assert!(empty.edit(&ui, &Out::Text("QA copy test".into()), 1.0));
+        assert_eq!(empty.text(), "# QA copy test");
     }
 
     /// E2E11 11: a heading line that also carries a checkbox marker draws as the heading alone, never the raw marker.
