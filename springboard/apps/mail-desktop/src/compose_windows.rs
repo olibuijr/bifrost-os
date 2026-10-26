@@ -227,6 +227,41 @@ impl Composes {
         }
     }
 
+    /// The red button on compose window `id` (the app opted in with `handles_close_request`): the window stays up and the
+    /// message is closed as Escape closes it. A message with changes turns the window into the question (Save This
+    /// Message, Don't Save, Cancel); an unchanged one closes. A window that is already asking keeps its question. When
+    /// another sheet holds the slot, so the question has no room, a changed message goes to Drafts and the window closes.
+    /// False when `id` is not a compose window.
+    pub fn close_requested(&mut self, ctx: &Ctx, mail: &mut MailWindow, id: WindowId) -> bool {
+        if !self.owns(id) {
+            return false;
+        }
+        if !self.activate(mail, id) {
+            if matches!(mail.mail.sheet, Some(Sheet::Question(_))) {
+                // another window is asking already: its question comes first
+                return false;
+            }
+            if let Some(index) = self.slots.iter().position(|slot| slot.id == id) {
+                let slot = self.slots.remove(index);
+                let mut compose = slot.compose;
+                if changed(&compose, &slot.opened) {
+                    if compose.draft_id.is_empty() {
+                        compose.draft_id = mail.new_draft_id();
+                    }
+                    mail.save_draft(&compose);
+                }
+                let _ = ctx.close_window(id);
+            }
+            return true;
+        }
+        if matches!(mail.mail.sheet, Some(Sheet::Compose(_))) {
+            mail.mail.sheet = None;
+            mail.mail.sheet_done = false;
+        }
+        self.sync(ctx, mail);
+        true
+    }
+
     /// The shell closed a compose window. A message with changes cannot be dropped silently: its window is opened again
     /// with the question (Save This Message, Don't Save, Cancel). True when windows changed.
     pub fn closed(&mut self, ctx: &Ctx, mail: &mut MailWindow, id: WindowId) -> bool {

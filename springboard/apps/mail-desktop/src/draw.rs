@@ -131,6 +131,8 @@ pub enum Side {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Hit {
     Button(Button),
+    /// The search field in the toolbar.
+    Search,
     Side(Side),
     Message(u32),
     Field(usize),
@@ -240,6 +242,10 @@ fn toolbar_glyph(button: &Button) -> Option<(&'static str, &'static str)> {
     })
 }
 
+/// The toolbar item id of the search field, and its width in points.
+const SEARCH_ID: u32 = 8;
+const SEARCH_PT: f32 = 180.0;
+
 fn toolbar_model(mail: &Mail) -> Toolbar {
     let mut items = vec![ToolbarItem::custom(90, "Mailbox title", 180.0), ToolbarItem::flexible_space()];
     let visible = toolbar_items(mail.open.is_some(), open_has_others(mail), mail.filter);
@@ -260,6 +266,7 @@ fn toolbar_model(mail: &Mail) -> Toolbar {
         };
         items.push(item.enabled(enabled));
     }
+    items.push(ToolbarItem::custom(SEARCH_ID, "Search", SEARCH_PT));
     Toolbar::new(items)
 }
 
@@ -773,7 +780,10 @@ impl MailWindow {
             let placed = widgets::toolbar_layout(ui, toolbar_bounds(ui, w), &model);
             // a disabled button takes no click
             let enabled = |id: &u32| model.items.iter().any(|i| i.id == *id && i.enabled);
-            return placed.hit(x / scale, y / scale).filter(enabled).and_then(toolbar_button).map_or(Hit::None, Hit::Button);
+            return match placed.hit(x / scale, y / scale) {
+                Some(SEARCH_ID) => Hit::Search,
+                id => id.filter(enabled).and_then(toolbar_button).map_or(Hit::None, Hit::Button),
+            };
         }
         if y < top {
             return favorite_items(&self.mail, ui, bar, top - bar).into_iter().find(|(_, r)| inside(*r, x, y)).map_or(Hit::None, |(i, _)| Hit::Favorite(i));
@@ -888,6 +898,13 @@ impl MailWindow {
         let placed = widgets::toolbar(s, ui, toolbar_bounds(ui, w), &model, None);
         if let Some(r) = placed.rect_of(90) {
             put_mid(s, &mut self.labels, ui, title, MAC_BODY_PT, Weight::Semibold, LABEL.now(), ui.pt(r.x), ui.pt(r.y + r.h / 2.0));
+        }
+        if let Some(r) = placed.rect_of(SEARCH_ID) {
+            let mut field = bifrost_app::controls::TextField::new();
+            field.set_text(self.mail.search_shown());
+            // the field is a little shorter than the bar, so its capsule sits clear of the bar's edges
+            let inset = widgets::TOOLBAR_GAP_PT / 2.0;
+            widgets::search_field(s, ui, &field, bifrost_app::controls::Rect { x: r.x, y: r.y + inset, w: r.w, h: r.h - 2.0 * inset }, "Search", self.mail.search_focused);
         }
     }
 

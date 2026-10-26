@@ -867,6 +867,10 @@ pub struct Mail {
     pub discovering: bool,
     /// The search text as applied. Empty shows every message.
     pub search: String,
+    /// The toolbar's search field as typed, with the spaces `search` trims; the field shows it while it still matches `search`.
+    pub search_text: String,
+    /// The toolbar's search field has the keyboard (a click on it, Edit > Find).
+    pub search_focused: bool,
     /// The threaded view: the list groups conversations together.
     pub threaded: bool,
     /// The files of each message loaded for the shown mailbox, by UID.
@@ -962,6 +966,8 @@ impl Mail {
             status: String::new(),
             discovering: false,
             search: String::new(),
+            search_text: String::new(),
+            search_focused: false,
             threaded: false,
             attachments: HashMap::new(),
             found: None,
@@ -1852,6 +1858,32 @@ impl Mail {
     pub fn open_search(&mut self) {
         let text = self.search.clone();
         self.sheet = Some(Sheet::Search(Form::new(vec![Field::new("Search", "from:ana subject:fundur \"exact phrase\"", &text)])));
+    }
+
+    /// What the toolbar's search field shows: the text as typed while it is the applied search, else the applied search
+    /// (a smart mailbox or Show All changed it).
+    pub fn search_shown(&self) -> &str {
+        if self.search_text.trim() == self.search { &self.search_text } else { &self.search }
+    }
+
+    /// Types into the toolbar's search field: the list filters at once, as the text grows.
+    pub fn type_search(&mut self, text: &str) {
+        let mut raw = self.search_shown().to_string();
+        raw.push_str(text);
+        self.set_search_text(raw);
+    }
+
+    /// Deletes the last character of the toolbar's search field.
+    pub fn backspace_search(&mut self) {
+        let mut raw = self.search_shown().to_string();
+        raw.pop();
+        self.set_search_text(raw);
+    }
+
+    /// Sets the toolbar's search field to `raw` and applies it.
+    pub fn set_search_text(&mut self, raw: String) {
+        self.apply_search(&raw);
+        self.search_text = raw;
     }
 
     /// Applies a search text. Empty (or blank) shows every message again.

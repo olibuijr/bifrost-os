@@ -345,6 +345,26 @@ impl App for MailApp {
         d
     }
 
+    /// The red button of an extra window comes to the app first: a compose window asks Save This Message, Don't Save,
+    /// Cancel for a message with changes instead of the shell dropping it.
+    fn handles_close_request(&self) -> bool {
+        true
+    }
+
+    fn window_close_requested(&mut self, ctx: &Ctx, window: WindowId) -> bool {
+        if window.is_main() {
+            ctx.close_main_window();
+            return true;
+        }
+        if let Some(mail) = &mut self.window {
+            if self.composes.owns(window) {
+                return self.composes.close_requested(ctx, mail, window) | self.sync(ctx);
+            }
+        }
+        // a viewer window closes at once
+        ctx.close_window(window).is_ok() && self.window_closed(ctx, window)
+    }
+
     fn window_closed(&mut self, ctx: &Ctx, window: WindowId) -> bool {
         let before = self.viewers.len();
         self.viewers.retain(|v| v.id != window);
@@ -798,6 +818,69 @@ mod tests {
         // Escape closes the message, asking first because it has text
         app.window_event(&ctx, id, Input::Key(KeyInput::Code(1)));
         assert!(matches!(app.window.as_ref().unwrap().mail.sheet, Some(Sheet::Question(_))), "Save This Message, Don't Save, Cancel");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The red button on a compose window with changes asks first: the window stays, as the question, and nothing is
+    /// closed or opened again. Cancel returns to the message; an unchanged message closes with its window.
+    #[test]
+    fn the_red_button_on_a_compose_window_with_text_asks_before_closing() {
+        let dir = std::env::temp_dir().join(format!("bifrost-mail-compose-red-{}", std::process::id()));
+        let ctx = ctx(&dir);
+        let mut app = app_with_inbox(&ctx);
+        assert!(app.handles_close_request());
+        app.with_window(&ctx, |mail| {
+            mail.mail.open_compose(None);
+            true
+        });
+        let id = app.composes.active.expect("a compose window");
+        app.window_event(&ctx, id, Input::Key(KeyInput::Text("dummy test text".into())));
+        ctx.take_sent();
+        assert!(app.window_close_requested(&ctx, id));
+        assert!(matches!(app.window.as_ref().unwrap().mail.sheet, Some(Sheet::Question(_))), "Save This Message, Don't Save, Cancel");
+        assert!(ctx.windows().get(id).is_some(), "the window waits for the answer");
+        assert_eq!(app.composes.slots.len(), 1);
+        let sent = ctx.take_sent();
+        assert!(!sent.iter().any(|m| matches!(m, bifrost_app::proto::ToShell::WindowClose { .. } | bifrost_app::proto::ToShell::WindowOpen { .. })), "{sent:?}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Cmd+F puts the cursor in the toolbar's search field (no Find sheet), typing filters the list live, a click away
+    /// leaves the field, and Escape clears the text first.
+    #[test]
+    fn find_focuses_the_toolbar_search_field_and_typing_filters_live() {
+        let dir = std::env::temp_dir().join(format!("bifrost-mail-search-field-{}", std::process::id()));
+        let ctx = ctx(&dir);
+        let mut app = app_with_inbox(&ctx);
+        assert_eq!(app.window.as_ref().unwrap().mail.visible_rows().len(), 2);
+        app.menu_action(&ctx, bifrost_mail::window::MENU_FIND);
+        let mail = &app.window.as_ref().unwrap().mail;
+        assert!(mail.search_focused, "Find focuses the field");
+        assert!(mail.sheet.is_none(), "no Find sheet opens");
+        app.event(&ctx, Input::Key(KeyInput::Text("fund".into())));
+        let mail = &app.window.as_ref().unwrap().mail;
+        assert_eq!(mail.search_shown(), "fund");
+        assert_eq!(mail.visible_rows().len(), 1, "the list filters as the text grows");
+        app.event(&ctx, Input::Key(KeyInput::Text(" ".into())));
+        assert_eq!(app.window.as_ref().unwrap().mail.search_shown(), "fund ", "a space typed in the field stays");
+        // Escape clears the text, a second one leaves the field
+        app.event(&ctx, Input::Key(KeyInput::Code(1)));
+        let mail = &app.window.as_ref().unwrap().mail;
+        assert_eq!((mail.search_shown(), mail.search_focused, mail.visible_rows().len()), ("", true, 2));
+        app.event(&ctx, Input::Key(KeyInput::Code(1)));
+        assert!(!app.window.as_ref().unwrap().mail.search_focused);
+        // the field is in the toolbar: a click on it focuses it, a click on the list leaves it
+        let mail = app.window.as_ref().unwrap();
+        let x = (0..800).rev().step_by(4).find(|x| matches!(mail.hit(&ctx.ui, *x as f32, 20.0), Hit::Search)).expect("a search field in the toolbar") as f32;
+        for kind in [TouchKind::Down, TouchKind::Up] {
+            app.event(&ctx, Input::Touch { kind, id: 0, x, y: 20.0, t: 10.0, mods: bifrost_app::ModifierFlags::EMPTY });
+        }
+        assert!(app.window.as_ref().unwrap().mail.search_focused);
+        let (rx, ry) = row_point(&app, &ctx.ui, 9);
+        for kind in [TouchKind::Down, TouchKind::Up] {
+            app.event(&ctx, Input::Touch { kind, id: 0, x: rx, y: ry, t: 500.0, mods: bifrost_app::ModifierFlags::EMPTY });
+        }
+        assert!(!app.window.as_ref().unwrap().mail.search_focused);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
