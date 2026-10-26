@@ -60,7 +60,7 @@ use std::sync::{Arc, OnceLock};
 pub fn data_dir() -> String {
     crate::shell::apphost::root().join("Browser").to_string_lossy().into_owned()
 }
-use super::ui::TINT as ACCENT;
+use super::ui::{accent_now, TINT as ACCENT};
 use super::ui::WEB_BROWSER_BAR as BAR;
 const TAB_IDLE: u32 = BLACK;
 use super::ui::WEB_BROWSER_BAR as TAB_ACTIVE;
@@ -1417,7 +1417,7 @@ impl Browser {
         s.fill_rrect(fx, fy, fw, fh, 1.0e4, FIELD);
         self.url.draw(s, ui, self.url_frame(ui), t);
         if let Some(p) = progress {
-            s.fill_rect(0, (top + th - ui.pt(2.0)) as usize, (self.w as f32 * p) as usize, ui.pt(2.0).ceil() as usize, ACCENT);
+            s.fill_rect(0, (top + th - ui.pt(2.0)) as usize, (self.w as f32 * p) as usize, ui.pt(2.0).ceil() as usize, accent_now());
         }
     }
 

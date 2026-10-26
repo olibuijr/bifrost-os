@@ -2,7 +2,7 @@
 //! Sizes are named point constants, colours are the named pairs from render ui.rs, text uses `MAC_*_PT`.
 use super::button_style::{ButtonConfiguration, ButtonRole, ButtonStyle};
 use super::{blit, View, ViewBase, ViewEvent};
-use crate::kit::ui::{Weight, CONTROL_PRESSED, FIELD_BG, LABEL, LABEL_2, LABEL_3, SEGMENT_ON, SYSTEM_GREEN, TINT, TRACK_C, WHITE};
+use crate::kit::ui::{Weight, CONTROL_PRESSED, FIELD_BG, LABEL, LABEL_2, LABEL_3, SEGMENT_ON, SYSTEM_GREEN, accent_now, TRACK_C, WHITE};
 use crate::kit::{Event, Ui};
 use bifrost_render::canvas::{Canvas, RectF};
 use crate::layout::ROW_PT;
@@ -47,7 +47,7 @@ pub(super) fn centred_baselines(ui: &Ui, pt: f32, frame: Rect) -> Option<(f32, f
 
 pub(super) fn focus_ring(s: &mut dyn Canvas, ui: &Ui, f: Rect, radius: f32) {
     let t = ui.pt(FOCUS_RING_PT);
-    s.stroke_rrect(RectF::new(ui.pt(f.x) - t, ui.pt(f.y) - t, ui.pt(f.w) + 2.0 * t, ui.pt(f.h) + 2.0 * t), ui.pt(radius) + t, t, TINT);
+    s.stroke_rrect(RectF::new(ui.pt(f.x) - t, ui.pt(f.y) - t, ui.pt(f.w) + 2.0 * t, ui.pt(f.h) + 2.0 * t), ui.pt(radius) + t, t, accent_now());
 }
 
 pub(super) fn node(v: &dyn View, role: Role, label: &str, value: &str) -> Option<Node> {
@@ -342,7 +342,7 @@ impl View for Slider {
         let t = self.track();
         let kx = self.model.knob_x(t);
         s.fill_rrect(RectF::new(ui.pt(t.x), ui.pt(t.y - SLIDER_TRACK_PT / 2.0), ui.pt(t.w), ui.pt(SLIDER_TRACK_PT)), ui.pt(SLIDER_TRACK_PT / 2.0), TRACK_C.now());
-        s.fill_rrect(RectF::new(ui.pt(t.x), ui.pt(t.y - SLIDER_TRACK_PT / 2.0), ui.pt(kx - t.x), ui.pt(SLIDER_TRACK_PT)), ui.pt(SLIDER_TRACK_PT / 2.0), TINT);
+        s.fill_rrect(RectF::new(ui.pt(t.x), ui.pt(t.y - SLIDER_TRACK_PT / 2.0), ui.pt(kx - t.x), ui.pt(SLIDER_TRACK_PT)), ui.pt(SLIDER_TRACK_PT / 2.0), accent_now());
         let k = Rect { x: kx - SLIDER_KNOB_PT / 2.0, y: t.y - SLIDER_KNOB_PT / 2.0, w: SLIDER_KNOB_PT, h: SLIDER_KNOB_PT };
         s.fill_rrect(RectF::new(ui.pt(k.x), ui.pt(k.y), ui.pt(k.w), ui.pt(k.h)), ui.pt(k.h / 2.0), if self.base.enabled { WHITE } else { CONTROL_PRESSED.now() });
         if self.base.focused {

@@ -526,3 +526,34 @@ fn a_form_with_no_sections_lays_out_and_draws() {
     draws(&mut w, 100, 100);
     assert!(w.ax_nodes().is_empty());
 }
+
+// ---- Accent colour ----
+
+/// The accent is process-wide: tests that change it run one at a time.
+static ACCENT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn drawn_with_green_accent<V: View + 'static>(v: V, size: (usize, usize)) -> (Vec<u32>, u32) {
+    use crate::kit::appearance::{accent, accent_now, set_accent, Accent};
+    let keep = accent();
+    set_accent(Accent::Green);
+    let green = accent_now();
+    let (mut w, _) = one(v, (size.0 as f32, size.1 as f32));
+    let mut px = vec![0u32; size.0 * size.1];
+    w.draw(&mut Surface { w: size.0, h: size.1, stride: size.0, px: &mut px, y0: 0 }, &ui());
+    set_accent(keep);
+    (px, green)
+}
+
+#[test]
+fn a_checked_checkbox_a_slider_and_a_progress_bar_are_filled_with_the_chosen_accent_not_system_blue() {
+    let _g = ACCENT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let blue = crate::kit::ui::TINT;
+    for (name, (px, green)) in [
+        ("checkbox", drawn_with_green_accent(Checkbox::new("C", true, "c"), (120, 24))),
+        ("slider", drawn_with_green_accent(Slider::new("Volume", values::Slider::new(0.0, 10.0, 10.0, None), "volume"), (118, 28))),
+        ("progress", drawn_with_green_accent(ProgressIndicator::bar(1.0), (100, 10))),
+    ] {
+        assert!(px.contains(&green), "{name}: filled with the accent");
+        assert!(!px.contains(&blue), "{name}: no fixed systemBlue left");
+    }
+}

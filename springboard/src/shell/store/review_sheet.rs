@@ -8,7 +8,7 @@
 use super::sheet::Rect;
 use super::{cell, fill, label, AppStore};
 use crate::gfx::{rgba, Surface};
-use crate::shell::ui::{Ui, Weight, CAPSULE_RADIUS, SECONDARY, TINT, WHITE};
+use crate::shell::ui::{Ui, Weight, CAPSULE_RADIUS, SECONDARY, TINT, accent_now, WHITE};
 use crate::shell::Event;
 use bifrost_core::app_review::{Error, Review, ReviewDraft, MAX_STARS};
 
@@ -200,7 +200,7 @@ impl AppStore {
         }
         for (i, r) in rating_rects(ui, w, h).iter().enumerate() {
             let on = (i as u8) < stars;
-            s.fill_rrect(r.0, r.1, r.2, r.3, r.2 / 2.0, if on { TINT } else { fill() });
+            s.fill_rrect(r.0, r.1, r.2, r.3, r.2 / 2.0, if on { accent_now() } else { fill() });
             let n = (i + 1).to_string();
             let nw = ui.measure(&n, 15.0, Weight::Bold);
             self.put(s, ui, &n, 15.0, Weight::Bold, if on { WHITE } else { label() }, false, r.0 + (r.2 - nw) / 2.0, r.1 + r.3 / 2.0);
@@ -209,7 +209,7 @@ impl AppStore {
         for (r, field) in [(nick, Field::Nickname), (body_box, Field::Body)] {
             s.fill_rrect(r.0, r.1, r.2, r.3, ui.pt(8.0), fill());
             if focus == Some(field) {
-                s.stroke_rrect(r.0, r.1, r.2, r.3, ui.pt(8.0), 2.0, TINT);
+                s.stroke_rrect(r.0, r.1, r.2, r.3, ui.pt(8.0), 2.0, accent_now());
             }
         }
         let inner = nick.2 - ui.pt(24.0);
@@ -228,7 +228,7 @@ impl AppStore {
             }
         }
         let (send, cancel) = buttons(ui, w, h);
-        s.fill_rrect(send.0, send.1, send.2, send.3, CAPSULE_RADIUS, if can_send { TINT } else { fill() });
+        s.fill_rrect(send.0, send.1, send.2, send.3, CAPSULE_RADIUS, if can_send { accent_now() } else { fill() });
         s.fill_rrect(cancel.0, cancel.1, cancel.2, cancel.3, CAPSULE_RADIUS, fill());
         for (text, r, ink) in [("Send", send, if can_send { WHITE } else { SECONDARY }), ("Cancel", cancel, TINT)] {
             let tw = ui.measure(text, 17.0, Weight::Semibold);

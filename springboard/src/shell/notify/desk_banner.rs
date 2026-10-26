@@ -10,7 +10,7 @@
 //! leaves. The tablet keeps its centred banner (`super::banner_rect`).
 
 use super::super::clock::Answer;
-use super::super::ui::{Weight, LABEL, MAC_BODY_PT, MENU_HIGHLIGHT, MENU_HIGHLIGHT_TEXT, SEPARATOR_C};
+use super::super::ui::{Weight, LABEL, MAC_BODY_PT, menu_highlight, MENU_HIGHLIGHT_TEXT, SEPARATOR_C};
 use super::super::{AppId, Effect, Event, Shell};
 use super::center::{NC_CARD_PT, NC_CARD_R_PT, NC_RIGHT_PT, NC_STACK_PT, NC_TOP_GAP_PT};
 use super::desk_card::{self, within, CardText, R4, CONTROL_PT, PAD_PT};
@@ -462,7 +462,7 @@ impl Shell {
             for (i, (item, row)) in self.desk_banner_menu().iter().zip(rows).enumerate() {
                 let lit = self.notify.banner_hover == Some(Part::Menu(i));
                 if lit {
-                    s.fill_rrect(row.0, row.1, row.2, row.3, ui.pt(5.0), MENU_HIGHLIGHT);
+                    s.fill_rrect(row.0, row.1, row.2, row.3, ui.pt(5.0), menu_highlight());
                 }
                 let ink = if lit { MENU_HIGHLIGHT_TEXT } else { LABEL.now() };
                 let label = ui.text(&ui.fit(&self.desk_banner_menu_title(item), MAC_BODY_PT, row.2 - ui.pt(16.0)), MAC_BODY_PT, Weight::Regular, ink);

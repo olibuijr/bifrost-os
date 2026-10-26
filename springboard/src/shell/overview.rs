@@ -12,7 +12,7 @@ use super::appgrid::AppGrid;
 use super::control_center::{desk_glass, desk_veil};
 use bifrost_ui::material_request::ShellSurface;
 use super::desk::Metrics;
-use super::ui::{Weight, CARD_BG, FIELD_BG, LABEL, LABEL_2, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, SELECTION, TINT, WHITE, WINDOW_FRAME_BLURRED};
+use super::ui::{Weight, CARD_BG, FIELD_BG, LABEL, LABEL_2, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, SELECTION, accent_now, WHITE, WINDOW_FRAME_BLURRED};
 use super::window_shots::{self, Source};
 use super::{apps, AppId, Effect, Event, Shell};
 use crate::gfx::{pack, rgba, Image, Surface, View};
@@ -1005,7 +1005,7 @@ impl Overview {
                 }
             }
             if i == cur {
-                s.stroke_rrect(r.x - 1.0, y - 1.0, r.w + 2.0, r.h + 2.0, rad + 1.0, ui.pt(2.0), crate::gfx::scale(TINT, alpha));
+                s.stroke_rrect(r.x - 1.0, y - 1.0, r.w + 2.0, r.h + 2.0, rad + 1.0, ui.pt(2.0), crate::gfx::scale(accent_now(), alpha));
             } else if drop_desk == Some(i) {
                 s.stroke_rrect(r.x - 1.0, y - 1.0, r.w + 2.0, r.h + 2.0, rad + 1.0, ui.pt(2.0), crate::gfx::scale(SELECTION.now(), alpha));
             }
@@ -1113,7 +1113,7 @@ impl Overview {
             TileKey::Foreign(id) => {
                 self.draw_foreign_picture(sh, s, id, r, rad, (iw, ih), alpha);
                 if hover || selected {
-                    let c = if selected { TINT } else { SELECTION.now() };
+                    let c = if selected { accent_now() } else { SELECTION.now() };
                     s.stroke_rrect(r.x - 2.0, r.y - 2.0, r.w + 4.0, r.h + 4.0, rad + 2.0, ui.pt(3.0), crate::gfx::scale(c, alpha));
                 }
                 return;
@@ -1141,7 +1141,7 @@ impl Overview {
             }
         }
         if hover || selected {
-            let c = if selected { TINT } else { SELECTION.now() };
+            let c = if selected { accent_now() } else { SELECTION.now() };
             s.stroke_rrect(r.x - 2.0, r.y - 2.0, r.w + 4.0, r.h + 4.0, rad + 2.0, ui.pt(3.0), crate::gfx::scale(c, alpha));
         }
     }

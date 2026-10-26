@@ -1,5 +1,5 @@
 //! System-style drawing adapters for renderer-independent BifrOSt controls.
-use crate::kit::ui::{Weight, FOLDER_EMBLEM, FOLDER_EMBLEM_HILITE, CONTROL_PRESSED, CAPSULE_BG, CAPSULE_EDGE, CAPSULE_SHADOW, DETAIL_BG, FIELD_BG, HAIRLINE_C, LABEL, LABEL_2, LABEL_3, MATERIAL_HUD, MATERIAL_HUD_SOLID, MATERIAL_MENU, MATERIAL_SHEET, MATERIAL_TOOLTIP, MATERIAL_HEADER, MATERIAL_CONTENT, MATERIAL_UNDER_WINDOW, MATERIAL_UNDER_PAGE, MATERIAL_FULLSCREEN, MATERIAL_SELECTION_EMPHASIZED, MATERIAL_SELECTION_INACTIVE, MATERIAL_POPOVER, MATERIAL_SIDEBAR, MATERIAL_SIDEBAR_SOLID, MATERIAL_TITLEBAR, MATERIAL_TITLEBAR_SOLID, ROW_PRESSED, SEGMENT_ON, SELECTION, SEPARATOR_C, SIDEBAR_BG, SIDEBAR_PLATE, TINT, WHITE};
+use crate::kit::ui::{Weight, FOLDER_EMBLEM, FOLDER_EMBLEM_HILITE, CONTROL_PRESSED, CAPSULE_BG, CAPSULE_EDGE, CAPSULE_SHADOW, DETAIL_BG, FIELD_BG, HAIRLINE_C, LABEL, LABEL_2, LABEL_3, MATERIAL_HUD, MATERIAL_HUD_SOLID, MATERIAL_MENU, MATERIAL_SHEET, MATERIAL_TOOLTIP, MATERIAL_HEADER, MATERIAL_CONTENT, MATERIAL_UNDER_WINDOW, MATERIAL_UNDER_PAGE, MATERIAL_FULLSCREEN, MATERIAL_SELECTION_EMPHASIZED, MATERIAL_SELECTION_INACTIVE, MATERIAL_POPOVER, MATERIAL_SIDEBAR, MATERIAL_SIDEBAR_SOLID, MATERIAL_TITLEBAR, MATERIAL_TITLEBAR_SOLID, ROW_PRESSED, SEGMENT_ON, SELECTION, SEPARATOR_C, SIDEBAR_BG, SIDEBAR_PLATE, TINT, accent_now, WHITE};
 use crate::kit::{Surface, Ui};
 use crate::kit::rgba;
 use bifrost_render::canvas::{Canvas, ImageRef, MaterialStyle, RectF};
@@ -734,7 +734,7 @@ pub fn search_field(s: &mut dyn Canvas, ui: &Ui, field: &TextField, bounds: Rect
             blit(s, &im, left as i32, top as i32);
             if focused {
                 let cx = ui.measure(&value[start..field.caret()], MAC_BODY_PT, Weight::Regular).min(room);
-                s.fill_rrect(RectF::new(left + cx, top, ui.pt(1.0), im_h), 0.0, TINT);
+                s.fill_rrect(RectF::new(left + cx, top, ui.pt(1.0), im_h), 0.0, accent_now());
             }
         }
     }
@@ -896,7 +896,7 @@ pub fn text_field(
         let cx = ui
             .measure(&value[start..field.caret()], 13., Weight::Regular)
             .min(room);
-        s.fill_rrect(RectF::new(left + cx, top, ui.pt(1.), ui.pt(17.)), 0., TINT);
+        s.fill_rrect(RectF::new(left + cx, top, ui.pt(1.), ui.pt(17.)), 0., accent_now());
     }
 }
 
@@ -981,7 +981,7 @@ pub fn menu(s: &mut dyn Canvas, ui: &Ui, origin: (f32, f32), width: f32, menu: &
         }
         let hot = menu.highlighted == Some(i) && item.enabled;
         if hot {
-            s.fill_rrect(RectF::new(ui.pt(origin.0 + MENU_INSET_PT), ui.pt(y), ui.pt(width - MENU_INSET_PT * 2.), ui.pt(h)), ui.pt(5.), TINT);
+            s.fill_rrect(RectF::new(ui.pt(origin.0 + MENU_INSET_PT), ui.pt(y), ui.pt(width - MENU_INSET_PT * 2.), ui.pt(h)), ui.pt(5.), accent_now());
         }
         let color = if hot { WHITE } else if !item.enabled { LABEL_3.now() } else if item.destructive { bifrost_render::ui::DESTRUCTIVE } else { LABEL.now() };
         let line = |t: &str, c: u32| ui.text(t, MAC_BODY_PT, Weight::Regular, c);
@@ -1859,7 +1859,7 @@ mod tests {
         let (rows, total) = m.rows(MENU_ROW_PT, MENU_SEPARATOR_PT, MENU_PAD_PT);
         assert_eq!(r.h, total);
         let hot_y = (10.0 + rows[1].0 + 2.0) as usize;
-        assert_eq!(px[hot_y * w + 40], TINT, "the highlighted row is the accent colour");
+        assert_eq!(px[hot_y * w + 40], accent_now(), "the highlighted row is the accent colour");
         let sep_y = (10.0 + rows[2].0 + rows[2].1 / 2.0) as usize;
         assert_eq!(px[sep_y * w + 60], SEPARATOR_C.now(), "separator hairline");
         assert_eq!(px[(r.y + r.h + 4.0) as usize * w + 100], 0, "nothing below the menu");

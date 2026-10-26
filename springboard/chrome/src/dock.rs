@@ -500,7 +500,7 @@ fn paint_into(c: &mut dyn Canvas, state: &DockState, lay: &Layout, now_s: f64) {
             let track = Rect::new(rr.x + rr.w * 0.15, rr.bottom() - 12.0, rr.w * 0.7, 4.0);
             c.fill_rrect(to_rectf(track), 2.0, ui::FILL_GRAY);
             if let Some(fill) = progress_fill(track, Some(item.progress), now_s, PROGRESS_PERIOD_S) {
-                c.fill_rrect(to_rectf(fill), 2.0, ui::TINT);
+                c.fill_rrect(to_rectf(fill), 2.0, ui::accent_now());
             }
         }
     }
@@ -518,7 +518,7 @@ pub fn paint_menu(entries: &[MenuEntry], hover: Option<usize>, size: (u32, u32),
         let row = Rect::new(MENU_PAD, MENU_PAD + i as f32 * MENU_ROW_H, w - 2.0 * MENU_PAD, MENU_ROW_H);
         let selected = hover == Some(i) && e.enabled;
         if selected {
-            c.fill_rrect(to_rectf(row), 5.0, ui::MENU_HIGHLIGHT);
+            c.fill_rrect(to_rectf(row), 5.0, ui::menu_highlight());
         }
         let color = if selected {
             ui::MENU_HIGHLIGHT_TEXT

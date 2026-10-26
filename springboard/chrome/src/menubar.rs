@@ -386,7 +386,7 @@ fn paint_popup(c: &mut dyn Canvas, face: u64, layout: &PopupLayout, items: &[Men
             c.fill_rrect(
                 RectF::new(PAD_PT, span.top, layout.w - 2.0 * PAD_PT, span.h),
                 ROW_RADIUS_PT,
-                ui::MENU_HIGHLIGHT,
+                ui::menu_highlight(),
             );
         }
         let color = if selected {

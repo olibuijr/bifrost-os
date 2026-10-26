@@ -17,6 +17,9 @@ pub const CELL: u32 = pack(28, 28, 30, 255); // secondarySystemGroupedBackground
 pub const SIDEBAR_FILL: u32 = pack(20, 20, 22, 255);
 // ---- Scheme-following colours (dark, light). Light values are measured from the Settings reference; call `.now()`. ----
 use crate::appearance::Pair;
+/// The user's accent colour in the current scheme. Focus rings, selections, checked controls and progress fills use it;
+/// `TINT` and `LINK` stay the literal systemBlue (text links and bar buttons).
+pub use crate::appearance::accent_now;
 /// Menu bar and menu materials: the tint over the blurred backdrop (straight alpha, as `glass::tint` takes it).
 pub const BAR_TINT: Pair = Pair::new(pack(28, 28, 30, 220), pack(246, 246, 246, 205));
 pub const MENU_TINT: Pair = Pair::new(pack(28, 28, 30, 240), pack(246, 246, 246, 238));
@@ -54,8 +57,10 @@ pub const BAR_TEXT_HALO_ALPHA: u32 = 60;
 pub const BAR_OPEN_CAPSULE_ON_LIGHT: u32 = pack(0, 0, 0, 31);
 /// The open menu title's light glass capsule (white at ~25%, premultiplied).
 pub const BAR_OPEN_CAPSULE: u32 = pack(64, 64, 64, 64);
-/// Menu item highlight capsule (accent, systemBlue) and the text on it.
-pub const MENU_HIGHLIGHT: u32 = TINT;
+/// Menu item highlight capsule: the user's accent colour (`controlAccentColor`, Settings > Appearance > Accent), and the text on it.
+pub fn menu_highlight() -> u32 {
+    accent_now()
+}
 pub const MENU_HIGHLIGHT_TEXT: u32 = WHITE;
 /// Menu shortcut glyphs: secondary label.
 pub const MENU_SHORTCUT: u32 = SECONDARY;
@@ -160,6 +165,7 @@ pub const AVATAR_BG: u32 = pack(112, 112, 116, 255);
 pub const AVATAR_FG: u32 = pack(40, 40, 43, 255);
 pub const AVATAR_PT: f32 = 60.0;
 pub const SEPARATOR: u32 = pack(56, 56, 58, 255);
+/// Literal systemBlue. Does not follow the accent colour: use `accent_now()` for selections, focus and filled controls.
 pub const TINT: u32 = pack(10, 132, 255, 255); // systemBlue
 pub const MINUS_FILL: u32 = pack(209, 209, 214, 240); // home edit mode minus badge
 pub const SYSTEM_RED: u32 = pack(255, 69, 58, 255);
@@ -746,7 +752,7 @@ impl AlertCard {
             let b = ui.pt(ALERT_CHECK_BOX_PT);
             let by = ry + (rh - b) / 2.0;
             if *on {
-                s.fill_rrect(rx, by, b, b, ui.pt(3.0), TINT);
+                s.fill_rrect(rx, by, b, b, ui.pt(3.0), accent_now());
                 // the tick: a short stroke down to the right, then a long one up to the right, in white dots
                 let t = ui.pt(1.8).max(1.0);
                 let mut dot = |px: f32, py: f32| s.fill_rrect(rx + px * b - t / 2.0, by + py * b - t / 2.0, t, t, t / 2.0, rgba(255, 255, 255, 255));
