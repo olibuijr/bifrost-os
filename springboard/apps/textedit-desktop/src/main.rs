@@ -1,4 +1,4 @@
-//! Text Editor as an installed BifrOSt app: plain and rich text documents, opened and saved as RTF, HTML or plain text
+//! TextEdit as an installed BifrOSt app: plain and rich text documents, opened and saved as RTF, HTML or plain text
 //! through the shell's document panels, with character and paragraph formatting, fonts, find and replace, spelling, a
 //! tab ruler, printing with page setup, a word count, and undo and redo.
 //!
@@ -447,7 +447,7 @@ impl TextEditApp {
     /// The window's title: the document's name, with "Edited" after it while it has unsaved changes. The window has no
     /// title row of its own (the shell draws none for a full-size window), so the app draws the title in its toolbar.
     fn window_title(&self) -> String {
-        self.docs.active().and_then(|id| self.docs.window_title(id)).unwrap_or_else(|| "Text Editor".to_string())
+        self.docs.active().and_then(|id| self.docs.window_title(id)).unwrap_or_else(|| "TextEdit".to_string())
     }
 
     /// The find bar's buttons: none while it is closed.
@@ -582,6 +582,12 @@ impl TextEditApp {
                         if let Notice::Created(created) = n {
                             self.apply_new_defaults(*created);
                         }
+                    }
+                }
+                // Open Recent on a document that is already open: its window comes forward
+                if id >= item::RECENT {
+                    if let Some(open) = self.docs.active().filter(|a| self.shown(*a)) {
+                        self.raise_doc(ctx, open);
                     }
                 }
                 self.after_documents(&notices);
@@ -1221,7 +1227,7 @@ impl TextEditApp {
         if apply && !typed.is_empty() {
             link = links::normalize(&typed).map_or(0, |url| links::intern(&url));
             if link == 0 {
-                self.note = Some(format!("\"{typed}\" is not an address Text Editor can link to"));
+                self.note = Some(format!("\"{typed}\" is not an address TextEdit can link to"));
                 self.link = Some(sheet);
                 return true;
             }
@@ -2374,7 +2380,9 @@ impl TextEditApp {
         }
     }
 
-    fn text_menu(&self) -> AppMenu {
+    /// Edit: the items the shell's own Edit menu (Undo, Cut, Copy, Paste, Select All) does not have. The shell merges this
+    /// menu into its Edit, so the bar reads File, Edit, Format, View, Window, Help as the reference's does.
+    fn edit_menu(&self) -> AppMenu {
         let doc = active_doc(&self.docs);
         let (has_sel, enabled) = doc.map_or((false, false), |d| (d.text.has_selection(), true));
         let has_find = !self.find.is_empty();
@@ -2427,7 +2435,7 @@ impl TextEditApp {
             AppMenuItem::separator(),
             menu_item(Action::Complete, "Complete", "alt+escape", enabled),
         ];
-        AppMenu { title: "Text".into(), items }
+        AppMenu { title: "Edit".into(), items }
     }
 
     /// Format, laid out as the reference TextEdit's: Font and Text submenus, then the document switches (Make Plain Text,
@@ -2525,6 +2533,8 @@ impl TextEditApp {
         for (index, e) in encoding::ALL.iter().enumerate().filter(|(i, e)| self.opts.lists_encoding(*i) || current == Some(**e)) {
             items.push(menu_item(Action::Encoding(index as u8), e.name(), "", enabled && !rich).checked(current == Some(*e)).depth(1));
         }
+        items.push(AppMenuItem::separator().depth(1));
+        items.push(menu_item(Action::ShowEncodings, "Customize Encodings List\u{2026}", "", true).depth(1));
         items.push(AppMenuItem::submenu("Reinterpret As"));
         for (index, e) in encoding::ALL.iter().enumerate() {
             items.push(menu_item(Action::Reinterpret(index as u8), e.name(), "", enabled && !rich).depth(1));
@@ -2546,31 +2556,6 @@ impl TextEditApp {
         AppMenu { title: "View".into(), items }
     }
 
-    /// Preferences: the format of new documents. The other options live in the menus they belong to (spelling and
-    /// substitutions in Edit, the ruler and wrapping in View, the header and footer in File) and are kept in the
-    /// preferences too.
-    fn preferences_menu(&self) -> AppMenu {
-        let mut items = vec![
-            menu_item(Action::ShowSettings, "Settings\u{2026}", "cmd+,", true),
-            AppMenuItem::submenu("New Documents"),
-            menu_item(Action::NewPlain(false), "Rich Text", "", true).checked(!self.opts.new_plain).depth(1),
-            menu_item(Action::NewPlain(true), "Plain Text", "", true).checked(self.opts.new_plain).depth(1),
-            AppMenuItem::submenu("Plain Text Encoding"),
-        ];
-        for (index, e) in encoding::ALL.iter().enumerate() {
-            items.push(menu_item(Action::DefaultEncoding(index as u8), e.name(), "", true).checked(self.opts.default_encoding == *e).depth(1));
-        }
-        items.push(menu_item(Action::ShowEncodings, "Customize Encodings List\u{2026}", "", true));
-        // every installed family (`text::families`), not only the three base ones
-        items.push(AppMenuItem::submenu("Default Font"));
-        for index in 0..text::families().len().min(256) {
-            let index = index as u8;
-            items.push(menu_item(Action::DefaultFont(index), view::family_name(index), "", true).checked(self.opts.default_font == index).depth(1));
-        }
-        items.push(menu_item(Action::MarkupAsCode, "Show RTF and HTML Files as Code", "", true).checked(self.opts.markup_as_code));
-        AppMenu { title: "Settings".into(), items }
-    }
-
     /// File: the document controller's items, then Print and Page Setup.
     fn file_menu(&self) -> AppMenu {
         let mut menu = self.docs.file_menu();
@@ -2581,7 +2566,7 @@ impl TextEditApp {
         menu.items.push(menu_item(Action::ExportPdf, "Export as PDF\u{2026}", "", enabled));
         menu.items.push(menu_item(Action::ShowProperties, "Show Properties\u{2026}", "cmd+alt+p", enabled));
         menu.items.push(AppMenuItem::separator());
-        menu.items.push(menu_item(Action::Print, "Print\u{2026}", "cmd+p", enabled));
+        menu.items.push(AppMenuItem::print(Action::Print.id().unwrap_or(0)).enabled(enabled));
         menu.items.push(menu_item(Action::HeaderFooter, "Print Header and Footer", "", enabled).checked(self.opts.header_footer));
         menu.items.push(menu_item(Action::Rewrap, "Rewrap to Fit Page", "", enabled).checked(self.opts.rewrap));
         menu.items.push(AppMenuItem::submenu("Paper Size"));
@@ -2593,6 +2578,8 @@ impl TextEditApp {
         let portrait = self.print_info.orientation == Orientation::Portrait;
         menu.items.push(menu_item(Action::Landscape(false), "Portrait", "", true).checked(portrait).depth(1));
         menu.items.push(menu_item(Action::Landscape(true), "Landscape", "", true).checked(!portrait).depth(1));
+        // the shell shows this one in the application menu (a Settings\u{2026} item on Cmd+, is not listed in File)
+        menu.items.push(menu_item(Action::ShowSettings, "Settings\u{2026}", "cmd+,", true));
         menu
     }
 }
@@ -2636,7 +2623,7 @@ impl App for TextEditApp {
     /// (the file's contents as an untitled document, so Save asks for a place to write it).
     fn rpc(&mut self, ctx: Option<&Ctx>, _data_dir: &std::path::Path, method: &str, params: &Json) -> Result<Json, RpcError> {
         if ctx.is_none() {
-            return Err(RpcError::new(INTERNAL_ERROR, "Text Editor is not running yet"));
+            return Err(RpcError::new(INTERNAL_ERROR, "TextEdit is not running yet"));
         }
         let call = ServiceCall::from_params(params).ok_or_else(|| RpcError::new(INVALID_PARAMS, "the service call has no text or path"))?;
         let doc = match method {
@@ -2847,7 +2834,7 @@ impl App for TextEditApp {
     }
 
     fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
-        vec![self.file_menu(), self.text_menu(), self.format_menu(), self.view_menu(), self.preferences_menu()]
+        vec![self.file_menu(), self.edit_menu(), self.format_menu(), self.view_menu()]
     }
 
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
@@ -4027,7 +4014,7 @@ mod tests {
         assert_eq!(level_titles(&format, Some("Writing Direction")), ["Left to Right", "Right to Left"]);
         assert_eq!(level_titles(&format, Some("Baseline")), ["Superscript", "Subscript"]);
         // the shell takes every item of every menu, and they fit the packets
-        let menus = vec![app.file_menu(), app.text_menu(), format.clone(), app.view_menu(), app.preferences_menu()];
+        let menus = vec![app.file_menu(), app.edit_menu(), format.clone(), app.view_menu()];
         for m in &menus {
             assert_eq!(m.dropped_items(), 0, "{} loses items", m.title);
             assert!(m.items.iter().all(|i| i.depth <= bifrost_app::proto::MAX_APP_MENU_DEPTH), "{}", m.title);
@@ -4052,7 +4039,7 @@ mod tests {
             format.items.insert(at + 1, AppMenuItem::new(1 + k, &format!("Installed Family {k}")).depth(1));
         }
         assert_eq!(format.dropped_items(), 0);
-        let out = bifrost_app::proto::app_menu_packets(&[app.file_menu(), app.text_menu(), format.clone(), app.view_menu(), app.preferences_menu()]);
+        let out = bifrost_app::proto::app_menu_packets(&[app.file_menu(), app.edit_menu(), format.clone(), app.view_menu()]);
         assert!(out.dropped.is_empty(), "{:?}", out.dropped);
     }
 
@@ -4094,13 +4081,12 @@ mod tests {
         assert!(!active_doc(&app.docs).unwrap().rich, "Redo makes it plain text again");
     }
 
-    /// Preferences > Default Font lists every family a document can use, and choosing one keeps it.
+    /// Settings > Default Font takes every family a document can use, and choosing one keeps it. The settings are in the
+    /// Settings panel (the application menu's Settings\u{2026}), not in a menu of their own.
     #[test]
-    fn preferences_default_font_lists_every_family() {
+    fn default_font_takes_every_family() {
         let ctx = window(1200, 780);
         let mut app = app_with_text("Hello", 0..0);
-        let prefs = app.preferences_menu();
-        assert_eq!(level_titles(&prefs, Some("Default Font")), text::families().to_vec());
         let last = (text::families().len() - 1) as u8;
         assert!(app.menu_action(&ctx, Action::DefaultFont(last).id().unwrap()));
         assert_eq!(app.opts.default_font, last);
@@ -4342,7 +4328,7 @@ mod tests {
         assert_eq!(app.window_title(), "Untitled");
         app.type_into("x");
         assert_eq!(app.window_title(), "Untitled \u{2013} Edited");
-        assert_eq!(TextEditApp::new().window_title(), "Text Editor", "with no document the app's own name shows");
+        assert_eq!(TextEditApp::new().window_title(), "TextEdit", "with no document the app's own name shows");
     }
 
     /// E2E9 11: a plain text document shows no format bar (the reference shows none): no items are placed, published

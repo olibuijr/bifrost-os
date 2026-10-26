@@ -1073,6 +1073,10 @@ pub enum ToShell {
     /// Several windows: move window `window` to (x, y) points relative to the visible desktop area. The shell clamps it
     /// to the screen. Tag 0x246.
     WindowMove { window: u32, x: f32, y: f32 },
+    /// Several windows: bring window `window` (0 is the main window) to the front and give it key focus
+    /// (`NSWindow.makeKeyAndOrderFront`), as the Window menu does. A document app opening a document that is already open
+    /// raises its window. An unknown window is ignored. Tag 0x258.
+    WindowRaise { window: u32 },
     /// Several windows: collapse window `window` to its title bar (`collapsed`) or expand it back. Tag 0x247.
     WindowCollapse { window: u32, collapsed: bool },
     /// `setNotificationCategories`: replaces the app's categories. Needs the `notifications` permission.
@@ -1411,6 +1415,8 @@ mod tag {
     pub const CLOSE_REQUESTS: u32 = 0x256;
     /// Shell -> app: the close control of an extra window was used (`ToApp::WindowCloseRequest`).
     pub const WINDOW_CLOSE_REQUEST: u32 = 0x257;
+    /// App -> shell: bring one of the app's windows to the front (`ToShell::WindowRaise`).
+    pub const WINDOW_RAISE: u32 = 0x258;
 
     pub const HELLO: u32 = 0x101;
     pub const BUFFERS: u32 = 0x102;
@@ -2247,6 +2253,10 @@ impl ToShell {
                 f32_(&mut b, *x);
                 f32_(&mut b, *y);
             }
+            ToShell::WindowRaise { window } => {
+                u32_(&mut b, tag::WINDOW_RAISE);
+                u32_(&mut b, *window);
+            }
             ToShell::WindowCollapse { window, collapsed } => {
                 u32_(&mut b, tag::WINDOW_COLLAPSE);
                 u32_(&mut b, *window);
@@ -2636,6 +2646,7 @@ impl ToShell {
                 }
                 ToShell::WindowMove { window, x, y }
             }
+            tag::WINDOW_RAISE => ToShell::WindowRaise { window: r.u32()? },
             tag::WINDOW_COLLAPSE => {
                 let window = r.u32()?;
                 let collapsed = match r.u8()? {
@@ -3953,6 +3964,8 @@ mod quick_action_tests {
             ToShell::WindowMove { window: 4, x: -3.0, y: 88.0 },
             ToShell::WindowCollapse { window: 4, collapsed: true },
             ToShell::WindowCollapse { window: 4, collapsed: false },
+            ToShell::WindowRaise { window: 0 },
+            ToShell::WindowRaise { window: 4 },
         ];
         for m in shell {
             assert_eq!(ToShell::decode(&m.encode()), Ok(m.clone()), "{m:?}");

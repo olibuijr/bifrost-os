@@ -1,4 +1,4 @@
-//! The document Text Editor opens, saves and keeps: a `Text` plus whether it is rich text. Reading follows the bytes
+//! The document TextEdit opens, saves and keeps: a `Text` plus whether it is rich text. Reading follows the bytes
 //! (an RTF header, an HTML prologue, or else plain text) and writing follows the type the file is saved as, so a plain
 //! text file is saved as plain text, an RTF file as RTF and an HTML file as HTML.
 
@@ -18,7 +18,7 @@ pub fn set_markup_as_code(on: bool) {
     MARKUP_AS_CODE.store(on, Ordering::Relaxed);
 }
 
-/// The file types Text Editor reads and writes (uniform type identifiers).
+/// The file types TextEdit reads and writes (uniform type identifiers).
 pub const RTF_TYPE: &str = "public.rtf";
 pub const PLAIN_TYPE: &str = "public.plain-text";
 pub const HTML_TYPE: &str = "public.html";
@@ -202,7 +202,7 @@ impl Document for TextDocument {
             webarchive::TYPE => Ok(webarchive::write(&without_pictures(self.text.cells()), self.text.tab_width(), &self.properties)),
             PLAIN_TYPE => self.write_plain(),
             "public.utf8-plain-text" => Ok(rtf::write_plain(self.text.cells())),
-            other => Err(DocumentError::new(&format!("Text Editor cannot write {other}"))),
+            other => Err(DocumentError::new(&format!("TextEdit cannot write {other}"))),
         }
     }
 
@@ -220,14 +220,14 @@ impl Document for TextDocument {
 
     fn read_package(files: &[(String, Vec<u8>)], uttype: &str) -> Result<Self, DocumentError> {
         if uttype != RTFD_TYPE {
-            return Err(DocumentError::new(&format!("Text Editor cannot read {uttype} packages")));
+            return Err(DocumentError::new(&format!("TextEdit cannot read {uttype} packages")));
         }
         Self::read_package_files(files)
     }
 
     fn package_files(&self, uttype: &str) -> Result<Vec<(String, Vec<u8>)>, DocumentError> {
         if uttype != RTFD_TYPE {
-            return Err(DocumentError::new(&format!("Text Editor cannot write {uttype} packages")));
+            return Err(DocumentError::new(&format!("TextEdit cannot write {uttype} packages")));
         }
         Ok(self.files_of_package())
     }

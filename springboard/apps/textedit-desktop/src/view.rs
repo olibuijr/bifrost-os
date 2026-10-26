@@ -1,4 +1,4 @@
-//! What Text Editor draws and where it can be touched: the unified toolbar, the find bar, the page with its text, the
+//! What TextEdit draws and where it can be touched: the unified toolbar, the find bar, the page with its text, the
 //! caret and selection, and the word count. Positions are in points derived from the window size; the canvas is
 //! reached in device pixels through `Ui::pt`. Colours and type come from the shared tokens only.
 
@@ -187,7 +187,7 @@ pub enum Action {
     ColorsDone,
 }
 
-/// The first menu id of Text Editor's own items. Ids are stable: they are the values a menu sends back.
+/// The first menu id of TextEdit's own items. Ids are stable: they are the values a menu sends back.
 const MENU_BASE: u32 = 0x4E00;
 /// The ids of the families (`Action::Font`), one per `Style::font` index 0 to 255, after every other item's id.
 const FONT_IDS: u32 = 0x100;
@@ -321,7 +321,7 @@ impl Action {
         })
     }
 
-    /// The action a menu id stands for, when it is one of Text Editor's.
+    /// The action a menu id stands for, when it is one of TextEdit's.
     pub fn from_id(id: u32) -> Option<Action> {
         let offset = id.checked_sub(MENU_BASE)?;
         Some(match offset {
