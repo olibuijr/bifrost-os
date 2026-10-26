@@ -11,7 +11,10 @@
 //!
 //! Artwork: [`Artwork`] is an identifier with the image sizes the item can supply. [`Artwork::choose`] picks the size to
 //! load for a target, [`aspect_fit`] sizes it inside a box and [`request_pixels`] turns points and the display scale into
-//! the pixel size passed to the artwork provider. Artwork does not reach the shell yet.
+//! the pixel size passed to the artwork provider. The pixels themselves are an [`ArtworkImage`] (straight RGBA, at most
+//! [`WIRE_SIDE_MAX`] on a side): [`publish_with_artwork`] or [`with_artwork`] sends them as the publish body's `artwork`
+//! field, and the media tile, the Now Playing detail, the menu bar extra and the lock card draw them in place of the
+//! glyph. A session without artwork, or with an `artwork` the shell cannot read, keeps the glyph.
 //!
 //! The models are `bifrost_ui::media_session`, `bifrost_ui::media_content` and `bifrost_ui::media_artwork`. The shell side
 //! is `springboard/src/shell/services/now_playing.rs`.
@@ -20,7 +23,7 @@ use crate::runtime::Ctx;
 use crate::service;
 use bifrost_core::json::Json;
 
-pub use bifrost_ui::media_artwork::{aspect_fit, request_pixels, Artwork, ArtworkError, ArtworkSize, MAX_SIDE};
+pub use bifrost_ui::media_artwork::{aspect_fit, request_pixels, Artwork, ArtworkError, ArtworkImage, ArtworkSize, MAX_SIDE, WIRE_SIDE_MAX};
 pub use bifrost_ui::media_content::{ContentKind, MediaContent, MediaDuration, MediaType};
 pub use bifrost_ui::media_session::{
     CommandState, MediaPlaybackSnapshot, MediaSession, MediaSessionError, PlaybackState, RemoteCommand,
@@ -212,6 +215,24 @@ pub fn queue_pick(service: &str, event: &str, body: &Json) -> Option<usize> {
     (index.is_finite() && index >= 0.0 && index.fract() == 0.0).then_some(index as usize)
 }
 
+/// The publish body with the session's artwork: `body` plus an `artwork` field (`{w, h, rgba}`, see
+/// [`ArtworkImage::to_json`]). `None` leaves the body as it is, so the shell shows its glyph. A body that is not an
+/// object is returned unchanged.
+pub fn with_artwork(mut body: Json, artwork: Option<&ArtworkImage>) -> Json {
+    if let (Json::Obj(fields), Some(art)) = (&mut body, artwork) {
+        fields.retain(|(key, _)| key != "artwork");
+        fields.push(("artwork".to_string(), art.to_json()));
+    }
+    body
+}
+
+/// Publishes the session with its Up Next queue and its artwork. Returns the request id, or `None` when the session
+/// has no content.
+pub fn publish_with_artwork(ctx: &Ctx, session: &MediaSession, queue: &[QueueEntry], artwork: Option<&ArtworkImage>) -> Option<u32> {
+    let body = with_artwork(publish_queue_body(session, queue)?, artwork);
+    Some(service::call(ctx, SERVICE, "publish", &body))
+}
+
 /// Withdraws the app's session from Control Center. Returns the request id.
 pub fn clear(ctx: &Ctx) -> u32 {
     service::call(ctx, SERVICE, "clear", &Json::Null)
@@ -288,6 +309,21 @@ mod tests {
         assert_eq!(queue_pick(SERVICE, COMMAND_EVENT, &play), None, "another command");
         let negative = bifrost_core::json::parse(r#"{"command":"queue_select","index":-1}"#).unwrap();
         assert_eq!(queue_pick(SERVICE, COMMAND_EVENT, &negative), None, "not an index");
+    }
+
+    #[test]
+    fn artwork_rides_in_the_publish_body_and_is_optional() {
+        let art = ArtworkImage::new(2, 1, vec![1, 2, 3, 255, 4, 5, 6, 255]).expect("pixels");
+        let body = with_artwork(publish_body(&session()).expect("a body"), Some(&art));
+        let sent = bifrost_core::json::parse(&body.encode()).expect("valid json");
+        assert_eq!(ArtworkImage::from_json(sent.get("artwork").expect("an artwork field")), Ok(art.clone()));
+        assert_eq!(sent.str_field("title").as_deref(), Some("Song"), "the rest of the body is untouched");
+        let plain = with_artwork(publish_body(&session()).expect("a body"), None);
+        assert!(plain.get("artwork").is_none(), "no artwork, no field: the shell keeps its glyph");
+        let again = with_artwork(body, Some(&art));
+        let Json::Obj(fields) = &again else { panic!("an object") };
+        assert_eq!(fields.iter().filter(|(k, _)| k == "artwork").count(), 1, "a second call replaces the first");
+        assert_eq!(with_artwork(Json::Null, Some(&art)), Json::Null);
     }
 
     #[test]

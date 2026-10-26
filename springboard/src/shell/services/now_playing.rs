@@ -6,6 +6,10 @@
 //! - `publish` `{id?, title, artist?, album?, type?: "audio"|"video", live?: bool, duration_ms?: number,
 //!    state: "playing"|"paused"|"stopped", position_ms?: number, commands?: {name: "enabled"|"disabled"}}`
 //!   replaces the shell's session with the caller's. The model is `bifrost_ui::media_session`.
+//!   `artwork?: {w, h, rgba}` is the item's cover: straight RGBA8 as base64, each side at most
+//!   `bifrost_ui::media_artwork::WIRE_SIDE_MAX` (the model is `ArtworkImage`). The shell crops it to a square and draws it
+//!   on the media tile, the Now Playing detail and the menu bar extra in place of the generic glyph. A publish without
+//!   `artwork`, or with one that cannot be read, shows the glyph; it never fails the publish.
 //! - `clear` removes the caller's session when it is the one shown.
 //! - `feedback` `{toggles: {like, dislike, bookmark: bool}, rating?: {min, max, value}}` sets the lock card's like,
 //!   dislike, bookmark and rating controls for the owner's session. The user's choice goes back as a `command`
@@ -24,8 +28,11 @@
 use super::{Event, Shell, SystemService};
 use crate::shell::music::nowplaying::Target as Media;
 use bifrost_core::json::Json;
+use crate::gfx::Image;
+use bifrost_ui::media_artwork::ArtworkImage;
 use bifrost_ui::media_content::{optional_text, MediaContent, MediaDuration, MediaType};
 use bifrost_ui::media_session::{CommandState, MediaSession, PlaybackState, RemoteCommand};
+use std::sync::Arc;
 #[cfg(not(test))]
 use std::sync::Mutex;
 use std::time::Instant;
@@ -90,6 +97,28 @@ pub fn parse_session(app_id: &str, body: &Json) -> Result<MediaSession, String> 
         }
     }
     Ok(session)
+}
+
+/// The cover in a `publish` body as a square image the shell can draw. `None` when the body has no `artwork` or it is
+/// malformed (wrong size, bad base64, wrong length): the shell then shows its glyph. A cover that is not square is
+/// cropped around its centre, so it fills the square tile without stretching.
+pub fn parse_artwork(body: &Json) -> Option<Arc<Image>> {
+    let art = ArtworkImage::from_json(body.get("artwork")?).ok()?;
+    Some(Arc::new(square(art.to_image())))
+}
+
+/// `image` cropped around its centre to a square of its shorter side.
+fn square(image: Image) -> Image {
+    if image.w == image.h {
+        return image;
+    }
+    let side = image.w.min(image.h);
+    let (x0, y0) = ((image.w - side) / 2, (image.h - side) / 2);
+    let mut px = Vec::with_capacity(side * side);
+    for y in y0..y0 + side {
+        px.extend_from_slice(&image.px[y * image.w + x0..y * image.w + x0 + side]);
+    }
+    Image { w: side, h: side, px }
 }
 
 /// The command a transport tap on the Control Center tile sends: play or pause follows the playback state.
@@ -227,6 +256,8 @@ pub(crate) struct Store {
     pending: Vec<(String, Sent)>,
     /// The owner's Up Next queue, replaced by each publish.
     queue: Vec<QueueItem>,
+    /// The shown session's cover, replaced by each publish. None draws the glyph.
+    artwork: Option<Arc<Image>>,
 }
 
 /// One entry of an app's Up Next queue.
@@ -268,6 +299,7 @@ impl Store {
         self.published = Some(Instant::now());
         self.feedback = None;
         self.queue = queue;
+        self.artwork = None;
     }
 
     /// Queues the owner's pick of an Up Next entry. False when there is no owner, no such entry, or it is not playable.
@@ -329,6 +361,7 @@ impl Store {
             self.published = None;
             self.feedback = None;
             self.queue.clear();
+            self.artwork = None;
         }
     }
 
@@ -384,6 +417,7 @@ impl Store {
                 self.published = None;
                 self.feedback = None;
                 self.queue.clear();
+                self.artwork = None;
             }
         }
     }
@@ -398,7 +432,7 @@ impl Store {
 
 #[cfg(not(test))]
 static STORE: Mutex<Store> =
-    Mutex::new(Store { owner: None, session: None, published: None, feedback: None, pending: Vec::new(), queue: Vec::new() });
+    Mutex::new(Store { owner: None, session: None, published: None, feedback: None, pending: Vec::new(), queue: Vec::new(), artwork: None });
 
 #[cfg(not(test))]
 fn with<T>(f: impl FnOnce(&mut Store) -> T) -> Option<T> {
@@ -413,7 +447,7 @@ fn with<T>(f: impl FnOnce(&mut Store) -> T) -> Option<T> {
 #[cfg(test)]
 thread_local! {
     static STORE: std::cell::RefCell<Store> =
-        const { std::cell::RefCell::new(Store { owner: None, session: None, published: None, feedback: None, pending: Vec::new(), queue: Vec::new() }) };
+        const { std::cell::RefCell::new(Store { owner: None, session: None, published: None, feedback: None, pending: Vec::new(), queue: Vec::new(), artwork: None }) };
 }
 
 #[cfg(test)]
@@ -424,6 +458,18 @@ fn with<T>(f: impl FnOnce(&mut Store) -> T) -> Option<T> {
 /// The session Control Center shows, if an app has published one.
 pub(crate) fn current() -> Option<MediaSession> {
     with(|s| s.current()).flatten()
+}
+
+/// The shown session's cover, a square image, or None when the owner published none (the caller draws the glyph).
+pub(crate) fn artwork() -> Option<Arc<Image>> {
+    with(|s| s.artwork.clone()).flatten()
+}
+
+/// What the Now Playing surfaces draw as the cover, at `glyph_size` px when it falls back: the shown session's artwork,
+/// else the generic music glyph. Every surface (media tile, Now Playing detail, lock card) goes through here, so the
+/// fallback is one rule.
+pub(crate) fn artwork_or_glyph(glyph_size: usize) -> Arc<Image> {
+    artwork().unwrap_or_else(|| crate::shell::music::icons::placeholder(glyph_size, 0.0))
 }
 
 /// The shown owner's Up Next queue (empty without a session or a queue).
@@ -542,7 +588,12 @@ impl SystemService for NowPlaying {
             "publish" => {
                 let session = parse_session(app_id, params)?;
                 let queue = parse_queue(params)?;
-                with(|s| s.publish(app_id, session, queue)).ok_or_else(|| "now playing store unavailable".to_string())?;
+                let artwork = parse_artwork(params);
+                with(|s| {
+                    s.publish(app_id, session, queue);
+                    s.artwork = artwork;
+                })
+                .ok_or_else(|| "now playing store unavailable".to_string())?;
                 Ok(Json::Null)
             }
             "clear" => {
@@ -611,7 +662,7 @@ mod tests {
         assert!(parse_queue(&body(r#"{"title":"x"}"#)).unwrap().is_empty(), "no queue is an empty one");
         assert!(parse_queue(&body(r#"{"queue":[{"artist":"no title"}]}"#)).unwrap_err().contains("title"));
         assert!(parse_queue(&body(r#"{"queue":"nope"}"#)).is_err());
-        let mut store = Store { owner: Some("app".into()), session: None, published: None, feedback: None, pending: Vec::new(), queue: q };
+        let mut store = Store { owner: Some("app".into()), session: None, published: None, feedback: None, pending: Vec::new(), queue: q, artwork: None };
         assert!(store.request_queue(0), "a playable entry is picked");
         assert!(!store.request_queue(1), "an unplayable entry is not");
         assert!(!store.request_queue(9), "an unknown entry is not");
@@ -619,6 +670,59 @@ mod tests {
         assert_eq!(events.len(), 1);
         assert!(matches!(events[0].body.get("command"), Some(Json::Str(c)) if c == "queue_select"));
         assert!(matches!(events[0].body.get("index"), Some(Json::Num(n)) if *n == 0.0));
+    }
+
+    fn cover_body(w: u32, h: u32, rgba: &[u8]) -> Json {
+        let art = ArtworkImage::new(w, h, rgba.to_vec()).expect("pixels");
+        Json::Obj(vec![("title".into(), Json::Str("Song".into())), ("artwork".into(), art.to_json())])
+    }
+
+    #[test]
+    fn a_publish_cover_becomes_a_premultiplied_square_and_a_missing_or_bad_one_is_none() {
+        let one = parse_artwork(&cover_body(1, 1, &[255, 0, 0, 255])).expect("a cover");
+        assert_eq!((one.w, one.h, one.px[0]), (1, 1, 255 | 255 << 24));
+        assert!(parse_artwork(&body(r#"{"title":"x"}"#)).is_none(), "no artwork field");
+        assert!(parse_artwork(&body(r#"{"title":"x","artwork":{"w":2,"h":2,"rgba":"AAAA"}}"#)).is_none(), "too few pixels");
+        assert!(parse_artwork(&body(r#"{"title":"x","artwork":{"w":4000,"h":2,"rgba":""}}"#)).is_none(), "over the size cap");
+        assert!(parse_artwork(&body(r#"{"title":"x","artwork":"nope"}"#)).is_none(), "not an object");
+        // 4 by 2, each column painted with its index in red: the centre square keeps columns 1 and 2
+        let wide: Vec<u8> = (0..2).flat_map(|_| (0..4u8).flat_map(|x| [x, 0, 0, 255])).collect();
+        let cropped = parse_artwork(&cover_body(4, 2, &wide)).expect("a cover");
+        assert_eq!((cropped.w, cropped.h), (2, 2), "cropped to the shorter side");
+        assert_eq!(cropped.px.iter().map(|p| p & 255).collect::<Vec<_>>(), vec![1, 2, 1, 2], "around the centre");
+    }
+
+    #[test]
+    fn a_cover_is_shown_with_its_session_and_goes_with_it() {
+        let cover = || parse_artwork(&cover_body(1, 1, &[1, 2, 3, 255]));
+        let mut store = Store::default();
+        store.publish("app.one", parse_session("app.one", &song()).unwrap(), Vec::new());
+        assert!(store.artwork.is_none(), "a publish without a cover shows the glyph");
+        store.artwork = cover();
+        store.publish("app.one", parse_session("app.one", &song()).unwrap(), Vec::new());
+        assert!(store.artwork.is_none(), "the next publish replaces the cover");
+        store.artwork = cover();
+        store.clear("app.two");
+        assert!(store.artwork.is_some(), "another app cannot clear it");
+        store.clear("app.one");
+        assert!(store.artwork.is_none(), "the cleared session takes its cover");
+        store.publish("app.one", parse_session("app.one", &song()).unwrap(), Vec::new());
+        store.artwork = cover();
+        store.prune(|_| false);
+        assert!(store.artwork.is_none(), "a pruned session takes its cover");
+    }
+
+    #[test]
+    fn every_surface_draws_the_cover_and_falls_back_to_the_glyph_without_one() {
+        let glyph = artwork_or_glyph(64);
+        assert_eq!((glyph.w, glyph.h), (64, 64), "no session: the glyph at the asked size");
+        assert_eq!(*glyph, *crate::shell::music::icons::placeholder(64, 0.0), "and it is the placeholder");
+        with(|s| s.publish("app.one", parse_session("app.one", &song()).unwrap(), Vec::new())).unwrap();
+        assert_eq!(*glyph, *artwork_or_glyph(64), "a session without a cover keeps the glyph");
+        with(|s| s.artwork = parse_artwork(&cover_body(1, 1, &[9, 9, 9, 255]))).unwrap();
+        let cover = artwork_or_glyph(64);
+        assert_eq!((cover.w, cover.h), (1, 1), "a published cover replaces it, whatever size the glyph would be");
+        assert_eq!(artwork().map(|a| a.px[0]), Some(9 | 9 << 8 | 9 << 16 | 255 << 24));
     }
 
     #[test]

@@ -410,6 +410,8 @@ pub struct Music {
     /// a finger is on the Songs A-Z index
     indexing: bool,
     art: Cache,
+    /// the current song's cover as sent to Control Center, with the cache key and kind it came from
+    np_art: Option<(String, u8, bifrost_app::now_playing::ArtworkImage)>,
     art_pending: HashSet<(usize, u8)>,
     /// covers that would not decode: not asked for again
     art_failed: HashSet<(usize, u8)>,
@@ -580,6 +582,7 @@ impl Music {
             scroll: Scroller::new(),
             indexing: false,
             art: Cache::new(art::BUDGET / 2),
+            np_art: None,
             art_pending: HashSet::new(),
             art_failed: HashSet::new(),
             cache: TextCache::default(),
@@ -1745,6 +1748,29 @@ impl Music {
     /// The app's Now Playing session, as published to Control Center (`app.rs`).
     pub fn session(&self) -> Option<&bifrost_app::now_playing::MediaSession> {
         self.now_playing.as_ref()
+    }
+
+    /// Brings the cover for Control Center up to date with the current song: the Now Playing picture when the sheet has
+    /// loaded it, else the list thumbnail (always requested for the playing song). The conversion to wire pixels runs
+    /// once per cover, not per tick. A song with no cover (or one not loaded yet) leaves none, so the tile keeps its glyph.
+    pub fn refresh_now_playing_artwork(&mut self) {
+        use bifrost_app::now_playing::ArtworkImage;
+        let key = self.snap.track.as_ref().and_then(|t| self.art_key(t));
+        let Some(key) = key else {
+            self.np_art = None;
+            return;
+        };
+        let kind = if self.art.peek(&key, BIG).is_some() { BIG } else { THUMB };
+        if self.np_art.as_ref().is_some_and(|(k, d, _)| *k == key && *d == kind) {
+            return;
+        }
+        let converted = self.art.peek(&key, kind).and_then(|img| ArtworkImage::from_premultiplied(img.w, img.h, &img.px).ok());
+        self.np_art = converted.map(|art| (key, kind, art));
+    }
+
+    /// The cover `refresh_now_playing_artwork` last prepared, for the published session (`app.rs`).
+    pub fn now_playing_artwork(&self) -> Option<&bifrost_app::now_playing::ArtworkImage> {
+        self.np_art.as_ref().map(|(_, _, art)| art)
     }
 
     /// Starts a scan of the music folders in the background; the library is replaced when it finishes.
