@@ -1346,6 +1346,18 @@ impl App for DictionaryApp {
             // scrolled row never draws under the traffic lights; one pass, one Sidebar accessibility group
             let rows = sidebar_rows(regions.sidebar, bar_h);
             widgets::source_list_in(canvas, ui, regions.sidebar, &list, self.sidebar_scroll(), None, Some(rows));
+            // no headwords: a centred hint under the band, not an unlabelled empty column
+            if list.items.is_empty() {
+                let hint = model::sidebar_hint(&self.query);
+                let wrap = ui.pt((regions.sidebar.w - 2.0 * PAD).max(PAD));
+                let mut y = ui.pt(rows.y + PAD) as i32;
+                for line in ui.wrap(hint, MAC_SUBHEAD_PT, Weight::Regular, wrap) {
+                    let img = ui.text(&line, MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now());
+                    let x = ui.pt(regions.sidebar.x + regions.sidebar.w / 2.0) as i32 - img.w as i32 / 2;
+                    widgets::blit(canvas, &img, x, y);
+                    y += img.h as i32;
+                }
+            }
             canvas.fill_rect(RectF::new(ui.pt(regions.sidebar.w) - 1.0, 0.0, 1.0, ch as f32), SEPARATOR_C.now());
         }
 

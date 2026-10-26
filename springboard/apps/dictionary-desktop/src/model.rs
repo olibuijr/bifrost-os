@@ -147,6 +147,16 @@ pub fn idle_subtitle(words: usize) -> String {
     format!("{} word{}", grouped(words), if words == 1 { "" } else { "s" })
 }
 
+/// What the sidebar says while it lists no headwords: a hint before anything is typed, "No Matches" after a search
+/// that found none. Not an empty column.
+pub fn sidebar_hint(query: &str) -> &'static str {
+    if query.trim().is_empty() {
+        "Matching words appear here."
+    } else {
+        "No Matches"
+    }
+}
+
 /// The word the app was started with: the first argument that is not a flag, either a `dict:` or `x-dictionary:` URL
 /// or the word itself. Another app or the shell can start Dictionary on a word this way.
 pub fn launch_word<I: IntoIterator<Item = String>>(args: I) -> Option<String> {
@@ -682,6 +692,13 @@ mod tests {
 
     fn inside(inner: bifrost_ui::Rect, outer: bifrost_ui::Rect) -> bool {
         inner.x >= outer.x - 0.01 && inner.y >= outer.y - 0.01 && inner.x + inner.w <= outer.x + outer.w + 0.01 && inner.y + inner.h <= outer.y + outer.h + 0.01
+    }
+
+    #[test]
+    fn an_empty_sidebar_says_what_it_is_for_or_that_nothing_matched() {
+        assert_eq!(sidebar_hint(""), "Matching words appear here.");
+        assert_eq!(sidebar_hint("  "), "Matching words appear here.");
+        assert_eq!(sidebar_hint("zzq"), "No Matches");
     }
 
     #[test]
