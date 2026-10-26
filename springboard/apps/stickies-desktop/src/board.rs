@@ -164,6 +164,16 @@ pub fn measure_range(ui: &Ui, note: &Note, m: &BodyMetrics, from: usize, to: usi
     note.style_runs(from..to).iter().map(|(r, s)| run_width(ui, &note.text[r.clone()], m.pt, s)).sum()
 }
 
+/// How many whole lines of the body fit the note's height.
+pub fn visible_rows(ui: &Ui, note: &Note, m: &BodyMetrics) -> usize {
+    (ui.pt(note.h - TITLE_H - 2.0 * PAD_PT) / m.step).floor().max(1.0) as usize
+}
+
+/// The first line of `lines` that is shown: a note too short for its text scrolls to keep the caret's line in view.
+pub fn first_line(ui: &Ui, note: &Note, m: &BodyMetrics, lines: &[Line]) -> usize {
+    layout::first_visible(lines.len(), layout::line_of(lines, note.caret), visible_rows(ui, note, m))
+}
+
 /// The wrapped lines of the body.
 pub fn body_lines(ui: &Ui, note: &Note, m: &BodyMetrics) -> Vec<Line> {
     layout::lines(&note.text, m.max, &|a, b| measure_range(ui, note, m, a, b))
@@ -174,7 +184,7 @@ pub fn offset_at(ui: &Ui, note: &Note, px: f32, py: f32) -> usize {
     let m = body_metrics(ui, note);
     let lines = body_lines(ui, note, &m);
     let top = ui.pt(note.y + TITLE_H + PAD_PT);
-    let row = ((py - top) / m.step).floor().max(0.0) as usize;
+    let row = ((py - top) / m.step).floor().max(0.0) as usize + first_line(ui, note, &m, &lines);
     let line = lines[row.min(lines.len() - 1)];
     layout::index_at(&note.text, &line, px - ui.pt(note.x + PAD_PT), &|a, b| measure_range(ui, note, &m, a, b))
 }
@@ -296,8 +306,9 @@ fn draw_body(c: &mut dyn Canvas, ui: &Ui, note: &Note, focused: bool, marks: &[M
     let links = model::links(&note.text);
     let sel = note.selection();
     let width = |a: usize, b: usize| measure_range(ui, note, &m, a, b);
-    for (i, line) in lines.iter().enumerate() {
-        let ly = top + m.step * i as f32;
+    let (first, rows) = (first_line(ui, note, &m, &lines), visible_rows(ui, note, &m));
+    for (i, line) in lines.iter().enumerate().skip(first).take(rows) {
+        let ly = top + m.step * (i - first) as f32;
         if focused && !sel.is_empty() {
             let (a, b) = (sel.start.max(line.start), sel.end.min(line.end));
             if a < b {
@@ -349,7 +360,16 @@ fn draw_body(c: &mut dyn Canvas, ui: &Ui, note: &Note, focused: bool, marks: &[M
         let at = layout::line_of(&lines, note.caret);
         let line = lines[at];
         let cx = text_x + width(line.start, note.caret.clamp(line.start, line.end));
-        c.fill_rect(RectF::new(cx, top + m.step * at as f32, rule, m.step), ink_on(note, note.current_style().ink));
+        c.fill_rect(RectF::new(cx, top + m.step * (at - first) as f32, rule, m.step), ink_on(note, note.current_style().ink));
+    }
+    // a cue at each edge that has more text beyond it, so clipped text never looks like the whole note
+    if first > 0 {
+        let img = ui.text("^", MAC_FOOTNOTE_PT, Weight::Bold, LABEL_2.now());
+        widgets::blit(c, &img, (x + ui.pt(note.w) / 2.0 - img.w as f32 / 2.0) as i32, (y + ui.pt(TITLE_H)) as i32);
+    }
+    if first + rows < lines.len() {
+        let img = ui.text("v", MAC_FOOTNOTE_PT, Weight::Bold, LABEL_2.now());
+        widgets::blit(c, &img, (x + ui.pt(note.w) / 2.0 - img.w as f32 / 2.0) as i32, (y + ui.pt(note.h - PAD_PT) - img.h as f32) as i32);
     }
 }
 
