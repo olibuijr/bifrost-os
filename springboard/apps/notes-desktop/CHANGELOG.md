@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.24.13
+
+- Creating a folder closes a note that is not in it; the folder name field no longer covers the list; Escape clears the search first.
+
 ## 1.24.12
 
 - Rebuilt for 0.10.44: every touch says whether a mouse or a finger made it, so a mouse drag no longer scrolls lists on the desktop (the wheel, trackpad and scroll bar still do).
