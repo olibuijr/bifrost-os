@@ -8,6 +8,8 @@ use std::path::Path;
 use std::sync::Mutex;
 
 use crate::calendar_system::CalendarIdentifier;
+use crate::coding::Date;
+use crate::time_zone::TimeZone;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Lang {
@@ -295,6 +297,37 @@ fn civil(unix: i64, tz_offset: i64) -> Civil {
     Civil { y, mo: (mo - 1) as usize, d, wd: (days + 4).rem_euclid(7) as usize, h: rem / 3600, mi: rem / 60 % 60, s: rem % 60 }
 }
 
+fn offset_parts(offset: i64) -> (char, i64, i64) {
+    let a = offset.abs();
+    (if offset < 0 { '-' } else { '+' }, a / 3600, a / 60 % 60)
+}
+
+/// `+HHMM`
+fn gmt_offset_basic(offset: i64) -> String {
+    let (s, h, m) = offset_parts(offset);
+    format!("{s}{h:02}{m:02}")
+}
+
+/// `GMT+HH:MM`, or `GMT` at zero
+fn gmt_offset(offset: i64) -> String {
+    let (s, h, m) = offset_parts(offset);
+    if offset == 0 {
+        "GMT".into()
+    } else {
+        format!("GMT{s}{h:02}:{m:02}")
+    }
+}
+
+/// `+HH:MM`, or `Z` at zero
+fn iso_offset(offset: i64) -> String {
+    let (s, h, m) = offset_parts(offset);
+    if offset == 0 {
+        "Z".into()
+    } else {
+        format!("{s}{h:02}:{m:02}")
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct DateFormatter {
     pub locale: Locale,
@@ -302,12 +335,32 @@ pub struct DateFormatter {
     pub time_style: DateStyle,
     /// seconds east of UTC (`TimeZone.secondsFromGMT`)
     pub tz_offset: i64,
+    /// `DateFormatter.timeZone`: when set, the offset comes from the zone at each formatted instant (so daylight
+    /// saving time is honoured) and `tz_offset` is ignored.
+    time_zone: Option<TimeZone>,
     pattern: Option<String>,
 }
 
 impl DateFormatter {
     pub fn new(locale: Locale) -> Self {
-        DateFormatter { locale, date_style: DateStyle::None, time_style: DateStyle::None, tz_offset: 0, pattern: None }
+        DateFormatter { locale, date_style: DateStyle::None, time_style: DateStyle::None, tz_offset: 0, time_zone: None, pattern: None }
+    }
+
+    /// `timeZone` setter; `None` goes back to the plain `tz_offset`.
+    pub fn set_time_zone(&mut self, tz: Option<TimeZone>) {
+        self.time_zone = tz;
+    }
+
+    pub fn time_zone(&self) -> Option<&TimeZone> {
+        self.time_zone.as_ref()
+    }
+
+    /// The offset east of UTC in force at `unix`: the zone's when one is set, else `tz_offset`.
+    fn effective_offset(&self, unix: i64) -> i64 {
+        match &self.time_zone {
+            Some(z) => i64::from(z.seconds_from_gmt(Date(unix as f64))),
+            None => self.tz_offset,
+        }
     }
 
     /// `dateFormat`: a CLDR pattern (`yyyy-MM-dd HH:mm`, quotes for literals).
@@ -450,7 +503,8 @@ impl DateFormatter {
     }
 
     pub fn string(&self, unix: i64) -> String {
-        let c = civil(unix, self.tz_offset);
+        let offset = self.effective_offset(unix);
+        let c = civil(unix, offset);
         let is = self.locale.lang() == Lang::Is;
         let pat = self.pattern.clone().unwrap_or_else(|| self.style_pattern());
         let chars: Vec<char> = pat.chars().collect();
@@ -505,6 +559,15 @@ impl DateFormatter {
                 'h' => out.push_str(&padded(h12)),
                 'm' => out.push_str(&two(c.mi)),
                 's' => out.push_str(&two(c.s)),
+                'z' => out.push_str(&match &self.time_zone {
+                    Some(z) => z.abbreviation(Date(unix as f64)),
+                    None => gmt_offset(offset),
+                }),
+                'Z' => out.push_str(&match n {
+                    1..=3 => gmt_offset_basic(offset),
+                    4 => gmt_offset(offset),
+                    _ => iso_offset(offset),
+                }),
                 'a' => out.push_str(if c.h < 12 { "AM" } else { "PM" }),
                 other => out.extend(std::iter::repeat(other).take(n)),
             }
@@ -846,6 +909,35 @@ mod tests {
         assert_eq!(NumberFormatter::new(is(), NumberStyle::Percent).string(0.5), "50\u{a0}%");
         assert_eq!(NumberFormatter::new(en(), NumberStyle::Currency).string(1234.5), "$1,234.50");
         assert_eq!(NumberFormatter::new(is(), NumberStyle::Currency).string(1234.5), "1.234\u{a0}kr."); // half-even, NumberFormatter.roundingMode default
+    }
+
+    #[test]
+    fn time_zone_honours_daylight_saving() {
+        let tz = TimeZone::from_posix_rule("Test", "CET-1CEST,M3.5.0,M10.5.0/3").unwrap();
+        let (jan, jul) = (1768478400, 1784116800); // 2026-01-15 and 2026-07-15, 12:00 UTC
+        let mut f = DateFormatter::new(en());
+        f.set_date_format("HH:mm Z ZZZZZ z");
+        assert_eq!(f.string(jan), "12:00 +0000 Z GMT");
+        f.set_time_zone(Some(tz.clone()));
+        assert_eq!(f.time_zone(), Some(&tz));
+        assert_eq!(f.string(jan), "13:00 +0100 +01:00 CET");
+        assert_eq!(f.string(jul), "14:00 +0200 +02:00 CEST");
+        f.tz_offset = 7200; // ignored while a zone is set
+        assert_eq!(f.string(jan), "13:00 +0100 +01:00 CET");
+        f.set_time_zone(None);
+        assert_eq!(f.string(jan), "14:00 +0200 +02:00 GMT+02:00");
+    }
+
+    #[test]
+    fn offset_letters() {
+        let mut f = DateFormatter::new(en());
+        f.set_date_format("Z|ZZZZ|ZZZZZ");
+        f.tz_offset = -(5 * 3600 + 1800);
+        assert_eq!(f.string(1768478400), "-0530|GMT-05:30|-05:30");
+        f.tz_offset = 3600;
+        assert_eq!(f.string(0), "+0100|GMT+01:00|+01:00");
+        f.tz_offset = 0;
+        assert_eq!(f.string(0), "+0000|GMT|Z");
     }
 
     #[test]
