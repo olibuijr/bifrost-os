@@ -2684,6 +2684,26 @@ fn a_selected_event_is_deleted_with_backspace_delete_and_the_event_menu() {
 }
 
 #[test]
+fn a_secondary_click_on_an_event_selects_it_and_offers_open_and_delete() {
+    // a right click had no menu: the event under it is selected, and its menu opens its window or deletes it
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    store::save(&temp.file(), &[event(1, "Standup")]).unwrap();
+    let mut c = week_calendar(&ui, temp.file());
+    c.layout_columns(&ui);
+    let (x, y) = event_point(&c, &ui, 1);
+    assert!(c.context_items(&ui, x + c.x0, ui.pt(2.0)).is_empty(), "no menu off the events");
+    let items = c.context_items(&ui, x + c.x0, y);
+    assert_eq!(items.iter().map(|i| i.label.as_str()).collect::<Vec<_>>(), ["Open", "Delete Event"]);
+    assert_eq!(c.picked_event(), Some(1), "the menu selects its event");
+    assert!(c.context_action(&ui, items[0].id, 1.0));
+    assert_eq!(c.take_open_request(), Some(1), "Open asks the app for the event's window");
+    assert!(c.context_action(&ui, items[1].id, 2.0));
+    assert!(c.events.is_empty(), "Delete Event deletes the selected event, with the Undo bar");
+    assert!(c.undo.is_some());
+}
+
+#[test]
 fn deleting_the_event_of_an_editor_window_closes_that_window() {
     let temp = Temp::new();
     let ui = crate::test_ui();

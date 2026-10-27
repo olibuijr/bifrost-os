@@ -9,13 +9,18 @@
 //!
 //! Touches in a window come in points; the calendar lays out in pixels, so `window_input` in `main.rs` scales them.
 
-use super::{Calendar, Draft, Target};
+use super::{overlay, Calendar, Draft, Target};
 use springboard::deildu::scroll::Scroller;
 use springboard::gfx::Surface;
 use springboard::shell::textfield::TextField;
 use springboard::shell::ui::Ui;
 
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_TITLE3_PT};
+use bifrost_app::ContextItem;
+
+/// The event menu's choices (`context_items`, `context_action`).
+const CTX_OPEN: u32 = 1;
+const CTX_DELETE: u32 = 2;
 
 /// The size of an editor window, in points (the same size as a contact card window).
 pub const EDITOR_WIDTH: f32 = 480.0;
@@ -187,6 +192,41 @@ impl Calendar {
                 self.error = Some("Could not save. The event is still here.".into());
                 false
             }
+        }
+    }
+
+    /// A secondary click at `(x, y)` (window pixels, as a touch): the menu of the event under it, Open and Delete Event,
+    /// which also selects that event. Empty off the events and while an editor or a sheet is open.
+    pub fn context_items(&mut self, ui: &Ui, x: f32, y: f32) -> Vec<ContextItem> {
+        self.layout_columns(ui);
+        if self.editor.is_some() || self.sheet_open() || self.event_pop.is_some() || self.cal_menu.is_some() || x < self.x0 {
+            return Vec::new();
+        }
+        let Some(Target::Row(id)) = self.hit(ui, x - self.x0, y) else { return Vec::new() };
+        if overlay::is_overlay(id) {
+            return Vec::new();
+        }
+        self.picked = Some(id);
+        self.dirty = true;
+        vec![ContextItem::new(CTX_OPEN, "Open"), ContextItem::new(CTX_DELETE, "Delete Event")]
+    }
+
+    /// The choice from the event menu of `context_items`; true when something changed. Open asks the app for the event's
+    /// window (as a double-click does), Delete Event deletes it with the Undo bar.
+    pub fn context_action(&mut self, ui: &Ui, choice: u32, t: f64) -> bool {
+        self.dirty = true;
+        let Some(id) = self.picked_event() else { return false };
+        match choice {
+            CTX_OPEN => {
+                self.open_request = Some(id);
+                true
+            }
+            CTX_DELETE => {
+                let deleted = self.delete_picked(t);
+                self.fit_scroll(ui);
+                deleted
+            }
+            _ => false,
         }
     }
 

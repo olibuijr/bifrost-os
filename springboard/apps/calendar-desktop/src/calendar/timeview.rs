@@ -3,6 +3,7 @@ use bifrost_app::kit::ui::{MAC_CAPTION1_PT};
 use bifrost_app::layout::top_inset;
 use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPACE_XS, SPACE_XXL, SPACE_XXS, SPACE_XXXL};
 use bifrost_app::kit::ui::MAC_SUBHEAD_PT;
+use bifrost_app::kit::colors;
 use springboard::layout::in_rect as within;
 use super::layout;
 use super::store::CalendarEvent;
@@ -308,6 +309,11 @@ impl Calendar {
                 let Some((_, title, minute, all_day)) = by_id.iter().find(|e| e.0 == id) else {
                     continue;
                 };
+                // the event a click selected is ringed in the tint: Delete and Backspace remove it
+                if self.picked == Some(id) {
+                    let ring = ui.pt(SPACE_XXS);
+                    g.fill_rrect(x - ring, y - ring, rw + 2.0 * ring, rh + 2.0 * ring, ui.pt(SPACE_XS) + ring, colors::LINK.now());
+                }
                 g.fill_rrect(x, y, rw, rh, ui.pt(SPACE_XS), FIELD_BG.now());
                 g.fill_rrect(x, y, ui.pt(SPACE_XS), rh, ui.pt(SPACE_XS) / 2.0, self.event_colour(id));
                 let text_w = rw - ui.pt(SPACE_M);
