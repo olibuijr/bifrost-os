@@ -37,7 +37,31 @@ def pick_host(answered, order=HOST_ORDER):
     return next((h for h in order if h in answered), "10.99.0.200")
 
 
+HOST_CACHE = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/tmp", "bifrost-midget-host")
+HOST_CACHE_S = 120
+
+
 def _reachable_host(order=HOST_ORDER, timeout=1.5):
+    """The address picked by the last probe if it is under HOST_CACHE_S old and still opens ssh at once (each probe of
+    a dead address costs its full timeout, ~2 s per command), else a fresh probe of every address."""
+    try:
+        if time.time() - os.path.getmtime(HOST_CACHE) < HOST_CACHE_S:
+            h = open(HOST_CACHE).read().strip()
+            if h in order:
+                socket.create_connection((h, 22), 0.3).close()
+                return h
+    except OSError:
+        pass
+    h = _probe_hosts(order, timeout)
+    try:
+        with open(HOST_CACHE, "w") as f:
+            f.write(h)
+    except OSError:
+        pass
+    return h
+
+
+def _probe_hosts(order=HOST_ORDER, timeout=1.5):
     """Probe every address at once (a dead one cannot delay the rest) and take the first in `order` that opens ssh."""
     import concurrent.futures
 
