@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.14.7
+
+- Cmd+A selects a playlist name being renamed; a search with no match reads No Results; Rating and Add to Playlist are greyed without a song.
+
 ## 1.14.6
 
 - Rebuilt for 0.10.44: every touch says whether a mouse or a finger made it, so a mouse drag no longer scrolls lists on the desktop (the wheel, trackpad and scroll bar still do).
