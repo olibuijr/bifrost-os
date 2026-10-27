@@ -67,7 +67,7 @@ pub fn polygon_verbs(pts: &[(f32, f32)]) -> Vec<PathVerb> {
 }
 
 /// Every name `glyph` draws, for galleries and tests.
-pub const NAMES: [&str; 76] = [
+pub const NAMES: [&str; 78] = [
     "chevron.left", "chevron.right", "sidebar.left", "square.grid.2x2", "list.bullet", "rectangle.split.3x1",
     "magnifyingglass", "xmark.circle.fill", "folder", "folder.badge.plus", "checkmark.circle", "clock",
     "menubar.dock.rectangle", "doc", "arrow.down.circle", "house", "desktopcomputer", "internaldrive", "trash", "tag",
@@ -79,6 +79,7 @@ pub const NAMES: [&str; 76] = [
     "arrow.clockwise", "xmark", "rectangle.grid.1x2", "chevron.up", "text.alignleft", "square.on.square",
     "bold", "italic", "underline", "strikethrough", "text.aligncenter", "text.alignright", "text.justify", "list.number",
     "tray", "paperplane", "archivebox", "xmark.bin", "arrowshape.turn.up.left", "arrowshape.turn.up.left.2",
+    "building.2", "exclamationmark.circle",
 ];
 
 /// True when `name` has a drawing.
@@ -428,6 +429,23 @@ pub fn glyph(s: &mut dyn Canvas, ui: &Ui, name: &str, bounds: Rect, color: u32) 
             circle(s, 0.5, 0.5, 0.42);
             dot(s, 0.5, 0.3, 0.05);
             poly(s, &[(0.5, 0.44), (0.5, 0.72)], false);
+        }
+        "exclamationmark.circle" => {
+            circle(s, 0.5, 0.5, 0.42);
+            poly(s, &[(0.5, 0.26), (0.5, 0.56)], false);
+            dot(s, 0.5, 0.72, 0.05);
+        }
+        "building.2" => {
+            rbox(s, 0.1, 0.3, 0.4, 0.62, 0.04);
+            rbox(s, 0.5, 0.12, 0.4, 0.8, 0.04);
+            for v in [0.46, 0.64] {
+                dot(s, 0.24, v, 0.035);
+                dot(s, 0.36, v, 0.035);
+            }
+            for v in [0.3, 0.48, 0.66] {
+                dot(s, 0.64, v, 0.035);
+                dot(s, 0.76, v, 0.035);
+            }
         }
         "flag" => {
             poly(s, &[(0.2, 0.08), (0.2, 0.92)], false);
