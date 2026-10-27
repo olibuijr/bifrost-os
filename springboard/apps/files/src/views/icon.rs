@@ -51,7 +51,7 @@ impl Files {
         let label_y = y + self.grid_icon() + GRID_LABEL_GAP;
         if self.dragging && self.drop_target.as_ref() == Some(&e.path) {
             // the folder a drop would go into: an accent plate behind its icon, as the list view tints its row
-            s.fill_rrect(ui.pt(icon_x - 4.), ui.pt(y - 4.), ui.pt(self.grid_icon() + 8.), ui.pt(self.grid_icon() + 8.), ui.pt(SPACE_S), TINT);
+            s.fill_rrect(ui.pt(icon_x - 4.), ui.pt(y - 4.), ui.pt(self.grid_icon() + 8.), ui.pt(self.grid_icon() + 8.), ui.pt(SPACE_S), accent_now());
         }
         if selected {
             // Files: a grey plate behind the icon and an accent capsule behind the name

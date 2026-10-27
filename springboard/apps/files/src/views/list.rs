@@ -43,7 +43,7 @@ impl Files {
             rect(s, ui, self.side(), y, w - self.side(), 32., CARD_BG.now())
         }
         if self.dragging && self.drop_target.as_ref() == Some(&e.path) {
-            rect(s, ui, self.side(), y, w - self.side(), 32., TINT)
+            rect(s, ui, self.side(), y, w - self.side(), 32., accent_now())
         }
         if selected {
             rect(s, ui, self.side(), y, w - self.side(), 32., SELECTION.now())
