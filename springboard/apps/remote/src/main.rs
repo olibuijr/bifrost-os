@@ -7,7 +7,7 @@ use bifrost_app::kit::{Damage,Surface};
 use bifrost_app::layout::Layout;
 use bifrost_app::network_path::Path;
 use bifrost_app::widgets;
-use springboard::shell::ui::{Weight,WHITE,TINT,CONTENT_BG,LABEL,LABEL_2,FIELD_BG,MAC_TITLE2_PT,MAC_TITLE3_PT,MAC_BODY_PT};
+use springboard::shell::ui::{Weight,WHITE,TINT,accent_now,CONTENT_BG,LABEL,LABEL_2,FIELD_BG,MAC_TITLE2_PT,MAC_TITLE3_PT,MAC_BODY_PT};
 use nearby::Nearby;
 use std::{path::PathBuf,process::Command};
 /// Nearby list: at most this many rows are drawn, each `ROW_H` points tall, starting at `ROWS_Y`.
@@ -92,7 +92,7 @@ impl App for Remote {
  s.blit(&u.text(&self.password,MAC_TITLE2_PT,Weight::Regular,LABEL.now()),u.pt(x+148.) as i32,u.pt(250.) as i32,255,255);
  let serving=self.status=="Serving";
  // Start is the one accent button; Stop is a quiet secondary fill, not red, because stopping is not destructive.
- s.fill_rrect(u.pt(x),u.pt(296.),u.pt(218.),u.pt(48.),u.pt(10.),if serving{FIELD_BG.now()}else{TINT});
+ s.fill_rrect(u.pt(x),u.pt(296.),u.pt(218.),u.pt(48.),u.pt(10.),start_fill(serving));
  s.blit(&u.text(if serving{"Stop Sharing"}else{"Start Sharing"},MAC_TITLE2_PT,Weight::Regular,if serving{LABEL.now()}else{WHITE}),u.pt(x+20.) as i32,u.pt(310.) as i32,255,255);
  // The line at 370 pt shows a sharing error, or else the result of the last copy.
  let msg=if self.error.is_empty(){self.notice.as_str()}else{self.error.as_str()};
@@ -118,3 +118,30 @@ impl App for Remote {
 fn main(){bifrost_app::run(Remote{data:PathBuf::new(),status:"Stopped".into(),password:String::new(),error:String::new(),last:0.,address:"Port 12000".into(),col:32.,
  network:String::new(),path:Path::offline(),net_at:f64::NEG_INFINITY,nearby:Nearby::new(),selected:None,
  path_service:None,intro:services::INTRO.into(),notice:String::new(),started:false,path_req:None,screens_req:None,copy_req:None});}
+
+/// The Start/Stop button's fill: the user's accent for Start, a quiet field fill for Stop.
+fn start_fill(serving: bool) -> u32 {
+    if serving { FIELD_BG.now() } else { accent_now() }
+}
+
+#[cfg(test)]
+mod accent_tests {
+    use super::*;
+    use bifrost_app::kit::appearance::{accent, set_accent, Accent};
+
+    /// The accent is process-wide: this test changes it and restores it.
+    static ACCENT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn the_start_button_is_filled_with_the_chosen_accent_not_system_blue() {
+        let _g = ACCENT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let keep = accent();
+        set_accent(Accent::Green);
+        let green = accent_now();
+        let (start, stop) = (start_fill(false), start_fill(true));
+        set_accent(keep);
+        assert_eq!(start, green);
+        assert_ne!(start, TINT);
+        assert_eq!(stop, FIELD_BG.now());
+    }
+}
