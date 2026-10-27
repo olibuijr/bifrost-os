@@ -64,7 +64,8 @@ impl Browser {
                 if self.pageui.active() {
                     return false;
                 }
-                if self.start_swallows_context(x, y) {
+                // the library panel and popover are chrome drawn over the page: their secondary click is not the page's
+                if self.lib.overlay() || self.start_swallows_context(x, y) {
                     return true;
                 }
                 if let Some(p) = self.pool.as_mut().filter(|p| p.contains(x, y)) {

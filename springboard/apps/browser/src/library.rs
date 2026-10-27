@@ -68,6 +68,8 @@ struct Pop {
     field: TextField,
     /// Horizontal centre the arrow points at, points.
     anchor: f32,
+    /// False when the page was already bookmarked: the popover then edits that bookmark.
+    added: bool,
 }
 
 #[derive(Default)]
@@ -254,6 +256,7 @@ impl Library {
 
     /// Cmd+D: bookmark the page if it is not one yet and show the naming popover (Remove is in it).
     pub fn bookmark_page(&mut self, store: &mut Store, url: &str, title: &str, now: u64, anchor: f32) {
+        let added = !store.is_bookmarked(url);
         if !store.add_bookmark(url, title, now) {
             return;
         }
@@ -262,7 +265,7 @@ impl Library {
         field.push_str(&name);
         field.command(Command::SelectAll, "");
         self.overflow = false;
-        self.pop = Some(Pop { url: url.to_string(), field, anchor });
+        self.pop = Some(Pop { url: url.to_string(), field, anchor, added });
     }
 
     fn close_pop(&mut self, store: &mut Store) {
@@ -571,7 +574,8 @@ impl Library {
                 s.fill_rect(ui.pt(ax - half) as usize, y.max(0.0) as usize, ui.pt(half * 2.0) as usize, ui.pt(1.0).ceil() as usize, CARD_BG.now());
             }
             let (field, remove, done) = Self::pop_buttons(r);
-            Self::txt(s, ui, "Added to Bookmarks", MAC_BODY_PT, Weight::Semibold, LABEL.now(), r.x + 16.0, r.y + 22.0);
+            let title = if p.added { "Added to Bookmarks" } else { "Bookmark" };
+            Self::txt(s, ui, title, MAC_BODY_PT, Weight::Semibold, LABEL.now(), r.x + 16.0, r.y + 22.0);
             Self::txt(s, ui, "Name", MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), r.x + 16.0, field.y + field.h / 2.0);
             widgets::text_field(s, ui, &p.field, field, "Title", true);
             Self::txt(s, ui, "Remove", MAC_SUBHEAD_PT, Weight::Regular, DESTRUCTIVE, remove.x, remove.y + remove.h / 2.0);
@@ -691,6 +695,30 @@ mod tests {
         assert_eq!(step(&rs, Some(3), 1), Some(3));
         assert_eq!(step(&rs, Some(3), -1), Some(1));
         assert_eq!(host("https://a.test:8080/x?y"), "a.test:8080");
+    }
+
+    #[test]
+    fn bookmarking_a_saved_page_edits_it_instead_of_adding() {
+        let mut st = Store::in_memory();
+        let mut lib = Library::default();
+        lib.bookmark_page(&mut st, "https://a.test/", "A", 1, 0.0);
+        assert!(lib.pop.as_ref().is_some_and(|p| p.added));
+        lib.close_all(&mut st);
+        lib.bookmark_page(&mut st, "https://a.test/", "A", 2, 0.0);
+        assert!(lib.pop.as_ref().is_some_and(|p| !p.added), "a saved page opens its bookmark for editing");
+        assert_eq!(st.bookmarks.len(), 1);
+    }
+
+    #[test]
+    fn panel_and_popover_cover_the_page_for_secondary_clicks() {
+        let mut st = Store::in_memory();
+        let mut lib = Library::default();
+        assert!(!lib.overlay());
+        lib.show_panel(Mode::Bookmarks);
+        assert!(lib.overlay(), "a secondary click over the open panel must not reach the page menu");
+        lib.close_all(&mut st);
+        lib.bookmark_page(&mut st, "https://a.test/", "A", 1, 0.0);
+        assert!(lib.overlay(), "the Cmd+D popover covers the page too");
     }
 
     #[test]
