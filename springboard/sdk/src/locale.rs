@@ -321,7 +321,7 @@ fn gmt_offset(offset: i64) -> String {
 /// Short specific zone name for English: the abbreviations the en_US data carries (UTC and the North American
 /// ones), else the short localized GMT form (`GMT`, `GMT+1`, `GMT+5:30`), never a raw abbreviation such as BST.
 fn short_zone_name(abbreviation: &str, offset: i64) -> String {
-    const KNOWN: [&str; 12] = ["UTC", "EST", "EDT", "CST", "CDT", "MST", "MDT", "PST", "PDT", "AKST", "AKDT", "HST"];
+    const KNOWN: [&str; 14] = ["UTC", "AST", "ADT", "EST", "EDT", "CST", "CDT", "MST", "MDT", "PST", "PDT", "AKST", "AKDT", "HST"];
     if KNOWN.contains(&abbreviation) {
         return abbreviation.to_string();
     }
@@ -977,11 +977,12 @@ mod tests {
         let (jan, jul) = (1768478400, 1784116800); // 2026-01-15 and 2026-07-15, 12:00 UTC
         let mut f = DateFormatter::new(en());
         f.set_date_format("z|zzz");
-        let cases: [(&str, Option<&str>, &str, &str); 8] = [
+        let cases: [(&str, Option<&str>, &str, &str); 9] = [
             ("UTC", None, "UTC|UTC", "UTC|UTC"),
             ("Europe/London", Some("GMT0BST,M3.5.0/1,M10.5.0"), "GMT|GMT", "GMT+1|GMT+1"),
             ("America/New_York", Some("EST5EDT,M3.2.0,M11.1.0"), "EST|EST", "EDT|EDT"),
             ("America/Los_Angeles", Some("PST8PDT,M3.2.0,M11.1.0"), "PST|PST", "PDT|PDT"),
+            ("America/Halifax", Some("AST4ADT,M3.2.0,M11.1.0"), "AST|AST", "ADT|ADT"),
             ("Europe/Berlin", Some("CET-1CEST,M3.5.0,M10.5.0/3"), "GMT+1|GMT+1", "GMT+2|GMT+2"),
             ("Asia/Tokyo", Some("JST-9"), "GMT+9|GMT+9", "GMT+9|GMT+9"),
             ("Asia/Kolkata", Some("IST-5:30"), "GMT+5:30|GMT+5:30", "GMT+5:30|GMT+5:30"),
