@@ -45,9 +45,9 @@
     {
       "feature": "Data Formatting",
       "apple": "NumberFormatter, DateFormatter, RelativeDateTimeFormatter, ByteCountFormatter, MeasurementFormatter, ListFormatter",
-      "bifrost": "springboard/sdk/src/locale.rs (NumberFormatter, DateFormatter, relative_date_time, byte_count, measurement, list); springboard/ui/src/format.rs (English-only shell formatters); wired: springboard/apps/calculator-desktop/src/tape.rs (paper tape, results via the locale-aware format::localize) and src/calc.rs copy_tape / Copy Tape button; wired: springboard/apps/calculator-desktop/src/tape.rs (render, statistics_lines use format::localize and format::display); springboard/sdk/src/formatters/ (spellOut and ordinal numbers, DateComponentsFormatter, named relative days, iso8601); springboard/sdk/tests/parity_sdk-complete-24.rs",
+      "bifrost": "springboard/sdk/src/locale.rs (NumberFormatter, DateFormatter, relative_date_time, byte_count, measurement, list); springboard/ui/src/format.rs (English-only shell formatters); wired: springboard/apps/calculator-desktop/src/tape.rs (paper tape, results via the locale-aware format::localize) and src/calc.rs copy_tape / Copy Tape button; wired: springboard/apps/calculator-desktop/src/tape.rs (render, statistics_lines use format::localize and format::display); springboard/sdk/src/formatters/ (spellOut and ordinal numbers, DateComponentsFormatter, named relative days, iso8601, person_name); springboard/sdk/tests/parity_sdk-complete-24.rs",
       "status": "partial",
-      "note": "verified on Midget 0.7.25 by 6 tests (earlier part). Added later, host tests only: en, is and de number separators (dates and wording en and is); ISO 8601 date-time writing and reading with a zone designator (parity_sdk-complete-24). Gap: no stringsdict plurals, duration is English only, no person-name or interval formatters; shell code still uses English-only format.rs Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Refreshed 2026-10-17: value types IndexSet, OrderedSet, CountedSet and Uuid are in sdk value_types.rs (tests value_types::tests), Decimal in sdk decimal.rs (tests decimal::tests), and IndexSet also in ui indexset.rs (tests indexset::tests)."
+      "note": "verified on Midget 0.7.25 by 6 tests (earlier part). Added later, host tests only: en, is and de number separators (dates and wording en and is); ISO 8601 date-time writing and reading with a zone designator (parity_sdk-complete-24). Gap: no stringsdict plurals, duration is English only, no interval formatter; person names (PersonNameComponents, PersonNameFormatter in formatters/person_name.rs) are Western order only, host tests only, not yet checked on Midget; shell code still uses English-only format.rs Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Refreshed 2026-10-17: value types IndexSet, OrderedSet, CountedSet and Uuid are in sdk value_types.rs (tests value_types::tests), Decimal in sdk decimal.rs (tests decimal::tests), and IndexSet also in ui indexset.rs (tests indexset::tests)."
     },
     {
       "feature": "Filters and Sorting",
@@ -90,6 +90,6 @@
     "Non-Gregorian week/era arithmetic beyond the supported components",
     "Progress tree (ProgressManager, Subprogress)",
     "NSNumber and value wrappers, key-value coding and a serialisation trait for the value types. IndexSet, OrderedSet, CountedSet, Decimal and Uuid are built",
-    "Person-name formatting (PersonNameComponents) and more unit dimensions. ISO 8601 and DateComponents formatters exist (springboard/sdk/src/formatters)"
+    "More unit dimensions. ISO 8601 and DateComponents formatters exist (springboard/sdk/src/formatters)"
   ]
 }
