@@ -1221,7 +1221,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
     fn pointer(kind: TouchKind, x: f32, y: f32, t: f64) -> Input {
-        Input::Touch { kind, id: 0, x, y, t, mods: bifrost_app::proto::ModifierFlags::EMPTY }
+        Input::Touch { kind, id: 0, x, y, t, source: bifrost_app::TouchSource::Pointer, mods: bifrost_app::proto::ModifierFlags::EMPTY }
     }
     fn test_ctx() -> Ctx {
         let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice());
