@@ -124,13 +124,16 @@ fn loader_var(name: &CStr16, text: &str) {
     let _ = uefi::runtime::set_variable(name, &LOADER, VariableAttributes::BOOTSERVICE_ACCESS | VariableAttributes::RUNTIME_ACCESS, &data);
 }
 
-/// The one modeset of the boot: the panel's largest GOP mode. Linux (simpledrm, then the GPU driver with fastboot)
-/// and the BifrOSt display code keep this mode, so the screen is never reprogrammed again.
-fn native_mode(gop: &mut GraphicsOutput) {
+/// The loader's modeset: the panel's largest GOP mode. Linux (simpledrm, then the GPU driver with fastboot) and the
+/// BifrOSt display code keep this mode, so the screen is never reprogrammed again. When the kernel command line pins a
+/// mode with `video=` (a faster refresh than the firmware offers) the kernel changes the mode once anyway, so the
+/// loader keeps the firmware's mode and the boot has one change instead of two (`cmdline::should_set_native_mode`).
+/// The boot frame is resolution independent, so it is drawn at whatever mode is current.
+fn native_mode(gop: &mut GraphicsOutput, kernel_sets_mode: bool) {
     let area = |m: &uefi::proto::console::gop::Mode| { let (w, h) = m.info().resolution(); w * h };
     let current = { let (w, h) = gop.current_mode_info().resolution(); w * h };
     if let Some(best) = gop.modes().max_by_key(area) {
-        if area(&best) > current {
+        if cmdline::should_set_native_mode(current, area(&best), kernel_sets_mode) {
             let _ = gop.set_mode(&best);
         }
     }
@@ -151,10 +154,10 @@ struct Display {
 }
 
 impl Display {
-    fn open(appearance: Appearance) -> Option<Display> {
+    fn open(appearance: Appearance, kernel_sets_mode: bool) -> Option<Display> {
         let h = boot::get_handle_for_protocol::<GraphicsOutput>().ok()?;
         let mut gop = boot::open_protocol_exclusive::<GraphicsOutput>(h).ok()?;
-        native_mode(&mut gop);
+        native_mode(&mut gop, kernel_sets_mode);
         let (w, hgt) = gop.current_mode_info().resolution();
         Some(Display { gop, width: w as u32, height: hgt as u32, appearance, pixels: alloc::vec![0u32; w * hgt] })
     }
@@ -404,7 +407,7 @@ fn main() -> Status {
         init,
         per_us,
         progress: Progress::new(timing),
-        display: Display::open(timing.appearance),
+        display: Display::open(timing.appearance, cmdline::video_size(&current).is_some()),
     };
     session.first_frame();
 
