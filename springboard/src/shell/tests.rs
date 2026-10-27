@@ -80,6 +80,36 @@
         sh
     }
 
+    /// The built-in windows read what produced the touch they handle (`bifrost_ui::pan`): a mouse press is the pointer's,
+    /// a press made while a touchscreen finger is down is that finger's, and the drag emulated for a wheel notch a
+    /// shell surface did not take is a scroll, so a finger's.
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn the_shell_tells_its_scrollers_whether_a_mouse_or_a_finger_pressed() {
+        use crate::bare::input::TouchPhase;
+        use bifrost_ui::pan::{source, TouchSource::{Finger, Pointer}};
+        let mut sh = desktop_shell();
+        let run = |sh: &mut Shell, t: f64| -> [bifrost_ui::pan::TouchSource; 3] {
+            let mut seen = [Finger; 3];
+            for (i, ev) in [Event::Down(600.0, 600.0), Event::Move(600.0, 500.0), Event::Up(600.0, 500.0)].into_iter().enumerate() {
+                sh.event(ev, t + i as f64 * 16.0);
+                seen[i] = source();
+            }
+            seen
+        };
+        assert_eq!(run(&mut sh, 1000.0), [Pointer; 3], "a mouse drag");
+        sh.ext_contact(4, TouchPhase::Down, 600.0, 600.0, 2000.0, true);
+        sh.event(Event::Down(600.0, 600.0), 2000.0);
+        sh.ext_contact(4, TouchPhase::Up, 600.0, 500.0, 2016.0, true);
+        sh.event(Event::Move(600.0, 500.0), 2016.0);
+        sh.event(Event::Up(600.0, 500.0), 2032.0);
+        assert_eq!(source(), Finger, "a finger's drag stays a finger's to its release");
+        assert_eq!(run(&mut sh, 3000.0), [Pointer; 3], "and the next mouse press is the pointer's again");
+        sh.desk_wheel(4000.0);
+        assert_eq!(run(&mut sh, 4000.0), [Finger; 3], "the drag emulated for a wheel notch");
+        assert_eq!(run(&mut sh, 4100.0), [Pointer; 3], "and only that drag");
+    }
+
     #[cfg(feature = "desktop-wayland")]
     #[test]
     fn the_menu_bar_text_turns_dark_over_a_light_wallpaper() {

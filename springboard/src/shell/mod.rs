@@ -898,6 +898,8 @@ pub struct Shell {
     touch_contacts: touch_frames::Contacts,
     /// what produced the plain touch an external app is getting now (`touch_frames::plain_source`)
     touch_source: bifrost_proto::TouchSource,
+    /// the pointer touches left of the drag emulated for a wheel notch, and when they stop counting (`note_pan_source`)
+    wheel_pan: (u8, f64),
     /// the modifier keys the hardware keyboard holds now (`HwKeys::modifier_flags`), set on every key event; each press
     /// forwarded to an external app carries them (`ToApp::Touch::mods`, the reference event modifier flags)
     key_mods: bifrost_proto::ModifierFlags,
@@ -1382,6 +1384,7 @@ impl Shell {
             osk_pinned: false,
             touch_contacts: touch_frames::Contacts::default(),
             touch_source: bifrost_proto::TouchSource::default(),
+            wheel_pan: (0, 0.0),
             key_mods: bifrost_proto::ModifierFlags::EMPTY,
             key_reset: false,
             im: Default::default(),
@@ -3508,6 +3511,7 @@ impl Shell {
         if matches!(ev, Event::Down(..) | Event::Move(..) | Event::Up(..)) && self.swallows_wheel_drag(t) {
             return vec![];
         }
+        self.note_pan_source(ev, t);
         // the touch a system gesture took belongs to that gesture: its first finger's moves and lift do nothing here
         if self.touch_taken {
             match ev {
@@ -3540,11 +3544,39 @@ impl Shell {
         fx
     }
 
+    /// A wheel notch happened at `t`: the drag emulated for it that a shell surface does not take is a scroll, so it pans
+    /// the built-in windows as a finger does (`note_pan_source`).
+    pub(super) fn note_wheel_pan(&mut self, t: f64) {
+        self.wheel_pan = (3, t + apphost::WHEEL_DRAG_MS);
+    }
+
+    /// Records for the kit's scrollers (`bifrost_ui::pan`) what produced the touch the built-in windows handle now, so a
+    /// mouse drag does not pan them on a desktop; a touchscreen finger, the drag emulated for a wheel notch and a tablet
+    /// still do. Shell surfaces read it at the press (`Scroller::down`).
+    fn note_pan_source(&mut self, ev: Event, t: f64) {
+        let kind = match ev {
+            Event::Down(..) => bifrost_proto::TouchKind::Down,
+            Event::Move(..) => bifrost_proto::TouchKind::Move,
+            Event::Up(..) => bifrost_proto::TouchKind::Up,
+            _ => return,
+        };
+        let wheel = self.wheel_pan.0 > 0 && t <= self.wheel_pan.1;
+        if wheel {
+            self.wheel_pan.0 -= 1;
+        } else {
+            self.wheel_pan = (0, 0.0);
+        }
+        let source = if wheel { bifrost_proto::TouchSource::Finger } else { touch_frames::plain_source(kind, &self.touch_contacts, self.touch_source) };
+        self.touch_source = source;
+        bifrost_ui::pan::set_source(source);
+    }
+
     /// A shell surface took the wheel event at `t`: the Down, Move and Up the pointer emulates for it are dropped.
     /// This is the one record of a notch a shell surface took: the desk's mark for it (`desk_wheel`) is spent here, since
     /// the desk never sees the press it was for.
     pub(super) fn swallow_wheel_drag(&mut self, t: f64) {
         self.wheel_drag = (3, t + apphost::WHEEL_DRAG_MS);
+        self.wheel_pan = (0, 0.0);
         self.desk_wheel_spent();
     }
 
