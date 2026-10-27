@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
 """Machine-level control of "midget" (Lenovo ThinkCentre M900 on titan's eno2, 10.99.0.0/24) from titan.
 
-usage: tools/midget.py idle LABEL [--seconds N] | kbench LABEL [--seconds N] | kab [--seconds N] | amt-info | amt-activate | power state|on|off|cycle|reset | mem | apps | recovery | unlock | login-bypass on|off | status | bios [list|get N|set N V|find WORD|dump] | me | labboot on|off | wake | reboot [--netboot|--disk] | poweroff | bootnext pxe|disk|NNNN | efi | hw | screen OUT.png | state | ota | wait NAME --value V | ax [PREFIX] | press NAME | key enter|cmd+o|cmd+shift+4|cmd+[|cmd+comma|down*3 | type TEXT | click X Y [--right] [--double] [--mods cmd+shift] | move X Y | drag X0 Y0 X1 Y1 [MS] | scroll X Y DY [DX] | shot [OUT.png] [--max W] | seq FILE | tap-window APP X Y | tap X Y | context X Y | hover X Y | open-url URL | open-app ID | open-folder ID PATH | show-in-files PATH | swipe X0 Y0 X1 Y1 [MS] | trace on|off | update [--restart] | appearance light|dark|auto | wallpaper ID | logs [N] | amt | ssh CMD... | qa-install [--disk DEV] [--shots DIR] [--timeout S] | reinstall --confirm \"REINSTALL midget\" [--timeout S] [--shots S] [--loop N] | follow [--timeout S] [--shots S] | wipe --disk DEV --confirm "WIPE 10.99.0.200 DEV" [--dry-run]
-Computer use (real uinput keyboard and absolute pointer; coordinates are `screen`/`shot` pixels, `--scale F` takes small-image
-pixels; docs/bifrost-pc-workflow.md "Computer use"): `shot` then `click`/`type`/`drag`/`scroll`, or a `seq` script.
+usage: tools/midget.py idle LABEL [--seconds N] | kbench LABEL [--seconds N] | kab [--seconds N] | amt-info | amt-activate | power state|on|off|cycle|reset | mem | apps | recovery | unlock | login-bypass on|off | status | bios [list|get N|set N V|find WORD|dump] | me | labboot on|off | wake | reboot [--netboot|--disk] | poweroff | bootnext pxe|disk|NNNN | efi | hw | screen OUT.png | state | ota | wait NAME --value V | ax [PREFIX] | press NAME [--in SCOPE] [--role ROLE] | key enter|cmd+o|cmd+shift+4|cmd+[|cmd+comma|down*3 | keydown SPEC | keyup SPEC | type TEXT | click X Y [--right] [--double] [--mods cmd+shift] [--relative] [--expect-unchanged [--from FULL.png]] | move X Y [--relative] | drag X0 Y0 X1 Y1 [MS] [--relative] | down X Y [--right] [--relative] | up [--right] | scroll X Y DY [DX] | shot [OUT.png] [--max W] | zoom X Y W H [OUT.png] [--up N] | session start|stop|status | seq FILE | tap-window APP X Y | tap X Y | context X Y | hover X Y | open-url URL | open-app ID | open-folder ID PATH | show-in-files PATH | swipe X0 Y0 X1 Y1 [MS] | trace on|off | update [--restart] | appearance light|dark|auto | wallpaper ID | logs [N] | amt | ssh CMD... | qa-install [--disk DEV] [--shots DIR] [--timeout S] | reinstall --confirm \"REINSTALL midget\" [--timeout S] [--shots S] [--loop N] | follow [--timeout S] [--shots S] | wipe --disk DEV --confirm "WIPE 10.99.0.200 DEV" [--dry-run]
+Computer use (uinput keyboard, absolute pointer and relative mouse; coordinates are `screen`/`shot` pixels, `--scale F` takes
+small-image pixels; docs/bifrost-pc-workflow.md "Computer use"): `shot` (prints the open windows in small-image pixels) then
+`press NAME --in APP` by preference, else `click`/`type`/`drag`/`scroll`, or a `seq` script; `zoom X Y W H` crops a region at
+full resolution to read small text. The first input command starts an input session (one helper on Midget holding the
+devices behind one ssh connection; `session status|stop`; it ends itself after MIDGET_SESSION_IDLE s, default 300; MIDGET_SESSION=0
+turns it off), so later keys arrive in milliseconds and `down`/`move`/`up`, `keydown`/`keyup` hold a button or key across
+commands and screenshots. `click --expect-unchanged` compares the square around the target with the last `shot` right before
+clicking and refuses (exit 3) when it changed. `--relative` moves the pointer like a real mouse (REL_X/REL_Y at a steady pace
+the window server does not accelerate) instead of warping it; `move X Y` without it re-syncs the mouse's idea of the position.
 Coordinates: `screen` writes compositor pixels. `tap`/`swipe`/`context`/`hover` take the shell's own geometry (what
 `state` prints as window=APP,X,Y,W,H), which can be offset from the screenshot because the compositor places windows
 itself (seen 2026-10-10: Files at 557,187 in `state`, 680,307 in the PNG). For anything inside a window use
@@ -18,7 +25,7 @@ Host: $MIDGET_HOST, else the first of 192.168.20.140 (VLAN 20), 10.99.0.200 (lab
 are Intel AMT (docs/bifrost-pc-workflow.md "AMT findings"); the AMT password is only ever read from out/lab/amt.password.
 """
 from pathlib import Path
-import contextlib, io, json, os, re, shlex, socket, struct, subprocess, sys, time, urllib.request
+import contextlib, inspect, io, json, math, os, re, select, shlex, socket, struct, subprocess, sys, time, urllib.request
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HOST_ORDER = ("192.168.20.140", "10.99.0.200", "192.168.1.187")  # VLAN 20, lab NIC (eno2), Wi-Fi
@@ -488,12 +495,22 @@ def cmd_login_bypass(args):
     return result.returncode
 
 
-# ---- computer use: look at a screenshot, then click / type / drag at its pixels through temporary uinput devices ----
+# ---- computer use: look at a screenshot, then click / type / drag at its pixels through uinput devices on Midget ----
 # (docs/bifrost-pc-workflow.md "Computer use"). Plans are built here as plain tuples (testable), then run on Midget by one
-# python3 program that creates the devices, waits for the compositor to pick them up, acts and destroys them.
+# python3 helper (`HELPER_SRC`) that creates the devices it needs, waits for the window server to pick them up and acts.
+# The helper either runs one embedded plan and exits (one-shot), or serves plans from its stdin for a whole session: the
+# input session (`session`) keeps one helper, and so one keyboard, pointer and mouse, alive over one ssh connection, so a
+# key arrives in milliseconds and a button or key can stay held between commands (`down`, `move`, `up`, `keydown`, `keyup`).
 
-BTN_LEFT, BTN_RIGHT, REL_HWHEEL, REL_WHEEL = 0x110, 0x111, 6, 8
+BTN_LEFT, BTN_RIGHT, BTN_MIDDLE, REL_HWHEEL, REL_WHEEL = 0x110, 0x111, 0x112, 6, 8
 SETTLE = float(os.environ.get("MIDGET_UINPUT_SETTLE", "0.5"))  # seconds the shell gets to open a fresh /dev/input node
+# `--relative`: a mouse that moves by deltas, like a USB mouse. The window server accelerates relative motion by speed: its
+# profile decelerates below 0.07 counts/ms, is exactly 1:1 up to 0.4 counts/ms, then speeds up (to about 2x, which is the
+# "1.9x" seen with a fast virtual mouse). INPUT_STEP counts every INPUT_TICK seconds is 0.25 counts/ms, on the 1:1 plateau
+# and under the shell's own 2-count acceleration knee, so the travel lands on the pixel without knowing the gain.
+INPUT_STEP, INPUT_TICK = 2, 0.008
+SESSION_IDLE = float(os.environ.get("MIDGET_SESSION_IDLE", "300"))  # seconds without a command before the session ends itself
+GUARD_RADIUS, GUARD_TOLERANCE = 40, 0.01  # `click --expect-unchanged`: half the compared square (screen px) and the changed fraction allowed
 
 
 def key_codes(spec):
@@ -662,24 +679,59 @@ def drag_points(x0, y0, x1, y1, steps):
     return [(x0 + (x1 - x0) * i / steps, y0 + (y1 - y0) * i / steps) for i in range(steps + 1)]
 
 
-def click_plan(x, y, size, right=False, double=False, mods=()):
-    """Move to the pixel, hover a beat, press and release (twice for a double click), with `mods` (evdev codes) held."""
+def rel_steps(dx, dy, step=2):
+    """Mouse deltas that add up to exactly (round(dx), round(dy)), each component at most `step` counts. Pure, and
+    copied verbatim into the on-device helper, which walks them one per INPUT_TICK."""
+    dx, dy = round(dx), round(dy)
+    n = max(1, -(-max(abs(dx), abs(dy)) // step))
+    out, px, py = [], 0, 0
+    for i in range(1, n + 1):
+        tx, ty = round(dx * i / n), round(dy * i / n)
+        out.append((tx - px, ty - py))
+        px, py = tx, ty
+    return out
+
+
+def goto(x, y, size, relative=False):
+    """The op that puts the pointer on a screenshot pixel: an absolute warp, or (`relative`) a mouse travel from where the
+    helper last left the pointer (warping to the screen centre first when that is unknown)."""
     ax, ay = px_to_abs(x, y, size)
+    return ("travel" if relative else "move", ax, ay)
+
+
+def click_plan(x, y, size, right=False, double=False, mods=(), relative=False):
+    """Move to the pixel, hover a beat, press and release (twice for a double click), with `mods` (evdev codes) held.
+    `relative` travels there and clicks with the mouse device instead of the absolute pointer."""
     btn = BTN_RIGHT if right else BTN_LEFT
-    plan = [("kd", c) for c in mods] + [("sleep", 0.1)] * bool(mods) + [("move", ax, ay), ("sleep", 0.15)]
+    press = "mbtn" if relative else "btn"
+    plan = [("kd", c) for c in mods] + [("sleep", 0.1)] * bool(mods) + [goto(x, y, size, relative), ("sleep", 0.15)]
     for _ in range(2 if double else 1):
-        plan += [("btn", btn, 1), ("sleep", 0.06), ("btn", btn, 0), ("sleep", 0.08)]
+        plan += [(press, btn, 1), ("sleep", 0.06), (press, btn, 0), ("sleep", 0.08)]
     return plan + [("ku", c) for c in reversed(mods)]
 
 
-def drag_plan(x0, y0, x1, y1, size, ms=400):
-    """Press at the start, interpolated moves (about 16 ms apart) over `ms`, release at the end."""
+def drag_plan(x0, y0, x1, y1, size, ms=400, relative=False):
+    """Press at the start, interpolated moves (about 16 ms apart) over `ms`, release at the end. `relative` drags with the
+    mouse device, whose travel has its own fixed pace (INPUT_STEP per INPUT_TICK), so `ms` does not apply."""
+    if relative:
+        return [goto(x0, y0, size, True), ("sleep", 0.15), ("mbtn", BTN_LEFT, 1), ("sleep", 0.12), goto(x1, y1, size, True),
+                ("sleep", 0.12), ("mbtn", BTN_LEFT, 0), ("sleep", 0.1)]
     steps = max(4, int(ms) // 16)
     pts = [px_to_abs(x, y, size) for x, y in drag_points(x0, y0, x1, y1, steps)]
     plan = [("move", *pts[0]), ("sleep", 0.15), ("btn", BTN_LEFT, 1), ("sleep", 0.12)]
     for p in pts[1:]:
         plan += [("move", *p), ("sleep", max(0.004, ms / 1000 / steps))]
     return plan + [("sleep", 0.12), ("btn", BTN_LEFT, 0), ("sleep", 0.1)]
+
+
+def hold_plan(x, y, size, right=False, relative=False):
+    """`down`: go to the pixel and press the button without releasing it (the session keeps it held)."""
+    return [goto(x, y, size, relative), ("sleep", 0.15), ("mbtn" if relative else "btn", BTN_RIGHT if right else BTN_LEFT, 1), ("sleep", 0.05)]
+
+
+def release_plan(right=False):
+    """`up`: release the button on whichever device holds it (the helper remembers)."""
+    return [("btn", BTN_RIGHT if right else BTN_LEFT, 0), ("sleep", 0.05)]
 
 
 def scroll_plan(x, y, size, dy, dx=0):
@@ -692,79 +744,391 @@ def scroll_plan(x, y, size, dy, dx=0):
     return plan + [("sleep", 0.6)]  # the shell eases the wheel into a drag and lifts it when idle
 
 
-def plan_seconds(plan):
-    """A generous estimate of how long the Midget side runs the plan, for the ssh timeout."""
+def plan_seconds(plan, size=None):
+    """A generous estimate of how long the Midget side runs the plan, for the ssh and session timeouts."""
     t = SETTLE + 1.0
     for op in plan:
-        t += op[1] if op[0] == "sleep" else len(op[1]) * op[2] * 3 if op[0] == "type" else 0.02
+        if op[0] == "sleep":
+            t += op[1]
+        elif op[0] == "type":
+            t += len(op[1]) * op[2] * 3
+        elif op[0] == "travel":  # from anywhere on the screen, at the mouse's fixed pace
+            t += math.hypot(*(size or (2560, 1440))) / INPUT_STEP * INPUT_TICK + SETTLE
+        else:
+            t += 0.02
     return t
 
 
-def uinput_plan_script(plan, size=None):
-    """Python source run on Midget: the keyboard and/or absolute pointer (with wheels) the plan needs, then the plan.
-    Ops: ("kd"|"ku", code) ("key", [codes], hold_s) ("type", [(shift, code) or (shift, code, altgr)], delay_s) ("move", ax, ay) ("btn", code, 0|1)
-    ("wheel", REL code, value) ("sleep", s). The pointer is absolute (ABS_X/Y 0..w-1, 0..h-1), not INPUT_PROP_DIRECT, so
-    the shell treats it as a pointing device, not a touchscreen."""
-    kb_codes = sorted(set(KEY_CODES.values()) | set(_PUNCT.values()) | {54, 97, 100} | set(range(1, 89)) | {86})  # every letter and the layouts' extra keys (86), so it counts as a keyboard
-    return f"""import os,fcntl,struct,time
-PLAN={plan!r}
-KB={kb_codes!r}
-SIZE={tuple(size or (1, 1))!r}
-def mk(name,pid,keys,rels,absmax):
- fd=os.open('/dev/uinput',os.O_WRONLY|os.O_NONBLOCK)
- io=lambda r,v: fcntl.ioctl(fd,r,v)
- io(0x40045564,1)
- for c in keys: io(0x40045565,c)
- for r in rels:
-  io(0x40045564,2); io(0x40045566,r)
- am=[0]*64
- if absmax:
-  io(0x40045564,3); io(0x40045567,0); io(0x40045567,1); am[0],am[1]=absmax
- os.write(fd,struct.pack('80sHHHHI',name,3,1,pid,1,0)+struct.pack('64i',*am)+bytes(768))
- fcntl.ioctl(fd,0x5501)
- return fd
-def ev(fd,t,c,v): os.write(fd,struct.pack('qqHHi',0,0,t,c,v))
-def put(fd,t,c,v):
- ev(fd,t,c,v); ev(fd,0,0,0)
-kinds=set(o[0] for o in PLAN)
-kb=mk(b'BifrOSt remote keyboard',1,KB,[],None) if kinds&{{'kd','ku','key','type'}} else None
-pt=mk(b'BifrOSt remote pointer',2,[272,273],[6,8],(SIZE[0]-1,SIZE[1]-1)) if kinds&{{'move','btn','wheel'}} else None
+# The on-device helper. Devices are made when an op first needs them: a keyboard (every key, so the window server
+# counts it as one), an absolute pointer (ABS_X/Y 0..w-1, 0..h-1, wheels; not INPUT_PROP_DIRECT, so the shell treats it as a
+# pointing device, not a touchscreen) and a relative mouse (REL_X/Y, wheels, buttons). Ops: ("kd"|"ku", code) ("key", [codes], hold_s)
+# ("type", [(shift, code) or (shift, code, altgr)], delay_s) ("move", ax, ay) ("travel", ax, ay) ("btn"|"mbtn", code, 0|1)
+# ("wheel"|"mwheel", REL code, value) ("sleep", s). With PLAN set it runs that plan and exits; otherwise it serves JSON lines
+# `{"plan": [...], "size": [w, h]}` from stdin (one reply line each: `ok ...` or `error: ...`) until EOF, `{"op": "quit"}`,
+# a signal or IDLE seconds of silence. Everything it made is destroyed on the way out, whichever way it leaves.
+HELPER_SRC = r"""import os, fcntl, struct, time, sys, json, select, signal
+PLAN=__PLAN__
+SIZE=__SIZE__
+KB=__KB__
+SETTLE, IDLE, STEP, TICK = __SETTLE__, __IDLE__, __STEP__, __TICK__
+__REL_STEPS__
+
+class Dev:
+    def __init__(self, name, pid, keys, rels, absmax):
+        fd = os.open('/dev/uinput', os.O_WRONLY | os.O_NONBLOCK)
+        io = lambda r, v: fcntl.ioctl(fd, r, v)
+        io(0x40045564, 1)
+        for c in keys:
+            io(0x40045565, c)
+        for r in rels:
+            io(0x40045564, 2); io(0x40045566, r)
+        am = [0] * 64
+        if absmax:
+            io(0x40045564, 3); io(0x40045567, 0); io(0x40045567, 1); am[0], am[1] = absmax
+        os.write(fd, struct.pack('80sHHHHI', name, 3, 1, pid, 1, 0) + struct.pack('64i', *am) + bytes(768))
+        fcntl.ioctl(fd, 0x5501)
+        self.fd = fd
+    def ev(self, t, c, v):
+        os.write(self.fd, struct.pack('qqHHi', 0, 0, t, c, v))
+    def put(self, t, c, v):
+        self.ev(t, c, v); self.ev(0, 0, 0)
+    def close(self):
+        try:
+            fcntl.ioctl(self.fd, 0x5502)
+        except OSError:
+            pass
+        os.close(self.fd)
+
+class Input:
+    def __init__(self):
+        self.kb = self.pt = self.ms = None
+        self.size = self.pos = None
+        self.held, self.keys = {}, set()
+    def keyboard(self):
+        if self.kb is None:
+            self.kb = Dev(b'BifrOSt remote keyboard', 1, KB, [], None); time.sleep(SETTLE)
+        return self.kb
+    def pointer(self, size):
+        if not size:
+            raise ValueError('no output size for the pointer')
+        size = tuple(size)
+        if self.pt is not None and self.size != size:
+            self.pt.close(); self.pt = None
+        if self.pt is None:
+            self.size = size
+            self.pt = Dev(b'BifrOSt remote pointer', 2, [272, 273, 274], [6, 8], (size[0] - 1, size[1] - 1)); time.sleep(SETTLE)
+        return self.pt
+    def mouse(self):
+        if self.ms is None:
+            self.ms = Dev(b'BifrOSt remote mouse', 3, [272, 273, 274], [0, 1, 6, 8], None); time.sleep(SETTLE)
+        return self.ms
+    def run(self, plan, size):
+        for o in plan:
+            k = o[0]
+            if k == 'sleep':
+                time.sleep(o[1])
+            elif k == 'kd':
+                self.keyboard().put(1, o[1], 1); self.keys.add(o[1])
+            elif k == 'ku':
+                self.keyboard().put(1, o[1], 0); self.keys.discard(o[1])
+            elif k == 'key':
+                kb = self.keyboard()
+                for c in o[1]:
+                    kb.put(1, c, 1)
+                time.sleep(o[2])
+                for c in reversed(o[1]):
+                    kb.put(1, c, 0)
+            elif k == 'type':
+                kb = self.keyboard()
+                for p in o[1]:
+                    sh, c, ag = p[0], p[1], len(p) > 2 and p[2]
+                    if ag: kb.put(1, 100, 1)
+                    if sh: kb.put(1, 42, 1)
+                    kb.put(1, c, 1); time.sleep(o[2]); kb.put(1, c, 0); time.sleep(o[2])
+                    if sh: kb.put(1, 42, 0)
+                    if ag: kb.put(1, 100, 0)
+            elif k == 'move':
+                pt = self.pointer(size)
+                pt.ev(3, 0, o[1]); pt.ev(3, 1, o[2]); pt.ev(0, 0, 0)
+                self.pos = (o[1], o[2])
+            elif k == 'travel':
+                if self.pos is None:
+                    self.run([('move', size[0] // 2, size[1] // 2), ('sleep', 0.1)], size)
+                ms = self.mouse()
+                for dx, dy in rel_steps(o[1] - self.pos[0], o[2] - self.pos[1], STEP):
+                    if dx: ms.ev(2, 0, dx)
+                    if dy: ms.ev(2, 1, dy)
+                    ms.ev(0, 0, 0); time.sleep(TICK)
+                self.pos = (o[1], o[2])
+            elif k in ('btn', 'mbtn'):
+                dev = self.held.pop(o[1], None) if o[2] == 0 else None
+                if dev is None and k == 'mbtn':
+                    dev = self.mouse()
+                elif dev is None:
+                    dev = (self.pt or self.ms or self.pointer(size)) if o[2] == 0 else self.pointer(size)
+                dev.put(1, o[1], o[2])
+                if o[2]:
+                    self.held[o[1]] = dev
+            elif k == 'wheel':
+                self.pointer(size).put(2, o[1], o[2])
+            elif k == 'mwheel':
+                self.mouse().put(2, o[1], o[2])
+            else:
+                raise ValueError('unknown op %r' % (k,))
+    def close(self):
+        for dev, c in [(d, c) for c, d in self.held.items()] + [(self.kb, c) for c in self.keys]:
+            try:
+                dev.put(1, c, 0)
+            except OSError:
+                pass
+        for d in (self.kb, self.pt, self.ms):
+            if d is not None:
+                d.close()
+
+def serve(inp):
+    while True:
+        ready, _, _ = select.select([sys.stdin], [], [], IDLE)
+        if not ready:
+            break
+        line = sys.stdin.readline()
+        if not line:
+            break
+        try:
+            msg = json.loads(line)
+            if msg.get('op') == 'quit':
+                sys.stdout.write('ok bye\n'); sys.stdout.flush()
+                break
+            t = time.time()
+            inp.run(msg['plan'], msg.get('size'))
+            sys.stdout.write('ok %dms pos=%s\n' % ((time.time() - t) * 1000, '%d,%d' % inp.pos if inp.pos else '-'))
+        except Exception as e:
+            sys.stdout.write('error: %s\n' % e)
+        sys.stdout.flush()
+
+inp = Input()
+for sig in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT):
+    signal.signal(sig, lambda *a: sys.exit(0))
 try:
- time.sleep({SETTLE!r})
- for o in PLAN:
-  k=o[0]
-  if k=='sleep': time.sleep(o[1])
-  elif k=='kd': put(kb,1,o[1],1)
-  elif k=='ku': put(kb,1,o[1],0)
-  elif k=='key':
-   for c in o[1]: put(kb,1,c,1)
-   time.sleep(o[2])
-   for c in reversed(o[1]): put(kb,1,c,0)
-  elif k=='type':
-   for p in o[1]:
-    sh,c,ag=p[0],p[1],len(p)>2 and p[2]
-    if ag: put(kb,1,100,1)
-    if sh: put(kb,1,42,1)
-    put(kb,1,c,1); time.sleep(o[2]); put(kb,1,c,0); time.sleep(o[2])
-    if sh: put(kb,1,42,0)
-    if ag: put(kb,1,100,0)
-  elif k=='move':
-   ev(pt,3,0,o[1]); ev(pt,3,1,o[2]); ev(pt,0,0,0)
-  elif k=='btn': put(pt,1,o[1],o[2])
-  elif k=='wheel': put(pt,2,o[1],o[2])
- time.sleep(.25)
+    if PLAN is not None:
+        inp.run(PLAN, SIZE); time.sleep(.25)
+    else:
+        serve(inp)
 finally:
- for f in (kb,pt):
-  if f is not None:
-   try: fcntl.ioctl(f,0x5502)
-   except OSError: pass
-   os.close(f)
+    inp.close()
 """
 
+KB_CODES = sorted(set(KEY_CODES.values()) | set(_PUNCT.values()) | {54, 97, 100} | set(range(1, 89)) | {86})  # every letter and the layouts' extra keys (86)
 
-def run_plan(plan, size=None):
-    """Run a plan on Midget over ssh; the exit code is the remote python's."""
-    result = run(SSH + ["python3 -c " + shlex.quote(uinput_plan_script(plan, size))], plan_seconds(plan) * 1.5 + 15)
+
+def helper_script(plan=None, size=None, idle=None):
+    """The helper's source for Midget: with `plan` a one-shot program, without it the session server (see HELPER_SRC)."""
+    idle = SESSION_IDLE + 60 if idle is None else idle  # the helper outlives the session daemon's idle limit, never the reverse
+    return (HELPER_SRC.replace("__PLAN__", repr(plan)).replace("__SIZE__", repr(tuple(size) if size else None))
+            .replace("__KB__", repr(KB_CODES)).replace("__SETTLE__", repr(SETTLE)).replace("__IDLE__", repr(float(idle)))
+            .replace("__STEP__", repr(INPUT_STEP)).replace("__TICK__", repr(INPUT_TICK)).replace("__REL_STEPS__", inspect.getsource(rel_steps)))
+
+
+def uinput_plan_script(plan, size=None):
+    """Python source run on Midget once: the helper with this plan embedded (devices made, plan run, devices destroyed)."""
+    return helper_script(plan, size)
+
+
+# ---- the input session: one helper on Midget behind one ssh connection, reached through a Unix socket on this side ----
+# `session serve` (started by the first input command, or `session start`) owns both until `session stop`, SESSION_IDLE
+# seconds without a command, or the helper going away; the socket and the helper are removed with it. MIDGET_SESSION=0 turns
+# the session off (every command then makes and destroys its own devices, and nothing can be held between commands).
+
+def runtime_dir():
+    return os.environ.get("XDG_RUNTIME_DIR") or f"/tmp/bifrost-{os.getuid()}"
+
+
+SESSION_SOCK = os.path.join(runtime_dir(), "bifrost-midget-input.sock")
+SESSION_LOG = os.path.join(runtime_dir(), "bifrost-midget-input.log")
+
+
+def session_enabled():
+    return os.environ.get("MIDGET_SESSION", "auto") != "0"
+
+
+def recv_line(sock, limit=1 << 20):
+    """One newline-terminated line from a socket (the socket's timeout bounds it); None on timeout, EOF or overflow."""
+    buf = b""
+    while b"\n" not in buf and len(buf) < limit:
+        try:
+            chunk = sock.recv(65536)
+        except OSError:
+            return None
+        if not chunk:
+            break
+        buf += chunk
+    return buf.split(b"\n", 1)[0].decode(errors="replace") if b"\n" in buf else None
+
+
+def session_request(msg, timeout):
+    """Send one message to the session daemon and return its reply line; None when no daemon answers in time."""
+    sock = socket.socket(socket.AF_UNIX)
+    sock.settimeout(timeout)
+    try:
+        sock.connect(SESSION_SOCK)
+        sock.sendall((json.dumps(msg) + "\n").encode())
+        return recv_line(sock)
+    except OSError:
+        return None
+    finally:
+        sock.close()
+
+
+def session_start(wait_s=8.0):
+    """True when a session daemon answers, starting one (detached, logging to SESSION_LOG) if none does."""
+    if session_request({"op": "status"}, 2) is not None:
+        return True
+    os.makedirs(os.path.dirname(SESSION_SOCK), exist_ok=True)
+    with open(SESSION_LOG, "a") as log:
+        subprocess.Popen([sys.executable, os.path.abspath(__file__), "session", "serve"], stdin=subprocess.DEVNULL, stdout=log,
+                         stderr=log, start_new_session=True, env={**os.environ, "MIDGET_HOST": HOST})
+    return wait(lambda: session_request({"op": "status"}, 2) is not None, wait_s, 0.25)
+
+
+class Helper:
+    """The helper on Midget behind one ssh connection: JSON plans in, one reply line per plan out."""
+
+    def __init__(self):
+        self.p = subprocess.Popen(SSH + ["python3 -c " + shlex.quote(helper_script())], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                  text=True, bufsize=1)
+
+    def alive(self):
+        return self.p.poll() is None
+
+    def send(self, plan, size, timeout):
+        """The reply line, or None when the helper does not answer within `timeout` seconds."""
+        try:
+            self.p.stdin.write(json.dumps({"plan": plan, "size": size}) + "\n")
+            self.p.stdin.flush()
+        except (OSError, ValueError):
+            return None
+        ready, _, _ = select.select([self.p.stdout], [], [], timeout)
+        if not ready:
+            return None
+        line = self.p.stdout.readline()
+        return line.strip() if line else None
+
+    def close(self):
+        try:
+            self.p.stdin.write('{"op": "quit"}\n')
+            self.p.stdin.flush()
+            self.p.stdin.close()
+        except (OSError, ValueError):
+            pass
+        try:
+            self.p.wait(5)
+        except subprocess.TimeoutExpired:
+            self.p.kill()
+
+
+def session_serve(idle=SESSION_IDLE):
+    """`session serve`: the daemon. Serves plans from SESSION_SOCK to one Helper until `quit`, `idle` seconds of silence, or
+    the helper stops answering (then it leaves rather than hand out a dead device). Returns the exit code."""
+    if session_request({"op": "status"}, 1) is not None:
+        print("a session daemon is already serving", flush=True)
+        return 0
+    with contextlib.suppress(OSError):
+        os.unlink(SESSION_SOCK)
+    srv = socket.socket(socket.AF_UNIX)
+    srv.bind(SESSION_SOCK)
+    os.chmod(SESSION_SOCK, 0o600)
+    srv.listen(8)
+    srv.settimeout(idle)
+    helper = Helper()
+    print(f"{time.strftime('%H:%M:%S')} session daemon pid {os.getpid()} on {SESSION_SOCK} for {HOST}, idle limit {idle:.0f}s", flush=True)
+    rc = 0
+    try:
+        while True:
+            try:
+                conn, _ = srv.accept()
+            except socket.timeout:
+                print("idle; ending the session", flush=True)
+                break
+            with conn:
+                conn.settimeout(5)
+                line = recv_line(conn)
+                if not line:
+                    continue
+                try:
+                    msg = json.loads(line)
+                except ValueError:
+                    conn.sendall(b"error: bad request\n")
+                    continue
+                if msg.get("op") == "quit":
+                    conn.sendall(b"ok bye\n")
+                    break
+                if msg.get("op") == "status":
+                    conn.sendall(f"ok pid={os.getpid()} helper={'up' if helper.alive() else 'down'} host={HOST}\n".encode())
+                    continue
+                if not helper.alive():
+                    conn.sendall(b"error: the input helper on the lab machine is gone; session ending\n")
+                    rc = 1
+                    break
+                timeout = min(600.0, float(msg.get("timeout", 30)))
+                reply = helper.send(msg.get("plan", []), msg.get("size"), timeout)
+                if reply is None:
+                    conn.sendall(b"error: the input helper did not answer in time; session ending\n")
+                    rc = 1
+                    break
+                conn.sendall((reply + "\n").encode())
+    finally:
+        helper.close()
+        srv.close()
+        with contextlib.suppress(OSError):
+            os.unlink(SESSION_SOCK)
+        print(f"{time.strftime('%H:%M:%S')} session ended", flush=True)
+    return rc
+
+
+def cmd_session(args):
+    """`session start|stop|status`: the persistent input helper (started by itself on the first input command)."""
+    op = args[0] if args else "status"
+    if op == "serve":
+        try:
+            idle = float(args[args.index("--idle") + 1]) if "--idle" in args else SESSION_IDLE
+        except (IndexError, ValueError):
+            print("usage: session serve [--idle SECONDS]")
+            return 2
+        return session_serve(idle)
+    if op == "start":
+        if not session_enabled():
+            print("MIDGET_SESSION=0: the session is off")
+            return 2
+        ok = session_start()
+        print("session up" if ok else f"could not start the session (see {SESSION_LOG})")
+        return 0 if ok else 1
+    if op == "stop":
+        print("stopped" if session_request({"op": "quit"}, 10) else "no session")
+        return 0
+    if op == "status":
+        reply = session_request({"op": "status"}, 2)
+        print(reply or "no session")
+        return 0 if reply else 1
+    print("usage: session start|stop|status")
+    return 2
+
+
+def run_plan(plan, size=None, hold=False):
+    """Run a plan on Midget: through the input session when it is on (started here if need be), else by a one-shot helper
+    that makes and destroys its devices. `hold` plans (a button or key left down) need the session and refuse the one-shot.
+    The exit code is 0 on success."""
+    timeout = plan_seconds(plan, size) * 1.5 + 15
+    if session_enabled() and session_start():
+        reply = session_request({"plan": plan, "size": size, "timeout": timeout}, timeout + 5)
+        if reply is not None:
+            if reply.startswith("ok"):
+                return 0
+            print(reply, file=sys.stderr)
+            return 1
+        print("the input session did not answer; using a one-shot device", file=sys.stderr)
+    if hold:
+        print("holding needs the input session (a device that outlives the command): unset MIDGET_SESSION=0 and check `session start`")
+        return 2
+    result = run(SSH + ["python3 -c " + shlex.quote(uinput_plan_script(plan, size))], timeout)
     print(result.stdout, end="")
     if result.stderr:
         print(result.stderr, end="", file=sys.stderr)
@@ -891,7 +1255,8 @@ def output_size(spec=None):
     return size
 
 
-def split_flags(args, valued=("--mods", "--size", "--scale", "--max"), bools=("--right", "--double")):
+def split_flags(args, valued=("--mods", "--size", "--scale", "--max", "--from", "--radius", "--in", "--role", "--up"),
+                bools=("--right", "--double", "--relative", "--expect-unchanged")):
     """-> (positional args, {flag: value or True}); raises ValueError for an unknown option or a missing value."""
     pos, fl, i = [], {}, 0
     while i < len(args):
@@ -932,8 +1297,102 @@ def pointer_args(args, usage, lo, hi, coords):
     return nums, fl, size
 
 
+# ---- the click guard: the target must still look as it did in the caller's screenshot ----
+# A list can move between the screenshot and the click (new mail arrived), so `click --expect-unchanged` grabs a fresh
+# screen right before clicking and refuses when the square around the target differs from the reference (the last `shot`,
+# or --from). The pointer may be painted into captures, so a pointer-sized hole at the target is left out of the compare.
+
+LAST_SHOT = os.path.join(os.path.dirname(KEY), "last-shot")
+
+
+def remember_shot(path, scale):
+    try:
+        open(LAST_SHOT, "w").write(f"{os.path.abspath(path)}\t{scale}\n")
+    except OSError:
+        pass
+
+
+def last_shot():
+    """(full screenshot path, small-image scale) of the last `shot`, when the file still exists; else None."""
+    try:
+        path, _, scale = open(LAST_SHOT).read().strip().partition("\t")
+        return (path, float(scale)) if path and os.path.exists(path) else None
+    except (OSError, ValueError):
+        return None
+
+
+def guard_boxes(x, y, size, radius=GUARD_RADIUS):
+    """(box, hole) in screen pixels: the square of half-side `radius` around the target, clamped to the screen, and the
+    part of it a painted pointer (hotspot at the target, glyph down and to the right) would cover. Boxes are (x0, y0, x1, y1)."""
+    w, h = size
+    x, y = round(x), round(y)
+    box = (max(0, x - radius), max(0, y - radius), min(w, x + radius), min(h, y + radius))
+    hole = (max(box[0], x - 2), max(box[1], y - 2), min(box[2], x + 30), min(box[3], y + 44))
+    return box, hole
+
+
+def crop_png(path, box):
+    """(w, h, channels, [row bytes]) of a PNG's pixels inside `box`: Pillow when present, else the pure decoder (slow on a
+    full screen, but it works). None when the file is not a PNG the decoder reads."""
+    x0, y0, x1, y1 = box
+    try:
+        from PIL import Image
+    except ImportError:
+        dec = png_decode(open(path, "rb").read())
+        if not dec:
+            return None
+        w, h, ch, rows = dec
+        return x1 - x0, y1 - y0, ch, [bytes(rows[y][x0 * ch:x1 * ch]) for y in range(y0, min(y1, h))]
+    with Image.open(path) as img:
+        im = img.convert("RGB").crop(box)
+        w, h = im.size
+        data = im.tobytes()
+    return w, h, 3, [data[r * w * 3:(r + 1) * w * 3] for r in range(h)]
+
+
+def region_diff(a, b, hole=None, tolerance=32):
+    """The fraction of pixels outside `hole` (box in crop coordinates) at which two crops (w, h, channels, rows) differ by more
+    than `tolerance` in any channel; 1.0 when their sizes or channel counts differ."""
+    if a[:3] != b[:3]:
+        return 1.0
+    w, h, ch = a[:3]
+    seen = changed = 0
+    for y in range(h):
+        ra, rb = a[3][y], b[3][y]
+        for x in range(w):
+            if hole and hole[0] <= x < hole[2] and hole[1] <= y < hole[3]:
+                continue
+            seen += 1
+            i = x * ch
+            if any(abs(ra[i + c] - rb[i + c]) > tolerance for c in range(ch)):
+                changed += 1
+    return changed / seen if seen else 0.0
+
+
+def guard_check(x, y, size, ref, radius=GUARD_RADIUS, tolerance=GUARD_TOLERANCE):
+    """Grab a fresh screen and compare the square around the target with `ref`. (True, note) to go on, (False, reason) to refuse."""
+    if not ref or not os.path.exists(ref):
+        return False, "no reference screenshot: run `shot` first or pass --from PATH"
+    if png_size(open(ref, "rb").read(32)) != tuple(size):
+        return False, f"{ref} is not a full {size[0]}x{size[1]} screenshot (pass the full image, not the small one)"
+    os.makedirs(runtime_dir(), exist_ok=True)
+    fresh = os.path.join(runtime_dir(), "bifrost-midget-guard.png")
+    with contextlib.redirect_stdout(io.StringIO()):
+        if cmd_screen(fresh) != 0:
+            return False, "could not take the fresh screenshot the guard compares against"
+    box, hole = guard_boxes(x, y, size, radius)
+    a, b = crop_png(ref, box), crop_png(fresh, box)
+    if a is None or b is None:
+        return False, "could not read the screenshots"
+    frac = region_diff(a, b, (hole[0] - box[0], hole[1] - box[1], hole[2] - box[0], hole[3] - box[1]))
+    if frac > tolerance:
+        return False, f"refused: {frac:.1%} of the {2 * radius} px square at ({round(x)}, {round(y)}) changed since {ref} (fresh screen: {fresh}); take a new shot and click again"
+    return True, f"guard: {frac:.1%} changed, clicking"
+
+
 def cmd_click(args):
-    usage = "click X Y [--right] [--double] [--mods cmd+shift] [--scale F] [--size WxH]   (X Y = screenshot pixels)"
+    usage = ("click X Y [--right] [--double] [--mods cmd+shift] [--relative] [--expect-unchanged [--from FULL.png] [--radius PX]] "
+             "[--scale F] [--size WxH]   (X Y = screenshot pixels)")
     got = pointer_args(args, usage, 2, 2, 2)
     if not got:
         return 2
@@ -942,24 +1401,76 @@ def cmd_click(args):
     if mods is None:
         print("unknown modifier in --mods " + fl["--mods"])
         return 2
-    print(f"click {px_to_abs(x, y, size)} of {size[0]}x{size[1]}" + (" right" if "--right" in fl else "") + (" double" if "--double" in fl else ""))
-    return run_plan(click_plan(x, y, size, "--right" in fl, "--double" in fl, mods), size)
+    if "--expect-unchanged" in fl:
+        try:
+            radius = int(fl.get("--radius", GUARD_RADIUS))
+        except ValueError:
+            print("--radius takes screen pixels")
+            return 2
+        ok, note = guard_check(x, y, size, fl.get("--from") or (last_shot() or (None,))[0], max(4, radius))
+        print(note)
+        if not ok:
+            return 3
+    print(f"click {px_to_abs(x, y, size)} of {size[0]}x{size[1]}" + (" right" if "--right" in fl else "") + (" double" if "--double" in fl else "")
+          + (" (relative mouse)" if "--relative" in fl else ""))
+    return run_plan(click_plan(x, y, size, "--right" in fl, "--double" in fl, mods, "--relative" in fl), size)
 
 
 def cmd_move(args):
-    got = pointer_args(args, "move X Y [--scale F] [--size WxH]   (hover at a screenshot pixel)", 2, 2, 2)
+    got = pointer_args(args, "move X Y [--relative] [--scale F] [--size WxH]   (hover at a screenshot pixel; with a button held, a drag step)", 2, 2, 2)
     if not got:
         return 2
     (x, y), fl, size = got
-    return run_plan([("move", *px_to_abs(x, y, size)), ("sleep", 0.3)], size)
+    return run_plan([goto(x, y, size, "--relative" in fl), ("sleep", 0.3)], size)
 
 
 def cmd_drag(args):
-    got = pointer_args(args, "drag X0 Y0 X1 Y1 [MS] [--scale F] [--size WxH]   (left button, default 400 ms)", 4, 5, 4)
+    got = pointer_args(args, "drag X0 Y0 X1 Y1 [MS] [--relative] [--scale F] [--size WxH]   (left button, default 400 ms)", 4, 5, 4)
     if not got:
         return 2
     (x0, y0, x1, y1, *ms), fl, size = got
-    return run_plan(drag_plan(x0, y0, x1, y1, size, ms[0] if ms else 400), size)
+    return run_plan(drag_plan(x0, y0, x1, y1, size, ms[0] if ms else 400, "--relative" in fl), size)
+
+
+def cmd_down(args):
+    """`down X Y [--right] [--relative]`: press and hold at the pixel; then `move`/`shot` as needed, and `up` releases."""
+    got = pointer_args(args, "down X Y [--right] [--relative] [--scale F] [--size WxH]   (press and hold; `move` drags, `up` releases)", 2, 2, 2)
+    if not got:
+        return 2
+    (x, y), fl, size = got
+    print(f"down {px_to_abs(x, y, size)}" + (" right" if "--right" in fl else ""))
+    return run_plan(hold_plan(x, y, size, "--right" in fl, "--relative" in fl), size, hold=True)
+
+
+def cmd_up(args):
+    """`up [--right]`: release the button `down` holds."""
+    try:
+        pos, fl = split_flags(args)
+    except ValueError as e:
+        print(f"{e}\nusage: up [--right]")
+        return 2
+    if pos:
+        print("usage: up [--right]")
+        return 2
+    return run_plan(release_plan("--right" in fl), output_size(fl.get("--size")), hold=True)
+
+
+def cmd_keydown(args):
+    """`keydown SPEC`: hold a key or chord (`keydown cmd`, `keydown ctrl+shift`) until `keyup SPEC`."""
+    codes = key_codes(args[0]) if len(args) == 1 else None
+    if not codes:
+        print("usage: keydown NAME|MOD+KEY   (held until `keyup`; names: " + " ".join(sorted(KEY_CODES)) + ")")
+        return 2
+    return run_plan([("kd", c) for c in codes] + [("sleep", 0.05)], hold=True)
+
+
+def cmd_keyup(args):
+    """`keyup SPEC`: release what `keydown` holds (the parts in reverse order)."""
+    codes = key_codes(args[0]) if len(args) == 1 else None
+    if not codes:
+        print("usage: keyup NAME|MOD+KEY")
+        return 2
+    return run_plan([("ku", c) for c in reversed(codes)] + [("sleep", 0.05)], hold=True)
 
 
 def cmd_scroll(args):
@@ -1085,9 +1596,111 @@ def cmd_shot(args):
     if scale == 1.0 or not resize_png(out, small, max_w):
         print("small: none needed" if scale == 1.0 else "small: no resizer for this PNG; use the full image")
         print("scale: 1.0")
-        return 0
-    print(f"small: {small} ({nw}x{nh})")
-    print(f"scale: {scale:.4f} (small -> full: multiply by it; or `click --scale {scale:.4f} X Y` with small-image coordinates)")
+        scale = 1.0
+    else:
+        print(f"small: {small} ({nw}x{nh})")
+        print(f"scale: {scale:.4f} (small -> full: multiply by it; or `click --scale {scale:.4f} X Y` with small-image coordinates)")
+    remember_shot(out, scale)
+    print_windows(scale)
+    return 0
+
+
+def state_windows(text):
+    """`window=APP,X,Y,W,H` lines of `state` -> [(name, x, y, w, h)] in shell pixels."""
+    out = []
+    for line in text.splitlines():
+        if line.startswith("window="):
+            f = line[7:].rsplit(",", 4)
+            if len(f) == 5 and all(re.fullmatch(r"-?\d+", v) for v in f[1:]):
+                out.append((f[0], *map(int, f[1:])))
+    return out
+
+
+def windows_in_small(wins, scale):
+    """The window rectangles in small-image pixels (divided by the shot's scale)."""
+    return [(n, *(round(v / scale) for v in (x, y, w, h))) for n, x, y, w, h in wins]
+
+
+def print_windows(scale):
+    """One line per open window with its rectangle in small-image pixels, from the shell's `state`, so the caller knows
+    where things are. The window server places windows itself, so the rectangle can be offset from the image: trust the
+    picture for the exact spot, the list for what is open and roughly where."""
+    text = control_text("state", 10) or ""
+    wins = windows_in_small(state_windows(text), scale)
+    screen = next((l.split("=", 1)[1] for l in text.splitlines() if l.startswith("screen=")), None)
+    if screen:
+        print(f"screen: {screen}")
+    if wins:
+        print("windows (small-image px, shell geometry): " + "; ".join(f"{n} at {x},{y} {w}x{h}" for n, x, y, w, h in wins))
+
+
+def zoom_box(x, y, w, h, scale, size):
+    """A region in small-image pixels -> the full-image box (x0, y0, x1, y1), clamped; None when nothing is left."""
+    x0, y0 = max(0, round(x * scale)), max(0, round(y * scale))
+    x1, y1 = min(size[0], round((x + w) * scale)), min(size[1], round((y + h) * scale))
+    return (x0, y0, x1, y1) if x1 > x0 and y1 > y0 else None
+
+
+def png_crop(data, box, up=1):
+    """Pure-python crop of a PNG (`png_decode` kinds) to `box`, each pixel repeated `up` times; None for other kinds."""
+    dec = png_decode(data)
+    if not dec:
+        return None
+    w, h, bpp, rows = dec
+    x0, y0, x1, y1 = box
+    keep = 3 if bpp >= 3 else 1
+    out = []
+    for y in range(y0, min(y1, h)):
+        line = b"".join(bytes(rows[y][x * bpp:x * bpp + keep]) * up for x in range(x0, min(x1, w)))
+        out += [line] * up
+    return png_encode((min(x1, w) - x0) * up, (min(y1, h) - y0) * up, 2 if keep == 3 else 0, out)
+
+
+def cmd_zoom(args):
+    """`zoom X Y W H [OUT.png] [--from FULL.png] [--scale F] [--up N]`: a full-resolution crop (enlarged N times, default 2) of
+    a region given in small-image pixels of the last `shot`, to read small text."""
+    usage = "zoom X Y W H [OUT.png] [--from FULL.png] [--scale F] [--up N]   (X Y W H in small-image pixels of the last shot)"
+    try:
+        pos, fl = split_flags(args)
+        nums = [float(v) for v in pos[:4]]
+        up = int(fl.get("--up", 2))
+    except ValueError as e:
+        print(f"{e}\nusage: {usage}")
+        return 2
+    if len(nums) != 4 or len(pos) > 5 or up < 1 or up > 8:
+        print("usage: " + usage)
+        return 2
+    last = last_shot()
+    src = fl.get("--from") or (last[0] if last else None)
+    if not src or not os.path.exists(src):
+        print("no screenshot to crop: run `shot` first or pass --from FULL.png")
+        return 2
+    try:
+        scale = float(fl["--scale"]) if "--scale" in fl else (last[1] if last and last[0] == os.path.abspath(src) else 1.0)
+    except ValueError:
+        print("--scale takes a number")
+        return 2
+    size = png_size(open(src, "rb").read(32))
+    if not size:
+        print(f"{src}: not a PNG")
+        return 1
+    box = zoom_box(*nums, scale, size)
+    if not box:
+        print(f"the region is outside the {size[0]}x{size[1]} image")
+        return 2
+    out = pos[4] if len(pos) > 4 else os.path.splitext(src)[0] + "-zoom.png"
+    try:
+        from PIL import Image
+        with Image.open(src) as img:
+            im = img.convert("RGB").crop(box)
+            im.resize((im.width * up, im.height * up), Image.NEAREST).save(out)
+    except ImportError:
+        png = png_crop(open(src, "rb").read(), box, up)
+        if png is None:
+            print(f"{src}: no resizer for this PNG kind")
+            return 1
+        open(out, "wb").write(png)
+    print(f"zoom: {out} ({box[2] - box[0]}x{box[3] - box[1]} full px x{up}) from {src} box {box}; small-image origin ({nums[0]:g}, {nums[1]:g}) at scale {scale:.4f}")
     return 0
 
 
@@ -1109,13 +1722,16 @@ def parse_seq(text):
 
 def seq_ops():
     return {"type": cmd_type, "click": cmd_click, "move": cmd_move, "drag": cmd_drag, "scroll": cmd_scroll, "key": cmd_key,
+            "down": cmd_down, "up": cmd_up, "keydown": cmd_keydown, "keyup": cmd_keyup, "zoom": cmd_zoom, "press": cmd_press,
+            "wait": cmd_wait, "ax": lambda a: cmd_control(["ax", "list"] + a),
             "shot": cmd_shot, "screen": lambda a: cmd_screen(a[0] if a else "/tmp/midget.png"), "tap-window": cmd_window_tap,
             "tap": lambda a: cmd_control(["tap"] + a), "unlock": lambda a: cmd_unlock(), "state": lambda a: cmd_control(["state"])}
 
 
 def cmd_seq(args):
-    """`seq FILE [--keep-going]` (FILE `-` = stdin): run the lines (`type`, `click`, `move`, `drag`, `scroll`, `key`, `shot`,
-    `screen`, `tap-window`, `tap`, `state`, `unlock`, `sleep S`) in order; stops at the first failing line unless --keep-going."""
+    """`seq FILE [--keep-going]` (FILE `-` = stdin): run the lines (`type`, `click`, `move`, `drag`, `scroll`, `key`, `down`, `up`,
+    `keydown`, `keyup`, `press`, `wait`, `ax`, `zoom`, `shot`, `screen`, `tap-window`, `tap`, `state`, `unlock`, `sleep S`) in
+    order; stops at the first failing line unless --keep-going. The input session keeps a held button or key across lines."""
     files = [a for a in args if a != "--keep-going"]
     if len(files) != 1:
         print("usage: seq FILE|- [--keep-going]   (lines: click X Y | type TEXT | key SPEC | sleep S | shot PATH | # comment)")
@@ -1331,6 +1947,66 @@ def ax_find(rows, query):
 def ax_press(query):
     out = (control_text("ax press " + query) or "no answer").strip()
     return out.startswith("ok"), out
+
+
+def ax_scope(rows, word):
+    """The scope (`os/settings`, `app/<id>`: the first two address segments) that `word` names: itself, or the one app id or
+    os section containing it (case-insensitive). -> (scope, []) or (None, the candidates to choose from)."""
+    scopes = sorted({"/".join(r["address"].split("/")[:2]) for r in rows if r["address"].count("/") >= 1})
+    if word in scopes:
+        return word, []
+    hits = [s for s in scopes if word.lower() in s.split("/", 1)[1].lower()]
+    return (hits[0], []) if len(hits) == 1 else (None, hits or scopes)
+
+
+def ax_match(rows, query, role=None):
+    """The rows `query` names among `rows`: the exact address, else the address suffix `/query`, else the exact name
+    (case-insensitive); `role` keeps only that role. Several rows mean the query is ambiguous."""
+    rows = [r for r in rows if not role or r["role"] == role]
+    for pick in (lambda r: r["address"] == query, lambda r: r["address"].endswith("/" + query), lambda r: r["name"].lower() == query.lower()):
+        hits = [r for r in rows if pick(r)]
+        if hits:
+            return hits
+    return []
+
+
+def cmd_press(args):
+    """`press NAME [--in SCOPE] [--role ROLE]`: press an element by name. Plain `press NAME` lets the shell resolve the name
+    over everything open; `--in` scopes it to one window (an app id or a fragment of it, `settings`, or an address prefix) and
+    `--role` to one role (button, row, toggle, ...), with the candidates listed when the name is missing or ambiguous."""
+    try:
+        pos, fl = split_flags(args)
+    except ValueError as e:
+        print(f"{e}\nusage: press NAME [--in SCOPE] [--role ROLE]")
+        return 2
+    query = " ".join(pos)
+    if not query:
+        print("usage: press NAME [--in SCOPE] [--role ROLE]   (NAME: an element name, address, or unique address suffix; `ax` lists them)")
+        return 2
+    if "--in" not in fl and "--role" not in fl:
+        return cmd_control(["ax", "press", query])
+    rows = ax_rows()
+    if rows is None:
+        print("the shell did not answer `ax list` (is it unlocked and reachable?)")
+        return 1
+    scope = None
+    if "--in" in fl:
+        scope, cands = ax_scope(rows, fl["--in"])
+        if scope is None:
+            print(f"--in {fl['--in']!r} does not pick exactly one of the open scopes; choose one of: " + " ".join(cands))
+            return 2
+        rows = [r for r in rows if r["address"] == scope or r["address"].startswith(scope + "/")]
+    hits = ax_match(rows, query, fl.get("--role"))
+    where = f" in {scope}" if scope else ""
+    if not hits:
+        print(f"no element {query!r}{where}" + (f" with role {fl['--role']}" if "--role" in fl else "") + f"; `ax {scope or ''}` lists what is there".replace("  ", " "))
+        return 1
+    if len(hits) > 1:
+        print(f"{query!r} is ambiguous{where}: " + " ".join(r["address"] for r in hits) + " (use the address, or --role)")
+        return 1
+    ok, out = ax_press(hits[0]["address"])
+    print(out)
+    return 0 if ok else 1
 
 
 def shell_screen():
@@ -2619,7 +3295,7 @@ def main():
         "lock": lambda: cmd_control(["lock"]),
         # the element map (docs/agent-api.md): ax [prefix] lists, press NAME presses by address, path or unique name
         "ax": lambda: cmd_control(["ax", "list"] + rest),
-        "press": lambda: cmd_control(["ax", "press"] + rest),
+        "press": lambda: cmd_press(rest),
         "wait": lambda: cmd_wait(rest),
         "ota": lambda: cmd_ota(rest),
         "appearance": lambda: cmd_appearance(rest),
@@ -2639,7 +3315,13 @@ def main():
         "move": lambda: cmd_move(rest),
         "drag": lambda: cmd_drag(rest),
         "scroll": lambda: cmd_scroll(rest),
+        "down": lambda: cmd_down(rest),
+        "up": lambda: cmd_up(rest),
+        "keydown": lambda: cmd_keydown(rest),
+        "keyup": lambda: cmd_keyup(rest),
         "shot": lambda: cmd_shot(rest),
+        "zoom": lambda: cmd_zoom(rest),
+        "session": lambda: cmd_session(rest),
         "seq": lambda: cmd_seq(rest),
         "swipe": lambda: cmd_control(["swipe"] + rest),
         "trace": lambda: cmd_control(["trace"] + rest),
