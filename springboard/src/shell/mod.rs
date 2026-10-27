@@ -1054,6 +1054,10 @@ pub struct Shell {
     /// (`draw_desk_windows`) and leaves the shell's own surface, the bar and the Dock alone; any other cause is the
     /// ordinary frame, which draws the windows as well.
     ext_frame: bool,
+    /// Whether the shell runs as a client of the Wayland window server (the desktop session): it then publishes the
+    /// windows as toplevels, starts window effects and asks the window server to place them. Read from
+    /// `SPRINGBOARD_WAYLAND` once, at construction; tests set it directly.
+    pub(crate) wayland: bool,
     /// Overview, the Apps grid and the desktops (see `overview.rs`)
     overview: overview::Overview,
     desktop_menu:Option<desktop_bar::Menu>,
@@ -1465,6 +1469,7 @@ impl Shell {
             metrics_changed: false,
             bar_rects: Vec::new(),
             ext_frame: false,
+            wayland: std::env::var_os("SPRINGBOARD_WAYLAND").is_some(),
             overview:Default::default(),
             desktop_menu:None,desktop_menu_scroll:Default::default(),desktop_flyout:Default::default(),defaults:None,recent_list:recent_items::new(),recent_dir:None,desktop_context:None,
             #[cfg(feature = "desktop-wayland")]
@@ -4710,7 +4715,7 @@ impl Shell {
             return &self.damage;
         }
         #[cfg(feature = "desktop-wayland")]
-        if std::mem::take(&mut self.perf_only) && std::env::var_os("SPRINGBOARD_WAYLAND").is_some()
+        if std::mem::take(&mut self.perf_only) && self.wayland
             && self.desk_active() && !self.is_locked() && self.anim.is_none() && !self.notify_damage_all()
             && self.desktop_menu.is_none() && !self.cc_active() && !self.center_active() && !panels_changed && !self.overlay_visible() && !self.quick_look.is_visible() && !self.utility_up()
             && self.desk_drawn && self.windows_ready(s, ext, t) {
@@ -4725,7 +4730,7 @@ impl Shell {
         }
         // a changed CPU or RAM reading repaints the menu bar's rows alone, under the conditions of the performance band above
         #[cfg(feature = "desktop-wayland")]
-        if std::mem::take(&mut self.bar_only) && std::env::var_os("SPRINGBOARD_WAYLAND").is_some()
+        if std::mem::take(&mut self.bar_only) && self.wayland
             && self.desk_active() && !self.is_locked() && self.anim.is_none() && !self.notify_damage_all()
             && self.desktop_menu.is_none() && !self.cc_active() && !self.center_active() && !self.overlay_visible() && !self.quick_look.is_visible() && !self.utility_up()
             && !self.overview_active()

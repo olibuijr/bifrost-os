@@ -4075,10 +4075,8 @@ mod extra_window_frame_tests {
 
     #[test]
     fn a_second_window_is_drawn_with_pixels_above_its_app_and_closing_it_takes_it_off_the_desk() {
-        let _lock = crate::test_support::global_lock();
-        let saved = std::env::var_os("SPRINGBOARD_WAYLAND");
-        std::env::set_var("SPRINGBOARD_WAYLAND", "1");
         let mut sh = crate::shell::tests::desktop_shell();
+        sh.wayland = true;
         sh.screen = Screen::Home;
         sh.anim = None;
         let (mine, _peer) = sys::socketpair_pair().unwrap();
@@ -4118,7 +4116,6 @@ mod extra_window_frame_tests {
         let after = sh.take_wayland_windows();
         assert!(after.iter().all(|f| f.id != id_of(extra)), "no frame for the closed window");
         assert!(after.iter().any(|f| f.id == id_of(main)), "the app's own window stays");
-        if let Some(v) = saved { std::env::set_var("SPRINGBOARD_WAYLAND", v) } else { std::env::remove_var("SPRINGBOARD_WAYLAND") };
     }
 
     /// E2E F4: a cascaded window is cascaded only when it first opens; one the person moved comes back where they left
@@ -4164,10 +4161,8 @@ mod extra_window_frame_tests {
     /// is not destroyed under the pointer (which ended the resize) and the window behind does not take the focus.
     #[test]
     fn an_app_between_buffer_sets_keeps_its_window() {
-        let _lock = crate::test_support::global_lock();
-        let saved = std::env::var_os("SPRINGBOARD_WAYLAND");
-        std::env::set_var("SPRINGBOARD_WAYLAND", "1");
         let mut sh = crate::shell::tests::desktop_shell();
+        sh.wayland = true;
         sh.screen = Screen::Home;
         sh.anim = None;
         let (mine, _peer) = sys::socketpair_pair().unwrap();
@@ -4200,7 +4195,6 @@ mod extra_window_frame_tests {
         let kept = next.iter().find(|f| f.id == id).expect("a frame is still sent: the toplevel is kept");
         assert_eq!((kept.width, kept.height), size, "at the size of the pixels it last presented");
         assert!(kept.pixels.is_none(), "the window server keeps showing the last pixels");
-        if let Some(v) = saved { std::env::set_var("SPRINGBOARD_WAYLAND", v) } else { std::env::remove_var("SPRINGBOARD_WAYLAND") };
     }
 }
 
