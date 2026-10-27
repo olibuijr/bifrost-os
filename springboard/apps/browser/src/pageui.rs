@@ -9,7 +9,7 @@ mod page_colors;
 use bifrost_app::controls::menu::{Menu, MenuItem};
 use bifrost_app::controls::prefs_layout::m;
 use bifrost_app::controls::{Node, Rect, Role, TextField};
-use bifrost_app::kit::ui::{Weight, CARD_BG, FIELD_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_SUBHEAD_PT, TINT, WHITE};
+use bifrost_app::kit::ui::{Weight, CARD_BG, FIELD_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_SUBHEAD_PT, accent_now, WHITE};
 use bifrost_app::kit::{Surface, Ui};
 use crate::tokens;
 use bifrost_app::webview::{DialogKind, MenuKind, WebProcessPool, WebViewEvent, WebViewId};
@@ -475,7 +475,7 @@ impl PageUi {
                 widgets::text_field(s, ui, &d.field, f, "", true);
             }
             let button = |s: &mut Surface, r: Rect, label: &str, primary: bool| {
-                s.fill_rrect(ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h), ui.pt(r.h / 2.0), if primary { TINT } else { FIELD_BG.now() });
+                s.fill_rrect(ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h), ui.pt(r.h / 2.0), if primary { accent_now() } else { FIELD_BG.now() });
                 let img = ui.text(label, MAC_BODY_PT, Weight::Regular, if primary { WHITE } else { LABEL.now() });
                 s.blit(&img, (ui.pt(r.x + r.w / 2.0) as i32) - img.w as i32 / 2, (ui.pt(r.y + r.h / 2.0) as i32) - img.h as i32 / 2, 255, 255);
             };

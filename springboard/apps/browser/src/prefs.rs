@@ -3,7 +3,7 @@
 //! drawn over the window like the script dialogs, because SDK apps have a single window.
 use bifrost_app::controls::prefs_layout::m;
 use bifrost_app::controls::{Rect, TextField};
-use bifrost_app::kit::ui::{AlertCard, MAC_FOOTNOTE_PT, Weight, CARD_BG, DESTRUCTIVE, FIELD_BG, LABEL, LABEL_2, LINK, MAC_BODY_PT, MAC_SUBHEAD_PT, MAC_TITLE2_PT, SEGMENT_ON, SEPARATOR_C, TINT};
+use bifrost_app::kit::ui::{AlertCard, MAC_FOOTNOTE_PT, Weight, CARD_BG, DESTRUCTIVE, FIELD_BG, LABEL, LABEL_2, LINK, MAC_BODY_PT, MAC_SUBHEAD_PT, MAC_TITLE2_PT, SEGMENT_ON, SEPARATOR_C, TINT, accent_now};
 use crate::tokens;
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::kit::{Surface, Ui};
@@ -396,7 +396,7 @@ impl Sheet {
         }
         text(s, "Restore tabs on launch", MAC_BODY_PT, Weight::Regular, LABEL.now(), lx, g.toggle.y + g.toggle.h / 2.0);
         let t = g.toggle;
-        s.fill_rrect(ui.pt(t.x), ui.pt(t.y), ui.pt(t.w), ui.pt(t.h), ui.pt(t.h / 2.0), if p.restore { TINT } else { CARD_BG.now() });
+        s.fill_rrect(ui.pt(t.x), ui.pt(t.y), ui.pt(t.w), ui.pt(t.h), ui.pt(t.h / 2.0), if p.restore { accent_now() } else { CARD_BG.now() });
         let knob = t.h - 4.0;
         let kx = if p.restore { t.x + t.w - knob - 2.0 } else { t.x + 2.0 };
         s.fill_rrect(ui.pt(kx), ui.pt(t.y + 2.0), ui.pt(knob), ui.pt(knob), ui.pt(knob / 2.0), tokens::KNOB);

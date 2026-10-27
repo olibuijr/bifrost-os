@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 use bifrost_app::controls::prefs_layout::m;
 use bifrost_app::controls::{Rect, TextField};
 use bifrost_app::kit::ui::system::SYSTEM_ORANGE;
-use bifrost_app::kit::ui::{Weight, CARD_BG, DESTRUCTIVE, LABEL, LABEL_2, MAC_FOOTNOTE_PT, SEGMENT_ON, SEPARATOR_C, SPACE_XS, TINT};
+use bifrost_app::kit::ui::{Weight, CARD_BG, DESTRUCTIVE, LABEL, LABEL_2, MAC_FOOTNOTE_PT, SEGMENT_ON, SEPARATOR_C, SPACE_XS, TINT, accent_now};
 use bifrost_app::kit::{Surface, Ui};
 use bifrost_app::proto::{CHORD_ALT, CHORD_CTRL, CHORD_META};
 use bifrost_app::webview::{WebProcessPool, WebViewEvent, WebViewId};
@@ -696,7 +696,7 @@ impl Inspector {
         }
         let Some(i) = &sel.info else { return Vec::new() };
         let head = format!("{}  {}", pagetools::selector_of(i), pagetools::box_text(i));
-        let mut rows = vec![Row { cells: vec![cell(head, TINT)], copy: pagetools::selector_of(i), toggle: None, select: None }];
+        let mut rows = vec![Row { cells: vec![cell(head, accent_now())], copy: pagetools::selector_of(i), toggle: None, select: None }];
         for (k, v) in i.attrs.iter().take(MAX_ATTR_ROWS) {
             rows.push(Row { cells: vec![cell(format!("   {k} = \"{v}\""), LABEL_2.now())], copy: v.clone(), toggle: Some(devtools::attr_id(k)), select: None });
         }
@@ -1381,7 +1381,7 @@ fn draw_cells(s: &mut Surface, ui: &Ui, row: &Row, list: Rect, cy: f32, top: f32
                 if x >= end || t.is_empty() {
                     continue;
                 }
-                let color = if c.color == TINT { TINT } else { elements::run_color(k) };
+                let color = if c.color == accent_now() { c.color } else { elements::run_color(k) };
                 let t = ui.fit(t, MAC_FOOTNOTE_PT, (end - x).max(8.0));
                 let img = ui.text(&t, MAC_FOOTNOTE_PT, Weight::Regular, color);
                 s.blit(&img, x as i32, ui.pt(cy) as i32 - img.h as i32 / 2, 255, 255);

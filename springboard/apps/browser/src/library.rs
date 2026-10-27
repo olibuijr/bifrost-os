@@ -4,7 +4,7 @@
 //! `store.rs`; this module only holds view state, layout, drawing and the pure row building (unit tested).
 use bifrost_app::controls::prefs_layout::m;
 use bifrost_app::controls::{Command, Rect, TextField};
-use bifrost_app::kit::ui::{Weight, CAPSULE_SHADOW, CARD_BG, DESTRUCTIVE, FIELD_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, ROW_PRESSED, SEGMENT_ON, SEPARATOR_C, TINT, WHITE};
+use bifrost_app::kit::ui::{Weight, CAPSULE_SHADOW, CARD_BG, DESTRUCTIVE, FIELD_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, ROW_PRESSED, SEGMENT_ON, SEPARATOR_C, TINT, WHITE, accent_now};
 use bifrost_app::kit::{Surface, Ui};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::controls::bookmark_import;
@@ -614,7 +614,7 @@ impl Library {
                 Row::Item { url, title } => {
                     let on = self.sel == Some(i);
                     if on {
-                        s.fill_rrect(ui.pt(g.list.x + 6.0), ui.pt(y + 1.0), ui.pt(g.list.w - 12.0), ui.pt(ROW_PT - 2.0), ui.pt(m::SELECTION_RADIUS), TINT);
+                        s.fill_rrect(ui.pt(g.list.x + 6.0), ui.pt(y + 1.0), ui.pt(g.list.w - 12.0), ui.pt(ROW_PT - 2.0), ui.pt(m::SELECTION_RADIUS), accent_now());
                     }
                     let (c1, c2) = if on { (WHITE, WHITE) } else { (LABEL.now(), LABEL_2.now()) };
                     let sub = host(url);

@@ -2,7 +2,7 @@
 //! file), the Storage tab (localStorage, sessionStorage, document.cookie), the computed Styles of the selected
 //! node, and the page scripts that edit attributes, text and storage entries. Everything here is pure (strings in,
 //! rows or scripts out); `inspector.rs` owns the requests and the input.
-use bifrost_app::kit::ui::{LABEL, LABEL_2, TINT};
+use bifrost_app::kit::ui::{LABEL, LABEL_2, accent_now};
 use bifrost_core::json::{self, Json};
 
 use crate::control::{js_str, Cell, Row};
@@ -321,7 +321,7 @@ pub fn source_rows(src: &Source, query: &str) -> Vec<Row> {
         rows.push(Row {
             cells: vec![
                 Cell { x: 4.0, w: -GUTTER_PT, text: (i + 1).to_string(), color: LABEL_2.now() },
-                Cell { x: 4.0 + GUTTER_PT + 8.0, w: 4000.0, text: elements::encode(line.clone()), color: if hit { TINT } else { LABEL.now() } },
+                Cell { x: 4.0 + GUTTER_PT + 8.0, w: 4000.0, text: elements::encode(line.clone()), color: if hit { accent_now() } else { LABEL.now() } },
             ],
             copy: src.plain[i].clone(),
             toggle: None,
@@ -427,8 +427,8 @@ pub fn storage_rows(entries: &[Entry], query: &str, selected: Option<&str>, widt
             let key_w = (width * 0.3).clamp(80.0, 240.0);
             rows.push(Row {
                 cells: vec![
-                    Cell { x: 22.0, w: key_w - 12.0, text: e.key.clone(), color: if on { TINT } else { LABEL.now() } },
-                    Cell { x: 22.0 + key_w, w: (width - key_w - 32.0).max(40.0), text: e.value.replace('\n', " "), color: if on { TINT } else { LABEL_2.now() } },
+                    Cell { x: 22.0, w: key_w - 12.0, text: e.key.clone(), color: if on { accent_now() } else { LABEL.now() } },
+                    Cell { x: 22.0 + key_w, w: (width - key_w - 32.0).max(40.0), text: e.value.replace('\n', " "), color: if on { accent_now() } else { LABEL_2.now() } },
                 ],
                 copy: e.value.clone(),
                 toggle: None,
