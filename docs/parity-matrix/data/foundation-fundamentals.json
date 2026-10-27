@@ -88,7 +88,7 @@
   "gaps": [
     "Regular expression and natural-language text analysis API",
     "Non-Gregorian week/era arithmetic beyond the supported components",
-    "Progress tree (ProgressManager, Subprogress)",
+    "ProgressManager, ProgressReporter and Subprogress: the Progress tree itself is exposed as bifrost_app::progress, but the newer manager types have no counterpart",
     "NSNumber and value wrappers, key-value coding and a serialisation trait for the value types. IndexSet, OrderedSet, CountedSet, Decimal and Uuid are built",
     "More unit dimensions. ISO 8601 and DateComponents formatters exist (springboard/sdk/src/formatters)"
   ]
