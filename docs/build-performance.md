@@ -166,3 +166,14 @@ These run the same drawing code as the shell, but on the host CPU, not on the la
 prove the Midget frame time: check the device numbers with `tools/bench.py --midget --graphics`.
 The budget is a ceiling, not a tuned target. Lower `FRAME_BUDGET_MS` only after a measured run shows headroom; never
 raise it to make a regression pass.
+
+## Disk hygiene
+
+`springboard/target` once reached 1.3 TB (fast/incremental 645 GB, debug 428 GB) and filled `/home`. The lead flow uses
+the `fast` profile only, so `tools/lead-run.sh` now runs `tools/target-prune.sh` after every command: incremental
+sessions older than 2 days go, `debug/incremental` always goes, and `debug/` goes once it is over 30 GB (plain
+`cargo test` without `--profile fast` is the only thing that fills it). It prints the target size and warns above
+300 GB. `lead-run.sh` also prints a loud banner before and after a run when `/home` is over 85% used. Finished
+worktrees under `.claude/worktrees` are removed with `tools/worktree-prune.sh --apply` (dry run by default; a clean
+worktree whose HEAD is in `main` or `integration` is removable). Limits: `LEAD_INCR_DAYS`, `LEAD_DEBUG_MAX_GB`,
+`LEAD_TARGET_WARN_GB`, `LEAD_DISK_WARN`.
