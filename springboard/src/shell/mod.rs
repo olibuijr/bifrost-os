@@ -225,6 +225,7 @@ pub mod splitview;
 pub mod stage_strip;
 mod desk;
 mod desk_occlusion;
+pub mod displays;
 pub mod window_fx;
 /// Picture in Picture placement and the automatic start gated by the Settings toggle.
 pub mod pip;

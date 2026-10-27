@@ -70,8 +70,8 @@ accounts for the menu bar in the compositor's already reduced arrangement area.
 
 Window geometry and the screens service now reserve the selected edge. Filled
 windows follow changes to Dock size, position and auto-hide; other windows keep
-their chosen sizes. This extends the one-display visible-frame behavior; it does
-not close the SDK's multi-display gap.
+their chosen sizes. This extends the one-display visible-frame behavior. The multi-display
+model is described under "Several displays" below.
 
 ## Validation
 
@@ -156,3 +156,19 @@ The external parity database connector is unavailable in this session. The
 updated export is retained in `out/dock-2026-10-23/followup-parity-db/`; no database
 publication is claimed. The row remains partial because multi-display support
 is still incomplete. These checks do not establish full reference-OS parity.
+
+## Several displays
+
+The Dock, like the menu bar, lives on one display: the main one. Every other display has its whole frame as its
+visible frame, with no Dock or menu bar reservation (the shell draws one menu bar, so separate per-display bars are not
+modelled). `shell/displays.rs` holds the `Arrangement` (outputs in the shell's pixel space plus the main index) and
+`Shell::set_outputs` takes it from the backend. Zoom (Fill), tiling, edge snapping, full screen, restoring a placed
+window and the Dock-change reflow of filled windows use the visible frame of the display the window is on (the one
+showing most of it); dragging a window may cross onto another display. The `screens` service and `bifrost_app::screens`
+list every output with its own frame and visible frame, and the main flag marks the Dock's display. New windows still
+open on the main display. One display (or none reported) behaves as before.
+
+Tests: `shell::displays::tests` (two fake outputs: visible frames per Dock edge, display choice, zoom, tile, full
+screen, restore, drag) and `services::screens::tests` (two-output list). Not done: the backend still binds the first
+`wl_output` only, so nothing calls `set_outputs` on hardware yet; drawing the desktop on a second output needs a
+surface per output. Midget has one display, so this is host-tested only.

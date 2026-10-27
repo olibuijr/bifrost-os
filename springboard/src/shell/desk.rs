@@ -266,7 +266,7 @@ pub struct Win {
     /// full screen: the window is in its own space over the whole screen, with no menu bar, Dock or title bar
     pub full: bool,
     /// the rectangle to go back to when un-maximized or left full screen
-    restore: Rect,
+    pub(super) restore: Rect,
     /// an extra window whose app asked for full-size content (`window_flags::FULL_SIZE`, kept in its app host's window
     /// table): it has no shell title row and draws its own, as a second document window of an editor does (E2E9 4)
     pub full_size: bool,
@@ -393,6 +393,8 @@ pub struct Desk {
     pub(super) intent_check: bool,
     /// back to front; the floating windows (`floating`) are the last ones
     pub wins: Vec<Win>,
+    /// the displays the desktop spans; with fewer than two, every window uses `Desk::area` of the one screen
+    pub(super) displays: super::displays::Arrangement,
     /// the apps whose windows float (their host asked for `ToShell::WindowLevel`), as of the last `sync_levels`
     pub(super) floating: Vec<AppId>,
     /// the extra windows collapsed to their title bars, with the height each had before it collapsed
@@ -1403,6 +1405,12 @@ impl Desk {
         Rect { x: m.dock_left, y: m.menubar, w: (m.w - m.dock_left - m.dock_right).max(1), h: (m.h - m.menubar - m.dock_bottom).max(1) }
     }
 
+    /// The visible frame of the display `r` is on: the work area on the main display (below the menu bar, inside the
+    /// Dock's edge), the whole frame on any other. One display is `Self::area`.
+    pub fn area_for(&self, m: &Metrics, r: Rect) -> Rect {
+        if self.displays.is_multi() { self.displays.visible_for(r, m) } else { Self::area(m) }
+    }
+
     /// Opens (or raises) the window for `app`; `size` is the wanted outer size.
     pub fn open(&mut self, m: &Metrics, app: AppId, size: (i32, i32)) -> usize {
         self.windowless_front.set(None);
@@ -1442,7 +1450,7 @@ impl Desk {
     /// Puts window `i` at `r` (a restored frame): the size is held inside the app's limits and the work area, the
     /// position inside the work area. The window is no longer zoomed, and `r` is what un-zooming goes back to.
     pub fn place(&mut self, m: &Metrics, i: usize, r: Rect) {
-        let a = Self::area(m);
+        let a = self.area_for(m, r);
         let (min_w, min_h, max_w, max_h) = size_range(self.wins[i].app, m);
         let w = r.w.clamp(min_w, max_w).min(a.w).max(1);
         let h = r.h.clamp(min_h, max_h).min(a.h).max(1);
@@ -1470,7 +1478,7 @@ impl Desk {
     /// changed.
     pub fn set_content_size(&mut self, m: &Metrics, i: usize, size: (f32, f32)) -> bool {
         let Some(win) = self.wins.get(i).copied() else { return false };
-        let a = Self::area(m);
+        let a = self.area_for(m, win.r);
         let (w, h) = outer_px(win.app, m, size);
         let (w, h) = if size_limits(win.app).fixed {
             (w, h)
@@ -1501,6 +1509,8 @@ impl Desk {
     /// Enters (`on`) or leaves full screen for window `i`. The window keeps the size it had to go back to. A
     /// fixed-size window does not go full screen; returns whether the window changed state.
     pub fn set_full_screen(&mut self, m: &Metrics, i: usize, on: bool) -> bool {
+        let (screen, area) = (self.displays.frame_for(self.wins[i].r, m), self.area_for(m, self.wins[i].r));
+        let screen = if self.displays.is_multi() { screen } else { Self::screen_rect(m) };
         let w = &mut self.wins[i];
         if size_limits(w.app).fixed || w.full == on {
             return false;
@@ -1514,11 +1524,11 @@ impl Desk {
             } else {
                 w.restore = w.r;
             }
-            w.r = Self::screen_rect(m);
+            w.r = screen;
             w.maximized = false;
         } else if let Some(k) = self.full_from_zoom.iter().position(|a| *a == w.app) {
             self.full_from_zoom.remove(k);
-            w.r = Self::area(m);
+            w.r = area;
             w.maximized = true;
         } else {
             w.r = w.restore;
@@ -1555,7 +1565,7 @@ impl Desk {
     }
 
     pub fn toggle_zoom(&mut self, m: &Metrics, i: usize) {
-        let a = Self::area(m);
+        let a = self.area_for(m, self.wins[i].r);
         let w = &mut self.wins[i];
         if size_limits(w.app).fixed || w.full {
             return; // a fixed-size window does not zoom (its green button is disabled on Golden Gate)
@@ -1572,7 +1582,7 @@ impl Desk {
 
     /// Places window `i` on `tile` of the work area; the rectangle it had is kept for "Return to Previous Size".
     pub fn tile(&mut self, m: &Metrics, i: usize, tile: Tile) {
-        let a = Self::area(m);
+        let a = self.area_for(m, self.wins[i].r);
         let w = &mut self.wins[i];
         if size_limits(w.app).fixed {
             return;
@@ -1681,6 +1691,16 @@ impl Desk {
         let w = &mut self.wins[i];
         w.maximized = false;
         let keep = m.title * 2;
+        if self.displays.is_multi() {
+            // the desktop is every display: the window may cross onto another, and its top is held inside the display
+            // most of it lands on (under the menu bar on the main one, which alone has it)
+            let at = Rect { x, y, w: w.r.w, h: w.r.h };
+            let (b, k) = (self.displays.bounds().unwrap_or(Rect { x: 0, y: 0, w: m.w, h: m.h }), self.displays.index_for(at));
+            let (f, top) = (self.displays.frame(k, m), if k == self.displays.main_index() { m.menubar } else { 0 });
+            w.r.x = x.clamp(b.x + keep - w.r.w, (b.x + b.w - keep).max(b.x + keep - w.r.w));
+            w.r.y = y.clamp(f.y + top, (f.y + f.h - m.title).max(f.y + top));
+            return;
+        }
         w.r.x = x.clamp(keep - w.r.w, m.w - keep);
         w.r.y = y.clamp(m.menubar, (m.h - m.title).max(m.menubar));
     }
@@ -3925,7 +3945,7 @@ impl Shell {
                     Some(Grab::Move { app: moved, .. }) => {
                         // a title bar dropped on a screen edge or corner tiles the window there (snap_zone)
                         let band = self.ui.pt(8.).round() as i32;
-                        if let (Some(tile), Some(i)) = (snap_zone(Desk::area(&m), x as i32, y as i32, band), self.desk.as_ref()?.index_of(moved)) {
+                        if let (Some(tile), Some(i)) = (snap_zone(self.desk.as_ref()?.area_for(&m, Rect { x: x as i32, y: y as i32, w: 1, h: 1 }), x as i32, y as i32, band), self.desk.as_ref()?.index_of(moved)) {
                             if let Some(d) = self.desk.as_mut() { d.tile(&m, i, tile); }
                             self.desk_layout(i);
                             self.desk_frame_changed(i);
