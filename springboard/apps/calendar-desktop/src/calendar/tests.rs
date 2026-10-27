@@ -1015,6 +1015,22 @@ fn copy_in_the_editor_takes_the_open_event_and_text_commands_go_to_the_field() {
 }
 
 #[test]
+fn cmd_a_in_the_editor_selects_the_title_so_typing_replaces_it() {
+    use bifrost_app::proto::CHORD_META;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.events = vec![event(1, "BTest meeting")];
+    c.open(&ui, Some(1));
+    c.activate(&ui, Target::Title, 0.0);
+    // the shell sends Cmd+A as the chord when the app reports no selectable field (the main window's commands)
+    assert!(c.chord(&ui, 30, CHORD_META, 0.0), "Cmd+A selects the focused field's text");
+    assert_eq!(c.fields[0].selection(), (0, 13));
+    c.key(&ui, Out::Text("BTest renamed".into()), 1.0);
+    assert_eq!(c.fields[0].text(), "BTest renamed", "typing replaces the selected title");
+}
+
+#[test]
 fn go_to_date_steps_and_accepts_the_chosen_day() {
     let temp = Temp::new();
     let ui = crate::test_ui();

@@ -1128,6 +1128,15 @@ impl Calendar {
     /// Month and Year. Not while an event is open. False when unused here.
     pub fn chord(&mut self, ui: &Ui, key: u32, mods: u32, t: f64) -> bool {
         use bifrost_app::proto::{CHORD_ALT, CHORD_CTRL, CHORD_META, CHORD_SHIFT};
+        // Cmd+A with a field of the editor focused selects its text. The shell sends the chord rather than the Edit command
+        // when the app reports no field to select, and the app's `commands` describes the main window, not an editor window.
+        if self.editor.is_some() && key == 30 && mods & CHORD_META != 0 && mods & CHORD_ALT == 0 {
+            if let Some(i) = self.focused() {
+                self.fields[i].edit(ui, &Out::Named("SelectAll"), t);
+                self.dirty = true;
+                return true;
+            }
+        }
         if mods & (CHORD_CTRL | CHORD_META) == 0 || mods & CHORD_ALT != 0 || self.editor.is_some() || self.sheet_open() || self.event_pop.is_some() {
             return false;
         }
