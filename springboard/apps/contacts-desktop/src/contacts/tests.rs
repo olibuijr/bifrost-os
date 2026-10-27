@@ -1192,3 +1192,10 @@ fn sidebar_labels_fit_without_truncation() {
     }
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }
+
+#[test]
+fn the_list_count_is_singular_for_one_contact() {
+    assert_eq!(count_label(0), "0 Contacts");
+    assert_eq!(count_label(1), "1 Contact");
+    assert_eq!(count_label(2), "2 Contacts");
+}

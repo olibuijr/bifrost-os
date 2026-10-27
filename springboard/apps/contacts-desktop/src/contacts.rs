@@ -30,6 +30,11 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use crate::archive;
+/// The list footer: "1 Contact", otherwise "N Contacts". The reference extract carries no localized string for this
+/// count, so the plain singular and plural forms are used.
+fn count_label(n: usize) -> String {
+    if n == 1 { "1 Contact".to_string() } else { format!("{n} Contacts") }
+}
 use crate::details::{self, CardDetails, Detail, Details};
 use crate::display_file::{self, Prefs};
 use crate::dupes;
@@ -3898,7 +3903,7 @@ impl Contacts {
             }
         }
         // the list's own band above the rows, so scrolled rows never show under the search field
-        let count = format!("{} Contacts", self.contacts.len());
+        let count = count_label(self.contacts.len());
         self.centre_text(s, ui, &count, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), x0 + self.list_w() / 2.0, (bottom + self.h) / 2.0);
         if self.renaming.is_some() {
             widgets::search_field(s, ui, &self.rename, self.search_rect(), "Group Name", self.focus == Some(RENAME));
