@@ -560,6 +560,7 @@ impl DateFormatter {
                 'm' => out.push_str(&two(c.mi)),
                 's' => out.push_str(&two(c.s)),
                 'z' => out.push_str(&match &self.time_zone {
+                    Some(z) if n >= 4 => z.long_name(Date(unix as f64)).unwrap_or_else(|| gmt_offset(offset)),
                     Some(z) => z.abbreviation(Date(unix as f64)),
                     None => gmt_offset(offset),
                 }),
@@ -926,6 +927,32 @@ mod tests {
         assert_eq!(f.string(jan), "13:00 +0100 +01:00 CET");
         f.set_time_zone(None);
         assert_eq!(f.string(jan), "14:00 +0200 +02:00 GMT+02:00");
+    }
+
+    #[test]
+    fn long_zone_name_follows_daylight_saving() {
+        let (jan, jul) = (1768478400, 1784116800); // 2026-01-15 and 2026-07-15, 12:00 UTC
+        let mut f = DateFormatter::new(en());
+        f.set_date_format("zzzz");
+        f.set_time_zone(Some(TimeZone::utc()));
+        assert_eq!(f.string(jan), "Coordinated Universal Time");
+        let london = TimeZone::from_posix_rule("Europe/London", "GMT0BST,M3.5.0/1,M10.5.0").unwrap();
+        f.set_time_zone(Some(london));
+        assert_eq!(f.string(jan), "Greenwich Mean Time");
+        assert_eq!(f.string(jul), "British Summer Time");
+        let ny = TimeZone::from_posix_rule("America/New_York", "EST5EDT,M3.2.0,M11.1.0").unwrap();
+        f.set_time_zone(Some(ny));
+        assert_eq!(f.string(jan), "Eastern Standard Time");
+        assert_eq!(f.string(jul), "Eastern Daylight Time");
+        f.set_date_format("z zzz zzzz");
+        assert_eq!(f.string(jul), "EDT EDT Eastern Daylight Time");
+        // an abbreviation without a long name, and no zone at all, fall back to the GMT form
+        let odd = TimeZone::from_posix_rule("Odd", "XYZ-3").unwrap();
+        f.set_time_zone(Some(odd));
+        f.set_date_format("zzzz");
+        assert_eq!(f.string(jan), "GMT+03:00");
+        f.set_time_zone(None);
+        assert_eq!(f.string(jan), "GMT");
     }
 
     #[test]
