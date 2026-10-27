@@ -7128,3 +7128,13 @@ slider; apps that want the reference behaviour use `temperature_and_tint`.
 Remaining gaps: PDF417 and Aztec generators (the reference ships both; their encoders are large and left for a later round);
 everything is CPU only; the composite and blend formulas work on stored sRGB codes, not the reference's linear working space; no
 shell compositor operator is selectable.
+
+### Sun and moon events (`bifrost_app::sun_moon`)
+
+`SunEvents::new(lat, lon, y, m, d)` returns astronomical, nautical and civil dawn and dusk, sunrise, sunset, solar
+noon and solar midnight as `coding::Date` (the dawn, dusk, sunrise and sunset fields are `None` in polar day or night,
+or when the sun never reaches that depression). It uses the NOAA solar position algorithm with depression angles of 18,
+12, 6 and 0.833 degrees; the day is the mean solar day of the longitude. `MoonPhase` has the eight WeatherKit cases and
+`symbol_name()`; `MoonEvents` gives the phase plus moonrise and moonset. The moon is a mean synodic-month model from a
+known new moon, so phase can be off by hours and rise and set by about an hour: an ephemeris would match Apple more
+closely and is not built. The model is offline and not yet wired into the Weather app.
