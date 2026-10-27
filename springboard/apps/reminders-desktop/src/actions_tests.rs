@@ -1469,6 +1469,7 @@ fn recently_deleted_deletes_permanently_and_deletes_all_after_asking() {
     assert_eq!(app.kept_count, 1);
 
     // the toolbar's "..." shows the same menu; Delete All empties the page
+    assert!(app.controls(&ui).iter().any(|n| n.label == "Recently Deleted Actions"), "the page's ... button is named for it");
     app.activate(&ui, Target::ListMenu(0.0, 0.0), 70.0);
     let (_, _, items) = app.take_menu_request().expect("the page's menu");
     assert!(items.iter().any(|i| i.id == purge::CTX_PURGE_ALL && i.enabled));
