@@ -279,12 +279,14 @@ pub(crate) fn deliver_window<A: crate::App>(app: &mut A, ctx: &crate::Ctx, msg: 
                 None => false,
             }
         }
-        ToApp::WindowTouch { id, touch, kind, x, y, t_ms, mods } => {
+        ToApp::WindowTouch { id, touch, kind, x, y, t_ms, source, mods } => {
             let routed = ctx.windows.borrow().route(WindowId(*id));
             match routed {
                 Some(window) => {
                     let t = crate::runtime::event_time(now, *t_ms);
-                    app.window_event(ctx, window, crate::Input::Touch { kind: *kind, id: *touch, x: *x, y: *y, t, mods: *mods })
+                    let input = crate::Input::Touch { kind: *kind, id: *touch, x: *x, y: *y, t, source: *source, mods: *mods };
+                    input.note_source();
+                    app.window_event(ctx, window, input)
                 }
                 None => false,
             }
@@ -339,7 +341,7 @@ pub fn is_close_window_key(key: &crate::proto::KeyInput) -> bool {
 /// so a click lands under the pointer at every display scale. Any other input is returned as it is.
 pub fn window_touch_in_px(ev: crate::Input, px_per_pt: f32) -> crate::Input {
     match ev {
-        crate::Input::Touch { kind, id, x, y, t, mods } => crate::Input::Touch { kind, id, x: x * px_per_pt, y: y * px_per_pt, t, mods },
+        crate::Input::Touch { kind, id, x, y, t, source, mods } => crate::Input::Touch { kind, id, x: x * px_per_pt, y: y * px_per_pt, t, source, mods },
         other => other,
     }
 }
@@ -370,16 +372,32 @@ mod tests {
     fn a_window_touch_in_points_becomes_px_at_the_display_scale_and_other_input_is_kept() {
         use crate::proto::{ModifierFlags, TouchKind};
         let k = 1200.0 / 768.0; // Midget's 1.5625
-        let ev = crate::Input::Touch { kind: TouchKind::Down, id: 3, x: 100.0, y: 40.0, t: 7.0, mods: ModifierFlags::SHIFT };
+        let ev = crate::Input::Touch { kind: TouchKind::Down, id: 3, x: 100.0, y: 40.0, t: 7.0, source: crate::proto::TouchSource::Pointer, mods: ModifierFlags::SHIFT };
         match window_touch_in_px(ev, k) {
-            crate::Input::Touch { kind, id, x, y, t, mods } => {
+            crate::Input::Touch { kind, id, x, y, t, source, mods } => {
                 assert_eq!((kind, id, t, mods), (TouchKind::Down, 3, 7.0, ModifierFlags::SHIFT));
+                assert_eq!(source, crate::proto::TouchSource::Pointer);
                 assert_eq!((x, y), (156.25, 62.5));
             }
             _ => panic!("still a touch"),
         }
         assert!(matches!(window_touch_in_px(crate::Input::Activate(9), k), crate::Input::Activate(9)));
         assert!(matches!(window_touch_in_px(crate::Input::Context { x: 2.0, y: 2.0 }, k), crate::Input::Context { x, y } if x == 2.0 && y == 2.0));
+    }
+
+    #[test]
+    fn a_window_touch_tells_the_kit_what_produced_it_before_the_app_sees_it() {
+        use crate::proto::TouchSource;
+        let ctx = crate::runtime::test_ctx();
+        let mut app = Fake::default();
+        let id = ctx.open_window(WindowSpec::new("Ada", 480.0, 560.0)).unwrap();
+        for source in [TouchSource::Pointer, TouchSource::Finger] {
+            let touch = ToApp::WindowTouch { id: id.0, touch: 7, kind: TouchKind::Down, x: 1.0, y: 2.0, t_ms: 0, source, mods: crate::proto::ModifierFlags::EMPTY };
+            bifrost_ui::pan::set_source(if source == TouchSource::Pointer { TouchSource::Finger } else { TouchSource::Pointer });
+            assert_eq!(deliver_window(&mut app, &ctx, &touch, 0.0), Some(true));
+            assert_eq!(bifrost_ui::pan::source(), source);
+        }
+        bifrost_ui::pan::set_source(TouchSource::Finger);
     }
 
     #[test]
@@ -783,7 +801,7 @@ mod tests {
     }
 
     fn touch_down(id: u32) -> ToApp {
-        ToApp::WindowTouch { id, touch: 7, kind: TouchKind::Down, x: 1.0, y: 2.0, t_ms: 0, mods: crate::proto::ModifierFlags::EMPTY }
+        ToApp::WindowTouch { id, touch: 7, kind: TouchKind::Down, x: 1.0, y: 2.0, t_ms: 0, source: crate::proto::TouchSource::Finger, mods: crate::proto::ModifierFlags::EMPTY }
     }
 
     #[test]
@@ -809,7 +827,7 @@ mod tests {
         let mut app = Fake::default();
         let id = ctx.open_window(WindowSpec::new("Ada", 480.0, 560.0)).unwrap();
         let mods = crate::proto::ModifierFlags::SHIFT | crate::proto::ModifierFlags::COMMAND;
-        let touch = ToApp::WindowTouch { id: id.0, touch: 7, kind: TouchKind::Down, x: 1.0, y: 2.0, t_ms: 0, mods };
+        let touch = ToApp::WindowTouch { id: id.0, touch: 7, kind: TouchKind::Down, x: 1.0, y: 2.0, t_ms: 0, source: crate::proto::TouchSource::Finger, mods };
         let wire = ToApp::decode(&touch.encode()).unwrap();
         assert_eq!(deliver_window(&mut app, &ctx, &wire, 0.0), Some(true));
         assert_eq!(app.log, vec![format!("touch 7 on 1 mods {:#x}", mods.bits())]);

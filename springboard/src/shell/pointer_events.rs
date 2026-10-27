@@ -86,13 +86,15 @@ impl Shell {
         }
         let Some((slot, window, lx, ly)) = self.ext_content_at(x, y) else { return false };
         let event = PointerEvent::Wheel { x: lx, y: ly, dx, dy, precise: false, phase: Phase::None, momentum: Phase::None };
-        if !self.send_pointer(slot, window, event) {
-            return false;
-        }
-        if let Some(Some(host)) = self.ext.get_mut(slot as usize) {
+        let pt = self.ui.pt(1.0) as f32;
+        let Some(Some(host)) = self.ext.get_mut(slot as usize) else { return false };
+        if host.pointer_window(window, for_window(event, window, pt)) {
             host.swallow_wheel_drag(t);
+            return true;
         }
-        true
+        // the app did not ask for the wheel: the drag emulated for the notch scrolls it, and it is not a mouse drag
+        host.keep_wheel_drag(t);
+        false
     }
 
     /// The wheel over the Settings window's content scrolls the list under it (`Settings::wheel`), and the drag emulated

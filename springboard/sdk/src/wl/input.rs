@@ -481,8 +481,10 @@ impl Seat {
     }
 
     fn touch(&mut self, kind: TouchKind, x: f32, y: f32, t: f64) {
-        // a press carries the modifiers held at the time, as the shell's touches do (the reference event modifier flags)
-        self.out.push(Input::Touch { kind, id: 0, x, y, t, mods: self.mods.flags() });
+        // the direct path takes no touchscreen, so every press is the pointer's; the kit reads it at the press. A press
+        // carries the modifiers held at the time, as the shell's touches do (the reference event modifier flags).
+        bifrost_ui::pan::set_source(crate::proto::TouchSource::Pointer);
+        self.out.push(Input::Touch { kind, id: 0, x, y, t, source: crate::proto::TouchSource::Pointer, mods: self.mods.flags() });
     }
 }
 

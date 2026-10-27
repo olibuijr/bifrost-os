@@ -895,6 +895,8 @@ pub struct Shell {
     osk_pinned: bool,
     /// the touchscreen fingers that are down, so the pointer stream does not report them twice (`touch_frames`)
     touch_contacts: touch_frames::Contacts,
+    /// what produced the plain touch an external app is getting now (`touch_frames::plain_source`)
+    touch_source: bifrost_proto::TouchSource,
     /// the modifier keys the hardware keyboard holds now (`HwKeys::modifier_flags`), set on every key event; each press
     /// forwarded to an external app carries them (`ToApp::Touch::mods`, the reference event modifier flags)
     key_mods: bifrost_proto::ModifierFlags,
@@ -1378,6 +1380,7 @@ impl Shell {
             hw_keyboard: false,
             osk_pinned: false,
             touch_contacts: touch_frames::Contacts::default(),
+            touch_source: bifrost_proto::TouchSource::default(),
             key_mods: bifrost_proto::ModifierFlags::EMPTY,
             key_reset: false,
             im: Default::default(),
@@ -3859,7 +3862,11 @@ impl Shell {
             if host.swallows_touch(t) {
                 return;
             }
-            host.touch_window(id, 1, kind, x / k, y / k, t as u32, self.key_mods);
+            // a mouse press or a finger (`touch_frames::plain_source`); the drag emulated for a wheel notch the app did not
+            // take is a scroll and counts as a finger's, so it pans on a desktop too
+            let source = if host.pans_touch(t) { bifrost_proto::TouchSource::Finger } else { touch_frames::plain_source(kind, &self.touch_contacts, self.touch_source) };
+            self.touch_source = source;
+            host.touch_window(id, 1, kind, x / k, y / k, t as u32, source, self.key_mods);
         }
     }
 

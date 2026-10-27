@@ -49,7 +49,7 @@ fn frames_touches_damage_and_exit() {
     // three touches in a row: each frame carries only its box, earlier boxes survive
     // the double-buffer swap (the SDK brings the stale buffer up to date)
     for (i, (x, y)) in [(3, 4), (20, 30), (50, 10)].into_iter().enumerate() {
-        h.touch(TouchKind::Down, 0, x as f32, y as f32, 0, bifrost_proto::ModifierFlags::EMPTY);
+        h.touch(TouchKind::Down, 0, x as f32, y as f32, 0, bifrost_proto::TouchSource::Finger, bifrost_proto::ModifierFlags::EMPTY);
         pump_until(&mut h, |_, frame| frame);
         let d = h.blit(&mut s, false);
         assert_eq!(d.areas().len(), 1, "touch {i}");
@@ -80,7 +80,7 @@ fn a_crash_is_reported_and_the_last_frame_stays() {
     let _ = springboard::shell::apphost::late_crashes();
     let mut h = spawn("apps-sdk-test-b");
     pump_until(&mut h, |_, frame| frame);
-    h.touch(TouchKind::Down, 0, -1.0, 0.0, 0, bifrost_proto::ModifierFlags::EMPTY);
+    h.touch(TouchKind::Down, 0, -1.0, 0.0, 0, bifrost_proto::TouchSource::Finger, bifrost_proto::ModifierFlags::EMPTY);
     pump_until(&mut h, |h, _| !h.running());
     let end = Instant::now() + Duration::from_secs(2);
     let mut code = match h.status() {

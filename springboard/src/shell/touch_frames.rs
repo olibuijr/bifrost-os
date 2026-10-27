@@ -10,7 +10,7 @@
 //! the samples and the clock.
 
 use crate::bare::input::TouchPhase;
-use bifrost_proto::TouchKind;
+use bifrost_proto::{TouchKind, TouchSource};
 use bifrost_ui::touch::{Raw, Sample, TouchType};
 
 /// The contact id of the pointer. Compositor and evdev contact ids are small, so this value never collides with one.
@@ -18,6 +18,17 @@ pub const POINTER_ID: u32 = u32::MAX;
 
 /// The contact id of a tap the shell synthesizes for an accessibility press (`ax press`). Not a finger.
 pub const SYNTHETIC_ID: u32 = u32::MAX - 1;
+
+/// What produced the plain touch of a pointer-stream event: a press made while a touchscreen finger is down is that
+/// finger's mirror (a finger); any other press is a mouse or trackpad (the pointer). The rest of the touch (moves, the
+/// release) keeps the source its press had, since the contact lifts before its mirror release arrives.
+pub fn plain_source(kind: TouchKind, contacts: &Contacts, held: TouchSource) -> TouchSource {
+    match kind {
+        TouchKind::Down if contacts.touching() => TouchSource::Finger,
+        TouchKind::Down => TouchSource::Pointer,
+        _ => held,
+    }
+}
 
 /// The tracker's raw kind of a contact phase.
 pub fn raw_of_phase(phase: TouchPhase) -> Raw {
@@ -136,6 +147,24 @@ mod tests {
         assert!(!c.touching());
         c.up(9); // an unknown contact is ignored
         assert!(!c.touching());
+    }
+
+    #[test]
+    fn a_press_is_a_finger_when_a_contact_is_down_and_the_pointer_otherwise_and_keeps_that_to_its_release() {
+        let mut c = Contacts::default();
+        let none = TouchSource::default();
+        // a mouse press, drag and release
+        let s = plain_source(TouchKind::Down, &c, none);
+        assert_eq!(s, TouchSource::Pointer);
+        assert_eq!(plain_source(TouchKind::Move, &c, s), TouchSource::Pointer);
+        assert_eq!(plain_source(TouchKind::Up, &c, s), TouchSource::Pointer);
+        // a finger: the contact is down before its pointer mirror, and up again before the mirror release
+        c.down(4);
+        let s = plain_source(TouchKind::Down, &c, s);
+        assert_eq!(s, TouchSource::Finger);
+        c.up(4);
+        assert_eq!(plain_source(TouchKind::Move, &c, s), TouchSource::Finger);
+        assert_eq!(plain_source(TouchKind::Up, &c, s), TouchSource::Finger);
     }
 
     #[test]
