@@ -582,6 +582,7 @@ pub mod maps;
 pub mod distributed;
 pub mod observable;
 pub mod observable_object;
+pub mod progress;
 /// Values computed from observable properties, recomputed only when something they read changed (`bifrost_ui::attribute_graph`).
 pub mod derived_state;
 /// Main-thread run loop timer queue (`RunLoop`): the non-`Send` scheduler that `debounce` and `throttle` use.
