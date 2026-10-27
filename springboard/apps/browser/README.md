@@ -13,7 +13,7 @@ Safari-style tab strip that appears only with two or more tabs. Pages render thr
 workspace member of an unmodified Servo v0.7.0 checkout:
 
 ```sh
-bifrost pc browser-engine 0.7.0-bifrost.15   # build (tools/build-webview-engine.sh), then pin engine.json and ENGINE
+bifrost pc browser-engine 0.7.0-bifrost.16   # build (tools/build-webview-engine.sh), then pin engine.json and ENGINE
 ```
 
 The command writes the archive's SHA-256 to `engine.json` and its first 12 hex digits to `ENGINE` (`src/main.rs`). `tools/pc-app.py` bundles the archive as `assets/servo.tar.gz`; the first launch unpacks it to
