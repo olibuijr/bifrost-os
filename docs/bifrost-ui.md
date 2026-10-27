@@ -6615,8 +6615,18 @@ the model is host-tested, but no shell or app drives it yet. Every row stays par
   stand-in tile. The shell crops it to a square and draws it on the Control Center media tile, the Now Playing detail, the menu
   bar extra and the lock card with their existing corner radii, and falls back to the glyph when none was published or it cannot
   be read (`services::now_playing::artwork_or_glyph`). Music sends the current song's cover (the Now Playing picture, else the
-  list thumbnail) and Voice Memos a waveform tile. Gaps against Apple: no `ArtworkProvider` callback with a requested size (the
-  app picks the size), no encoded-image (PNG or JPEG) artwork, no animated artwork, and not checked on Midget yet.
+  list thumbnail) and Voice Memos a waveform tile. Gaps against Apple: not checked on Midget yet.
+- **Encoded artwork and the sized provider**: `ArtworkImage::from_encoded(bytes)` (and `from_encoded_fit(bytes, side)`) decodes a PNG
+  or JPEG cover in the SDK with the render crate's image reader (no new dependency) and averages it down to `WIRE_SIDE_MAX`
+  (or `side`), keeping the aspect ratio and never enlarging. Other formats, bytes that do not decode and a picture over
+  `ENCODED_PIXELS_MAX` (25 million pixels, read from the header before any pixel is allocated) give `ArtworkError::Undecodable`, and
+  the session keeps its glyph. `ArtworkProvider` is the artwork-with-bounds-size request handler (`MPMediaItemArtwork`
+  `init(boundsSize:requestHandler:)`): the app registers a closure from the requested `ArtworkSize` to an `ArtworkSource`
+  (`Pixels` or `Encoded`), and `now_playing::publish_with_provider` asks it for the size the shell needs, `SHELL_COVER_POINTS`
+  (64 pt) times the display scale, at most `WIRE_SIDE_MAX` since the publish carries no more (`ArtworkProvider::request_side`). A
+  provider with nothing for that size publishes without a cover. Music decodes the encoded picture embedded in the album's tags
+  (`nowplay::embedded_cover`) and falls back to its cached thumbnail when the album has none or it will not decode. Animated
+  artwork exists only on the reference's tablet and phone platform: not applicable on the desktop, so it is not offered.
 - **Remote routing (`bifrost_app::remote_routing`)**: `action_for(command)` maps a shell command to a `RemoteAction` (skips map to none,
   since they use `SkipIntervalCommand`), `media_key(name)` maps hardware media keys, and `route(center, command)` passes the command to
   the app's `CommandCenter`. A switched-off or unhandled action is refused. No caller found.

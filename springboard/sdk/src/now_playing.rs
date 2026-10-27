@@ -16,6 +16,15 @@
 //! field, and the media tile, the Now Playing detail, the menu bar extra and the lock card draw them in place of the
 //! glyph. A session without artwork, or with an `artwork` the shell cannot read, keeps the glyph.
 //!
+//! Encoded artwork: an app that has its cover as PNG or JPEG bytes (embedded album art) passes them to
+//! [`ArtworkImage::from_encoded`], which decodes and averages them down to the cap before anything is sent; a file
+//! that is not a readable PNG or JPEG gives an error and the session keeps the glyph.
+//!
+//! Sized provider: [`ArtworkProvider`] holds a closure that returns the cover (pixels or encoded bytes) for a requested
+//! size. [`publish_with_provider`] asks it for the size the shell needs at the display scale and publishes the result;
+//! a provider with nothing for that size publishes without a cover. Animated artwork exists only on the reference's
+//! tablet and phone platform and is not offered.
+//!
 //! The models are `bifrost_ui::media_session`, `bifrost_ui::media_content` and `bifrost_ui::media_artwork`. The shell side
 //! is `springboard/src/shell/services/now_playing.rs`.
 
@@ -23,7 +32,10 @@ use crate::runtime::Ctx;
 use crate::service;
 use bifrost_core::json::Json;
 
-pub use bifrost_ui::media_artwork::{aspect_fit, request_pixels, Artwork, ArtworkError, ArtworkImage, ArtworkSize, MAX_SIDE, WIRE_SIDE_MAX};
+pub use bifrost_ui::media_artwork::{
+    aspect_fit, encoded_format, request_pixels, Artwork, ArtworkError, ArtworkImage, ArtworkProvider, ArtworkSize, ArtworkSource, ENCODED_PIXELS_MAX,
+    MAX_SIDE, SHELL_COVER_POINTS, WIRE_SIDE_MAX,
+};
 pub use bifrost_ui::media_content::{ContentKind, MediaContent, MediaDuration, MediaType};
 pub use bifrost_ui::media_session::{
     CommandState, MediaPlaybackSnapshot, MediaSession, MediaSessionError, PlaybackState, RemoteCommand,
@@ -233,6 +245,20 @@ pub fn publish_with_artwork(ctx: &Ctx, session: &MediaSession, queue: &[QueueEnt
     Some(service::call(ctx, SERVICE, "publish", &body))
 }
 
+/// The cover a provider supplies at the shell's size for a display `scale` (pixels per point, 2.0 on a 2x display). A
+/// provider with nothing for that size, or bytes that do not decode, gives `None`, so the shell keeps its glyph.
+pub fn provided_artwork(provider: &ArtworkProvider, scale: f32) -> Option<ArtworkImage> {
+    let percent = if scale.is_finite() && scale > 0.0 { (scale * 100.0).round() as u32 } else { 100 };
+    provider.image_for(percent).ok()
+}
+
+/// Publishes the session with its Up Next queue and the cover its provider supplies at the size the shell needs.
+/// Returns the request id, or `None` when the session has no content.
+pub fn publish_with_provider(ctx: &Ctx, session: &MediaSession, queue: &[QueueEntry], provider: &ArtworkProvider) -> Option<u32> {
+    let artwork = provided_artwork(provider, ctx.cfg.scale);
+    publish_with_artwork(ctx, session, queue, artwork.as_ref())
+}
+
 /// Withdraws the app's session from Control Center. Returns the request id.
 pub fn clear(ctx: &Ctx) -> u32 {
     service::call(ctx, SERVICE, "clear", &Json::Null)
@@ -324,6 +350,42 @@ mod tests {
         let Json::Obj(fields) = &again else { panic!("an object") };
         assert_eq!(fields.iter().filter(|(k, _)| k == "artwork").count(), 1, "a second call replaces the first");
         assert_eq!(with_artwork(Json::Null, Some(&art)), Json::Null);
+    }
+
+    #[test]
+    fn a_provider_is_asked_at_the_display_scale_and_publishes_as_wire_pixels() {
+        use std::cell::Cell;
+        use std::rc::Rc;
+        let asked = Rc::new(Cell::new(None));
+        let seen = asked.clone();
+        let tile = ArtworkImage::new(2, 1, vec![1, 2, 3, 255, 4, 5, 6, 255]).expect("pixels");
+        let sent = tile.clone();
+        let provider = ArtworkProvider::new(Artwork::new("cover").unwrap(), move |size| {
+            seen.set(Some(size));
+            Some(ArtworkSource::Pixels(sent.clone()))
+        });
+        assert_eq!(provided_artwork(&provider, 1.0), Some(tile.clone()));
+        assert_eq!(asked.get().map(|s| s.width), Some(SHELL_COVER_POINTS), "1x asks for the points");
+        provided_artwork(&provider, 1.5);
+        assert_eq!(asked.get().map(|s| s.width), Some(96), "1.5x asks for 96 px");
+        provided_artwork(&provider, f32::NAN);
+        assert_eq!(asked.get().map(|s| s.width), Some(SHELL_COVER_POINTS), "a bad scale counts as 1x");
+        let body = with_artwork(publish_body(&session()).expect("a body"), provided_artwork(&provider, 2.0).as_ref());
+        assert_eq!(ArtworkImage::from_json(body.get("artwork").expect("artwork")), Ok(tile));
+        let none = ArtworkProvider::new(Artwork::new("none").unwrap(), |_| None);
+        assert!(provided_artwork(&none, 2.0).is_none(), "nothing supplied, the glyph stays");
+    }
+
+    #[test]
+    fn encoded_bytes_become_wire_artwork_in_the_publish_body() {
+        let px: Vec<u8> = (0..300 * 200).flat_map(|_| [30u8, 60, 90, 255]).collect();
+        let png = bifrost_render::cg::imageio::encode::encode_png(300, 200, &px, &Default::default()).expect("a png");
+        let art = ArtworkImage::from_encoded(&png).expect("a cover");
+        assert_eq!((art.width(), art.height()), (WIRE_SIDE_MAX, 85), "downscaled to the cap, aspect kept");
+        let body = with_artwork(publish_body(&session()).expect("a body"), Some(&art));
+        let sent = bifrost_core::json::parse(&body.encode()).expect("valid json");
+        assert_eq!(ArtworkImage::from_json(sent.get("artwork").expect("artwork")), Ok(art));
+        assert_eq!(ArtworkImage::from_encoded(b"junk"), Err(ArtworkError::Undecodable));
     }
 
     #[test]
