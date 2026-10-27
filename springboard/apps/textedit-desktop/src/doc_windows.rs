@@ -648,6 +648,35 @@ mod tests {
         assert!(ctx.take_sent().iter().any(|m| matches!(m, ToShell::WindowClose { id: 0 })), "the main window is ordered out");
     }
 
+    /// Cmd+Q asks for the edited document (Save, Don't Save, Cancel) instead of quitting: Cancel keeps it edited and the app
+    /// running, Don't Save lets the app terminate. A clean app terminates at once.
+    #[test]
+    fn quit_asks_about_an_edited_document_and_cancel_keeps_it_edited() {
+        use bifrost_app::document::alert;
+        let ctx = window(1200, 780);
+        let mut app = TextEditApp::new();
+        app.configure(&ctx);
+        let first = app.docs.active().unwrap();
+        assert!(app.quit_requested(&ctx), "nothing unsaved: quit now");
+        app.type_into("unsaved");
+        assert!(app.docs.is_edited(first));
+        assert!(!app.quit_requested(&ctx), "the edited document asks first");
+        assert_eq!(app.docs.alert_doc(), Some(first));
+        assert!(!app.tick(&ctx, 0.0) && !ctx.take_terminate());
+        // Cancel: still edited, still open, and nothing quits afterwards
+        app.menu_action(&ctx, Action::CloseAnswer(alert::CANCEL as u8).id().unwrap());
+        assert!(app.docs.is_edited(first), "Cancel never clears the edited state");
+        assert_eq!(app.window_title(), "Untitled \u{2013} Edited");
+        app.tick(&ctx, 1.0);
+        assert!(!ctx.take_terminate(), "Cancel stops the quit");
+        assert_eq!(app.docs.len(), 1);
+        // asked again, Don't Save lets the app terminate
+        assert!(!app.quit_requested(&ctx));
+        app.menu_action(&ctx, Action::CloseAnswer(alert::DONT_SAVE as u8).id().unwrap());
+        app.tick(&ctx, 2.0);
+        assert!(ctx.take_terminate(), "every document answered: the app quits");
+    }
+
     /// The red button on a second document window asks as Cmd+W in it does: an edited document keeps its window and raises
     /// the confirmation on it (no new window, nothing for the shell to drop), a clean one closes its window, and a window
     /// the app does not know is ignored instead of closing the main window's document.

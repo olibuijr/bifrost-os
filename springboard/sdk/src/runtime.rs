@@ -196,6 +196,11 @@ thread_local! {
     static LAST_TEXT_STATE: RefCell<crate::proto::TextState> = RefCell::new(Default::default());
 }
 
+thread_local! {
+    /// Set by `Ctx::terminate`: the run loop ends the app as for `ToApp::Quit` at the end of the turn.
+    static TERMINATE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
 /// The answer to `ToApp::SelectionRequest`: the app's own selection when it gives one, else the selected text of the
 /// focused field it last reported.
 pub(crate) fn selection_reply<A: App>(app: &mut A, ctx: &Ctx) -> String {
@@ -411,6 +416,18 @@ impl Ctx {
         let closed = self.windows.borrow_mut().close(id)?;
         self.send(ToShell::WindowClose { id: id.0 });
         Ok(closed)
+    }
+
+    /// `reply(toApplicationShouldTerminate:)`: ends the app now, saving its state as `ToApp::Quit` does. An app that
+    /// vetoed `App::quit_requested` calls it once the person has answered every question.
+    pub fn terminate(&self) {
+        TERMINATE.with(|t| t.set(true));
+    }
+
+    /// Whether `terminate` was called since the last time, cleared by asking. The run loop asks once a turn; a test asks to
+    /// see that the app agreed to quit.
+    pub fn take_terminate(&self) -> bool {
+        TERMINATE.with(|t| t.replace(false))
     }
 
     /// Orders the main window out (the reference window's order-out call): a document app whose last document closed has no window, as on
@@ -954,6 +971,15 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                         flush_restorable(&app, c, true);
                     }
                 }
+                // the person's Quit of an app that announced `CloseRequests`: it quits now or asks first (`Ctx::terminate`)
+                ToApp::QuitRequest => {
+                    if let Some(c) = &ctx {
+                        if app.quit_requested(c) {
+                            c.terminate();
+                        }
+                        need_frame = true;
+                    }
+                }
                 ToApp::Quit => {
                     if let Some(c) = &ctx {
                         if active {
@@ -1182,6 +1208,15 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
             busy = true;
             // the background window is still on screen on the desktop: show what changed
             repaint_suspended |= !active;
+        }
+        // `Ctx::terminate`: the app has answered its quit questions; it ends as for `ToApp::Quit`
+        if c.take_terminate() {
+            if active {
+                app.suspend(c);
+            }
+            flush_restorable(&app, c, true);
+            open = false;
+            continue;
         }
         flush_restorable(&app, c, false);
         let frame_due = (active || repaint_suspended) && need_frame;

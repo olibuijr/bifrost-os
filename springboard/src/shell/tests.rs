@@ -3634,6 +3634,28 @@
         assert!(sh.desk.as_ref().unwrap().index_of(app).is_none(),"its window is closed by the shell, as before");
     }
 
+    /// The person's Quit (Cmd+Q, the Dock) of an app that opted in is a `QuitRequest` the app may veto with a save sheet; the app
+    /// stays in the list until it exits itself. An app that did not opt in is quit at once, and `desk_quit_app` (logout,
+    /// shutdown, updates) is never a request.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn the_persons_quit_asks_an_app_that_opted_in() {
+        use bifrost_proto::{sys::Recv,ToApp};
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        let (mine,theirs)=bifrost_proto::sys::socketpair_pair().unwrap();
+        let host=apphost::AppHost::with_channel("fixture",mine,None,bifrost_proto::Configure{w:100,h:100,scale:1.,safe_top:0.,safe_bottom:0.,dark:true,text_scale:1.,reduce_motion:false});
+        sh.ext.push(Some(host));
+        let sent=||{let mut v=Vec::new();while let Ok(Recv::Packet(p,_))=theirs.recv(false){v.push(ToApp::decode(&p).unwrap());}v};
+        sh.ext[0].as_mut().unwrap().close_requests=true;
+        sh.desk_quit_requested(0);
+        assert_eq!(sent(),vec![ToApp::QuitRequest],"the app is asked, not told to quit");
+        assert!(sh.ext[0].as_ref().is_some_and(|h|h.running()),"the app keeps running until it exits itself");
+        sh.ext[0].as_mut().unwrap().close_requests=false;
+        sh.desk_quit_requested(0);
+        assert!(sh.ext[0].is_none(),"an app that did not opt in quits at once");
+        assert!(sent().contains(&ToApp::Quit));
+    }
+
     /// The red light of an extra window of an app that opted in asks the app about that window (`WindowCloseRequest`) and
     /// leaves the window on the desk; before, the shell dropped it and the app's save sheet came back in a new window behind
     /// the main one. An app that did not opt in, or a window the app no longer has, closes as before.
