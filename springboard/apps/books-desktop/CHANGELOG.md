@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.10.6
+
+- Rebuilt for 0.10.44: every touch says whether a mouse or a finger made it, so a mouse drag no longer scrolls lists on the desktop (the wheel, trackpad and scroll bar still do).
+
 ## 1.10.5
 
 - Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.

@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 0.10.44 — 2026-10-27
+
+Fixes from the backlog waves and the owner's reports, with every app rebuilt.
+
+- Mouse and finger: every touch now says whether a mouse or a finger made it. On the desktop a mouse drag no longer scrolls a list (Mail's inbox, Settings, the Photos sidebar, Overview and the app lists); the wheel, trackpad and scroll bar do. A finger on a touchscreen and the tablet still pan. Apps must be rebuilt with this release (the touch message changed).
+- Files: dragging a file onto a folder moves it again (a slow, mostly vertical drag never began); a drag that ends outside the window no longer leaves Files stuck dragging.
+- TextEdit: Cmd+Q asks about every edited document (Save, Don't Save, Cancel) instead of quitting; Cancel keeps the document edited; after Replace All typing continues after the last replacement.
+- Mail: an HTML message that starts with a large inline image shows its text, not pages of image data.
+- Red close: closing an app's last window keeps the app running in the Dock with its menu bar; a Dock click opens a window again. Twelve single-window utilities still quit.
+- Accent colour: focus rings, selections, filled controls and progress in 13 more apps, the menu bar highlight and the Dock follow Settings > Appearance > Accent.
+- Now Playing shows PNG and JPEG album art. Terminal gets the back-tab sequence for Shift+Tab. Overview shows live window contents on the Vulkan renderer.
+- Tools: tools/midget.py keeps one input session (keys about 9x faster), adds press-and-hold, a relative mouse, guarded clicks and zoomed crops; tools/midget-scan.py.
+
 ## 0.10.43 — 2026-10-26
 
 The open items of the handoff list, fixed by nine fixers and checked on Midget.

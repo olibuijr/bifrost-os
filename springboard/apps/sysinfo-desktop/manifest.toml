@@ -1,6 +1,6 @@
 id = "is.olibuijr.sysinfo.desktop"
 name = "System Information"
-version = "0.9.8"
+version = "0.9.9"
 exec = "bifrost-sysinfo"
 icon = "icon.png"
 min_shell = "0.6.5"

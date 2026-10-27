@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.34.11
+
+- Rebuilt for 0.10.44: every touch says whether a mouse or a finger made it, so a mouse drag no longer scrolls lists on the desktop (the wheel, trackpad and scroll bar still do).
+
 ## 1.34.10
 
 - Open With > Other… lists every installed app; Undo restores tag colours.

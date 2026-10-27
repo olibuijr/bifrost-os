@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.13
+
+- Rebuilt for 0.10.44: every touch says whether a mouse or a finger made it, so a mouse drag no longer scrolls lists on the desktop (the wheel, trackpad and scroll bar still do).
+
 ## 0.1.12
 
 - Listed under Open With for shell scripts and plain text.

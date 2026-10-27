@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.8
+
+- Rebuilt for 0.10.44: every touch says whether a mouse or a finger made it, so a mouse drag no longer scrolls lists on the desktop (the wheel, trackpad and scroll bar still do).
+
 ## 1.4.7
 
 - The empty-state text is hidden while the Settings sheet covers it.

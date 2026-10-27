@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.8
+
+- Rebuilt for 0.10.44: every touch says whether a mouse or a finger made it, so a mouse drag no longer scrolls lists on the desktop (the wheel, trackpad and scroll bar still do).
+
 ## 0.8.7
 
 - Confirmation and form sheets take Return, Cmd+., the Tab focus ring and Space.

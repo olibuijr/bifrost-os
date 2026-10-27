@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.13.7
+
+- Rebuilt for 0.10.44: every touch says whether a mouse or a finger made it, so a mouse drag no longer scrolls lists on the desktop (the wheel, trackpad and scroll bar still do).
+
 ## 1.13.6
 
 - The board is a dark canvas with light ink in Dark appearance.

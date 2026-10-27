@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.17
+
+- Rebuilt for 0.10.44: every touch says whether a mouse or a finger made it, so a mouse drag no longer scrolls lists on the desktop (the wheel, trackpad and scroll bar still do).
+
 ## 0.17.16
 
 - An HTML message that starts with a large inline image shows its text, not the image source.

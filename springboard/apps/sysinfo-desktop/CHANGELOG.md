@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.9
+
+- Rebuilt for 0.10.44: every touch says whether a mouse or a finger made it, so a mouse drag no longer scrolls lists on the desktop (the wheel, trackpad and scroll bar still do).
+
 ## 0.9.8
 
 - Graphics, Storage and the Overview read the hardware facts (new hardware-info entitlement); uniform sidebar; a minimum window size.

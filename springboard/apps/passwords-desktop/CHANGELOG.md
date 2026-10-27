@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.15
+
+- Rebuilt for 0.10.44: every touch says whether a mouse or a finger made it, so a mouse drag no longer scrolls lists on the desktop (the wheel, trackpad and scroll bar still do).
+
 ## 0.2.14
 
 - Import, Export and a New Password button sit in a toolbar clear of the window buttons, and every bar button responds.

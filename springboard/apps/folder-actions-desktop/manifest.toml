@@ -1,6 +1,6 @@
 id = "is.olibuijr.folderactions.desktop"
 name = "Folder Actions Setup"
-version = "0.1.8"
+version = "0.1.9"
 exec = "bifrost-folder-actions"
 icon = "icon.png"
 min_shell = "0.4.84"

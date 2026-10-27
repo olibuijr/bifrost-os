@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.12
+
+- Rebuilt for 0.10.44: every touch says whether a mouse or a finger made it, so a mouse drag no longer scrolls lists on the desktop (the wheel, trackpad and scroll bar still do).
+
 ## 1.20.11
 
 - The Clear and Recently Deleted alerts take Return, Cmd+., Cmd+D, the Tab focus ring and Space.

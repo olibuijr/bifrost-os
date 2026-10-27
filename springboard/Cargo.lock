@@ -308,7 +308,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-activity"
-version = "0.10.9"
+version = "0.10.10"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -349,7 +349,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-archive"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "bifrost-app",
  "flate2",
@@ -358,7 +358,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-assistant"
-version = "1.4.7"
+version = "1.4.8"
 dependencies = [
  "bifrost-app",
  "bifrost-assistant-client",
@@ -444,7 +444,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-audio-setup"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "bifrost-app",
  "bifrost-audio-hal",
@@ -497,7 +497,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-automator"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -508,7 +508,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-bluetooth-exchange"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -518,7 +518,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-books"
-version = "1.10.5"
+version = "1.10.6"
 dependencies = [
  "bifrost-app",
  "springboard",
@@ -527,7 +527,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-browser"
-version = "0.17.7"
+version = "0.17.8"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -538,7 +538,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-calculator"
-version = "1.14.4"
+version = "1.14.5"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -547,7 +547,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-calendar"
-version = "1.19.9"
+version = "1.19.10"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -556,7 +556,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-chess"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "bifrost-app",
  "springboard",
@@ -578,7 +578,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-clock"
-version = "1.6.7"
+version = "1.6.8"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -601,7 +601,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-colormeter"
-version = "0.5.10"
+version = "0.5.11"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -610,7 +610,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-colour-utility"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -619,7 +619,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-console"
-version = "1.9.7"
+version = "1.9.8"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -628,7 +628,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-contacts"
-version = "1.17.5"
+version = "1.17.6"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -644,7 +644,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-daw"
-version = "0.5.10"
+version = "0.5.11"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -655,7 +655,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-dictionary"
-version = "0.6.9"
+version = "0.6.10"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -665,7 +665,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-diskutil"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -674,7 +674,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-files"
-version = "1.34.10"
+version = "1.34.11"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -683,7 +683,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-folder-actions"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -691,7 +691,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-fontbook"
-version = "0.6.14"
+version = "0.6.15"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -701,7 +701,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-freeform"
-version = "1.13.6"
+version = "1.13.7"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -710,7 +710,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-games"
-version = "1.6.10"
+version = "1.6.11"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -726,7 +726,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-grapher"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "bifrost-app",
  "springboard",
@@ -734,7 +734,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-image-capture"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "bifrost-app",
  "bifrost-ui",
@@ -752,7 +752,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-journal"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -770,7 +770,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-keychain-access"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -790,7 +790,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-locate"
-version = "0.4.9"
+version = "0.4.10"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -799,7 +799,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-mail"
-version = "0.17.16"
+version = "0.17.17"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -808,7 +808,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-maps"
-version = "0.7.6"
+version = "0.7.7"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -830,7 +830,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-messages"
-version = "0.7.7"
+version = "0.7.8"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -856,7 +856,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-music"
-version = "1.14.5"
+version = "1.14.6"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -865,7 +865,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-news"
-version = "1.6.12"
+version = "1.6.13"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -874,7 +874,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-notes"
-version = "1.24.11"
+version = "1.24.12"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -884,7 +884,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-passwords"
-version = "0.2.14"
+version = "0.2.15"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -894,7 +894,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-photobooth"
-version = "0.5.10"
+version = "0.5.11"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -904,7 +904,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-podcasts"
-version = "1.14.4"
+version = "1.14.5"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -913,7 +913,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-printers"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -930,7 +930,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-reminders"
-version = "1.20.11"
+version = "1.20.12"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -940,7 +940,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-remote"
-version = "0.2.7"
+version = "0.2.8"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -965,7 +965,7 @@ version = "0.1.0"
 
 [[package]]
 name = "bifrost-screen-sharing"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -975,7 +975,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-screenshot"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -983,7 +983,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-script-editor"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "bifrost-app",
  "springboard",
@@ -991,7 +991,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-setup-assistant"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "bifrost-app",
  "springboard",
@@ -999,7 +999,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-shortcuts"
-version = "1.14.4"
+version = "1.14.5"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -1008,7 +1008,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-stickies"
-version = "0.10.6"
+version = "0.10.7"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -1018,7 +1018,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-stocks"
-version = "0.2.5"
+version = "0.2.6"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -1027,7 +1027,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-sysinfo"
-version = "0.9.8"
+version = "0.9.9"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -1037,7 +1037,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-textedit"
-version = "1.13.13"
+version = "1.13.14"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -1046,7 +1046,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-tips"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "bifrost-app",
  "springboard",
@@ -1063,7 +1063,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-videoplayer"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -1072,7 +1072,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-viewer"
-version = "0.11.17"
+version = "0.11.18"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -1082,7 +1082,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-voicememos"
-version = "1.11.6"
+version = "1.11.7"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -1091,7 +1091,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-weather"
-version = "1.9.5"
+version = "1.9.6"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -1104,7 +1104,7 @@ version = "0.1.0"
 
 [[package]]
 name = "bifrost-wireless-diagnostics"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "bifrost-app",
  "springboard",
@@ -4460,7 +4460,7 @@ dependencies = [
 
 [[package]]
 name = "springboard"
-version = "0.10.43"
+version = "0.10.44"
 dependencies = [
  "bifrost-assistant-client",
  "bifrost-audio-driver",

@@ -1,6 +1,6 @@
 id = "is.olibuijr.screensharing.desktop"
 name = "Screen Sharing"
-version = "0.1.8"
+version = "0.1.9"
 exec = "bifrost-screen-sharing"
 icon = "icon.png"
 window = "full-size"

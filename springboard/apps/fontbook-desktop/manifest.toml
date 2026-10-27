@@ -1,6 +1,6 @@
 id = "is.olibuijr.fontbook.desktop"
 name = "Fonts"
-version = "0.6.14"
+version = "0.6.15"
 exec = "bifrost-fontbook"
 icon = "icon.png"
 min_shell = "0.4.84"
