@@ -2803,7 +2803,7 @@ reads the system zone on every query, and `TimeZone::from_seconds_from_gmt(s)` i
 identifier `GMT+0100`). Queries take a `coding::Date` (seconds since 1970): `seconds_from_gmt`, `abbreviation`,
 `is_daylight_saving_time`, `next_daylight_saving_time_transition` (the first changing second within four years, None
 for a fixed offset). `TimeZone::known_time_zone_identifiers()` lists the database sorted. `localized_name(NameStyle, &Locale)`
-returns English names: short forms are the abbreviation in force, long forms come from a built-in table of common
+returns English names: short forms are the abbreviation in force (the `DateFormatter` letters `z`, `zz` and `zzz` instead follow the reference en_US data: UTC and North American abbreviations, otherwise the short GMT form such as `GMT+1`), long forms come from a built-in table of common
 abbreviations (GMT, BST, CET, EST, PST, JST, AEST, NZST, ...) and are None for anything else. The data is the shell's
 `springboard/src/bare/timezone.rs` (TZif v1/v2 files, POSIX footer rules, abbreviations); `SYSTEM_TIME_ZONE_DID_CHANGE`
 names the zone-change notification, which nothing publishes yet.

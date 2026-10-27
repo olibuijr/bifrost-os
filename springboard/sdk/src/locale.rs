@@ -318,6 +318,21 @@ fn gmt_offset(offset: i64) -> String {
     }
 }
 
+/// Short specific zone name for English: the abbreviations the en_US data carries (UTC and the North American
+/// ones), else the short localized GMT form (`GMT`, `GMT+1`, `GMT+5:30`), never a raw abbreviation such as BST.
+fn short_zone_name(abbreviation: &str, offset: i64) -> String {
+    const KNOWN: [&str; 12] = ["UTC", "EST", "EDT", "CST", "CDT", "MST", "MDT", "PST", "PDT", "AKST", "AKDT", "HST"];
+    if KNOWN.contains(&abbreviation) {
+        return abbreviation.to_string();
+    }
+    let (s, h, m) = offset_parts(offset);
+    match (offset, m) {
+        (0, _) => "GMT".into(),
+        (_, 0) => format!("GMT{s}{h}"),
+        _ => format!("GMT{s}{h}:{m:02}"),
+    }
+}
+
 /// `+HH:MM`, or `Z` at zero
 fn iso_offset(offset: i64) -> String {
     let (s, h, m) = offset_parts(offset);
@@ -561,8 +576,9 @@ impl DateFormatter {
                 's' => out.push_str(&two(c.s)),
                 'z' => out.push_str(&match &self.time_zone {
                     Some(z) if n >= 4 => z.long_name(Date(unix as f64)).unwrap_or_else(|| gmt_offset(offset)),
-                    Some(z) => z.abbreviation(Date(unix as f64)),
-                    None => gmt_offset(offset),
+                    Some(z) => short_zone_name(&z.abbreviation(Date(unix as f64)), offset),
+                    None if n >= 4 => gmt_offset(offset),
+                    None => short_zone_name("", offset),
                 }),
                 'Z' => out.push_str(&match n {
                     1..=3 => gmt_offset_basic(offset),
@@ -921,12 +937,12 @@ mod tests {
         assert_eq!(f.string(jan), "12:00 +0000 Z GMT");
         f.set_time_zone(Some(tz.clone()));
         assert_eq!(f.time_zone(), Some(&tz));
-        assert_eq!(f.string(jan), "13:00 +0100 +01:00 CET");
-        assert_eq!(f.string(jul), "14:00 +0200 +02:00 CEST");
+        assert_eq!(f.string(jan), "13:00 +0100 +01:00 GMT+1");
+        assert_eq!(f.string(jul), "14:00 +0200 +02:00 GMT+2");
         f.tz_offset = 7200; // ignored while a zone is set
-        assert_eq!(f.string(jan), "13:00 +0100 +01:00 CET");
+        assert_eq!(f.string(jan), "13:00 +0100 +01:00 GMT+1");
         f.set_time_zone(None);
-        assert_eq!(f.string(jan), "14:00 +0200 +02:00 GMT+02:00");
+        assert_eq!(f.string(jan), "14:00 +0200 +02:00 GMT+2");
     }
 
     #[test]
@@ -953,6 +969,37 @@ mod tests {
         assert_eq!(f.string(jan), "GMT+03:00");
         f.set_time_zone(None);
         assert_eq!(f.string(jan), "GMT");
+    }
+
+    #[test]
+    fn short_zone_name_is_a_us_abbreviation_or_the_short_gmt_form() {
+        // measured against the reference locale data for en_US; `z`, `zz` and `zzz` agree
+        let (jan, jul) = (1768478400, 1784116800); // 2026-01-15 and 2026-07-15, 12:00 UTC
+        let mut f = DateFormatter::new(en());
+        f.set_date_format("z|zzz");
+        let cases: [(&str, Option<&str>, &str, &str); 8] = [
+            ("UTC", None, "UTC|UTC", "UTC|UTC"),
+            ("Europe/London", Some("GMT0BST,M3.5.0/1,M10.5.0"), "GMT|GMT", "GMT+1|GMT+1"),
+            ("America/New_York", Some("EST5EDT,M3.2.0,M11.1.0"), "EST|EST", "EDT|EDT"),
+            ("America/Los_Angeles", Some("PST8PDT,M3.2.0,M11.1.0"), "PST|PST", "PDT|PDT"),
+            ("Europe/Berlin", Some("CET-1CEST,M3.5.0,M10.5.0/3"), "GMT+1|GMT+1", "GMT+2|GMT+2"),
+            ("Asia/Tokyo", Some("JST-9"), "GMT+9|GMT+9", "GMT+9|GMT+9"),
+            ("Asia/Kolkata", Some("IST-5:30"), "GMT+5:30|GMT+5:30", "GMT+5:30|GMT+5:30"),
+            ("GMT+03:00", None, "GMT+3|GMT+3", "GMT+3|GMT+3"),
+        ];
+        for (name, rule, winter, summer) in cases {
+            let tz = match (name, rule) {
+                ("UTC", _) => TimeZone::utc(),
+                ("GMT+03:00", _) => TimeZone::from_seconds_from_gmt(3 * 3600).unwrap(),
+                (_, Some(r)) => TimeZone::from_posix_rule(name, r).unwrap(),
+                _ => unreachable!(),
+            };
+            f.set_time_zone(Some(tz));
+            assert_eq!(f.string(jan), winter, "{name} in January");
+            assert_eq!(f.string(jul), summer, "{name} in July");
+        }
+        f.set_time_zone(None);
+        assert_eq!(f.string(jan), "GMT|GMT");
     }
 
     #[test]
