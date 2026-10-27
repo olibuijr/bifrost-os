@@ -2378,9 +2378,10 @@ impl Reminders {
             self.activate(ui, Target::ClearCancel, t);
             return true;
         }
-        // Escape closes the Details popover whatever field is focused in it, dropping its edits, as it closes a popover
+        // Escape closes the Details popover whatever field is focused in it, keeping its edits like a press outside
+        // (the popover applies them as they are made; it has no Cancel)
         if self.details_popover() {
-            self.activate(ui, Target::Cancel, t);
+            self.activate(ui, Target::DetailsClose, t);
             return true;
         }
         if self.focus.is_some() {
