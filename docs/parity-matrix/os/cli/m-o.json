@@ -708,7 +708,7 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/cmd/src/mdutil.rs, springboard/src/shell/spotlight_scope.rs",
+   "bifrost": "springboard/cmd/src/mdutil.rs, springboard/src/shell/search_scope.rs",
    "status": "parity",
    "note": "mdutil stores per-volume index settings; the desktop quick search does not read them yet, so -i off does not stop its index. Built 2026-10-17 (wave 13): mdutil -i writes the Spotlight exclusions (spotlight_excluded) that shell::spotlight_scope reads (mdutil::tests). Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
