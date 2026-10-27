@@ -11,6 +11,7 @@
 # lock, so runs never overlap), every file of the checkout is touched, which makes this checkout's crates newer than
 # any stored check and rebuilds just the workspace crates once. Registry dependencies are keyed by version and keep
 # their artifacts. Consecutive runs in the same checkout stay incremental. Source files only get a new mtime.
+# Warnings (dead code included) and errors are printed as short-format lines; the output is capped at 300 lines.
 # Usage (from anywhere inside a bifrost-os checkout or worktree):
 #   tools/agent-check.sh                 the shell: lib + tests without desktop-wayland, then the shell bin with it
 #   tools/agent-check.sh -p bifrost-wm   any other `cargo check` arguments instead of the default pair
@@ -23,7 +24,7 @@ lock="$CARGO_TARGET_DIR/.agent-check.lock"
 run() {
     systemd-run --user --scope --quiet --collect --unit="agent-check-$$-$RANDOM" \
         -p MemoryHigh=3G -p MemoryMax=4G nice -n 19 ionice -c3 \
-        cargo check --offline -j 2 --message-format short "$@" 2>&1 | grep -E '^(error|warning: unused)|^[^ ].*: error|^error\[' | head -60
+        cargo check --offline -j 2 --message-format short "$@" 2>&1 | grep -E '^(error|warning)|^[^ ].*: (error|warning)|^error\[' | head -300
     return "${PIPESTATUS[0]}"
 }
 exec 9>"$lock"
