@@ -2905,15 +2905,20 @@ impl Notes {
         match result {
             Ok(name) => {
                 self.notice = None;
-                if naming.old.as_ref().is_none_or(|o| self.view == View::Folder(o.clone())) {
-                    // a search left in the field would list every folder's matches in the new, empty folder
-                    if naming.old.is_none() {
-                        self.search.set_text(ui, "");
+                match &naming.old {
+                    // a search left in the field would list every folder's matches in the new, empty folder; the
+                    // open note is not in it, so the switch closes the editor as a sidebar switch does
+                    None => {
                         self.searching = false;
+                        self.show_view(ui, View::Folder(name), t);
                     }
-                    self.view = View::Folder(name);
+                    Some(old) => {
+                        if self.view == View::Folder(old.clone()) {
+                            self.view = View::Folder(name);
+                        }
+                        self.reload(ui, t);
+                    }
                 }
-                self.reload(ui, t);
             }
             Err(error) => self.notice = Some(format!("Unable to save folder: {error}")),
         }
@@ -5724,6 +5729,21 @@ mod tests {
         n.activate(&ui, Target::Undo, 0.0, 0.0, 901.0);
         assert_eq!(n.editing().unwrap().text, "Notes\n1. milk\n2. **eggs**");
         draw(&mut n, &ui, 1000.0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_new_folder_closes_the_open_note_that_is_not_in_it() {
+        let ui = ui();
+        let dir = scratch("folder-closes-note");
+        let mut n = seeded(&ui, &dir);
+        n.open_note(&ui, 0, false, 1.0);
+        assert!(n.is_editing());
+        n.new_folder(&ui, 2.0);
+        n.naming.as_mut().unwrap().field.set_text(&ui, "BTestFolder");
+        n.key(&ui, Out::Enter, 3.0);
+        assert_eq!(n.view(), &View::Folder("BTestFolder".into()));
+        assert!(!n.is_editing(), "the note is not in the new empty folder, so the editor shows no note");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
