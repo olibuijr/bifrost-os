@@ -431,7 +431,7 @@ impl Files {
     /// The folder or sidebar place under a point, when a drop there would move the selection.
     pub(crate) fn drop_target_at(&self, x: f32, y: f32) -> Option<PathBuf> {
         let target = if x < self.side() {
-            self.sidebar().hit(self.sidebar_bounds(), SIDEBAR_SCROLL, x, y).and_then(|id| self.sidebar_path(id))
+            self.sidebar().hit(self.sidebar_bounds(), self.sidebar_scroll(), x, y).and_then(|id| self.sidebar_path(id))
         } else {
             self.item_at(x, y)
                 .filter(|i| !self.selection.contains(i) && self.rows[*i].is_dir && !self.fx.drag_paths.contains(&self.rows[*i].path))
@@ -497,7 +497,7 @@ impl Files {
         // Golden Gate full-size window: the sidebar runs to the top edge under the traffic lights (the shell draws them)
         if !self.sidebar_hidden {
             let pressed = if self.dragging { self.drop_target.as_ref().and_then(|t| self.sidebar_id(t)) } else { None };
-            widgets::source_list(s, ui, self.sidebar_bounds(), &self.sidebar(), SIDEBAR_SCROLL, pressed);
+            widgets::source_list(s, ui, self.sidebar_bounds(), &self.sidebar(), self.sidebar_scroll(), pressed);
             rect(s, ui, self.side() - 1., 0., 1., h, SEPARATOR_C.now());
         }
         // The toolbar shares the content colour and its button groups float over it as glass capsules (Golden Gate's

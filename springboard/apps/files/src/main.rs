@@ -133,6 +133,8 @@ struct Files {
     controls: Controls,
     searching: bool,
     scroll: f32,
+    /// How far the sidebar list is scrolled (points): a drag that starts in the sidebar moves it.
+    side_scroll: f32,
     /// Where the press landed (x, y in points) and when. Never moves: a drag starts from it and a click ends on it.
     down: Option<(f32, f32, f64)>,
     /// The y the last pointer move left the finger at: the list scrolls by the difference to the next one.
@@ -263,6 +265,7 @@ impl Files {
             controls: Controls::default(),
             searching: false,
             scroll: 0.,
+            side_scroll: 0.,
             down: None,
             pan_y: 0.,
             last_click: None,
@@ -737,17 +740,22 @@ impl Files {
                     }
                 } else if self.down.is_some() && bifrost_app::pans_now() {
                     let (old, new) = (self.pan_y, y);
-                    let visible = self.visible().len();
-                    let columns = ((self.w - (self.side() + 16.)) / self.grid_w()).floor().max(1.) as usize;
-                    let total = if self.vo.gallery {
-                        0.
-                    } else if self.grid {
-                        visible.div_ceil(columns) as f32 * self.grid_h()
+                    if self.down.is_some_and(|(sx, _, _)| sx < self.side()) {
+                        // a drag that began in the sidebar scrolls the source list, not the listing
+                        self.side_scroll = (self.side_scroll + old - new).clamp(0., self.side_scroll_max());
                     } else {
-                        visible as f32 * 32.
-                    };
-                    self.scroll =
-                        (self.scroll + old - new).clamp(0., (total - (self.h - self.rows_top() - 70.)).max(0.));
+                        let visible = self.visible().len();
+                        let columns = ((self.w - (self.side() + 16.)) / self.grid_w()).floor().max(1.) as usize;
+                        let total = if self.vo.gallery {
+                            0.
+                        } else if self.grid {
+                            visible.div_ceil(columns) as f32 * self.grid_h()
+                        } else {
+                            visible as f32 * 32.
+                        };
+                        self.scroll =
+                            (self.scroll + old - new).clamp(0., (total - (self.h - self.rows_top() - 70.)).max(0.));
+                    }
                     // the press point stays where it was: a drag that has not begun yet is measured from it, and the
                     // release is a click only if it ends near it
                     self.pan_y = new;
@@ -928,7 +936,7 @@ mod tests {
             dnd: Default::default(), windows: Vec::new(), info_window: false, info_wanted: false, home:"/fixture".into(), path:"/fixture".into(), history:vec![], at:0,
             tabs: tabs::TabStrip::new(tabs::TabState { path: "/fixture".into(), history: vec![], at: 0 }),
             listing: rows.clone(), rows, hits: None, search: None, selection:vec![], select_mode:false, sidebar_hidden:false, status_bar:false, title_w:120., path_segs:vec![], loading:false, error:None, job:None,grid:true,sort:Sort::Name,
-            query:TextField::new(),controls:Controls::default(),searching:false,scroll:0.,down:None,pan_y:0.,last_click:None,preview:None,
+            query:TextField::new(),controls:Controls::default(),searching:false,scroll:0.,side_scroll:0.,down:None,pan_y:0.,last_click:None,preview:None,
             w:960.,h:630.,painted_state:String::new(),painted_selection:vec![],revision:0,
             show_hidden:false,clip:None,naming:None,work:None,notice:None,info:None,tag_index:TagIndex::default(),tag_panel:false,smart:vec![],open_with:None,dragging:false,drop_target:None,undo:vec![],columns:false,ancestors:vec![],watch:None,journal:bifrost_app::fswatch::EventJournal::new(JOURNAL_CAP),journal_seen:0,fx:FileManagerState::default(),vo:ViewOpts::default(),data_dir:None,labels:new_labels(),row_text:Default::default(),sys:SystemState::default(),ext:Default::default(),
         }
