@@ -35,9 +35,10 @@ use springboard::shell::photos::library;
 use springboard::shell::textfield::TextField;
 use std::path::{Path, PathBuf};
 use bifrost_app::kit::ui::{SPACE_L, SPACE_S};
-use bifrost_app::kit::ui::{SYSTEM_RED, TINT};
+use bifrost_app::kit::ui::{accent_now, SYSTEM_RED, TINT};
 
 const RED: u32 = SYSTEM_RED;
+/// Literal systemBlue for the text buttons (Cancel, Done); fills, progress and handles use `accent_now()`.
 const BLUE: u32 = TINT;
 /// The backdrop of the artwork Voice Memos publishes (straight RGB): the dark tile Control Center shows covers on.
 const ARTWORK_BACKDROP: [u8; 3] = [44, 44, 46];
@@ -2289,7 +2290,7 @@ impl VoiceMemos {
             s.fill_rrect(mx, my, mw, h, h / 2.0, LABEL_3.now());
             let fill = meter_fraction(self.input_level) * mw;
             if fill > 0.0 {
-                s.fill_rrect(mx, my, fill.max(h), h, h / 2.0, BLUE);
+                s.fill_rrect(mx, my, fill.max(h), h, h / 2.0, accent_now());
             }
             let readout = meter_title(self.input_level);
             self.centred(s, ui, &readout, MAC_FOOTNOTE_PT, LABEL_2.now(), (px, my + h + ui.pt(SPACE_XS), pw, ui.pt(SPACE_XL)));
@@ -2450,7 +2451,7 @@ impl VoiceMemos {
         s.fill_rrect(r.0, ty, r.2, track, track / 2.0, LABEL_3.now());
         let filled = r.2 * self.volume;
         if filled > 0.0 {
-            s.fill_rrect(r.0, ty, filled.max(track), track, track / 2.0, BLUE);
+            s.fill_rrect(r.0, ty, filled.max(track), track, track / 2.0, accent_now());
         }
         let knob = ui.pt(VOLUME_KNOB_PT);
         let kx = r.0 + filled - knob / 2.0;
@@ -2493,7 +2494,7 @@ impl VoiceMemos {
         let (hw, top, hh) = (ui.pt(SPACE_XXS), wave.1 - ui.pt(SPACE_M), wave.3 + ui.pt(SPACE_XXL));
         for secs in [range.start(), range.end()] {
             let x = self.trim_x(ui, secs, length);
-            s.fill_rrect(x - hw / 2.0, top, hw, hh, hw / 2.0, BLUE);
+            s.fill_rrect(x - hw / 2.0, top, hw, hh, hw / 2.0, accent_now());
         }
         let verb = if replace { "Replaces" } else { "Keeps" };
         let keep = format!("{verb} {} of {}", store::clock((range.duration() * 1000.0) as u64), store::clock(memo.duration_ms));
@@ -2596,6 +2597,27 @@ mod tests {
         let tiny = ui.measure(&name, MAC_TITLE3_PT, Weight::Bold) / 2.0;
         let (text, pt) = VoiceMemos::sidebar_title(&ui, &name, tiny);
         assert!(text.ends_with('…') && ui.measure(&text, pt, Weight::Bold) <= tiny);
+    }
+
+    /// The accent is process-wide: this test changes it and restores it.
+    static ACCENT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn the_volume_slider_is_filled_with_the_chosen_accent_not_system_blue() {
+        use bifrost_app::kit::appearance::{accent, set_accent, Accent};
+        let _g = ACCENT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let (mut app, ui) = app("accent");
+        app.volume = 0.6;
+        let keep = accent();
+        set_accent(Accent::Green);
+        let green = accent_now();
+        let (w, h) = (1200, 1920);
+        let mut px = vec![0u32; w * h];
+        app.draw_volume(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, &ui);
+        set_accent(keep);
+        assert!(px.contains(&green), "the filled part is the accent");
+        assert!(!px.contains(&TINT), "no fixed systemBlue left");
+        let _ = std::fs::remove_dir_all(&app.dir);
     }
 
     #[test]
