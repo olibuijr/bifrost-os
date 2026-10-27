@@ -26,6 +26,10 @@ const MARGIN: f32 = 20.0;
 fn toggle_fill(on: bool) -> u32 {
     if on { ui::accent_now() } else { ui::FIELD_BG.now() }
 }
+/// Text links and bar buttons follow the user's accent.
+fn link_color() -> u32 {
+    ui::accent_now()
+}
 const HEADER: f32 = 96.0;
 const ROW_H: f32 = 56.0;
 const TRACK_W: f32 = 180.0;
@@ -907,7 +911,7 @@ impl Daw {
         let Some(p) = &self.project else { return };
         // header
         s.fill_rect(self.lead as usize, 8, 80, 40, ui::FIELD_BG.now());
-        Self::draw_text(s, ui, "< Songs", ui.pt(15.0), Weight::Semibold, ui::TINT, self.lead + 12.0, 18.0);
+        Self::draw_text(s, ui, "< Songs", ui.pt(15.0), Weight::Semibold, link_color(), self.lead + 12.0, 18.0);
         Self::draw_text(s, ui, &p.name, ui.pt(ui::MAC_TITLE1_PT), Weight::Bold, ui::LABEL.now(), self.lead + 110.0, 16.0);
         let play_col = if self.playing { ui::LABEL_2.now() } else { ui::accent_now() };
         s.fill_rect((w - 220.0) as usize, 16, 100, 32, play_col);
@@ -938,10 +942,10 @@ impl Daw {
         Self::draw_text(s, ui, "Stop", ui.pt(13.0), Weight::Semibold, ui::LABEL.now(), gx + 12.0, gy + 7.0);
         // the add row under the last track: + Track, and + Scene while under 8 scenes
         let add_y = gy + 32.0 + p.tracks.len() as f32 * CELL_H;
-        Self::draw_text(s, ui, "+ Track", ui.pt(15.0), Weight::Semibold, ui::TINT, gx + 8.0, add_y + 12.0);
-        Self::draw_text(s, ui, "Import MIDI", ui.pt(15.0), Weight::Semibold, ui::TINT, gx + TRACK_W + 132.0, add_y + 12.0);
+        Self::draw_text(s, ui, "+ Track", ui.pt(15.0), Weight::Semibold, link_color(), gx + 8.0, add_y + 12.0);
+        Self::draw_text(s, ui, "Import MIDI", ui.pt(15.0), Weight::Semibold, link_color(), gx + TRACK_W + 132.0, add_y + 12.0);
         if p.scenes.len() < 8 {
-            Self::draw_text(s, ui, "+ Scene", ui.pt(15.0), Weight::Semibold, ui::TINT, gx + TRACK_W + 8.0, add_y + 12.0);
+            Self::draw_text(s, ui, "+ Scene", ui.pt(15.0), Weight::Semibold, link_color(), gx + TRACK_W + 8.0, add_y + 12.0);
         }
         // scene headers
         for (c, sc) in p.scenes.iter().enumerate() {
@@ -1088,7 +1092,7 @@ impl Daw {
         let w = s.w as f32;
         let Some(p) = &self.project else { return };
         s.fill_rect(self.lead as usize, 8, 80, 40, ui::FIELD_BG.now());
-        Self::draw_text(s, ui, "< Session", ui.pt(15.0), Weight::Semibold, ui::TINT, self.lead + 8.0, 18.0);
+        Self::draw_text(s, ui, "< Session", ui.pt(15.0), Weight::Semibold, link_color(), self.lead + 8.0, 18.0);
         Self::draw_text(s, ui, "Arrangement", ui.pt(ui::MAC_TITLE1_PT), Weight::Bold, ui::LABEL.now(), self.lead + 110.0, 16.0);
         for (i, a) in p.arrangement.iter().enumerate() {
             let y = HEADER + 16.0 + i as f32 * ROW_H;
@@ -1099,14 +1103,14 @@ impl Daw {
             Self::draw_text(s, ui, &format!("{} bars", a.bars), ui.pt(14.0), Weight::Regular, ui::LABEL_2.now(), w - 320.0, y + 18.0);
             for (x, label) in [(w - 260.0, "-"), (w - 200.0, "+"), (w - 140.0, "x"), (w - 90.0, if muted { "unmute" } else { "mute" })] {
                 s.fill_rect(x as usize, (y + 12.0) as usize, 40, 28, ui::SEGMENT_ON.now());
-                Self::draw_text(s, ui, label, ui.pt(14.0), Weight::Semibold, ui::TINT, x + 12.0, y + 17.0);
+                Self::draw_text(s, ui, label, ui.pt(14.0), Weight::Semibold, link_color(), x + 12.0, y + 17.0);
             }
         }
         let base = HEADER + 16.0 + p.arrangement.len() as f32 * ROW_H;
         Self::draw_text(s, ui, "Add a scene to the arrangement:", ui.pt(13.0), Weight::Semibold, ui::LABEL_2.now(), MARGIN, base + 4.0);
         for (i, sc) in p.scenes.iter().enumerate() {
             let y = base + 28.0 + i as f32 * 40.0;
-            Self::draw_text(s, ui, &format!("+ {}", sc.name), ui.pt(15.0), Weight::Regular, ui::TINT, MARGIN + 8.0, y);
+            Self::draw_text(s, ui, &format!("+ {}", sc.name), ui.pt(15.0), Weight::Regular, link_color(), MARGIN + 8.0, y);
         }
     }
 
@@ -1116,14 +1120,14 @@ impl Daw {
         let Some(p) = &self.project else { return };
         let w = s.w as f32;
         s.fill_rect(self.lead as usize, 8, 80, 40, ui::FIELD_BG.now());
-        Self::draw_text(s, ui, "< Session", ui.pt(15.0), Weight::Semibold, ui::TINT, self.lead + 8.0, 18.0);
+        Self::draw_text(s, ui, "< Session", ui.pt(15.0), Weight::Semibold, link_color(), self.lead + 8.0, 18.0);
         let title = p.tracks.get(self.rack_track).map(|t| t.name.clone()).unwrap_or_default();
         Self::draw_text(s, ui, &format!("Rack · {title}"), ui.pt(ui::MAC_TITLE1_PT), Weight::Bold, ui::LABEL.now(), self.lead + 110.0, 16.0);
         let format = format!("Stream: {}", rack::describe(daw::render::DEFAULT_SR, 2));
         Self::draw_text(s, ui, &format, ui.pt(ui::MAC_CALLOUT_PT), Weight::Regular, ui::LABEL_2.now(), self.lead + 110.0, 58.0);
         for (label, x) in [("< Track", w - 220.0), ("Track >", w - 110.0)] {
             s.fill_rect(x as usize, 16, 100, 32, ui::FIELD_BG.now());
-            Self::draw_text(s, ui, label, ui.pt(15.0), Weight::Semibold, ui::TINT, x + 22.0, 22.0);
+            Self::draw_text(s, ui, label, ui.pt(15.0), Weight::Semibold, link_color(), x + 22.0, 22.0);
         }
 
         let Some(track) = p.tracks.get(self.rack_track) else { return };
@@ -1151,7 +1155,7 @@ impl Daw {
 
         let (px, pw) = rack_panel(w);
         s.fill_rect(px as usize, RACK_TOP as usize, pw as usize, 32, ui::FIELD_BG.now());
-        Self::draw_text(s, ui, "Save Preset", ui.pt(15.0), Weight::Semibold, ui::TINT, px + 12.0, RACK_TOP + 8.0);
+        Self::draw_text(s, ui, "Save Preset", ui.pt(15.0), Weight::Semibold, link_color(), px + 12.0, RACK_TOP + 8.0);
         match self.rack_presets.as_ref() {
             Some(store) if !store.presets().is_empty() => {
                 for (k, preset) in store.presets().iter().take(RACK_PRESET_ROWS).enumerate() {
@@ -1351,5 +1355,16 @@ mod accent_tests {
         assert_eq!(on, green);
         assert_ne!(on, ui::TINT);
         assert_eq!(off, ui::FIELD_BG.now());
+    }
+
+    #[test]
+    fn text_links_follow_the_chosen_accent_not_system_blue() {
+        let _g = ACCENT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let keep = accent();
+        set_accent(Accent::Green);
+        let (link, green) = (link_color(), ui::accent_now());
+        set_accent(keep);
+        assert_eq!(link, green);
+        assert_ne!(link, ui::TINT);
     }
 }

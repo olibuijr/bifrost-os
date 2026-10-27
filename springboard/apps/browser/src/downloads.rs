@@ -65,10 +65,15 @@ fn skip_probe(url: &str) -> bool {
 use bifrost_app::controls::prefs_layout::m;
 use bifrost_app::controls::Rect;
 use bifrost_app::glyphs;
-use bifrost_app::kit::ui::{Weight, CAPSULE_SHADOW, CARD_BG, DESTRUCTIVE, LABEL, LABEL_2, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, ROW_PRESSED, SEPARATOR_C, TINT, accent_now};
+use bifrost_app::kit::ui::{Weight, CAPSULE_SHADOW, CARD_BG, DESTRUCTIVE, LABEL, LABEL_2, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, ROW_PRESSED, SEPARATOR_C, accent_now};
 use bifrost_app::kit::{Surface, Ui};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::webview::WebViewId;
+
+/// Row glyph buttons and the "Clear" text follow the user's accent.
+fn button_color() -> u32 {
+    accent_now()
+}
 use bifrost_core::json::Json;
 
 use crate::control::{num, obj, text};
@@ -583,14 +588,14 @@ impl Downloads {
                 s.fill_rrect(x, y, (w * it.fraction()).max(h), h, h / 2.0, accent_now());
             }
             let glyph = if it.state == State::Active { "xmark" } else { "magnifyingglass" };
-            glyphs::glyph(s, ui, glyph, self.button_rect(wpt, i), TINT);
+            glyphs::glyph(s, ui, glyph, self.button_rect(wpt, i), button_color());
             if i + 1 < shown {
                 s.fill_rect(ui.pt(tx) as usize, ui.pt(row.y + row.h) as usize, ui.pt(row.x + row.w - PAD_PT - tx) as usize, 1, SEPARATOR_C.now());
             }
         }
         let c = self.clear_rect(wpt);
         s.fill_rect(ui.pt(c.x) as usize, ui.pt(c.y) as usize, ui.pt(c.w) as usize, 1, SEPARATOR_C.now());
-        let img = ui.text("Clear", MAC_SUBHEAD_PT, Weight::Regular, TINT);
+        let img = ui.text("Clear", MAC_SUBHEAD_PT, Weight::Regular, button_color());
         s.blit(&img, ui.pt(c.x + c.w / 2.0) as i32 - img.w as i32 / 2, ui.pt(c.y + c.h / 2.0) as i32 - img.h as i32 / 2, 255, 255);
     }
 }
@@ -598,6 +603,22 @@ impl Downloads {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bifrost_app::kit::appearance::{accent, set_accent, Accent};
+    use bifrost_app::kit::ui::TINT;
+
+    /// The accent is process-wide: this test changes it and restores it.
+    static ACCENT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn row_buttons_follow_the_chosen_accent_not_system_blue() {
+        let _g = ACCENT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let keep = accent();
+        set_accent(Accent::Green);
+        let (c, green) = (button_color(), accent_now());
+        set_accent(keep);
+        assert_eq!(c, green);
+        assert_ne!(c, TINT);
+    }
 
     #[test]
     fn displayable_types() {
