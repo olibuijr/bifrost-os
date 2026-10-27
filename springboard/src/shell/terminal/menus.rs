@@ -46,6 +46,10 @@ impl Shell {
             _ => true,
         }
     }
+    /// A Find, Connections, Form, Processes, More or Command panel is up and holds the typing.
+    pub(crate) fn terminal_panel_open(&self) -> bool {
+        self.terminal_ui.panel != Panel::None
+    }
     pub(super) fn terminal_panel_rect(&self) -> (f32, f32, f32, f32) {
         let bottom = if self.keyboard.shown() {
             self.kb_top()

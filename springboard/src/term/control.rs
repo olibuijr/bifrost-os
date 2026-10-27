@@ -29,6 +29,7 @@ pub fn spec_bytes(spec: &str, app_cursor: bool) -> Option<Vec<u8>> {
         "enter" | "return" => "Enter",
         "backspace" => "Backspace",
         "tab" => "Tab",
+        "backtab" | "shift+tab" => "BackTab",
         "escape" | "esc" => "Escape",
         "up" => "Up",
         "down" => "Down",

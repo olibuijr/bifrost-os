@@ -1248,9 +1248,10 @@ impl Shell {
             _ if self.assistant.is_shown() => self.assistant_key(out, t),
             _ if self.quicksearch.is_shown() => self.compose_search_key(out, t),
             Screen::App(AppId::Terminal | AppId::External(_)) => {
-                // an SDK app gets Shift+Tab with its Shift (the chord on Tab), which steps focus back; a Wayland client behind the
-                // input method and the Help viewer keep Tab
-                let out = if back_tab && matches!(self.screen, Screen::App(AppId::External(_))) && !self.im.active && self.help_viewer.is_none() {
+                // an SDK app gets Shift+Tab with its Shift (the chord on Tab), which steps focus back; the built-in Terminal gets
+                // the back-tab sequence (ESC [ Z); a Wayland client behind the input method and the Help viewer keep Tab
+                let panel_open = self.screen == Screen::App(AppId::Terminal) && self.terminal_panel_open();
+                let out = if back_tab && !panel_open && !self.im.active && self.help_viewer.is_none() {
                     Out::Named("BackTab")
                 } else {
                     out
