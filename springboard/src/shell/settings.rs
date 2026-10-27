@@ -5718,6 +5718,35 @@ mod e2e_w3_tests {
         assert_eq!(st.sidebar_list().expect("split").offset(), 40.0, "the sidebar stays");
     }
 
+    /// A mouse drag in the sidebar or a pane does not scroll it on a desktop; a finger does, and a tablet pans on either.
+    #[test]
+    fn a_mouse_drag_does_not_scroll_the_sidebar_or_a_pane_on_a_desktop() {
+        use bifrost_ui::form_factor::FormFactor::{Desktop, Tablet};
+        use bifrost_ui::pan::{with_touch, TouchSource::{Finger, Pointer}};
+        let ui = crate::shell::tests::ui();
+        let drag = |x: f32, form, source, pane: bool| {
+            let (mut st, mut prefs) = split(&ui);
+            st.set_size(&ui, 1200, 700);
+            if pane {
+                st.open_page_id(&ui, PageId::Appearance, 0.0);
+                settle(&mut st, &ui);
+            }
+            let x = if pane { st.sidebar_px() as f32 + x } else { x };
+            with_touch(form, source, || {
+                st.touch(&ui, &mut prefs, Event::Down(x, 600.0), 0.0);
+                st.touch(&ui, &mut prefs, Event::Move(x, 500.0), 16.0);
+                st.touch(&ui, &mut prefs, Event::Move(x, 200.0), 32.0);
+                st.touch(&ui, &mut prefs, Event::Up(x, 200.0), 48.0);
+            });
+            if pane { st.list().expect("list").offset() } else { st.sidebar_list().expect("split").offset() }
+        };
+        for pane in [false, true] {
+            assert_eq!(drag(10.0, Desktop, Pointer, pane), 0.0, "a mouse drag does not scroll (pane: {pane})");
+            assert!(drag(10.0, Desktop, Finger, pane) > 0.0, "a finger drag scrolls (pane: {pane})");
+            assert!(drag(10.0, Tablet, Pointer, pane) > 0.0, "a tablet pans on any drag (pane: {pane})");
+        }
+    }
+
     /// N4: a window resize rebuilt the sidebar from its top.
     #[test]
     fn a_resize_keeps_the_sidebar_scroll() {

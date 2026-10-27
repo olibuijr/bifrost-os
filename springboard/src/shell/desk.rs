@@ -3707,6 +3707,7 @@ impl Shell {
     /// lists scroll; that press must not grab window chrome: on an edge it resized the window by the notch (N1), on a
     /// title bar it moved it, on a traffic light or a Dock icon it clicked it. Only content takes the emulated drag.
     pub fn desk_wheel(&mut self, t: f64) {
+        self.note_wheel_pan(t);
         if let Some(d) = self.desk.as_mut() {
             d.wheel_at = Some(t);
         }
