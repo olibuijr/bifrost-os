@@ -603,7 +603,8 @@ impl Window {
                 ]));
                 let pin = if m.selected_pin.is_some() { ("Remove Pin", Act::RemovePin) } else { ("Drop Pin", Act::DropPin) };
                 v.push(Item::Buttons(vec![(pin.0.into(), pin.1, false), ("Copy Link".into(), Act::CopyLink, false), ("Print".into(), Act::Print, false)]));
-                v.push(Item::Buttons(vec![("Set Home".into(), Act::SetHome, false), ("Set Work".into(), Act::SetWork, false), ("New Collection".into(), Act::NewCollection, false)]));
+                v.push(Item::Buttons(vec![("Set Home".into(), Act::SetHome, false), ("Set Work".into(), Act::SetWork, false)]));
+                v.push(Item::Buttons(vec![("New Collection".into(), Act::NewCollection, false)]));
                 let colls: Vec<(String, Act, bool)> = m
                     .lib()
                     .collections
@@ -2048,6 +2049,15 @@ mod tests {
         let (x, y) = centre_of(&find(&w, &ui, "Close"));
         click(&mut w, &ctx, &ui, x, y);
         assert_eq!(w.maps.panel, Panel::None);
+    }
+
+    #[test]
+    fn the_new_collection_label_fits_its_card_button() {
+        let (mut w, ui, _) = window("collection-label", 1200, 780);
+        w.maps.choose(crate::geocode::Place::new("Perlan, Reykjavik", 64.1295, -21.9186));
+        let b = find(&w, &ui, "New Collection");
+        let need = ui.measure("New Collection", MAC_SUBHEAD_PT, Weight::Medium) / ui.pt(1.0);
+        assert!(need + SPACE_S <= b.rect.w, "the label needs {need} pt, the button is {} pt wide", b.rect.w);
     }
 
     #[test]
