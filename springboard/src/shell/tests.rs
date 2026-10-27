@@ -1443,7 +1443,7 @@
     fn ctrl_cmd_q_with_a_keyboard_layer_up_still_types_into_the_login_window() {
         let mut sh = signed_in_desktop();
         sh.char_viewer_open();
-        sh.modal_layer = Some(capture_flow::Layer { x: 0, y: 0, image: Image::new(1, 1), input: None });
+        sh.modal_layer = Some(capture_flow::Layer::new(0, 0, Image::new(1, 1), None));
         sh.hw_shortcut(hwkeys::Shortcut::Lock, 1000.0);
         assert!(sh.is_locked(), "Ctrl+Cmd+Q locks");
         assert!(sh.screen_on, "a desktop lock keeps the display on");
