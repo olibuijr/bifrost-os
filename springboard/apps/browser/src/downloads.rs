@@ -69,11 +69,6 @@ use bifrost_app::kit::ui::{Weight, CAPSULE_SHADOW, CARD_BG, DESTRUCTIVE, LABEL, 
 use bifrost_app::kit::{Surface, Ui};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::webview::WebViewId;
-
-/// Row glyph buttons and the "Clear" text follow the user's accent.
-fn button_color() -> u32 {
-    accent_now()
-}
 use bifrost_core::json::Json;
 
 use crate::control::{num, obj, text};
@@ -86,6 +81,11 @@ const BTN_PT: f32 = 24.0;
 const ICON_PT: f32 = 28.0;
 const ARROW_PT: f32 = 7.0;
 const FOOT_PT: f32 = 28.0;
+
+/// Row glyph buttons and the "Clear" text follow the user's accent.
+fn button_color() -> u32 {
+    accent_now()
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum State {
@@ -603,19 +603,13 @@ impl Downloads {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bifrost_app::kit::appearance::{accent, set_accent, Accent};
+    use bifrost_app::kit::appearance::Accent;
     use bifrost_app::kit::ui::TINT;
-
-    /// The accent is process-wide: this test changes it and restores it.
-    static ACCENT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     #[test]
     fn row_buttons_follow_the_chosen_accent_not_system_blue() {
-        let _g = ACCENT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let keep = accent();
-        set_accent(Accent::Green);
-        let (c, green) = (button_color(), accent_now());
-        set_accent(keep);
+        // The accent is process-wide: the crate's shared lock keeps other accent tests out.
+        let (c, green) = crate::tokens::with_accent(Accent::Green, || (button_color(), accent_now()));
         assert_eq!(c, green);
         assert_ne!(c, TINT);
     }
