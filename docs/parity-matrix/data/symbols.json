@@ -79,10 +79,9 @@
     }
   ],
   "gaps": [
-    "No symbol-effect API: appear, bounce, disappear, pulse, scale, variableColor, replace and automatic cannot be applied to a glyph",
-    "No discrete or indefinite effect protocols and no SymbolEffectOptions (repeat, speed) for starting or stopping a looping effect",
+    "Symbol effects exist as a pure model with a combined per-instant frame (springboard/ui/src/symbol_effect.rs: frame, EffectFrame, bounce up and down, variable colour, automatic) but their durations and amounts are not yet measured: the reference binary is inside a dyld cache that is not unpacked. Drawing integration in glyphs.rs for the new frame is still to do",
     "No content transition for swapping one symbol for another; a glyph change is a plain redraw",
-    "No draw-on and draw-off, breathe, rotate or wiggle effects; glyphs have no stroke-progress or per-layer state",
+    "No draw-on and draw-off effects; glyphs have no stroke-progress or per-layer state, so variable colour layers are not drawn",
     "The glyph set is 78 hand-drawn names (springboard/sdk/src/glyphs.rs NAMES), one weight, no variable or palette rendering, not the SF Symbols catalogue",
     "The SF Symbols font path in springboard/render/src/symbols.rs has no symbol font on the device to resolve against"
   ]

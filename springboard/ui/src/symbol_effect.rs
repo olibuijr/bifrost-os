@@ -1,9 +1,10 @@
 //! Symbol effects for system symbol images (`SymbolEffect`, `DiscreteSymbolEffect`, `IndefiniteSymbolEffect`,
 //! `SymbolEffectOptions`, `ReplaceSymbolEffect`) as pure functions of time. An effect gives a `Pose` (scale, rotation,
 //! opacity and offset) for a glyph at `now` seconds; the renderer applies it. Durations and amounts are our own design
-//! values, not the reference system's tuning.
+//! values: the reference binary sits in a dyld cache that is not unpacked yet, so nothing here is measured.
 
 use crate::anim::Curve;
+use crate::symbol_layers::{layer_opacity, Fill, Inactive};
 use std::f32::consts::{PI, TAU};
 
 /// How a glyph is drawn at one instant. `REST` is the untouched glyph.
@@ -71,6 +72,14 @@ pub enum Effect {
     Disappear,
     /// A transitory scale bump.
     Bounce,
+    /// A vertical hop upward and back (`bounce.up`).
+    BounceUp,
+    /// A vertical dip downward and back (`bounce.down`).
+    BounceDown,
+    /// Cycles the opacity of each layer in turn; read it with `EffectFrame::layer_opacity`.
+    VariableColor,
+    /// Lets the system choose: it resolves to `Bounce`.
+    Automatic,
     /// Fades the opacity down and back up.
     Pulse,
     /// Shrinks the glyph and holds it small.
@@ -90,7 +99,8 @@ impl Effect {
     pub fn cycle_secs(self) -> f32 {
         match self {
             Effect::Appear | Effect::Disappear => 0.4,
-            Effect::Bounce => 0.6,
+            Effect::Bounce | Effect::BounceUp | Effect::BounceDown | Effect::Automatic => 0.6,
+            Effect::VariableColor => 1.2,
             Effect::Pulse => 0.9,
             Effect::ScaleDown | Effect::ScaleUp => 0.35,
             Effect::Breathe => 1.6,
@@ -113,7 +123,10 @@ impl Effect {
                 p.opacity = 1.0 - ease;
                 p.scale = 1.0 - 0.4 * ease;
             }
-            Effect::Bounce => p.scale = 1.0 + 0.15 * (PI * t).sin(),
+            Effect::Bounce | Effect::Automatic => p.scale = 1.0 + 0.15 * (PI * t).sin(),
+            Effect::BounceUp => p.dy = -0.2 * (PI * t).sin(),
+            Effect::BounceDown => p.dy = 0.2 * (PI * t).sin(),
+            Effect::VariableColor => {}
             Effect::Pulse => p.opacity = 1.0 - 0.5 * (PI * t).sin(),
             Effect::ScaleDown => p.scale = 1.0 - 0.25 * ease,
             Effect::ScaleUp => p.scale = 1.0 + 0.25 * ease,
@@ -192,6 +205,42 @@ impl SymbolEffect {
         }
         self.effect.pose_at(cycles.fract())
     }
+}
+
+/// Everything a renderer needs for one glyph at one instant: the pose, the variable colour progress and whether the
+/// effect has ended (`frame`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct EffectFrame {
+    pub scale: f32,
+    pub opacity: f32,
+    /// Vertical offset as a fraction of the glyph height; negative is up.
+    pub y_offset: f32,
+    pub rotation: f32,
+    /// Progress through the current variable colour cycle, 0..=1; 0 for other effects.
+    pub progress: f32,
+    pub finished: bool,
+}
+
+impl EffectFrame {
+    /// Opacity of layer `layer` of `layers`: the layer fill for `VariableColor`, the whole-glyph opacity otherwise.
+    pub fn layer_opacity(&self, effect: Effect, layer: usize, layers: usize, fill: Fill, inactive: Inactive) -> f32 {
+        if effect == Effect::VariableColor && !self.finished {
+            layer_opacity(layer, layers, self.progress, fill, inactive)
+        } else if layer < layers {
+            self.opacity
+        } else {
+            0.0
+        }
+    }
+}
+
+/// The frame of `effect` with `options` at `t` seconds after it started.
+pub fn frame(effect: Effect, options: Options, t: f64) -> EffectFrame {
+    let fx = SymbolEffect::new(effect, options, 0.0);
+    let pose = fx.pose(t);
+    let finished = fx.is_done(t);
+    let progress = if effect == Effect::VariableColor && !finished { fx.elapsed_cycles(t).fract() } else { 0.0 };
+    EffectFrame { scale: pose.scale, opacity: pose.opacity, y_offset: pose.dy, rotation: pose.rotation, progress, finished }
 }
 
 /// How a symbol is replaced by another (`ReplaceSymbolEffect` variants).
@@ -337,5 +386,64 @@ mod tests {
         assert!(out.opacity > 0.0 && incoming.opacity == 0.0);
         let (out, incoming) = replace_poses(Replace::UpUp, 0.8);
         assert!(out.opacity == 0.0 && incoming.opacity > 0.0);
+    }
+
+    #[test]
+    fn bounce_up_and_down_hop_in_opposite_directions_and_rest_at_the_ends() {
+        let up = frame(Effect::BounceUp, Options::default(), 0.3);
+        let down = frame(Effect::BounceDown, Options::default(), 0.3);
+        assert!(up.y_offset < 0.0 && down.y_offset > 0.0);
+        assert!(close(up.y_offset, -down.y_offset));
+        assert!(close(frame(Effect::BounceUp, Options::default(), 0.0).y_offset, 0.0));
+        let end = frame(Effect::BounceDown, Options::default(), 0.61);
+        assert!(end.finished && close(end.y_offset, 0.0) && close(end.scale, 1.0));
+    }
+
+    #[test]
+    fn counted_bounce_finishes_after_two_periods_and_speed_halves_it() {
+        let o = Options::repeat(1);
+        assert!(!frame(Effect::BounceUp, o, 1.1).finished);
+        assert!(frame(Effect::BounceUp, o, 1.21).finished);
+        let fast = o.speed(2.0);
+        assert!(!frame(Effect::BounceUp, fast, 0.55).finished);
+        assert!(frame(Effect::BounceUp, fast, 0.61).finished);
+    }
+
+    #[test]
+    fn continuous_effect_never_finishes() {
+        for k in 0..50 {
+            assert!(!frame(Effect::VariableColor, Options::repeating(), k as f64 * 3.7).finished);
+        }
+    }
+
+    #[test]
+    fn automatic_resolves_to_the_bounce_scale_bump() {
+        for t in [0.0, 0.15, 0.3, 0.45, 0.6, 1.0] {
+            assert_eq!(frame(Effect::Automatic, Options::default(), t), frame(Effect::Bounce, Options::default(), t));
+        }
+    }
+
+    #[test]
+    fn frame_of_appear_and_disappear_ends_match_the_pose() {
+        let a = frame(Effect::Appear, Options::default(), 0.0);
+        assert!(close(a.opacity, 0.0) && !a.finished);
+        let a = frame(Effect::Appear, Options::default(), 1.0);
+        assert!(a.finished && a.opacity == 1.0 && a.scale == 1.0);
+        assert_eq!(frame(Effect::Disappear, Options::default(), 1.0).opacity, 0.0);
+    }
+
+    #[test]
+    fn variable_colour_frame_lights_layers_in_turn() {
+        let o = Options::repeating();
+        let start = frame(Effect::VariableColor, o, 0.0);
+        assert_eq!(start.progress, 0.0);
+        assert!(close(start.layer_opacity(Effect::VariableColor, 0, 3, Fill::Cumulative, Inactive::Dim), 0.3));
+        let late = frame(Effect::VariableColor, o, 1.1);
+        assert!(late.progress > 0.9);
+        assert!(close(late.layer_opacity(Effect::VariableColor, 0, 3, Fill::Cumulative, Inactive::Dim), 1.0));
+        // Other effects report the whole-glyph opacity for every layer; a layer past the count is 0.
+        let pulse = frame(Effect::Pulse, o, 0.45);
+        assert!(close(pulse.layer_opacity(Effect::Pulse, 1, 3, Fill::Cumulative, Inactive::Dim), pulse.opacity));
+        assert_eq!(pulse.layer_opacity(Effect::Pulse, 3, 3, Fill::Cumulative, Inactive::Dim), 0.0);
     }
 }

@@ -5442,6 +5442,7 @@ wiring.
 - `surface_use`: Use counts for a shared buffer.
 - `switch_scan`: Switch Control item scanning (`AccessibilityTechnology.switchControl`)
 - `symbol_effect`: Symbol effects for system symbol images (`SymbolEffect`, `DiscreteSymbolEffect`, `IndefiniteSymbolEffect`,
+- Symbol effects, one frame: `symbol_effect::frame(effect, options, t)` returns an `EffectFrame` (scale, opacity, y offset, rotation, variable colour progress, finished) for any `Effect`, including `BounceUp`, `BounceDown`, `VariableColor` and `Automatic` (resolves to `Bounce`). `EffectFrame::layer_opacity` gives a per-layer opacity through `symbol_layers`. Durations and amounts are BifrOSt design values; the reference tuning could not be measured because its framework sits in a dyld cache that is not unpacked yet. Content transition and draw-on/off are not modelled.
 - `symbol_layers`: Symbol layers
 - `tensor`: Tensor types for compute graphs
 - `text_classifier`: A text classifier that runs
