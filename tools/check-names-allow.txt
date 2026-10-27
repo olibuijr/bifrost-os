@@ -28,7 +28,6 @@ springboard/cmd/src/mdutil.rs:spotlight_excluded:the same persisted settings key
 springboard/sdk/src/quicksearch.rs:hide_in_spotlight:existing public API name retained for search-index parity
 springboard/sdk/src/searchable_entity.rs:hide_in_spotlight:existing public API name retained for search-index parity
 springboard/src/shell/entity_index.rs:hide_in_spotlight:existing public API name retained for search-index parity
-springboard/src/shell/desk.rs:spotlight_front_tests|hand-back as Spotlight's keyboard goes:a test module name and its assertion message (code lines; desk.rs is edited by another change, comments only here)
 springboard/apps/files/src/views/options.rs:"apple":the fruit, a sort-order test entry name
 springboard/apps/locate-desktop/src/window.rs:"iphone":icon asset id of the Devices section (assets are keyed by it)
 springboard/apps/stocks-desktop/src/*.rs:Apple Inc\.:a listed company's name in quote sample data and a doc example

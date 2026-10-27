@@ -5468,7 +5468,7 @@ mod launch_front_tests;
 /// E2E6 Search: whatever Search, the Apps grid, the Dock or `open-app` opens is the front window and keeps the
 /// keyboard, whatever focus the window server gives other windows on its own while the app maps (`FrontIntent`).
 #[cfg(all(test, feature = "desktop-wayland"))]
-mod spotlight_front_tests;
+mod search_front_tests;
 
 /// Full screen as the reference shows it: the menu bar slides in at the top edge with the window's toolbar directly
 /// under it (never under the bar), the traffic lights in that band, and both go again once the pointer leaves them.

@@ -23,7 +23,7 @@ fn a_launch_over_a_built_in_stays_in_front_through_the_window_servers_focus() {
     sh.desk_open(AppId::External(0), 10.0);
     let want = (Some(AppId::External(0)), Screen::App(AppId::External(0)));
     sh.wayland_window_event(WindowEvent::HandBack(id(AppId::Settings)));
-    assert_eq!(front(&sh), want, "the hand-back as Spotlight's keyboard goes");
+    assert_eq!(front(&sh), want, "the hand-back as Search's keyboard goes");
     sh.wayland_window_event(WindowEvent::ServerFocus(id(AppId::Settings)));
     assert_eq!(front(&sh), want, "a later keyboard enter of the window that was in front");
     sh.desk_intent_tick(10.0 + FRONT_INTENT_MS / 2.0);
