@@ -682,7 +682,9 @@ pub fn run() -> Result<(), String> {
     loop {
         let events = display.dispatch(-1, Some(link.fd()))?;
         for m in link.recv().map_err(|e| format!("shell link closed: {e}"))? {
-            if let ToChrome::MenuBar(model) = m {
+            if crate::model::apply_appearance(&m) {
+                bar.changed();
+            } else if let ToChrome::MenuBar(model) = m {
                 bar.set_model(model);
             }
         }

@@ -116,9 +116,33 @@ pub enum ToChrome {
     MenuBar(MenuBarModel),
     Dock(DockModel),
     Panels(PanelsModel),
+    /// The system appearance. `dark` is the scheme the shell is heading for; `accent` is the chosen accent as
+    /// `bifrost_render::appearance::Accent::to_wire` names it (0: not sent), so the client resolves both scheme values
+    /// itself. `apply_appearance` puts it into the client's process.
     Appearance { dark: bool, accent: u32, reduce_motion: bool, reduce_transparency: bool },
     /// Open a panel ("notifications", "control", "search") or close it ("").
     ShowPanel(String),
+}
+
+/// The scheme and accent an `Appearance` model names (`None` for any other model). A `accent` the client does not know
+/// (0, or past the list) leaves the accent as it is.
+pub fn appearance_of(m: &ToChrome) -> Option<(bool, Option<bifrost_render::appearance::Accent>)> {
+    match m {
+        ToChrome::Appearance { dark, accent, .. } => Some((*dark, bifrost_render::appearance::Accent::from_wire(*accent))),
+        _ => None,
+    }
+}
+
+/// Makes this process draw in the scheme and accent of an `Appearance` model, so `ui::accent_now()` and
+/// `ui::menu_highlight()` follow the user's choice. True when `m` was an `Appearance`. The shell fades the scheme
+/// itself; the client jumps, as the chrome has no clock for the fade.
+pub fn apply_appearance(m: &ToChrome) -> bool {
+    let Some((dark, accent)) = appearance_of(m) else { return false };
+    bifrost_render::appearance::jump_to(!dark);
+    if let Some(a) = accent {
+        bifrost_render::appearance::set_accent(a);
+    }
+    true
 }
 
 /// Chrome to shell.
@@ -610,6 +634,24 @@ mod tests {
             ToChrome::Appearance { dark: true, accent: 0x0a84ff, reduce_motion: false, reduce_transparency: true },
             ToChrome::ShowPanel("control".into()),
         ]
+    }
+
+    #[test]
+    fn appearance_names_the_scheme_and_the_accent_and_applies_to_the_process() {
+        use bifrost_render::appearance::{accent, accent_now, set_accent, Accent};
+        let m = |accent: u32| ToChrome::Appearance { dark: true, accent, reduce_motion: false, reduce_transparency: false };
+        assert_eq!(appearance_of(&m(Accent::Green.to_wire())), Some((true, Some(Accent::Green))));
+        assert_eq!(appearance_of(&m(0)), Some((true, None)), "0 means not sent");
+        assert_eq!(appearance_of(&ToChrome::ShowPanel(String::new())), None);
+        let keep = accent();
+        set_accent(Accent::Blue);
+        assert!(apply_appearance(&m(Accent::Green.to_wire())));
+        assert_eq!(accent(), Accent::Green);
+        assert_eq!(accent_now(), Accent::Green.colours().0, "dark scheme: the dark value");
+        assert!(apply_appearance(&m(0)));
+        assert_eq!(accent(), Accent::Green, "an unknown accent keeps the one the client has");
+        assert!(!apply_appearance(&ToChrome::ShowPanel(String::new())));
+        set_accent(keep);
     }
 
     fn sample_from_chrome() -> Vec<FromChrome> {

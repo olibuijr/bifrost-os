@@ -579,13 +579,17 @@ pub fn run() -> Result<(), String> {
         let now = started.elapsed().as_secs_f64();
         let wait = if state.animating(now) { 16 } else { -1 };
         let events = display.dispatch(wait, Some(link.fd()))?;
+        // a new scheme or accent repaints the Dock and its open menu
+        let mut appearance_changed = false;
         for m in link.recv().map_err(|e| format!("shell link: {e}"))? {
-            if let ToChrome::Dock(model) = m {
+            if crate::model::apply_appearance(&m) {
+                appearance_changed = true;
+            } else if let ToChrome::Dock(model) = m {
                 state.set_model(model);
             }
         }
-        let mut dirty = false;
-        let mut menu_dirty = false;
+        let mut dirty = appearance_changed;
+        let mut menu_dirty = appearance_changed;
         for ev in events {
             match ev {
                 Event::Configured { surface: s, width, height, scale: sc } => {
