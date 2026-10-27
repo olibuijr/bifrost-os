@@ -449,6 +449,24 @@ impl App for CalendarApp {
             self.send_outbox(ctx);
             return used;
         }
+        // a secondary click on an event: its menu (Open, Delete Event), and the choice made from it
+        if let Input::Context { x, y } = ev {
+            let Some(c) = &mut self.cal else { return false };
+            let items = c.context_items(&ctx.ui, x, y);
+            if items.is_empty() {
+                return false;
+            }
+            ctx.context_menu(x, y, items);
+            return true;
+        }
+        if let Input::ContextAction(choice) = ev {
+            let Some(c) = &mut self.cal else { return false };
+            let done = c.context_action(&ctx.ui, choice, bifrost_app::proto::sys::now_ms());
+            share_copy(c, ctx);
+            self.open_event_window(ctx);
+            self.send_outbox(ctx);
+            return done;
+        }
         let (Some(c), Input::Touch { kind, x, y, t, .. }) = (&mut self.cal, ev) else { return false };
         let e = match kind {
             TouchKind::Down => Event::Down(x, y),
