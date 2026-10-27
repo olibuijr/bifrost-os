@@ -30,11 +30,6 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use crate::archive;
-/// The list footer: "1 Contact", otherwise "N Contacts". The reference extract carries no localized string for this
-/// count, so the plain singular and plural forms are used.
-fn count_label(n: usize) -> String {
-    if n == 1 { "1 Contact".to_string() } else { format!("{n} Contacts") }
-}
 use crate::details::{self, CardDetails, Detail, Details};
 use crate::display_file::{self, Prefs};
 use crate::dupes;
@@ -49,6 +44,12 @@ use crate::group_file;
 use crate::history::History;
 use crate::names;
 pub use store::Contact;
+
+/// The list footer: "1 Contact", otherwise "N Contacts". The reference extract carries no localized string for this
+/// count, so the plain singular and plural forms are used.
+fn count_label(n: usize) -> String {
+    if n == 1 { "1 Contact".to_string() } else { format!("{n} Contacts") }
+}
 
 /// Toolbar items and control ids.
 pub const BAR_SIDEBAR: u32 = 1;
