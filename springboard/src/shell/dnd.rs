@@ -334,6 +334,11 @@ impl super::Shell {
         let mut outs = sess.moved(target, &takes);
         sess.pos = Some((x, y));
         if up {
+            // the release is the session's, not the window's: the press that began the drag is over, and the moves that
+            // follow (no button held) are not a drag in the window it started in
+            if let Some(d) = self.desk.as_mut() {
+                d.end_grab();
+            }
             if sess.over().is_none() {
                 if let Some(zone) = self.dnd_zone(x, y) {
                     // the Dock or the desktop takes the files; the session ends here
