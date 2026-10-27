@@ -98,10 +98,8 @@ fn bench_frame_menu_open() {
 #[test]
 #[ignore]
 fn bench_frame_ext_pixels() {
-    let _lock = crate::test_support::global_lock();
-    let saved = std::env::var_os("SPRINGBOARD_WAYLAND");
-    std::env::set_var("SPRINGBOARD_WAYLAND", "1");
     let mut sh = desktop(Some(AppId::Settings));
+    sh.wayland = true;
     sh.screen = Screen::Home;
     sh.anim = None;
     let mut buf = vec![0u32; W * H];
@@ -114,11 +112,6 @@ fn bench_frame_ext_pixels() {
             sh.draw(&mut Surface { w: W, h: H, stride: W, px: &mut buf, y0: 0 }, 1e9 + 16.0 + k as f64 * 16.0);
         }),
     );
-    if let Some(v) = saved {
-        std::env::set_var("SPRINGBOARD_WAYLAND", v)
-    } else {
-        std::env::remove_var("SPRINGBOARD_WAYLAND")
-    };
 }
 
 /// A Settings window dragged by its title bar: each timed frame is one pointer move (the event) plus the repaint.

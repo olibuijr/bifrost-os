@@ -20,34 +20,6 @@
         shell_sized(1200, 1920)
     }
 
-    /// For a test of the shell placing windows itself (tiling): with the window server's variable set, the compositor owns
-    /// window positions and a tile is only queued as a request (`compositor_places_windows`). The guard holds the
-    /// crate-wide test lock, so no parallel test has the variable set meanwhile, and puts the variable back when dropped.
-    #[cfg(feature = "desktop-wayland")]
-    pub(crate) struct ShellPlacesWindows {
-        saved: Option<std::ffi::OsString>,
-        _lock: std::sync::MutexGuard<'static, ()>,
-    }
-
-    #[cfg(feature = "desktop-wayland")]
-    impl ShellPlacesWindows {
-        pub(crate) fn new() -> Self {
-            let lock = crate::test_support::global_lock();
-            let saved = std::env::var_os("SPRINGBOARD_WAYLAND");
-            std::env::remove_var("SPRINGBOARD_WAYLAND");
-            ShellPlacesWindows { saved, _lock: lock }
-        }
-    }
-
-    #[cfg(feature = "desktop-wayland")]
-    impl Drop for ShellPlacesWindows {
-        fn drop(&mut self) {
-            if let Some(v) = self.saved.take() {
-                std::env::set_var("SPRINGBOARD_WAYLAND", v);
-            }
-        }
-    }
-
     /// A shell in desktop mode (menu bar, dock, windows).
     #[allow(dead_code)]
     pub(crate) fn desktop_shell() -> Shell {
@@ -77,6 +49,8 @@
         sh.form = if desktop { bifrost_ui::form_factor::FormFactor::Desktop } else { bifrost_ui::form_factor::FormFactor::Tablet };
         // the keyboard client starts out shown; the shell raises it when a field asks, so start every test from down
         sh.keyboard.set_shown(false, 0.0);
+        // not a client of the window server unless a test says so (`sh.wayland = true`), whatever the environment
+        sh.wayland = false;
         sh
     }
 
@@ -915,7 +889,6 @@
     #[cfg(feature="desktop-wayland")]
     #[test]
     fn choosing_in_the_window_menu_tiles_that_window_or_takes_it_full_screen() {
-        let _placement=ShellPlacesWindows::new();
         use desktop_bar::Action;
         let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
         sh.desk_open(AppId::Settings,0.);
@@ -937,7 +910,6 @@
     #[cfg(feature="desktop-wayland")]
     #[test]
     fn the_window_menu_can_tile_two_windows_side_by_side() {
-        let _placement=ShellPlacesWindows::new();
         use desktop_bar::Action;
         let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
         sh.desk_open(AppId::Terminal,0.);
@@ -1149,9 +1121,7 @@
     #[cfg(feature="desktop-wayland")]
     #[test]
     fn a_frame_for_an_apps_pixels_alone_draws_no_shell_surface() {
-        let _lock=crate::test_support::global_lock();
-        let saved=std::env::var_os("SPRINGBOARD_WAYLAND");std::env::set_var("SPRINGBOARD_WAYLAND","1");
-        let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;sh.drawn=Drawn::App;
+        let mut sh=shell();sh.wayland=true;sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;sh.drawn=Drawn::App;
         let (w,h)=(sh.w as usize,sh.h as usize);
         let mut pixels=vec![0;w*h];
         // the first frame draws the desktop whole (it is what sets desk_drawn)
@@ -1176,7 +1146,6 @@
         sh.ext_frame=true;sh.dirty=true;
         sh.draw(&mut Surface{w,h,stride:w,px:&mut pixels,y0:0},2000.);
         assert!(!sh.ext_frame);
-        if let Some(v)=saved {std::env::set_var("SPRINGBOARD_WAYLAND",v)} else {std::env::remove_var("SPRINGBOARD_WAYLAND")};
     }
 
     /// A menu, panel or overlay that is only open does not ask for frames: input and the overlays' own timers mark the
@@ -1900,9 +1869,7 @@
     #[cfg(feature = "desktop-wayland")]
     #[test]
     fn a_bar_only_frame_repaints_only_the_menu_bar_band() {
-        let _lock=crate::test_support::global_lock();
-        let saved=std::env::var_os("SPRINGBOARD_WAYLAND");std::env::set_var("SPRINGBOARD_WAYLAND","1");
-        let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;sh.drawn=Drawn::App;
+        let mut sh=shell();sh.wayland=true;sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;sh.drawn=Drawn::App;
         let mut pixels=vec![0;sh.w as usize*sh.h as usize];
         let (w,h)=(sh.w as usize,sh.h as usize);
         // a bar-only repaint always follows a full desktop frame (it is what sets desk_drawn)
@@ -1914,7 +1881,6 @@
         let damage=sh.draw(&mut Surface{w,h,stride:w,px:&mut pixels,y0:0},1000.);
         assert!(!damage.is_all());assert!(damage.pixels()<=w*band,"nothing below the bar is repainted");
         assert!(pixels[..w*band]==expected[..w*band],"the bar's rows equal a desktop repaint of them");
-        if let Some(v)=saved {std::env::set_var("SPRINGBOARD_WAYLAND",v)} else {std::env::remove_var("SPRINGBOARD_WAYLAND")};
     }
 
     /// A window that windows in front cover keeps no cache entry on purpose; that must not make every partial desktop
@@ -1936,9 +1902,7 @@
     #[cfg(feature = "desktop-wayland")]
     #[test]
     fn a_bar_only_frame_reports_damage_for_the_changed_items_alone() {
-        let _lock=crate::test_support::global_lock();
-        let saved=std::env::var_os("SPRINGBOARD_WAYLAND");std::env::set_var("SPRINGBOARD_WAYLAND","1");
-        let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;sh.drawn=Drawn::App;
+        let mut sh=shell();sh.wayland=true;sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;sh.drawn=Drawn::App;
         let (w,h)=(sh.w as usize,sh.h as usize);
         let mut pixels=vec![0;w*h];
         sh.draw(&mut Surface{w,h,stride:w,px:&mut pixels,y0:0},0.);
@@ -1952,15 +1916,12 @@
         assert!(!damage.is_all());
         assert_eq!(damage.pixels(),100*band,"only the changed item's rectangle");
         assert!(sh.bar_rects.is_empty(),"the rectangles belong to one frame");
-        if let Some(v)=saved {std::env::set_var("SPRINGBOARD_WAYLAND",v)} else {std::env::remove_var("SPRINGBOARD_WAYLAND")};
     }
 
     #[cfg(feature = "desktop-wayland")]
     #[test]
     fn review_performance_overlay_repaints_only_its_desktop_band() {
-        let _lock=crate::test_support::global_lock();
-        let saved=std::env::var_os("SPRINGBOARD_WAYLAND");std::env::set_var("SPRINGBOARD_WAYLAND","1");
-        let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;sh.perf.enabled=true;sh.drawn=Drawn::App;
+        let mut sh=shell();sh.wayland=true;sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;sh.perf.enabled=true;sh.drawn=Drawn::App;
         let mut pixels=vec![0;sh.w as usize*sh.h as usize];
         let (w,h)=(sh.w as usize,sh.h as usize);
         // a perf-only repaint always follows a full desktop frame (it is what sets desk_drawn)
@@ -1975,7 +1936,6 @@
         let damage=sh.draw(&mut Surface{w,h,stride:w,px:&mut pixels,y0:0},1000.);
         assert!(!damage.is_all());assert!(damage.pixels()<w*h/10);
         assert!(pixels==expected,"partial HUD repaint differs from full desktop");
-        if let Some(v)=saved {std::env::set_var("SPRINGBOARD_WAYLAND",v)} else {std::env::remove_var("SPRINGBOARD_WAYLAND")};
     }
 
     #[cfg(test)]
@@ -4121,10 +4081,8 @@ mod live_wallpaper_tests {
     #[cfg(feature = "desktop-wayland")]
     #[test]
     fn every_desktop_frame_publishes_the_windows() {
-        let _lock = crate::test_support::global_lock();
-        let saved = std::env::var_os("SPRINGBOARD_WAYLAND");
-        std::env::set_var("SPRINGBOARD_WAYLAND", "1");
         let mut sh = desktop_shell();
+        sh.wayland = true;
         sh.anim = None;
         sh.screen_on = true;
         sh.screen = Screen::Home;
@@ -4151,10 +4109,5 @@ mod live_wallpaper_tests {
         sh.ext_frame = false;
         sh.draw(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 5000.0);
         assert!(sh.take_wayland_windows().iter().any(|f| f.id == id), "a settled frame never publishes an empty window list");
-        if let Some(v) = saved {
-            std::env::set_var("SPRINGBOARD_WAYLAND", v)
-        } else {
-            std::env::remove_var("SPRINGBOARD_WAYLAND")
-        };
     }
 }

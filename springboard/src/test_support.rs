@@ -1,8 +1,8 @@
 //! Test-only helpers shared by the whole crate.
 //!
-//! Some state is process-wide: the `SPRINGBOARD_WAYLAND` environment variable, the appearance fade in
-//! `bifrost_render::appearance`, the glass flags. Tests run in parallel threads, so a test that sets or changes any of it
-//! must hold `global_lock()` for its whole body, or another test reads the value mid-change.
+//! Some state is process-wide: the appearance fade in `bifrost_render::appearance`, the glass flags. Tests run in
+//! parallel threads, so a test that sets or changes any of it must hold `global_lock()` for its whole body, or another
+//! test reads the value mid-change.
 //!
 //! Heavy read-only fixtures (the UI fonts, solid full-screen wallpapers) are made once per process here and shared, so
 //! the suite's memory does not grow with the number of tests that build a shell.

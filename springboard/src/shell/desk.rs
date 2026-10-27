@@ -144,13 +144,6 @@ pub fn placement_of(tile: Tile) -> crate::bare::window_level_client::Placement {
     }
 }
 
-/// Whether the Wayland compositor owns window positions (the desktop session): the shell can maximize and restore a
-/// window there, but cannot move it to a half or the centre.
-#[cfg(feature = "desktop-wayland")]
-pub fn compositor_places_windows() -> bool {
-    cfg!(feature = "desktop-wayland") && std::env::var_os("SPRINGBOARD_WAYLAND").is_some()
-}
-
 /// Waits for (reaps) the started apps whose process has exited and forgets them. A quit app nobody waited for stays a
 /// zombie, and a zombie still counts in its cgroup's `pids.current`, so the CPU and RAM menus listed quit apps as
 /// running (E2E N14, W5-13). Running children are kept.
@@ -1906,7 +1899,7 @@ impl Shell {
     /// nothing to keep.
     pub(super) fn desk_windows_kept(&mut self) -> bool {
         #[cfg(feature = "desktop-wayland")]
-        if std::env::var_os("SPRINGBOARD_WAYLAND").is_some() {
+        if self.wayland {
             return self.retain_wayland_windows();
         }
         true
@@ -1916,7 +1909,7 @@ impl Shell {
     /// server's path (the conditions of the bar-only frame), nothing animating and nothing floating over the windows.
     #[cfg(feature = "desktop-wayland")]
     pub(super) fn ext_windows_only_ok(&self, t: f64) -> bool {
-        std::env::var_os("SPRINGBOARD_WAYLAND").is_some()
+        self.wayland
             && self.desk_active() && self.desk_drawn && !self.is_locked() && self.anim.is_none()
             && self.desktop_menu.is_none() && !self.cc_active() && !self.center_active() && !self.overlay_visible() && !self.quick_look.is_visible() && !self.utility_up()
             && !self.overview_active() && !self.desk_animating(t)
@@ -2468,7 +2461,7 @@ impl Shell {
     pub(super) fn desk_tile_window(&mut self, i: usize, tile: Tile) {
         let Some(w) = self.desk.as_ref().and_then(|d| d.wins.get(i)).copied() else { return };
         if w.full { return; }
-        if compositor_places_windows() {
+        if self.wayland {
             if tile == Tile::Fill {
                 if !w.maximized { self.desk_zoom_window(i); }
             } else {
@@ -2526,7 +2519,7 @@ impl Shell {
     pub(super) fn desk_restore_window(&mut self, i: usize) {
         let Some(w) = self.desk.as_ref().and_then(|d| d.wins.get(i)).copied() else { return };
         if w.full { return; }
-        if compositor_places_windows() {
+        if self.wayland {
             // a zoom (Fill, the green button, a full-screen exit that came back filled) is undone as a zoom: the shell's
             // frame goes back to the one it kept and the window server drops its maximize to the same frame, so neither
             // side is left waiting for the other (W3-6); a tile goes back through the window server, which made it
@@ -2781,7 +2774,7 @@ impl Shell {
     /// Starts a window effect. Nothing starts without the Wayland presenter, for `AnimationBehavior::None`
     /// (and the kinds a behaviour excludes), or without a desk; Reduce Motion turns it into a cross-fade.
     pub(super) fn desk_fx_start(&mut self, app: AppId, call: FxCall, t: f64) {
-        if !cfg!(feature = "desktop-wayland") || std::env::var_os("SPRINGBOARD_WAYLAND").is_none() { return; }
+        if !cfg!(feature = "desktop-wayland") || !self.wayland { return; }
         let (Some(id), Some(i)) = (win_id(app), self.desk.as_ref().and_then(|d| d.index_of(app))) else { return };
         let m = self.desk_metrics();
         let win = self.desk.as_ref().unwrap().wins[i].r;
@@ -2875,7 +2868,7 @@ impl Shell {
         {let installed=apphost::installed();
         let ids:Vec<&str>=desk.linux_apps.iter().map(|a|a.app_id.as_str()).collect();
         list.extend(super::dock_tiles::linux_tiles(&installed,apps(),&ids).into_iter().map(|i|apps().len()+1+i));}
-        if std::env::var_os("SPRINGBOARD_WAYLAND").is_some() { list.push(apps().len()); }
+        if self.wayland { list.push(apps().len()); }
         // sections: pinned, then recents (running, not kept), then minimized windows and the Trash
         list.sort_by_key(|&i| self.dock_section(i));
         list.extend(desk.wins.iter().enumerate().filter(|(_, w)| self.overview.user_minimized(w) && !desk.is_hidden(w.app) && !desk.is_put_aside(w.app)).map(|(wi, _)| super::desktop_dock::DOCK_MIN_BASE - wi));
@@ -4356,7 +4349,7 @@ impl Shell {
                 continue;
             }
             #[cfg(feature = "desktop-wayland")]
-            if std::env::var_os("SPRINGBOARD_WAYLAND").is_some() {
+            if self.wayland {
                 let id = win_id(w.app).unwrap_or(0);
                 let focused = Some(i) == front;
                 let hover = self.desk.as_ref().unwrap().lights_hover == Some(w.app);
@@ -4613,7 +4606,7 @@ impl Shell {
             let top = b.r.y.max(0) as usize;
             // without the window server the windows are drawn into this frame: the toolbar's rows are moved down in place
             // (bottom row first, as the band overlaps them), before the bar is drawn over the top rows
-            let in_frame = std::env::var_os("SPRINGBOARD_WAYLAND").is_none() && s.y0 == 0 && s.h >= top + band && x0 < s.w;
+            let in_frame = !self.wayland && s.y0 == 0 && s.h >= top + band && x0 < s.w;
             match cached {
                 Some(c) => copy_rect(s, &c.pixels[..c.width * band], c.width, band, b.r.x, b.r.y),
                 None if in_frame => {
@@ -4675,12 +4668,12 @@ impl Shell {
         let b = w.body(m);
         let (bw, bh) = (b.w.max(1) as usize, b.h.max(1) as usize);
         #[cfg(feature = "desktop-wayland")]
-        let persistent = std::env::var_os("SPRINGBOARD_WAYLAND").is_some() && matches!(w.app, AppId::External(_)) && !self.keyboard.shown() && !self.keyboard.animating();
+        let persistent = self.wayland && matches!(w.app, AppId::External(_)) && !self.keyboard.shown() && !self.keyboard.animating();
         #[cfg(not(feature = "desktop-wayland"))]
         let persistent = false;
         // a built-in on the Wayland path keeps its last (undimmed) body too, so a key-state change can reuse it
         #[cfg(feature = "desktop-wayland")]
-        let builtin = std::env::var_os("SPRINGBOARD_WAYLAND").is_some() && !matches!(w.app, AppId::External(_));
+        let builtin = self.wayland && !matches!(w.app, AppId::External(_));
         #[cfg(not(feature = "desktop-wayland"))]
         let builtin = false;
         let reuse = builtin && self.desk.as_mut().unwrap().reuse_body.take() == Some(w.app) && !self.keyboard.shown() && !self.keyboard.animating();
@@ -6827,10 +6820,8 @@ mod tests {
     #[test]
     fn a_closing_window_keeps_the_frame_the_last_present_took_for_its_close_effect() {
         // window effects run only under the window server
-        let _lock = crate::test_support::global_lock();
-        let saved = std::env::var_os("SPRINGBOARD_WAYLAND");
-        std::env::set_var("SPRINGBOARD_WAYLAND", "1");
         let mut sh = crate::shell::tests::desktop_shell();
+        sh.wayland = true;
         let m = sh.desk_metrics();
         let app = AppId::Settings;
         {
@@ -6855,7 +6846,6 @@ mod tests {
         // the next present has no frame of the closed window to remember
         assert!(sh.take_wayland_windows().is_empty());
         assert!(sh.desk.as_ref().unwrap().presented.is_empty(), "nothing of the closed window outlives its present");
-        if let Some(v) = saved { std::env::set_var("SPRINGBOARD_WAYLAND", v) } else { std::env::remove_var("SPRINGBOARD_WAYLAND") };
     }
 
     /// E2E11 3: an app moving its mapped window (`WindowMove`) makes the next frame ask the window server to move the
