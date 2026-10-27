@@ -2,7 +2,7 @@
 //! the row, over the list, instead of a form that replaces the list. The popover is the kit's `widgets::popover`; inside it
 //! the details form keeps its rows (`form_rows`) and scrolls when it is taller than the window. The list keeps its own
 //! scroll underneath (`list_scroll`). A click outside the popover closes it and keeps the edits (Done), as a transient
-//! `NativePopover` does; Escape cancels them, Return in the title saves.
+//! `NativePopover` does; Escape closes it the same way and keeps them (there is no Cancel), Return in the title saves.
 use super::*;
 use bifrost_app::controls::geometry::Edge;
 use bifrost_app::controls::Rect;

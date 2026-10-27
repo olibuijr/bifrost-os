@@ -227,7 +227,7 @@ fn delete_and_backspace_delete_the_selected_reminder_and_escape_closes_details_f
     app.key(&ui, Out::Backspace, 42.0);
     app.key(&ui, Out::Named("Delete"), 43.0);
     assert_eq!(app.data.items.len(), 1);
-    // Escape closes the popover even while a field in it has focus
+    // Escape closes the popover even while a field in it has focus, keeping its edits
     assert!(app.escape(&ui, 44.0));
     assert!(app.editor.is_none() && !app.details_popover());
     cleanup(&path);
@@ -1369,7 +1369,7 @@ fn the_i_on_the_selected_row_opens_details_in_a_popover_over_the_list() {
 }
 
 #[test]
-fn escape_drops_the_details_edits_and_a_new_reminder_keeps_the_full_form() {
+fn escape_keeps_the_details_edits_and_a_new_reminder_keeps_the_full_form() {
     let (mut app, ui, path) = app("details-escape");
     add(&mut app, &ui, "Feed cat", 0.0);
     app.screen = Screen::Items;
@@ -1378,9 +1378,11 @@ fn escape_drops_the_details_edits_and_a_new_reminder_keeps_the_full_form() {
     app.activate(&ui, Target::Info(row), 10.0);
     assert!(app.details_popover());
     app.title.set_text(&ui, "Changed");
+    app.activate(&ui, Target::Flag, 15.0);
     assert!(app.escape(&ui, 20.0));
     assert!(app.editor.is_none());
-    assert_eq!(app.data.items[0].title, "Feed cat", "Escape cancels");
+    assert!(app.data.items[0].flagged, "Escape keeps the flag");
+    assert_eq!(app.data.items[0].title, "Changed", "Escape keeps the edit, as a press outside does");
     app.activate(&ui, Target::New, 30.0);
     assert!(app.editor.is_some() && !app.details_popover(), "a new reminder still opens the full form");
     assert!(app.details_geometry(&ui).is_none());
