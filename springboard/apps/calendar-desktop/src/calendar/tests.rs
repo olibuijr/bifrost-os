@@ -2829,6 +2829,22 @@ fn the_time_zone_button_is_a_glyph_and_the_all_day_band_stays_put() {
 }
 
 #[test]
+fn the_first_hour_label_clears_the_all_day_band_when_the_grid_opens() {
+    use super::timeview::{ALLDAY_H, GRID0};
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.set_size(1200, 780);
+    c.activate(&ui, Target::View(View::Week), 0.0);
+    c.scroll_to_morning(&ui);
+    // the day start's hour line, below the grid's header and the all-day band, and the bottom of that band (px)
+    let line = ui.pt(GRID0) - c.scroll.offset() + ui.pt(ALLDAY_H) + ui.pt(c.prefs.hour_h) * f32::from(c.prefs.day_start);
+    let band_bottom = ui.pt(GRID0 + ALLDAY_H);
+    assert!(line - band_bottom >= ui.pt(bifrost_app::kit::ui::SPACE_S) - 0.5, "the 8 AM label is centred on its line: its top half hides under the band");
+    draw_once(&mut c, &ui);
+}
+
+#[test]
 fn plus_opens_the_quick_event_popover_and_return_adds_the_event() {
     let ui = crate::test_ui();
     let temp = Temp::new();

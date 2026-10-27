@@ -95,7 +95,8 @@ impl Calendar {
 
     /// Initial offset showing the start of the day (8 AM unless the setting says otherwise) at the top.
     pub(super) fn scroll_to_morning(&mut self, ui: &Ui) {
-        self.scroll.jump_to(ui.pt(self.prefs.day_start as f32 * self.prefs.hour_h));
+        // the hour label is centred on its line: the line sits a space below the all-day band, or the label's top half hides under it
+        self.scroll.jump_to(ui.pt(self.prefs.day_start as f32 * self.prefs.hour_h - SPACE_S));
     }
 
     /// View > Zoom In / Zoom Out: changes the hour height one step and keeps the same time of day at the top of the grid.
