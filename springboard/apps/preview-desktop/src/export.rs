@@ -58,12 +58,12 @@ pub fn png_bytes(img: &Image) -> Option<Vec<u8>> {
     encode_png(img.w, img.h, &pixels::to_straight_rgba(img), &PngOptions::default())
 }
 
-/// Encodes `img` and writes it to `target`. A PNG keeps transparency; a JPEG has none, so a transparent picture is laid
-/// over white first.
-pub fn write_image(img: &Image, raster: Raster, target: &Path) -> Result<(), String> {
+/// Encodes `img` as `raster`. A PNG keeps transparency; a JPEG has none, so a transparent picture is laid over white
+/// first.
+pub fn encode(img: &Image, raster: Raster) -> Result<Vec<u8>, String> {
     let unencoded = || "The picture could not be encoded.".to_string();
-    let bytes = match raster {
-        Raster::Png => png_bytes(img).ok_or_else(unencoded)?,
+    match raster {
+        Raster::Png => png_bytes(img).ok_or_else(unencoded),
         Raster::Jpeg(quality) => {
             let flat;
             let opaque = if pixels::has_alpha(img) {
@@ -76,9 +76,14 @@ pub fn write_image(img: &Image, raster: Raster, target: &Path) -> Result<(), Str
             if encoded.is_empty() {
                 return Err(unencoded());
             }
-            encoded
+            Ok(encoded)
         }
-    };
+    }
+}
+
+/// Encodes `img` as `raster` and writes it to `target`.
+pub fn write_image(img: &Image, raster: Raster, target: &Path) -> Result<(), String> {
+    let bytes = encode(img, raster)?;
     std::fs::write(target, bytes).map_err(|e| e.to_string())
 }
 
