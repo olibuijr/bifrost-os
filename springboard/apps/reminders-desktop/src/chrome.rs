@@ -189,7 +189,9 @@ impl Reminders {
         items.push(ToolbarItem::flexible_space());
         items.push(ToolbarItem::icon(B_EXPORT, "Export List", "square.and.arrow.up").in_group(1).enabled(self.file_export && self.list_view()));
         items.push(ToolbarItem::icon(B_OPTIONS, "View Options", "arrow.up.arrow.down").in_group(1).selected(self.options_open));
-        items.push(ToolbarItem::icon(B_INFO, "Show List Info", "ellipsis").in_group(1).enabled(self.list_view() || self.smart_view() || self.deleted.is_some()));
+        // on Recently Deleted the "..." holds the page's purge menu, so it is named for that, not for List Info
+        let info = if self.deleted.is_some() { "Recently Deleted Actions" } else { "Show List Info" };
+        items.push(ToolbarItem::icon(B_INFO, info, "ellipsis").in_group(1).enabled(self.list_view() || self.smart_view() || self.deleted.is_some()));
         items.push(ToolbarItem::icon(B_ADD, "New Reminder", "plus").in_group(1));
         // the search field is always in the toolbar (Golden Gate: a visible search field, not a collapsed button)
         let search_w = ((end - start) * 0.35).clamp(SEARCH_MIN_PT, SEARCH_MAX_PT);
