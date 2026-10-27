@@ -4,7 +4,7 @@
   "macos_since": "14.0",
   "status": "partial",
   "bifrost": "springboard/sdk/src/glyphs.rs (glyph, NAMES), springboard/render/src/symbols.rs (symbol font lookup), springboard/sdk/src/view/animation.rs (implicit animation), springboard/ui/src/anim.rs",
-  "summary": "The Symbols framework is Apple's set of universal symbol effects (appear, bounce, pulse, variableColor, replace and others) for SF Symbols images in AppKit, UIKit and SwiftUI. BifrOSt has a fixed set of 59 hand-drawn line glyphs named after SF Symbols and a generic implicit animation system, but no symbol-effect API and no symbol layers or rendering modes, so none of the effects can be applied to a symbol image.",
+  "summary": "The Symbols framework is Apple's set of universal symbol effects (appear, bounce, pulse, variableColor, replace and others) for SF Symbols images in AppKit, UIKit and SwiftUI. BifrOSt has a fixed set of 78 hand-drawn line glyphs named after SF Symbols and a generic implicit animation system, but no symbol-effect API and no symbol layers or rendering modes, so none of the effects can be applied to a symbol image.",
   "rea_evidence": "ev_4228c223ea1ec28dfa7061baa7d6168c30cb9d1b86003c9d7dcf0cab875728f3",
   "features": [
     {
@@ -83,7 +83,7 @@
     "No discrete or indefinite effect protocols and no SymbolEffectOptions (repeat, speed) for starting or stopping a looping effect",
     "No content transition for swapping one symbol for another; a glyph change is a plain redraw",
     "No draw-on and draw-off, breathe, rotate or wiggle effects; glyphs have no stroke-progress or per-layer state",
-    "The glyph set is 59 hand-drawn names, one weight, no variable or palette rendering, not the SF Symbols catalogue",
+    "The glyph set is 78 hand-drawn names (springboard/sdk/src/glyphs.rs NAMES), one weight, no variable or palette rendering, not the SF Symbols catalogue",
     "The SF Symbols font path in springboard/render/src/symbols.rs has no symbol font on the device to resolve against"
   ]
 }
