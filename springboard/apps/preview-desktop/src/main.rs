@@ -2726,8 +2726,9 @@ impl App for Viewer {
             return false;
         }
         self.shot_request = None;
+        // the shell's refusal is already a sentence for the person (screen recording is off, the sheet was asked)
         if let Err(e) = screenshot::started_from_reply(result) {
-            self.status = format!("Could not take a screenshot: {e}");
+            self.status = e;
         }
         true
     }
