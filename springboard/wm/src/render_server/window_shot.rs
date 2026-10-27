@@ -1,4 +1,4 @@
-//! A window capture on the Vulkan render server: `bifrost_window_capture_v1` (Mission Control tiles, the Dock thumbnail
+//! A window capture on the Vulkan render server: `bifrost_window_capture_v1` (Overview tiles, the Dock thumbnail
 //! of a window being minimized, window screenshots) for the Vulkan scanout, which has no GLES renderer to draw
 //! `capture::capture_window` with. Same contract: the window alone, its geometry scaled to fill the `size` picture,
 //! its material regions as flat plates behind it, over a transparent ground, RGBA rows premultiplied, top first.
