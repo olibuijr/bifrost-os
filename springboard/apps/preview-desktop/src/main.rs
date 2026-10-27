@@ -1957,7 +1957,9 @@ impl Viewer {
                 let delta = y - *last;
                 *last = y;
                 let max = self.scroll_max(ui, lay);
-                self.view.sidebar_scroll = (self.view.sidebar_scroll - delta).clamp(0.0, max);
+                if bifrost_app::pans_now() {
+                    self.view.sidebar_scroll = (self.view.sidebar_scroll - delta).clamp(0.0, max);
+                }
                 true
             }
             Some(Gesture::Drag { now, .. }) => {
@@ -1980,7 +1982,9 @@ impl Viewer {
                 let delta = y - *last;
                 *last = y;
                 let most = self.contact_max(ui, lay);
-                self.contact_scroll = (self.contact_scroll - delta).clamp(0.0, most);
+                if bifrost_app::pans_now() {
+                    self.contact_scroll = (self.contact_scroll - delta).clamp(0.0, most);
+                }
                 true
             }
             Some(Gesture::Slider { which, .. }) => {

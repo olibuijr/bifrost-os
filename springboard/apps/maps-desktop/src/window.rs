@@ -914,7 +914,10 @@ impl Window {
                     if d.moved {
                         let (dx, dy) = (x - d.last.0, y - d.last.1);
                         if d.in_card {
-                            self.card_scroll = (self.card_scroll - dy).max(0.0);
+                            // the card is a list: a mouse drag does not pan it on a desktop (the map itself still pans)
+                            if bifrost_app::pans_now() {
+                                self.card_scroll = (self.card_scroll - dy).max(0.0);
+                            }
                         } else {
                             self.maps.view.pan(dx as f64, dy as f64);
                             self.maps.touch_settings();

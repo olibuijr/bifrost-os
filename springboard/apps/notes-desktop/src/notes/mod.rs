@@ -3557,7 +3557,9 @@ impl Notes {
             Event::Move(_, y) => {
                 if let Some(y0) = self.pick_drag.replace(y) {
                     let (_, total) = p.metrics(sw, gap);
-                    p.scroll = (p.scroll + y0 - y).clamp(0.0, (total - (sh - head)).max(0.0));
+                    if bifrost_app::pans_now() {
+                        p.scroll = (p.scroll + y0 - y).clamp(0.0, (total - (sh - head)).max(0.0));
+                    }
                     if (y0 - y).abs() > 0.5 {
                         self.pick_moved = true;
                     }

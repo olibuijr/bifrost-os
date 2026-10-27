@@ -256,7 +256,7 @@ impl SysInfo {
                         }
                         self.dragged = true;
                         let press = self.press;
-                        self.drag_scroll(press, last - y)
+                        bifrost_app::pans_now() && self.drag_scroll(press, last - y)
                     }
                     TouchKind::Up => {
                         let released = self.hit(&ctx.ui, x, y);
