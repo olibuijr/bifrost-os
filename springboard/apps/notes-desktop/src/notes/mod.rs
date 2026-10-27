@@ -3867,10 +3867,9 @@ impl Notes {
         true
     }
 
-    /// Escape: closes a menu, cancels a name prompt, leaves the search field, or drops the note's selection and any
-    /// pending style. The open note stays open, as in the reference (Back and the list close it).
+    /// Escape: closes a menu, cancels a name prompt, clears the search text (then leaves the empty field), or drops the
+    /// note's selection and any pending style. The open note stays open, as in the reference (Back and the list close it).
     pub fn escape(&mut self, ui: &Ui, t: f64) -> bool {
-        let _ = ui;
         if self.erase_ask.take().is_some() {
             // Escape is the alert's Cancel
             self.dirty = true;
@@ -3889,6 +3888,13 @@ impl Notes {
             return true;
         }
         if self.search.focused {
+            // a query goes first: the list shows every note again and the field stays open for the next search
+            if !self.search.is_empty() {
+                self.search.set_text(ui, "");
+                self.rebuild(ui, t);
+                self.dirty = true;
+                return true;
+            }
             self.search.focused = false;
             self.searching = false;
             self.keyboard.set_shown(false, t);
@@ -6113,6 +6119,24 @@ mod tests {
         tap(&mut n, &ui, mx + mw / 2.0, y, 400.0);
         assert!(n.menu.is_none());
         assert_eq!(n.prefs().sort, store::SortKey::Title);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn escape_clears_the_search_query_then_leaves_the_field() {
+        let ui = ui();
+        let dir = scratch("search-escape");
+        let mut n = seeded(&ui, &dir);
+        let all = n.listed().len();
+        n.activate(&ui, Target::Search, 0.0, 0.0, 1000.0);
+        type_text(&mut n, &ui, "rust", 1100.0);
+        assert_eq!(n.listed(), vec![("2", "Ideas")], "the query filters the list");
+        assert!(n.escape(&ui, 1200.0));
+        assert_eq!(n.search.text(), "", "Escape clears the query");
+        assert_eq!(n.listed().len(), all, "the full list comes back");
+        assert!(n.field_focused(), "the empty field stays open for the next search");
+        assert!(n.escape(&ui, 1300.0));
+        assert!(!n.field_focused(), "a second Escape leaves the empty field");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
