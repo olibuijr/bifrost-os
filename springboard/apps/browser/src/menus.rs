@@ -45,7 +45,7 @@ pub(super) struct HistoryMenu {
     pub visited: Vec<String>,
 }
 
-/// The Edit menu's find items (as Safari's Edit > Find): Find in Page is open to any page, Find Next and Find Previous while a
+/// The Edit menu's find items (as the reference browser's Edit > Find): Find in Page is open to any page, Find Next and Find Previous while a
 /// find is open.
 pub(super) fn find_items(page: bool, find_open: bool) -> Vec<AppMenuItem> {
     vec![
