@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.34.12
+
+- The Tags panel shows which tags are on, in its own card; the sidebar scrolls to every tag; tag dots sit on the icon; File has Open (Cmd+O) and Preview shows Space.
+
 ## 1.34.11
 
 - Rebuilt for 0.10.44: every touch says whether a mouse or a finger made it, so a mouse drag no longer scrolls lists on the desktop (the wheel, trackpad and scroll bar still do).
