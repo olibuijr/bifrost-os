@@ -89,7 +89,7 @@ const KEY_K: u32 = 37;
 const KEY_T: u32 = 20;
 const KEY_W: u32 = 17;
 const KEY_R: u32 = 19;
-/// Main-menu item ids (`App::menu_action`): File > Share and Downloads, View > Show Reader, Zoom and Find.
+/// Main-menu item ids (`App::menu_action`): File > Share and Downloads, View > Show Reader, Reload and Zoom; Edit > Find.
 const MENU_READER: u32 = 1;
 const MENU_SHARE: u32 = 2;
 const MENU_ZOOM_IN: u32 = 3;
@@ -102,6 +102,7 @@ const MENU_DOWNLOADS: u32 = 9;
 const MENU_CLEAR_DOWNLOADS: u32 = 10;
 const MENU_AUTOFILL: u32 = 11;
 const MENU_OVERVIEW: u32 = 12;
+const MENU_RELOAD: u32 = 13;
 const KEY_D: u32 = 32;
 const KEY_Y: u32 = 21;
 const KEY_B: u32 = 48;

@@ -45,6 +45,16 @@ pub(super) struct HistoryMenu {
     pub visited: Vec<String>,
 }
 
+/// The Edit menu's find items (as Safari's Edit > Find): Find in Page is open to any page, Find Next and Find Previous while a
+/// find is open.
+pub(super) fn find_items(page: bool, find_open: bool) -> Vec<AppMenuItem> {
+    vec![
+        AppMenuItem::new(MENU_FIND, "Find in Page\u{2026}").key("cmd+f").enabled(page),
+        AppMenuItem::new(MENU_FIND_NEXT, "Find Next").key("cmd+g").enabled(find_open),
+        AppMenuItem::new(MENU_FIND_PREV, "Find Previous").key("cmd+shift+g").enabled(find_open),
+    ]
+}
+
 /// The History menu: Show All History, Reopen Last Closed Tab, Back and Forward (each with the selected tab's earlier or later
 /// pages under it, a jump per page), then the recently closed tabs and the recently visited pages.
 pub(super) fn history_items(h: &HistoryMenu) -> Vec<AppMenuItem> {
@@ -191,21 +201,25 @@ impl Browser {
             return;
         }
         if id == ids::PAGE || id == ids::DEVELOP {
-            let title = if id == ids::PAGE { "View" } else { "Develop" };
+            let groups: &[&str] = if id == ids::PAGE { &["View", "Edit"] } else { &["Develop"] };
             let mut items = vec![Item::new(ids::BACK, "‹  Main Menu"), Item::separator()];
             if id == ids::DEVELOP {
                 items.push(Item::new(ids::INSPECTOR, "Web Inspector").shortcut("⌥⌘I").checked(self.inspector.is_open()));
                 items.push(Item::separator());
             }
-            if let Some(menu) = self.menus().into_iter().find(|menu| menu.title == title) {
-                for item in menu.items {
-                    if item.separator { items.push(Item::separator()); }
-                    else {
-                        let mut row = Item::new(item.id, &item.title).enabled(item.enabled && !item.submenu).checked(item.checked);
-                        if !item.key.is_empty() {
-                            row.shortcut = Some(item.key.replace("cmd+", "⌘").replace("shift+", "⇧").replace("alt+", "⌥").replace("backslash", "\\").to_uppercase());
+            let menus = self.menus();
+            for (n, group) in groups.iter().enumerate() {
+                if n > 0 { items.push(Item::separator()); }
+                for menu in menus.iter().filter(|menu| menu.title == *group) {
+                    for item in &menu.items {
+                        if item.separator { items.push(Item::separator()); }
+                        else {
+                            let mut row = Item::new(item.id, &item.title).enabled(item.enabled && !item.submenu).checked(item.checked);
+                            if !item.key.is_empty() {
+                                row.shortcut = Some(item.key.replace("cmd+", "⌘").replace("shift+", "⇧").replace("alt+", "⌥").replace("backslash", "\\").to_uppercase());
+                            }
+                            items.push(row);
                         }
-                        items.push(row);
                     }
                 }
             }
@@ -263,7 +277,7 @@ impl Browser {
         self.sheet.open || self.main_menu.open() || self.pageui.active()
     }
 
-    /// File, View, History, Bookmarks and Develop (the shell orders them; see the module comment).
+    /// File, Edit, View, History, Bookmarks and Develop (the shell orders them; see the module comment).
     pub(super) fn menus(&self) -> Vec<AppMenu> {
         let reader_ok = self.view().is_some_and(|v| self.reader.button(v));
         let reader_on = self.view().is_some_and(|v| self.reader.is_active(v));
@@ -287,19 +301,18 @@ impl Browser {
                     AppMenuItem::new(MENU_CLEAR_DOWNLOADS, "Clear Finished Downloads").enabled(finished),
                 ],
             },
+            AppMenu { title: "Edit".into(), items: find_items(page, self.find.open) },
             AppMenu {
                 title: "View".into(),
                 items: vec![
                     AppMenuItem::new(MENU_READER, "Show Reader").key("cmd+shift+r").checked(reader_on).enabled(reader_ok),
                     AppMenuItem::new(MENU_OVERVIEW, "Show All Tabs").key("cmd+shift+backslash").checked(self.overview.open).enabled(!self.tabs.is_empty()),
                     AppMenuItem::separator(),
+                    AppMenuItem::new(MENU_RELOAD, "Reload Page").key("cmd+r").enabled(page),
+                    AppMenuItem::separator(),
                     AppMenuItem::new(MENU_ZOOM_IN, "Zoom In").key("cmd+=").enabled(page),
                     AppMenuItem::new(MENU_ZOOM_OUT, "Zoom Out").key("cmd+-").enabled(page),
                     AppMenuItem::new(MENU_ACTUAL_SIZE, "Actual Size").key("cmd+0").enabled(page),
-                    AppMenuItem::separator(),
-                    AppMenuItem::new(MENU_FIND, "Find in Page\u{2026}").key("cmd+f").enabled(page),
-                    AppMenuItem::new(MENU_FIND_NEXT, "Find Next").key("cmd+g").enabled(self.find.open),
-                    AppMenuItem::new(MENU_FIND_PREV, "Find Previous").key("cmd+shift+g").enabled(self.find.open),
                 ],
             },
             AppMenu { title: "History".into(), items: self.history_menu() },
@@ -373,6 +386,10 @@ impl Browser {
             }
             MENU_FIND_PREV => {
                 self.find_step(FindDirection::Backward);
+                true
+            }
+            MENU_RELOAD => {
+                self.activate(RELOAD);
                 true
             }
             MENU_ZOOM_IN => {
@@ -476,6 +493,19 @@ mod tests {
             assert_eq!(in_range(*base + *len as u32, *base, *len), None, "one past the end is not an item");
         }
         assert_eq!(in_range(5, CLOSED_MENU_BASE, CLOSED_MENU_MAX), None, "below the base is not an item");
+    }
+
+    #[test]
+    fn find_is_an_edit_item_open_to_any_page_and_next_or_previous_need_a_find() {
+        let items = find_items(true, false);
+        assert_eq!(titles(&items), vec!["Find in Page\u{2026}", "Find Next", "Find Previous"]);
+        assert_eq!((item(&items, "Find in Page\u{2026}").id, item(&items, "Find in Page\u{2026}").key.as_str()), (MENU_FIND, "cmd+f"));
+        assert!(item(&items, "Find in Page\u{2026}").enabled);
+        assert!(!item(&items, "Find Next").enabled && !item(&items, "Find Previous").enabled, "no find open yet");
+        let items = find_items(false, true);
+        assert!(!item(&items, "Find in Page\u{2026}").enabled, "no page to search");
+        assert!(item(&items, "Find Next").enabled && item(&items, "Find Previous").enabled);
+        assert_eq!(item(&items, "Find Previous").key, "cmd+shift+g");
     }
 
     #[test]
