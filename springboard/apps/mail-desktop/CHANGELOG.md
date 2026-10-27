@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.16
+
+- An HTML message that starts with a large inline image shows its text, not the image source.
+
 ## 0.17.15
 
 - The Save This Message question takes Cmd+D for Don't Save, and Tab and Space reach every button.

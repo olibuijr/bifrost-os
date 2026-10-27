@@ -1,6 +1,6 @@
 [package]
 name = "bifrost-mail"
-version = "0.17.15"
+version = "0.17.16"
 edition = "2021"
 
 [lib]
