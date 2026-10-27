@@ -1072,7 +1072,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-viewer"
-version = "0.11.18"
+version = "0.11.19"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
