@@ -723,5 +723,34 @@ mod canvas_tests {
         assert!(glyph(&mut down, &u, "chevron.down", b, 0xffff_ffff));
         assert_eq!(up.ops.len(), down.ops.len(), "the same two segments");
     }
+
+    #[test]
+    fn the_building_and_exclamation_glyphs_resolve_and_draw_inside_their_box() {
+        let u = ui();
+        let b = Rect { x: 0.0, y: 0.0, w: 20.0, h: 20.0 };
+        for name in ["building.2", "exclamationmark.circle"] {
+            assert!(has(name), "{name} is a known symbol");
+            let mut r = Rec::default();
+            assert!(glyph(&mut r, &u, name, b, 0xffff_ffff), "{name} resolves");
+            assert!(!r.ops.is_empty(), "{name} draws something");
+            let inside = |x: f32, y: f32| (-0.01..=20.01).contains(&x) && (-0.01..=20.01).contains(&y);
+            for op in &r.ops {
+                match op {
+                    Op::Fill(q, ..) | Op::FillRect(q, _) | Op::Stroke(q, ..) => {
+                        assert!(inside(q.x, q.y) && inside(q.x + q.w, q.y + q.h), "{name} rect {q:?} stays in the box");
+                    }
+                    Op::Path(verbs, ..) => {
+                        assert!(!verbs.is_empty(), "{name} path is not empty");
+                        for v in verbs {
+                            if let PathVerb::Move(x, y) | PathVerb::Line(x, y) = v {
+                                assert!(inside(*x, *y), "{name} point ({x}, {y}) stays in the box");
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
 }
 
