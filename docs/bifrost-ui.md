@@ -2129,7 +2129,7 @@ Host tests only (`sdk/tests/url_session.rs`, loopback servers); a row becomes `p
 | `URLSessionStreamTask` | `url_stream_task::URLSessionStreamTask`: `connect`, `write`, `write_line`, `read_data`, `read_line`, `close_write` |
 | `NetService`, `NetServiceBrowser` | `net_service`: publish/stop, TXT, browser with `did_find` / `did_remove`, over `dns_service` |
 
-Decided gaps: Digest, client-certificate and server-trust challenges; `AcceptPolicy.onlyFromMainDocumentDomain`; `wss://`
+`ConfiguredSession` answers a Digest challenge (MD5, qop auth or none) once from the stored or delegate credential, with nc=00000001 and a fresh client nonce. Decided gaps: Digest variants beyond that (MD5-sess, SHA-256, auth-int, nonce-count reuse), client-certificate and server-trust challenges; `AcceptPolicy.onlyFromMainDocumentDomain`; `wss://`
 and secure stream upgrade; upload tasks and OS-level background transfer; an mDNS responder (the browser is fed by a
 transport); no `Vary`, `Expires` or `Age` handling; `URLError` has the few codes used here. The shared session's
 `url::URLCache` stays memory only.

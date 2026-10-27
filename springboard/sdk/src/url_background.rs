@@ -3,9 +3,10 @@
 //! background `URLSession` sessions with download resume data (Foundation parity).
 //!
 //! `ConfiguredSession::data` is blocking (call it from a background thread). Per request it: applies the cache policy,
-//! attaches cookies, sends, stores `Set-Cookie`, and on a 401 with `WWW-Authenticate: Basic` asks the delegate
-//! (`urlSession(_:didReceive:completionHandler:)`) and retries once with the chosen credential. Digest is not answered
-//! (the challenge goes to the delegate and the 401 is returned unless it cancels or supplies nothing).
+//! attaches cookies, sends, stores `Set-Cookie`, and on a 401 with `WWW-Authenticate: Basic` or `Digest` asks the
+//! delegate (`urlSession(_:didReceive:completionHandler:)`) and retries once with the chosen credential. A Digest
+//! challenge is parsed by `http_digest` (MD5, quality of protection `auth` or none) and answered with nonce count 1
+//! and a fresh client nonce; an unparsable challenge, a declined one or a second 401 returns the 401 unchanged.
 //! A background configuration builds a `BackgroundSession` (`URLSessionConfiguration::background_session`); building
 //! one with the same identifier picks the unfinished downloads up again.
 //!
@@ -17,6 +18,7 @@
 
 use crate::http_auth::{parse_www_authenticate, AuthChallenge, AuthDisposition, URLCredentialStorage, URLProtectionSpace};
 use crate::http_cookies::HTTPCookieStorage;
+use crate::http_digest::{authorization, parse_digest_challenge, DigestAnswer};
 use crate::url::{HTTPURLResponse, URLError, URLRequest, URLSession};
 use crate::url_cache::{CacheDecision, CachePolicy, URLCache};
 use std::cell::RefCell;
@@ -556,9 +558,15 @@ impl ConfiguredSession {
         Ok((resp, body))
     }
 
-    /// The request to retry after a Basic challenge, or `None` when the delegate declines or the scheme is not Basic.
+    /// The request to retry after a Basic or Digest challenge, or `None` when the delegate declines, the scheme is
+    /// neither, or a Digest challenge cannot be answered (unparsable, another algorithm, no client nonce).
     fn answer_challenge(&self, req: &URLRequest, resp: &HTTPURLResponse) -> Option<URLRequest> {
-        let challenge = parse_www_authenticate(resp.value("WWW-Authenticate")?)?;
+        let header = resp.value("WWW-Authenticate")?;
+        let challenge = parse_www_authenticate(header)?;
+        if challenge.scheme != "basic" && challenge.scheme != "digest" {
+            return None;
+        }
+        let digest = if challenge.scheme == "digest" { Some(parse_digest_challenge(header)?) } else { None };
         let space = URLProtectionSpace::for_challenge(&req.url, &challenge)?;
         let storage = self.configuration.url_credential_storage.as_ref()?;
         let ch = AuthChallenge::new(space.clone());
@@ -566,17 +574,22 @@ impl ConfiguredSession {
             Some(d) => d.did_receive(&ch),
             None => ch.disposition(&storage.lock().unwrap()),
         };
-        match disposition {
-            AuthDisposition::UseCredential(cred) if challenge.scheme == "basic" => {
-                if cred.persistence != crate::http_auth::CredentialPersistence::None {
-                    storage.lock().unwrap().set_credential(cred.clone(), space);
-                }
-                let mut retry = req.clone();
-                cred.apply_to(&mut retry);
-                Some(retry)
+        let AuthDisposition::UseCredential(cred) = disposition else { return None };
+        let mut retry = req.clone();
+        match digest {
+            None => cred.apply_to(&mut retry),
+            Some(d) => {
+                // RFC 7616 section 3.4: the first answer to a nonce has nc=00000001; the single retry is its only use.
+                let cnonce: String = crate::entropy::bytes(8).ok()?.iter().map(|b| format!("{b:02x}")).collect();
+                let uri = crate::url::request_target(&crate::url::parse_url(&req.url).ok()?, &req.url, false);
+                let answer = DigestAnswer { user: &cred.user, password: &cred.password, method: &req.method, uri: &uri, cnonce: &cnonce, nonce_count: 1 };
+                retry.set_header("Authorization", &authorization(&d, &answer));
             }
-            _ => None,
         }
+        if cred.persistence != crate::http_auth::CredentialPersistence::None {
+            storage.lock().unwrap().set_credential(cred, space);
+        }
+        Some(retry)
     }
 }
 
@@ -816,13 +829,92 @@ mod tests {
         assert_eq!(log.lock().unwrap().len(), 1, "no retry");
     }
 
-    #[test]
-    fn only_a_basic_challenge_is_answered() {
+    fn digest_challenge_reply(extra: &str) -> Vec<u8> {
+        reply("401 Unauthorized", &format!("WWW-Authenticate: Digest realm=\"r\", nonce=\"n1\"{extra}\r\n"), b"")
+    }
+
+    fn digest_session(replies: Vec<Vec<u8>>, with_credential: bool) -> (ConfiguredSession, Arc<Mutex<Vec<String>>>) {
         use crate::http_auth::{CredentialPersistence, URLCredential};
-        let answer = Arc::new(Answer { disposition: AuthDisposition::UseCredential(URLCredential::new("ana", "secret", CredentialPersistence::Permanent)), asked: Mutex::new(0) });
-        let replies = vec![reply("401 Unauthorized", "WWW-Authenticate: Digest realm=\"r\", nonce=\"n\"\r\n", b"")];
-        let (cs, log) = challenged(Some(answer), Arc::new(Mutex::new(URLCredentialStorage::new())), replies);
+        let storage = Arc::new(Mutex::new(URLCredentialStorage::new()));
+        if with_credential {
+            storage.lock().unwrap().set_credential(URLCredential::new("ola", "pw", CredentialPersistence::ForSession), space());
+        }
+        challenged(None, storage, replies)
+    }
+
+    /// The value of `key=` in a lower-cased Authorization line, quotes removed.
+    fn field(request: &str, key: &str) -> String {
+        let line = request.lines().find(|l| l.starts_with("authorization:")).expect("authorization header");
+        let at = line.find(&format!(" {key}=")).unwrap_or_else(|| panic!("{key} in {line}")) + key.len() + 2;
+        line[at..].split(',').next().unwrap().trim().trim_matches('"').to_string()
+    }
+
+    #[test]
+    fn a_digest_challenge_is_answered_with_the_matching_response_digest() {
+        use crate::http_digest::{response_digest, DigestChallenge};
+        let (cs, log) = digest_session(vec![digest_challenge_reply(", qop=\"auth\""), reply("200 OK", "", b"ok")], true);
+        let (resp, body) = cs.data(&URLRequest::new("http://h/f?x=1")).unwrap();
+        assert_eq!((resp.status_code, body.as_slice()), (200, &b"ok"[..]));
+        let log = log.lock().unwrap();
+        assert_eq!(log.len(), 2);
+        assert!(!log[0].contains("authorization:"));
+        let challenge = DigestChallenge { realm: "r".into(), nonce: "n1".into(), opaque: None, qop_auth: true };
+        let cnonce = field(&log[1], "cnonce");
+        assert_eq!(cnonce.len(), 16, "a fresh client nonce");
+        assert_eq!(field(&log[1], "nc"), "00000001");
+        assert_eq!(field(&log[1], "uri"), "/f?x=1");
+        let answer = crate::http_digest::DigestAnswer { user: "ola", password: "pw", method: "GET", uri: "/f?x=1", cnonce: &cnonce, nonce_count: 1 };
+        assert_eq!(field(&log[1], "response"), response_digest(&challenge, &answer));
+    }
+
+    #[test]
+    fn a_digest_challenge_without_qop_has_no_nonce_count() {
+        let (cs, log) = digest_session(vec![digest_challenge_reply(""), reply("200 OK", "", b"ok")], true);
+        assert_eq!(cs.data(&URLRequest::new("http://h/f")).unwrap().0.status_code, 200);
+        let log = log.lock().unwrap();
+        assert!(!log[1].contains("nc="), "{}", log[1]);
+        assert!(log[1].contains("authorization: digest username=\"ola\""), "{}", log[1]);
+    }
+
+    #[test]
+    fn a_digest_challenge_without_a_credential_returns_the_401_after_one_request() {
+        let (cs, log) = digest_session(vec![digest_challenge_reply(", qop=\"auth\"")], false);
         assert_eq!(cs.data(&URLRequest::new("http://h/f")).unwrap().0.status_code, 401);
-        assert_eq!(log.lock().unwrap().len(), 1, "a Digest challenge is not retried with Basic");
+        assert_eq!(log.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn a_second_digest_401_stops_after_two_requests() {
+        let (cs, log) = digest_session(vec![digest_challenge_reply(", qop=\"auth\""), digest_challenge_reply(", qop=\"auth\", stale=true")], true);
+        assert_eq!(cs.data(&URLRequest::new("http://h/f")).unwrap().0.status_code, 401);
+        assert_eq!(log.lock().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn an_unparsable_or_unsupported_digest_challenge_is_not_retried() {
+        for header in ["Digest realm=\"r\"", "Digest realm=\"r\", nonce=\"n\", algorithm=SHA-256"] {
+            let replies = vec![reply("401 Unauthorized", &format!("WWW-Authenticate: {header}\r\n"), b"")];
+            let (cs, log) = digest_session(replies, true);
+            assert_eq!(cs.data(&URLRequest::new("http://h/f")).unwrap().0.status_code, 401);
+            assert_eq!(log.lock().unwrap().len(), 1, "{header}");
+        }
+    }
+
+    #[test]
+    fn a_digest_credential_from_the_delegate_is_kept_when_it_persists() {
+        use crate::http_auth::{CredentialPersistence, URLCredential};
+        let storage = Arc::new(Mutex::new(URLCredentialStorage::new()));
+        let answer = Arc::new(Answer { disposition: AuthDisposition::UseCredential(URLCredential::new("ana", "secret", CredentialPersistence::Permanent)), asked: Mutex::new(0) });
+        let (cs, _) = challenged(Some(answer.clone()), storage.clone(), vec![digest_challenge_reply(""), reply("200 OK", "", b"ok")]);
+        assert_eq!(cs.data(&URLRequest::new("http://h/f")).unwrap().0.status_code, 200);
+        assert_eq!(*answer.asked.lock().unwrap(), 1);
+        assert_eq!(storage.lock().unwrap().credential(&space()).map(|c| c.user.clone()), Some("ana".to_string()));
+    }
+
+    #[test]
+    fn an_unknown_scheme_is_not_answered() {
+        let (cs, log) = digest_session(vec![reply("401 Unauthorized", "WWW-Authenticate: Bearer realm=\"r\"\r\n", b"")], true);
+        assert_eq!(cs.data(&URLRequest::new("http://h/f")).unwrap().0.status_code, 401);
+        assert_eq!(log.lock().unwrap().len(), 1);
     }
 }
