@@ -23,7 +23,7 @@ You test ONE app of BifrOSt OS (a macOS-style desktop) on the lab PC "Midget" by
 
 App: ${A.app} (${A.id}). ${A.notes || ''}
 
-How to drive Midget (each Bash call is exactly ONE of these commands, nothing chained, always with this prefix):
+How to drive Midget (each Bash call is exactly ONE of these commands, nothing chained: no sleep, cd or ; before or after it, always with this prefix; if a command is refused, rewrite it as one plain command and continue, a refusal never means stop; to wait for something, just take another screenshot):
 - Screenshot: ${M} shot ${SCRATCH}/t_${A.app}_N.png --max 1280   (then Read ${SCRATCH}/t_${A.app}_N-small.png; the "small" image is 1280 px wide)
 - Click at small-image coordinates: ${M} click --scale 2 X Y   (add --double or --right; --mods cmd+shift for modifiers)
 - Drag: ${M} drag X0 Y0 X1 Y1 600   (FULL-size pixels = small x2);  scroll: ${M} scroll X Y DY  (full-size pixels)
