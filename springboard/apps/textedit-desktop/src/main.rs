@@ -1802,6 +1802,22 @@ impl TextEditApp {
         was_rich
     }
 
+    /// A quit waiting on the documents (`quit_requested`) goes on after every answer: the next edited document asks on its own
+    /// window, which comes forward, and with none left the app exits (`Ctx::terminate`). True when a sheet was raised.
+    fn continue_quit(&mut self, ctx: &Ctx) -> bool {
+        if !self.docs.quitting() {
+            return false;
+        }
+        if self.docs.advance_quit(ctx) {
+            ctx.terminate();
+            return false;
+        }
+        match self.docs.alert_doc() {
+            Some(doc) if self.current_doc != Some(doc) => self.raise_doc(ctx, doc),
+            _ => false,
+        }
+    }
+
     /// Whether the window being handled shows the close confirmation: its document is the one waiting to close.
     fn close_alert_here(&self) -> bool {
         self.current_doc.is_some() && self.docs.alert_doc() == self.current_doc
@@ -2910,8 +2926,19 @@ impl App for TextEditApp {
 
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
         self.docs.tick(ctx, t);
+        let asking = self.continue_quit(ctx);
         self.sync_titles(ctx);
-        false
+        asking
+    }
+
+    /// Cmd+Q, the application menu's and the Dock's Quit ask for every edited document (the close confirmation, Save, Don't
+    /// Save or Cancel) before the app exits; logout and shutdown still send `Quit` and only autosave.
+    fn quit_requested(&mut self, ctx: &Ctx) -> bool {
+        let quit = self.docs.request_quit(ctx);
+        if !quit {
+            self.continue_quit(ctx);
+        }
+        quit
     }
 
     fn next_wake(&self, _t: f64) -> Option<f64> {
@@ -3418,7 +3445,7 @@ mod tests {
         fn set_pref(&self, _k: &str, _v: &str) {}
     }
 
-    /// Cmd+Q asks nothing: the unsaved Untitled is autosaved as the app quits (`suspend`) and the next launch opens it
+    /// A quit that is not asked (logout, shutdown): the unsaved Untitled is autosaved as the app quits (`suspend`) and the next launch opens it
     /// again, edited, instead of a blank document.
     #[test]
     fn an_unsaved_untitled_document_comes_back_on_the_next_launch() {

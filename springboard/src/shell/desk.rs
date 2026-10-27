@@ -3357,8 +3357,21 @@ impl Shell {
         }
     }
 
+    /// The person quits an app (Cmd+Q, the application menu's or the Dock's Quit). An installed SDK app that announced
+    /// `ToShell::CloseRequests` is sent `ToApp::QuitRequest` and nothing else happens here: it asks about its unsaved
+    /// documents and exits itself once it may, or stays on Cancel. Every other app quits as `desk_quit_app` does. Logout,
+    /// shutdown, updates and the shell's own cleanups use `desk_quit_app` and are never vetoed.
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+    pub(super) fn desk_quit_requested(&mut self, slot: u8) {
+        if self.ext.get(slot as usize).and_then(Option::as_ref).is_some_and(|h| h.running() && h.close_requests) {
+            self.ext_send(slot as usize, &bifrost_proto::ToApp::QuitRequest);
+            return;
+        }
+        self.desk_quit_app(slot);
+    }
+
     /// Quits the installed SDK app in `slot`: its desk windows go and the app is sent `Quit`, so it saves its state and exits
-    /// (`AppHost::begin_quit` kills it after the grace period). The Dock's Quit and Cmd+Q use it. A direct app's window is the
+    /// (`AppHost::begin_quit` kills it after the grace period). Logout, shutdown and updates use it (the person's Quit goes through `desk_quit_requested`). A direct app's window is the
     /// window server's, so `desk_close_app` already quits it; an app on the shared-memory route only loses its desk window there
     /// and its process is quit here. Cmd+W and the traffic light close the window and leave the app running.
     pub(super) fn desk_quit_app(&mut self, slot: u8) {

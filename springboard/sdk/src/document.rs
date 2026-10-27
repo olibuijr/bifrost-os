@@ -326,6 +326,8 @@ pub struct DocumentController<D: Document> {
     recents: Vec<RecentDocument>,
     pending: HashMap<u32, Pending>,
     alert: Option<CloseAlert>,
+    /// A quit is waiting on the edited documents (`request_quit`): each is asked in turn, and Cancel or a failed save ends it.
+    quitting: bool,
     sent: Option<(String, bool, String)>,
     /// The document the shell's window state follows when it is not the active one (see `set_state_doc`).
     state_doc: Option<DocId>,
@@ -344,7 +346,7 @@ impl<D: Document> Default for DocumentController<D> {
 
 impl<D: Document> DocumentController<D> {
     pub fn new() -> Self {
-        DocumentController { docs: Vec::new(), active: None, next_id: 0, recents: Vec::new(), pending: HashMap::new(), alert: None, sent: None, state_doc: None, autosave_delay: AUTOSAVE_DELAY_MS, revisions: RevisionStore::default(), now: 0.0 }
+        DocumentController { docs: Vec::new(), active: None, next_id: 0, recents: Vec::new(), pending: HashMap::new(), alert: None, quitting: false, sent: None, state_doc: None, autosave_delay: AUTOSAVE_DELAY_MS, revisions: RevisionStore::default(), now: 0.0 }
     }
 
     // ---- the document list ----
@@ -709,7 +711,44 @@ impl<D: Document> DocumentController<D> {
                 Vec::new()
             }
             alert::DONT_SAVE => self.finish_close(host, doc).into_iter().collect(),
-            _ => Vec::new(),
+            _ => {
+                // Cancel keeps the document as it is, edited, and stops a quit that was waiting on it
+                self.quitting = false;
+                Vec::new()
+            }
+        }
+    }
+
+    /// `applicationShouldTerminate`: true when nothing is unsaved and the app may quit now. Otherwise the first edited
+    /// document asks (the close alert, [`DocumentController::alert_doc`] says which) and `false` comes back; the app answers
+    /// with `answer_alert` and calls `advance_quit` after every answer and every `handle`, which asks for the next edited
+    /// document and finally says when to quit. Cancel, or a save that fails or is cancelled, ends the quit.
+    pub fn request_quit(&mut self, host: &dyn DocumentHost) -> bool {
+        self.quitting = true;
+        self.advance_quit(host)
+    }
+
+    /// True when a quit is waiting on the documents ([`DocumentController::request_quit`]).
+    pub fn quitting(&self) -> bool {
+        self.quitting
+    }
+
+    /// Moves a waiting quit on: asks about the next edited document, waits while an alert or a save is open, and returns
+    /// true once no edited document is left and the app may quit. False when no quit is waiting.
+    pub fn advance_quit(&mut self, host: &dyn DocumentHost) -> bool {
+        if !self.quitting || self.alert.is_some() || self.pending.values().any(|p| matches!(p, Pending::Save { .. })) {
+            return false;
+        }
+        match self.docs.iter().find(|e| e.edited()).map(|e| e.id) {
+            Some(id) => {
+                // the answer to the sheet must not find the document saved behind it
+                let _ = self.close(host, id);
+                false
+            }
+            None => {
+                self.quitting = false;
+                true
+            }
         }
     }
 
@@ -956,6 +995,9 @@ impl<D: Document> DocumentController<D> {
 
     fn on_failed(&mut self, host: &dyn DocumentHost, request: u32, code: DocErrorCode) -> Option<Vec<Notice>> {
         let pending = self.pending.remove(&request)?;
+        if matches!(pending, Pending::Save { after: After::Close, .. }) {
+            self.quitting = false;
+        }
         let doc = match pending {
             Pending::Save { doc, .. } => Some(doc),
             Pending::Revert(id) => Some(id),
@@ -1010,7 +1052,9 @@ impl<D: Document> DocumentController<D> {
     }
 
     fn autosave(&mut self, host: &dyn DocumentHost, id: DocId) {
-        if self.saving(id) {
+        // a document waiting for its close answer stays as it is: an autosave behind the sheet would clear the edited
+        // flag, and Cancel would keep a document that no longer says it has unsaved changes
+        if self.saving(id) || self.alert.as_ref().is_some_and(|a| a.doc == id) {
             return;
         }
         let Some(e) = self.entry(id) else { return };
@@ -1709,6 +1753,81 @@ mod tests {
         let n = c.handle(&m, DocumentEvent::Saved(m.file(req, "a.txt", 4, "b"))).unwrap();
         assert_eq!(n, vec![Notice::Saved(id, SaveOp::Save), Notice::Closed(id)]);
         assert!(c.is_empty());
+    }
+
+    /// Cancel on the close sheet keeps the document edited, and an autosave tick while the sheet is up cannot clear the flag
+    /// behind it.
+    #[test]
+    fn cancel_on_the_close_sheet_keeps_the_document_edited_even_across_an_autosave() {
+        let m = Mock::new("cancelkeeps");
+        let mut c = DocumentController::<Text>::new();
+        let id = open(&mut c, &m, "a.txt", 4, "a");
+        c.get_mut(id).unwrap().0 = "b".into();
+        c.note_change(id, count(1));
+        c.tick(&m, 0.0);
+        c.close(&m, id);
+        let before = m.log().len();
+        c.tick(&m, AUTOSAVE_DELAY_MS * 2.0);
+        assert_eq!(m.log().len(), before, "no autosave behind the sheet");
+        assert!(c.answer_alert(&m, alert::CANCEL).is_empty());
+        assert!(c.is_edited(id));
+        assert_eq!(c.window_title(id).unwrap(), "a.txt \u{2013} Edited");
+        assert_eq!(c.len(), 1);
+    }
+
+    /// Quit asks for every edited document in turn: Don't Save lets it go on, Cancel stops it and keeps the documents
+    /// edited, and with none left it says the app may quit.
+    #[test]
+    fn quit_asks_for_every_edited_document_and_cancel_stops_it() {
+        let m = Mock::new("quit");
+        let mut c = DocumentController::<Text>::new();
+        let clean = c.new_document();
+        assert!(c.request_quit(&m), "nothing edited: quit now");
+        let (a, b) = (c.new_document(), c.new_document());
+        c.mark_edited(a);
+        c.mark_edited(b);
+        assert!(!c.request_quit(&m), "edited documents ask first");
+        assert!(c.quitting());
+        assert_eq!(c.alert_doc(), Some(a));
+        assert!(!c.advance_quit(&m), "waits while the sheet is up");
+        c.answer_alert(&m, alert::DONT_SAVE);
+        assert!(!c.advance_quit(&m));
+        assert_eq!(c.alert_doc(), Some(b), "the next edited document asks");
+        c.answer_alert(&m, alert::CANCEL);
+        assert!(!c.quitting(), "Cancel ends the quit");
+        assert!(!c.advance_quit(&m));
+        assert!(c.is_edited(b) && c.get(clean).is_some());
+        // asked again: Don't Save on the last one lets the app quit
+        assert!(!c.request_quit(&m));
+        c.answer_alert(&m, alert::DONT_SAVE);
+        assert!(c.advance_quit(&m), "no edited document left");
+        assert!(!c.quitting());
+    }
+
+    /// Save in the quit sheet waits for the save, then goes on; a cancelled save panel ends the quit.
+    #[test]
+    fn quit_waits_for_a_save_and_a_cancelled_save_ends_it() {
+        let m = Mock::new("quitsave");
+        let mut c = DocumentController::<Text>::new();
+        let id = open(&mut c, &m, "a.txt", 4, "a");
+        c.get_mut(id).unwrap().0 = "b".into();
+        c.note_change(id, count(1));
+        assert!(!c.request_quit(&m));
+        c.answer_alert(&m, alert::SAVE);
+        assert!(!c.advance_quit(&m), "the save is under way");
+        let req = m.next.get();
+        c.handle(&m, DocumentEvent::SaveTo(m.file(req, "a.txt", 4, ""))).unwrap();
+        c.handle(&m, DocumentEvent::Saved(m.file(req, "a.txt", 4, "b"))).unwrap();
+        assert!(c.advance_quit(&m), "saved and closed: quit");
+        // an untitled one: the save panel is cancelled, the quit is off and the document stays edited
+        let u = c.new_document();
+        c.mark_edited(u);
+        assert!(!c.request_quit(&m));
+        c.answer_alert(&m, alert::SAVE);
+        let req = m.next.get();
+        c.handle(&m, DocumentEvent::Failed { request: req, code: DocErrorCode::Cancelled }).unwrap();
+        assert!(!c.quitting() && !c.advance_quit(&m));
+        assert!(c.is_edited(u));
     }
 
     #[test]

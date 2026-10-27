@@ -852,6 +852,14 @@ pub trait App {
         ctx.close_main_window();
         true
     }
+    /// `applicationShouldTerminate`: the person quits the app (Cmd+Q, the application menu's or the Dock's Quit) and
+    /// `handles_close_request` is `true`. Return `true` to quit now. A document app with unsaved documents returns `false`,
+    /// raises its save sheet (`DocumentController::request_quit`) and calls `Ctx::terminate` once every sheet is answered
+    /// with Save or Don't Save; Cancel simply does not call it. Logout, shutdown and Force Quit do not ask. The default
+    /// quits at once.
+    fn quit_requested(&mut self, _ctx: &Ctx) -> bool {
+        true
+    }
     /// The person used the close control (the red light) of the extra window `window` and `handles_close_request` is
     /// `true` (`ToApp::WindowCloseRequest`): the shell has left the window up, as it does for Cmd+W in it. A document app
     /// closes the document the window shows as for Cmd+W and closes the window once it may. The default closes the window

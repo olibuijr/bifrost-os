@@ -1649,7 +1649,7 @@ impl Shell {
             quit_step(&foreign,sdk_slot,self.desk_windowless_front().or_else(||desk.and_then(|d|d.front()).map(|w|w.app)))
         };
         match step {
-            QuitStep::App(slot)=>{self.desk_quit_app(slot);Vec::new()}
+            QuitStep::App(slot)=>{self.desk_quit_requested(slot);Vec::new()}
             QuitStep::Windows(ids)=>ids.into_iter().map(|id|Effect::ForeignWindowAction(id,false)).collect(),
             QuitStep::Window(app)=>{self.desk_close_app(app);Vec::new()}
             QuitStep::Nothing=>Vec::new(),

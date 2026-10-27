@@ -657,6 +657,12 @@ pub enum ToApp {
     /// (`Ctx::close_window`), or keeps it. Without the opt-in the shell closes the window at once (`WindowClosed`).
     /// Tag 0x257.
     WindowCloseRequest { id: u32 },
+    /// The person quits the app (Cmd+Q, the application menu's or the Dock's Quit) and the app announced
+    /// `ToShell::CloseRequests { on: true }`: the shell does not send `Quit` but asks first
+    /// (`applicationShouldTerminate`). The app quits at once, or raises its questions (a save sheet for every edited
+    /// document) and quits itself when they are answered, or stays. Logout, shutdown and Force Quit still use `Quit` and
+    /// are never vetoed. Tag 0x259.
+    QuitRequest,
     Resume,
     Suspend,
     Quit,
@@ -1417,6 +1423,8 @@ mod tag {
     pub const WINDOW_CLOSE_REQUEST: u32 = 0x257;
     /// App -> shell: bring one of the app's windows to the front (`ToShell::WindowRaise`).
     pub const WINDOW_RAISE: u32 = 0x258;
+    /// Shell -> app: the person quits the app and it may veto (`ToApp::QuitRequest`).
+    pub const QUIT_REQUEST: u32 = 0x259;
 
     pub const HELLO: u32 = 0x101;
     pub const BUFFERS: u32 = 0x102;
@@ -1916,6 +1924,7 @@ impl ToApp {
             }
             ToApp::Reopen => u32_(&mut b, tag::REOPEN),
             ToApp::CloseRequest => u32_(&mut b, tag::CLOSE_REQUEST),
+            ToApp::QuitRequest => u32_(&mut b, tag::QUIT_REQUEST),
             ToApp::WindowCloseRequest { id } => {
                 u32_(&mut b, tag::WINDOW_CLOSE_REQUEST);
                 u32_(&mut b, *id);
@@ -2113,6 +2122,7 @@ impl ToApp {
             }
             tag::REOPEN => ToApp::Reopen,
             tag::CLOSE_REQUEST => ToApp::CloseRequest,
+            tag::QUIT_REQUEST => ToApp::QuitRequest,
             tag::WINDOW_CLOSE_REQUEST => ToApp::WindowCloseRequest { id: r.u32()? },
             tag::RESUME => ToApp::Resume,
             tag::SUSPEND => ToApp::Suspend,
@@ -3183,6 +3193,7 @@ mod tests {
             ToApp::Activate(u64::MAX),
             ToApp::Reopen,
             ToApp::CloseRequest,
+            ToApp::QuitRequest,
             ToApp::Resume,
             ToApp::Suspend,
             ToApp::Quit,
