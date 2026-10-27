@@ -366,6 +366,8 @@ struct Replacing {
     field: TextField,
 }
 
+/// The folder-name card's height (pt), over the top of the list while it is open.
+const NAMING_CARD_PT: f32 = 56.0;
 /// The replace card's height and its rows (pt): the label and buttons row, then the field.
 const REPLACE_CARD_PT: f32 = 80.0;
 const REPLACE_BAR_PT: f32 = 32.0;
@@ -1214,6 +1216,11 @@ impl Notes {
         self.bar_px(ui, chrome::B_SEARCH)
     }
 
+    /// Where the rows start (pt): below the folder-name card while it is open, so the card never covers a row.
+    fn list_top(&self) -> f32 {
+        list_top_pt() + if self.naming.is_some() { NAMING_CARD_PT + SPACE_S } else { 0.0 }
+    }
+
     /// Screen rect of shown row `i` at the current scroll.
     fn row_rect(&self, ui: &Ui, i: usize) -> (f32, f32, f32, f32) {
         if self.prefs.layout == gallery::Layout::Gallery {
@@ -1224,7 +1231,7 @@ impl Notes {
         let (lx, lw) = self.list_px(ui);
         let m = ui.pt(SPACE_S);
         let section = self.section_offset(i);
-        (lx + m, ui.pt(list_top_pt() + section + ROW_PT * i as f32) - self.list_scroll.offset(), lw - 2.0 * m, ui.pt(ROW_PT))
+        (lx + m, ui.pt(self.list_top() + section + ROW_PT * i as f32) - self.list_scroll.offset(), lw - 2.0 * m, ui.pt(ROW_PT))
     }
 
     #[cfg(test)]
@@ -1597,7 +1604,7 @@ impl Notes {
         let list_h = if self.prefs.layout == gallery::Layout::Gallery {
             self.gallery_grid(ui).2 + ui.pt(SPACE_L)
         } else {
-            ui.pt(list_top_pt() + section) + ui.pt(ROW_PT) * self.shown.len() as f32 + ui.pt(SPACE_L)
+            ui.pt(self.list_top() + section) + ui.pt(ROW_PT) * self.shown.len() as f32 + ui.pt(SPACE_L)
         };
         let text_h = ui.pt(nav_bottom_pt() + TEXT_TOP_PT) + self.editor.height() + ui.pt(60.0);
         self.list_scroll.set_max(list_h - bottom);
@@ -3305,7 +3312,7 @@ impl Notes {
         let m = ui.pt(SPACE_S);
         let pitch = ui.pt(GALLERY_CARD_PT) + gap;
         let ch = ui.pt(GALLERY_CARD_PT);
-        let mut y = ui.pt(list_top_pt());
+        let mut y = ui.pt(self.list_top());
         let (mut col, mut cells, mut heads) = (0usize, Vec::with_capacity(self.shown.len()), vec![]);
         for i in 0..self.shown.len() {
             if let Some(k) = self.sections.iter().position(|(_, start)| *start == i) {
@@ -4354,8 +4361,9 @@ impl Notes {
         }
         if n == 0 {
             let msg = if !self.search.is_empty() { "No Results" } else if self.view == View::Trash { "No Deleted Notes" } else { "No Notes" };
+            let top = ui.pt(self.list_top());
             let img = self.labels.get(ui, msg, MAC_TITLE3_PT, Weight::Regular, LABEL_2.now());
-            centred(&mut content, img, (lx + lw / 2.0) as i32, (ui.pt(list_top_pt()) + ui.pt(SPACE_HUGE * 2.0)) as i32);
+            centred(&mut content, img, (lx + lw / 2.0) as i32, (top + ui.pt(SPACE_HUGE * 2.0)) as i32);
         }
     }
 
@@ -4424,7 +4432,7 @@ impl Notes {
         if cells.is_empty() {
             let msg = if !self.search.is_empty() { "No Results" } else if self.view == View::Trash { "No Deleted Notes" } else { "No Notes" };
             let img = self.labels.get(ui, msg, MAC_TITLE3_PT, Weight::Regular, LABEL_2.now()).clone();
-            centred(&mut content, &img, (lx + ui.pt(SPACE_S)) as i32, (ui.pt(list_top_pt()) + ui.pt(SPACE_HUGE * 2.0)) as i32);
+            centred(&mut content, &img, (lx + ui.pt(SPACE_S)) as i32, (ui.pt(self.list_top()) + ui.pt(SPACE_HUGE * 2.0)) as i32);
         }
     }
 
@@ -4522,7 +4530,7 @@ impl Notes {
         let (lx, lw) = self.list_px(ui);
         let Some(naming) = &self.naming else { return };
         let pad = ui.pt(SPACE_S);
-        let (x, y, w, h) = (lx + pad, ui.pt(nav_bottom_pt()) + pad, lw - 2.0 * pad, ui.pt(56.0));
+        let (x, y, w, h) = (lx + pad, ui.pt(nav_bottom_pt()) + pad, lw - 2.0 * pad, ui.pt(NAMING_CARD_PT));
         s.fill_rrect(x, y, w, h, ui.pt(m::CARD_RADIUS), CARD_BG.now());
         s.stroke_rrect(x, y, w, h, ui.pt(m::CARD_RADIUS), 1.0, SEPARATOR_C.now());
         let (label, placeholder) = match (&naming.link, &naming.old) {
@@ -5772,6 +5780,9 @@ mod tests {
         n.run(&ui, Act::NewFolder, 1.0);
         assert!(n.naming.is_some() && n.keyboard_shown());
         draw(&mut n, &ui, 2.0);
+        // the name card sits over the list top: the first row starts below it, not under it
+        let card_bottom = ui.pt(nav_bottom_pt() + SPACE_S + NAMING_CARD_PT);
+        assert!(n.row_rect(&ui, 0).1 >= card_bottom, "the folder-name card covers the first row");
         assert_eq!(n.naming.as_ref().unwrap().field.text(), "New Folder");
         n.naming.as_mut().unwrap().field.set_text(&ui, "Work");
         n.key(&ui, Out::Enter, 3.0);
