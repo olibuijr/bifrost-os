@@ -44,7 +44,9 @@ mod layout;
 pub use layout::*;
 
 mod dock;
-pub(super) use dock::{dock_dot, dock_press_rects, dock_release_hits};
+pub(super) use dock::{dock_press_rects, dock_release_hits};
+#[cfg(test)]
+use dock::dock_dot;
 
 mod draw;
 use draw::*;
