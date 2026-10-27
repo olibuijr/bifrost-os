@@ -3593,6 +3593,47 @@
         assert!(sent().contains(&ToApp::Quit),"Quit still reaches an app that handles the close control");
     }
 
+    /// Red close of an app that keeps running after its last window closes (the default: the app announced
+    /// `CloseRequests`, `App::terminates_after_last_window_closed` is false): the shell asks it, the app's default answer
+    /// orders the main window out (`WindowClose` id 0), and it stays running with no window, active and in the Dock. A Dock
+    /// click then puts the window back and tells the app (`Reopen`). An app that terminates after its last window (it
+    /// announced nothing) is quit by the same red light.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn the_red_light_closes_the_window_and_the_app_keeps_running_unless_it_terminates_with_it() {
+        use bifrost_proto::{sys::Recv,ToApp,ToShell};
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        let (mine,theirs)=bifrost_proto::sys::socketpair_pair().unwrap();
+        let host=apphost::AppHost::with_channel("fixture",mine,None,bifrost_proto::Configure{w:100,h:100,scale:1.,safe_top:0.,safe_bottom:0.,dark:true,text_scale:1.,reduce_motion:false});
+        sh.ext.push(Some(host));
+        let sent=||{let mut v=Vec::new();while let Ok(Recv::Packet(p,_))=theirs.recv(false){v.push(ToApp::decode(&p).unwrap());}v};
+        let app=AppId::External(0);
+        let m=sh.desk_metrics();
+        {let d=sh.desk.as_mut().unwrap();d.wins.clear();d.open(&m,app,(600,400));}
+        sh.screen=Screen::App(app);
+        // the app announces that it answers the close control, as every default app does
+        {let mut out=apphost::Pumped::default();sh.ext[0].as_mut().unwrap().handle(ToShell::CloseRequests{on:true},Vec::new(),&mut out);}
+        sh.desk_close_requested(app);
+        assert_eq!(sent(),vec![ToApp::CloseRequest],"the red light asks the app and does not quit it");
+        // the default answer: the app orders its main window out
+        {let mut out=apphost::Pumped::default();sh.ext[0].as_mut().unwrap().handle(ToShell::WindowClose{id:0},Vec::new(),&mut out);}
+        sh.desk_sync_extra_windows();
+        assert!(sh.desk.as_ref().unwrap().index_of(app).is_none(),"the window is closed");
+        assert!(sh.ext[0].as_ref().is_some_and(|h|h.running()),"the app keeps running");
+        assert!(!sent().contains(&ToApp::Quit),"nothing quit it");
+        assert_eq!(sh.desk_windowless_front(),Some(app),"it stays the active app and owns the menu bar");
+        assert!(sh.ext_windowless_apps().contains(&app),"it keeps its Dock dot");
+        // a Dock click (an activation) puts the window back and asks the app to reopen one
+        sh.desk_open(app,1.0);
+        assert!(sh.desk.as_ref().unwrap().index_of(app).is_some(),"the window is back");
+        assert_eq!(sent(),vec![ToApp::Reopen]);
+        // an app that terminates with its last window announced nothing: the red light quits it
+        sh.ext[0].as_mut().unwrap().close_requests=false;
+        sh.desk_close_requested(app);
+        assert!(!sent().contains(&ToApp::CloseRequest),"an app that announced nothing is not asked");
+        assert!(sh.desk.as_ref().unwrap().index_of(app).is_none(),"its window is closed by the shell, as before");
+    }
+
     /// The red light of an extra window of an app that opted in asks the app about that window (`WindowCloseRequest`) and
     /// leaves the window on the desk; before, the shell dropped it and the app's save sheet came back in a new window behind
     /// the main one. An app that did not opt in, or a window the app no longer has, closes as before.

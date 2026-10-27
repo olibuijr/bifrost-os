@@ -582,6 +582,14 @@ struct Slot {
     stale_all: bool,
 }
 
+/// Whether the app tells the shell (`ToShell::CloseRequests`) that it answers the close control of its main window: an app
+/// that decides itself (`handles_close_request`), and every app that does not quit with its last window
+/// (`terminates_after_last_window_closed`), whose default answer orders the window out and keeps it running. Only an app
+/// that terminates and does not decide is closed by the shell, which quits it.
+pub(crate) fn announces_close_requests(handles_close_request: bool, terminates_after_last_window_closed: bool) -> bool {
+    handles_close_request || !terminates_after_last_window_closed
+}
+
 /// Whether the SDK can bind a layer context on its Wayland connection (`wl::connection`). The direct path needs the
 /// connection to dispatch the `bifrost_layer_*` objects, which it does not yet (todo_left in
 /// `docs/graphics/g2-sdk-direct-runtime.md`). Until it does, the direct path is never entered.
@@ -1161,7 +1169,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
             let _ = chan.send(&ToShell::PointerInterest { mask: interest }.encode(), &[]);
         }
         // an app that answers the main window's close control itself says so once; the shell asks it instead of quitting it
-        if !close_requests_sent && app.handles_close_request() {
+        if !close_requests_sent && announces_close_requests(app.handles_close_request(), app.terminates_after_last_window_closed()) {
             close_requests_sent = true;
             let _ = chan.send(&ToShell::CloseRequests { on: true }.encode(), &[]);
         }
@@ -1911,6 +1919,69 @@ mod badge_tests {
         assert!(d.event(ToApp::DocBatch { request: 5, count: 3 }, None).is_none());
         assert!(matches!(d.event(ToApp::DocError { request: 5, code: DocErrorCode::Denied }, None), Some(DocumentEvent::Failed { .. })));
         assert!(d.batches.is_empty(), "an error drops the batch");
+    }
+}
+
+#[cfg(test)]
+mod close_policy_tests {
+    use super::announces_close_requests;
+    use crate::App;
+
+    #[derive(Default)]
+    struct Plain;
+    impl App for Plain {
+        fn id(&self) -> &str {
+            "is.test.plain"
+        }
+        fn draw(&mut self, _: &crate::Ctx, s: &mut crate::kit::Surface, _: f64) -> crate::kit::Damage {
+            crate::kit::Damage::new(s.w, s.h)
+        }
+    }
+
+    struct Utility;
+    impl App for Utility {
+        fn id(&self) -> &str {
+            "is.test.utility"
+        }
+        fn draw(&mut self, _: &crate::Ctx, s: &mut crate::kit::Surface, _: f64) -> crate::kit::Damage {
+            crate::kit::Damage::new(s.w, s.h)
+        }
+        fn terminates_after_last_window_closed(&self) -> bool {
+            true
+        }
+    }
+
+    /// The reference desktop keeps an app running after its last window closes: by default the app tells the shell it answers
+    /// the close control (so the shell asks it instead of quitting it) and the default answer orders the window out.
+    #[test]
+    fn an_app_keeps_running_with_no_window_unless_it_terminates_after_the_last_window() {
+        let plain = Plain;
+        assert!(!plain.terminates_after_last_window_closed(), "keep running is the default");
+        assert!(announces_close_requests(plain.handles_close_request(), plain.terminates_after_last_window_closed()));
+        let utility = Utility;
+        assert!(!announces_close_requests(utility.handles_close_request(), utility.terminates_after_last_window_closed()), "a single-window utility is closed (quit) by the shell");
+    }
+
+    /// An app that decides itself is asked either way; the flag only matters to an app that does not.
+    #[test]
+    fn an_app_that_handles_the_close_control_is_always_asked() {
+        assert!(announces_close_requests(true, true));
+        assert!(announces_close_requests(true, false));
+        assert!(announces_close_requests(false, false));
+        assert!(!announces_close_requests(false, true));
+    }
+
+    /// The default answer to the red light of a default app orders the main window out and sends nothing that quits it.
+    #[test]
+    fn the_default_answer_to_the_red_light_orders_the_window_out_and_does_not_quit() {
+        use bifrost_proto::ToShell;
+        let ctx = super::test_ctx();
+        let mut app = Plain;
+        assert!(app.close_requested(&ctx));
+        assert!(!ctx.windows().main_shown());
+        assert_eq!(ctx.take_sent(), vec![ToShell::WindowClose { id: 0 }]);
+        // a reopen puts it back and the default handler needs no frame
+        assert!(!app.reopen(&ctx));
     }
 }
 

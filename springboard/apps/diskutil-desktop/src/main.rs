@@ -61,6 +61,10 @@ fn size_pt(w_px: u32, h_px: u32, scale: f32) -> (f32, f32) {
 }
 
 impl App for DiskUtility {
+    /// A single-window utility: the red light quits it (`applicationShouldTerminateAfterLastWindowClosed:`).
+    fn terminates_after_last_window_closed(&self) -> bool {
+        true
+    }
     fn id(&self) -> &str {
         "is.olibuijr.diskutil.desktop"
     }
