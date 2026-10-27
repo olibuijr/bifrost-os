@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.9
+
+- Zoom, Back and Forward follow the characters on the keyboard layout; View has Reload Page and Edit has Find; Cmd+D on a saved page edits its bookmark.
+
 ## 0.17.8
 
 - Rebuilt for 0.10.44: every touch says whether a mouse or a finger made it, so a mouse drag no longer scrolls lists on the desktop (the wheel, trackpad and scroll bar still do).
