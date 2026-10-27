@@ -109,7 +109,7 @@ pub(super) fn draw_light_glyph(s: &mut Surface, lr: &Rect, i: usize, maximized: 
 /// The green light's glyph on a full-screen window (the band revealed under the menu bar): two solid arrowheads, at
 /// the top-left and bottom-right of the centre, whose right-angle corners point in at it, as the reference's "Exit Full
 /// Screen" glyph does (the opposite of the outward pair that enters full screen).
-#[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+#[cfg(any(feature = "desktop-wayland", test))]
 pub(super) fn draw_exit_full_screen_glyph(s: &mut Surface, lr: &Rect, p: f32) {
     let (cx, cy) = (lr.x as f32 + lr.w as f32 / 2.0, lr.y as f32 + lr.h as f32 / 2.0);
     let gap = (p * 0.6).max(0.6);
@@ -195,7 +195,7 @@ pub(super) const EDGE_BAND: usize = 3;
 
 /// The parts of a `width` x `height` window that the rim stroke and the corner clip touch, as (x, y, w, h): a band
 /// `EDGE_BAND` wide along each edge and a square over each rounded corner.
-#[allow(dead_code)]
+#[cfg(any(feature = "desktop-wayland", test))]
 pub(super) fn edge_band_rects(width: usize, height: usize, radius: f32) -> [(i32, i32, i32, i32); 8] {
     let n = (radius.ceil() as usize).min(width / 2).min(height / 2);
     let (w, h) = (width as i32, height as i32);
@@ -206,7 +206,7 @@ pub(super) fn edge_band_rects(width: usize, height: usize, radius: f32) -> [(i32
 }
 
 /// Whether window rect `r` overlaps body damage area `a` (body coordinates, `top` rows below the window's top).
-#[allow(dead_code)]
+#[cfg(feature = "desktop-wayland")]
 pub(super) fn overlaps(r: &(i32, i32, i32, i32), a: &crate::gfx::Area, top: usize) -> bool {
     (a.x0 as i32) < r.0 + r.2 && (a.x1 as i32) > r.0 && ((a.y0 + top) as i32) < r.1 + r.3 && ((a.y1 + top) as i32) > r.1
 }
@@ -214,7 +214,8 @@ pub(super) fn overlaps(r: &(i32, i32, i32, i32), a: &crate::gfx::Area, top: usiz
 /// Copies [x0, x1) x [y0, y1) of a retained window (window coordinates) from the app's frame `src` (pixels, width,
 /// height; the frame starts `top` rows down), dimmed by `dim` for a background window as the fast path dims a fresh
 /// blit. Pixels outside the frame (the title bar) are left as they are.
-#[allow(dead_code, clippy::too_many_arguments)]
+#[cfg(any(feature = "desktop-wayland", test))]
+#[allow(clippy::too_many_arguments)]
 pub(super) fn restore_from_frame(pixels: &mut [u32], width: usize, height: usize, top: usize, src: (&[u32], usize, usize), dim: Option<u32>, x0: i32, y0: i32, x1: i32, y1: i32) {
     let (spx, sw, sh) = src;
     let cx = |v: i32| (v.max(0) as usize).min(width).min(sw);
@@ -236,7 +237,8 @@ pub(super) fn restore_from_frame(pixels: &mut [u32], width: usize, height: usize
 /// stroked once and the corners clipped once. So an edge pixel always holds exactly one stroke over the app's pixel,
 /// however often the app repaints (stroking the retained buffer again blended 15% white per repaint, E2E-10).
 /// Returns the window rects it changed (for the frame's damage).
-#[allow(dead_code, clippy::too_many_arguments)]
+#[cfg(any(feature = "desktop-wayland", test))]
+#[allow(clippy::too_many_arguments)]
 pub(super) fn restore_window_edge(pixels: &mut [u32], width: usize, height: usize, top: usize, src: (&[u32], usize, usize), dim: Option<u32>, radius: f32, rim: u32) -> Vec<(i32, i32, i32, i32)> {
     let rects = edge_band_rects(width, height, radius);
     let (_, sw, sh) = src;
@@ -259,7 +261,7 @@ pub(super) fn restore_window_edge(pixels: &mut [u32], width: usize, height: usiz
 
 #[cfg(feature = "desktop-wayland")]
 pub(super) fn clip_corners(image:&mut Image,radius:f32) {clip_window_corners(&mut image.px,image.w,image.h,radius,None);}
-#[allow(dead_code)]
+#[cfg(any(feature = "desktop-wayland", test))]
 pub(super) fn clip_window_corners(pixels:&mut [u32],width:usize,height:usize,radius:f32,damage:Option<&crate::gfx::Damage>) {
     let n=(radius.ceil() as usize).min(width/2).min(height/2);
     let mask=crate::gfx::rrect_mask(n*2,n*2,radius);
