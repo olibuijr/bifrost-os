@@ -2,6 +2,15 @@
 # The one compile check agents may run (owner, 2026-10-25: "allow cargo check"): `cargo check` only (no linking, no
 # tests), in its own memory-limited systemd scope at the lowest CPU and I/O priority, one check at a time on Titan,
 # with a shared target directory so dependencies are checked once for every worktree.
+#
+# Stale-artifact guard: cargo names workspace crates by their workspace-relative path, so every worktree maps to the
+# same artifacts, and a crate counts as fresh when no source file is newer than the stored check. A sibling worktree's
+# older build therefore looked fresh to a worktree whose files are older (bogus errors such as a constant "not found"
+# that the sources define). A private target per worktree costs many GB, and checksum freshness needs a nightly
+# toolchain. Instead the target records which checkout last used it (`.owner`); when a different one runs (under the
+# lock, so runs never overlap), every file of the checkout is touched, which makes this checkout's crates newer than
+# any stored check and rebuilds just the workspace crates once. Registry dependencies are keyed by version and keep
+# their artifacts. Consecutive runs in the same checkout stay incremental. Source files only get a new mtime.
 # Usage (from anywhere inside a bifrost-os checkout or worktree):
 #   tools/agent-check.sh                 the shell: lib + tests without desktop-wayland, then the shell bin with it
 #   tools/agent-check.sh -p bifrost-wm   any other `cargo check` arguments instead of the default pair
@@ -20,6 +29,10 @@ run() {
 exec 9>"$lock"
 echo "agent-check: waiting for the check lock" >&2
 flock 9
+if [ "$(cat "$CARGO_TARGET_DIR/.owner" 2>/dev/null)" != "$root" ]; then
+    echo "agent-check: target last used by another checkout; refreshing source times of $root" >&2
+    (cd "$root" && git ls-files -z -co --exclude-standard | xargs -0 -r touch -c --) && echo "$root" > "$CARGO_TARGET_DIR/.owner"
+fi
 rc=0
 if [ $# -gt 0 ]; then
     run "$@" || rc=$?
