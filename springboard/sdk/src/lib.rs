@@ -114,6 +114,7 @@ pub mod speech;
 pub mod screenshot;
 pub mod locale;
 pub mod time_zone;
+pub mod sun_moon;
 pub mod formatters;
 pub mod pref_domains;
 pub mod calendar_system;
