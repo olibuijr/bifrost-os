@@ -133,7 +133,10 @@ struct Files {
     controls: Controls,
     searching: bool,
     scroll: f32,
+    /// Where the press landed (x, y in points) and when. Never moves: a drag starts from it and a click ends on it.
     down: Option<(f32, f32, f64)>,
+    /// The y the last pointer move left the finger at: the list scrolls by the difference to the next one.
+    pan_y: f32,
     last_click: Option<(usize, f64)>,
     preview: Option<(String, String)>,
     w: f32,
@@ -261,6 +264,7 @@ impl Files {
             searching: false,
             scroll: 0.,
             down: None,
+            pan_y: 0.,
             last_click: None,
             preview: None,
             w: 960.,
@@ -690,7 +694,11 @@ impl Files {
                 ..
             } => {
                 self.notice = None;
+                // a press while a drag is still held means the release of that drag never came (the shell owned the
+                // pointer and ended the session elsewhere): the old drag is over, it must not drop on this press
+                self.cancel_drag();
                 self.down = Some((x / ctx.ui.s, y / ctx.ui.s, t));
+                self.pan_y = y / ctx.ui.s;
             }
             Input::Touch {
                 kind: TouchKind::Move,
@@ -727,8 +735,8 @@ impl Files {
                         self.drop_target = target;
                         self.revision += 1;
                     }
-                } else if let Some((_, old, _)) = self.down {
-                    let new = y;
+                } else if self.down.is_some() {
+                    let (old, new) = (self.pan_y, y);
                     let visible = self.visible().len();
                     let columns = ((self.w - (self.side() + 16.)) / self.grid_w()).floor().max(1.) as usize;
                     let total = if self.vo.gallery {
@@ -740,9 +748,9 @@ impl Files {
                     };
                     self.scroll =
                         (self.scroll + old - new).clamp(0., (total - (self.h - self.rows_top() - 70.)).max(0.));
-                    if let Some((_, old, _)) = &mut self.down {
-                        *old = new
-                    }
+                    // the press point stays where it was: a drag that has not begun yet is measured from it, and the
+                    // release is a click only if it ends near it
+                    self.pan_y = new;
                 }
             }
             Input::Touch {
@@ -920,7 +928,7 @@ mod tests {
             dnd: Default::default(), windows: Vec::new(), info_window: false, info_wanted: false, home:"/fixture".into(), path:"/fixture".into(), history:vec![], at:0,
             tabs: tabs::TabStrip::new(tabs::TabState { path: "/fixture".into(), history: vec![], at: 0 }),
             listing: rows.clone(), rows, hits: None, search: None, selection:vec![], select_mode:false, sidebar_hidden:false, status_bar:false, title_w:120., path_segs:vec![], loading:false, error:None, job:None,grid:true,sort:Sort::Name,
-            query:TextField::new(),controls:Controls::default(),searching:false,scroll:0.,down:None,last_click:None,preview:None,
+            query:TextField::new(),controls:Controls::default(),searching:false,scroll:0.,down:None,pan_y:0.,last_click:None,preview:None,
             w:960.,h:630.,painted_state:String::new(),painted_selection:vec![],revision:0,
             show_hidden:false,clip:None,naming:None,work:None,notice:None,info:None,tag_index:TagIndex::default(),tag_panel:false,smart:vec![],open_with:None,dragging:false,drop_target:None,undo:vec![],columns:false,ancestors:vec![],watch:None,journal:bifrost_app::fswatch::EventJournal::new(JOURNAL_CAP),journal_seen:0,fx:FileManagerState::default(),vo:ViewOpts::default(),data_dir:None,labels:new_labels(),row_text:Default::default(),sys:SystemState::default(),ext:Default::default(),
         }
@@ -1211,6 +1219,64 @@ mod tests {
         assert_eq!(files.drop_target_at(80., row(&dir.join("Documents"))), Some(dir.join("Documents")));
         assert_eq!(files.drop_target_at(80., row(&files.bin())), None);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+    fn pointer(kind: TouchKind, x: f32, y: f32, t: f64) -> Input {
+        Input::Touch { kind, id: 0, x, y, t, mods: bifrost_app::proto::ModifierFlags::EMPTY }
+    }
+    fn test_ctx() -> Ctx {
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        let cfg = bifrost_app::proto::Configure { w: 960, h: 630, scale: 1.0, safe_top: 0.0, safe_bottom: 0.0, dark: false, text_scale: 1.0, reduce_motion: false };
+        Ctx::testing(Ui::new(springboard::font::Font::parse(data).unwrap(), 1.0), cfg)
+    }
+    /// A one-column icon grid with the folder A above the folder B: the x of the column and the y of each cell's centre.
+    fn stacked_folders() -> (Files, f32, f32, f32) {
+        let mut files = fixture(vec![folder("A"), folder("B")]);
+        files.w = files.side() + 16. + 1.5 * files.grid_w();
+        let x = files.side() + 16. + 0.5 * files.grid_w();
+        let a = files.rows_top() + 16. + 0.5 * files.grid_h();
+        let b = files.rows_top() + 16. + 1.5 * files.grid_h();
+        (files, x, a, b)
+    }
+    #[test]
+    fn a_slow_vertical_drag_onto_the_folder_below_moves_the_item() {
+        // the real stream: a press on A, many small moves straight down, a release over B. A relative mouse reports a point
+        // or two per move, an absolute pointer a few more; none is ever 12 points (the drag slop) from the one before. The
+        // pan of an unmoved list must not take the press point along, or the drag never begins and the release is read as
+        // a click.
+        let ctx = test_ctx();
+        for step in [1., 3., 7.] {
+            let (mut files, x, a, b) = stacked_folders();
+            files.route_input(&ctx, pointer(TouchKind::Down, x, a, 0.));
+            let mut y = a;
+            let mut t = 0.;
+            while y < b {
+                y = (y + step).min(b);
+                t += 16.;
+                files.route_input(&ctx, pointer(TouchKind::Move, x, y, t));
+            }
+            assert!(files.dragging, "step {step}: the drag began from the press point");
+            assert_eq!(files.fx.drag_paths, vec![PathBuf::from("/fixture/A")]);
+            assert_eq!(files.drop_target, Some(PathBuf::from("/fixture/B")), "step {step}: B is lit under the pointer");
+            files.route_input(&ctx, pointer(TouchKind::Up, x, b, t + 16.));
+            assert!(!files.dragging);
+            assert!(matches!(files.work.as_ref().map(|w| w.kind), Some(JobKind::Transfer(Op::Move))), "step {step}: the release moves A into B");
+            assert_eq!(files.work.as_ref().map(|w| w.dest.clone()), Some(PathBuf::from("/fixture/B")));
+        }
+    }
+    #[test]
+    fn a_press_ends_a_drag_whose_release_never_came() {
+        // the shell owned the pointer for the session and ended it without a drop here: the next press must not drop
+        let ctx = test_ctx();
+        let (mut files, x, a, _) = stacked_folders();
+        files.dragging = true;
+        files.fx.drag_paths = vec![PathBuf::from("/fixture/A")];
+        files.drop_target = Some(PathBuf::from("/fixture/B"));
+        files.route_input(&ctx, pointer(TouchKind::Down, x, a, 0.));
+        assert!(!files.dragging);
+        assert!(files.drop_target.is_none());
+        assert!(files.fx.drag_paths.is_empty());
+        files.route_input(&ctx, pointer(TouchKind::Up, x, a, 40.));
+        assert!(files.work.is_none(), "the click moved nothing");
     }
     #[test]
     fn columns_click_the_folders_above_and_the_open_one() {

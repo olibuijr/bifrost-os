@@ -1064,6 +1064,9 @@ impl Desk {
     }
 
     pub(super) fn grab_idle(&self)->bool{self.grab.is_none()}
+    /// The press that began a drag session ends with the shell taking its release (`dnd_event`): the window must not go on
+    /// hearing the pointer moves of the buttonless pointer as a held drag.
+    pub(super) fn end_grab(&mut self){self.grab=None;}
     /// Whether the Dock keeps magnifying: with no grab, or while a Dock icon is pressed but not dragged, so the row does
     /// not jump back to rest under the pointer between the press and the release (W2-23).
     pub(super) fn dock_grab_magnifies(&self)->bool{matches!(self.grab,None|Some(Grab::DockDrag{moved:false,..}))}
@@ -6697,6 +6700,55 @@ mod tests {
             if let Ok(ToApp::Touch { kind, .. }) = ToApp::decode(&p) { kinds.push(kind); }
         }
         assert_eq!(kinds, vec![TouchKind::Down, TouchKind::Move, TouchKind::Up], "the app hears the whole drag");
+    }
+
+    /// The drag session of an app's window takes the pointer from the press that began it: the window hears Down and the
+    /// Moves up to the grants, then the session runs (Entered on its own window), and its release ends the press, so
+    /// the pointer moves that follow (no button held) are not touches of a drag the window believes is still held.
+    #[test]
+    fn a_drag_session_takes_the_release_and_ends_the_press_that_began_it() {
+        use crate::shell::{sharing::INBOUND, Screen};
+        use bifrost_proto::{dragop, DragItem, DragPhase, DragPreview, Payload, ToApp, ToShell, TouchKind};
+        let mut sh = crate::shell::tests::desktop_shell();
+        sh.anim = None;
+        let (mine, peer) = bifrost_proto::sys::socketpair_pair().unwrap();
+        let cfg = bifrost_proto::Configure { w: 100, h: 100, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
+        sh.ext.push(Some(apphost::AppHost::with_channel("fixture", mine, None, cfg)));
+        let slot = (sh.ext.len() - 1) as u8;
+        let app = AppId::External(slot);
+        let m = sh.desk_metrics();
+        {
+            let d = sh.desk.as_mut().unwrap();
+            d.wins.clear();
+            d.open(&m, app, (500, 400));
+        }
+        sh.screen = Screen::App(app);
+        let w = *sh.desk.as_ref().unwrap().wins.iter().find(|w| w.app == app).unwrap();
+        let b = w.body(&m);
+        let (x, y) = ((b.x + b.w / 2) as f32, (b.y + b.h / 2) as f32);
+        sh.desk_event(Event::Down(x, y), 100.);
+        sh.desk_event(Event::Move(x + 14., y), 116.);
+        sh.dnd_msg(slot, ToShell::DragRegister { types: vec!["public.data".into()] });
+        let item = DragItem::new(Payload::File { grant: [1; 16], name: "a.txt".into() });
+        sh.dnd_msg(slot, ToShell::DragBegin { session: INBOUND | 1, allowed: dragop::COPY | dragop::MOVE, items: vec![item], preview: DragPreview::default() });
+        assert!(sh.dnd.session.is_some(), "the window in front began the session");
+        // the session owns the pointer: the move enters the window itself, the release is the window's drop
+        assert!(sh.dnd_event(Event::Move(x + 30., y + 4.), 132.).is_some());
+        assert!(sh.dnd_event(Event::Up(x + 30., y + 4.), 148.).is_some());
+        assert!(sh.desk.as_ref().unwrap().grab_idle(), "the release ended the press");
+        // the pointer moves after the release reach nobody as a touch
+        sh.desk_event(Event::Move(x + 50., y), 164.);
+        let (mut touches, mut phases) = (Vec::new(), Vec::new());
+        while let Ok(bifrost_proto::sys::Recv::Packet(p, _)) = peer.recv(false) {
+            match ToApp::decode(&p) {
+                Ok(ToApp::Touch { kind, .. }) => touches.push(kind),
+                Ok(ToApp::DragDest { phase, .. }) => phases.push(phase),
+                _ => {}
+            }
+        }
+        assert_eq!(touches, vec![TouchKind::Down, TouchKind::Move], "the app heard the press and the moves up to the session only");
+        assert_eq!(phases.first(), Some(&DragPhase::Entered), "the session entered the source window");
+        assert!(phases.contains(&DragPhase::Updated), "the release is a pointer step in the window, then its drop");
     }
 
     /// O8: the active app that closed its last window keeps the menu bar, so the window under it must not draw as the

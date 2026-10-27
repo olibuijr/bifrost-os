@@ -56,6 +56,20 @@ pub(crate) struct DragOut {
 }
 
 impl Files {
+    /// Drops a drag that is still held when a new press arrives: the release that should have ended it never reached the
+    /// window (the shell owned the pointer and ended the session without a drop here), so it must not drop on the next press.
+    pub(crate) fn cancel_drag(&mut self) {
+        if !self.dragging {
+            return;
+        }
+        self.dragging = false;
+        self.drop_target = None;
+        self.spring_hover(None);
+        self.fx.drag_paths.clear();
+        self.fx.copy_drag = false;
+        self.revision += 1;
+    }
+
     /// The drag just started on items: ask the shell for a read grant for each one. The session begins when they are all in.
     pub(crate) fn drag_out_ask(&mut self, ctx: &Ctx) {
         self.dnd.asking = self.fx.drag_paths.iter().map(|p| ctx.grant_path(&p.to_string_lossy())).collect();
