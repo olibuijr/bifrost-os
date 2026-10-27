@@ -2383,7 +2383,7 @@ impl App for Viewer {
             file_items.push(AppMenuItem::separator().depth(1));
         }
         file_items.push(AppMenuItem::new(MENU_CLEAR_RECENTS, "Clear Menu").enabled(!self.recents.is_empty()).depth(1));
-        file_items.extend([AppMenuItem::separator(), item(Action::Print, open, false), AppMenuItem::separator()]);
+        file_items.extend([AppMenuItem::separator(), AppMenuItem::print(Action::Print.id()).enabled(open), AppMenuItem::separator()]);
         file_items.extend([item(Action::ExportPng, open, false), item(Action::ExportJpeg, open, false)]);
         file_items.push(AppMenuItem::separator());
         file_items.extend(scale_items);
@@ -2406,18 +2406,13 @@ impl App for Viewer {
         let sidebar_label = if self.sidebar { "Hide Sidebar" } else { "Show Sidebar" };
         vec![
             AppMenu { title: "File".into(), items: file_items },
+            // Edit merges into the shell's Edit, which already has Undo, Redo, Copy and Select All: only the app's own items here
             AppMenu {
-                title: "Preview".into(),
+                title: "Edit".into(),
                 items: vec![
-                    item(Action::Undo, self.history.can_undo(), false),
-                    item(Action::Redo, self.history.can_redo(), false),
-                    AppMenuItem::separator(),
                     item(Action::Find, pdf, false),
                     item(Action::FindNext, pdf, false),
                     item(Action::FindPrevious, pdf, false),
-                    AppMenuItem::separator(),
-                    item(Action::CopyText, open, false),
-                    item(Action::SelectAll, open, false),
                     AppMenuItem::separator(),
                     AppMenuItem::submenu("Speech"),
                     AppMenuItem::new(MENU_SPEAK_START, "Start Speaking").enabled(open).depth(1),
@@ -2965,5 +2960,26 @@ mod tests {
         assert_eq!(m.page, 3);
         assert_eq!(m.rect, Norm { x: 0.25, y: 0.25, w: 0.5, h: 0.25 });
         assert_eq!(m.ink.len(), 2);
+    }
+
+    fn menu_ctx() -> Ctx {
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        let cfg = bifrost_app::proto::Configure { w: 100, h: 100, scale: 1.0, safe_top: 0.0, safe_bottom: 0.0, dark: true, text_scale: 1.0, reduce_motion: false };
+        Ctx::testing(Ui::new(bifrost_app::kit::Font::parse(data).unwrap(), 1.0), cfg)
+    }
+
+    #[test]
+    fn print_is_the_apps_one_item_and_there_is_no_second_menu_titled_preview() {
+        let menus = Viewer::new().main_menu(&menu_ctx());
+        let prints: Vec<&AppMenuItem> = menus.iter().flat_map(|m| m.items.iter()).filter(|i| i.prints).collect();
+        assert_eq!(prints.len(), 1, "one Print… that replaces the shell's File > Print…");
+        assert_eq!(prints[0].id, Action::Print.id());
+        assert!(!prints[0].enabled, "no document open, so Print… is greyed");
+        let file = menus.iter().find(|m| m.title == "File").expect("File menu");
+        assert_eq!(file.items.iter().filter(|i| i.title.starts_with("Print")).count(), 1, "the File menu lists Print… once");
+        assert!(!menus.iter().any(|m| m.title == "Preview"), "no second Edit menu titled Preview");
+        let edit: Vec<&str> = menus.iter().filter(|m| m.title == "Edit").flat_map(|m| m.items.iter().map(|i| i.title.as_str())).collect();
+        assert!(edit.contains(&"Find\u{2026}") && edit.contains(&"Find Next") && edit.contains(&"Find Previous"));
+        assert!(!edit.iter().any(|t| matches!(*t, "Undo" | "Redo" | "Copy" | "Select All")), "the shell's Edit has these already");
     }
 }
