@@ -1680,7 +1680,7 @@ Where Servo 0.7.0 limits this, and Apple behaviour that is not matched yet:
 - Page rendering: CSS `backdrop-filter` is not implemented in Servo 0.7.0 (its style system parses it only under the
   off-by-default `layout.unimplemented` preference and layout never emits it), so a translucent sticky header shows the
   page behind it unblurred; `filter` works. The gap and what closing it needs are in `apps/browser/docs/servo-review.md`
-  ("Remaining gaps"); the engine is not patched. `@supports (backdrop-filter: blur(1px))` is false, so a site can fall back.
+  ("Remaining gaps"); the engine is not patched (it is a workspace member of an unmodified Servo checkout; the fork of stylo, layout and paint it would need is described there). `@supports (backdrop-filter: blur(1px))` is false, so a site can fall back; bifrost.olibuijr.com does (`.nav` uses the solid page colour).
 - Fonts: the engine's fallback list is fixed in Servo, so CJK punctuation (U+3000 to U+303F and the other Common-script CJK
   blocks) relies on `packaging/arch/fontconfig/61-bifrost-cjk-fallback.conf`, which makes the installed Noto Sans CJK SC
   answer the list's last family name; the package scriptlet rebuilds the font cache for it (Browser README, "Web compatibility").
