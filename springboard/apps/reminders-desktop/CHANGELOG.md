@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.13
+
+- Escape closes the details popover and keeps its edits; the Recently Deleted toolbar menu is named for what it does.
+
 ## 1.20.12
 
 - Rebuilt for 0.10.44: every touch says whether a mouse or a finger made it, so a mouse drag no longer scrolls lists on the desktop (the wheel, trackpad and scroll bar still do).
