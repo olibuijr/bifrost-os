@@ -130,6 +130,8 @@ fn sheet_slide(start_ms: f64) -> motion::Anim {
 pub const THUMB: u8 = 0;
 pub const CELL_ART: u8 = 1;
 pub const BIG: u8 = 2;
+/// the kind of a Control Center cover decoded from the song's embedded picture (not a cache kind)
+const EMBEDDED: u8 = 3;
 
 const PLAYLIST_HEADER_PT: f32 = 68.0;
 const MENU_ROW_PT: f32 = 48.0;
@@ -412,6 +414,8 @@ pub struct Music {
     art: Cache,
     /// the current song's cover as sent to Control Center, with the cache key and kind it came from
     np_art: Option<(String, u8, bifrost_app::now_playing::ArtworkImage)>,
+    /// the cache key whose embedded picture would not decode: not tried again, the cached thumbnail is used
+    np_embedded_failed: Option<String>,
     art_pending: HashSet<(usize, u8)>,
     /// covers that would not decode: not asked for again
     art_failed: HashSet<(usize, u8)>,
@@ -583,6 +587,7 @@ impl Music {
             indexing: false,
             art: Cache::new(art::BUDGET / 2),
             np_art: None,
+            np_embedded_failed: None,
             art_pending: HashSet::new(),
             art_failed: HashSet::new(),
             cache: TextCache::default(),
@@ -1750,7 +1755,8 @@ impl Music {
         self.now_playing.as_ref()
     }
 
-    /// Brings the cover for Control Center up to date with the current song: the Now Playing picture when the sheet has
+    /// Brings the cover for Control Center up to date with the current song: the encoded picture embedded in the
+    /// album's tags when it has one (decoded straight to wire size), else the Now Playing picture when the sheet has
     /// loaded it, else the list thumbnail (always requested for the playing song). The conversion to wire pixels runs
     /// once per cover, not per tick. A song with no cover (or one not loaded yet) leaves none, so the tile keeps its glyph.
     pub fn refresh_now_playing_artwork(&mut self) {
@@ -1760,6 +1766,24 @@ impl Music {
             self.np_art = None;
             return;
         };
+        if self.np_art.as_ref().is_some_and(|(k, d, _)| *k == key && *d == EMBEDDED) {
+            return;
+        }
+        let live = self.snap.track.as_ref().is_some_and(|t| t.is_live());
+        let encoded = if live || self.np_embedded_failed.as_deref() == Some(key.as_str()) {
+            None
+        } else {
+            key.parse::<usize>().ok().and_then(|album| self.library.cover_of(album))
+        };
+        if encoded.is_some() {
+            match nowplay::embedded_cover(encoded) {
+                Some(art) => {
+                    self.np_art = Some((key, EMBEDDED, art));
+                    return;
+                }
+                None => self.np_embedded_failed = Some(key.clone()),
+            }
+        }
         let kind = if self.art.peek(&key, BIG).is_some() { BIG } else { THUMB };
         if self.np_art.as_ref().is_some_and(|(k, d, _)| *k == key && *d == kind) {
             return;
