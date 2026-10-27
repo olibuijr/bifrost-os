@@ -212,6 +212,28 @@ impl App for MapsApp {
         self.extra.iter().filter_map(|e| e.win.next_wake(t)).chain(main).reduce(f64::min)
     }
 
+    // the map zooms on the wheel; with this set the shell stops emulating the wheel as a drag that pans
+    fn pointer_interest(&self) -> u32 {
+        bifrost_app::pointer_events::WHEEL
+    }
+
+    fn pointer(&mut self, ctx: &Ctx, ev: &bifrost_app::pointer_events::PointerEvent) -> bool {
+        // the main window's events are in surface pixels, which is what the window takes
+        let bifrost_app::pointer_events::PointerEvent::Wheel { x, y, dy, .. } = *ev else { return false };
+        self.w.as_mut().is_some_and(|w| w.wheel(&ctx.ui, x, y, dy))
+    }
+
+    fn window_pointer(&mut self, ctx: &Ctx, window: WindowId, ev: &bifrost_app::pointer_events::PointerEvent) -> bool {
+        if window.is_main() {
+            return self.pointer(ctx, ev);
+        }
+        // an extra window's events arrive in window points, turned into the pixels it is drawn in
+        let bifrost_app::pointer_events::PointerEvent::Wheel { x, y, dy, .. } = *ev else { return false };
+        let k = ctx.ui.pt(1.0);
+        let Some(e) = self.extra.iter_mut().find(|e| e.id == window) else { return false };
+        e.win.wheel(&ctx.ui, x * k, y * k, dy * k)
+    }
+
     fn window_event(&mut self, ctx: &Ctx, window: WindowId, ev: Input) -> bool {
         if window.is_main() {
             return self.event(ctx, ev);
@@ -412,6 +434,12 @@ fn main() {
 mod tests {
     use super::*;
     use bifrost_maps::state::MENU_ACTS;
+
+    #[test]
+    fn the_map_takes_the_wheel_so_it_zooms_instead_of_panning() {
+        let app = MapsApp { w: None, extra: Vec::new(), shared: None, focus: WindowId::MAIN, net: net(), kb: false, path_request: None };
+        assert_ne!(app.pointer_interest() & bifrost_app::pointer_events::WHEEL, 0);
+    }
 
     #[test]
     fn new_window_menu_id_is_not_a_map_action() {
