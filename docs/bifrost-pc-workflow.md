@@ -512,6 +512,8 @@ Show in Files: another app or a script asks for a folder to open in Files.
 
 ## Releases and the test machine (2026-10-08)
 
+Release tools: `tools/bump-apps.py DIR=NOTE ...` (or `--all-sdk NOTE`) patch-bumps manifest, Cargo.toml, the lock entry and `CHANGELOG.md` per app. Optional commit guard (not installed by default): `ln -sf ../../tools/hooks/pre-commit .git/hooks/pre-commit` runs the names scanner on staged files only.
+
 **Release step 0, the EFI loader (2026-10-12):** the loader is excluded from the cargo workspace, so the workspace
 check never compiles it. `tools/lab-push.sh`, `bifrost pc publish`, the package build and the ISO tools therefore build
 it with `tools/build-efi-boot.sh release` and refuse to continue if the build fails or the binary is older than the
