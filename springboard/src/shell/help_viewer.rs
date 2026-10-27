@@ -617,6 +617,7 @@ impl Shell {
 
     /// The app whose help the Help menu offers: the Settings book when Settings is on screen, or the book of the
     /// installed app in front. None when that app has no book.
+    #[cfg(feature = "desktop-wayland")]
     pub(super) fn help_book(&self) -> Option<(String, String)> {
         let id = match self.foreign_front_app_id() {
             Some(id) => id,
@@ -635,11 +636,6 @@ impl Shell {
         let d = self.desk.as_ref()?;
         let win = d.native_windows.iter().find(|w| w.active)?;
         super::apphost::installed().iter().find(|a| a.manifest.wayland_app_id == win.app_id).map(|a| a.manifest.id.clone())
-    }
-    /// Without the desktop there are no foreign windows, so no installed app is in front.
-    #[cfg(not(feature = "desktop-wayland"))]
-    fn foreign_front_app_id(&self) -> Option<String> {
-        None
     }
 
     /// A touch while the viewer is up. A release on a control acts; a drag in the page scrolls it.

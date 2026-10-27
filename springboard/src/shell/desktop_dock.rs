@@ -1,7 +1,9 @@
 //! Persistent desktop dock choices; app identities survive registry changes.
 //! It also draws what an app sets on its Dock tile through the `dock` service: a progress bar and an attention bounce.
 use super::{apps,Shell,Effect,AppId,desktop_bar::Menu,desk::{Rect,DOCK_TRASH},dock_stack::DOCK_STACK};
-use super::ui::{FILL_GRAY,LINK,MAC_CALLOUT_PT};
+use super::ui::{FILL_GRAY,LINK};
+#[cfg(any(test, feature = "desktop-wayland"))]
+use super::ui::MAC_CALLOUT_PT;
 use crate::gfx::Surface;
 use bifrost_ui::values::Progress;
 use bifrost_render::motion::{self,Anim,Curve,Kind};
@@ -127,6 +129,7 @@ impl Shell {
  pub(super) fn dock_reorder(&mut self,from:usize,to:usize,after:bool){let Some(key)=self.dock_app_key(from)else{return;};let target=self.dock_app_key(to);let d=self.desk.as_mut().unwrap();d.dock_preferences.pinned.retain(|s|s!=&key);let at=target.and_then(|key|d.dock_preferences.pinned.iter().position(|s|s==&key)).map(|at|at+after as usize).unwrap_or(d.dock_preferences.pinned.len());d.dock_preferences.pinned.insert(at.min(d.dock_preferences.pinned.len()),key);d.dock_preferences.save(&self.data_dir);self.dirty=true;}
  pub(super) fn dock_is_visible(&self)->bool{self.desk.as_ref().is_some_and(|d|!d.dock_autohides()||d.dock_visible)}
  /// A stable surface with room for magnified icons, bounce, labels and shadow. Transparent margins do not take input.
+ #[cfg(any(test, feature = "desktop-wayland"))]
  pub(super) fn dock_surface_rect(&self)->Rect {
   if !self.dock_is_visible(){return self.dock_overlay_rect();}
   let m=self.desk_metrics();let (_,bar,rects)=self.desk_dock(&m);let p=self.dock_preferences();
@@ -148,6 +151,7 @@ impl Shell {
   Rect{x,y,w:(r.x+r.w).min(self.w).saturating_sub(x).max(1),h:(r.y+r.h).min(self.h).saturating_sub(y).max(1)}
  }
  /// The plate and magnified icons take input; labels and the surface's unused margins let clicks through.
+ #[cfg(any(test, feature = "desktop-wayland"))]
  pub(super) fn dock_input_rect(&self,surface:Rect)->Option<[i32;4]>{
   if !self.dock_is_visible(){return None;}
   let m=self.desk_metrics();let (_,bar,rects)=self.desk_dock(&m);let (_,live)=self.dock_live(bar,&rects,self.desk_t/1000.);
@@ -359,6 +363,7 @@ impl Shell {
  }
  /// How far (px) the plate can grow past the resting capsule at each end of its axis while magnified: the growth with
  /// the pointer on the middle icon (where the most icons are inside the radius) plus one magnified icon of slack.
+ #[cfg(any(test, feature = "desktop-wayland"))]
  pub(super) fn dock_axis_room(&self)->i32{
   let p=self.dock_preferences();if !p.magnification{return 0;}
   let m=self.desk_metrics();let (_,bar,rects)=self.desk_dock(&m);
