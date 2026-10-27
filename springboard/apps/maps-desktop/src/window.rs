@@ -42,6 +42,8 @@ const DOUBLE_TAP_MS: f64 = 350.0;
 const DOUBLE_TAP_PT: f32 = 20.0;
 /// Pan step of an arrow key, points.
 const KEY_PAN_PT: f64 = 60.0;
+/// Zoom per point of wheel travel: a notch of about 30 points doubles or halves the view's scale by about 0.4 levels.
+const WHEEL_ZOOM_PER_PT: f32 = 0.01;
 const RECENTS_SHOWN: usize = 8;
 const STEPS_SHOWN: usize = 80;
 
@@ -845,6 +847,26 @@ impl Window {
 
     fn pin_at(&self, mx: f32, my: f32) -> Option<usize> {
         self.maps.pins().visible(&self.maps.view).into_iter().rev().find(|&(_, x, y)| (x as f32 - mx).abs() < 14.0 && (y as f32 - 9.0 - my).abs() < 16.0).map(|(i, _, _)| i)
+    }
+
+    /// The scroll wheel at pixel (`px`, `py`) moved the content `dy` pixels (positive moves it down, so the wheel
+    /// turned up). Over the map it zooms about the pointer; over the card it scrolls the list. False elsewhere.
+    pub fn wheel(&mut self, ui: &Ui, px: f32, py: f32, dy: f32) -> bool {
+        self.pt_px = ui.pt(1.0).max(0.01);
+        let (x, y) = (px / self.pt(), py / self.pt());
+        let dy = dy / self.pt();
+        let card_h = self.card_height();
+        if card_h > 0.0 && self.card_rect(card_h).contains(x, y) {
+            self.card_scroll = (self.card_scroll - dy).max(0.0);
+        } else if self.map_rect().contains(x, y) {
+            let (mx, my) = self.to_map_pt(x, y);
+            self.maps.view.zoom_at(f64::from(dy * WHEEL_ZOOM_PER_PT).exp(), f64::from(mx), f64::from(my));
+            self.maps.touch_settings();
+        } else {
+            return false;
+        }
+        self.dirty = true;
+        true
     }
 
     /// A pointer or touch event with no finger id (a mouse, or one finger).
@@ -1909,6 +1931,22 @@ mod tests {
         w.finger(&ctx, &ui, 3, TouchKind::Down, 500.0, 400.0, 1100.0);
         w.finger(&ctx, &ui, 3, TouchKind::Move, 400.0, 300.0, 1110.0);
         assert_ne!(w.maps.view.centre(), centre, "one finger pans");
+    }
+
+    #[test]
+    fn the_wheel_over_the_map_zooms_about_the_pointer_and_the_wheel_down_zooms_out() {
+        let (mut w, ui, _) = window("wheel", 1200, 780);
+        let m = w.map_rect();
+        let (x, y) = (m.x + m.w / 2.0, m.y + m.h / 2.0);
+        let (lat, lon) = w.maps.view.to_geo(f64::from(m.w / 2.0), f64::from(m.h / 2.0));
+        let z = w.maps.view.zoom();
+        assert!(w.wheel(&ui, x, y, 30.0));
+        assert!(w.maps.view.zoom() > z, "the wheel up zooms in");
+        let (cx, cy) = w.maps.view.to_geo(f64::from(m.w / 2.0), f64::from(m.h / 2.0));
+        assert!((cx - lat).abs() < 1e-9 && (cy - lon).abs() < 1e-9, "the point under the pointer stays put");
+        let z = w.maps.view.zoom();
+        w.wheel(&ui, x, y, -30.0);
+        assert!(w.maps.view.zoom() < z, "the wheel down zooms out");
     }
 
     #[test]
