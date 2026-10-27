@@ -422,6 +422,7 @@ pub mod save_sync;
 pub mod file_provider;
 pub mod family_controls;
 pub mod file_manager;
+pub mod file_url;
 /// File-manager sync extensions: badges, shortcut-menu items, a toolbar button and folder observation for Files.
 pub mod file_manager_sync;
 /// A model provider for the local inference engine on a loopback port (`LocalModelProvider`).
