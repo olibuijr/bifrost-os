@@ -290,6 +290,13 @@ impl Vulkan {
         }
     }
 
+    /// A window capture (`SessionHooks::capture_window`): `window` alone at `size` as RGBA rows over a transparent
+    /// ground, drawn by the render server from the window's current buffers. `None` when the window has no dma-buf
+    /// to sample (the consumer keeps its fallback) or the render failed.
+    pub fn capture_window(&mut self, state: &WmState, window: &smithay::desktop::Window, size: (i32, i32)) -> Option<Vec<u8>> {
+        crate::render_server::window_shot::capture_window(&mut self.server, state, window, size)
+    }
+
     /// Drops the importer's cache of destroyed client buffers (WM-7).
     pub fn forget_buffers(&mut self, keys: &[u64]) {
         for &k in keys {

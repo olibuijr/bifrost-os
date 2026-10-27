@@ -5,7 +5,7 @@
 //! Module owners (wave G1): `import` (client buffers to textures), `output` (scanout targets, KMS present, direct
 //! scanout), `compose` (scene drawing and damage), `material` (live blur, rounded clips, window shadows), `clock`
 //! (frame scheduling, presentation feedback), `layers` (the `bifrost_layer_v1` server and per-context trees),
-//! `stats` (frame timings for the bench).
+//! `stats` (frame timings for the bench), `window_shot` (one window alone for the window-capture protocol).
 //!
 //! The data flow per output frame: `clock` decides to start a frame -> `layers` applies pending transactions and
 //! evaluates presentation trees at the predicted presentation time -> `compose` builds the draw list from the
@@ -24,6 +24,7 @@ pub mod scene_build;
 pub mod server;
 pub mod stats;
 pub mod window_anim;
+pub mod window_shot;
 
 /// Whether the Vulkan render server is selected (`BIFROST_WM_RENDERER=vulkan`, or `/etc/bifrost/renderer` says
 /// `vulkan`). The default flips to Vulkan at the switch-over.

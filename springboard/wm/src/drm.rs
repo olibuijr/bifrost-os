@@ -735,12 +735,13 @@ impl Drm {
     }
 
     /// A window capture (`SessionHooks::capture_window`): one window alone at `spec.size`, RGBA over a transparent
-    /// ground. The Vulkan scanout has no GLES renderer to draw it with, so the request fails there (`unsupported`).
+    /// ground. The Vulkan scanout draws it with the render server from the window's current buffers
+    /// (`render_server::window_shot`); it fails (`unsupported`) only for a window with no dma-buf to sample.
     fn capture_window(&mut self, state: &WmState, spec: &WindowCaptureSpec) -> Option<Vec<u8>> {
-        if self.vulkan.is_some() {
-            return None;
-        }
         let window = state.window_any(spec.id)?;
+        if let Some(v) = self.vulkan.as_mut() {
+            return v.capture_window(state, &window, spec.size);
+        }
         match crate::capture::capture_window(&mut self.renderer, &self.glass, state, &window, spec.size) {
             Ok(px) => Some(px),
             Err(e) => {

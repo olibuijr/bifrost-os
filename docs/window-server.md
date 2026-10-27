@@ -463,7 +463,8 @@ window out of the composed screen, so a window overlapping it showed in the pict
   on wlr-screencopy and ext-image-copy-capture.
 - **Access.** Privileged clients only (above). A request from any other client is also answered `failed(denied)`.
 - **Performance.** A request renders the window alone into a texture of the fitted size (`capture::capture_window`, GLES; on the
-  Vulkan scanout `failed(unsupported)`), once, never per frame. Every commit of a window's surface tree advances its content
+  Vulkan scanout `render_server::window_shot`, the window's dma-buf nodes composited by the render server into an offscreen target;
+  `failed(unsupported)` only for a window with no dma-buf), once, never per frame. Every commit of a window's surface tree advances its content
   serial (`WindowCapture::touch`); a request that quotes the serial the shell already holds is answered `unchanged` and draws
   nothing. The shell rate-limits: Mission Control refreshes the tiles it shows at most 5 times a second while it is open, the Dock
   asks once when a window is minimized, a screenshot asks once (`window_shots`).
@@ -481,8 +482,8 @@ window out of the composed screen, so a window overlapping it showed in the pict
   `capture::tests` (material plates), and in the shell `window_shots::tests`, `overview::tests`, `desk::tests`,
   `capture_flow::tests`.
 - **Not done.** Window mode of the screenshot toolbar picks windows by the rectangles the desk holds, so a window of another client
-  cannot be picked in it yet (the window server's `frame` event reports only a client's own toplevels). Windows that the
-  Vulkan scanout composes cannot be captured. Not run on Midget.
+  cannot be picked in it yet (the window server's `frame` event reports only a client's own toplevels). Shm-only windows on the
+  Vulkan scanout cannot be captured (the scene builder samples dma-bufs only). Not run on Midget with the Vulkan renderer.
 
 ## Text input, input method and virtual keyboard
 
