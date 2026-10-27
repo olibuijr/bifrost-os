@@ -5182,7 +5182,7 @@ impl Shell {
             if self.overlays_on_desk() && !self.is_locked() {
                 let mut image = Image::new(self.w.max(1) as usize, self.h.max(1) as usize);
                 self.draw_modal_sheets(&mut Surface { w: image.w, h: image.h, stride: image.w, px: &mut image.px, y0: 0 }, t);
-                self.modal_layer = Some(capture_flow::Layer { x: 0, y: 0, image, input: None });
+                self.modal_layer = Some(capture_flow::Layer::new(0, 0, image, None));
             } else {
                 self.modal_layer = None;
                 self.draw_modal_sheets(s, t);

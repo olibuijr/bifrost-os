@@ -469,7 +469,7 @@ impl Shell {
                     let mut image = crate::gfx::Image::new(iw, ih);
                     let mut ls = Surface { w: iw, h: ih, stride: iw, px: &mut image.px, y0: 0 };
                     ls.stroke_rrect(ring.0 - x0, ring.1 - y0, ring.2, ring.3, r + t, t, LINK);
-                    ring_layer = Some(crate::shell::capture_flow::Layer { x: x0 as i32, y: y0 as i32, image, input: Some([0, 0, 0, 0]) });
+                    ring_layer = Some(crate::shell::capture_flow::Layer::new(x0 as i32, y0 as i32, image, Some([0, 0, 0, 0])));
                 } else {
                     s.stroke_rrect(ring.0, ring.1, ring.2, ring.3, r + t, t, LINK);
                 }
