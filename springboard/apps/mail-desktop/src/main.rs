@@ -640,7 +640,7 @@ mod tests {
     /// A click with modifier keys held (a Shift-click, a Cmd-click), as the shell sends it.
     fn click_with(app: &mut MailApp, ctx: &Ctx, (x, y): (f32, f32), t: f64, mods: ModifierFlags) {
         for kind in [TouchKind::Down, TouchKind::Up] {
-            app.event(ctx, Input::Touch { kind, id: 0, x, y, t, mods });
+            app.event(ctx, Input::Touch { kind, id: 0, x, y, t, source: bifrost_app::TouchSource::Finger, mods });
         }
     }
 
@@ -811,7 +811,7 @@ mod tests {
         // a click on Subject moves the focus there, and typing follows it
         let (x, y) = field_centre(&app, &ctx.ui, "Subject", COMPOSE_W, COMPOSE_H);
         for kind in [TouchKind::Down, TouchKind::Up] {
-            app.window_event(&ctx, id, Input::Touch { kind, id: 0, x, y, t: 10.0, mods: bifrost_app::ModifierFlags::EMPTY });
+            app.window_event(&ctx, id, Input::Touch { kind, id: 0, x, y, t: 10.0, source: bifrost_app::TouchSource::Finger, mods: bifrost_app::ModifierFlags::EMPTY });
         }
         app.window_event(&ctx, id, Input::Key(KeyInput::Text("Fundur".into())));
         assert_eq!(compose_field(&app, "Subject"), "Fundur");
@@ -909,12 +909,12 @@ mod tests {
         let mail = app.window.as_ref().unwrap();
         let x = (0..800).rev().step_by(4).find(|x| matches!(mail.hit(&ctx.ui, *x as f32, 20.0), Hit::Search)).expect("a search field in the toolbar") as f32;
         for kind in [TouchKind::Down, TouchKind::Up] {
-            app.event(&ctx, Input::Touch { kind, id: 0, x, y: 20.0, t: 10.0, mods: bifrost_app::ModifierFlags::EMPTY });
+            app.event(&ctx, Input::Touch { kind, id: 0, x, y: 20.0, t: 10.0, source: bifrost_app::TouchSource::Finger, mods: bifrost_app::ModifierFlags::EMPTY });
         }
         assert!(app.window.as_ref().unwrap().mail.search_focused);
         let (rx, ry) = row_point(&app, &ctx.ui, 9);
         for kind in [TouchKind::Down, TouchKind::Up] {
-            app.event(&ctx, Input::Touch { kind, id: 0, x: rx, y: ry, t: 500.0, mods: bifrost_app::ModifierFlags::EMPTY });
+            app.event(&ctx, Input::Touch { kind, id: 0, x: rx, y: ry, t: 500.0, source: bifrost_app::TouchSource::Finger, mods: bifrost_app::ModifierFlags::EMPTY });
         }
         assert!(!app.window.as_ref().unwrap().mail.search_focused);
         let _ = std::fs::remove_dir_all(&dir);
@@ -1021,6 +1021,41 @@ mod tests {
         }
     }
 
+    /// Drags the message list of a 60-message inbox upwards, as the shell would deliver it (the SDK notes the touch's source
+    /// first), on a machine of form `form`; returns the list's offset and whether it is flinging afterwards.
+    fn drag_the_list(form: bifrost_app::controls::form_factor::FormFactor, source: bifrost_app::TouchSource) -> (f32, bool) {
+        let dir = std::env::temp_dir().join(format!("bifrost-mail-drag-{}-{:?}-{:?}", std::process::id(), form, source));
+        let ctx = ctx(&dir);
+        let mut app = app_with_account(&ctx);
+        let listed = |uid: u32| Listed { uid, flags: Flags::empty(), header: format!("Subject: m{uid}\r\nFrom: Ana <ana@x.is>\r\n\r\n") };
+        app.window.as_mut().unwrap().mail.apply_listing("work", INBOX, vec![], (1..=60).map(listed).collect());
+        app.window.as_mut().unwrap().list_scroll.set_max(1000.0);
+        let (x, y) = row_point(&app, &ctx.ui, 3);
+        let out = bifrost_app::pan::with_touch(form, bifrost_app::TouchSource::Finger, || {
+            for (i, (kind, dy)) in [(TouchKind::Down, 0.0), (TouchKind::Move, -60.0), (TouchKind::Move, -140.0), (TouchKind::Up, -140.0)].into_iter().enumerate() {
+                let input = Input::Touch { kind, id: 0, x, y: y + dy, t: 100.0 + 16.0 * i as f64, source, mods: ModifierFlags::EMPTY };
+                input.note_source();
+                app.event(&ctx, input);
+            }
+            let list = &app.window.as_ref().unwrap().list_scroll;
+            (list.offset(), list.animating())
+        });
+        let _ = std::fs::remove_dir_all(&dir);
+        out
+    }
+
+    /// A mouse drag in the message list does not scroll it on a desktop, like a finger drag does; on a tablet both scroll.
+    #[test]
+    fn a_pointer_drag_does_not_scroll_the_message_list_on_a_desktop_but_a_finger_drag_does() {
+        use bifrost_app::controls::form_factor::FormFactor::{Desktop, Tablet};
+        use bifrost_app::TouchSource::{Finger, Pointer};
+        assert_eq!(drag_the_list(Desktop, Pointer), (0.0, false), "no pan and no fling for a mouse drag");
+        let (offset, flinging) = drag_the_list(Desktop, Finger);
+        assert!(offset > 50.0 && flinging, "a finger drag scrolls: {offset}");
+        assert!(drag_the_list(Tablet, Finger).0 > 50.0);
+        assert!(drag_the_list(Tablet, Pointer).0 > 50.0, "on a tablet every drag scrolls, as before");
+    }
+
     /// E2E: Mail takes the wheel (so the shell no longer emulates a drag for it in any window): the main window's
     /// message list scrolls under the pointer, a viewer window's text scrolls in pixels from the window points it
     /// gets, and a compose window's message scrolls back from its end until typing brings the end back.
@@ -1099,7 +1134,7 @@ mod tests {
         let id = app.composes.active.expect("a compose window");
         let (x, y) = field_centre(&app, &ctx.ui, "Subject", 2.0 * COMPOSE_W, 2.0 * COMPOSE_H);
         for kind in [TouchKind::Down, TouchKind::Up] {
-            app.window_event(&ctx, id, Input::Touch { kind, id: 0, x: x / 2.0, y: y / 2.0, t: 10.0, mods: bifrost_app::ModifierFlags::EMPTY });
+            app.window_event(&ctx, id, Input::Touch { kind, id: 0, x: x / 2.0, y: y / 2.0, t: 10.0, source: bifrost_app::TouchSource::Finger, mods: bifrost_app::ModifierFlags::EMPTY });
         }
         app.window_event(&ctx, id, Input::Key(KeyInput::Text("Fundur".into())));
         assert_eq!(compose_field(&app, "Subject"), "Fundur");

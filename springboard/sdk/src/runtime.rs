@@ -34,8 +34,9 @@ pub(crate) fn merge_tree(mut app: Vec<crate::proto::NodeExt>, links: &[bifrost_u
 #[derive(Clone, Debug, PartialEq)]
 pub enum Input {
     /// A press, drag or release (`t` in ms), with the modifier keys held at the time (the reference event modifier flags): a Shift-click
-    /// extends a selection and a Cmd-click toggles one item. Plain touches and synthesized presses carry none.
-    Touch { kind: TouchKind, id: u32, x: f32, y: f32, t: f64, mods: crate::proto::ModifierFlags },
+    /// extends a selection and a Cmd-click toggles one item. Plain touches and synthesized presses carry none. `source` says
+    /// whether a pointer or a finger made it: on a desktop only a finger drag pans content (`pans_on_drag`).
+    Touch { kind: TouchKind, id: u32, x: f32, y: f32, t: f64, source: crate::proto::TouchSource, mods: crate::proto::ModifierFlags },
     Key(KeyInput),
     Open(String),
     Command(crate::Command),
@@ -44,6 +45,16 @@ pub enum Input {
     ContextAction(u32),
     /// The user chose a Home Screen quick action (`quick_actions`): its type and user info.
     QuickAction(crate::quick_actions::QuickActionPick),
+}
+
+impl Input {
+    /// Records what produced this touch (`bifrost_ui::pan::set_source`), so the kit's scroll views and `Scroller` know at the
+    /// press whether a drag pans. The SDK calls it just before it hands a touch to the app; a no-op for other input.
+    pub fn note_source(&self) {
+        if let Input::Touch { source, .. } = self {
+            bifrost_ui::pan::set_source(*source);
+        }
+    }
 }
 
 /// A file the user chose in an open or save panel (`NativeOpenPanel` / `NativeSavePanel`). The app gets the open file, never
@@ -768,7 +779,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
             continue;
         }
         // drain; consecutive moves of one touch are held back and only the last is delivered
-        let mut held_move: Option<(u32, f32, f32, u32, crate::proto::ModifierFlags)> = None;
+        let mut held_move: Option<(u32, f32, f32, u32, crate::proto::TouchSource, crate::proto::ModifierFlags)> = None;
         loop {
             let (pkt, mut fds) = match chan.recv(false) {
                 Ok(Recv::Packet(p, f)) => (p, f),
@@ -784,8 +795,8 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
             // turn only when the app says it changed (it asked for a frame); every other packet may change what is published
             let motion = matches!(msg, ToApp::Touch { kind: TouchKind::Move, .. } | ToApp::Touches(_));
             busy |= !motion;
-            if let ToApp::Touch { kind: TouchKind::Move, id, x, y, t_ms, mods } = msg {
-                if let Some(h) = held_move.replace((id, x, y, t_ms, mods)) {
+            if let ToApp::Touch { kind: TouchKind::Move, id, x, y, t_ms, source, mods } = msg {
+                if let Some(h) = held_move.replace((id, x, y, t_ms, source, mods)) {
                     if h.0 != id {
                         let changed = deliver_move(&mut app, ctx.as_ref(), &mut touch_router, h, now);
                         need_frame |= changed;
@@ -800,6 +811,9 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                 if let Some(c) = &ctx {
                     localize(&mut ev, now);
                     if let Some(ev) = touch_router.frame(app.wants_touch_events(), ev) {
+                        if let Some(first) = ev.touches.first() {
+                            bifrost_ui::pan::set_source(bifrost_ui::pan::TouchSource::of_touch_type(first.kind));
+                        }
                         let changed = app.touches(c, &ev);
                         need_frame |= changed;
                         busy |= changed;
@@ -868,9 +882,9 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                         need_frame |= app.event(c, Input::QuickAction(crate::quick_actions::QuickActionPick { kind, user_info }));
                     }
                 }
-                ToApp::Touch { kind, id, x, y, t_ms, mods } => {
+                ToApp::Touch { kind, id, x, y, t_ms, source, mods } => {
                     if let Some(c) = &ctx {
-                        need_frame |= deliver_touch(&mut app, c, &mut touch_router, kind, id, x, y, event_time(now, t_ms), mods);
+                        need_frame |= deliver_touch(&mut app, c, &mut touch_router, kind, id, x, y, event_time(now, t_ms), source, mods);
                     }
                 }
                 ToApp::Touches(_) => {}
@@ -1495,16 +1509,20 @@ fn draw_windows<A: App>(chan: &Channel, app: &mut A, ctx: &Ctx, pixels: &mut std
 }
 
 /// Delivers the last of a run of moves of one touch (`t_ms` is the shell's stamp of that last sample).
-fn deliver_move<A: App>(app: &mut A, ctx: Option<&Ctx>, router: &mut TouchRouter, m: (u32, f32, f32, u32, crate::proto::ModifierFlags), now: f64) -> bool {
+fn deliver_move<A: App>(app: &mut A, ctx: Option<&Ctx>, router: &mut TouchRouter, m: (u32, f32, f32, u32, crate::proto::TouchSource, crate::proto::ModifierFlags), now: f64) -> bool {
     let Some(c) = ctx else { return false };
-    deliver_touch(app, c, router, TouchKind::Move, m.0, m.1, m.2, event_time(now, m.3), m.4)
+    deliver_touch(app, c, router, TouchKind::Move, m.0, m.1, m.2, event_time(now, m.3), m.4, m.5)
 }
 
 /// Delivers a plain touch: as `Input::Touch`, or as a touch event for an app that takes them (`App::wants_touch_events`).
 #[allow(clippy::too_many_arguments)]
-fn deliver_touch<A: App>(app: &mut A, c: &Ctx, router: &mut TouchRouter, kind: TouchKind, id: u32, x: f32, y: f32, t: f64, mods: crate::proto::ModifierFlags) -> bool {
+fn deliver_touch<A: App>(app: &mut A, c: &Ctx, router: &mut TouchRouter, kind: TouchKind, id: u32, x: f32, y: f32, t: f64, source: crate::proto::TouchSource, mods: crate::proto::ModifierFlags) -> bool {
     match router.plain(app.wants_touch_events(), kind, id, x, y, t) {
-        Plain::Deliver => app.event(c, Input::Touch { kind, id, x, y, t, mods }),
+        Plain::Deliver => {
+            let input = Input::Touch { kind, id, x, y, t, source, mods };
+            input.note_source();
+            app.event(c, input)
+        }
         Plain::Frame(ev) => app.touches(c, &ev),
         Plain::Skip => false,
     }

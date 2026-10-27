@@ -997,7 +997,9 @@ impl Inspector {
                 Some(Drag::List { start_y, last_y, moved }) => {
                     let dy = py - last_y;
                     let rows = dy / ROW_PT;
-                    self.scroll = if self.from_top() { self.scroll - rows } else { self.scroll + rows }.max(0.0);
+                    if bifrost_app::pans_now() {
+                        self.scroll = if self.from_top() { self.scroll - rows } else { self.scroll + rows }.max(0.0);
+                    }
                     self.drag = Some(Drag::List { start_y, last_y: py, moved: moved + dy.abs() });
                     true
                 }

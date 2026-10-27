@@ -602,6 +602,17 @@ const PB_WRITE_GRACE_MS: f64 = 1500.0;
 /// How long after a wheel event the drag emulated for it can still arrive, in ms.
 pub(super) const WHEEL_DRAG_MS: f64 = 250.0;
 
+/// Counts one plain touch at `t` ms against the drag emulated for a wheel event (`left` touches, until `until`): true
+/// while the down, the move and the up of that drag are still due.
+fn wheel_drag_touch((left, until): &mut (u8, f64), t: f64) -> bool {
+    if *left == 0 || t > *until {
+        (*left, *until) = (0, 0.0);
+        return false;
+    }
+    *left -= 1;
+    true
+}
+
 pub struct AppHost {
     pub id: String,
     /// The binary this process was started from (empty for a host on a test channel).
@@ -718,6 +729,9 @@ pub struct AppHost {
     pub pointer_interest: u32,
     /// Plain touches still to drop after a wheel event went to the app: the drag emulated for the wheel, and until when.
     wheel_swallow: (u8, f64),
+    /// Plain touches still to come after a wheel event the app did not take: the drag emulated for the wheel, and until
+    /// when. They are a scroll, so the app gets them as a finger's and they pan on a desktop too (`Shell::ext_touch`).
+    wheel_pan: (u8, f64),
     /// How the shell shows this app (`launch_route` at spawn; a `Buffers` message from a direct app demotes it).
     route: Route,
     /// The touch frames the app gets (`ToApp::Touches`): one tracker per surface, at the app's scale.
@@ -884,6 +898,7 @@ impl AppHost {
             accessory: Vec::new(),
             pointer_interest: 0,
             wheel_swallow: (0, 0.0),
+            wheel_pan: (0, 0.0),
             route: Route::Shm,
             frames: bifrost_ui::touch::TouchTracker::with_scale(cfg.scale),
             frame_scale: cfg.scale,
@@ -1220,17 +1235,23 @@ impl AppHost {
 
     /// True for each plain touch of the drag emulated for a wheel event the app took already.
     pub(super) fn swallows_touch(&mut self, t: f64) -> bool {
-        if self.wheel_swallow.0 == 0 || t > self.wheel_swallow.1 {
-            self.wheel_swallow = (0, 0.0);
-            return false;
-        }
-        self.wheel_swallow.0 -= 1;
-        true
+        wheel_drag_touch(&mut self.wheel_swallow, t)
+    }
+
+    /// A wheel event the app did not ask for happened at `t` ms: the drag emulated for it still reaches the app, as a
+    /// finger's, since a wheel notch is a scroll and not a mouse drag (`pans_touch`).
+    pub(super) fn keep_wheel_drag(&mut self, t: f64) {
+        self.wheel_pan = (3, t + WHEEL_DRAG_MS);
+    }
+
+    /// True for each plain touch of the drag emulated for a wheel event the app did not take: it pans like a finger.
+    pub(super) fn pans_touch(&mut self, t: f64) -> bool {
+        wheel_drag_touch(&mut self.wheel_pan, t)
     }
 
     /// A press, drag or release for the app's main window, with the modifier keys held (the reference event modifier flags).
-    pub fn touch(&mut self, kind: TouchKind, id: u32, x: f32, y: f32, t_ms: u32, mods: bifrost_proto::ModifierFlags) {
-        self.send(&ToApp::Touch { kind, id, x, y, t_ms, mods });
+    pub fn touch(&mut self, kind: TouchKind, id: u32, x: f32, y: f32, t_ms: u32, source: bifrost_proto::TouchSource, mods: bifrost_proto::ModifierFlags) {
+        self.send(&ToApp::Touch { kind, id, x, y, t_ms, source, mods });
     }
 
     /// Sends one frame of touches (`ToApp::Touches`). Call it before the matching `touch` so the app can drop the
@@ -1727,11 +1748,11 @@ impl AppHost {
 
     /// A touch inside one of the app's extra windows, with window-local coordinates in points. False when it is not open.
     #[allow(dead_code)]
-    pub fn touch_window(&mut self, id: u32, touch: u32, kind: TouchKind, x: f32, y: f32, t_ms: u32, mods: bifrost_proto::ModifierFlags) -> bool {
+    pub fn touch_window(&mut self, id: u32, touch: u32, kind: TouchKind, x: f32, y: f32, t_ms: u32, source: bifrost_proto::TouchSource, mods: bifrost_proto::ModifierFlags) -> bool {
         if !self.window_open(id) {
             return false;
         }
-        self.send(&ToApp::WindowTouch { id, touch, kind, x, y, t_ms, mods });
+        self.send(&ToApp::WindowTouch { id, touch, kind, x, y, t_ms, source, mods });
         true
     }
 
@@ -2402,11 +2423,15 @@ impl Shell {
             Event::Up(x, y) => (TouchKind::Up, x, y),
             _ => return,
         };
+        // the app learns whether a mouse or a finger made the touch: only a finger pans a list on a desktop. The drag
+        // emulated for a wheel notch the app did not take is a scroll, so it counts as a finger's.
+        let source = if h.pans_touch(t) { bifrost_proto::TouchSource::Finger } else { super::touch_frames::plain_source(kind, &self.touch_contacts, self.touch_source) };
+        self.touch_source = source;
         // the pointer as a touch frame, before the plain stream; a finger on the touchscreen is reported by its contact
         if let Some((raw, s)) = super::touch_frames::pointer_sample(kind, x, y, &self.touch_contacts) {
             h.feed_touch(raw, s, t);
         }
-        h.touch(kind, 0, x, y, t as u32, self.key_mods);
+        h.touch(kind, 0, x, y, t as u32, source, self.key_mods);
     }
 
     /// A touchscreen contact (`Event::Contact`) at (`x`, `y`) in screen pixels. The foreground external app gets it as a
@@ -3903,16 +3928,16 @@ mod window_table_tests {
         let mut out = Pumped::default();
         host.handle(ToShell::WindowOpen { id: 3, title: "Card".into(), w: 10.0, h: 10.0, position: None, flags: 0 }, Vec::new(), &mut out);
         assert!(host.configure_window(3, 20.0, 30.0));
-        assert!(host.touch_window(3, 1, TouchKind::Down, 1.0, 2.0, 5, bifrost_proto::ModifierFlags::EMPTY));
+        assert!(host.touch_window(3, 1, TouchKind::Down, 1.0, 2.0, 5, bifrost_proto::TouchSource::Finger, bifrost_proto::ModifierFlags::EMPTY));
         assert!(host.close_window_from_shell(3));
         assert!(!host.close_window_from_shell(3), "a window closes once");
-        assert!(!host.touch_window(3, 1, TouchKind::Down, 1.0, 2.0, 6, bifrost_proto::ModifierFlags::EMPTY), "no touch reaches a closed window");
+        assert!(!host.touch_window(3, 1, TouchKind::Down, 1.0, 2.0, 6, bifrost_proto::TouchSource::Finger, bifrost_proto::ModifierFlags::EMPTY), "no touch reaches a closed window");
         assert!(host.windows.of_app("fixture").is_empty());
         assert_eq!(
             sent(&peer),
             vec![
                 ToApp::WindowConfigure { id: 3, w: 20.0, h: 30.0 },
-                ToApp::WindowTouch { id: 3, touch: 1, kind: TouchKind::Down, x: 1.0, y: 2.0, t_ms: 5, mods: bifrost_proto::ModifierFlags::EMPTY },
+                ToApp::WindowTouch { id: 3, touch: 1, kind: TouchKind::Down, x: 1.0, y: 2.0, t_ms: 5, source: bifrost_proto::TouchSource::Finger, mods: bifrost_proto::ModifierFlags::EMPTY },
                 ToApp::WindowClosed { id: 3 },
             ]
         );
@@ -3921,18 +3946,18 @@ mod window_table_tests {
     /// E2E-3: a Shift-click or Cmd-click reaches the app with its modifiers, on the main window and on an extra window.
     #[test]
     fn a_press_reaches_the_app_with_the_modifier_keys_held() {
-        use bifrost_proto::ModifierFlags as F;
+        use bifrost_proto::{ModifierFlags as F, TouchSource};
         let (channel, peer) = sys::socketpair_pair().unwrap();
         let mut host = AppHost::with_channel("fixture", channel, None, cfg());
         let mut out = Pumped::default();
         host.handle(ToShell::WindowOpen { id: 3, title: "Card".into(), w: 10.0, h: 10.0, position: None, flags: 0 }, Vec::new(), &mut out);
-        host.touch(TouchKind::Down, 0, 4.0, 5.0, 7, F::SHIFT);
-        assert!(host.touch_window(3, 1, TouchKind::Down, 1.0, 2.0, 8, F::COMMAND));
+        host.touch(TouchKind::Down, 0, 4.0, 5.0, 7, TouchSource::Pointer, F::SHIFT);
+        assert!(host.touch_window(3, 1, TouchKind::Down, 1.0, 2.0, 8, TouchSource::Finger, F::COMMAND));
         assert_eq!(
             sent(&peer),
             vec![
-                ToApp::Touch { kind: TouchKind::Down, id: 0, x: 4.0, y: 5.0, t_ms: 7, mods: F::SHIFT },
-                ToApp::WindowTouch { id: 3, touch: 1, kind: TouchKind::Down, x: 1.0, y: 2.0, t_ms: 8, mods: F::COMMAND },
+                ToApp::Touch { kind: TouchKind::Down, id: 0, x: 4.0, y: 5.0, t_ms: 7, source: TouchSource::Pointer, mods: F::SHIFT },
+                ToApp::WindowTouch { id: 3, touch: 1, kind: TouchKind::Down, x: 1.0, y: 2.0, t_ms: 8, source: TouchSource::Finger, mods: F::COMMAND },
             ]
         );
     }
@@ -3962,6 +3987,21 @@ mod window_table_tests {
         );
     }
 
+    /// A wheel notch an app did not ask for: the drag emulated for it still reaches the app, and only its three touches
+    /// count as a finger's (they pan on a desktop); the drag is forgotten once it is late.
+    #[test]
+    fn the_drag_emulated_for_a_wheel_notch_the_app_did_not_take_pans_like_a_finger() {
+        let (channel, _peer) = sys::socketpair_pair().unwrap();
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
+        assert!(!host.pans_touch(0.0), "a plain press is what the pointer made it");
+        host.keep_wheel_drag(100.0);
+        assert!(host.pans_touch(100.0) && host.pans_touch(116.0) && host.pans_touch(132.0));
+        assert!(!host.pans_touch(140.0), "only the three emulated touches pan");
+        host.keep_wheel_drag(200.0);
+        assert!(!host.pans_touch(200.0 + WHEEL_DRAG_MS + 1.0), "a late touch is a press of its own");
+        assert!(!host.pans_touch(500.0));
+    }
+
     /// The custom actions an app names for its elements are kept cleaned, and a new list replaces the old one.
     #[test]
     fn custom_actions_are_kept_cleaned_and_replaced_by_the_next_list() {
@@ -3982,6 +4022,38 @@ mod window_table_tests {
 mod extra_window_frame_tests {
     use super::*;
     use crate::shell::{desk, AppId, Screen};
+
+    /// Every plain touch the shell has queued for the fixture app so far, with what produced it.
+    fn touch_sources(peer: &Channel) -> Vec<(TouchKind, bifrost_proto::TouchSource)> {
+        let mut out = Vec::new();
+        while let Recv::Packet(p, _) = peer.recv(false).unwrap() {
+            if let ToApp::Touch { kind, source, .. } = ToApp::decode(&p).unwrap() {
+                out.push((kind, source));
+            }
+        }
+        out
+    }
+
+    /// A mouse press, drag and release reach the app as the pointer's (so its lists do not pan on the desktop); the drag
+    /// the compositor emulates for a wheel notch the app did not take reaches it as a finger's, so the notch still
+    /// scrolls, and the next press is the pointer's again.
+    #[test]
+    fn a_mouse_drag_is_the_pointer_and_the_drag_emulated_for_a_wheel_notch_is_a_finger() {
+        use bifrost_proto::TouchSource::{Finger, Pointer};
+        let mut sh = crate::shell::tests::desktop_shell();
+        let peer = crate::shell::tests::fixture_app(&mut sh);
+        sh.ext_touch(0, Event::Down(10.0, 10.0), 1000.0);
+        sh.ext_touch(0, Event::Move(10.0, 60.0), 1016.0);
+        sh.ext_touch(0, Event::Up(10.0, 60.0), 1032.0);
+        assert_eq!(touch_sources(&peer), vec![(TouchKind::Down, Pointer), (TouchKind::Move, Pointer), (TouchKind::Up, Pointer)]);
+        // a wheel notch the app did not ask for (`pointer_wheel`), then the down, move and up emulated for it
+        sh.ext.get_mut(0).unwrap().as_mut().unwrap().keep_wheel_drag(2000.0);
+        sh.ext_touch(0, Event::Down(10.0, 10.0), 2000.0);
+        sh.ext_touch(0, Event::Move(10.0, 40.0), 2016.0);
+        sh.ext_touch(0, Event::Up(10.0, 40.0), 2032.0);
+        sh.ext_touch(0, Event::Down(10.0, 10.0), 3000.0);
+        assert_eq!(touch_sources(&peer), vec![(TouchKind::Down, Finger), (TouchKind::Move, Finger), (TouchKind::Up, Finger), (TouchKind::Down, Pointer)]);
+    }
 
     /// The colour the app paints into every window.
     const FILL: u32 = 0xff33_6699;

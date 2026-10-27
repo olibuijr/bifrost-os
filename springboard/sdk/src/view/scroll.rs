@@ -31,6 +31,8 @@ pub struct ScrollView {
     last_y: f32,
     /// the touch has passed the slop and pans the content
     dragging: bool,
+    /// the touch that is down may pan (`bifrost_ui::pan`): a pointer drag on a desktop never does
+    pans: bool,
     /// frame time of the last `tick` (seconds): `ViewEvent` carries no timestamp, so touches are timed with it
     now: f64,
     doc_h: f32,
@@ -53,6 +55,7 @@ impl ScrollView {
             down_y: None,
             last_y: 0.0,
             dragging: false,
+            pans: true,
             now: 0.0,
             doc_h: 0.0,
             knob: false,
@@ -115,6 +118,9 @@ impl ScrollView {
     /// The touch is at `y`: past the slop it pans the content, one to one with the finger.
     fn finger(&mut self, y: f32) {
         let Some(y0) = self.down_y else { return };
+        if !self.pans {
+            return;
+        }
         if !self.dragging {
             if (y - y0).abs() <= DRAG_SLOP_PT {
                 return;
@@ -197,6 +203,7 @@ impl View for ScrollView {
                 self.down_y = Some(*y);
                 self.last_y = *y;
                 self.dragging = false;
+                self.pans = bifrost_ui::pan::pans_now();
             }
             ViewEvent::Pointer(Event::Move(_, y)) => self.finger(*y),
             ViewEvent::Pointer(Event::Up(_, y)) => self.lift(*y),

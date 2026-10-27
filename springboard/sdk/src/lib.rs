@@ -18,8 +18,10 @@ pub use bifrost_ui::remote_command;
 /// selection rules, library queries, external player content items, and the playback arbiter.
 pub use bifrost_ui::{content_items, media_feedback, media_picker, media_playlist, media_query, playback_arbiter};
 pub use bifrost_proto as proto;
-pub use bifrost_proto::{AppMenu, AppMenuItem, Configure, KeyInput, ModifierFlags, TouchKind};
+pub use bifrost_proto::{AppMenu, AppMenuItem, Configure, KeyInput, ModifierFlags, TouchKind, TouchSource};
 pub use bifrost_ui::touch::{TouchEvent, TouchPhase, TouchType};
+/// Whether a drag pans content: on a desktop only a finger pans, never a mouse (`bifrost_ui::pan`).
+pub use bifrost_ui::pan::{self, pans_now, pans_on_drag};
 
 /// The shell's drawing, text and Settings-style list kit, reused as is so apps
 /// look like stock bifrost apps (see AGENTS.md design rules).

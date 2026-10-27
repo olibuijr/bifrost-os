@@ -454,7 +454,7 @@ impl State {
             }
             TouchKind::Move => {
                 let Some((y0, scroll0)) = self.drag else { return Outcome::Pass };
-                if (y - y0).abs() > slop {
+                if bifrost_app::pans_now() && (y - y0).abs() > slop {
                     self.dragged = true;
                     self.pressed = None;
                 }

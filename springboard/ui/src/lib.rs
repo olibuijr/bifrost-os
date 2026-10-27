@@ -647,6 +647,7 @@ pub mod dwell;
 pub mod symbol_layers;
 pub mod frame_rate;
 pub mod form_factor;
+pub mod pan;
 pub mod transition;
 pub mod frame_clock;
 pub mod drawable_layer;

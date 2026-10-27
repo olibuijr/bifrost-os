@@ -67,6 +67,10 @@ struct Touch {
     y0: f32,
     offset0: f32,
     dragging: bool,
+    /// whether a drag of this touch pans (`crate::pan`): a pointer drag on a desktop does not, so it never starts one
+    pans: bool,
+    /// a touch that does not pan moved past the slop: it is not a tap either
+    slid: bool,
     /// the finger position the drag is measured from (past the slop, so the content does not jump)
     anchor: f32,
     samples: [(f64, f32); SAMPLES],
@@ -172,7 +176,7 @@ impl Scroller {
     pub fn down(&mut self, y: f32, t: f64) {
         // a touch during a fling catches the content where it is
         self.motion = None;
-        let mut tc = Touch { y0: y, offset0: self.offset, dragging: false, anchor: y, samples: [(0.0, 0.0); SAMPLES], n: 0 };
+        let mut tc = Touch { y0: y, offset0: self.offset, dragging: false, pans: crate::pan::pans_now(), slid: false, anchor: y, samples: [(0.0, 0.0); SAMPLES], n: 0 };
         tc.push(t, y);
         self.touch = Some(tc);
     }
@@ -180,6 +184,10 @@ impl Scroller {
     pub fn moved(&mut self, y: f32, t: f64) {
         let max = self.max;
         let Some(tc) = self.touch.as_mut() else { return };
+        if !tc.pans {
+            tc.slid |= (y - tc.y0).abs() > SLOP;
+            return;
+        }
         if !tc.dragging && (y - tc.y0).abs() > SLOP {
             tc.dragging = true;
             tc.anchor = tc.y0 + SLOP.copysign(y - tc.y0);
@@ -204,7 +212,7 @@ impl Scroller {
         self.moved(y, t);
         let Some(tc) = self.touch.take() else { return false };
         if !tc.dragging {
-            return true;
+            return !tc.slid;
         }
         let fv = tc.velocity();
         let v = if paused || fv.abs() < MIN_FLING { 0.0 } else { -fv };
@@ -274,6 +282,43 @@ mod tests {
         assert_eq!(super::indicator(100.0, 100.0, 100.0, 24.0), Some((50.0, 50.0)), "at the end");
         assert_eq!(super::indicator(100.0, 100.0, -40.0, 24.0), Some((0.0, 50.0)), "a rubber band keeps it in the track");
         assert_eq!(super::indicator(100.0, 9900.0, 0.0, 24.0).map(|k| k.1), Some(24.0), "a long list keeps a grabbable knob");
+    }
+
+    fn drag(s: &mut super::Scroller) -> bool {
+        s.down(100.0, 0.0);
+        s.moved(60.0, 16.0);
+        s.moved(20.0, 32.0);
+        s.up(20.0, 48.0)
+    }
+
+    #[test]
+    fn a_pointer_drag_on_a_desktop_does_not_pan_or_fling_and_is_not_a_tap() {
+        use crate::form_factor::FormFactor;
+        use crate::pan::{with_touch, TouchSource};
+        let mut s = super::Scroller::new();
+        s.set_max(500.0);
+        let tap = with_touch(FormFactor::Desktop, TouchSource::Pointer, || drag(&mut s));
+        assert!(!tap, "a press that slid away is no click");
+        assert_eq!((s.offset(), s.animating(), s.dragging()), (0.0, false, false));
+        let click = with_touch(FormFactor::Desktop, TouchSource::Pointer, || {
+            s.down(100.0, 0.0);
+            s.up(101.0, 10.0)
+        });
+        assert!(click, "a press that stayed put is a click");
+    }
+
+    #[test]
+    fn a_finger_drag_pans_on_a_desktop_and_either_source_pans_on_a_tablet() {
+        use crate::form_factor::FormFactor;
+        use crate::pan::{with_touch, TouchSource};
+        for (form, source) in [(FormFactor::Desktop, TouchSource::Finger), (FormFactor::Tablet, TouchSource::Finger), (FormFactor::Tablet, TouchSource::Pointer)] {
+            let mut s = super::Scroller::new();
+            s.set_max(500.0);
+            let tap = with_touch(form, source, || drag(&mut s));
+            assert!(!tap);
+            assert!(s.offset() > 50.0, "{form:?} {source:?}: {}", s.offset());
+            assert!(s.animating(), "the release flings");
+        }
     }
 
     #[test]

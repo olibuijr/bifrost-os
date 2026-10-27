@@ -250,7 +250,7 @@ impl Sheet {
         if down {
             self.drag = Some((py, self.scroll, false));
         } else if let Some((y0, s0, _)) = self.drag {
-            if (py - y0).abs() > 4.0 && g.max_scroll > 0.0 {
+            if bifrost_app::pans_now() && (py - y0).abs() > 4.0 && g.max_scroll > 0.0 {
                 self.scroll = (s0 - (py - y0)).clamp(0.0, g.max_scroll);
                 self.drag = Some((y0, s0, true));
             }

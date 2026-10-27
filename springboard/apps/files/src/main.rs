@@ -735,7 +735,7 @@ impl Files {
                         self.drop_target = target;
                         self.revision += 1;
                     }
-                } else if self.down.is_some() {
+                } else if self.down.is_some() && bifrost_app::pans_now() {
                     let (old, new) = (self.pan_y, y);
                     let visible = self.visible().len();
                     let columns = ((self.w - (self.side() + 16.)) / self.grid_w()).floor().max(1.) as usize;
