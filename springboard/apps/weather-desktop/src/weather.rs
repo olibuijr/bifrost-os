@@ -327,7 +327,8 @@ pub struct Weather {
     /// when each place was last asked for (ms), and the asks in flight
     tried: HashMap<String, f64>,
     pending: HashSet<String>,
-    error: Option<WeatherError>,
+    /// why the forecast of each place (by key) is missing, from its last failed fetch
+    errors: HashMap<String, WeatherError>,
     /// whether the network path lets the app reach the forecast service (true until the shell says otherwise)
     online: bool,
     /// place keys with the rain Notifications switch on, and the rain spells already announced
@@ -406,7 +407,7 @@ impl Weather {
             forecasts,
             tried: HashMap::new(),
             pending: HashSet::new(),
-            error: None,
+            errors: HashMap::new(),
             online: true,
             notify_on,
             rain: RainWatch::default(),
@@ -769,7 +770,7 @@ impl Weather {
             self.forecasts.len(),
             self.watch.len(),
             self.quotes.len(),
-            self.error.map_or("", |e| e.description())
+            self.errors.get(&self.place().key()).map_or("", |e| e.description())
         )
     }
 
@@ -840,8 +841,9 @@ impl Weather {
             self.maintain_at = f64::NEG_INFINITY;
         } else {
             self.maintain_at = f64::INFINITY;
-            if !self.forecasts.contains_key(&self.place().key()) {
-                self.error = Some(WeatherError::Unknown);
+            let key = self.place().key();
+            if !self.forecasts.contains_key(&key) {
+                self.errors.insert(key, WeatherError::Unknown);
             }
         }
     }
@@ -861,6 +863,7 @@ impl Weather {
                     self.pending.remove(&key);
                     match result {
                         Ok(f) => {
+                            self.errors.remove(&key);
                             if let Some(place) = self.places.iter().find(|p| p.key() == key) {
                                 let enabled = self.notify_on.contains(&key);
                                 if let Some(notice) = self.rain.check(&key, &place.name, &f.minutes, enabled) {
@@ -872,12 +875,13 @@ impl Weather {
                                 }
                             }
                             self.forecasts.insert(key.clone(), f);
-                            self.error = None;
                             if key == self.place().key() {
                                 self.save_summary();
                             }
                         }
-                        Err(e) => self.error = Some(e),
+                        Err(e) => {
+                            self.errors.insert(key, e);
+                        }
                     }
                 }
                 Done::Linked { result, .. } => {
@@ -936,8 +940,9 @@ impl Weather {
         }
         if !self.online {
             // no path: nothing to ask for until `set_online(true)` (which resets `maintain_at`)
-            if !self.forecasts.contains_key(&self.place().key()) {
-                self.error = Some(WeatherError::Unknown);
+            let key = self.place().key();
+            if !self.forecasts.contains_key(&key) {
+                self.errors.insert(key, WeatherError::Unknown);
             }
             self.maintain_at = f64::INFINITY;
             return;
@@ -1190,6 +1195,7 @@ impl Weather {
                 if self.places.len() > 1 && i < self.places.len() {
                     let gone = self.places.remove(i);
                     self.forecasts.remove(&gone.key());
+                    self.errors.remove(&gone.key());
                     if self.notify_on.remove(&gone.key()) {
                         notify::save(self.store.dir(), &self.notify_on);
                     }
@@ -1803,9 +1809,10 @@ impl Weather {
         let _ = place_name;
         let cx = self.w as f32 / 2.0;
         let Some(f) = forecast else {
-            let text = self.error.map_or("Loading\u{2026}", |e| e.description());
+            let error = self.errors.get(&self.place().key()).copied();
+            let text = error.map_or("Loading\u{2026}", |e| e.description());
             self.put(s, ui, text, MAC_BODY_PT, Weight::Regular, WHITE, Align::Centre, cx, ui.pt(nav_bottom_pt() + 200.0));
-            if let Some(e) = self.error {
+            if let Some(e) = error {
                 self.put(s, ui, e.recovery_suggestion(), MAC_FOOTNOTE_PT, Weight::Regular, fade(WHITE, 160), Align::Centre, cx, ui.pt(nav_bottom_pt() + 226.0));
             }
             return;
@@ -2437,6 +2444,22 @@ mod tests {
         assert!(app.online);
         app.set_online(true);
         assert!(app.online, "a repeated state changes nothing");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_failed_fetch_is_shown_only_for_its_own_place() {
+        let (mut app, _ui, dir) = app_with("errors-per-place", &["Oslo", "Reykjavik"]);
+        let (oslo, reykjavik) = (app.places[0].key(), app.places[1].key());
+        app.done.lock().unwrap().push(Done::Forecast { key: oslo.clone(), result: Err(WeatherError::Unreachable) });
+        app.pump();
+        assert!(app.describe().contains("weather_error=The weather service could not be reached.\n"), "{}", app.describe());
+        app.selected = 1;
+        assert!(app.describe().contains("weather_error=\n"), "Reykjavik did not fail: {}", app.describe());
+        app.done.lock().unwrap().push(Done::Forecast { key: reykjavik, result: Err(WeatherError::BadAnswer) });
+        app.pump();
+        app.selected = 0;
+        assert!(app.describe().contains("weather_error=The weather service could not be reached.\n"), "Oslo still failed: {}", app.describe());
         let _ = std::fs::remove_dir_all(&dir);
     }
 
