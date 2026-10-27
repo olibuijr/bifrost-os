@@ -178,10 +178,14 @@ fn mini_status_right(ui: &Ui, mini: &Mini) -> Option<f32> {
 }
 
 /// The title and the hint of an empty library, per Library section: what is missing, and how to add music (File >
-/// Import, or files copied to the Music folder). Nothing is hinted while the folder is still being read.
-fn library_empty_text(tab: Tab, scope: Scope, scanning: bool) -> (&'static str, &'static str) {
+/// Import, or files copied to the Music folder). Nothing is hinted while the folder is still being read, and a search
+/// on the Songs list reads as a search result (no matches), not as a library with nothing in it.
+fn library_empty_text(tab: Tab, scope: Scope, scanning: bool, query: &str) -> (&'static str, &'static str) {
     if scanning {
         return ("Looking for music\u{2026}", "");
+    }
+    if tab == Tab::Songs && !query.is_empty() {
+        return ("No Results", "");
     }
     const ADD: &str = "Choose File > Import\u{2026} (\u{2318}O) or copy MP3 or M4A files to your Music folder";
     let title = match (tab, scope) {
@@ -2791,7 +2795,7 @@ impl Music {
                 self.label(&mut band, ui, "Songs you play show up here", MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), self.w as f32 / 2.0, mid + ui.pt(SPACE_L), 0.5);
             } else if page == Page::Root && self.tab == Tab::Playlists || matches!(page, Page::Playlist(_) | Page::Smart(_) | Page::SmartEdit(_) | Page::Info) {
             } else if !radio && self.library.is_empty() {
-                let (text, hint) = library_empty_text(self.tab, self.scope, self.scanning);
+                let (text, hint) = library_empty_text(self.tab, self.scope, self.scanning, &self.search);
                 self.label(&mut band, ui, text, MAC_TITLE1_PT, Weight::Semibold, LABEL_2.now(), self.w as f32 / 2.0, mid - ui.pt(SPACE_L), 0.5);
                 let hint = ui.fit(hint, MAC_SUBHEAD_PT, self.w as f32 - 2.0 * ui.pt(SPACE_L));
                 self.label(&mut band, ui, &hint, MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), self.w as f32 / 2.0, mid + ui.pt(SPACE_L), 0.5);
@@ -3591,15 +3595,23 @@ mod tests {
 
     #[test]
     fn an_empty_library_names_the_section_and_says_how_to_add_music() {
-        assert_eq!(library_empty_text(Tab::Albums, Scope::All, false).0, "No Albums");
-        assert_eq!(library_empty_text(Tab::Artists, Scope::All, false).0, "No Artists");
-        assert_eq!(library_empty_text(Tab::Songs, Scope::All, false).0, "No Songs");
-        assert_eq!(library_empty_text(Tab::Songs, Scope::RecentlyAdded, false).0, "Nothing Added Yet");
+        assert_eq!(library_empty_text(Tab::Albums, Scope::All, false, "").0, "No Albums");
+        assert_eq!(library_empty_text(Tab::Artists, Scope::All, false, "").0, "No Artists");
+        assert_eq!(library_empty_text(Tab::Songs, Scope::All, false, "").0, "No Songs");
+        assert_eq!(library_empty_text(Tab::Songs, Scope::RecentlyAdded, false, "").0, "Nothing Added Yet");
         for (tab, scope) in [(Tab::Artists, Scope::All), (Tab::Songs, Scope::Favourites), (Tab::Songs, Scope::RecentlyPlayed)] {
-            let hint = library_empty_text(tab, scope, false).1;
+            let hint = library_empty_text(tab, scope, false, "").1;
             assert!(hint.contains("Import") && hint.contains("Music folder"), "{hint}");
         }
-        assert_eq!(library_empty_text(Tab::Songs, Scope::All, true).1, "", "no hint while the folder is read");
+        assert_eq!(library_empty_text(Tab::Songs, Scope::All, true, "").1, "", "no hint while the folder is read");
+    }
+
+    #[test]
+    fn a_search_with_no_match_reads_as_no_results_not_an_empty_library() {
+        assert_eq!(library_empty_text(Tab::Songs, Scope::All, false, "zzq"), ("No Results", ""));
+        assert_eq!(library_empty_text(Tab::Songs, Scope::Favourites, false, "zzq").0, "No Results");
+        assert_eq!(library_empty_text(Tab::Albums, Scope::All, false, "zzq").0, "No Albums", "the search is for the Songs list");
+        assert_eq!(library_empty_text(Tab::Songs, Scope::All, true, "zzq").0, "Looking for music\u{2026}", "a scan still comes first");
     }
 
     #[test]
