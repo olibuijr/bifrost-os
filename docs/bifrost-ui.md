@@ -2833,6 +2833,9 @@ and need `/usr/share/zoneinfo`. Not yet checked on Midget.
   entry point over the five styles), `relative::named_days` ("yesterday", "today", "tomorrow") and `date_components`
   (`DateComponentsFormatter`: positional, abbreviated, short, full; English). German (`de`) now uses comma-decimal
   separators and the "12 %" / "1.234,50 EUR" shapes in `NumberFormatter`.
+- `formatters::person_name`: `PersonNameComponents` and `PersonNameFormatter` (Short, Medium, Long, Abbreviated; `string` and a
+  whitespace `components` parser with known prefixes and suffixes). Not matched: locale-dependent name order (family-first
+  scripts), phonetic representation and attributed output. Host tests only.
 
 Gaps: `Locale` has no `region`/`calendar`/`measurementSystem` accessors yet, `DateFormatter` still takes an explicit
 `tz_offset` and a Gregorian calendar, week-of-year and weekday-ordinal components and `DateInterval` are missing, CLDR
