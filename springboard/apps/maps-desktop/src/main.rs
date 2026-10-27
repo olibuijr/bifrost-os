@@ -55,6 +55,11 @@ fn net() -> Arc<dyn Net> {
     if bifrost_app::testing::pinned() { Arc::new(Offline) } else { Arc::new(Live::default()) }
 }
 
+/// File > Print…: marked as the app's Print, so the shell puts it where its own File > Print… row stands (one Print, at the end of File).
+fn print_item(enabled: bool) -> AppMenuItem {
+    AppMenuItem::print(Act::Print.menu_id().expect("menu items come from MENU_ACTS")).enabled(enabled)
+}
+
 fn item(w: &Window, act: Act, title: &str, key: &str) -> AppMenuItem {
     let id = act.menu_id().expect("menu items come from MENU_ACTS");
     let mut it = AppMenuItem::new(id, title).enabled(w.maps.can(act));
@@ -280,7 +285,7 @@ impl App for MapsApp {
                     sub(item(w, Act::CopyCoordinates, "Copy Coordinates", "cmd+alt+c")),
                     sub(item(w, Act::Share, "Share\u{2026}", "")),
                     AppMenuItem::separator(),
-                    item(w, Act::Print, "Print\u{2026}", "cmd+p"),
+                    print_item(w.maps.can(Act::Print)),
                 ],
             },
             AppMenu {
@@ -418,5 +423,14 @@ mod tests {
         assert!(MENU_ACTS.len() < NEW_WINDOW_MENU as usize);
         assert!(Act::from_menu_id(NEW_WINDOW_MENU).is_none());
         assert!(Act::from_menu_id(NO_COLLECTIONS_MENU).is_none());
+    }
+
+    #[test]
+    fn file_print_is_the_apps_print_item_the_shell_replaces() {
+        let p = print_item(true);
+        assert!(p.prints, "the shell replaces its own File > Print… row only for a prints item");
+        assert_eq!(p.key, "cmd+p");
+        assert_eq!(Act::from_menu_id(p.id), Some(Act::Print));
+        assert!(p.enabled && !print_item(false).enabled);
     }
 }
