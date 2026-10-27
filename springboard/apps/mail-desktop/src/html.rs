@@ -26,7 +26,8 @@ const BLOCK: &[&str] = &[
 ];
 
 /// The longest tag, in bytes, that is parsed. A longer run of attributes is not a tag and is shown as text, so a
-/// hostile body cannot make every `<` rescan the rest of the input.
+/// hostile body cannot make every `<` rescan the rest of the input. A quoted `data:` value (an inline image) is not
+/// counted against the cap, so a large inline image is still one tag.
 const MAX_TAG_BYTES: usize = 4096;
 
 /// The most input, in bytes, that `sanitize` and `to_text` read. The rest of a larger body is ignored.
@@ -272,15 +273,17 @@ fn skip_element(lower: &str, from: usize, name: &str) -> usize {
 /// Parsing is linear: a tag is at most `MAX_TAG_BYTES` long, and a `<` where an attribute name or an unquoted value
 /// should start ends the attempt, so an unfinished tag never swallows the tags that follow it.
 fn parse_tag(src: &str, start: usize) -> Option<Tag> {
-    let src = clamp(src, start.saturating_add(MAX_TAG_BYTES));
     let b = src.as_bytes();
+    // The end of what this tag may use. It starts `MAX_TAG_BYTES` after the `<` and grows by the length of every quoted
+    // `data:` value (an inline image), which is the one legitimate reason for a tag to be long.
+    let mut limit = start.saturating_add(MAX_TAG_BYTES).min(b.len());
     let mut p = start + 1;
     let closing = b.get(p) == Some(&b'/');
     if closing {
         p += 1;
     }
     let name_start = p;
-    while p < b.len() && b[p].is_ascii_alphanumeric() {
+    while p < limit && b[p].is_ascii_alphanumeric() {
         p += 1;
     }
     if p == name_start {
@@ -289,10 +292,10 @@ fn parse_tag(src: &str, start: usize) -> Option<Tag> {
     let name = src[name_start..p].to_ascii_lowercase();
     let mut attrs = Vec::new();
     loop {
-        while p < b.len() && (b[p].is_ascii_whitespace() || b[p] == b'/') {
+        while p < limit && (b[p].is_ascii_whitespace() || b[p] == b'/') {
             p += 1;
         }
-        if p >= b.len() {
+        if p >= limit {
             return None;
         }
         if b[p] == b'>' {
@@ -302,7 +305,7 @@ fn parse_tag(src: &str, start: usize) -> Option<Tag> {
             return None;
         }
         let key_start = p;
-        while p < b.len() && !b[p].is_ascii_whitespace() && !matches!(b[p], b'=' | b'>' | b'/' | b'<') {
+        while p < limit && !b[p].is_ascii_whitespace() && !matches!(b[p], b'=' | b'>' | b'/' | b'<') {
             p += 1;
         }
         if p == key_start {
@@ -311,24 +314,33 @@ fn parse_tag(src: &str, start: usize) -> Option<Tag> {
         }
         let key = src[key_start..p].to_ascii_lowercase();
         let mut q = p;
-        while q < b.len() && b[q].is_ascii_whitespace() {
+        while q < limit && b[q].is_ascii_whitespace() {
             q += 1;
         }
         let mut value = String::new();
-        if q < b.len() && b[q] == b'=' {
+        if q < limit && b[q] == b'=' {
             q += 1;
-            while q < b.len() && b[q].is_ascii_whitespace() {
+            while q < limit && b[q].is_ascii_whitespace() {
                 q += 1;
             }
-            if q < b.len() && (b[q] == b'"' || b[q] == b'\'') {
+            if q < limit && (b[q] == b'"' || b[q] == b'\'') {
                 let quote = b[q];
                 let vs = q + 1;
-                let off = b[vs..].iter().position(|&c| c == quote)?;
+                // A `data:` value may run past the cap: its closing quote is looked for in the whole input. The search
+                // stops at the nearest quote of the same kind, so hostile input cannot make it rescan.
+                let data = src.get(vs..vs + 5).is_some_and(|v| v.eq_ignore_ascii_case("data:"));
+                let off = if data {
+                    let off = b[vs..].iter().position(|&c| c == quote)?;
+                    limit = limit.max(vs + off + 1).saturating_add(MAX_TAG_BYTES / 4).min(b.len());
+                    off
+                } else {
+                    b[vs..limit].iter().position(|&c| c == quote)?
+                };
                 value = src[vs..vs + off].to_string();
                 p = vs + off + 1;
             } else {
                 let vs = q;
-                while q < b.len() && !b[q].is_ascii_whitespace() && b[q] != b'>' {
+                while q < limit && !b[q].is_ascii_whitespace() && b[q] != b'>' {
                     if b[q] == b'<' {
                         return None;
                     }
@@ -541,6 +553,47 @@ mod tests {
     fn non_ascii_sources_do_not_panic() {
         assert_eq!(clean("<img src=\"Þ\">"), "");
         assert_eq!(sanitize_with_parts("<img src=\"ÞÞ\">", false, &[]).html, "");
+    }
+
+    /// A `data:` PNG tag well past `MAX_TAG_BYTES`, with filler that is not a real image.
+    fn big_png_tag() -> String {
+        format!("<img src=\"data:image/png;base64,iVBORw0KGgo{}\" width=\"600\" alt=\"Welcome\">", "QUFB".repeat(50_000))
+    }
+
+    #[test]
+    fn a_large_inline_image_tag_is_a_tag_and_never_text() {
+        let tag = big_png_tag();
+        assert!(tag.len() > 10 * MAX_TAG_BYTES);
+        let page = format!("{tag}<p>Welcome aboard</p>");
+        assert_eq!(to_text(&page), "Welcome aboard");
+        let s = sanitize(&page, false);
+        assert!(s.html.starts_with("<img src=\"data:image/png;base64,iVBORw0KGgo"), "the inline image is kept");
+        assert!(s.html.ends_with(" width=\"600\" alt=\"Welcome\" /><p>Welcome aboard</p>"));
+        assert_eq!(s.remote_images_blocked, 0);
+        // a data image that is not a raster format is dropped, not printed
+        let svg = format!("<img src=\"data:image/svg+xml;base64,{}\">ok", "QUFB".repeat(50_000));
+        assert_eq!(to_text(&svg), "ok");
+        assert_eq!(clean(&svg), "ok");
+    }
+
+    #[test]
+    fn a_remote_image_after_a_large_inline_image_is_still_blocked() {
+        let page = format!("{}<img src=\"https://t.example/px.gif\"><p>hi</p>", big_png_tag());
+        let s = sanitize(&page, false);
+        assert_eq!(s.remote_images_blocked, 1);
+        assert!(!s.html.contains("t.example"));
+        assert_eq!(to_text(&page), "hi");
+    }
+
+    #[test]
+    fn an_unclosed_data_value_stays_linear() {
+        let hostile = "<img src=\"data:".repeat(50_000);
+        let start = std::time::Instant::now();
+        let _ = to_text(&hostile);
+        let _ = sanitize(&hostile, false);
+        let one_open = format!("<img src=\"data:{}", "x".repeat(MAX_HTML_BYTES / 2));
+        let _ = to_text(&one_open);
+        assert!(start.elapsed().as_secs() < 5);
     }
 
     #[test]
