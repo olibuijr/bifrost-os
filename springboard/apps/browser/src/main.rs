@@ -138,9 +138,6 @@ mod starttab;
 const KEY_F: u32 = 33;
 const KEY_BACKSLASH: u32 = 43;
 const KEY_G: u32 = 34;
-const KEY_0: u32 = 11;
-const KEY_MINUS: u32 = 12;
-const KEY_EQUAL: u32 = 13;
 
 struct Tab {
     view: WebViewId,

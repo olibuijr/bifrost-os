@@ -3303,6 +3303,30 @@
         assert_eq!(bifrost_proto::ToApp::decode(&packet),Ok(bifrost_proto::ToApp::MenuAction(1)));
     }
 
+    /// Key equivalents read the character the layout produces, not the key's place: on the Icelandic board the key at evdev 13 types
+    /// `-` (Zoom Out) and `=` is Shift+0, while on the U.S. board code 13 is `=` (Zoom In) and `+` is Shift+`=`.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn menu_key_equivalents_follow_the_layout_character() {
+        use bifrost_proto::{AppMenu,AppMenuItem,CHORD_META,CHORD_SHIFT};
+        use crate::installer::keymaps::layout_index;
+        let menus=vec![AppMenu{title:"View".into(),items:vec![
+            AppMenuItem::new(3,"Zoom In").key("cmd+="),AppMenuItem::new(4,"Zoom Out").key("cmd+-"),AppMenuItem::new(5,"Actual Size").key("cmd+0")]}];
+        let is=layout_index("is").unwrap();
+        let us=layout_index("us").unwrap();
+        // Icelandic: code 13 types '-', code 43 types '+', Shift+0 (code 11) types '='
+        assert_eq!(desktop_bar::chord_menu_id_in(&menus,is,13,CHORD_META),Some(4),"Cmd+- zooms out");
+        assert_eq!(desktop_bar::chord_menu_id_in(&menus,is,43,CHORD_META),Some(3),"Cmd++ zooms in");
+        assert_eq!(desktop_bar::chord_menu_id_in(&menus,is,11,CHORD_META|CHORD_SHIFT),Some(3),"Cmd+= (Shift+0) zooms in");
+        assert_eq!(desktop_bar::chord_menu_id_in(&menus,is,11,CHORD_META),Some(5),"Cmd+0 is Actual Size");
+        assert_eq!(desktop_bar::chord_menu_id_in(&menus,is,12,CHORD_META),None,"the key typing o-umlaut is no zoom key");
+        // U.S.: the existing places hold
+        assert_eq!(desktop_bar::chord_menu_id_in(&menus,us,13,CHORD_META),Some(3));
+        assert_eq!(desktop_bar::chord_menu_id_in(&menus,us,13,CHORD_META|CHORD_SHIFT),Some(3),"Cmd++ (Shift+=) zooms in");
+        assert_eq!(desktop_bar::chord_menu_id_in(&menus,us,12,CHORD_META),Some(4));
+        assert_eq!(desktop_bar::chord_menu_id_in(&menus,us,11,CHORD_META),Some(5));
+    }
+
     /// The app's own menus sit after View and before Window (the Browser: File, Edit, View, History, Bookmarks, Develop, Window, Help),
     /// and the document apps' Format menus sit right after Edit. The app's order is kept within each group.
     #[cfg(feature="desktop-wayland")]
