@@ -124,7 +124,7 @@ impl UserDefaults {
     }
 
     pub fn string(&self, key: &str) -> Option<String> {
-        match self.get(key)?.clone() {
+        match self.get(key)? {
             Value::Str(s) => Some(s),
             _ => None,
         }
@@ -152,7 +152,7 @@ impl UserDefaults {
         self.set(key, Value::from_plist(v));
     }
     pub fn data(&self, key: &str) -> Option<Vec<u8>> {
-        match self.get(key)?.clone() {
+        match self.get(key)? {
             Value::Data(d) => Some(d),
             _ => None,
         }

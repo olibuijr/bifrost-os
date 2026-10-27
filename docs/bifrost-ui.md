@@ -2843,6 +2843,15 @@ and need `/usr/share/zoneinfo`. Not yet checked on Midget.
   `..`, no filesystem access) and `resolving_symlinks` (canonicalize, unchanged on error). Not matched: non-file schemes
   and network URLs (`url.rs` covers requests), bookmark data, resource-value caching on the URL object and the
   enumerator (`file_manager.rs` has resource values and enumeration). Host tests only.
+- `defaults::UserDefaults::with_store(store, app_id)` (preference domain search list): a read goes through the app's
+  own domain, then suites added with `add_suite` (`remove_suite` drops one), then the global domain, then the values
+  passed to `register`; `set` and `remove` change the app domain only and save at once. `persistent_domain(name)` returns
+  the stored values of one domain. `open` and `memory` keep the per-app file behaviour, and no caller uses `with_store`
+  yet. Host tests only.
+- `progress` (Foundation `Progress`): re-exports `ProgressTree` and `ProgressId` from `bifrost_ui::progress` (unit
+  counts, child shares, finish, cancel, pause and resume, `add_child`, `become_current`/`resign_current`) and adds
+  `localized_description(tree, id)`, the English "N% completed" rounded down and empty while indeterminate. Not
+  matched: publishing progress to other processes, the progress manager, reporter and subprogress types. Host tests only.
 
 Gaps: `Locale` has no `region`/`calendar`/`measurementSystem` accessors yet, `DateFormatter` still takes an explicit
 `tz_offset` and a Gregorian calendar, week-of-year and weekday-ordinal components and `DateInterval` are missing, CLDR
