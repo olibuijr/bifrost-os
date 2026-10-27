@@ -2836,6 +2836,13 @@ and need `/usr/share/zoneinfo`. Not yet checked on Midget.
 - `formatters::person_name`: `PersonNameComponents` and `PersonNameFormatter` (Short, Medium, Long, Abbreviated; `string` and a
   whitespace `components` parser with known prefixes and suffixes). Not matched: locale-dependent name order (family-first
   scripts), phonetic representation and attributed output. Host tests only.
+- `file_url::FileUrl` (Core Foundation URL parity for file paths, pure std): `from_path`, `parse` / `as_string`
+  (percent-encoding, trailing slash for directories, `file://` and `file://localhost` only), `appending_path_component`,
+  `deleting_last_path_component` (the root stays the root), `last_path_component`, `path_components`, `path_extension`,
+  `appending_path_extension`, `deleting_path_extension` (dotfiles have no extension), `standardized` (lexical `.` and
+  `..`, no filesystem access) and `resolving_symlinks` (canonicalize, unchanged on error). Not matched: non-file schemes
+  and network URLs (`url.rs` covers requests), bookmark data, resource-value caching on the URL object and the
+  enumerator (`file_manager.rs` has resource values and enumeration). Host tests only.
 
 Gaps: `Locale` has no `region`/`calendar`/`measurementSystem` accessors yet, `DateFormatter` still takes an explicit
 `tz_offset` and a Gregorian calendar, week-of-year and weekday-ordinal components and `DateInterval` are missing, CLDR
