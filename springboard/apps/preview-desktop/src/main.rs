@@ -2699,7 +2699,6 @@ impl App for Viewer {
                 }
                 return ours;
             }
-            _ => return false,
         };
         let mut bytes = Vec::new();
         if let Err(e) = (&doc.file).read_to_end(&mut bytes) {

@@ -89,6 +89,7 @@ struct Backing {
 /// and a plate take the material's corner radius when the material is one rectangle (the window's radius, which the
 /// shell sends for every region, so nothing shows past the window's rounded corners), like the Vulkan path's
 /// `material_nodes`; a plate takes the recipe's opaque colour.
+#[cfg(test)]
 fn backing_of(specs: &[MaterialSpec], origin: Point<i32, Logical>, active: bool, dark: bool) -> Backing {
     backing_with(specs, origin, active, dark, false)
 }

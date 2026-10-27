@@ -137,6 +137,7 @@ pub fn take_fresh() -> bool {
 }
 
 /// How many times the library was read from disk this run.
+#[cfg(test)]
 pub fn loads() -> usize {
     LOADS.load(Ordering::Relaxed)
 }

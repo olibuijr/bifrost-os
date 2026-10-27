@@ -407,10 +407,7 @@ fn connect_now(path: &std::path::Path) -> std::io::Result<UnixStream> {
         sun_family: u16,
         sun_path: [u8; 108],
     }
-    extern "C" {
-        fn socket(domain: i32, ty: i32, protocol: i32) -> i32;
-        fn connect(fd: i32, addr: *const SockaddrUn, len: u32) -> i32;
-    }
+    use crate::bare::sys::{connect, socket};
 
     let bytes = path.as_os_str().as_bytes();
     let mut addr = SockaddrUn { sun_family: AF_UNIX as u16, sun_path: [0; 108] };
@@ -428,7 +425,7 @@ fn connect_now(path: &std::path::Path) -> std::io::Result<UnixStream> {
     // SAFETY: `fd` is a fresh descriptor nothing else owns; OwnedFd closes it on every path out.
     let owned = unsafe { OwnedFd::from_raw_fd(fd) };
     // SAFETY: `addr` is a live sockaddr_un and `len` stays within it (checked above).
-    if unsafe { connect(owned.as_raw_fd(), &addr, len) } != 0 {
+    if unsafe { connect(owned.as_raw_fd(), (&addr as *const SockaddrUn).cast(), len) } != 0 {
         let e = io::Error::last_os_error();
         return Err(match e.raw_os_error() {
             Some(EAGAIN) | Some(EINPROGRESS) => io::Error::new(io::ErrorKind::WouldBlock, "the app is not accepting connections on its control socket"),

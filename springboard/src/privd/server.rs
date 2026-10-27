@@ -27,7 +27,7 @@ struct Ucred {
 }
 
 extern "C" {
-    fn getsockopt(fd: i32, level: i32, name: i32, val: *mut Ucred, len: *mut u32) -> i32;
+    fn getsockopt(fd: i32, level: i32, name: i32, val: *mut std::ffi::c_void, len: *mut u32) -> i32;
     fn geteuid() -> u32;
     fn chown(path: *const std::os::raw::c_char, uid: u32, gid: u32) -> i32;
 }
@@ -71,7 +71,7 @@ pub fn peer(stream: &UnixStream) -> io::Result<(i32, u32)> {
     let mut c = Ucred { pid: 0, uid: u32::MAX, gid: 0 };
     let mut len = std::mem::size_of::<Ucred>() as u32;
     // SAFETY: `c` and `len` are valid for the call; the fd is an open socket.
-    let r = unsafe { getsockopt(stream.as_raw_fd(), SOL_SOCKET, SO_PEERCRED, &mut c, &mut len) };
+    let r = unsafe { getsockopt(stream.as_raw_fd(), SOL_SOCKET, SO_PEERCRED, (&mut c as *mut Ucred).cast(), &mut len) };
     if r != 0 {
         return Err(io::Error::last_os_error());
     }

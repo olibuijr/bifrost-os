@@ -1420,6 +1420,7 @@ impl Shell {
         self.desktop_menu_typed=Some(model);
     }
     /// Pointer movement with a menu open, at the time of the last input (`desktop_menu_hover_at`).
+    #[cfg(test)]
     pub(super) fn desktop_menu_hover(&mut self,x:f32,y:f32) {let t=self.last_input;self.desktop_menu_hover_at(x,y,t);}
     /// Pointer movement with a menu open at `t` ms: highlight the row under it, and a bar title switches the open menu (as
     /// Golden Gate does). A row that opens a submenu opens it beside the row once the pointer rested there for
@@ -2995,7 +2996,7 @@ mod app_submenu_tests {
     fn a_diagonal_move_toward_the_submenu_keeps_it_open_and_a_rest_lets_the_row_take_over() {
         let (mut sh, _app) = with_menus(vec![format(3)]);
         let (format, font, right) = format_and_font(&mut sh);
-        let (hx, hy) = row_point(&sh, Menu::Custom(0), format, 0);
+        let (_, hy) = row_point(&sh, Menu::Custom(0), format, 0);
         // from the far side of the header row, heading down toward the submenu's near edge
         let start = if right { (format.0 as f32 + sh.ui.pt(20.), hy) } else { ((format.0 + format.2) as f32 - sh.ui.pt(20.), hy) };
         sh.desktop_menu_hover_at(start.0, start.1, 100.);

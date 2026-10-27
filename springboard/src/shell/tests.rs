@@ -824,7 +824,7 @@
     }
 
     /// The first pixel of a window's green button, for the pointer tests.
-    #[cfg(feature="desktop-wayland")]
+    #[cfg(all(test, feature="desktop-wayland"))]
     fn green_button(sh:&Shell)->(f32,f32) {
         let m=sh.desk_metrics();let d=sh.desk.as_ref().unwrap();let r=d.wins[0].r;
         for y in (r.y..r.y+80).step_by(2) {for x in (r.x..r.x+200).step_by(2) {

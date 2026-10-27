@@ -2101,7 +2101,6 @@ impl Dispatch<cap_frame::BifrostWindowCaptureFrameV1,u64> for State {
             }
             cap_frame::Event::Unchanged{serial}=>ShotOutcome::Unchanged{serial},
             cap_frame::Event::Failed{..}=>ShotOutcome::Failed,
-            _=>return,
         };
         if let Some(job)=s.cap_jobs.remove(token) { job.buffer.destroy(); job.frame.destroy(); }
         s.cap_results.push((*token,outcome));

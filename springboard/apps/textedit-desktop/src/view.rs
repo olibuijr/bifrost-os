@@ -7,7 +7,6 @@ use crate::properties::{ListLayout, PanelLayout};
 use crate::text::{Align, Attachment, Cell, ListKind, Style, Transform, COLORS, FAMILIES, OBJECT, SPACINGS};
 use bifrost_app::graphics_imageio;
 use bifrost_app::controls::Rect;
-use bifrost_app::document::item;
 use bifrost_app::kit::canvas::{Canvas, ImageRef, RectF};
 use bifrost_app::kit::ui::{
     Ui, Weight, BLACK, CONTENT_BG, DESTRUCTIVE, DETAIL_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, LINK, MAC_BODY_PT, MAC_FOOTNOTE_PT,
@@ -1228,6 +1227,7 @@ pub fn draw_status(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry, words: usize, c
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bifrost_app::document::item;
 
     #[test]
     fn menu_ids_round_trip() {

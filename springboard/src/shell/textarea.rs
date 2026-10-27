@@ -574,7 +574,7 @@ impl TextArea {
             }
             // the hidden emphasis markers, before the formulas and the title marker take kind 7 too
             if display.is_none() {
-                for (i, st) in styles.iter().enumerate().filter(|(_, st)| st.2 == 7) {
+                for (i, _) in styles.iter().enumerate().filter(|(_, st)| st.2 == 7) {
                     match concealed.last_mut() {
                         Some(r) if r.end == start + i => r.end += 1,
                         _ => concealed.push(start + i..start + i + 1),

@@ -46,10 +46,14 @@ impl Shell {
     fn desk_back(&mut self, t: f64) {
         match self.screen {
             Screen::App(AppId::Settings) => {
-                self.settings.as_mut().is_some_and(|s| s.back_page(t));
+                if let Some(s) = self.settings.as_mut() {
+                    s.back_page(t);
+                }
             }
             Screen::App(AppId::Files) => {
-                self.files.as_mut().is_some_and(|f| f.hw_back(t));
+                if let Some(f) = self.files.as_mut() {
+                    f.hw_back(t);
+                }
             }
             Screen::App(AppId::Photos) => {
                 if let Some(p) = self.photos.as_mut() {

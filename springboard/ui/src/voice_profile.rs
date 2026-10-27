@@ -340,7 +340,7 @@ mod tests {
         let noise: Vec<f32> = (0..32_000)
             .map(|_| {
                 state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
-                ((state >> 8) as f32 / (1u32 << 24) as f32 - 0.5)
+                (state >> 8) as f32 / (1u32 << 24) as f32 - 0.5
             })
             .collect();
         assert_eq!(analyze(&noise, 16_000), Err(ProfileError::NoVoicedSpeech));

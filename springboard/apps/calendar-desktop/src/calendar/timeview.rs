@@ -3,7 +3,6 @@ use bifrost_app::kit::ui::{MAC_CAPTION1_PT};
 use bifrost_app::layout::top_inset;
 use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPACE_XS, SPACE_XXL, SPACE_XXS, SPACE_XXXL};
 use bifrost_app::kit::ui::MAC_SUBHEAD_PT;
-use bifrost_app::kit::colors;
 use springboard::layout::in_rect as within;
 use super::layout;
 use super::store::CalendarEvent;

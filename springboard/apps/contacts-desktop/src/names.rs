@@ -128,6 +128,7 @@ pub enum NameOrder {
 
 /// The name as the list and the card show it: "Ada Lovelace" in first-name order, or "Lovelace, Ada" in last-name
 /// order. A name with only one part is shown as it is.
+#[cfg(test)]
 pub fn shown(name: &str, order: NameOrder) -> String {
     shown_with(name, "", order)
 }
