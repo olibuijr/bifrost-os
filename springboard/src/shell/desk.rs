@@ -211,6 +211,7 @@ pub struct Desk {
     pub(super) cmdtab: Option<(Vec<AppId>, usize)>,
     /// the front app's windows as Cmd+` found them (front first) and the one it brought forward last: consecutive
     /// presses walk this order, so raising one window at a time still visits every window (W2-25)
+    #[cfg(any(test, feature = "desktop-wayland"))]
     pub(super) window_cycle: Option<(Vec<AppId>, usize)>,
     /// the dock slot under the pointer, whose name shows above it
     pub(super) dock_hover:Option<usize>,
@@ -233,6 +234,7 @@ pub struct Desk {
     /// they come back with Show All or when their app is activated (`raise`)
     pub(super) hidden: Vec<AppId>,
     /// the window server's toplevels (native and Linux apps) Hide minimized, so Show All can bring them back
+    #[cfg(feature = "desktop-wayland")]
     pub(super) hidden_foreign: Vec<u32>,
     /// the windows Show Desktop put aside: `minimized`, but not in the Dock's minimized section; Show Desktop again or
     /// Bring All to Front brings them back (N13)
@@ -431,6 +433,7 @@ pub fn borderless(app: AppId) -> bool {
 }
 
 /// The most rects a borderless window's input region holds before `alpha_shape` merges them into boxes.
+#[cfg(any(test, feature = "desktop-wayland"))]
 pub const MAX_SHAPE_RECTS: usize = 512;
 
 /// Whether the Photos window is full-size: on the desktop form factor, read from the process's form factor (fixed for
@@ -880,15 +883,18 @@ impl Desk {
     /// Hide (Cmd+H, the App menu's Hide): every shown window of the app `parent` goes away at once, with no minimize
     /// effect and no Dock thumbnail; the app stays running and comes back with `unhide` or when one of its windows is raised.
     /// Returns whether a window was hidden.
+    #[cfg(any(test, feature = "desktop-wayland"))]
     pub(super) fn hide_app(&mut self, parent: AppId) -> bool {
         self.hide_where(|a| a.parent() == parent)
     }
 
     /// Hide Others (Option+Cmd+H): every app but `keep` (a parent id; None hides every app's windows) is hidden.
+    #[cfg(any(test, feature = "desktop-wayland"))]
     pub(super) fn hide_others(&mut self, keep: Option<AppId>) -> bool {
         self.hide_where(|a| Some(a.parent()) != keep)
     }
 
+    #[cfg(any(test, feature = "desktop-wayland"))]
     fn hide_where(&mut self, pick: impl Fn(AppId) -> bool) -> bool {
         let mut any = false;
         for w in self.wins.iter_mut().filter(|w| !w.minimized && pick(w.app)) {
@@ -1021,6 +1027,7 @@ impl Desk {
     /// toplevels only the active app's (Window > Bring All to Front acts on the active app). The active app is the one
     /// whose toplevel is active, or, when none is and `shell_app_front` is false, the one that was active when Show
     /// Desktop put the toplevels aside. Returns whether a window came back.
+    #[cfg(any(test, feature = "desktop-wayland"))]
     pub(super) fn bring_back_front_app_aside(&mut self, shell_app_front: bool) -> bool {
         #[allow(unused_mut)]
         let mut any = self.bring_back_shell_aside();
@@ -1077,6 +1084,7 @@ impl Desk {
     }
 
     /// Show All: every window Hide put away is shown again, where it was in the stack.
+    #[cfg(any(test, feature = "desktop-wayland"))]
     pub(super) fn unhide_all(&mut self) {
         self.unhide(|_| true);
     }
@@ -1095,11 +1103,13 @@ impl Desk {
     }
 
     /// Whether any window is hidden now (Show All has something to show).
+    #[cfg(any(test, feature = "desktop-wayland"))]
     pub(super) fn any_hidden(&self) -> bool {
         self.wins.iter().any(|w| w.minimized && self.hidden.contains(&w.app))
     }
 
     /// Whether a window of an app other than `parent` is on screen (Hide Others has something to hide).
+    #[cfg(any(test, feature = "desktop-wayland"))]
     pub(super) fn others_shown(&self, parent: Option<AppId>) -> bool {
         self.wins.iter().any(|w| !w.minimized && Some(w.app.parent()) != parent)
     }
@@ -1516,6 +1526,7 @@ pub(super) fn thumbnail_frame(slot: Rect, window_w: i32, window_h: i32) -> Rect 
 
 /// Like `dock_rects` with a divider after each index in `seps` (pinned | recents | minimized and Trash).
 /// One step through `n` items from `i`, wrapping: forwards, or backwards when `reverse`.
+#[cfg(any(test, feature = "desktop-wayland"))]
 pub(super) fn cycle_step(i: usize, n: usize, reverse: bool) -> usize {
     if n == 0 { 0 } else if reverse { (i + n - 1) % n } else { (i + 1) % n }
 }
@@ -1523,6 +1534,7 @@ pub(super) fn cycle_step(i: usize, n: usize, reverse: bool) -> usize {
 /// The next Cmd+` stop: the order to walk and the window to bring forward. `stack` is the front app's windows, front
 /// first. A walk continues while the window in front is the one it raised last and the app has the same windows;
 /// otherwise a new walk starts from the stack as it is. None with fewer than two windows.
+#[cfg(any(test, feature = "desktop-wayland"))]
 pub(super) fn window_cycle_next(prev: Option<(Vec<AppId>, usize)>, stack: &[AppId], reverse: bool) -> Option<(Vec<AppId>, usize)> {
     if stack.len() < 2 { return None; }
     let same = |order: &Vec<AppId>| order.len() == stack.len() && stack.iter().all(|a| order.contains(a));
@@ -1565,6 +1577,7 @@ pub(super) fn win_id(app: AppId) -> Option<u32> {
 const WINDOW_ID_FLAG: u32 = 0x0100_0000;
 
 /// The desk window a window-server id names (the reverse of `win_id`).
+#[cfg(feature = "desktop-wayland")]
 pub(super) fn frame_app(id: u32) -> Option<AppId> {
     if id & WINDOW_ID_FLAG != 0 {
         return Some(AppId::ExternalWindow(((id >> 16) & 0xff) as u8, (id & 0xffff) as u16));
@@ -1573,6 +1586,7 @@ pub(super) fn frame_app(id: u32) -> Option<AppId> {
 }
 
 /// The title a frame carries to the window server: the app's name (an extra window shows its parent's name here).
+#[cfg(feature = "desktop-wayland")]
 fn frame_title(id: u32) -> &'static str {
     let Some(app) = frame_app(id) else { return "" };
     apps().iter().find(|a| a.id == app.parent()).map_or("", |a| a.name)
@@ -2353,6 +2367,7 @@ impl Shell {
     }
 
     /// Whether the menu bar is hidden now: the front window is full screen and the pointer is not at the top.
+    #[cfg(feature = "desktop-wayland")]
     pub(super) fn desk_bar_hidden(&self) -> bool {
         // a menu opened from the revealed bar keeps the bar while the pointer is down in the menu
         // a screen recording keeps the bar: its indicator must stay visible for the whole recording, even over a full-screen window
@@ -2445,6 +2460,7 @@ impl Shell {
         self.desk_frame_changed(i);
     }
 
+    #[cfg(feature = "desktop-wayland")]
     pub(super) fn desk_zoom_window(&mut self,i:usize) {let m=self.desk_metrics();self.desk.as_mut().unwrap().toggle_zoom(&m,i);self.desk_layout(i);if let Some(app)=self.desk.as_ref().and_then(|d|d.wins.get(i)).map(|w|w.app){let t=self.last_input;self.desk_fx_start(app,FxCall::Zoom,t);}self.dirty=true;}
 
     /// Minimizes window `i` to its Dock tile, playing the minimize effect first when it is allowed.
@@ -2746,6 +2762,7 @@ impl Shell {
     /// Window > Bring All to Front for the active app (the app of the front window when none is active). The windows
     /// Show Desktop put aside come back first (N13): the shell's, and of the window server's toplevels only the active
     /// app's (Show Desktop's toggle brings back the rest); windows minimized to the Dock stay there.
+    #[cfg(any(test, feature = "desktop-wayland"))]
     pub(super) fn desk_bring_all_to_front(&mut self) {
         let shell_app_front = matches!(self.screen, Screen::App(_));
         if self.desk.as_mut().is_some_and(|d| d.bring_back_front_app_aside(shell_app_front)) {

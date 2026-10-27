@@ -320,7 +320,7 @@ impl Today {
     }
 
     /// Sets the summary and hours directly (tests, previews).
-    #[cfg(test)]
+    #[cfg(all(test, feature = "desktop-wayland"))]
     pub(crate) fn set_weather(&mut self, summary: Option<Summary>, hours: Vec<Hour>) {
         self.weather = summary;
         self.weather_hours = hours;
