@@ -940,7 +940,7 @@ pub fn draw(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, cache: &mut O
     }
     if let (Some(p), Some(sel)) = (placed, scene.selection) {
         let (x, y, w, h) = to_screen(&p, scene.view.quarters, sel);
-        s.stroke_rrect(x, y, w.max(1.0), h.max(1.0), 0.0, 1.5, ui::TINT);
+        s.stroke_rrect(x, y, w.max(1.0), h.max(1.0), 0.0, 1.5, ui::accent_now());
     }
     if let (Some(p), Some(at), true) = (placed, scene.loupe, cached) {
         if let Some(c) = cache.as_ref() {
@@ -996,7 +996,7 @@ fn draw_loupe(s: &mut Surface, ui: &Ui, p: &Placed, shown: &Image, at: (f32, f32
             }
         }
     }
-    s.stroke_rrect((cx - r) as f32, (cy - r) as f32, (2 * r) as f32, (2 * r) as f32, r as f32, 2.0, ui::TINT);
+    s.stroke_rrect((cx - r) as f32, (cy - r) as f32, (2 * r) as f32, (2 * r) as f32, r as f32, 2.0, ui::accent_now());
 }
 
 /// The contact sheet: every page's thumbnail in a grid, the shown page marked.
@@ -1103,7 +1103,16 @@ fn draw_color_panel(s: &mut Surface, ui: &Ui, lay: &Layout, sliders: &[Slider]) 
         let t = if slider.max > slider.min { (slider.value - slider.min) / (slider.max - slider.min) } else { 0.0 };
         let kx = tx as f32 + t.clamp(0.0, 1.0) * tw as f32;
         let radius = ui.pt(ui::CELL_RADIUS_PT);
-        s.fill_rrect(kx - radius, ty as f32 - radius, 2.0 * radius, 2.0 * radius, radius, ui::TINT);
+        s.fill_rrect(kx - radius, ty as f32 - radius, 2.0 * radius, 2.0 * radius, radius, ui::accent_now());
+    }
+}
+
+/// Fill and label colours of an Export As segment: the chosen one is filled with the user's accent, a disabled one is dim.
+fn segment_colours(enabled: bool, active: bool) -> (u32, u32) {
+    match (enabled, active) {
+        (false, _) => (ui::FIELD_BG.now(), ui::LABEL_2.now()),
+        (true, true) => (ui::accent_now(), ui::WHITE),
+        (true, false) => (ui::FIELD_BG.now(), ui::LABEL.now()),
     }
 }
 
@@ -1123,11 +1132,7 @@ fn draw_export_panel(s: &mut Surface, ui: &Ui, lay: &Layout, panel: &export_pane
         s.blit_colored(&img, x + pad, *y, ui::LABEL_2.now(), 255);
     }
     for b in &panel.buttons {
-        let (background, text) = match (b.enabled, b.active) {
-            (false, _) => (ui::FIELD_BG.now(), ui::LABEL_2.now()),
-            (true, true) => (ui::TINT, ui::WHITE),
-            (true, false) => (ui::FIELD_BG.now(), ui::LABEL.now()),
-        };
+        let (background, text) = segment_colours(b.enabled, b.active);
         s.fill_rrect(b.x as f32, b.y as f32, b.w as f32, b.h as f32, ui.pt(ui::SPACE_S), background);
         let img = ui.text(b.label, ui::MAC_FOOTNOTE_PT, Weight::Regular, text);
         let tx = b.x + (b.w - img.w as i32) / 2;
@@ -1412,6 +1417,23 @@ fn fill(s: &mut Surface, x: i32, y: i32, w: i32, h: i32, color: u32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The accent is process-wide: this test changes it and restores it.
+    static ACCENT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn the_chosen_export_segment_is_filled_with_the_accent_not_system_blue() {
+        use bifrost_app::kit::appearance::{accent, set_accent, Accent};
+        let _g = ACCENT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let keep = accent();
+        set_accent(Accent::Green);
+        let (chosen, green) = (segment_colours(true, true), ui::accent_now());
+        set_accent(keep);
+        assert_eq!(chosen, (green, ui::WHITE));
+        assert_ne!(chosen.0, ui::TINT);
+        assert_eq!(segment_colours(true, false).0, ui::FIELD_BG.now());
+        assert_eq!(segment_colours(false, true).0, ui::FIELD_BG.now(), "a disabled segment is never tinted");
+    }
 
     #[test]
     fn action_ids_round_trip_and_are_unique() {

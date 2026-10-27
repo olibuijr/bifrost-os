@@ -22,7 +22,7 @@ use bifrost_app::controls::tips::{self, Datastore, Tip, TipSection, TipView, Tip
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::{Node, Rect, Role};
 use bifrost_app::kit::ui::{
-    Ui, Weight, BLACK, DETAIL_BG, LABEL, SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_PURPLE, SYSTEM_RED, SYSTEM_YELLOW, TINT,
+    Ui, Weight, BLACK, DETAIL_BG, LABEL, SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_PURPLE, SYSTEM_RED, SYSTEM_YELLOW, TINT, accent_now,
     TOAST_FILL, WHITE, CONTENT_BG,
 };
 use bifrost_app::kit::ui::{SPACE_L, SPACE_S, SPACE_XXL, SPACE_XXXL};
@@ -2022,10 +2022,10 @@ impl Freeform {
         let gap = ui.pt(ROTATE_GAP_PT);
         let line = ui.pt(1.0).max(1.0);
         // the stem from the top edge to the rotate handle
-        s.fill_rrect(b.x + b.w / 2.0 - line / 2.0, b.y + top - gap, line, gap, 0.0, TINT);
+        s.fill_rrect(b.x + b.w / 2.0 - line / 2.0, b.y + top - gap, line, gap, 0.0, accent_now());
         for (_, (x, y)) in arrange::handle_points(b, gap) {
             let (x0, y0) = (x - side / 2.0, y + top - side / 2.0);
-            s.fill_rrect(x0, y0, side, side, 0.0, TINT);
+            s.fill_rrect(x0, y0, side, side, 0.0, accent_now());
             s.fill_rrect(x0 + line, y0 + line, side - 2.0 * line, side - 2.0 * line, 0.0, DETAIL_BG.now());
         }
     }
@@ -2034,10 +2034,10 @@ impl Freeform {
     fn outline(&self, s: &mut Surface, ui: &Ui, top: f32, b: Rect) {
         let t = ui.pt(1.0).max(1.0);
         let (x0, y0) = (b.x, b.y + top);
-        s.fill_rrect(x0, y0, b.w, t, 0.0, TINT);
-        s.fill_rrect(x0, y0 + b.h, b.w, t, 0.0, TINT);
-        s.fill_rrect(x0, y0, t, b.h, 0.0, TINT);
-        s.fill_rrect(x0 + b.w, y0, t, b.h, 0.0, TINT);
+        s.fill_rrect(x0, y0, b.w, t, 0.0, accent_now());
+        s.fill_rrect(x0, y0 + b.h, b.w, t, 0.0, accent_now());
+        s.fill_rrect(x0, y0, t, b.h, 0.0, accent_now());
+        s.fill_rrect(x0 + b.w, y0, t, b.h, 0.0, accent_now());
     }
 
     pub fn draw(&mut self, s: &mut Surface, ui: &Ui, _t: f64) {
@@ -2088,7 +2088,7 @@ impl Freeform {
             let d = ui.pt(bifrost_app::kit::ui::SPACE_XXS);
             for &p in self.lasso.points().iter().step_by(2) {
                 let (x, y) = self.view_pt(p);
-                s.fill_rrect(x, y + top as f32, d, d, d / 2.0, TINT);
+                s.fill_rrect(x, y + top as f32, d, d, d / 2.0, accent_now());
             }
         }
         if self.inspector {
@@ -2251,6 +2251,35 @@ mod model_tests {
         let mut app = Freeform::new(ui, 200, 200);
         app.ensure_canvas(ui);
         app
+    }
+
+    /// The accent is process-wide: this test changes it and restores it.
+    static ACCENT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn the_selection_frame_and_handles_follow_the_chosen_accent_not_system_blue() {
+        use bifrost_app::kit::appearance::{accent, set_accent, Accent};
+        let _g = ACCENT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let ui = test_ui();
+        let app = board(&ui);
+        let b = Rect { x: 20.0, y: 20.0, w: 60.0, h: 40.0 };
+        let keep = accent();
+        set_accent(Accent::Green);
+        let green = accent_now();
+        let mut px = vec![0u32; 120 * 120];
+        app.outline(&mut Surface { w: 120, h: 120, stride: 120, px: &mut px, y0: 0 }, &ui, 0.0, b);
+        let mut handles = vec![0u32; 120 * 120];
+        app.draw_handles(&mut Surface { w: 120, h: 120, stride: 120, px: &mut handles, y0: 0 }, &ui, 0.0, b);
+        set_accent(keep);
+        for (name, px) in [("outline", px), ("handles", handles)] {
+            assert!(px.contains(&green), "{name}: drawn in the accent");
+            assert!(!px.contains(&TINT), "{name}: no fixed systemBlue left");
+        }
+    }
+
+    #[test]
+    fn the_pen_palette_keeps_a_literal_blue() {
+        assert!(COLORS.contains(&TINT));
     }
 
     #[test]

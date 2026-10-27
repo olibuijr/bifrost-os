@@ -7,7 +7,7 @@ use crate::loupe::{aperture_cells, cell_of};
 use crate::source::PixelRect;
 use crate::window::{ColorMeter, CTL_APERTURE, LINE_PT};
 use bifrost_app::controls::{Node, Rect, Role};
-use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_CALLOUT_PT, SEPARATOR_C, TINT};
+use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_CALLOUT_PT, SEPARATOR_C, accent_now};
 use bifrost_app::kit::{pack, Surface, TextCache, Ui, Weight};
 use bifrost_app::widgets;
 
@@ -65,7 +65,7 @@ fn paint_loupe(w: &mut ColorMeter, s: &mut Surface, ui: &Ui) {
             // the aperture, when it covers more than the one pixel the marker shows
             if w.aperture > 1 {
                 if let Some(cells) = w.aperture_rect().and_then(|a| aperture_cells(rect, a)) {
-                    frame_cells(s, ui, l, rect, cells, TINT);
+                    frame_cells(s, ui, l, rect, cells, tint());
                 }
             }
             if let Some((cx, cy)) = cell_of(rect, w.pointer.x, w.pointer.y) {
@@ -95,6 +95,11 @@ fn paint_cells(s: &mut Surface, ui: &Ui, l: Rect, rect: PixelRect, px: &[Rgb8]) 
 }
 
 /// Four thin edges around `cells`, a block of cells of the magnifier (cell `(0, 0)` is the top left pixel of `rect`).
+/// The colour of the aperture frame and the aperture slider's filled part: the user's accent.
+fn tint() -> u32 {
+    accent_now()
+}
+
 fn frame_cells(s: &mut Surface, ui: &Ui, l: Rect, rect: PixelRect, cells: PixelRect, color: u32) {
     let cw = l.w / rect.w as f32;
     let ch = l.h / rect.h as f32;
@@ -154,7 +159,7 @@ fn paint_aperture(w: &mut ColorMeter, s: &mut Surface, ui: &Ui) {
     fill(s, ui, track, SLIDER_TRACK_PT / 2.0, LABEL_3.now());
     let filled = t.w * w.aperture_fraction();
     if filled > 0.0 {
-        fill(s, ui, Rect { w: filled.max(SLIDER_TRACK_PT), ..track }, SLIDER_TRACK_PT / 2.0, TINT);
+        fill(s, ui, Rect { w: filled.max(SLIDER_TRACK_PT), ..track }, SLIDER_TRACK_PT / 2.0, tint());
     }
     let knob = Rect { x: t.x + filled - SLIDER_KNOB_PT / 2.0, y: mid - SLIDER_KNOB_PT / 2.0, w: SLIDER_KNOB_PT, h: SLIDER_KNOB_PT };
     fill(s, ui, knob, SLIDER_KNOB_PT / 2.0, SEPARATOR_C.now());
@@ -180,4 +185,24 @@ pub fn controls(w: &ColorMeter, ui: &Ui) -> Vec<Node> {
         enabled: true,
     });
     nodes
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bifrost_app::kit::appearance::{accent, set_accent, Accent};
+
+    /// The accent is process-wide: this test changes it and restores it.
+    static ACCENT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn the_aperture_frame_and_slider_follow_the_chosen_accent_not_system_blue() {
+        let _g = ACCENT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let keep = accent();
+        set_accent(Accent::Green);
+        let (colour, green) = (tint(), accent_now());
+        set_accent(keep);
+        assert_eq!(colour, green);
+        assert_ne!(colour, bifrost_app::kit::ui::TINT);
+    }
 }

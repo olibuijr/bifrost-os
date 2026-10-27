@@ -108,8 +108,13 @@ fn text(s: &mut Surface, u: &Ui, label: &str, size: f32, color: u32, x: f32, y: 
     s.blit(&u.text(label, size, Weight::Regular, color), u.pt(x) as i32, u.pt(y) as i32, 255, 255);
 }
 
+/// A button's fill: the user's accent, red when destructive, the field colour when disabled.
+fn button_fill(enabled: bool, destructive: bool) -> u32 {
+    if !enabled { ui::FIELD_BG.now() } else if destructive { ui::DESTRUCTIVE } else { ui::accent_now() }
+}
+
 fn button(s: &mut Surface, u: &Ui, r: Rect, label: &str, enabled: bool, destructive: bool) {
-    let fill = if !enabled { ui::FIELD_BG.now() } else if destructive { ui::DESTRUCTIVE } else { ui::TINT };
+    let fill = button_fill(enabled, destructive);
     let color = if enabled { ui::WHITE } else { ui::LABEL_2.now() };
     s.fill_rrect(u.pt(r.x), u.pt(r.y), u.pt(r.w), u.pt(r.h), u.pt(8.0), fill);
     text(s, u, label, ui::MAC_BODY_PT, color, r.x + 14.0, r.y + 6.0);
@@ -268,4 +273,27 @@ fn main() {
         window: (1200.0, 780.0),
         col: (32.0, 600.0),
     });
+}
+
+#[cfg(test)]
+mod accent_tests {
+    use super::*;
+    use bifrost_app::kit::appearance::{accent, set_accent, Accent};
+
+    /// The accent is process-wide: this test changes it and restores it.
+    static ACCENT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn the_default_button_is_filled_with_the_chosen_accent_not_system_blue() {
+        let _g = ACCENT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let keep = accent();
+        set_accent(Accent::Green);
+        let green = ui::accent_now();
+        let (plain, destructive, disabled) = (button_fill(true, false), button_fill(true, true), button_fill(false, false));
+        set_accent(keep);
+        assert_eq!(plain, green);
+        assert_ne!(plain, ui::TINT);
+        assert_eq!(destructive, ui::DESTRUCTIVE);
+        assert_eq!(disabled, ui::FIELD_BG.now());
+    }
 }

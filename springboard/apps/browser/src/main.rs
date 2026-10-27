@@ -38,7 +38,7 @@ use std::{fs, io};
 
 use bifrost_app::controls::prefs_layout::m;
 use bifrost_app::controls::{Node, Rect, Role, TextField};
-use bifrost_app::kit::ui::{Weight, CARD_BG, CONTENT_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_SUBHEAD_PT, ROW_PRESSED, SEGMENT_ON, SEPARATOR_C, SPACE_S, SPACE_XXS, TINT};
+use bifrost_app::kit::ui::{Weight, CARD_BG, CONTENT_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_SUBHEAD_PT, ROW_PRESSED, SEGMENT_ON, SEPARATOR_C, SPACE_S, SPACE_XXS, accent_now};
 use bifrost_app::kit::{Damage, Surface, Ui};
 use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};

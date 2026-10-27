@@ -14,10 +14,9 @@ use springboard::gfx::pack;
 use bifrost_app::controls::prefs_layout::m;
 use springboard::shell::cache::TextCache;
 use springboard::shell::ui::{centred, Weight, CARD_BG, CONTENT_BG, DETAIL_BG, FIELD_BG, LABEL, LABEL_2, SEPARATOR_C, TRACK_C, WHITE};
-use bifrost_app::kit::ui::{LINK, AVATAR_FG, BLACK, DESTRUCTIVE, SYSTEM_BLUE, SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_PINK, SYSTEM_PURPLE, SYSTEM_YELLOW, TINT};
+use bifrost_app::kit::ui::{LINK, AVATAR_FG, BLACK, DESTRUCTIVE, SYSTEM_BLUE, SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_PINK, SYSTEM_PURPLE, SYSTEM_YELLOW, accent_now};
 use bifrost_app::kit::ui::{READER_DARK_BG, READER_DARK_DIM, READER_DARK_INK, READER_DARK_SEP, READER_SEPIA_ACCENT, READER_SEPIA_BG, READER_SEPIA_DIM, READER_SEPIA_INK, READER_SEPIA_RAISED, READER_SEPIA_SEP, READER_WHITE_ACCENT, READER_WHITE_DIM, READER_WHITE_INK, READER_WHITE_RAISED, READER_WHITE_SEP};
 
-const BLUE: u32 = TINT;
 const ORANGE: u32 = SYSTEM_ORANGE;
 const RED: u32 = DESTRUCTIVE;
 /// Tabs, swatches, size buttons and the search field: the small tile radius of `prefs_layout::m`.
@@ -40,7 +39,7 @@ pub(super) fn palette(theme: Theme) -> Palette {
     match theme {
         Theme::White => Palette { bg: WHITE, fg: READER_WHITE_INK, dim: READER_WHITE_DIM, sep: READER_WHITE_SEP, raised: READER_WHITE_RAISED, accent: READER_WHITE_ACCENT },
         Theme::Sepia => Palette { bg: READER_SEPIA_BG, fg: READER_SEPIA_INK, dim: READER_SEPIA_DIM, sep: READER_SEPIA_SEP, raised: READER_SEPIA_RAISED, accent: READER_SEPIA_ACCENT },
-        Theme::Dark => Palette { bg: READER_DARK_BG, fg: READER_DARK_INK, dim: READER_DARK_DIM, sep: READER_DARK_SEP, raised: AVATAR_FG, accent: TINT },
+        Theme::Dark => Palette { bg: READER_DARK_BG, fg: READER_DARK_INK, dim: READER_DARK_DIM, sep: READER_DARK_SEP, raised: AVATAR_FG, accent: accent_now() },
     }
 }
 
@@ -94,7 +93,7 @@ fn highlight_colour(style: u8) -> u32 {
 /// `lh` its height.
 /// A choice button of the Settings window: the chosen one is filled in the tint and labelled white.
 fn settings_choice(labels: &mut TextCache, s: &mut Surface, ui: &Ui, (x, y, w, h): (f32, f32, f32, f32), name: &str, on: bool) {
-    s.fill_rrect(x, y, w, h, ui.pt(RADIUS_PT), if on { TINT } else { FIELD_BG.now() });
+    s.fill_rrect(x, y, w, h, ui.pt(RADIUS_PT), if on { accent_now() } else { FIELD_BG.now() });
     put_mid(labels, s, ui, name, MAC_BODY_PT, if on { Weight::Semibold } else { Weight::Regular }, if on { WHITE } else { LABEL.now() }, x + w / 2.0, y + h / 2.0);
 }
 
@@ -405,7 +404,7 @@ impl Books {
                         if a < b {
                             let x0 = left + col_x(ui, &line.text, a - line_start, pt, weight, extra);
                             let x1 = left + col_x(ui, &line.text, b - line_start, pt, weight, extra);
-                            s.fill_rrect(x0, top + line.y, x1 - x0, lh, 0.0, fade(TINT, 90));
+                            s.fill_rrect(x0, top + line.y, x1 - x0, lh, 0.0, fade(accent_now(), 90));
                         }
                     }
                     if let Some((block, off, len)) = r.highlight {
@@ -425,7 +424,7 @@ impl Books {
                             if a < b {
                                 let x0 = left + col_x(ui, &line.text, a, pt, weight, extra);
                                 let x1 = left + col_x(ui, &line.text, b, pt, weight, extra);
-                                s.fill_rrect(x0, top + line.y, x1 - x0, lh, 0.0, fade(TINT, 70));
+                                s.fill_rrect(x0, top + line.y, x1 - x0, lh, 0.0, fade(accent_now(), 70));
                             }
                         }
                     }
@@ -501,7 +500,7 @@ impl Books {
         let (ty, th) = (sy + sh / 2.0 - ui.pt(SPACE_XXS), ui.pt(SPACE_XS));
         s.fill_rrect(sx, ty, sw, th, ui.pt(SPACE_XXS), TRACK_C.now());
         let f = if total > 1 { page as f32 / (total - 1) as f32 } else { 0.0 };
-        s.fill_rrect(sx, ty, sw * f, th, ui.pt(SPACE_XXS), BLUE);
+        s.fill_rrect(sx, ty, sw * f, th, ui.pt(SPACE_XXS), accent_now());
         s.fill_rrect(sx + sw * f - ui.pt(SPACE_S), sy + sh / 2.0 - ui.pt(SPACE_M), ui.pt(SPACE_M), ui.pt(SPACE_XXL), ui.pt(SPACE_XS), DETAIL_BG.now());
     }
 
@@ -745,5 +744,31 @@ impl Books {
         if let Some((dx, dy, dw, dh)) = at(Target::SettingsDone) {
             put_mid(&mut self.labels, s, ui, "Done", MAC_BODY_PT, Weight::Semibold, LINK, dx + dw / 2.0, dy + dh / 2.0);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bifrost_app::kit::appearance::{accent, set_accent, Accent};
+
+    /// The accent is process-wide: tests that change it run one at a time.
+    static ACCENT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn the_dark_reader_accent_follows_the_chosen_accent_not_system_blue() {
+        let _g = ACCENT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let keep = accent();
+        set_accent(Accent::Green);
+        let (pal, green) = (palette(Theme::Dark), accent_now());
+        set_accent(keep);
+        assert_eq!(pal.accent, green);
+        assert_ne!(pal.accent, bifrost_app::kit::ui::TINT);
+    }
+
+    #[test]
+    fn the_white_and_sepia_reader_themes_keep_their_own_accent() {
+        assert_eq!(palette(Theme::White).accent, READER_WHITE_ACCENT);
+        assert_eq!(palette(Theme::Sepia).accent, READER_SEPIA_ACCENT);
     }
 }

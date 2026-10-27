@@ -65,7 +65,7 @@ fn skip_probe(url: &str) -> bool {
 use bifrost_app::controls::prefs_layout::m;
 use bifrost_app::controls::Rect;
 use bifrost_app::glyphs;
-use bifrost_app::kit::ui::{Weight, CAPSULE_SHADOW, CARD_BG, DESTRUCTIVE, LABEL, LABEL_2, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, ROW_PRESSED, SEPARATOR_C, TINT};
+use bifrost_app::kit::ui::{Weight, CAPSULE_SHADOW, CARD_BG, DESTRUCTIVE, LABEL, LABEL_2, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, ROW_PRESSED, SEPARATOR_C, TINT, accent_now};
 use bifrost_app::kit::{Surface, Ui};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::webview::WebViewId;
@@ -580,7 +580,7 @@ impl Downloads {
                 let (x, y, w) = (ui.pt(tx), ui.pt(row.y + 43.0), room);
                 let h = ui.pt(3.0).max(1.0);
                 s.fill_rrect(x, y, w, h, h / 2.0, ROW_PRESSED.now());
-                s.fill_rrect(x, y, (w * it.fraction()).max(h), h, h / 2.0, TINT);
+                s.fill_rrect(x, y, (w * it.fraction()).max(h), h, h / 2.0, accent_now());
             }
             let glyph = if it.state == State::Active { "xmark" } else { "magnifyingglass" };
             glyphs::glyph(s, ui, glyph, self.button_rect(wpt, i), TINT);

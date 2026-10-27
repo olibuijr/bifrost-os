@@ -27,7 +27,7 @@ use springboard::files::{
 use springboard::shell::clock::Wall;
 
 use springboard::shell::ui::{
-    Ui, Weight, CARD_BG, DETAIL_BG, LABEL, LABEL_2, LINK, SELECTION, SEPARATOR_C, TINT, WHITE,
+    Ui, Weight, CARD_BG, DETAIL_BG, LABEL, LABEL_2, LINK, SELECTION, SEPARATOR_C, WHITE, accent_now,
     CONTENT_BG,
 };
 use std::{

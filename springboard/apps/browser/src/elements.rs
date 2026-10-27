@@ -5,7 +5,7 @@
 use std::collections::HashSet;
 
 use bifrost_app::kit::ui::system::{SYSTEM_BROWN, SYSTEM_PURPLE};
-use bifrost_app::kit::ui::{LABEL, LABEL_2, TINT};
+use bifrost_app::kit::ui::{LABEL, LABEL_2, TINT, accent_now};
 use bifrost_core::json::{self, Json};
 
 use crate::control::{Cell, Row};
@@ -163,7 +163,7 @@ fn walk(n: &Node, depth: usize, key: String, toggled: &HashSet<String>, selected
     out.push(Row {
         cells: vec![
             Cell { x, w: TRI_PT, text: format!("{MARK}{mark}"), color: LABEL_2.now() },
-            Cell { x: x + TRI_PT, w: 4000.0, text: encode(runs), color: if n.matched || is_sel { TINT } else { LABEL.now() } },
+            Cell { x: x + TRI_PT, w: 4000.0, text: encode(runs), color: if n.matched || is_sel { accent_now() } else { LABEL.now() } },
         ],
         copy: open_tag(n),
         toggle: if has_kids { Some(key.clone()) } else { None },
@@ -225,6 +225,23 @@ mod tests {
 
     fn leaf(tag: &str, text: &str) -> Node {
         Node { tag: tag.into(), text: text.into(), ..Node::default() }
+    }
+
+    #[test]
+    fn a_selected_or_matched_row_is_drawn_in_the_chosen_accent_not_system_blue() {
+        use bifrost_app::kit::appearance::Accent;
+        let tree = Tree { root: Some(Node { tag: "div".into(), path: "0".into(), ..Node::default() }), ..Tree::default() };
+        let (accent, selected, plain) = crate::tokens::with_accent(Accent::Green, || {
+            (bifrost_app::kit::ui::accent_now(), rows(&tree, &HashSet::new(), Some("0")), rows(&tree, &HashSet::new(), None))
+        });
+        assert_eq!(selected[0].cells[1].color, accent);
+        assert_ne!(selected[0].cells[1].color, TINT);
+        assert_ne!(plain[0].cells[1].color, accent, "an unselected row keeps the label colour");
+    }
+
+    #[test]
+    fn attribute_values_keep_the_literal_syntax_colour() {
+        assert_eq!(run_color('v'), TINT);
     }
 
     #[test]

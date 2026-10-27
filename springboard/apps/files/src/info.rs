@@ -226,7 +226,7 @@ impl Files {
                 s.fill_rrect(ui.pt(x + 20.), ui.pt(row_y + 7.), ui.pt(SPACE_L), ui.pt(SPACE_L), ui.pt(SPACE_S), tag_colour(tag));
                 text(s, ui, tag.label(), 13., LABEL.now(), x + 44., row_y + 6., 200.);
                 if !picked.is_empty() && picked.iter().all(|p| self.tag_index.has(p, tag)) {
-                    text(s, ui, "On", 13., TINT, x + w - 120., row_y + 6., 60.);
+                    text(s, ui, "On", 13., accent_now(), x + w - 120., row_y + 6., 60.);
                 }
             }
             text(s, ui, "Click a colour to turn it on or off for the selection. Click elsewhere to close.", 11., LABEL_2.now(), x + 20., TAG_ROWS_TOP + Tag::ALL.len() as f32 * TAG_ROW + 14., w - x - 56.);

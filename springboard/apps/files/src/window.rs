@@ -521,7 +521,7 @@ impl Files {
                 widgets::search_button(s, ui, (r.x, r.y), false);
             }
         }
-        if let Some(node)=self.controls.focused().filter(|n|n.role==Role::Button){let r=node.bounds;rect(s,ui,r.x,r.y+r.h-2.,r.w,SPACE_XXS,TINT);}
+        if let Some(node)=self.controls.focused().filter(|n|n.role==Role::Button){let r=node.bounds;rect(s,ui,r.x,r.y+r.h-2.,r.w,SPACE_XXS,accent_now());}
         if self.is_list() {
             self.paint_list_header(ui, s);
         }
