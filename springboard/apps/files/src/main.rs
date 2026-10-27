@@ -316,7 +316,9 @@ impl Files {
     pub(crate) fn file_menu_items(&self) -> Vec<bifrost_app::AppMenuItem> {
         // File > Preview (the same panel as the context menu's Preview): the shell merges an app menu titled File
         // into its own File menu, and the item needs a selection
-        let quick_look = bifrost_app::AppMenuItem::new(MENU_QUICK_LOOK, "Preview").enabled(!self.selected_paths().is_empty());
+        // File > Open (Cmd+O) and Preview (Space), with their key equivalents as the reference's File menu shows them
+        let open = bifrost_app::AppMenuItem::new(MENU_OPEN, "Open").key("cmd+o").enabled(self.selection.len() == 1 && self.naming.is_none());
+        let quick_look = bifrost_app::AppMenuItem::new(MENU_QUICK_LOOK, "Preview").key("space").enabled(!self.selected_paths().is_empty());
         // File > New Folder (Shift+Cmd+N): the toolbar has no New Folder button; the folder menus have it too
         let new_folder = bifrost_app::AppMenuItem::new(MENU_NEW_FOLDER, "New Folder").key("cmd+shift+n").enabled(!self.in_recents() && !self.in_bin());
         // the item actions of the context menu, with the same keys (the reference file manager's File menu lists them too); not while a name
@@ -332,6 +334,7 @@ impl Files {
         vec![
             new_folder,
             bifrost_app::AppMenuItem::separator(),
+            open,
             quick_look,
             bifrost_app::AppMenuItem::new(MENU_INFO, "Get Info").key("cmd+i").enabled(single && !typing),
             bifrost_app::AppMenuItem::new(MENU_RENAME, "Rename").enabled(single && !typing && !in_bin),
@@ -351,6 +354,7 @@ impl App for Files {
     }
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
         match id {
+            MENU_OPEN => if let Some(i) = self.focus() { self.open(i) },
             MENU_QUICK_LOOK => self.quick_look(),
             MENU_NEW_FOLDER if !self.in_recents() && !self.in_bin() => self.new_folder(),
             MENU_INFO | MENU_RENAME | MENU_DUPLICATE | MENU_ALIAS | MENU_TRASH | MENU_PUT_BACK => {
@@ -1078,6 +1082,8 @@ mod tests {
         let mut files = fixture(fs::list(&dir).unwrap());
         files.select_only(0);
         let row = |files: &Files, title: &str| files.file_menu_items().into_iter().find(|i| i.title == title).map(|i| (i.key, i.enabled));
+        assert_eq!(row(&files, "Open"), Some(("cmd+o".into(), true)));
+        assert_eq!(row(&files, "Preview"), Some(("space".into(), true)));
         assert_eq!(row(&files, "Move to Trash"), Some(("cmd+backspace".into(), true)));
         assert_eq!(row(&files, "Get Info"), Some(("cmd+i".into(), true)));
         assert_eq!(row(&files, "Duplicate"), Some(("cmd+d".into(), true)));
