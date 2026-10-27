@@ -52,7 +52,7 @@ class KeyCombos(unittest.TestCase):
         with patch.object(midget, 'run', return_value=subprocess.CompletedProcess([], 0, '', '')) as run:
             self.assertEqual(midget.cmd_key(['cmd+o']), 0)
             script = run.call_args.args[0][-1]
-            self.assertIn("('key', [125, 24], 0.05)", script)
+            self.assertIn("('key', [125, 24], 0.05)", script.replace('\'"\'"\'', "'"))
             self.assertIn('for c in reversed(o[1])', script)
 
 

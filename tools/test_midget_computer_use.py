@@ -327,7 +327,7 @@ class Holds(unittest.TestCase):
         import subprocess
         with patch.object(m, "run", return_value=subprocess.CompletedProcess([], 0, "", "")) as run:
             self.assertEqual(m.run_plan([("key", [28], 0.05)]), 0)
-            self.assertIn("PLAN=[('key', [28], 0.05)]", run.call_args.args[0][-1])
+            self.assertIn("PLAN=[('key', [28], 0.05)]", run.call_args.args[0][-1].replace('\'"\'"\'', "'"))
 
 
 class Session(unittest.TestCase):
