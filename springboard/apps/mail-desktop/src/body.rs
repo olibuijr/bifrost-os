@@ -358,6 +358,77 @@ mod tests {
         assert!(attachments("Content-Type: text/plain\r\n\r\nhello\r\n").is_empty());
     }
 
+    /// A large `data:` PNG tag (not a real image), as senders put at the top of a welcome mail.
+    fn big_png_tag() -> String {
+        format!("<img src=\"data:image/png;base64,iVBORw0KGgo{}\" width=\"600\" alt=\"Logo\">", "QUFB".repeat(20_000))
+    }
+
+    /// `text` as a sender writes quoted-printable: "=3D" for each "=", lines of at most 75 characters joined by "=" CRLF.
+    fn qp_encode(text: &str) -> String {
+        let mut out = String::new();
+        let mut line = 0;
+        for c in text.chars() {
+            let piece = match c {
+                '=' => "=3D".to_string(),
+                '\u{e1}' => "=C3=A1".to_string(),
+                c => c.to_string(),
+            };
+            if line + piece.len() > 75 {
+                out.push_str("=\r\n");
+                line = 0;
+            }
+            out.push_str(&piece);
+            line += piece.len();
+        }
+        out
+    }
+
+    #[test]
+    fn an_html_body_that_starts_with_a_large_inline_image_shows_its_text() {
+        let raw = format!("Content-Type: text/html; charset=utf-8\r\n\r\n{}<p>Welcome aboard</p>\r\n", big_png_tag());
+        let text = readable(&raw);
+        assert_eq!(text, "Welcome aboard");
+        assert!(!text.contains("<img") && !text.contains("base64") && !text.contains("iVBOR"));
+        // the same body as the only alternative of a message
+        let alt = format!("Content-Type: multipart/alternative; boundary=B\r\n\r\n--B\r\nContent-Type: text/html\r\n\r\n{}<p>Welcome aboard</p>\r\n--B--\r\n", big_png_tag());
+        assert_eq!(readable(&alt), "Welcome aboard");
+    }
+
+    #[test]
+    fn a_quoted_printable_image_tag_split_by_soft_breaks_is_one_tag() {
+        let encoded = qp_encode(&format!("{}<p>Hello \u{e1} there</p>", big_png_tag()));
+        assert!(encoded.contains("=\r\n"));
+        let raw = format!("Content-Type: text/html; charset=utf-8\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n{encoded}\r\n");
+        assert_eq!(readable(&raw), "Hello \u{e1} there");
+        assert_eq!(remote_images(&raw), 0);
+        // a break inside the "src" of a small tag too
+        let small = "Content-Type: text/html\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n<img sr=\r\nc=3D\"data:image/png;base64,iVBO=\r\nRw0=\">=\r\n<p>x</p>\r\n";
+        assert_eq!(readable(small), "x");
+    }
+
+    #[test]
+    fn a_cid_image_of_a_related_message_is_not_printed() {
+        let image = "iVBORw0KGgo".repeat(2000);
+        let raw = format!(
+            "Content-Type: multipart/related; boundary=R\r\n\r\n--R\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<img src=\"cid:logo@mail\"><p>Hello</p>\r\n--R\r\nContent-Type: image/png\r\nContent-ID: <logo@mail>\r\nContent-Transfer-Encoding: base64\r\n\r\n{image}\r\n--R--\r\n"
+        );
+        assert_eq!(readable(&raw), "Hello");
+        assert_eq!(remote_images(&raw), 0);
+        // the image resolves from its MIME part once the sanitizer is given the part as a data URI
+        let html = html_part(&raw, 0, &mut { MAX_PARTS }).unwrap();
+        let cids = vec![("logo@mail".to_string(), format!("data:image/png;base64,{image}"))];
+        let shown = html::sanitize_with_parts(&html, false, &cids);
+        assert!(shown.html.starts_with("<img src=\"data:image/png;base64,iVBORw0KGgo"));
+        assert!(shown.html.ends_with("<p>Hello</p>"));
+    }
+
+    #[test]
+    fn a_remote_image_beside_a_large_inline_one_stays_blocked() {
+        let raw = format!("Content-Type: text/html\r\n\r\n{}<img src=\"https://t.example/px.gif\"><p>Hi</p>", big_png_tag());
+        assert_eq!(remote_images(&raw), 1);
+        assert_eq!(readable(&raw), "Hi");
+    }
+
     #[test]
     fn nested_multipart_is_searched() {
         let raw = concat!(
