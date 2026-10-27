@@ -169,10 +169,9 @@ package_bifrost_files() {
     find "$pkgdir/usr/share/springboard/system-assets" -type f -exec chmod 644 {} +
   fi
   # public key that signs this repository (packaging/arch/keys/README.md); the scriptlet imports it into pacman's keyring.
-  # Absent until the key is generated: the package then ships none and the repository stays unsigned.
-  if [[ -f $here/keys/bifrost-repo.gpg ]]; then
-    install -Dm644 "$here/keys/bifrost-repo.gpg" "$pkgdir/usr/share/bifrost/keys/bifrost-repo.gpg"
-  fi
+  # The repository is signed and installed systems require it, so a package without the key would be a dead end: fail.
+  [[ -s $here/keys/bifrost-repo.gpg ]] || { echo "packaging/arch/keys/bifrost-repo.gpg is missing (packaging/arch/keys/README.md)" >&2; return 1; }
+  install -Dm644 "$here/keys/bifrost-repo.gpg" "$pkgdir/usr/share/bifrost/keys/bifrost-repo.gpg"
   # ML-DSA-65 publisher public keys (`springboard --publisher-keygen`): the shell pins every `*.pub` here and then refuses
   # an app package without a detached signature from one of them (packaging/arch/publisher-keys/README.md). Absent
   # until a key is generated: the package then ships none and store packages pass on their checksum alone.
