@@ -60,7 +60,7 @@ impl Files {
             s.fill_rrect(ui.pt(x + (self.grid_w() - lw) / 2.), ui.pt(label_y - 1.), ui.pt(lw), ui.pt(self.vo.text + 6.), ui.pt(SPACE_XS), SELECTION.now());
         }
         self.paint_entry_icon(ui, s, e, icon_x, y, self.grid_icon(), true);
-        tag_dots(s, ui, &self.tag_index, &e.path, x + 4., y + 2.);
+        tag_dots(s, ui, &self.tag_index, &e.path, icon_x + 4., y + 4.);
         self.paint_badges(ui, s, &e.path, icon_x + self.grid_icon() - 2., y + self.grid_icon() - 12.);
         if let Some(field) = name_field {
             bifrost_app::widgets::text_field(s, ui, field, Rect { x: x + 2., y: label_y - 2., w: self.grid_w() - 4., h: 22. }, "", true);
@@ -80,6 +80,7 @@ impl Files {
 mod tests {
     use super::*;
     use crate::tests::fixture;
+    use springboard::files::tags::Tag;
 
     #[test]
     fn the_default_icon_is_as_wide_as_the_reference_next_to_a_sidebar_row() {
@@ -91,5 +92,30 @@ mod tests {
         assert_eq!(files.grid_h(), files.grid_icon() + GRID_PAD_H);
         // the name's plate fits in the cell under the icon
         assert!(GRID_LABEL_GAP + files.vo.text + 6. <= GRID_PAD_H);
+    }
+
+    #[test]
+    fn a_tag_dot_sits_on_the_corner_of_the_icon_tile() {
+        let font = springboard::font::Font::parse(Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice())).unwrap();
+        let ui = Ui::new(font, 1.0);
+        let mut files = fixture(vec![crate::tests::folder("BifrostTest")]);
+        files.grid = true;
+        let path = files.rows[0].path.clone();
+        files.tag_index.toggle(&path, Tag::Purple);
+        let (w, h) = (1200usize, 800usize);
+        let mut px = vec![0u32; w * h];
+        {
+            let mut s = Surface { w, h, stride: w, px: &mut px, y0: 0 };
+            files.paint_icon_cell(&ui, &mut s, 0, 0, 4, h as f32);
+        }
+        let colour = crate::info::tag_colour(Tag::Purple);
+        let hits: Vec<(usize, usize)> = (0..w * h).filter(|&i| px[i] == colour).map(|i| (i % w, i / w)).collect();
+        assert!(!hits.is_empty(), "the purple dot is painted");
+        // the icon tile in pixels: its left edge and top edge, from the cell's origin
+        let icon_x = files.side() + 16. + (files.grid_w() - files.grid_icon()) / 2.;
+        let icon_y = files.rows_top() + 16.;
+        let (min_x, min_y) = (hits.iter().map(|p| p.0).min().unwrap() as f32, hits.iter().map(|p| p.1).min().unwrap() as f32);
+        assert!(min_x >= icon_x, "the dot starts inside the tile, not left of it: {min_x} < {icon_x}");
+        assert!(min_y >= icon_y, "the dot starts inside the tile, not above it: {min_y} < {icon_y}");
     }
 }
