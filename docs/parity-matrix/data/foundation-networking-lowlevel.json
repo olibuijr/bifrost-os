@@ -26,7 +26,7 @@
       "apple": "HTTPCookieStorage, URLCredentialStorage, URLAuthenticationChallenge",
       "bifrost": "springboard/sdk/src/http_auth.rs; springboard/sdk/src/http_digest.rs (parse_digest_challenge, authorization); springboard/sdk/src/http_cookies.rs; springboard/sdk/src/url_background.rs (ConfiguredSession wires jar, credential storage and delegate)",
       "status": "partial",
-      "note": "verified on Midget 0.7.25 by 11 tests (earlier part). Host tests only: cookie jar (accept policy Always/Never) and credential storage are used by ConfiguredSession; a 401 Basic challenge goes to the delegate and is retried once. The Digest (MD5, qop auth) challenge is parsed and answered headless in springboard/sdk/tests/parity_sdk-complete-41.rs, including the RFC 2617 worked example, but ConfiguredSession does not send it yet. Gap: client-certificate and server-trust challenges and AcceptPolicy.onlyFromMainDocumentDomain are not done; verify on Midget for parity."
+      "note": "verified on Midget 0.7.25 by 11 tests (earlier part). Host tests only: cookie jar (accept policy Always/Never) and credential storage are used by ConfiguredSession; a 401 Basic challenge goes to the delegate and is retried once. The Digest (MD5, qop auth) challenge is parsed and answered headless in springboard/sdk/tests/parity_sdk-complete-41.rs, including the RFC 2617 worked example, and ConfiguredSession now answers a 401 Digest challenge once (nc=00000001, fresh client nonce) from the stored or delegate credential; tests in springboard/sdk/src/url_background.rs: a_digest_challenge_is_answered_with_the_matching_response_digest, a_digest_challenge_without_a_credential_returns_the_401_after_one_request, a_second_digest_401_stops_after_two_requests, an_unparsable_or_unsupported_digest_challenge_is_not_retried. Gap: client-certificate and server-trust challenges and AcceptPolicy.onlyFromMainDocumentDomain are not done; verify on Midget for parity."
     },
     {
       "feature": "URL Loading: WebSocket and streaming tasks",
@@ -102,7 +102,7 @@
   "gaps": [
     "Bonjour mDNS responder (advertise on the wire)",
     "wss:// WebSocket and StartSecureConnection on stream tasks",
-    "Client-certificate and server-trust challenges. Digest is parsed and answered headless (sdk http_digest.rs), but ConfiguredSession does not send it yet.",
+    "Client-certificate and server-trust challenges. Digest answers cover MD5 with qop auth or none only (no MD5-sess, SHA-256 or auth-int) and keep no nonce count beyond the single retry.",
     "OS-level background transfers",
     "General XPC-style service connections",
     "Operation dependencies and quality-of-service classes for OperationQueue (sdk operation_queue.rs has the queue and its tests, operation_queue::tests, but no dependency graph or QoS).",
