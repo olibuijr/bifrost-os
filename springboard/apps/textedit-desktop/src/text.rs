@@ -1139,7 +1139,9 @@ impl Text {
             let new: Vec<Cell> = replacement.chars().map(|ch| Cell { ch, style }).collect();
             self.cells.splice(start..start + needle.len(), new);
         }
-        self.select(0, 0);
+        // the caret goes after the last replacement, so typing after Done continues there, not at the top
+        let after = starts[starts.len() - 1] + replacement.chars().count() * starts.len() - needle.len() * (starts.len() - 1);
+        self.select(after, after);
         starts.len()
     }
 
@@ -1547,6 +1549,7 @@ mod tests {
         let mut t = plain("a-a-a");
         assert_eq!(t.replace_all("a", "bb", true), 3);
         assert_eq!(t.text(), "bb-bb-bb");
+        assert_eq!(t.selection(), 8..8, "the caret is after the last replacement");
         assert_eq!(t.undo_name(), Some("Replacing"));
         assert!(t.undo());
         assert_eq!(t.text(), "a-a-a");

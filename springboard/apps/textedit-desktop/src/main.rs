@@ -3962,6 +3962,22 @@ mod tests {
         assert_eq!(caret_of(&app), 0..5);
     }
 
+    /// After Replace All and Done, typing continues after the last replacement, not at the start of the document.
+    #[test]
+    fn typing_after_replace_all_and_done_continues_after_the_last_replacement() {
+        let ctx = window(1200, 780);
+        let mut app = app_with_text("one cat, two cats", 0..0);
+        assert!(app.perform(&ctx, Action::Find));
+        app.find = "cat".into();
+        app.replace = "dog".into();
+        assert!(app.perform(&ctx, Action::ReplaceAll));
+        assert!(app.perform(&ctx, Action::FindDone));
+        assert_eq!(text_of(&app), "one dog, two dogs");
+        assert_eq!(caret_of(&app), 17..17);
+        app.event(&ctx, Input::Key(KeyInput::Text("!".into())));
+        assert_eq!(text_of(&app), "one dog, two dogs!");
+    }
+
     /// QA W2-12: Cmd+A in the find field, live matches while typing, the previous query selected on reopening, and no
     /// "not found" left in the status row after the bar closes.
     #[test]
