@@ -23,10 +23,9 @@ The reviewing lead owns the unclassified group above: app review fixes, physical
 
 ### HMAC triage and HTTPS-only updates
 
-- `springboard/tools/update-hmac.key` is tracked in git. The shell no longer embeds it.
+- `springboard/tools/update-hmac.key` is removed. The shell no longer embeds it and no publisher writes `latest.json.sig`. The old key was public in git history, so it must never be reused.
 - Previously the shell accepted plain-HTTP manifests signed with an HMAC key that every client held, which gave no authenticity against a client that had the key. The LAN fallback `http://192.168.1.12:8190` is removed.
 - Now: `shell/update.rs` accepts only `https://` manifest and binary URLs (manifest parse, `fetch_manifest`, `get`). `shell/diag.rs` diagnostics upload is HTTPS only, through `store::net::post_text` (new `deildu::http::Client::post_text`).
-- Still open: `tools/bifrost.py` (around line 425) writes `latest.json.sig` with the same key, and the tracked key file remains. Remove both in a publisher change after the cut-over; no client reads them now.
 - Behavior change: a diagnostics upload to a non-HTTPS update URL now fails with an explicit error.
 
 ### Path fixes
