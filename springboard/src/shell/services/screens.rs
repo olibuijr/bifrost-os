@@ -9,6 +9,8 @@ use super::{Event, Shell, SystemService};
 use bifrost_core::json::Json;
 use bifrost_ui::screen::{Screen, Screens};
 use bifrost_ui::Rect;
+use crate::shell::desk::Metrics;
+use crate::shell::displays::Arrangement;
 
 /// The service name apps call it by, and the event name it pushes.
 pub const SERVICE: &str = "screens";
@@ -44,11 +46,31 @@ impl SystemService for Displays {
 /// home by the status bar.
 fn current(shell: &Shell) -> Screens {
     if shell.desk_active() {
+        if let Some(arrangement) = shell.multi_displays() {
+            return arrangement_screens(arrangement, &shell.desk_metrics(), shell.layout.s);
+        }
         let a = crate::shell::desk::Desk::area(&shell.desk_metrics());
         snapshot_visible(shell.w, shell.h, shell.layout.s, Rect { x: a.x as f32, y: a.y as f32, w: a.w as f32, h: a.h as f32 })
     } else {
         snapshot(shell.w, shell.h, shell.layout.s, shell.layout.status_h, 0)
     }
+}
+
+/// Every display of a multi-display desktop, in global points (pixels divided by the interface scale, which one
+/// shared point space needs). The main display is the one holding the menu bar and the Dock, so only its visible frame
+/// is inset; the others report their whole frame.
+pub fn arrangement_screens(arrangement: &Arrangement, m: &Metrics, scale: f32) -> Screens {
+    let s = if scale > 0.0 { scale } else { 1.0 };
+    let pts = |r: crate::shell::desk::Rect| Rect { x: r.x as f32 / s, y: r.y as f32 / s, w: r.w as f32 / s, h: r.h as f32 / s };
+    let screens = arrangement
+        .outputs()
+        .iter()
+        .enumerate()
+        .map(|(i, o)| Screen::new(&o.name, pts(o.frame), s).with_visible_frame(pts(arrangement.visible(i, m))))
+        .collect();
+    let mut all = Screens::new(screens);
+    all.set_main(arrangement.main_index());
+    all
 }
 
 /// The one display, from the framebuffer size in pixels, the pixels-per-point scale and the bars in pixels.
@@ -130,6 +152,30 @@ mod tests {
         assert_eq!(screen.visible_frame.x, 0.0);
         assert_eq!(screen.visible_frame.w, screen.frame.w);
         assert_eq!(screen.visible_frame.y + screen.visible_frame.h, screen.frame.h);
+    }
+
+    #[test]
+    fn two_displays_are_listed_each_with_its_own_visible_frame_and_one_main() {
+        use crate::shell::desk::Rect as PxRect;
+        use crate::shell::displays::{Arrangement, Output};
+        let m = Metrics { w: 2560, h: 1440, title: 38, menubar: 35, min_w: 400, min_h: 275, edge: 8, light: 18, light_gap: 10, light_x: 15, dock_left: 0, dock_right: 0, dock_bottom: 120, pt: 1.25 };
+        let a = Arrangement::new(
+            vec![Output::new("Left", PxRect { x: -1920, y: 0, w: 1920, h: 1080 }), Output::new("Main", PxRect { x: 0, y: 0, w: 2560, h: 1440 })],
+            1,
+        );
+        let s = arrangement_screens(&a, &m, 1.25);
+        assert_eq!(s.all().len(), 2);
+        assert_eq!(s.main().map(|x| x.name.as_str()), Some("Main"));
+        let (left, main) = (&s.all()[0], &s.all()[1]);
+        assert_eq!(left.frame, Rect { x: -1536.0, y: 0.0, w: 1536.0, h: 864.0 });
+        assert_eq!(left.visible_frame, left.frame, "no menu bar or Dock on the other display");
+        assert_eq!(main.frame, Rect { x: 0.0, y: 0.0, w: 2048.0, h: 1152.0 });
+        assert_eq!(main.visible_frame, Rect { x: 0.0, y: 28.0, w: 2048.0, h: 1152.0 - 28.0 - 96.0 });
+        let j = encode(&s);
+        let rows = j.as_array().unwrap();
+        assert_eq!(field(&rows[0], "main"), Json::Bool(false));
+        assert_eq!(field(&rows[1], "main"), Json::Bool(true));
+        assert_eq!(s.containing(-100.0, 100.0).map(|x| x.name.as_str()), Some("Left"));
     }
 
     fn field(v: &Json, k: &str) -> Json {

@@ -46,10 +46,14 @@ impl Shell {
    Change::MagnifiedSize(delta)=>{let p=&mut self.desk.as_mut().unwrap().dock_preferences;p.magnified=(p.magnified+delta).clamp(48.,128.);},
   }
   // Filled windows follow the newly available frame; ordinary windows keep the person's chosen size.
-  let m=self.desk_metrics();let area=super::desk::Desk::area(&m);let mut resized=Vec::new();
-  if let Some(d)=self.desk.as_mut(){for(i,w)in d.wins.iter_mut().enumerate(){if w.maximized&&!w.full&&w.r!=area{w.r=area;resized.push(i);}}}
-  for i in resized{self.desk_layout(i);}
+  self.reflow_filled_windows();
   self.dock_preferences().save(&self.data_dir);self.dirty=true;vec![]
+ }
+ /// Refits every filled (zoomed) window to the visible frame of its display; other windows keep their size.
+ pub(super) fn reflow_filled_windows(&mut self){
+  let m=self.desk_metrics();let mut resized=Vec::new();
+  if let Some(d)=self.desk.as_mut(){for i in 0..d.wins.len(){let w=d.wins[i];let area=d.area_for(&m,w.r);if w.maximized&&!w.full&&w.r!=area{d.wins[i].r=area;resized.push(i);}}}
+  for i in resized{self.desk_layout(i);}
  }
  pub(super) fn dock_app_key(&self,index:usize)->Option<String>{if let Some(a)=apps().get(index){return Some(a.icon.into());} #[cfg(feature="desktop-wayland")]if index>apps().len(){return self.desk.as_ref()?.linux_apps.get(index-apps().len()-1).map(|a|format!("linux:{}",a.app_id));}None}
 #[cfg(feature = "desktop-wayland")]

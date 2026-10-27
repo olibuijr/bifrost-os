@@ -66,7 +66,7 @@ flag, and `changed` is pushed when the geometry changes. SDK client: `bifrost_ap
 this service use the same work area, independently of magnification and label padding.
 Since 0.10.24, Settings changes apply after window-local input handling returns,
 so filled-window reflow uses the full output dimensions.
-Gaps (refresh rate, several displays) are in `docs/parity/wire-svc-screens.md`.
+Several displays are modelled (the Dock and menu bar on the main display, the others whole; backend reporting pending). Gaps (refresh rate, backend multi-output) are in `docs/parity/wire-svc-screens.md`.
 
 ## Thumbnail generator (`QLThumbnailGenerator`, `bifrost_app::thumbnails`)
 
