@@ -71,7 +71,7 @@ Apple HIG and the Bifrost checklist are the design authority; cite the section (
 - Verify before claiming it works: run the focused tests, and for visual work compare a preview or a Midget
   screenshot against the design rules below. Report the commands and their results.
 - Commit each finished change with a conventional message. If you are on `main`, create a feature branch first.
-- Do not push, merge or deploy unless asked.
+- Commit every finished change and push `main` and `integration` to origin after each merge batch (owner, 2026-10-27), after a secrets, name and licence scan; agents commit on their own branch and never push.
 - Agent teams (owner, 2026-10-13): Haiku 5.5 agents only code and commit; they never build, test, run
   tools/check-names.py or touch Midget. Exception (owner, 2026-10-25): agents may run `tools/agent-check.sh`
   (cargo check only, memory-limited, one at a time) before committing. The lead reviews and merges, asks the owner before every build, runs one build
