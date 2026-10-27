@@ -862,10 +862,11 @@ fn zooming_keeps_the_same_hour_at_the_top() {
     let mut c = new(&ui, temp.file());
     c.set_size(1200, 780);
     c.activate(&ui, Target::View(View::Day), 0.0);
-    // the day opens at 8 AM
-    assert!((c.scroll.offset() - ui.pt(8.0 * prefs::HOUR_H_DEFAULT)).abs() < 1.0);
+    // the day opens at 8 AM, its label a small space clear of the all-day band
+    let top_hour = 8.0 - SPACE_S / prefs::HOUR_H_DEFAULT;
+    assert!((c.scroll.offset() - ui.pt(top_hour * prefs::HOUR_H_DEFAULT)).abs() < 1.0);
     c.zoom_hours(&ui, 1);
-    assert!((c.scroll.offset() - ui.pt(8.0 * (prefs::HOUR_H_DEFAULT + prefs::HOUR_H_STEP))).abs() < 1.0);
+    assert!((c.scroll.offset() - ui.pt(top_hour * (prefs::HOUR_H_DEFAULT + prefs::HOUR_H_STEP))).abs() < 1.0);
     assert!(c.time_scroll_max(&ui) > 0.0);
 }
 
@@ -2689,7 +2690,7 @@ fn a_secondary_click_on_an_event_selects_it_and_offers_open_and_delete() {
     let temp = Temp::new();
     let ui = crate::test_ui();
     store::save(&temp.file(), &[event(1, "Standup")]).unwrap();
-    let mut c = week_calendar(&ui, temp.file());
+    let mut c = new(&ui, temp.file()); // the month grid, where event_point finds the event
     c.layout_columns(&ui);
     let (x, y) = event_point(&c, &ui, 1);
     assert!(c.context_items(&ui, x + c.x0, ui.pt(2.0)).is_empty(), "no menu off the events");

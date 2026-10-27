@@ -313,7 +313,7 @@ impl Calendar {
                 // the event a click selected is ringed in the tint: Delete and Backspace remove it
                 if self.picked == Some(id) {
                     let ring = ui.pt(SPACE_XXS);
-                    g.fill_rrect(x - ring, y - ring, rw + 2.0 * ring, rh + 2.0 * ring, ui.pt(SPACE_XS) + ring, colors::LINK.now());
+                    g.fill_rrect(x - ring, y - ring, rw + 2.0 * ring, rh + 2.0 * ring, ui.pt(SPACE_XS) + ring, bifrost_app::kit::ui::accent_now());
                 }
                 g.fill_rrect(x, y, rw, rh, ui.pt(SPACE_XS), FIELD_BG.now());
                 g.fill_rrect(x, y, ui.pt(SPACE_XS), rh, ui.pt(SPACE_XS) / 2.0, self.event_colour(id));
