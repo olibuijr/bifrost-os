@@ -112,22 +112,35 @@ Address and login notes (2026-10-12):
 - After every reboot Midget shows the lock screen. `midget.py unlock` types the Tester password (`out/lab/tester.password`, or `~/.config/bifrost/midget-login`); `bifrost pc midget key enter` alone only unlocks an older shell without the login window.
 - `bios find WORD` is a case-insensitive substring match over `/sys/class/firmware-attributes/thinklmi/attributes` (names such as "Intel(R) Manageability Control", "After Power Loss", "Wake on LAN"); `bios get NAME` and `bios set NAME VALUE` take the exact attribute name (quote it in the shell) and print `possible_values`.
 
-### Computer use on Midget (2026-10-19)
+### Computer use on Midget (2026-10-19, session, guard, holds and relative mouse 2026-10-27)
 
-Look at a screenshot, then click, type and drag at the pixel coordinates seen in it, like a person with a mouse and keyboard.
-Every command opens a temporary `/dev/uinput` device on Midget over the existing ssh, waits 0.5 s for the shell to pick it up
-(`MIDGET_UINPUT_SETTLE` changes that), acts and destroys it. Python 3 on both sides, nothing to install.
+Look at a screenshot, then press things by name or click, type and drag at the pixel coordinates seen in it, like a person
+with a mouse and keyboard. Python 3 on both sides, nothing to install.
+
+**The input session.** The first input command starts one helper on Midget (`tools/midget.py session serve` on Titan holds
+it behind one ssh connection and a Unix socket in `$XDG_RUNTIME_DIR`). The helper makes a `/dev/uinput` keyboard, absolute
+pointer and relative mouse the first time each is needed, waits 0.5 s once for the window server to pick it up
+(`MIDGET_UINPUT_SETTLE`), and keeps them: later keys and clicks arrive in milliseconds, and a button or key stays held between
+commands. The session ends itself after `MIDGET_SESSION_IDLE` seconds without a command (default 300), on `session stop`, or
+when the helper goes away; the devices and the socket go with it. `session status` shows it. `MIDGET_SESSION=0` turns it
+off: every command then makes and destroys its own devices as before (seatd logs "Could not revoke evdev" for each; that is
+this, not BifrOSt), and nothing can be held between commands.
 
 | Command | What |
 |---|---|
-| `shot [OUT.png] [--max W]` | `screen`, plus `OUT-small.png` (width at most W, default 1280, aspect kept; Pillow, else a pure-python nearest-neighbour fallback) and the scale between them. Look at the small image, multiply what you read by the scale |
-| `click X Y [--right] [--double] [--mods cmd+shift]` | moves an absolute pointer to screenshot pixel (X, Y) and clicks; modifiers are held on a second, keyboard device |
-| `move X Y` | hover |
-| `drag X0 Y0 X1 Y1 [MS]` | press, interpolated moves (default 400 ms), release |
+| `shot [OUT.png] [--max W]` | `screen`, plus `OUT-small.png` (width at most W, default 1280, aspect kept; Pillow, else a pure-python nearest-neighbour fallback), the scale between them, the shell's `screen=` state and the open windows with their rectangles in small-image pixels (shell geometry: the window server may place a window with an offset, so trust the picture for the exact spot). Remembered as the reference for `zoom` and `click --expect-unchanged` |
+| `zoom X Y W H [OUT.png] [--up N]` | a full-resolution crop of that region of the last `shot`, given in small-image pixels, enlarged N times (default 2) to read small text; `--from FULL.png --scale F` for another image |
+| `press NAME [--in SCOPE] [--role ROLE]` | **the recommended way to press anything that has a name**: `ax` lists the elements (address, role, name, value). `--in` scopes the name to one window (an app id or a fragment of it, `settings`, or an address prefix such as `app/is.olibuijr.mail.desktop`), `--role` to one role; a missing or ambiguous name is reported with the candidates instead of pressing something else. Plain `press NAME` lets the shell resolve the name over everything open |
+| `click X Y [--right] [--double] [--mods cmd+shift] [--relative] [--expect-unchanged [--from FULL.png] [--radius PX]]` | moves the pointer to screenshot pixel (X, Y) and clicks; modifiers are held on the keyboard device. `--expect-unchanged` grabs a fresh screen right before clicking and refuses (exit 3) when the square around the target (half-side 40 px, `--radius`) differs from the last `shot` (or `--from`): a list that moved since the screenshot (new mail arrived) is caught instead of clicked. A pointer-sized hole at the target is left out of the compare, so a painted pointer does not count; a refusal costs one more `shot` |
+| `move X Y [--relative]` | hover; with a button held by `down`, one step of a drag |
+| `down X Y [--right] [--relative]`, `up [--right]` | press and hold (needs the session), then `move` or `shot` as you like, then release |
+| `keydown SPEC`, `keyup SPEC` | hold a key or chord (`keydown cmd`, `keydown ctrl+shift`) across commands and screenshots, then release it |
+| `drag X0 Y0 X1 Y1 [MS] [--relative]` | press, interpolated moves (default 400 ms), release, in one command |
 | `scroll X Y DY [DX]` | wheel notches at the pixel: DY > 0 scrolls down, DX > 0 right (REL_WHEEL / REL_HWHEEL) |
-| `type [--raw] [--delay MS] TEXT` | US layout: letters, digits, punctuation with Shift, space; `\n` is Enter and `\t` Tab (unless `--raw`); about 15 ms per key; characters with no US key are listed and skipped |
+| `type [--raw] [--delay MS] TEXT` | the session keyboard layout: letters, digits, punctuation with Shift (AltGr where the layout needs it), space; `\n` is Enter and `\t` Tab (unless `--raw`); about 15 ms per key; characters with no key are listed and skipped |
 | `key SPEC...` | `enter`, chords `cmd+shift+4`, repeats `down*3`, several in a row: `key cmd+l tab*2 enter` (also `f1`..`f12`, `home`, `end`, `pageup`, `pagedown`, `delete`). US punctuation keys by name (`minus`, `equal`, `bracketleft`, `bracketright`, `semicolon`, `apostrophe`, `grave`, `backslash`, `comma`, `period`, `slash`) or as the character itself in a chord: `key cmd+[ cmd+] cmd+,` (quote `[` `]` and a backslash for the shell). Shifted characters are `shift+` the key (`cmd+shift+.`) |
-| `seq FILE` | runs one command per line (`click`, `type`, `key`, `move`, `drag`, `scroll`, `shot`, `screen`, `tap-window`, `tap`, `state`, `unlock`, `sleep S`, `# comments`); stops at the first failure, `--keep-going` goes on; `-` reads stdin |
+| `session start\|stop\|status` | the persistent helper (started by itself on the first input command) |
+| `seq FILE` | runs one command per line (`click`, `type`, `key`, `move`, `drag`, `scroll`, `down`, `up`, `keydown`, `keyup`, `press`, `wait`, `ax`, `zoom`, `shot`, `screen`, `tap-window`, `tap`, `state`, `unlock`, `sleep S`, `# comments`); stops at the first failure, `--keep-going` goes on; `-` reads stdin |
 
 Coordinates are compositor pixels, the same space as `screen`/`shot`: the pointer's range is 0..w-1 by 0..h-1 with the output size
 read from the last `screen`/`shot` (10 minutes, `out/lab/output-size`), else from a fresh screenshot's header; `--size WxH` or
@@ -136,18 +149,31 @@ small image shows (640, 360) on a 2560-wide screen. Unlike `tap` and `tap-window
 window under the pointer gets it and no window geometry is needed. The pointer is a plain absolute device (`INPUT_PROP_DIRECT`
 off), so the shell treats it as a pointing device, not a touchscreen: a right click is the shell's long press.
 
+**`--relative`: a real mouse.** The absolute pointer warps; a USB mouse sends REL_X/REL_Y deltas that the window server
+accelerates by speed, and some pointer bugs only show on that path. With `--relative` (`click`, `move`, `drag`, `down`) the
+helper's mouse device travels from where it last left the pointer to the target in 2-count steps every 8 ms: 0.25 counts/ms
+sits on the window server's unaccelerated plateau (it decelerates below 0.07 counts/ms, is 1:1 up to 0.4, then speeds up to
+about 2x, the "1.9x" seen with a fast virtual mouse) and under the shell's own 2-count knee, so the travel lands on the pixel
+without knowing the gain (`INPUT_STEP`, `INPUT_TICK` in `tools/midget.py`; a 1000 px travel takes 4 s). The buttons go
+through the mouse device too. When the helper does not know where the pointer is (first use) it warps to the screen centre
+first; `tap`, `hover` and a real mouse move the pointer without telling it, so `move X Y` (absolute) re-syncs it.
+
 ```bash
-bifrost pc midget shot /tmp/m.png                  # then read /tmp/m-small.png, note "scale: 2.0000"
-bifrost pc midget click --scale 2 420 300          # a point on the small image
+bifrost pc midget shot /tmp/m.png                  # read /tmp/m-small.png, note "scale: 2.0000" and the window list
+bifrost pc midget zoom 300 120 200 40              # the small-image region at full resolution, 2x, in /tmp/m-zoom.png
+bifrost pc midget press "Hello from Anna" --in mail --role row   # by name, inside Mail; ambiguity is an error
+bifrost pc midget click --scale 2 420 300 --expect-unchanged     # refuses if that spot changed since the shot
 bifrost pc midget click 1500 900 --double --mods cmd
+bifrost pc midget click 1500 900 --relative        # a mouse that moves, not a warp
 bifrost pc midget type "hello world\n"             # follows the session keyboard layout (read from /etc/bifrost/keyboard.env once per call)
 bifrost pc midget type --layout is "a@b"          # override: us, is, ... (AltGr is held around the key)
 bifrost pc midget key cmd+a cmd+c
 bifrost pc midget drag 400 300 900 300 600
 bifrost pc midget scroll 1280 720 5
+bifrost pc midget session stop                     # end the helper now (it ends itself after 5 min idle)
 ```
 
-A repeatable flow (`bifrost pc midget seq flow.txt`):
+A repeatable flow (`bifrost pc midget seq flow.txt`), including a screenshot in the middle of a drag:
 
 ```
 # open Spotlight, search, open the first hit
@@ -160,9 +186,23 @@ sleep 1
 shot /tmp/flow-calc.png
 click 1280 720 --right
 shot /tmp/flow-menu.png
+# drag a window with the button held, look, then drop it
+down 900 300
+move 1100 400
+shot /tmp/flow-mid-drag.png
+move 1300 500
+up
+keydown cmd
+click 400 400
+click 600 400
+keyup cmd
 ```
 
-Unit tests for the pure parts (keymap, scaling, seq parsing, PNG resize): `python3 tools/test_midget_computer_use.py`.
+Tester agents (`BIFROST_MIDGET_TESTER=1`, `~/.claude/hooks/no-agent-builds.sh`) may run the desktop-use subcommands only;
+every one of them is bounded by a timeout, changes no file on Midget, and the session helper is removed on exit or error.
+
+Unit tests for the pure parts (keymap, scaling, the click guard's region compare, the mouse stepping, zoom, seq parsing, the
+session plumbing, PNG resize): `python3 tools/test_midget_computer_use.py`; the scoped `press`: `python3 tools/test_midget_ax.py`.
 
 ### AMT findings (2026-10-12)
 
