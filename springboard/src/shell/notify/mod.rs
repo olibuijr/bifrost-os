@@ -1691,6 +1691,11 @@ mod tests {
 
     #[test]
     fn a_long_list_scrolls_instead_of_dismissing() {
+        // a swipe in the list is a finger gesture; on a desktop a mouse drag does not scroll (pan::pans_on_drag)
+        bifrost_ui::pan::with_touch(bifrost_ui::form_factor::FormFactor::Tablet, bifrost_ui::pan::TouchSource::Finger, a_long_list_scrolls);
+    }
+
+    fn a_long_list_scrolls() {
         let mut sh = shell();
         unlock(&mut sh);
         sh.tick(1000.0);

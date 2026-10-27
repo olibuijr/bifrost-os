@@ -1030,7 +1030,7 @@ mod tests {
         let listed = |uid: u32| Listed { uid, flags: Flags::empty(), header: format!("Subject: m{uid}\r\nFrom: Ana <ana@x.is>\r\n\r\n") };
         app.window.as_mut().unwrap().mail.apply_listing("work", INBOX, vec![], (1..=60).map(listed).collect());
         app.window.as_mut().unwrap().list_scroll.set_max(1000.0);
-        let (x, y) = row_point(&app, &ctx.ui, 3);
+        let (x, y) = row_point(&app, &ctx.ui, 60);
         let out = bifrost_app::pan::with_touch(form, bifrost_app::TouchSource::Finger, || {
             for (i, (kind, dy)) in [(TouchKind::Down, 0.0), (TouchKind::Move, -60.0), (TouchKind::Move, -140.0), (TouchKind::Up, -140.0)].into_iter().enumerate() {
                 let input = Input::Touch { kind, id: 0, x, y: y + dy, t: 100.0 + 16.0 * i as f64, source, mods: ModifierFlags::EMPTY };

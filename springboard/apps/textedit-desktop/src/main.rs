@@ -3973,9 +3973,10 @@ mod tests {
         assert!(app.perform(&ctx, Action::ReplaceAll));
         assert!(app.perform(&ctx, Action::FindDone));
         assert_eq!(text_of(&app), "one dog, two dogs");
-        assert_eq!(caret_of(&app), 17..17);
+        // right after the last replacement, the "dog" of "dogs"
+        assert_eq!(caret_of(&app), 16..16);
         app.event(&ctx, Input::Key(KeyInput::Text("!".into())));
-        assert_eq!(text_of(&app), "one dog, two dogs!");
+        assert_eq!(text_of(&app), "one dog, two dog!s");
     }
 
     /// QA W2-12: Cmd+A in the find field, live matches while typing, the previous query selected on reopening, and no
