@@ -839,8 +839,18 @@ pub trait App {
     }
     /// Whether the app answers the close control of its main window itself (`windowShouldClose:`). The runtime tells the
     /// shell once (`ToShell::CloseRequests`); the shell then sends `close_requested` for the red light and Cmd+W instead of
-    /// closing the window (which quits a direct app) at once. The default `false` keeps that: no request, no veto.
+    /// closing the window at once. The default `false` leaves the answer to the default of
+    /// `terminates_after_last_window_closed`: the window is ordered out and the app keeps running.
     fn handles_close_request(&self) -> bool {
+        false
+    }
+    /// `applicationShouldTerminateAfterLastWindowClosed:`. The default `false` is how the reference desktop treats most
+    /// apps: the close control of the main window only closes the window (`close_requested`), and the app keeps running
+    /// with no window, in the Dock with its running dot and owning the menu bar, until the person activates it again
+    /// (`reopen`) or quits it. A single-window utility (a calculator, a system report) returns `true`: the close control
+    /// then quits the app, as before. Quit (Cmd+Q) and shutdown are the same either way. An app that also returns `true`
+    /// from `handles_close_request` is always asked, and decides for itself.
+    fn terminates_after_last_window_closed(&self) -> bool {
         false
     }
     /// The person used the close control of the main window and `handles_close_request` is `true`. A document app calls

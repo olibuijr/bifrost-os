@@ -5662,6 +5662,19 @@ shell `the_close_control_asks_an_app_that_opted_in_and_never_vetoes_quit`, scrip
 `the_close_control_closes_a_clean_script_and_asks_about_an_edited_one`, textedit
 `the_close_request_on_the_main_window_asks_about_an_edited_document`.
 
+Terminate after the last window (`applicationShouldTerminateAfterLastWindowClosed:`). Apple parity gap closed: the red light
+of an SDK app's main window quit the app unless it overrode `handles_close_request`. The reference keeps an app running with
+no window after its last window closes (Dock dot, menu bar kept, `Desk::windowless_front`), except single-window utilities.
+`App::terminates_after_last_window_closed` (default `false`) is that flag; the runtime announces `CloseRequests` for every
+app that decides itself or does not terminate (`runtime::announces_close_requests`), so the shell asks the app, whose default
+`close_requested` orders the main window out and keeps it running windowless. A Dock click or activation reopens it
+(`ToApp::Reopen`, `App::reopen`; the SDK marks the main window shown again, a document app opens a new document). Quit and
+shutdown are unchanged. Set to `true`: Calculator, System Information, Digital Color Meter, Chess, Grapher, Disk Utility,
+Wireless Diagnostics, Audio MIDI Setup, Bluetooth File Exchange, ColorSync Utility, Screenshot, Image Capture. The same gap as
+above holds on the direct route (the order-out quits). Tests: runtime `an_app_keeps_running_with_no_window_unless_it_terminates_after_the_last_window`,
+`an_app_that_handles_the_close_control_is_always_asked`, `the_default_answer_to_the_red_light_orders_the_window_out_and_does_not_quit`;
+shell `the_red_light_closes_the_window_and_the_app_keeps_running_unless_it_terminates_with_it`.
+
 Units (2026-10-23, E2E follow-up). `WindowTouch` and an extra window's pointer events are in the window's **points**, while
 the main window's `ToApp::Touch` is in surface pixels. An app that hit-tests an extra window in px, or hands its touches to code
 written for the main window, scales them first: `app_windows::window_touch_in_px(ev, ctx.ui.pt(1.0))` returns the touch in px
