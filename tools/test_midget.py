@@ -1,9 +1,11 @@
 """Check package-update restart boundaries without contacting a machine."""
 import importlib.util
+import os
 import subprocess
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+os.environ["MIDGET_SESSION"] = "0"  # no input-session daemon from a test: plans go through the (patched) one-shot `run`
 spec = importlib.util.spec_from_file_location('midget', Path(__file__).with_name('midget.py'))
 midget = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(midget)
@@ -50,8 +52,8 @@ class KeyCombos(unittest.TestCase):
         with patch.object(midget, 'run', return_value=subprocess.CompletedProcess([], 0, '', '')) as run:
             self.assertEqual(midget.cmd_key(['cmd+o']), 0)
             script = run.call_args.args[0][-1]
-            self.assertIn('codes=[125, 24]', script)
-            self.assertIn('for c in reversed(codes)', script)
+            self.assertIn("('key', [125, 24], 0.05)", script)
+            self.assertIn('for c in reversed(o[1])', script)
 
 
 class RebootWaits(unittest.TestCase):
