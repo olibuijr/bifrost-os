@@ -61,6 +61,10 @@ fn named_key(name: &str) -> Option<Key> {
 
 /// Bytes for a named key, honouring application cursor mode; empty if unknown.
 fn key_bytes(name: &str, app_cursor: bool) -> Vec<u8> {
+    // Shift+Tab is the back-tab sequence (CSI Z, terminfo `kcbt`), not a plain Tab
+    if name == "BackTab" {
+        return b"\x1b[Z".to_vec();
+    }
     named_key(name).map(|k| encode(k, Mods::default(), app_cursor)).unwrap_or_default()
 }
 
@@ -678,6 +682,8 @@ mod tests {
         assert_eq!(key_bytes("Enter", false), b"\r");
         assert_eq!(key_bytes("Backspace", false), b"\x7f");
         assert_eq!(key_bytes("Tab", false), b"\t");
+        assert_eq!(key_bytes("BackTab", false), b"\x1b[Z");
+        assert_eq!(key_bytes("BackTab", true), b"\x1b[Z", "application cursor mode does not change back-tab");
         assert_eq!(key_bytes("Escape", false), b"\x1b");
         assert_eq!(key_bytes("Up", false), b"\x1b[A");
         assert_eq!(key_bytes("Down", false), b"\x1b[B");
