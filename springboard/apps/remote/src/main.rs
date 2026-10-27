@@ -7,7 +7,7 @@ use bifrost_app::kit::{Damage,Surface};
 use bifrost_app::layout::Layout;
 use bifrost_app::network_path::Path;
 use bifrost_app::widgets;
-use springboard::shell::ui::{Weight,WHITE,TINT,accent_now,CONTENT_BG,LABEL,LABEL_2,FIELD_BG,MAC_TITLE2_PT,MAC_TITLE3_PT,MAC_BODY_PT};
+use springboard::shell::ui::{Weight,WHITE,accent_now,CONTENT_BG,LABEL,LABEL_2,FIELD_BG,MAC_TITLE2_PT,MAC_TITLE3_PT,MAC_BODY_PT};
 use nearby::Nearby;
 use std::{path::PathBuf,process::Command};
 /// Nearby list: at most this many rows are drawn, each `ROW_H` points tall, starting at `ROWS_Y`.
@@ -88,7 +88,7 @@ impl App for Remote {
  let (x,_)=l.readable();
  self.col=x;
  widgets::large_title(s,u,&l,"Remote",64.);
- for (label,size,color,y) in [(self.intro.as_str(),MAC_TITLE2_PT,LABEL_2.now(),110.),(self.status.as_str(),MAC_TITLE2_PT,LABEL.now(),150.),("Browser address: this computer’s IP, port 12000",MAC_TITLE3_PT,LABEL_2.now(),186.),(self.address.as_str(),MAC_TITLE2_PT,TINT,218.),("Access password",MAC_BODY_PT,LABEL_2.now(),254.)]{s.blit(&u.text(label,size,Weight::Regular,color),u.pt(x) as i32,u.pt(y) as i32,255,255);}
+ for (label,size,color,y) in [(self.intro.as_str(),MAC_TITLE2_PT,LABEL_2.now(),110.),(self.status.as_str(),MAC_TITLE2_PT,LABEL.now(),150.),("Browser address: this computer’s IP, port 12000",MAC_TITLE3_PT,LABEL_2.now(),186.),(self.address.as_str(),MAC_TITLE2_PT,address_color(),218.),("Access password",MAC_BODY_PT,LABEL_2.now(),254.)]{s.blit(&u.text(label,size,Weight::Regular,color),u.pt(x) as i32,u.pt(y) as i32,255,255);}
  s.blit(&u.text(&self.password,MAC_TITLE2_PT,Weight::Regular,LABEL.now()),u.pt(x+148.) as i32,u.pt(250.) as i32,255,255);
  let serving=self.status=="Serving";
  // Start is the one accent button; Stop is a quiet secondary fill, not red, because stopping is not destructive.
@@ -119,6 +119,9 @@ fn main(){bifrost_app::run(Remote{data:PathBuf::new(),status:"Stopped".into(),pa
  network:String::new(),path:Path::offline(),net_at:f64::NEG_INFINITY,nearby:Nearby::new(),selected:None,
  path_service:None,intro:services::INTRO.into(),notice:String::new(),started:false,path_req:None,screens_req:None,copy_req:None});}
 
+/// The address is a link-style label: it follows the user's accent.
+fn address_color() -> u32 { accent_now() }
+
 /// The Start/Stop button's fill: the user's accent for Start, a quiet field fill for Stop.
 fn start_fill(serving: bool) -> u32 {
     if serving { FIELD_BG.now() } else { accent_now() }
@@ -128,6 +131,7 @@ fn start_fill(serving: bool) -> u32 {
 mod accent_tests {
     use super::*;
     use bifrost_app::kit::appearance::{accent, set_accent, Accent};
+    use springboard::shell::ui::TINT;
 
     /// The accent is process-wide: this test changes it and restores it.
     static ACCENT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
@@ -143,5 +147,16 @@ mod accent_tests {
         assert_eq!(start, green);
         assert_ne!(start, TINT);
         assert_eq!(stop, FIELD_BG.now());
+    }
+
+    #[test]
+    fn the_address_follows_the_chosen_accent_not_system_blue() {
+        let _g = ACCENT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let keep = accent();
+        set_accent(Accent::Green);
+        let (addr, green) = (address_color(), accent_now());
+        set_accent(keep);
+        assert_eq!(addr, green);
+        assert_ne!(addr, TINT);
     }
 }
