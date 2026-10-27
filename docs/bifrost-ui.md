@@ -7134,7 +7134,7 @@ shell compositor operator is selectable.
 `SunEvents::new(lat, lon, y, m, d)` returns astronomical, nautical and civil dawn and dusk, sunrise, sunset, solar
 noon and solar midnight as `coding::Date` (the dawn, dusk, sunrise and sunset fields are `None` in polar day or night,
 or when the sun never reaches that depression). It uses the NOAA solar position algorithm with depression angles of 18,
-12, 6 and 0.833 degrees; the day is the mean solar day of the longitude. `MoonPhase` has the eight WeatherKit cases and
+12, 6 and 0.833 degrees; the day is the mean solar day of the longitude. `weather_service::MoonPhase` (shared with the Weather service) has the eight WeatherKit cases and
 `symbol_name()`; `MoonEvents` gives the phase plus moonrise and moonset. The moon is a mean synodic-month model from a
 known new moon, so phase can be off by hours and rise and set by about an hour: an ephemeris would match Apple more
 closely and is not built. The model is offline and not yet wired into the Weather app.

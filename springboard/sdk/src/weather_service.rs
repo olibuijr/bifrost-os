@@ -227,6 +227,20 @@ impl MoonPhase {
             MoonPhase::WaningCrescent => "Waning Crescent",
         }
     }
+
+    /// The name of the matching moon-phase symbol glyph.
+    pub fn symbol_name(self) -> &'static str {
+        match self {
+            MoonPhase::New => "moonphase.new.moon",
+            MoonPhase::WaxingCrescent => "moonphase.waxing.crescent",
+            MoonPhase::FirstQuarter => "moonphase.first.quarter",
+            MoonPhase::WaxingGibbous => "moonphase.waxing.gibbous",
+            MoonPhase::Full => "moonphase.full.moon",
+            MoonPhase::WaningGibbous => "moonphase.waning.gibbous",
+            MoonPhase::LastQuarter => "moonphase.last.quarter",
+            MoonPhase::WaningCrescent => "moonphase.waning.crescent",
+        }
+    }
 }
 
 /// The moon at a moment.
@@ -240,9 +254,9 @@ pub struct Moon {
 }
 
 /// The mean length of the lunar cycle in days.
-const SYNODIC_DAYS: f64 = 29.530_588_853;
+pub(crate) const SYNODIC_DAYS: f64 = 29.530_588_853;
 /// A new moon: 2000-01-06 18:14 UTC, in Unix seconds.
-const NEW_MOON_EPOCH: i64 = 947_182_440;
+pub(crate) const NEW_MOON_EPOCH: i64 = 947_182_440;
 
 /// The moon at Unix time `unix_secs`, from the mean lunar cycle.
 pub fn moon(unix_secs: i64) -> Moon {
@@ -295,6 +309,25 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("bifrost-weather-service-{}-{name}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         dir
+    }
+
+    #[test]
+    fn moon_phase_symbols_are_distinct() {
+        let all = [
+            MoonPhase::New,
+            MoonPhase::WaxingCrescent,
+            MoonPhase::FirstQuarter,
+            MoonPhase::WaxingGibbous,
+            MoonPhase::Full,
+            MoonPhase::WaningGibbous,
+            MoonPhase::LastQuarter,
+            MoonPhase::WaningCrescent,
+        ];
+        let mut names: Vec<&str> = all.iter().map(|p| p.symbol_name()).collect();
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), 8);
+        assert_eq!(MoonPhase::Full.symbol_name(), "moonphase.full.moon");
     }
 
     #[test]

@@ -1,4 +1,4 @@
-//! Sun and moon events (WeatherKit parity): `SunEvents`, `MoonEvents` and `MoonPhase`, computed offline.
+//! Sun and moon events (WeatherKit parity): `SunEvents` and `MoonEvents` (phase is `weather_service::MoonPhase`), computed offline.
 //!
 //! The sun follows the NOAA solar position algorithm (mean elements, equation of centre, equation of time). Dawn
 //! and dusk use depression angles of 18, 12 and 6 degrees (astronomical, nautical, civil) and 0.833 degrees for
@@ -17,10 +17,8 @@
 
 use crate::calendar_system::days_from_civil;
 use crate::coding::Date;
+use crate::weather_service::{moon, MoonPhase, SYNODIC_DAYS as SYNODIC_MONTH_DAYS};
 
-const SYNODIC_MONTH_DAYS: f64 = 29.530_588_853;
-/// A new moon: 2000-01-06 18:14 UTC, as seconds since 1970.
-const NEW_MOON_EPOCH: f64 = 947_182_440.0;
 /// Mean interval between two moon transits: a synodic month longer than the 24 h day by 1/29.53 of a day.
 const LUNAR_DAY_SECONDS: f64 = 86_400.0 * (1.0 + 1.0 / SYNODIC_MONTH_DAYS);
 /// Moonrise and moonset altitude: refraction, semi-diameter and parallax combined.
@@ -122,57 +120,6 @@ impl SunEvents {
     }
 }
 
-/// `MoonPhase`: the eight named phases, each covering an eighth of the synodic month centred on its mark.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MoonPhase {
-    New,
-    WaxingCrescent,
-    FirstQuarter,
-    WaxingGibbous,
-    Full,
-    WaningGibbous,
-    LastQuarter,
-    WaningCrescent,
-}
-
-impl MoonPhase {
-    const ALL: [MoonPhase; 8] = [
-        MoonPhase::New,
-        MoonPhase::WaxingCrescent,
-        MoonPhase::FirstQuarter,
-        MoonPhase::WaxingGibbous,
-        MoonPhase::Full,
-        MoonPhase::WaningGibbous,
-        MoonPhase::LastQuarter,
-        MoonPhase::WaningCrescent,
-    ];
-
-    /// The phase at an instant, from the mean synodic month.
-    pub fn at(date: Date) -> MoonPhase {
-        let eighth = moon_age_days(date) / SYNODIC_MONTH_DAYS * 8.0;
-        Self::ALL[((eighth + 0.5).floor() as usize) % 8]
-    }
-
-    /// The name of the matching moon-phase symbol glyph.
-    pub fn symbol_name(self) -> &'static str {
-        match self {
-            MoonPhase::New => "moonphase.new.moon",
-            MoonPhase::WaxingCrescent => "moonphase.waxing.crescent",
-            MoonPhase::FirstQuarter => "moonphase.first.quarter",
-            MoonPhase::WaxingGibbous => "moonphase.waxing.gibbous",
-            MoonPhase::Full => "moonphase.full.moon",
-            MoonPhase::WaningGibbous => "moonphase.waning.gibbous",
-            MoonPhase::LastQuarter => "moonphase.last.quarter",
-            MoonPhase::WaningCrescent => "moonphase.waning.crescent",
-        }
-    }
-}
-
-/// Days since the last mean new moon.
-fn moon_age_days(date: Date) -> f64 {
-    ((date.0 - NEW_MOON_EPOCH) / 86_400.0).rem_euclid(SYNODIC_MONTH_DAYS)
-}
-
 /// `MoonEvents`: the moon's phase at solar noon and its rise and set within the day (`None` when none falls
 /// inside it, which happens about once a month, or when the moon stays above or below the horizon).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -187,7 +134,8 @@ impl MoonEvents {
         let sun = SunEvents::new(latitude, longitude, year, month, day);
         let start = sun.solar_midnight.0;
         let noon = sun.solar_noon.0;
-        let age = moon_age_days(sun.solar_noon);
+        let mn = moon(sun.solar_noon.0 as i64);
+        let age = mn.age_days;
         // The moon transits at local solar noon at new moon and at midnight at full moon.
         let transit = noon + age / SYNODIC_MONTH_DAYS * 86_400.0;
         // Declination from the moon's ecliptic longitude (the 5 degree orbital tilt is ignored).
@@ -201,7 +149,7 @@ impl MoonEvents {
             let h = h?;
             (-2..=1).find_map(|k| within(transit + f64::from(k) * LUNAR_DAY_SECONDS + sign * h * 240.0))
         };
-        MoonEvents { phase: MoonPhase::at(sun.solar_noon), moonrise: pick(-1.0), moonset: pick(1.0) }
+        MoonEvents { phase: mn.phase, moonrise: pick(-1.0), moonset: pick(1.0) }
     }
 }
 
@@ -264,22 +212,14 @@ mod tests {
 
     #[test]
     fn the_moon_phase_matches_published_2026_new_and_full_moons() {
-        // New moon 2026-02-17, full moon 2026-03-03, new moon 2026-08-12 (all near midday UTC).
-        assert_eq!(MoonPhase::at(at(2026, 2, 17, 12, 0)), MoonPhase::New);
-        assert_eq!(MoonPhase::at(at(2026, 3, 3, 12, 0)), MoonPhase::Full);
-        assert_eq!(MoonPhase::at(at(2026, 8, 12, 18, 0)), MoonPhase::New);
+        // Each date is an eclipse, so the phase is certain: annular solar eclipse (new moon) 2026-02-17,
+        // total lunar eclipse (full moon) 2026-03-03, total solar eclipse (new moon) 2026-08-12.
+        assert_eq!(moon(at(2026, 2, 17, 12, 0).0 as i64).phase, MoonPhase::New);
+        assert_eq!(moon(at(2026, 3, 3, 12, 0).0 as i64).phase, MoonPhase::Full);
+        assert_eq!(moon(at(2026, 8, 12, 18, 0).0 as i64).phase, MoonPhase::New);
         // A week after a new moon the moon is at first quarter; a week after a full moon, last quarter.
-        assert_eq!(MoonPhase::at(at(2026, 2, 24, 12, 0)), MoonPhase::FirstQuarter);
-        assert_eq!(MoonPhase::at(at(2026, 3, 10, 12, 0)), MoonPhase::LastQuarter);
-    }
-
-    #[test]
-    fn moon_phase_symbols_are_distinct() {
-        let mut names: Vec<&str> = MoonPhase::ALL.iter().map(|p| p.symbol_name()).collect();
-        names.sort_unstable();
-        names.dedup();
-        assert_eq!(names.len(), 8);
-        assert_eq!(MoonPhase::Full.symbol_name(), "moonphase.full.moon");
+        assert_eq!(moon(at(2026, 2, 24, 12, 0).0 as i64).phase, MoonPhase::FirstQuarter);
+        assert_eq!(moon(at(2026, 3, 10, 12, 0).0 as i64).phase, MoonPhase::LastQuarter);
     }
 
     #[test]
