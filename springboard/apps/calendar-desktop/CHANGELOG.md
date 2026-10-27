@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.19.11
+
+- Cmd+A selects the event title; a clicked event shows its selection and a right click offers Open and Delete Event; the Day and Week grid opens with the 8 AM label clear of the all-day band.
+
 ## 1.19.10
 
 - Rebuilt for 0.10.44: every touch says whether a mouse or a finger made it, so a mouse drag no longer scrolls lists on the desktop (the wheel, trackpad and scroll bar still do).

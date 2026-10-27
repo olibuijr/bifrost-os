@@ -547,7 +547,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-calendar"
-version = "1.19.10"
+version = "1.19.11"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
