@@ -23,6 +23,6 @@
   "gaps": [
     "CFURL: FileUrl (springboard/sdk/src/file_url.rs) covers file paths only; no non-file schemes, bookmark data, resource-value caching on the URL object or enumerator; springboard/sdk/src/file_manager.rs covers resource values and directory enumeration.",
     "UserDefaults::with_store (defaults.rs) reads through the app domain, added suites, the global domain and registered values (host tests only); the shell and apps still use the per-app file store via open, and the search list is not yet checked on Midget.",
-    "Calendar/TimeZone are not yet used by DateFormatter (it takes an explicit tz_offset)."
+    "DateFormatter takes an optional TimeZone (set_time_zone) and honours daylight saving time per instant, with z, Z, ZZZZ and ZZZZZ letters (host tests only); Calendar is still not used by DateFormatter, and zzzz gives the abbreviation, not the long zone name."
   ]
 }
