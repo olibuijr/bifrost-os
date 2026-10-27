@@ -946,11 +946,9 @@ impl Shell {
 
     /// Whether the window in front is a native client's (a window the window server owns), so Cmd+` cycles by
     /// activating its app's other native windows (`switcher_same_app`) instead of the desk's windows.
+    #[cfg(feature = "desktop-wayland")]
     pub(super) fn foreign_cycle_owned(&self) -> bool {
-        #[cfg(feature = "desktop-wayland")]
-        { self.desk.as_ref().is_some_and(|d| d.native_windows.iter().chain(d.linux_apps.iter().flat_map(|a| a.windows.iter())).any(|w| w.active)) }
-        #[cfg(not(feature = "desktop-wayland"))]
-        { false }
+        self.desk.as_ref().is_some_and(|d| d.native_windows.iter().chain(d.linux_apps.iter().flat_map(|a| a.windows.iter())).any(|w| w.active))
     }
 
     /// Cmd+` (Shift: backwards) in front of a native client: its app's next native window; the compositor raises the

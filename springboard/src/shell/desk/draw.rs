@@ -191,6 +191,7 @@ pub(super) fn stroke_window_rim(s: &mut Surface, x: f32, y: f32, w: f32, h: f32,
 }
 
 /// Width of the band along each window edge that the rim stroke and the corner clip can change.
+#[cfg(any(test, feature = "desktop-wayland"))]
 pub(super) const EDGE_BAND: usize = 3;
 
 /// The parts of a `width` x `height` window that the rim stroke and the corner clip touch, as (x, y, w, h): a band

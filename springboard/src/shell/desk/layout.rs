@@ -24,6 +24,7 @@ pub enum Tile {
 
 /// A choice of the green-button menu (hover on the green traffic light), for one window.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg(any(test, feature = "desktop-wayland"))]
 pub enum Arrange {
     /// Fill, Centre and the halves and quarters of Move & Resize.
     Tile(Tile),
@@ -47,11 +48,14 @@ pub struct ArrangeMenu {
 pub const ARRANGE_DWELL_MS: f64 = 500.0;
 /// The gap (pt) between a green button and the menu under it, and how far above the menu's top (pt, measured from the
 /// anchor) the pointer may stray on the way in before the menu closes.
+#[cfg(feature = "desktop-wayland")]
 pub const ARRANGE_GAP_PT: f32 = 4.0;
+#[cfg(feature = "desktop-wayland")]
 pub const ARRANGE_BRIDGE_PT: f32 = 24.0;
 
 /// One line of the green-button menu.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg(any(test, feature = "desktop-wayland"))]
 pub enum ArrangeLine {
     Item(&'static str, Arrange),
     Header(&'static str),
@@ -60,6 +64,7 @@ pub enum ArrangeLine {
 
 /// The lines of the green-button menu for a window: `full` when it is full screen (the only choice then is to leave
 /// it), `others` when another window could share the screen.
+#[cfg(any(test, feature = "desktop-wayland"))]
 pub fn arrange_lines(full: bool, others: bool) -> Vec<ArrangeLine> {
     use ArrangeLine::*;
     if full {
@@ -207,6 +212,7 @@ pub fn snap_zone(a: Rect, px: i32, py: i32, band: i32) -> Option<Tile> {
 /// a run of covered pixels per row, and rows with the same runs merged into one rect. A borderless window takes the
 /// pointer only there (`WindowFrame::input`). More than `MAX_SHAPE_RECTS` rects (a noisy picture) falls back to one
 /// bounding box per run of rows, so the region stays small.
+#[cfg(any(test, feature = "desktop-wayland"))]
 pub fn alpha_shape(px: &[u32], width: usize, height: usize) -> Vec<[i32; 4]> {
     let mut out: Vec<[i32; 4]> = Vec::new();
     // the rects of the row band still growing: (x0, x1) runs and the row they started on
