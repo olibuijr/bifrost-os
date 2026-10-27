@@ -23,7 +23,7 @@ fn us() -> usize {
 /// The character the key `code` types on the active layout, with or without Shift. None for keys that type nothing
 /// and for dead keys (a mark waiting for a letter).
 pub fn char_for(code: u16, shift: bool) -> Option<char> {
-    char_in(LAYOUT.load(Ordering::Relaxed), code, shift)
+    char_in(layout(), code, shift)
 }
 
 /// The character the key `code` types on the layout `layout` (an index into the installer's `LAYOUTS`).
@@ -38,10 +38,15 @@ pub fn char_in(layout: usize, code: u16, shift: bool) -> Option<char> {
 /// The character a key equivalent (Cmd/Ctrl chord) reads from the key `code`: the active layout's, except that a
 /// letter of a non-Latin layout (Cyrillic) reads as the U.S. letter on that key, so Cmd+C still copies there.
 pub fn chord_char_for(code: u16) -> Option<char> {
-    chord_char_in(LAYOUT.load(Ordering::Relaxed), code)
+    chord_char_in(layout(), code)
 }
 
-fn chord_char_in(layout: usize, code: u16) -> Option<char> {
+/// The active layout (an index into the installer's `LAYOUTS`).
+pub fn layout() -> usize {
+    LAYOUT.load(Ordering::Relaxed)
+}
+
+pub fn chord_char_in(layout: usize, code: u16) -> Option<char> {
     let c = char_in(layout, code, false)?;
     if c.is_ascii() || !c.is_alphabetic() || is_latin(c) {
         return Some(c);

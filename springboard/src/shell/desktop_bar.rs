@@ -412,18 +412,34 @@ pub(super) fn context_rows(slot:u8,items:&[bifrost_proto::ContextItem])->Vec<Row
     rows
 }
 /// The enabled item whose key equivalent is `ch` with the chord modifiers `mods` (`CHORD_*`), `NativeMenu.performKeyEquivalent:`.
+/// The plus key and the equals key are one key equivalent (Zoom In answers both), whatever the layout puts them on.
 pub(super) fn app_menu_chord(menus:&[bifrost_proto::AppMenu],ch:char,mods:u32)->Option<u32> {
     use bifrost_proto::{CHORD_ALT,CHORD_CTRL,CHORD_META,CHORD_SHIFT};
-    let ch=ch.to_ascii_lowercase();
-    menus.iter().flat_map(|m|m.items.iter()).filter(|i|i.enabled&&!i.separator&&!i.submenu&&i.id!=0).find(|i|{
+    let find=|ch:char|menus.iter().flat_map(|m|m.items.iter()).filter(|i|i.enabled&&!i.separator&&!i.submenu&&i.id!=0).find(|i|{
         bifrost_ui::keys::KeyCombo::parse(&i.key).is_some_and(|c|c.key==bifrost_ui::keys::Key::Char(ch)&&c.cmd==(mods&CHORD_META!=0)&&c.ctrl==(mods&CHORD_CTRL!=0)&&c.alt==(mods&CHORD_ALT!=0)&&c.shift==(mods&CHORD_SHIFT!=0))
-    }).map(|i|i.id)
+    }).map(|i|i.id);
+    let ch=ch.to_ascii_lowercase();
+    find(ch).or_else(||(ch=='+').then(||find('=')).flatten())
+}
+/// The enabled item whose key equivalent the key `code` with the chord modifiers `mods` presses, read through the active layout:
+/// the character the key types, else (with Shift held) the symbol Shift gives it with Shift taken out of the chord, so Cmd+Shift+0
+/// is Cmd+= on an Icelandic keyboard and Cmd+Shift+= is Cmd++ on a U.S. one.
+pub(super) fn chord_menu_id(menus:&[bifrost_proto::AppMenu],code:u16,mods:u32)->Option<u32> {
+    chord_menu_id_in(menus,super::evkeys::layout(),code,mods)
+}
+/// `chord_menu_id` on the layout `layout` (an index into the installer's `LAYOUTS`).
+pub(super) fn chord_menu_id_in(menus:&[bifrost_proto::AppMenu],layout:usize,code:u16,mods:u32)->Option<u32> {
+    use bifrost_proto::CHORD_SHIFT;
+    super::evkeys::chord_char_in(layout,code).and_then(|c|app_menu_chord(menus,c,mods)).or_else(||{
+        let shifted=(mods&CHORD_SHIFT!=0).then(||super::evkeys::char_in(layout,code,true)).flatten().filter(|c|!c.is_alphabetic())?;
+        app_menu_chord(menus,shifted,mods&!CHORD_SHIFT)
+    })
 }
 /// Whether the key `code` with the chord modifiers `mods` is a key equivalent of an enabled item in `menus`. Key equivalents go to the
 /// app in front first: the shell closes or minimizes a window with Cmd+W or Cmd+M only when the app does not take the chord (a tabbed
 /// app's Close Tab keeps Cmd+W while it has a tab to close).
 pub(super) fn chord_in_menus(menus:&[bifrost_proto::AppMenu],code:u16,mods:u32)->bool {
-    super::evkeys::chord_char_for(code).and_then(|c|app_menu_chord(menus,c,mods)).is_some()
+    chord_menu_id(menus,code,mods).is_some()
 }
 /// What quitting (Cmd+Q, the App menu's Quit) does to the app in front. Cmd+W only ever closes the window.
 #[cfg(feature = "desktop-wayland")]

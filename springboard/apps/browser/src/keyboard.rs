@@ -89,18 +89,6 @@ impl Browser {
                         self.find_step(if s { FindDirection::Backward } else { FindDirection::Forward });
                         true
                     }
-                    (KEY_EQUAL, _) => {
-                        self.zoom_by(1);
-                        true
-                    }
-                    (KEY_MINUS, false) => {
-                        self.zoom_by(-1);
-                        true
-                    }
-                    (KEY_0, false) => {
-                        self.zoom_by(0);
-                        true
-                    }
                     (KEY_T, true) => {
                         self.reopen_closed();
                         true
@@ -154,14 +142,6 @@ impl Browser {
                 }
                 KEY_R => {
                     self.activate(RELOAD);
-                    true
-                }
-                KEY_LEFTBRACE => {
-                    self.activate(BACK);
-                    true
-                }
-                KEY_RIGHTBRACE => {
-                    self.activate(FORWARD);
                     true
                 }
                 _ => false,
