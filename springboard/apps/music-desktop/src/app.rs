@@ -569,6 +569,8 @@ impl App for MusicApp {
                 self.app.as_mut().unwrap().type_text("\n");
                 true
             }
+            // Cmd+A selects the whole playlist name being typed; any other chord is not the music app's
+            Input::Key(k) if k.as_chord() == Some((30, bifrost_app::proto::CHORD_META)) => self.app.as_mut().is_some_and(|m| m.select_all_name()),
             Input::Key(KeyInput::Code(_)) => false,
             Input::Open(url) => {
                 let path = url.strip_prefix("file://").unwrap_or(&url);

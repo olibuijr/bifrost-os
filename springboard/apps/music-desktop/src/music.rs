@@ -492,6 +492,8 @@ pub struct Music {
     last_t: f64,
     /// a playlist name being typed
     renaming: Option<String>,
+    /// Cmd+A chose the whole name: the next typed text or Backspace replaces or clears it
+    rename_selected: bool,
     menu: Option<Menu>,
     /// y where a finger went down on the Now Playing sheet (swipe down to dismiss)
     np_swipe: Option<f32>,
@@ -637,6 +639,7 @@ impl Music {
             output_choice: None,
             last_t: 0.0,
             renaming: None,
+            rename_selected: false,
             menu: None,
             np_swipe: None,
             dirty: true,
@@ -691,6 +694,9 @@ impl Music {
             } else if c.is_control() {
                 continue;
             } else if let Some(name) = &mut self.renaming {
+                if std::mem::take(&mut self.rename_selected) {
+                    name.clear();
+                }
                 name.push(c);
             } else if let Some((_, value)) = &mut self.rule_edit {
                 value.push(c);
@@ -704,9 +710,23 @@ impl Music {
         self.dirty = true;
     }
 
+    /// Cmd+A while a playlist name is being typed: the whole name is selected. False when no name is being typed.
+    pub fn select_all_name(&mut self) -> bool {
+        if self.renaming.is_none() {
+            return false;
+        }
+        self.rename_selected = true;
+        self.dirty = true;
+        true
+    }
+
     pub fn backspace(&mut self) {
         if let Some(name) = &mut self.renaming {
-            name.pop();
+            if std::mem::take(&mut self.rename_selected) {
+                name.clear();
+            } else {
+                name.pop();
+            }
         } else if let Some((_, value)) = &mut self.rule_edit {
             value.pop();
         } else if let Some((_, value)) = &mut self.info_edit {
@@ -719,6 +739,7 @@ impl Music {
 
     fn commit_rename(&mut self) {
         let Some(name) = self.renaming.take() else { return };
+        self.rename_selected = false;
         let clean = playlists::clean_name(&name).unwrap_or_default().to_lowercase();
         match self.page() {
             Page::Playlist(p) => {
@@ -2531,11 +2552,14 @@ impl Music {
             Target::QDel(i) => self.queue_remove(i.saturating_sub(1)),
             Target::QClear => self.queue_clear(),
             Target::QDrag(_) => {}
-            Target::Rename => match self.page() {
-                Page::Playlist(p) => self.renaming = self.playlists.lists().get(p).map(|l| l.name.clone()),
-                Page::Smart(p) => self.renaming = self.smart.lists().get(p).map(|l| l.name.clone()),
-                _ => {}
-            },
+            Target::Rename => {
+                self.rename_selected = false;
+                match self.page() {
+                    Page::Playlist(p) => self.renaming = self.playlists.lists().get(p).map(|l| l.name.clone()),
+                    Page::Smart(p) => self.renaming = self.smart.lists().get(p).map(|l| l.name.clone()),
+                    _ => {}
+                }
+            }
             Target::DeletePlaylist => match self.page() {
                 Page::Playlist(p) => {
                     if let Some(name) = self.playlists.lists().get(p).map(|l| l.name.clone()) {
@@ -3824,6 +3848,35 @@ mod tests {
         m.activate(Target::DeletePlaylist, 0.0);
         assert!(m.smart.lists().is_empty());
         assert_eq!(m.page(), Page::Root);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn cmd_a_selects_the_name_being_renamed_so_typing_replaces_it() {
+        let dir = folder("rename-all");
+        let mut m = music(&dir);
+        m.activate(Target::Seg(4), 0.0);
+        m.activate(Target::Row(1), 0.0);
+        m.activate(Target::Back, 0.0);
+        m.activate(Target::Row(3), 0.0);
+        assert_eq!(m.page(), Page::Smart(0));
+        assert!(!m.select_all_name(), "no name is being typed yet");
+        m.activate(Target::Rename, 0.0);
+        assert!(m.select_all_name());
+        m.type_text("Mix");
+        assert_eq!(m.renaming.as_deref(), Some("Mix"), "the typed text replaces the selected name");
+        m.type_text("\n");
+        assert_eq!(m.smart.lists()[0].name, "Mix");
+        // Backspace on a selected name clears it all
+        m.activate(Target::Rename, 0.0);
+        assert!(m.select_all_name());
+        m.backspace();
+        assert_eq!(m.renaming.as_deref(), Some(""));
+        // a new rename starts unselected: typing appends
+        m.cancel(0.0);
+        m.activate(Target::Rename, 0.0);
+        m.type_text("!");
+        assert_eq!(m.renaming.as_deref(), Some("Mix!"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
