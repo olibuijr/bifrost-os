@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.14.0
+
+- Upstream soundcraft v0.14.0.
+  ## What's Changed
+  * Migrate SoundCraft to egui 0.37 by @skylartaylor in https://github.com/storytold/soundcraft/pull/1063
+  * Follow-ups to #1058: Auto Pan keeps the stereo image, paste and Strip Silence fixes by @aiongg in https://github.com/storytold/soundcraft/pull/1060
+  * Meters: keep every block's peak until the UI takes it by @forwardaudio in https://github.com/storytold/soundcraft/pull/1045
+  * feat: startup update prompt modal and direct self-updating by @dylanmtaylor in https://github.com/storytold/soundcraft/pull/1073
+
 ## 0.13.1
 
 - Upstream soundcraft v0.13.1.
