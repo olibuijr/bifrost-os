@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.15.0
+
+- Upstream pdfcraft v0.15.0.
+  ## What's Changed
+  * Reject non-hex characters in XFA image hash parsing by @Silvertree2010 in https://github.com/storytold/pdfcraft/pull/4630
+  * Fix AFNumber format printing "inf" for large finite values by @Silvertree2010 in https://github.com/storytold/pdfcraft/pull/4592
+  * Reject '+' as a hex digit in FormCalc url Decode escapes by @Silvertree2010 in https://github.com/storytold/pdfcraft/pull/4586
+  * Fix FormCalc Round overflowing to infinity for large values by @Silvertree2010 in https://github.com/storytold/pdfcraft/pull/4508
+
 ## 0.14.0
 
 - Upstream pdfcraft v0.14.0.
