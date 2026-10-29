@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.18.0
+
+- Upstream vectorcraft v0.18.0.
+  ## What's Changed
+  * Reject exponent notation in the pica form of Unit::parse by @Silvertree2010 in https://github.com/storytold/vectorcraft/pull/4126
+  * Refuse signs, exponents and non-numeric text in Export for Screens sizes by @Silvertree2010 in https://github.com/storytold/vectorcraft/pull/4123
+  * Reject misplaced or excess '=' padding in base64_decode by @Silvertree2010 in https://github.com/storytold/vectorcraft/pull/4131
+  * Shortcuts: the Cmd+Escape test expects no binding on Windows by @dotCooCoo in https://github.com/storytold/vectorcraft/pull/4096
+
 ## 0.17.0
 
 - Upstream vectorcraft v0.17.0.
