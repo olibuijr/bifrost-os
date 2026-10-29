@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.9
+
+- Text links follow the selected accent.
+
 ## 0.2.8
 
 - Rebuilt for 0.10.44: every touch says whether a mouse or a finger made it, so a mouse drag no longer scrolls lists on the desktop (the wheel, trackpad and scroll bar still do).

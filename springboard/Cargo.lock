@@ -527,7 +527,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-browser"
-version = "0.17.9"
+version = "0.17.10"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -644,7 +644,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-daw"
-version = "0.5.11"
+version = "0.5.12"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -940,7 +940,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-remote"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
  "bifrost-app",
  "bifrost-core",

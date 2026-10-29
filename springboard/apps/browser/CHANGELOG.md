@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.10
+
+- Text links follow the selected accent.
+
 ## 0.17.9
 
 - Zoom, Back and Forward follow the characters on the keyboard layout; View has Reload Page and Edit has Find; Cmd+D on a saved page edits its bookmark.
