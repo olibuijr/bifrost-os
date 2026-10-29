@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.18.0
+
+- Upstream effectcraft v0.18.0.
+  ## What's Changed
+  * Migrate EffectCraft to egui 0.37 by @skylartaylor in https://github.com/storytold/effectcraft/pull/2367
+  * feat: startup update prompt modal and direct self-updating by @dylanmtaylor in https://github.com/storytold/effectcraft/pull/2420
+  * build: pin craft-update to craft-libs main (db19c37) by @dylanmtaylor in https://github.com/storytold/effectcraft/pull/2435
+  * sonar: method paths instead of closures (rust:S1612) by @dylanmtaylor in https://github.com/storytold/effectcraft/pull/2274
+
 ## 0.17.0
 
 - Upstream effectcraft v0.17.0.
