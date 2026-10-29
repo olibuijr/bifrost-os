@@ -94,6 +94,23 @@ class RepositoryKey(unittest.TestCase):
             body = scriptlet[scriptlet.index(hook):]
             self.assertIn("bifrost_repo_trust", body[:body.index("\n}\n")], hook)
 
+    def test_trust_migration_requires_a_successful_key_import(self):
+        scriptlet = read(ARCH, "springboard.install")
+        start = scriptlet.index("bifrost_repo_siglevel() {")
+        end = scriptlet.index("\n}\n", scriptlet.index("bifrost_repo_trust() {", start)) + 3
+        functions = scriptlet[start:end]
+        original = "[options]\nSigLevel = Required DatabaseOptional\n[bifrost]\nSigLevel = Optional TrustAll\nServer = s\n"
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "pacman.conf")
+            for status in (1, 0):
+                with open(path, "w") as f:
+                    f.write(original)
+                script = functions + f"\nbifrost_repo_key() {{ return {status}; }}\nbifrost_repo_trust\n"
+                subprocess.run(["bash", "-c", script], check=True, capture_output=True,
+                               env={**os.environ, "BIFROST_PACMAN_CONF": path})
+                expected = original if status else original.replace("Optional TrustAll", "Required DatabaseRequired")
+                self.assertEqual(read(path), expected)
+
 
 class AgentAccessIsLabOnly(unittest.TestCase):
     def test_unit_needs_the_lab_marker_and_listens_on_loopback_by_default(self):
