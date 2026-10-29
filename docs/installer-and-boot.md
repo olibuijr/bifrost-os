@@ -182,15 +182,23 @@ Coordinates are original panel pixels. `tools/midget.py` sends each line over SS
 The `[bifrost]` repository is signed with a release key; the root-run `bifrost-update-guard` installs whatever it serves, so the
 signature is the only thing between a tampered mirror and root on every machine. Two phases:
 
-`tools/pc-publish.py` signs every package (`makepkg --sign`) and the database (`repo-add --sign`) with the key named by
-`BIFROST_REPO_SIGN_KEY` (the fingerprint is kept in `out/lab/repo-sign-key.fpr`) in the GnuPG home `BIFROST_REPO_GNUPGHOME`
-(default `out/lab/gnupg`, never in git); the `.sig` files are published next to the files. The public key
-(`packaging/arch/keys/bifrost-repo.gpg`, see the README there) is shipped by `springboard-shell` at `/usr/share/bifrost/keys/`
-and imported and locally signed into pacman's keyring by its scriptlet (`bifrost_repo_key` in `springboard.install`); the
-installer imports it from the live medium (`tools/build-iso.sh` copies it there) before the first sync. Installs write
-`SigLevel = Required DatabaseRequired` for `[bifrost]` (`BIFROST_REPO_SIG_LEVEL` in `installer/plan.rs`): an unsigned package or
-database, or one signed by a key the machine does not trust, is refused. There was no unsigned installed base to migrate (the
-only installed machine, Midget, had the key imported and its `pacman.conf` switched by hand on 2026-10-20).
+`tools/pc-publish.py` signs every package (`makepkg --sign`) and the database (`repo-add --sign`) with the key whose public
+half is `packaging/arch/keys/bifrost-repo.gpg` (see the README there), using the secret key in the GnuPG home
+`BIFROST_REPO_GNUPGHOME` (default `out/lab/repo-signing`, never in git); the `.sig` files are published next to the files.
+A missing secret key, or a signature missing after the run, stops the publish: it never falls back to unsigned. The only
+unsigned publish is the explicit `--bootstrap-unsigned`. `springboard-shell` ships the public key at
+`/usr/share/bifrost/keys/` (the package build fails without it); its scriptlet imports and locally signs it into pacman's
+keyring (`bifrost_repo_key` in `springboard.install`) and, only when that worked, rewrites the `[bifrost]` section of
+`/etc/pacman.conf` to `SigLevel = Required DatabaseRequired` (`bifrost_repo_siglevel`). The installer imports the key from the
+live medium (`tools/build-iso.sh` copies it there and fails without it) before the first sync, and writes the same
+`SigLevel` for `[bifrost]` (`BIFROST_REPO_SIG_LEVEL` in `installer/plan.rs`); without the key it stops with an error. An
+unsigned package or database, or one signed by a key the machine does not trust, is refused.
+
+Migration of machines that trust nothing yet: pacman refuses a signed database whose key is not in the keyring, even under
+`Optional`, so the release that first carries the key is published `--bootstrap-unsigned` and accepted under the old setting;
+its scriptlet imports the key and switches the section, so the very next update is verified. From then on every publish is
+signed and `midget.py ota` stays a single step each time. A machine that already has the key and `Required DatabaseRequired`
+(Midget, switched by hand on 2026-10-20) skips the bootstrap release.
 
 ## 7. CLI tools (`tools/`)
 

@@ -87,27 +87,67 @@ class PublicRepoExport(unittest.TestCase):
 
 
 class RepositorySigning(unittest.TestCase):
-    def test_no_key_means_unsigned_with_a_loud_warning(self):
-        self.assertIsNone(pub.signing_config({}))
-        self.assertIsNone(pub.signing_config({"BIFROST_REPO_SIGN_KEY": "  "}))
+    FPR = "0E6ED141285756654C6C347A02421144AA8469AE"
+
+    def config(self, env, shipped=FPR):
+        return pub.signing_config(env, public_key="/keys/bifrost-repo.gpg", fingerprint_of=lambda path: shipped)
+
+    def test_no_key_at_all_means_unsigned_with_a_loud_warning(self):
+        self.assertIsNone(self.config({}, shipped=None))
+        self.assertIsNone(self.config({"BIFROST_REPO_SIGN_KEY": "  "}, shipped=None))
         self.assertEqual(pub.signing_args(None), [])
         self.assertEqual(pub.signing_env(None), {})
         self.assertIn("UNSIGNED", pub.unsigned_warning())
+        self.assertIn("--bootstrap-unsigned", pub.unsigned_warning(bootstrap=True))
 
-    def test_a_key_signs_with_its_own_gnupg_home_under_out_lab(self):
-        cfg = pub.signing_config({"BIFROST_REPO_SIGN_KEY": "ABCD1234"})
-        self.assertEqual(pub.signing_args(cfg), ["--sign", "--key", "ABCD1234"])
-        self.assertTrue(cfg["gnupghome"].endswith("out/lab/gnupg"))
+    def test_the_shipped_public_key_makes_signing_the_default(self):
+        cfg = self.config({})
+        self.assertEqual(cfg["key"], self.FPR)
+        self.assertEqual(pub.signing_args(cfg), ["--sign", "--key", self.FPR])
+
+    def test_the_default_gnupg_home_is_out_lab_repo_signing(self):
+        cfg = self.config({})
+        self.assertTrue(cfg["gnupghome"].endswith("out/lab/repo-signing"))
         self.assertEqual(pub.signing_env(cfg), {"GNUPGHOME": cfg["gnupghome"]})
-        other = pub.signing_config({"BIFROST_REPO_SIGN_KEY": "K", "BIFROST_REPO_GNUPGHOME": "/srv/keys"})
-        self.assertEqual(other["gnupghome"], "/srv/keys")
+        self.assertEqual(self.config({"BIFROST_REPO_GNUPGHOME": "/srv/keys"})["gnupghome"], "/srv/keys")
+
+    def test_the_environment_key_must_be_the_shipped_key(self):
+        self.assertEqual(self.config({"BIFROST_REPO_SIGN_KEY": self.FPR[-16:]})["key"], self.FPR)
+        self.assertEqual(self.config({"BIFROST_REPO_SIGN_KEY": "0x" + self.FPR[-8:]})["key"], self.FPR)
+        with self.assertRaises(SystemExit):
+            self.config({"BIFROST_REPO_SIGN_KEY": "DEADBEEFDEADBEEF"})
+        self.assertEqual(self.config({"BIFROST_REPO_SIGN_KEY": "ABCD1234"}, shipped=None)["key"], "ABCD1234")
+
+    def test_the_fingerprint_comes_from_the_exported_key_file(self):
+        out = "pub:-:255:22:02421144AA8469AE:1::::::scSC\nfpr:::::::::" + self.FPR.lower() + ":\nuid:-::::1::X::Name:\n"
+        run = mock.Mock(return_value=mock.Mock(returncode=0, stdout=out))
+        with tempfile.NamedTemporaryFile() as f:
+            self.assertEqual(pub.key_fingerprint(f.name, runner=run), self.FPR)
+            self.assertEqual(pub.key_fingerprint(f.name, runner=mock.Mock(return_value=mock.Mock(returncode=2, stdout=""))), None)
+        self.assertIsNone(pub.key_fingerprint("/nonexistent/key.gpg", runner=run))
 
     def test_a_configured_key_that_is_missing_stops_the_publish(self):
-        cfg = pub.signing_config({"BIFROST_REPO_SIGN_KEY": "ABCD1234"})
+        cfg = self.config({})
         missing = mock.Mock(return_value=mock.Mock(returncode=2))
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(SystemExit) as stop:
             pub.check_signing_key(cfg, runner=missing)
+        self.assertIn("--bootstrap-unsigned", str(stop.exception), "the only way out is explicit")
         pub.check_signing_key(cfg, runner=mock.Mock(return_value=mock.Mock(returncode=0)))
+
+    def test_a_missing_signature_after_a_signed_run_stops_the_publish(self):
+        cfg = self.config({})
+        with tempfile.TemporaryDirectory() as d:
+            pkg, db = os.path.join(d, "p.pkg.tar.zst"), os.path.join(d, "bifrost.db.tar.zst")
+            for f in (pkg, db):
+                open(f, "wb").close()
+            with self.assertRaises(SystemExit):
+                pub.require_signatures(cfg, [pkg, db])
+            open(pkg + ".sig", "wb").write(b"s")
+            with self.assertRaises(SystemExit):
+                pub.require_signatures(cfg, [pkg, db])
+            open(db + ".sig", "wb").write(b"s")
+            pub.require_signatures(cfg, [pkg, db])
+            pub.require_signatures(None, [os.path.join(d, "unsigned")])
 
     def test_signatures_are_exported_next_to_what_they_sign(self):
         with tempfile.TemporaryDirectory() as d:

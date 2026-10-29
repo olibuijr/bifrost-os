@@ -325,6 +325,10 @@ const REPO_KEY_TARGET: &str = "/usr/share/bifrost/keys/bifrost-repo.gpg";
 /// Imports the key file `$1` into pacman's keyring and signs it locally (the same steps as the package scriptlet).
 const IMPORT_REPO_KEY_SH: &str = "pacman-key --add \"$1\" && fpr=$(gpg --batch --with-colons --import-options show-only --import \"$1\" | awk -F: '$1==\"fpr\"{print $10; exit}') && [ -n \"$fpr\" ] && pacman-key --lsign-key \"$fpr\"";
 
+fn repo_key_missing_message() -> String {
+    format!("{REPO_KEY_LIVE} is not on the installer medium; the update repository is signed and the installed system requires its signature (rebuild the medium with tools/build-iso.sh)")
+}
+
 fn bifrost_repo_section(server: &str) -> String {
     format!("[bifrost]\nSigLevel = {BIFROST_REPO_SIG_LEVEL}\nServer = {server}\n")
 }
@@ -936,16 +940,15 @@ pub fn install(cfg: &Config, progress: &Shared) {
             r.write(&sys("/etc/pacman.conf"), &format!("{conf}\n{}", bifrost_repo_section(server)))?;
             // the public key that signs the repository: into the target's keyring before the first `pacman -Sy` below
             // (the package ships the same key and its scriptlet keeps it imported afterwards)
-            if std::path::Path::new(REPO_KEY_LIVE).exists() {
-                let imported = r.cmd(&["install", "-Dm644", REPO_KEY_LIVE, &sys(REPO_KEY_TARGET)])
-                    .and_then(|_| r.chroot(&["sh", "-c", IMPORT_REPO_KEY_SH, "sh", REPO_KEY_TARGET]));
-                match imported {
-                    Ok(_) => r.log("update repository key imported into the installed keyring".to_string()),
-                    Err(e) => r.log(format!("WARNING: update repository key not imported ({e}); a signed repository will be refused")),
-                }
-            } else {
-                r.log(format!("WARNING: {REPO_KEY_LIVE} is not on the installer medium; a signed update repository is refused until the package brings the key"));
+            // The section above requires signatures, so an install without the key could never update: stop here, loudly,
+            // instead of finishing a system that refuses its own update channel.
+            if !std::path::Path::new(REPO_KEY_LIVE).exists() {
+                return Err(repo_key_missing_message());
             }
+            r.cmd(&["install", "-Dm644", REPO_KEY_LIVE, &sys(REPO_KEY_TARGET)])
+                .and_then(|_| r.chroot(&["sh", "-c", IMPORT_REPO_KEY_SH, "sh", REPO_KEY_TARGET]))
+                .map_err(|e| format!("the update repository key could not be imported into the installed keyring: {e}"))?;
+            r.log("update repository key imported into the installed keyring".to_string());
         }
 
         r.set(2, 86, "Installing the desktop");
@@ -1455,6 +1458,8 @@ mod tests {
         assert_eq!(s, "[bifrost]\nSigLevel = Required DatabaseRequired\nServer = https://repo.example/arch/$arch\n");
         assert!(!s.contains("TrustAll"), "no unknown signing key is trusted");
         assert!(IMPORT_REPO_KEY_SH.contains("pacman-key --add") && IMPORT_REPO_KEY_SH.contains("--lsign-key"));
+        assert!(repo_key_missing_message().contains(REPO_KEY_LIVE), "a medium without the key says where it belongs");
+        assert_eq!(REPO_KEY_LIVE, REPO_KEY_TARGET, "the scriptlet and the installer read the same path");
     }
 
     #[test]
