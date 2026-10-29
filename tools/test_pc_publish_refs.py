@@ -92,9 +92,10 @@ class RepositorySigning(unittest.TestCase):
     def config(self, env, shipped=FPR):
         return pub.signing_config(env, public_key="/keys/bifrost-repo.gpg", fingerprint_of=lambda path: shipped)
 
-    def test_no_key_at_all_means_unsigned_with_a_loud_warning(self):
-        self.assertIsNone(self.config({}, shipped=None))
-        self.assertIsNone(self.config({"BIFROST_REPO_SIGN_KEY": "  "}, shipped=None))
+    def test_missing_or_unreadable_public_key_stops_even_with_an_environment_key(self):
+        for env in ({}, {"BIFROST_REPO_SIGN_KEY": "  "}, {"BIFROST_REPO_SIGN_KEY": "ABCD1234"}):
+            with self.assertRaises(SystemExit):
+                self.config(env, shipped=None)
         self.assertEqual(pub.signing_args(None), [])
         self.assertEqual(pub.signing_env(None), {})
         self.assertIn("UNSIGNED", pub.unsigned_warning())
@@ -116,7 +117,6 @@ class RepositorySigning(unittest.TestCase):
         self.assertEqual(self.config({"BIFROST_REPO_SIGN_KEY": "0x" + self.FPR[-8:]})["key"], self.FPR)
         with self.assertRaises(SystemExit):
             self.config({"BIFROST_REPO_SIGN_KEY": "DEADBEEFDEADBEEF"})
-        self.assertEqual(self.config({"BIFROST_REPO_SIGN_KEY": "ABCD1234"}, shipped=None)["key"], "ABCD1234")
 
     def test_the_fingerprint_comes_from_the_exported_key_file(self):
         out = "pub:-:255:22:02421144AA8469AE:1::::::scSC\nfpr:::::::::" + self.FPR.lower() + ":\nuid:-::::1::X::Name:\n"

@@ -130,19 +130,20 @@ def key_matches(fingerprint, key):
 
 
 def signing_config(env=None, public_key=PUBLIC_KEY, fingerprint_of=key_fingerprint):
-    """The repository signing setup, or None when no key is configured at all: {"key": id, "gnupghome": dir}.
+    """The repository signing setup: {"key": id, "gnupghome": dir}.
     Signing is configured by shipping the public key (packaging/arch/keys/bifrost-repo.gpg): its fingerprint is the key that
     signs. BIFROST_REPO_SIGN_KEY may name the key instead, but then it must be that same key, or no installed system would
     trust the result. The secret half lives in a GnuPG home under out/lab (BIFROST_REPO_GNUPGHOME overrides), never in git."""
     env = os.environ if env is None else env
     shipped = fingerprint_of(public_key)
+    if not shipped:
+        sys.exit(f"pc-publish: repository public key {public_key} is missing or unreadable; "
+                 "the release must carry a valid key even when bootstrapping")
     key = env.get("BIFROST_REPO_SIGN_KEY", "").strip()
-    if key and shipped and not key_matches(shipped, key):
+    if key and not key_matches(shipped, key):
         sys.exit(f"pc-publish: BIFROST_REPO_SIGN_KEY={key} is not the key in {os.path.relpath(public_key, REPO)} "
                  f"({shipped}); installed systems would refuse what it signs")
-    key = shipped or key
-    if not key:
-        return None
+    key = shipped
     home = os.path.abspath(os.path.expanduser(env.get("BIFROST_REPO_GNUPGHOME", "") or DEFAULT_GNUPGHOME))
     return {"key": key, "gnupghome": home}
 
@@ -345,7 +346,8 @@ def main():
     a = ap.parse_args()
     prof = "release" if a.release else "fast"
     t0 = time.time()
-    sign = None if a.bootstrap_unsigned else signing_config()
+    configured = signing_config()
+    sign = None if a.bootstrap_unsigned else configured
     if sign:
         check_signing_key(sign)
     else:
