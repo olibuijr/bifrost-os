@@ -45,6 +45,29 @@ pub fn wants_unlock(line: &str) -> bool {
     line.split_whitespace().any(|t| t == "bifrost.unlock" || t.starts_with("root=/dev/mapper/"))
 }
 
+/// The panel size a `video=` token pins (`video=DP-1:2560x1440@165` or `video=2560x1440`), `None` when the line has
+/// none (`video=eDP-1:d`, `video=efifb:off`, no token). The kernel's display driver then sets that mode itself.
+pub fn video_size(line: &str) -> Option<(u32, u32)> {
+    line.split_whitespace().filter_map(|t| t.strip_prefix("video=")).find_map(|spec| {
+        // [<connector>:]<xres>x<yres>[M][R][-<bpp>][@<refresh>][i][m][e|D|d]
+        let spec = spec.rsplit_once(':').map_or(spec, |(_, mode)| mode);
+        let (w, rest) = spec.split_once('x')?;
+        let h: String = rest.chars().take_while(char::is_ascii_digit).collect();
+        match (w.parse::<u32>().ok()?, h.parse::<u32>().ok()?) {
+            (0, _) | (_, 0) => None,
+            size => Some(size),
+        }
+    })
+}
+
+/// Whether the loader sets the largest GOP mode. Each mode change makes the monitor retrain its link (a visible
+/// blink), so when `video=` pins a mode the kernel will change the mode once anyway, and the loader leaves the
+/// firmware's mode alone: one change from firmware to desktop instead of two. Without `video=` the loader's change to
+/// the largest mode is the boot's only one (the kernel and the window server keep it).
+pub fn should_set_native_mode(current_area: usize, largest_area: usize, kernel_sets_mode: bool) -> bool {
+    !kernel_sets_mode && largest_area > current_area
+}
+
 /// Returns `line` with every text-free token replaced by the verbose set. Every other token (root, subvolume,
 /// the initrd path, the hardware flags) is kept in order.
 pub fn verbose(line: &str) -> String {
@@ -68,6 +91,37 @@ mod tests {
         assert!(!wants_unlock("quiet root=UUID=abcd rw"));
         assert!(!wants_unlock("quiet bifrost.unlocked=1 root=/dev/sda2"));
         assert!(!wants_unlock(""));
+    }
+
+    #[test]
+    fn video_size_reads_the_pinned_mode() {
+        assert_eq!(video_size("quiet video=DP-1:2560x1440@165 rw"), Some((2560, 1440)));
+        assert_eq!(video_size("video=1920x1080"), Some((1920, 1080)));
+        assert_eq!(video_size("video=eDP-1:1280x800M@60e"), Some((1280, 800)));
+        assert_eq!(video_size("video=HDMI-A-1:1920x1080-32@60 video=DP-1:d"), Some((1920, 1080)));
+    }
+
+    #[test]
+    fn video_size_ignores_tokens_that_pin_no_size() {
+        assert_eq!(video_size(""), None);
+        assert_eq!(video_size("quiet root=UUID=1 rw"), None);
+        assert_eq!(video_size("video=eDP-1:d"), None);
+        assert_eq!(video_size("video=efifb:off"), None);
+        assert_eq!(video_size("video=DP-1:0x0@60"), None);
+        assert_eq!(video_size("video=DP-1:2560x@60"), None);
+        assert_eq!(video_size("novideo=DP-1:2560x1440"), None);
+    }
+
+    #[test]
+    fn the_loader_keeps_the_firmware_mode_when_the_kernel_will_set_one() {
+        let (current, largest) = (1024 * 768, 2560 * 1440);
+        // no video=: the loader's change is the boot's one mode change
+        assert!(should_set_native_mode(current, largest, false));
+        // video= pins a mode: the kernel changes it, so the loader does not add a second change
+        assert!(!should_set_native_mode(current, largest, true));
+        // already at the largest mode (or larger): never changed
+        assert!(!should_set_native_mode(largest, largest, false));
+        assert!(!should_set_native_mode(largest, current, false));
     }
 
     #[test]
