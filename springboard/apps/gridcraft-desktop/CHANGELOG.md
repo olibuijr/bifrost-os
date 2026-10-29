@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.13.0
+
+- Upstream gridcraft v0.13.0.
+  ## What's Changed
+  * Trace arrows stay on the traced cell when the selection moves by @marcoarnulfo in https://github.com/storytold/gridcraft/pull/2481
+  * Make the Row Height dialog use points like Excel by @Silvertree2010 in https://github.com/storytold/gridcraft/pull/2524
+  * Return None from datetime_from_serial when rounding carries past 9999 by @Silvertree2010 in https://github.com/storytold/gridcraft/pull/2528
+  * Keep <scheme val="minor"/> on every body-font font on save by @Silvertree2010 in https://github.com/storytold/gridcraft/pull/2557
+
 ## 0.12.1
 
 - Upstream gridcraft v0.12.1.
