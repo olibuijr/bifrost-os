@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.10.45 — 2026-10-29
+
+- Require signed system updates after importing the repository key, and sign published packages and repository metadata.
+- Avoid an extra display mode change during boot when the kernel command line specifies a display mode.
+
 ## 0.10.44 — 2026-10-27
 
 Fixes from the backlog waves and the owner's reports, with every app rebuilt.
