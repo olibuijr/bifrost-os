@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.14.0
+
+- Upstream cadcraft v0.14.0.
+  ## What's Changed
+  * Migrate CADCraft to egui 0.37 by @skylartaylor in https://github.com/storytold/cadcraft/pull/2119
+  * craft-pdf and its PDF backends back at craft-libs 6e7f285 by @aiongg in https://github.com/storytold/cadcraft/pull/2147
+  * macOS menu choices and their shortcuts run at once by @aiongg in https://github.com/storytold/cadcraft/pull/2140
+  * "Save changes?" and Drawing Recovery appear at once by @aiongg in https://github.com/storytold/cadcraft/pull/2144
+
 ## 0.13.0
 
 - Upstream cadcraft v0.13.0.
