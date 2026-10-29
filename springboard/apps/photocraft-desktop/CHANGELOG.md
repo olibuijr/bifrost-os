@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.17.0
+
+- Upstream photocraft v0.17.0.
+  ## What's Changed
+  * Package: never overwrite one link's copy with another, list a missing link once by @softwaregames1 in https://github.com/storytold/photocraft/pull/9185
+  * Fix CPU pixel grid stroke width on HiDPI displays by @ssh-den in https://github.com/storytold/photocraft/pull/9199
+  * Image Rotation › Arbitrary turns unlinked layer masks (#9201) by @davidmann4 in https://github.com/storytold/photocraft/pull/9203
+  * fix(cms): ignore tags inside .look XML comments (#9109) by @DuBearte in https://github.com/storytold/photocraft/pull/9210
+
 ## 0.16.0
 
 - Upstream photocraft v0.16.0.
