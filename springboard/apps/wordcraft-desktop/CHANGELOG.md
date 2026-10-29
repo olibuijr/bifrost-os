@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.12.0
+
+- Upstream wordcraft v0.12.0.
+  ## What's Changed
+  * Parse \genfrac in LaTeX import so binomials survive export by @Silvertree2010 in https://github.com/storytold/wordcraft/pull/4242
+  * Linux desktop entry: stop declaring text/plain by @marcoarnulfo in https://github.com/storytold/wordcraft/pull/4206
+  * Lists: draw Arabic letter numbering (arabicAlpha, arabicAbjad) by @7mz410 in https://github.com/storytold/wordcraft/pull/4218
+  * Cap list label length when expanding level template text by @Silvertree2010 in https://github.com/storytold/wordcraft/pull/4003
+
 ## 0.11.0
 
 - Upstream wordcraft v0.11.0.
