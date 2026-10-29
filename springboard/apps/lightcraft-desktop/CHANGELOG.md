@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.15.0
+
+- Upstream lightcraft v0.15.0.
+  ## What's Changed
+  * Migrate LightCraft to egui 0.37 with current main preserved by @skylartaylor in https://github.com/storytold/lightcraft/pull/2913
+  * feat(update): add startup update prompt modal and self-update by @dylanmtaylor in https://github.com/storytold/lightcraft/pull/2933
+  * security: bound heic-rs 0.1.4 work around hostile HEIF containers by @dylanmtaylor in https://github.com/storytold/lightcraft/pull/2770
+  * security/raw: bound hostile-memory paths in the raw decoders by @dylanmtaylor in https://github.com/storytold/lightcraft/pull/2780
+
 ## 0.14.0
 
 - Upstream lightcraft v0.14.0.
