@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.14.0
+
+- Upstream filmcraft v0.14.0.
+  ## What's Changed
+  * Keep draft-decoder counter assertions in one test by @lisn0 in https://github.com/storytold/filmcraft/pull/3286
+  * Report parameter and accepted value from effects.setParam by @lisn0 in https://github.com/storytold/filmcraft/pull/3281
+  * Frame workers: a replaced frame server's workers end and release its cache and media pool by @dotCooCoo in https://github.com/storytold/filmcraft/pull/3244
+  * codecs: the rayon deadlock test allows 120 s between two answered frame requests by @dotCooCoo in https://github.com/storytold/filmcraft/pull/3241
+
 ## 0.13.0
 
 - Upstream filmcraft v0.13.0.
