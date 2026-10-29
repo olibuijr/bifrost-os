@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.12.0
+
+- Upstream deckcraft v0.12.0.
+  ## What's Changed
+  * Migrate DeckCraft to egui 0.37 by @skylartaylor in https://github.com/storytold/deckcraft/pull/1350
+  * refactor: explicit imports in engine/anim/geom/model/render/text/pdf/ogg modules (SonarCloud S2208) by @dylanmtaylor in https://github.com/storytold/deckcraft/pull/1270
+  * Slides: Ctrl+Shift+click selects a range, also in the slide sorter by @Faabyy in https://github.com/storytold/deckcraft/pull/1107
+  * Reuse Slides: choose which slides of the other file to insert by @Faabyy in https://github.com/storytold/deckcraft/pull/1109
+
 ## 0.11.1
 
 - Upstream deckcraft v0.11.1.
