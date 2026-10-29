@@ -39,8 +39,8 @@ release that carries the key has to be accepted without a signature, and every r
    section of `/etc/pacman.conf` to `SigLevel = Required DatabaseRequired`.
 2. Every release after that is a plain `bifrost pc publish` (signed). The machine verifies it against the key from step 1.
 
-A machine that already has the key imported and `Required DatabaseRequired` (Midget, switched by hand on 2026-10-20) skips
-step 1 and takes signed releases directly.
+A machine that already has the key imported and `Required DatabaseRequired` skips step 1 and takes signed releases
+directly. Midget was checked on 2026-10-29 and still had `Optional TrustAll`, so it requires the bootstrap migration.
 
 - The installer reads the key from the live medium at the same path (`tools/build-iso.sh` copies this directory there and
   fails without it) and imports it into the target before the first `pacman -Sy`. New installs get `Required
