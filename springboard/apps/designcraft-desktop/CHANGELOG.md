@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.14.0
+
+- Upstream designcraft v0.14.0.
+  ## What's Changed
+  * Application bar: use craft-window's shared title bar by @aiongg in https://github.com/storytold/designcraft/pull/1811
+  * Fix ruler major tick spacing skipping the 10x step by @Silvertree2010 in https://github.com/storytold/designcraft/pull/1808
+  * Reply with a parse error on non-UTF-8 lines in MCP serve by @Silvertree2010 in https://github.com/storytold/designcraft/pull/1803
+  * Preflight: the missing-link test makes the temporary folder absolute by @dotCooCoo in https://github.com/storytold/designcraft/pull/1796
+
 ## 0.13.0
 
 - Upstream designcraft v0.13.0.
