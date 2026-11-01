@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.16.0
+
+- Upstream lightcraft v0.16.0.
+  ## What's Changed
+  * Grant network access so update checks can reach GitHub by @dylanmtaylor in https://github.com/storytold/lightcraft/pull/3269
+  * Honor CARGO_BUILD_TARGET in FreeBSD packaging for aarch64 release builds by @dylanmtaylor in https://github.com/storytold/lightcraft/pull/3275
+  * deps: bump tar, zip, roxmltree, rustls-webpki and symphonia to latest by @dylanmtaylor in https://github.com/storytold/lightcraft/pull/3358
+  * CI: workflows only call craft-common-actions at @main (AGENTS.md; windows-arm64 unpinned) by @dylanmtaylor in https://github.com/storytold/lightcraft/pull/3356
+
 ## 0.15.0
 
 - Upstream lightcraft v0.15.0.
