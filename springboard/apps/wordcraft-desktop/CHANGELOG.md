@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.13.2
+
+- Upstream wordcraft v0.13.2.
+  ## What's Changed
+  * Grant network access so update checks can reach GitHub by @dylanmtaylor in https://github.com/storytold/wordcraft/pull/4741
+  * Honor CARGO_BUILD_TARGET in FreeBSD packaging for aarch64 release builds by @dylanmtaylor in https://github.com/storytold/wordcraft/pull/4760
+  * Labels: continue selected recipients across sheets (#4880) by @OPUZZLES in https://github.com/storytold/wordcraft/pull/4894
+  * packaging: Flatpak finds and prints to CUPS printers by @dylanmtaylor in https://github.com/storytold/wordcraft/pull/4909
+
 ## 0.12.0
 
 - Upstream wordcraft v0.12.0.
