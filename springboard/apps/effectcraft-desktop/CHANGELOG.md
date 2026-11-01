@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.19.0
+
+- Upstream effectcraft v0.19.0.
+  ## What's Changed
+  * Honor CARGO_BUILD_TARGET in FreeBSD packaging for aarch64 release builds by @dylanmtaylor in https://github.com/storytold/effectcraft/pull/2555
+  * Export: convert H.264 frames to YUV 4:2:0 on the GPU by @MatejKozlovsky in https://github.com/storytold/effectcraft/pull/1631
+  * Face tracker: find polygon crossings once per window row by @vangel76 in https://github.com/storytold/effectcraft/pull/2334
+  * Camera tracking: validate solver input and bound workspaces by @vangel76 in https://github.com/storytold/effectcraft/pull/2341
+
 ## 0.18.0
 
 - Upstream effectcraft v0.18.0.
