@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.15.0
+
+- Upstream soundcraft v0.15.0.
+  ## What's Changed
+  * Grant network access so update checks can reach GitHub by @dylanmtaylor in https://github.com/storytold/soundcraft/pull/1163
+  * Honor CARGO_BUILD_TARGET in FreeBSD packaging for aarch64 release builds by @dylanmtaylor in https://github.com/storytold/soundcraft/pull/1167
+  * Reject out-of-range timecode fields so Min:Secs strings fall through by @Silvertree2010 in https://github.com/storytold/soundcraft/pull/1024
+  * Count only audio-track clips in session text export by @Silvertree2010 in https://github.com/storytold/soundcraft/pull/1025
+
 ## 0.14.0
 
 - Upstream soundcraft v0.14.0.
