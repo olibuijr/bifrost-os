@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.13.1
+
+- Upstream deckcraft v0.13.1.
+  ## What's Changed
+  * Grant network access so update checks can reach GitHub by @dylanmtaylor in https://github.com/storytold/deckcraft/pull/1502
+  * Honor CARGO_BUILD_TARGET in FreeBSD packaging for aarch64 release builds by @dylanmtaylor in https://github.com/storytold/deckcraft/pull/1507
+  * CI: workflows only call craft-common-actions at @main (AGENTS.md; windows-arm64 unpinned) by @dylanmtaylor in https://github.com/storytold/deckcraft/pull/1557
+  * Update prompt shows the app icon and accent color instead of a letter by @dylanmtaylor in https://github.com/storytold/deckcraft/pull/1561
+
 ## 0.12.0
 
 - Upstream deckcraft v0.12.0.
