@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.16.1
+
+- Upstream pdfcraft v0.16.1.
+  ## What's Changed
+  * Grant network access so update checks can reach GitHub by @dylanmtaylor in https://github.com/storytold/pdfcraft/pull/5189
+  * Honor CARGO_BUILD_TARGET in FreeBSD packaging for aarch64 release builds by @dylanmtaylor in https://github.com/storytold/pdfcraft/pull/5205
+  * Issue #2368: flattening keeps a NoRotate widget upright on a rotated page by @wstock in https://github.com/storytold/pdfcraft/pull/2402
+  * Export Data as CSV keeps formula-like cells as text, like the merge report by @oracola91 in https://github.com/storytold/pdfcraft/pull/2524
+
 ## 0.15.0
 
 - Upstream pdfcraft v0.15.0.
