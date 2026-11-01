@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.14.2
+
+- Upstream gridcraft v0.14.2.
+  ## What's Changed
+  * Grant network access so update checks can reach GitHub by @dylanmtaylor in https://github.com/storytold/gridcraft/pull/2841
+  * Honor CARGO_BUILD_TARGET in FreeBSD packaging for aarch64 release builds by @dylanmtaylor in https://github.com/storytold/gridcraft/pull/2847
+  * Macro interface: Automate › Macros, Macros and Record Macro dialogs, step editor with a debugger by @prxnvt in https://github.com/storytold/gridcraft/pull/478
+  * Macro engine: macro tokens, resolved to A1 references when a step runs by @prxnvt in https://github.com/storytold/gridcraft/pull/2151
+
 ## 0.13.0
 
 - Upstream gridcraft v0.13.0.
