@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.15.2
+
+- Upstream designcraft v0.15.2.
+  ## What's Changed
+  * Grant network access so update checks can reach GitHub by @dylanmtaylor in https://github.com/storytold/designcraft/pull/1954
+  * Honor CARGO_BUILD_TARGET in FreeBSD packaging for aarch64 release builds by @dylanmtaylor in https://github.com/storytold/designcraft/pull/1959
+  * Show file and message dialogs without blocking the frame (fixes macOS crash) by @aiongg in https://github.com/storytold/designcraft/pull/1961
+  * packaging: Flatpak finds and prints to CUPS printers by @dylanmtaylor in https://github.com/storytold/designcraft/pull/2012
+
 ## 0.14.0
 
 - Upstream designcraft v0.14.0.
