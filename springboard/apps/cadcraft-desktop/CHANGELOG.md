@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.15.1
+
+- Upstream cadcraft v0.15.1.
+  ## What's Changed
+  * Grant network access so update checks can reach GitHub by @dylanmtaylor in https://github.com/storytold/cadcraft/pull/2413
+  * Honor CARGO_BUILD_TARGET in FreeBSD packaging for aarch64 release builds by @dylanmtaylor in https://github.com/storytold/cadcraft/pull/2425
+  * PEDIT Multiple at the command line by @aldozar in https://github.com/storytold/cadcraft/pull/2225
+  * Reject out-of-range LUNITS, LUPREC, AUNITS and AUPREC in SETVAR by @Silvertree2010 in https://github.com/storytold/cadcraft/pull/2269
+
 ## 0.14.0
 
 - Upstream cadcraft v0.14.0.
