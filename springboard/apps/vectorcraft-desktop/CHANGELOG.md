@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.19.0
+
+- Upstream vectorcraft v0.19.0.
+  ## What's Changed
+  * Grant network access so update checks can reach GitHub by @dylanmtaylor in https://github.com/storytold/vectorcraft/pull/4482
+  * Honor CARGO_BUILD_TARGET in FreeBSD packaging for aarch64 release builds by @dylanmtaylor in https://github.com/storytold/vectorcraft/pull/4487
+  * Enforce Rust coding standards via Clippy by @dylanmtaylor in https://github.com/storytold/vectorcraft/pull/4299
+  * Remove the experimental Windows 7 build by @dylanmtaylor in https://github.com/storytold/vectorcraft/pull/4497
+
 ## 0.18.0
 
 - Upstream vectorcraft v0.18.0.
