@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.18.0
+
+- Upstream photocraft v0.18.0.
+  ## What's Changed
+  * Grant network access so update checks can reach GitHub by @dylanmtaylor in https://github.com/storytold/photocraft/pull/9982
+  * Correct update_transport comment: Flatpak sandbox now has network by @dylanmtaylor in https://github.com/storytold/photocraft/pull/9983
+  * Honor CARGO_BUILD_TARGET in FreeBSD packaging for aarch64 release builds by @dylanmtaylor in https://github.com/storytold/photocraft/pull/9989
+  * Engine: a pixel change damages only the tiles that changed (#9329) by @brennanMKE in https://github.com/storytold/photocraft/pull/9942
+
 ## 0.17.0
 
 - Upstream photocraft v0.17.0.
