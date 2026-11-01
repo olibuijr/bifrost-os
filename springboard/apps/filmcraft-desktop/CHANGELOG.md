@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.15.0
+
+- Upstream filmcraft v0.15.0.
+  ## What's Changed
+  * Grant network access so update checks can reach GitHub by @dylanmtaylor in https://github.com/storytold/filmcraft/pull/3527
+  * Honor CARGO_BUILD_TARGET in FreeBSD packaging for aarch64 release builds by @dylanmtaylor in https://github.com/storytold/filmcraft/pull/3534
+  * CI: workflows only call craft-common-actions at @main (AGENTS.md; windows-arm64 unpinned) by @dylanmtaylor in https://github.com/storytold/filmcraft/pull/3645
+  * Project panel: search finds names holding every typed word by @punkhop in https://github.com/storytold/filmcraft/pull/3327
+
 ## 0.14.0
 
 - Upstream filmcraft v0.14.0.
