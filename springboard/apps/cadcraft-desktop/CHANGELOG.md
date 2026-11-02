@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.16.0
+
+- Upstream cadcraft v0.16.0.
+  ## What's Changed
+  * Validate new linetype names in the rename command by @Silvertree2010 in https://github.com/storytold/cadcraft/pull/2519
+  * Updates: shared check-result dialog from craft-update by @aiongg in https://github.com/storytold/cadcraft/pull/2530
+  * docs: tidy agent, contributor and asset docs by @aiongg in https://github.com/storytold/cadcraft/pull/2527
+  * Backups of drawings sharing a name no longer overwrite each other by @tanish2k09 in https://github.com/storytold/cadcraft/pull/2537
+
 ## 0.15.1
 
 - Upstream cadcraft v0.15.1.
