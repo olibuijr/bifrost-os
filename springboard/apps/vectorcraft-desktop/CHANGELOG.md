@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.20.0
+
+- Upstream vectorcraft v0.20.0.
+  ## What's Changed
+  * Updates: shared check-result dialog from craft-update by @aiongg in https://github.com/storytold/vectorcraft/pull/4814
+  * docs: tidy agent, contributor and asset docs by @aiongg in https://github.com/storytold/vectorcraft/pull/4807
+  * Shortcuts: in the web build a key-position shortcut uses the key of the same press by @dotCooCoo in https://github.com/storytold/vectorcraft/pull/4867
+  * Fix #4864: a search pick of an Asset Export command opens the panel by @dotCooCoo in https://github.com/storytold/vectorcraft/pull/4869
+
 ## 0.19.0
 
 - Upstream vectorcraft v0.19.0.
