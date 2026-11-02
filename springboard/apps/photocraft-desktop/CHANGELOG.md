@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.19.0
+
+- Upstream photocraft v0.19.0.
+  ## What's Changed
+  * Updates: shared check-result dialog from craft-update by @aiongg in https://github.com/storytold/photocraft/pull/10421
+  * docs: tidy agent, contributor and release docs by @aiongg in https://github.com/storytold/photocraft/pull/10420
+  * Keep brush state intact when a preset tip fails to load by @wanikhawar in https://github.com/storytold/photocraft/pull/10288
+  * Integration batch: 18 PRs on main by @davidmann4 in https://github.com/storytold/photocraft/pull/10145
+
 ## 0.18.0
 
 - Upstream photocraft v0.18.0.
