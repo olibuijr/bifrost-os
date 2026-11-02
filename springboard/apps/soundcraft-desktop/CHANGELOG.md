@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.16.0
+
+- Upstream soundcraft v0.16.0.
+  ## What's Changed
+  * Updates: shared check-result dialog from craft-update by @aiongg in https://github.com/storytold/soundcraft/pull/1219
+  * docs: tidy agent, contributor and release docs by @aiongg in https://github.com/storytold/soundcraft/pull/1218
+  * Clip menu: act on the whole edit selection when the right-clicked clip is part of it by @ydking0911 in https://github.com/storytold/soundcraft/pull/1196
+  * Zoom Toggle: Alt+Shift+E and Alt-click cancel it and keep the current view by @dotCooCoo in https://github.com/storytold/soundcraft/pull/1101
+
 ## 0.15.0
 
 - Upstream soundcraft v0.15.0.
