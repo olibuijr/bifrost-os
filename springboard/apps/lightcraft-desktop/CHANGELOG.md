@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.17.0
+
+- Upstream lightcraft v0.17.0.
+  ## What's Changed
+  * Updates: shared check-result dialog from craft-update by @aiongg in https://github.com/storytold/lightcraft/pull/3437
+  * docs: tidy agent, contributor and asset docs by @aiongg in https://github.com/storytold/lightcraft/pull/3436
+  * Integration r3: 178 reviewed PRs by @aiongg in https://github.com/storytold/lightcraft/pull/3430
+  * Issue #3405: Auto Import waits for an import that starts during its listing by @finaler1x in https://github.com/storytold/lightcraft/pull/3409
+
 ## 0.16.0
 
 - Upstream lightcraft v0.16.0.
