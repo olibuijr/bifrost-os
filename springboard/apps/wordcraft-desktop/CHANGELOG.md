@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.14.0
+
+- Upstream wordcraft v0.14.0.
+  ## What's Changed
+  * Updates: shared check-result dialog from craft-update by @aiongg in https://github.com/storytold/wordcraft/pull/5037
+  * docs: tidy agent, contributor and asset docs by @aiongg in https://github.com/storytold/wordcraft/pull/5035
+  * #3676: page parameters saturate instead of wrapping to page one by @socrabs151 in https://github.com/storytold/wordcraft/pull/4289
+  * View › Macros opens a dialog to run, delete and record macros (#4327) by @x-labb in https://github.com/storytold/wordcraft/pull/4426
+
 ## 0.13.2
 
 - Upstream wordcraft v0.13.2.
