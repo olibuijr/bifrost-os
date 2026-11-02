@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.15.0
+
+- Upstream gridcraft v0.15.0.
+  ## What's Changed
+  * Updates: shared check-result dialog from craft-update by @aiongg in https://github.com/storytold/gridcraft/pull/3013
+  * docs: tidy agent, contributor and asset docs by @aiongg in https://github.com/storytold/gridcraft/pull/3012
+  * Make the Merge & Center ribbon label part of its split button by @Silvertree2010 in https://github.com/storytold/gridcraft/pull/3024
+  * Match Excel for YEARFRAC basis 0, MOD, NUMBERVALUE and PERCENTRANK edge cases by @Harrison-Booth in https://github.com/storytold/gridcraft/pull/2657
+
 ## 0.14.2
 
 - Upstream gridcraft v0.14.2.
