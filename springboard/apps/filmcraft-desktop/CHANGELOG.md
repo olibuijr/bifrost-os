@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.16.0
+
+- Upstream filmcraft v0.16.0.
+  ## What's Changed
+  * Updates: shared check-result dialog from craft-update by @aiongg in https://github.com/storytold/filmcraft/pull/3756
+  * docs: tidy agent, contributor and asset docs by @aiongg in https://github.com/storytold/filmcraft/pull/3755
+  * Integration: backlog round r1 (244 PRs) by @aiongg in https://github.com/storytold/filmcraft/pull/3746
+  * Keep a clip's transitions when copying and pasting it by @Silvertree2010 in https://github.com/storytold/filmcraft/pull/3473
+
 ## 0.15.0
 
 - Upstream filmcraft v0.15.0.
