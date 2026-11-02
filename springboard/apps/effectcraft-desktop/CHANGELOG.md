@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.20.0
+
+- Upstream effectcraft v0.20.0.
+  ## What's Changed
+  * Updates: shared check-result dialog from craft-update by @aiongg in https://github.com/storytold/effectcraft/pull/2718
+  * docs: tidy agent, contributor and asset docs by @aiongg in https://github.com/storytold/effectcraft/pull/2717
+  * i18n: Swedish (sv) interface translation by @kler in https://github.com/storytold/effectcraft/pull/1541
+  * comp.deleteAllMarkers: add Delete All Markers for composition markers by @maxaeexe in https://github.com/storytold/effectcraft/pull/2169
+
 ## 0.19.0
 
 - Upstream effectcraft v0.19.0.
