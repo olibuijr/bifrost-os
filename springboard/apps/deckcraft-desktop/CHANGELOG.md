@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.14.1
+
+- Upstream deckcraft v0.14.1.
+  ## What's Changed
+  * Use private directories for print previews by @Harrison-Booth in https://github.com/storytold/deckcraft/pull/1519
+  * Slideshow click targets follow animated shapes by @Harrison-Booth in https://github.com/storytold/deckcraft/pull/1521
+  * Add read-only slide action inspection by @Harrison-Booth in https://github.com/storytold/deckcraft/pull/1574
+  * Reject invalid index in transition commands instead of using selection by @Silvertree2010 in https://github.com/storytold/deckcraft/pull/1577
+
 ## 0.13.1
 
 - Upstream deckcraft v0.13.1.
