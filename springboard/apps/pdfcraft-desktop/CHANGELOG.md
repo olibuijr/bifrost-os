@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.17.0
+
+- Upstream pdfcraft v0.17.0.
+  ## What's Changed
+  * Updates: shared check-result dialog from craft-update by @aiongg in https://github.com/storytold/pdfcraft/pull/5527
+  * docs: tidy agent, contributor and asset docs by @aiongg in https://github.com/storytold/pdfcraft/pull/5522
+  * Draft: Add Flatpak OCI image build and GHCR packaging helper by @dylanmtaylor in https://github.com/storytold/pdfcraft/pull/5526
+  * Rewrite an unsigned file in full when saving after deleting pages by @srt8hellcat2-ui in https://github.com/storytold/pdfcraft/pull/4279
+
 ## 0.16.1
 
 - Upstream pdfcraft v0.16.1.
