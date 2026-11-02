@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.16.0
+
+- Upstream designcraft v0.16.0.
+  ## What's Changed
+  * Separate the CJK commands from Insert Math Expression in the Type menu (#2043) by @MarekSpodBiedry in https://github.com/storytold/designcraft/pull/2048
+  * Add File > Quit to the in-window menu on Windows and Linux (#2044) by @MarekSpodBiedry in https://github.com/storytold/designcraft/pull/2049
+  * Spellcheck squiggles follow the text frame rotation (#2042) by @MarekSpodBiedry in https://github.com/storytold/designcraft/pull/2047
+  * macOS: Finder opens .indd and .indt files with DesignCraft by @texjer in https://github.com/storytold/designcraft/pull/2053
+
 ## 0.15.2
 
 - Upstream designcraft v0.15.2.
