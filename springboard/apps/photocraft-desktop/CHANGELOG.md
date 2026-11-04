@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.20.1
+
+- Upstream photocraft v0.20.1.
+  ## What's Changed
+  * Add editable arrowheads to Line tool (#6408) by @superplay2021 in https://github.com/storytold/photocraft/pull/9259
+  * Integration batch 11: 9 ATN PRs on main by @davidmann4 in https://github.com/storytold/photocraft/pull/10535
+  * Prefer an installed pattern ID over a colliding name in ATN import by @Silvertree2010 in https://github.com/storytold/photocraft/pull/7642
+  * Actions: read .atn step names in the code page Photoshop wrote them in (#6743) by @regexer in https://github.com/storytold/photocraft/pull/8327
+
 ## 0.19.0
 
 - Upstream photocraft v0.19.0.
