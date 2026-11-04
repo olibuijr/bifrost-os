@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.17.0
+
+- Upstream cadcraft v0.17.0.
+  ## What's Changed
+  * -ATTDEF at the command line: attribute modes, AFLAGS, and the text's prompts by @2ez4gcx in https://github.com/storytold/cadcraft/pull/2597
+  * -WBLOCK at the command line, as AutoCAD runs it by @2ez4gcx in https://github.com/storytold/cadcraft/pull/2594
+  * LEADER at the command line, as AutoCAD runs it by @2ez4gcx in https://github.com/storytold/cadcraft/pull/2596
+  * Thai text: stacked marks, Thai fonts first, MTEXT word wrap by @awillfox in https://github.com/storytold/cadcraft/pull/2591
+
 ## 0.16.0
 
 - Upstream cadcraft v0.16.0.
