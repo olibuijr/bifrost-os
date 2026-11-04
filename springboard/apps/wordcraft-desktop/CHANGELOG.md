@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.15.0
+
+- Upstream wordcraft v0.15.0.
+  ## What's Changed
+  * Use the body boundary for header margin anchors by @finwarman in https://github.com/storytold/wordcraft/pull/2485
+  * Keep repeated spaces in LaTeX export by @Silvertree2010 in https://github.com/storytold/wordcraft/pull/5051
+  * Paragraph side borders lie outside the text (#5036) by @VoiceLessQ in https://github.com/storytold/wordcraft/pull/5088
+  * Lists: a level above counts its first number at the first deeper item by @pakiat in https://github.com/storytold/wordcraft/pull/5108
+
 ## 0.14.0
 
 - Upstream wordcraft v0.14.0.
