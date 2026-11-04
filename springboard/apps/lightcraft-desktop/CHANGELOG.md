@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.18.0
+
+- Upstream lightcraft v0.18.0.
+  ## What's Changed
+  * Integration batch 46 (6 community PRs) by @echelon in https://github.com/storytold/lightcraft/pull/3584
+  * Fix Histogram::percentile returning black when the target truncates to 0 by @Silvertree2010 in https://github.com/storytold/lightcraft/pull/3515
+  * GPU equivalence tests run on a software adapter when asked (lavapipe, WARP), for local runs on every platform by @THEtheChad in https://github.com/storytold/lightcraft/pull/3370
+  * Reject shutter fractions with a non-positive numerator or denominator by @Silvertree2010 in https://github.com/storytold/lightcraft/pull/3442
+
 ## 0.17.0
 
 - Upstream lightcraft v0.17.0.
