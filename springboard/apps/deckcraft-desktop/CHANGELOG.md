@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.15.0
+
+- Upstream deckcraft v0.15.0.
+  ## What's Changed
+  * WASM: open presenter view in a separate browser window (#729) by @FredApps in https://github.com/storytold/deckcraft/pull/730
+  * H.264: temporal direct mvs are scaled in i32 and clipped to the spec range by @SusieeTheLinuxUser in https://github.com/storytold/deckcraft/pull/1247
+  * PPTX: parse each tags part once and cap the tags an import copies (#1164) by @Naseq in https://github.com/storytold/deckcraft/pull/1373
+  * Allow resizing on all selected shapes (#1539) by @DominicTheD3v in https://github.com/storytold/deckcraft/pull/1558
+
 ## 0.14.1
 
 - Upstream deckcraft v0.14.1.
