@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.17.0
+
+- Upstream designcraft v0.17.0.
+  ## What's Changed
+  * Drop text variable markers in Text Only and RTF story export by @Silvertree2010 in https://github.com/storytold/designcraft/pull/2098
+  * Skip children of hidden groups in EPUB/HTML export by @Silvertree2010 in https://github.com/storytold/designcraft/pull/2097
+  * Match placed SVG font-family against legacy family and full names by @Silvertree2010 in https://github.com/storytold/designcraft/pull/2094
+  * Drop XML-forbidden control characters from math SVG text by @Silvertree2010 in https://github.com/storytold/designcraft/pull/2092
+
 ## 0.16.0
 
 - Upstream designcraft v0.16.0.
