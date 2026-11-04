@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.16.0
+
+- Upstream gridcraft v0.16.0.
+  ## What's Changed
+  * Data: Solver Load/Save Model and Reset All by @prxnvt in https://github.com/storytold/gridcraft/pull/3086
+  * Data: Solver Options by @prxnvt in https://github.com/storytold/gridcraft/pull/3087
+  * M7: add data tables beneath charts by @campbellcody in https://github.com/storytold/gridcraft/pull/3123
+  * Page Layout: Page Setup's page order (Down, then over / Over, then down) by @iluebbe in https://github.com/storytold/gridcraft/pull/3130
+
 ## 0.15.0
 
 - Upstream gridcraft v0.15.0.
