@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.21.0
+
+- Upstream vectorcraft v0.21.0.
+  ## What's Changed
+  * Paste: in front or back of a compound path's member, other art goes beside the compound path by @dotCooCoo in https://github.com/storytold/vectorcraft/pull/5120
+  * .ai import: version 7 palettes keep their swatches without names by @dotCooCoo in https://github.com/storytold/vectorcraft/pull/5123
+  * Variables: Rename reports a missing variable or data set before a taken name by @dotCooCoo in https://github.com/storytold/vectorcraft/pull/5135
+  * Variables: a graph variable's data set applies its CSV as graph.setData does by @dotCooCoo in https://github.com/storytold/vectorcraft/pull/5136
+
 ## 0.20.0
 
 - Upstream vectorcraft v0.20.0.
