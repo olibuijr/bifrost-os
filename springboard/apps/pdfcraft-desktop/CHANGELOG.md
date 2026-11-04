@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.18.0
+
+- Upstream pdfcraft v0.18.0.
+  ## What's Changed
+  * M2: a reference in a colour space or array isn't lost: Indexed tables, Pattern spaces, /Decode, /W and functions by @Piohrun in https://github.com/storytold/pdfcraft/pull/5539
+  * fix(render): a JBIG2 page's segments are bounded in what they hold and refer to (hayro-jbig2 patches 5 to 9, hayro-syntax 29) by @Piohrun in https://github.com/storytold/pdfcraft/pull/5491
+  * Reject signed and empty arcs in try_oid by @Silvertree2010 in https://github.com/storytold/pdfcraft/pull/5581
+  * Ignore a negative trailer /Size in incremental saves by @Silvertree2010 in https://github.com/storytold/pdfcraft/pull/5566
+
 ## 0.17.0
 
 - Upstream pdfcraft v0.17.0.
