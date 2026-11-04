@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.17.0
+
+- Upstream filmcraft v0.17.0.
+  ## What's Changed
+  * Ignore leading byte order mark in SRT parser by @Silvertree2010 in https://github.com/storytold/filmcraft/pull/3781
+  * Read sub-dollar amounts without a zero major unit in TTS by @Silvertree2010 in https://github.com/storytold/filmcraft/pull/3783
+  * i18n(sv): translate 49 new strings by @kler in https://github.com/storytold/filmcraft/pull/3784
+  * Reject zero, negative and non-finite FPS in ALE import by @Silvertree2010 in https://github.com/storytold/filmcraft/pull/3790
+
 ## 0.16.0
 
 - Upstream filmcraft v0.16.0.
