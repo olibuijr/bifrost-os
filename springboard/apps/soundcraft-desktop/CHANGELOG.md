@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.17.0
+
+- Upstream soundcraft v0.17.0.
+  ## What's Changed
+  * Keep score export notes when bars are shorter than a sixteenth by @Silvertree2010 in https://github.com/storytold/soundcraft/pull/1234
+  * Export only the MIDI notes a trimmed clip still plays by @Silvertree2010 in https://github.com/storytold/soundcraft/pull/1032
+  * AIFF: test that a negative channel count is rejected by @TheGalitube in https://github.com/storytold/soundcraft/pull/1223
+  * Accept VST3 multi-out instruments with up to 64 audio buses by @Silvertree2010 in https://github.com/storytold/soundcraft/pull/1248
+
 ## 0.16.0
 
 - Upstream soundcraft v0.16.0.
