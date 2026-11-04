@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.21.0
+
+- Upstream effectcraft v0.21.0.
+  ## What's Changed
+  * Export: write a colr atom in ProRes MOVs (#2801) by @JonRC in https://github.com/storytold/effectcraft/pull/2804
+  * Shortcuts: panel and context scopes, one chord per scope by @pravdomil in https://github.com/storytold/effectcraft/pull/1266
+  * PDF import: the encryption pre-scan reads a bounded window after each trailer (#2142) by @becauseno7 in https://github.com/storytold/effectcraft/pull/2679
+  * i18n(ja): the animator pop-up reads its own catalog rows by @zitann2020 in https://github.com/storytold/effectcraft/pull/2742
+
 ## 0.20.0
 
 - Upstream effectcraft v0.20.0.
