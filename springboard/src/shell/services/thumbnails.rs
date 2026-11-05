@@ -298,7 +298,7 @@ impl SystemService for Thumbnails {
     }
 
     fn call(&mut self, _shell: &mut Shell, app_id: &str, method: &str, params: &Json, t: f64) -> Result<Json, String> {
-        self.now_ms = (t.max(0.0) * 1000.0) as u64;
+        self.now_ms = t.max(0.0) as u64;
         match method {
             "request" => {
                 let r = self.request(app_id, parse_request(params)?);
@@ -310,7 +310,7 @@ impl SystemService for Thumbnails {
     }
 
     fn tick(&mut self, _shell: &mut Shell, t: f64) -> Vec<Event> {
-        self.now_ms = (t.max(0.0) * 1000.0) as u64;
+        self.now_ms = t.max(0.0) as u64;
         self.poll()
     }
 }
@@ -321,6 +321,14 @@ mod tests {
     use crate::shell::photos::thumbs::DiskCache;
     use std::path::PathBuf;
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn the_app_call_deadlines_run_on_the_shell_clock_in_milliseconds() {
+        let mut sh = crate::shell::tests::shell();
+        let mut s = Thumbnails::with_generator(Generator::new(DiskCache::new(scratch("clock").join("cache"), 100)));
+        s.tick(&mut sh, 1_500.0);
+        assert_eq!(s.now_ms, 1_500, "the shell clock is already milliseconds");
+    }
 
     #[test]
     fn a_job_that_panics_becomes_an_error_and_a_job_that_returns_is_untouched() {

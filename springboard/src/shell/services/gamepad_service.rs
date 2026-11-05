@@ -31,8 +31,8 @@ use std::sync::Mutex;
 
 const SYSFS_INPUT: &str = "/sys/class/input";
 const DEV_INPUT: &str = "/dev/input";
-/// Seconds between rescans of the input nodes (the kernel's hot-plug is also seen by the chord watch).
-const SCAN_EVERY: f64 = 0.5;
+/// Milliseconds between rescans of the input nodes (the kernel's hot-plug is also seen by the chord watch).
+const SCAN_EVERY_MS: f64 = 500.0;
 /// `struct input_event` on a 64-bit kernel: timeval (16), type (2), code (2), value (4).
 const RECORD: usize = 24;
 
@@ -285,7 +285,7 @@ impl SystemService for GamepadService {
 
     fn tick(&mut self, shell: &mut Shell, t: f64) -> Vec<Event> {
         let mut out = Vec::new();
-        let scanned = self.last_scan.map_or(true, |last| t - last >= SCAN_EVERY);
+        let scanned = self.last_scan.map_or(true, |last| t - last >= SCAN_EVERY_MS);
         if scanned {
             self.last_scan = Some(t);
             out.extend(self.scan());
@@ -530,6 +530,21 @@ mod tests {
         assert_eq!(gone[0].event, "disconnected");
         assert!(svc.pads.is_empty());
         assert!(svc.devices.is_empty());
+        let _ = std::fs::remove_dir_all(&sysfs);
+    }
+
+    #[test]
+    fn ticks_five_ms_apart_scan_the_input_nodes_once() {
+        let sysfs = temp_root("tick-ms");
+        let mut svc = GamepadService::with_roots(&sysfs, Path::new("/nonexistent-dev-input"));
+        let mut sh = crate::shell::tests::shell();
+        svc.tick(&mut sh, 1_000.0);
+        // a node that is no controller: the scan notes its name and nothing else
+        std::fs::create_dir_all(sysfs.join("event6/device/capabilities")).unwrap();
+        svc.tick(&mut sh, 1_005.0);
+        assert!(svc.seen.is_empty(), "the clock is milliseconds: 5 ms later the nodes are not read again");
+        svc.tick(&mut sh, 1_000.0 + SCAN_EVERY_MS);
+        assert!(svc.seen.contains("event6"), "a scan interval later the new node is seen");
         let _ = std::fs::remove_dir_all(&sysfs);
     }
 

@@ -120,7 +120,7 @@ impl SystemService for PreviewService {
     }
 
     fn call(&mut self, shell: &mut Shell, app_id: &str, method: &str, params: &Json, t: f64) -> Result<Json, String> {
-        self.now_ms = (t.max(0.0) * 1000.0) as u64;
+        self.now_ms = t.max(0.0) as u64;
         match method {
             "show" => {
                 let (items, index) = parse_show(params)?;
@@ -154,7 +154,7 @@ impl SystemService for PreviewService {
     }
 
     fn tick(&mut self, shell: &mut Shell, t: f64) -> Vec<Event> {
-        self.now_ms = (t.max(0.0) * 1000.0) as u64;
+        self.now_ms = t.max(0.0) as u64;
         // the user's keys step the panel without a call: ask for what the body now waits for
         self.ask(shell);
         for done in self.thumbs.poll().into_iter().filter(|e| e.app.as_deref() == Some(PANEL)) {

@@ -50,8 +50,8 @@ use std::path::{Path, PathBuf};
 pub const PERMISSION: &str = "photos";
 /// How much of a file is read to find its pixel size.
 const HEADER_BYTES: u64 = 256 * 1024;
-/// The seconds between two looks at the library for change observers.
-pub const OBSERVE_INTERVAL: f64 = 2.0;
+/// The milliseconds between two looks at the library for change observers.
+pub const OBSERVE_INTERVAL_MS: f64 = 2_000.0;
 /// The event a change observer receives.
 pub const LIBRARY_DID_CHANGE: &str = "library_did_change";
 /// The event an app receives when the person ends its photo picker.
@@ -577,12 +577,12 @@ impl SystemService for Photos {
         answer(app_id, has_permission, method, params, &library)
     }
 
-    /// Looks at the library for the change observers every `OBSERVE_INTERVAL` seconds and pushes what changed to each.
+    /// Looks at the library for the change observers every `OBSERVE_INTERVAL_MS` milliseconds and pushes what changed to each.
     /// An observer whose access was taken away is dropped without an event.
     fn tick(&mut self, _shell: &mut Shell, t: f64) -> Vec<Event> {
         // the pickers the person ended: the app may read what was chosen, then it hears of it
         let mut out: Vec<Event> = photo_pick::take_finished().into_iter().map(|(app, ids)| finish_event(&app, &ids)).collect();
-        if t - self.last_look < OBSERVE_INTERVAL {
+        if t - self.last_look < OBSERVE_INTERVAL_MS {
             return out;
         }
         self.last_look = t;
@@ -848,7 +848,7 @@ mod tests {
         pick.toggle(&chosen);
         photo_pick::finish(app, pick.selected().to_vec());
         let mut shell = crate::shell::tests::shell();
-        let events = Photos::default().tick(&mut shell, 10.0);
+        let events = Photos::default().tick(&mut shell, 10_000.0);
         assert_eq!(events.len(), 1);
         assert_eq!((events[0].app.as_deref(), events[0].event.as_str()), (Some(app), PICKER_DID_FINISH));
         let results = events[0].body.get("results").and_then(Json::as_array).unwrap();
@@ -861,13 +861,25 @@ mod tests {
     }
 
     #[test]
+    fn ticks_five_ms_apart_look_at_the_library_once() {
+        let mut shell = crate::shell::tests::shell();
+        let mut svc = Photos::default();
+        svc.tick(&mut shell, 10_000.0);
+        assert_eq!(svc.last_look, 10_000.0);
+        svc.tick(&mut shell, 10_005.0);
+        assert_eq!(svc.last_look, 10_000.0, "the clock is milliseconds: 5 ms later the library is not looked at again");
+        svc.tick(&mut shell, 10_000.0 + OBSERVE_INTERVAL_MS);
+        assert_eq!(svc.last_look, 10_000.0 + OBSERVE_INTERVAL_MS);
+    }
+
+    #[test]
     fn a_cancelled_picker_tells_the_app_and_grants_nothing() {
         let app = "is.example.photos-cancelled";
         answer(app, true, "picker", &Json::Null, &library()).unwrap();
         photo_pick::take_waiting().unwrap();
         photo_pick::cancel(app);
         let mut shell = crate::shell::tests::shell();
-        let events = Photos::default().tick(&mut shell, 10.0);
+        let events = Photos::default().tick(&mut shell, 10_000.0);
         assert_eq!(events[0].body.get("cancelled"), Some(&Json::Bool(true)));
         assert_eq!(events[0].body.get("results").and_then(Json::as_array).map(|r| r.len()), Some(0));
         assert!(picked_of(app).is_empty());

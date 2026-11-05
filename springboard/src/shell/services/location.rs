@@ -371,7 +371,10 @@ impl SystemService for Location {
         SERVICE
     }
 
-    fn call(&mut self, shell: &mut Shell, app_id: &str, method: &str, params: &Json, t: f64) -> Result<Json, String> {
+    fn call(&mut self, shell: &mut Shell, app_id: &str, method: &str, params: &Json, _t: f64) -> Result<Json, String> {
+        // the last use is kept in Unix seconds (the Location Services page compares it with the wall clock), not in
+        // the shell's millisecond clock
+        let t = now_unix();
         let places = self.places(&shell.prefs);
         let status = effective_status(location_status(app_id), services_on(&shell.prefs));
         let accuracy = accuracy_for(precise_for(&shell.prefs, app_id));
@@ -381,7 +384,8 @@ impl SystemService for Location {
         reply
     }
 
-    fn tick(&mut self, shell: &mut Shell, t: f64) -> Vec<Event> {
+    fn tick(&mut self, shell: &mut Shell, _t: f64) -> Vec<Event> {
+        let t = now_unix();
         publish_in_use(self.in_use(t, ACTIVE_WINDOW));
         if self.watching.is_empty() {
             return Vec::new();
@@ -594,6 +598,17 @@ mod tests {
         s.answer(WHEN, "a", "stop", &Json::Null, None, &[], 20.0).unwrap();
         assert!(s.in_use(20.0, ACTIVE_WINDOW).is_empty(), "stop ends the indicator");
         assert!(s.in_use(5.0, ACTIVE_WINDOW).is_empty(), "a fix in the future is not counted");
+    }
+
+    #[test]
+    fn the_tick_judges_recent_fixes_by_the_wall_clock_not_the_shell_clock() {
+        let mut sh = crate::shell::tests::shell();
+        let mut s = Location::default();
+        record_use("is.example.map", now_unix());
+        // the shell clock is milliseconds since boot; the last use is Unix seconds
+        s.tick(&mut sh, 5.0);
+        assert_eq!(in_use_now(), ["is.example.map"], "a fix just now shows the indicator");
+        publish_in_use(Vec::new());
     }
 
     #[test]

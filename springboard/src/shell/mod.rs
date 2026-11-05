@@ -4337,7 +4337,8 @@ impl Shell {
                 Some((n as u8, background::Facts { focused, on_screen, covered }))
             })
             .collect();
-        let signals = self.suspender.update(&facts, (t.max(0.0) * 1000.0) as u64);
+        // the shell clock is already milliseconds
+        let signals = self.suspender.update(&facts, t.max(0.0) as u64);
         self.send_app_signals(&signals);
     }
 

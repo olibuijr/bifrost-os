@@ -27,9 +27,9 @@ fn slot_of(app_id: &str) -> Result<u8, String> {
     u8::try_from(slot).map_err(|_| "app slot out of range".to_string())
 }
 
-/// The milliseconds clock of the background tick, from the shell's seconds.
+/// The milliseconds clock of the background tick, from the shell's clock (already milliseconds).
 fn millis(t: f64) -> u64 {
-    (t.max(0.0) * 1000.0) as u64
+    t.max(0.0) as u64
 }
 
 /// The limit in milliseconds that the `limit` parameter (seconds) asks for.
@@ -91,7 +91,7 @@ mod tests {
 
     #[test]
     fn the_clock_is_milliseconds_and_never_negative() {
-        assert_eq!(millis(1.5), 1500);
+        assert_eq!(millis(1_500.0), 1_500, "the shell clock is already milliseconds");
         assert_eq!(millis(-3.0), 0);
     }
 

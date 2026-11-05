@@ -116,12 +116,18 @@ pub mod usb_access;
 pub mod process_owners;
 
 /// A named service in the shell.
+///
+/// The `t` that `call` and `tick` get is the shell clock in milliseconds (monotonic, `sys::now_ms` in the main loop).
+/// Intervals, deadlines and lockouts kept against it are milliseconds too (name them `*_MS`); a value that leaves the
+/// service in seconds (JSON to apps) or is compared with the wall clock is converted where it leaves.
 pub trait SystemService {
     /// The name apps call it by, for example `"dock"`.
     fn name(&self) -> &'static str;
-    /// Handles `method` called by the app `app_id` with JSON `params`. Returns the result or an error message.
+    /// Handles `method` called by the app `app_id` with JSON `params` at shell time `t` (milliseconds). Returns the
+    /// result or an error message.
     fn call(&mut self, shell: &mut Shell, app_id: &str, method: &str, params: &Json, t: f64) -> Result<Json, String>;
-    /// Runs on every shell tick; returns events to deliver.
+    /// Runs on every shell tick, at shell time `t` (milliseconds); returns events to deliver. A tick comes many
+    /// times a second, so a service that reads the machine keeps its own interval in milliseconds.
     fn tick(&mut self, _shell: &mut Shell, _t: f64) -> Vec<Event> {
         Vec::new()
     }
@@ -307,6 +313,39 @@ impl Shell {
 #[cfg(test)]
 mod gate_tests {
     use super::*;
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    /// Records the `t` each call and tick gets.
+    struct Clock(Rc<RefCell<Vec<f64>>>);
+
+    impl SystemService for Clock {
+        fn name(&self) -> &'static str {
+            "test-clock"
+        }
+
+        fn call(&mut self, _shell: &mut Shell, _app_id: &str, _method: &str, _params: &Json, t: f64) -> Result<Json, String> {
+            self.0.borrow_mut().push(t);
+            Ok(Json::Null)
+        }
+
+        fn tick(&mut self, _shell: &mut Shell, t: f64) -> Vec<Event> {
+            self.0.borrow_mut().push(t);
+            Vec::new()
+        }
+    }
+
+    #[test]
+    fn services_get_the_shell_clock_in_milliseconds_unchanged() {
+        let mut sh = crate::shell::tests::shell();
+        let seen = Rc::new(RefCell::new(Vec::new()));
+        sh.services = vec![Box::new(Clock(Rc::clone(&seen)))];
+        sh.services_tick(1_000.0);
+        sh.services_tick(1_005.0);
+        sh.service_call("", "test-clock", "now", "", 1_016.0).unwrap();
+        // two ticks one frame apart are 5 ms apart, not 5 s: a service's intervals are milliseconds
+        assert_eq!(*seen.borrow(), [1_000.0, 1_005.0, 1_016.0]);
+    }
 
     #[test]
     fn only_first_party_system_apps_hold_the_system_gate() {
