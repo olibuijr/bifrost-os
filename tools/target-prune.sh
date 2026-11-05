@@ -4,9 +4,9 @@
 #   1. a crate's whole incremental dir (target/*/incremental/<crate-hash>/) goes once nothing in it changed for 2 days
 #      (LEAD_INCR_DAYS): the crate has not been built since. Single sessions of a crate still in use are never touched
 #      (2026-10-27: removing old sessions under live crates left an rlib with undefined symbols at link time).
-#   2. the debug profile is not part of the lead flow (the shell, installer and apps ship from target/fast); it only
-#      appears when a plain `cargo test` runs. Its incremental dir always goes, and the whole debug dir goes once it is
-#      over LEAD_DEBUG_MAX_GB (default 30). Anything in it is rebuilt by the next plain test run.
+#   2. the debug profile is the lead's test profile (`cargo test --workspace`); the shell, installer and apps ship from
+#      target/fast. It is kept between runs (deleting it made every workspace test run a cold rebuild); the whole debug
+#      dir goes only once it is over LEAD_DEBUG_MAX_GB (default 150).
 #   3. prints the target size and warns loudly when it is over LEAD_TARGET_WARN_GB (default 300).
 # Deletes only below <target>/ (a directory literally named "target"), never anything else.
 # usage: tools/target-prune.sh [TARGET_DIR]   (default: springboard/target of this checkout)
@@ -27,9 +27,11 @@ done
 
 # 2. the debug profile
 if [ -d "$T/debug" ]; then
-    rm -rf -- "$T/debug/incremental"
-    if [ "$(gb "$T/debug" || echo 0)" -gt "${LEAD_DEBUG_MAX_GB:-30}" ]; then
-        echo "target-prune: debug is over ${LEAD_DEBUG_MAX_GB:-30} GB, removing it"
+    # debug is the test profile (cargo test): keep it and its incremental state, or every workspace test run is a
+    # cold rebuild of every crate (2026-11-05). Stale incremental sessions go by age above; the whole profile only
+    # when it outgrows the cap.
+    if [ "$(gb "$T/debug" || echo 0)" -gt "${LEAD_DEBUG_MAX_GB:-150}" ]; then
+        echo "target-prune: debug is over ${LEAD_DEBUG_MAX_GB:-150} GB, removing it"
         rm -rf -- "$T/debug"
     fi
 fi
