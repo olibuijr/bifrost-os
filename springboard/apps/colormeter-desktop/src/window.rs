@@ -72,6 +72,12 @@ pub enum Outcome {
     CopySwatch(Rgb8),
 }
 
+/// How often the refresh loop asks the shell for the pointer and the pixels around it, in milliseconds (the app clock is
+/// in milliseconds).
+pub const POLL_MS: f64 = 50.0;
+/// How long after a refused or failed request the next one goes out, in milliseconds.
+pub const RETRY_MS: f64 = 5000.0;
+
 pub struct ColorMeter {
     pub source: Box<dyn ScreenSource + Send>,
     pub pointer: Pointer,
@@ -96,6 +102,8 @@ pub struct ColorMeter {
     pub labels: TextCache,
     /// The target a press started on; the release acts only when it lands on the same one.
     pub press: Target,
+    /// While the source is refused: when requests go out again, in milliseconds.
+    pub retry_at: Option<f64>,
 }
 
 impl ColorMeter {
@@ -115,6 +123,7 @@ impl ColorMeter {
             size: (0.0, 0.0),
             labels: TextCache::default(),
             press: Target::Nothing,
+            retry_at: None,
         }
     }
 
@@ -155,9 +164,37 @@ impl ColorMeter {
         self.source.track(request, ask);
     }
 
-    /// Takes the shell's reply to `request` when it was one of ours. True when a frame is needed.
-    pub fn answer(&mut self, request: u32, result: &Result<Json, String>) -> bool {
-        self.source.answer(request, result)
+    /// Takes the replies that have arrived through `take`. True when a frame is needed.
+    pub fn collect(&mut self, take: &mut dyn FnMut(u32) -> Option<Result<Json, String>>) -> bool {
+        self.source.collect(take)
+    }
+
+    /// Whether requests go out at `t` (milliseconds). After a refused or failed reply they go out once per [`RETRY_MS`].
+    pub fn due(&mut self, t: f64) -> bool {
+        if !self.source.refused() {
+            self.retry_at = None;
+            return true;
+        }
+        match self.retry_at {
+            None => {
+                self.retry_at = Some(t + RETRY_MS);
+                false
+            }
+            Some(at) if t < at => false,
+            Some(_) => {
+                self.retry_at = Some(t + RETRY_MS);
+                true
+            }
+        }
+    }
+
+    /// When the refresh loop next needs to run, in milliseconds: soon while capture works, at the next retry when not.
+    pub fn next_poll(&self, t: f64) -> f64 {
+        if self.source.refused() {
+            self.retry_at.unwrap_or(t + RETRY_MS)
+        } else {
+            t + POLL_MS
+        }
     }
 
     /// The display size, when the source can read one.
@@ -541,6 +578,61 @@ mod tests {
         m.cells = ZOOMS[ZOOMS.len() - 1];
         m.activate(Target::Toolbar(B_ZOOM));
         assert_eq!(m.cells, ZOOMS[0]);
+    }
+
+    /// A source that reports itself refused or not, and nothing else.
+    struct Gate(std::sync::Arc<std::sync::atomic::AtomicBool>);
+
+    impl ScreenSource for Gate {
+        fn display_size(&self) -> Option<(u32, u32)> {
+            None
+        }
+        fn pointer(&self) -> Option<(u32, u32)> {
+            None
+        }
+        fn read(&self, _: PixelRect) -> Option<Vec<Rgb8>> {
+            None
+        }
+        fn refused(&self) -> bool {
+            self.0.load(std::sync::atomic::Ordering::Relaxed)
+        }
+    }
+
+    #[test]
+    fn requests_go_out_on_every_poll_while_capture_works() {
+        let mut m = ColorMeter::new(Box::new(Gate(Default::default())));
+        assert!(m.due(0.0) && m.due(POLL_MS) && m.due(2.0 * POLL_MS));
+        assert_eq!(m.next_poll(100.0), 100.0 + POLL_MS);
+    }
+
+    #[test]
+    fn a_refused_capture_is_retried_only_every_few_seconds() {
+        let refused = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let mut m = ColorMeter::new(Box::new(Gate(refused.clone())));
+        assert!(m.due(0.0));
+        refused.store(true, std::sync::atomic::Ordering::Relaxed);
+        // the first poll after the refusal sends nothing and schedules the retry; the loop sleeps until then
+        assert!(!m.due(50.0));
+        assert_eq!(m.next_poll(50.0), 50.0 + RETRY_MS);
+        let mut sent = 0;
+        let mut t = 100.0;
+        while t < 50.0 + RETRY_MS {
+            sent += m.due(t) as u32;
+            t += POLL_MS;
+        }
+        assert_eq!(sent, 0, "nothing goes out before the retry is due");
+        assert!(m.due(50.0 + RETRY_MS));
+        assert!(!m.due(60.0 + RETRY_MS));
+        // a capture that works again polls at the normal rate
+        refused.store(false, std::sync::atomic::Ordering::Relaxed);
+        assert!(m.due(70.0 + RETRY_MS));
+        assert_eq!(m.next_poll(100.0), 100.0 + POLL_MS);
+    }
+
+    #[test]
+    fn the_retry_delay_is_in_milliseconds() {
+        // the app clock is in milliseconds: seconds here would wake a thousand times too often
+        assert!(RETRY_MS >= 1000.0 && POLL_MS >= 16.0);
     }
 
     /// A source whose loupe request is always due.
