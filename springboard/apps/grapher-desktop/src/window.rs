@@ -2,7 +2,7 @@
 //! itself in `plot.rs`. Every rectangle here is in points; touch positions arrive in device pixels and are converted
 //! with `ui.pt(1.0)`.
 
-use crate::model::{Model, Row};
+use crate::model::{break_lines, Model, Row};
 use crate::plot::{self, Area};
 use crate::view::View;
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
@@ -240,8 +240,22 @@ impl Grapher {
     pub fn key(&mut self, dir: &Path, key: KeyInput) -> bool {
         let changed = match key {
             KeyInput::Text(text) => {
-                let clean: String = text.chars().filter(|c| !c.is_control()).collect();
-                self.model.type_text(&clean)
+                // a line break in pasted or typed text starts a new equation, as Return does; the first line goes into
+                // the selected one. Empty lines add nothing, so a trailing break or a lone newline changes nothing.
+                let mut changed = false;
+                let mut new_row = false;
+                for line in break_lines(&text).split('\n') {
+                    let clean: String = line.chars().filter(|c| !c.is_control()).collect();
+                    if clean.is_empty() {
+                        new_row = true;
+                        continue;
+                    }
+                    if std::mem::take(&mut new_row) {
+                        self.model.add("");
+                    }
+                    changed |= self.model.type_text(&clean);
+                }
+                changed
             }
             KeyInput::Code(8) => self.model.backspace(),
             KeyInput::Code(13) => {
@@ -380,6 +394,18 @@ mod tests {
         let after: Vec<String> = g.model.rows.iter().map(|r| r.text.clone()).collect();
         assert_eq!(&after[..before.len()], &before[..]);
         assert_eq!(after.last().map(String::as_str), Some("y = x"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn pasted_lines_become_one_equation_each() {
+        let dir = std::env::temp_dir().join("grapher-paste-test");
+        let mut g = Grapher::new();
+        g.model = Model::from_text("");
+        g.add_equation(&dir);
+        assert!(g.key(&dir, KeyInput::Text("y = sin(x)\ny = x^3 / 8\r\ny = 2\n".into())));
+        let texts: Vec<&str> = g.model.rows.iter().map(|r| r.text.as_str()).collect();
+        assert_eq!(texts, vec!["y = sin(x)", "y = x^3 / 8", "y = 2"]);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
