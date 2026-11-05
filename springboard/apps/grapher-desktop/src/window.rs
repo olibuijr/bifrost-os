@@ -384,6 +384,16 @@ mod tests {
     }
 
     #[test]
+    fn every_symbol_in_the_toolbar_is_one_the_kit_draws() {
+        let g = Grapher::new();
+        for item in g.toolbar().items {
+            if let Some(symbol) = &item.symbol {
+                assert!(bifrost_app::glyphs::has(symbol), "{} uses {symbol}, which has no drawing", item.label);
+            }
+        }
+    }
+
+    #[test]
     fn a_remove_is_disabled_without_a_selection() {
         let mut g = Grapher::new();
         g.model.selected = None;
