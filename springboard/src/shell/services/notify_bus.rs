@@ -48,8 +48,8 @@ pub const NETWORK_CHANGE: &str = "system.network.change";
 pub const CONTACTS_CHANGE: &str = "system.contacts.change";
 /// Posted when the events file changes (the Calendar app saved, or the file appeared or went).
 pub const CALENDAR_CHANGE: &str = "system.calendar.change";
-/// How often the store files are stat'ed, in seconds of shell time.
-const STORE_STAT_INTERVAL: f64 = 1.0;
+/// How often the store files are stat'ed, in milliseconds of shell time.
+const STORE_STAT_INTERVAL_MS: f64 = 1_000.0;
 /// Longest name, in bytes.
 pub const MAX_NAME: usize = 128;
 /// Most tokens one app may hold.
@@ -247,7 +247,7 @@ impl NotifyBus {
     /// Stats the store files under `data_dir` when the interval since the last stat has passed.
     fn stat_stores(&mut self, data_dir: &Path, t: f64) {
         match self.stat_at {
-            Some(at) if t - at < STORE_STAT_INTERVAL => {}
+            Some(at) if t - at < STORE_STAT_INTERVAL_MS => {}
             _ => {
                 self.stat_at = Some(t);
                 let contacts = contacts_change_log(data_dir);
@@ -797,14 +797,16 @@ mod tests {
         bus.stat_stores(&data, 0.0);
         assert_eq!(bus.stores.0, None, "no file yet");
         std::fs::write(&contacts, "first\n").unwrap();
-        bus.stat_stores(&data, 0.5);
+        bus.stat_stores(&data, 5.0);
+        assert_eq!(bus.stores.0, None, "the clock is milliseconds: 5 ms later the files are not stat'ed again");
+        bus.stat_stores(&data, 500.0);
         assert_eq!(bus.stores.0, None, "inside the interval the files are not stat'ed again");
-        bus.stat_stores(&data, 1.0);
+        bus.stat_stores(&data, 1_000.0);
         let first = bus.stores.0.expect("the file is seen once the interval has passed");
         std::fs::write(&contacts, "second save, longer\n").unwrap();
-        bus.stat_stores(&data, 1.5);
+        bus.stat_stores(&data, 1_500.0);
         assert_eq!(bus.stores.0, Some(first), "a save inside the interval waits for the next stat");
-        bus.stat_stores(&data, 2.0);
+        bus.stat_stores(&data, 2_000.0);
         assert_ne!(bus.stores.0, Some(first), "the save is seen after the interval");
     }
 

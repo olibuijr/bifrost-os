@@ -30,10 +30,12 @@ use bifrost_ui::searchindex::{IndexDescription, ProtectionClass};
 pub const MAX_LIMIT: u64 = 50;
 /// The default `limit` when the app gives none.
 pub const DEFAULT_LIMIT: u64 = 10;
+/// Milliseconds of shell time between two expiry sweeps.
+const SWEEP_EVERY_MS: f64 = 1_000.0;
 
 #[derive(Default)]
 pub struct SearchRanking {
-    /// the shell time (seconds) from which the next expiry sweep runs
+    /// the shell time (milliseconds) from which the next expiry sweep runs
     next_sweep: f64,
 }
 
@@ -119,7 +121,7 @@ impl SystemService for SearchRanking {
 
     fn tick(&mut self, _shell: &mut Shell, t: f64) -> Vec<Event> {
         if t >= self.next_sweep {
-            self.next_sweep = t + 1.0;
+            self.next_sweep = t + SWEEP_EVERY_MS;
             spotindex::expire_due();
         }
         Vec::new()
@@ -134,5 +136,15 @@ mod tests {
     fn the_service_is_named_search_index_and_limits_are_sane() {
         assert_eq!(SearchRanking::default().name(), "search-index");
         assert!(DEFAULT_LIMIT <= MAX_LIMIT);
+    }
+
+    #[test]
+    fn ticks_five_ms_apart_sweep_once() {
+        let mut sh = crate::shell::tests::shell();
+        let mut svc = SearchRanking::default();
+        svc.tick(&mut sh, 1_000.0);
+        assert_eq!(svc.next_sweep, 1_000.0 + SWEEP_EVERY_MS);
+        svc.tick(&mut sh, 1_005.0);
+        assert_eq!(svc.next_sweep, 1_000.0 + SWEEP_EVERY_MS, "the clock is milliseconds: 5 ms later there is no sweep");
     }
 }

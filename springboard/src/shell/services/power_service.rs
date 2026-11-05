@@ -8,7 +8,7 @@
 //!
 //! Events go to every running app and carry the same keys as the method that answers them: `thermalStateDidChange`,
 //! `powerStateDidChange` and `batteryDidChange` (the battery event fires when the percent, the charging state or the
-//! plug state changes, not on every energy reading). The sensors are read at most every [`POLL_SECS`].
+//! plug state changes, not on every energy reading). The sensors are read at most every [`POLL_MS`].
 //!
 //! The models are `bifrost_core::thermal` and `bifrost_core::power_supply`. The shell's Low Power Mode setting is
 //! also written to [`POWER_STATE_PATH`], which the SDK's `ProcessInfo::is_low_power_mode_enabled` reads. Per-process
@@ -26,8 +26,8 @@ pub const SUPPLY_CLASS: &str = "/sys/class/power_supply";
 /// The file the shell writes its Low Power Mode setting to (`low_power=0|1`). Must match the SDK's
 /// `bifrost_app::process_info::POWER_STATE_PATH`.
 pub const POWER_STATE_PATH: &str = "/run/bifrost/power-state";
-/// Seconds between sensor reads (the events are checked on each read).
-pub const POLL_SECS: f64 = 10.0;
+/// Milliseconds between sensor reads (the events are checked on each read).
+pub const POLL_MS: f64 = 10_000.0;
 
 pub const EVENT_THERMAL: &str = "thermalStateDidChange";
 pub const EVENT_LOW_POWER: &str = "powerStateDidChange";
@@ -153,7 +153,7 @@ impl SystemService for PowerService {
         if t < self.next_poll {
             return Vec::new();
         }
-        self.next_poll = t + POLL_SECS;
+        self.next_poll = t + POLL_MS;
         let now = Reading::now(shell.low_power());
         let events = changes(self.last.as_ref(), &now)
             .into_iter()
@@ -250,6 +250,20 @@ mod tests {
         assert_eq!(field(&j, "thermalState"), &Json::Str("critical".into()));
         assert_eq!(field(&j, "lowPowerMode"), &Json::Bool(true));
         assert_eq!(field(&j, "battery").get("present"), Some(&Json::Bool(false)));
+    }
+
+    #[test]
+    fn ticks_five_ms_apart_read_the_sensors_once() {
+        let mut sh = crate::shell::tests::shell();
+        let mut svc = PowerService::default();
+        svc.tick(&mut sh, 1_000.0);
+        // a reading no sensor produces: a re-read would replace it
+        let marker = reading(ThermalState::Critical, sh.low_power(), Some(PowerSource { name: "marker".into(), ..battery(1, PowerState::Unknown, 0) }));
+        svc.last = Some(marker.clone());
+        svc.tick(&mut sh, 1_005.0);
+        assert_eq!(svc.last.as_ref(), Some(&marker), "the clock is milliseconds: 5 ms is not a poll interval");
+        svc.tick(&mut sh, 1_000.0 + POLL_MS);
+        assert_ne!(svc.last.as_ref(), Some(&marker), "a poll interval later the sensors are read again");
     }
 
     #[test]

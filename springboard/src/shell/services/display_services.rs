@@ -11,7 +11,7 @@
 //!   ([`MODE_REQUEST`], sent by `bare::wayland`). The answer is definite and at once: `{applied: true}` when the mode is
 //!   already the current one, else `{applied: false, requested: true}` and the outcome arrives as the `mode_changed`
 //!   event. An applied change is kept only when the person calls `keep_mode`; otherwise it reverts after
-//!   [`CONFIRM_SECS`] (`mode_reverted` event), and `revert_mode` reverts it at once.
+//!   [`CONFIRM_MS`] (`mode_reverted` event), and `revert_mode` reverts it at once.
 //! - `set_rotation` and `mirror` fail: the output is a single panel the shell does not rotate or mirror.
 //! - `capture {id}` answers the screen as `{width, height, png}` (PNG as base64) once the person authorized screen
 //!   recording for the app; the first call queues the Allow / Don't Allow sheet and fails.
@@ -43,8 +43,8 @@ pub const DISPLAY_ID: DisplayId = 1;
 
 /// The refresh rate of the current output mode in hertz, reported by the compositor connection (0 until it is known).
 pub static OUTPUT_REFRESH_HZ: AtomicU32 = AtomicU32::new(0);
-/// How long an applied display change waits for the person to keep it before it goes back.
-pub const CONFIRM_SECS: f64 = 15.0;
+/// How long an applied display change waits for the person to keep it before it goes back, in milliseconds.
+pub const CONFIRM_MS: f64 = 15_000.0;
 
 /// An output mode the shell asks the window server for. `refresh_mhz` is in millihertz; 0 takes the fastest refresh
 /// the window server has at that size.
@@ -195,7 +195,7 @@ pub struct Confirm {
 
 impl Confirm {
     pub fn start(previous: DisplayMode, now: f64) -> Self {
-        Confirm { previous, until: now + CONFIRM_SECS }
+        Confirm { previous, until: now + CONFIRM_MS }
     }
 
     pub fn expired(&self, now: f64) -> bool {
@@ -482,7 +482,8 @@ pub const MODE_REVERTED: &str = "mode_reverted";
 fn mode_event(name: &str, applied: bool, with_revert_in: bool) -> Event {
     let mut fields = vec![("applied", Json::Bool(applied))];
     if with_revert_in {
-        fields.push(("revert_in", num(CONFIRM_SECS)));
+        // apps read the wait in seconds
+        fields.push(("revert_in", num(CONFIRM_MS / 1_000.0)));
     }
     Event { app: None, event: name.into(), body: obj(fields) }
 }
@@ -681,10 +682,12 @@ mod tests {
     #[test]
     fn an_applied_change_is_kept_for_fifteen_seconds_and_then_goes_back() {
         let previous = DisplayMode { width: 1280, height: 800, pixel_width: 1280, pixel_height: 800, refresh_hz: 60.0, usable: true };
-        let c = Confirm::start(previous, 100.0);
-        assert_eq!(CONFIRM_SECS, 15.0);
-        assert!(!c.expired(114.9));
-        assert!(c.expired(115.0));
+        let c = Confirm::start(previous, 100_000.0);
+        assert_eq!(CONFIRM_MS, 15_000.0);
+        assert!(!c.expired(100_005.0), "the clock is milliseconds: 5 ms later the change is still waiting");
+        assert!(!c.expired(114_900.0));
+        assert!(c.expired(115_000.0));
+        assert_eq!(mode_event(MODE_CHANGED, true, true).body.get("revert_in"), Some(&Json::Num(15.0)), "apps hear the wait in seconds");
         assert_eq!(c.previous, previous);
     }
 

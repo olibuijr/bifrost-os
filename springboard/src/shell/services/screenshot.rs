@@ -21,15 +21,15 @@ use std::path::{Path, PathBuf};
 pub const SERVICE: &str = "screenshot";
 /// The event a finished picture is sent with.
 pub const CAPTURED: &str = "captured";
-/// A picture whose file has not landed this many seconds after it was saved is given up (a failed write never lands).
-pub const WAIT_SECS: f64 = 10.0;
+/// A picture whose file has not landed this many milliseconds after it was saved is given up (a failed write never lands).
+pub const WAIT_MS: f64 = 10_000.0;
 
 /// The request in progress and the pictures owed to apps. Pure state: the shell feeds it each tick.
 #[derive(Default)]
 pub struct Shots {
     /// The app whose request has not ended yet.
     asked: Option<String>,
-    /// Saved pictures owed to apps: (app, path, time saved).
+    /// Saved pictures owed to apps: (app, path, shell time saved in milliseconds).
     waiting: Vec<(String, PathBuf, f64)>,
 }
 
@@ -50,7 +50,7 @@ impl Shots {
 
     /// One tick. `saved` are the pictures the shell saved since the last tick and `session_open` says whether a capture
     /// session is still on screen. A request ends when its session closes: the pictures saved by then are owed to its
-    /// app. Returns the (app, path) pairs whose files exist now; pictures not yet on disk wait, up to [`WAIT_SECS`].
+    /// app. Returns the (app, path) pairs whose files exist now; pictures not yet on disk wait, up to [`WAIT_MS`].
     pub fn step(&mut self, saved: Vec<PathBuf>, session_open: bool, t: f64, landed: impl Fn(&Path) -> bool) -> Vec<(String, PathBuf)> {
         if let Some(app) = self.asked.clone() {
             if !session_open {
@@ -64,7 +64,7 @@ impl Shots {
                 ready.push((app.clone(), path.clone()));
                 false
             } else {
-                t - since < WAIT_SECS
+                t - since < WAIT_MS
             }
         });
         ready
@@ -142,19 +142,19 @@ mod tests {
         // the session is still open: nothing is owed yet
         assert!(s.step(vec![], true, 0.0, |_| true).is_empty());
         // the person finishes: the save lands on the next tick
-        let ready = s.step(vec![p("Screenshot-1.png")], false, 1.0, |_| true);
+        let ready = s.step(vec![p("Screenshot-1.png")], false, 1_000.0, |_| true);
         assert_eq!(ready, vec![("viewer".to_string(), p("Screenshot-1.png"))]);
         // and it is delivered only once
-        assert!(s.step(vec![], false, 2.0, |_| true).is_empty());
+        assert!(s.step(vec![], false, 2_000.0, |_| true).is_empty());
     }
 
     #[test]
     fn a_cancelled_selection_owes_nothing_and_a_toolbar_capture_is_not_the_apps() {
         let mut s = Shots::default();
         s.ask("viewer", false).unwrap();
-        assert!(s.step(vec![], false, 1.0, |_| true).is_empty(), "cancelled: no picture");
+        assert!(s.step(vec![], false, 1_000.0, |_| true).is_empty(), "cancelled: no picture");
         // a later toolbar capture while nothing is asked is dropped, not sent to an app
-        assert!(s.step(vec![p("Screenshot-2.png")], false, 2.0, |_| true).is_empty());
+        assert!(s.step(vec![p("Screenshot-2.png")], false, 2_000.0, |_| true).is_empty());
     }
 
     #[test]
@@ -162,10 +162,15 @@ mod tests {
         let mut s = Shots::default();
         s.ask("viewer", false).unwrap();
         assert!(s.step(vec![p("a.png")], false, 0.0, |_| false).is_empty(), "the file is still being written");
-        assert_eq!(s.step(vec![], false, 1.0, |_| true).len(), 1, "it lands later");
+        assert_eq!(s.step(vec![], false, 1_000.0, |_| true).len(), 1, "it lands later");
         s.ask("viewer", false).unwrap();
-        s.step(vec![p("b.png")], false, 5.0, |_| false);
-        assert!(s.step(vec![], false, 5.0 + WAIT_SECS, |_| false).is_empty(), "a write that never lands is dropped");
+        s.step(vec![p("b.png")], false, 5_000.0, |_| false);
+        // the clock is milliseconds: a file that lands 9 s later is still sent
+        assert_eq!(s.step(vec![], false, 14_000.0, |_| true).len(), 1, "a slow write inside the wait is still delivered");
+        s.ask("viewer", false).unwrap();
+        s.step(vec![p("c.png")], false, 20_000.0, |_| false);
+        s.step(vec![], false, 20_000.0 + WAIT_MS, |_| false);
+        assert!(s.step(vec![], false, 20_001.0 + WAIT_MS, |_| true).is_empty(), "a write that never lands is dropped");
     }
 
     #[test]

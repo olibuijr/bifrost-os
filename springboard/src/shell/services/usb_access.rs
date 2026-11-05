@@ -57,8 +57,8 @@ use std::time::Duration;
 
 /// The file in the shell data folder that keeps the Always Allow grants.
 pub const STORE_FILE: &str = "usb-app-grants.txt";
-/// Seconds between reads of the buses.
-const SCAN_EVERY: f64 = 1.0;
+/// Milliseconds between reads of the buses.
+const SCAN_EVERY_MS: f64 = 1_000.0;
 /// The most devices one app has open at once.
 pub const MAX_OPEN_PER_APP: usize = 8;
 /// The most requests waiting on one handle.
@@ -919,7 +919,7 @@ impl SystemService for UsbAccessService {
 
     fn tick(&mut self, shell: &mut Shell, t: f64) -> Vec<Event> {
         self.ensure_loaded();
-        let scanned = if self.last_scan.map_or(true, |last| t - last >= SCAN_EVERY) {
+        let scanned = if self.last_scan.map_or(true, |last| t - last >= SCAN_EVERY_MS) {
             self.last_scan = Some(t);
             Some(self.scan())
         } else {
@@ -1046,6 +1046,18 @@ mod tests {
         assert_eq!(data_param(&obj_of(vec![])).unwrap(), Vec::<u8>::new());
         assert!(data_param(&obj_of(vec![("data", text("00".repeat(MAX_BROKER_BYTES + 1)))])).is_err());
         assert!(data_param(&obj_of(vec![("data", text("00".repeat(MAX_BROKER_BYTES)))])).is_ok());
+    }
+
+    #[test]
+    fn ticks_five_ms_apart_scan_the_buses_once() {
+        let mut r = rig("tick-ms");
+        let mut sh = crate::shell::tests::shell();
+        r.svc.tick(&mut sh, 1_000.0);
+        plug_usb(&r.usb, "1-2", "0403", "6001", 7, "ff", "Logic Probe", "A1");
+        r.svc.tick(&mut sh, 1_005.0);
+        assert!(r.svc.known.is_empty(), "the clock is milliseconds: 5 ms later the buses are not read again");
+        r.svc.tick(&mut sh, 1_000.0 + SCAN_EVERY_MS);
+        assert_eq!(r.svc.known.len(), 1, "a scan interval later the plugged device is seen");
     }
 
     #[test]
