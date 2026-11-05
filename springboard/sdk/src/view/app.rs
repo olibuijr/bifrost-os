@@ -272,10 +272,11 @@ impl<S: Responder + 'static> ViewApp<S> {
         self.sync_text_input(ctx);
         d
     }
-    /// `App::draw_canvas` with animation: ticks spinners and indeterminate bars to `t` (the `draw_canvas` argument), then
+    /// `App::draw_canvas` with animation: ticks spinners and indeterminate bars to `t` (the `draw_canvas` argument, in
+    /// milliseconds like the rest of the loop clock), then
     /// paints into `canvas`. Apps with views forward `draw_canvas` here and return `true` from `draws_canvas`.
     pub fn draw_at(&mut self, ctx: &Ctx, canvas: &mut dyn Canvas, t: f64) -> Damage {
-        self.window.tick(t);
+        self.window.tick(t / 1000.0);
         self.flush_animation_actions();
         let d = self.window.draw(canvas, &ctx.ui);
         self.sync_text_input(ctx);
