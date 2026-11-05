@@ -17,6 +17,11 @@ pub const PALETTE: [(u8, u8, u8); 6] = [
 /// The equations a new document starts with.
 pub const STARTER: [&str; 3] = ["y = sin(x)", "y = x^2 / 4 - 1", "r = 2 + cos(3t)"];
 
+/// `text` with every line break (`\r\n` or a bare `\r`) as `\n`, so one equation per line whatever the source wrote.
+pub fn break_lines(text: &str) -> String {
+    text.replace("\r\n", "\n").replace('\r', "\n")
+}
+
 /// One equation as the user typed it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Row {
@@ -69,8 +74,8 @@ impl Model {
         if text.trim().is_empty() {
             return model;
         }
-        for line in text.lines() {
-            model.add(line.trim_end_matches('\r'));
+        for line in break_lines(text).lines() {
+            model.add(line);
         }
         model
     }
@@ -255,6 +260,13 @@ mod tests {
         assert_eq!(curves.len(), 1);
         assert_eq!(curves[0].rgb, PALETTE[1]);
         assert!(!curves[0].lines.is_empty());
+    }
+
+    #[test]
+    fn a_saved_file_with_any_line_break_gives_one_equation_per_line() {
+        let model = Model::from_text("y = sin(x)\ry = x^3 / 8\r\ny = 2\n");
+        let texts: Vec<&str> = model.rows.iter().map(|r| r.text.as_str()).collect();
+        assert_eq!(texts, vec!["y = sin(x)", "y = x^3 / 8", "y = 2"]);
     }
 
     #[test]

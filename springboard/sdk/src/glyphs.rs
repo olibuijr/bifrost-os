@@ -67,9 +67,9 @@ pub fn polygon_verbs(pts: &[(f32, f32)]) -> Vec<PathVerb> {
 }
 
 /// Every name `glyph` draws, for galleries and tests.
-pub const NAMES: [&str; 78] = [
+pub const NAMES: [&str; 80] = [
     "chevron.left", "chevron.right", "sidebar.left", "square.grid.2x2", "list.bullet", "rectangle.split.3x1",
-    "magnifyingglass", "xmark.circle.fill", "folder", "folder.badge.plus", "checkmark.circle", "clock",
+    "magnifyingglass", "minus.magnifyingglass", "plus.magnifyingglass", "xmark.circle.fill", "folder", "folder.badge.plus", "checkmark.circle", "clock",
     "menubar.dock.rectangle", "doc", "arrow.down.circle", "house", "desktopcomputer", "internaldrive", "trash", "tag",
     "music.note", "film", "photo", "ellipsis", "square.and.arrow.up", "plus", "globe", "arrow.up.arrow.down",
     "chevron.down", "backward.fill", "forward.fill", "play.fill", "pause.fill", "gobackward.15", "goforward.30",
@@ -194,6 +194,17 @@ pub fn glyph(s: &mut dyn Canvas, ui: &Ui, name: &str, bounds: Rect, color: u32) 
         "magnifyingglass" => {
             circle(s, 0.42, 0.42, 0.27);
             poly(s, &[(0.62, 0.62), (0.86, 0.86)], false);
+        }
+        "minus.magnifyingglass" => {
+            circle(s, 0.42, 0.42, 0.27);
+            poly(s, &[(0.62, 0.62), (0.86, 0.86)], false);
+            poly(s, &[(0.28, 0.42), (0.56, 0.42)], false);
+        }
+        "plus.magnifyingglass" => {
+            circle(s, 0.42, 0.42, 0.27);
+            poly(s, &[(0.62, 0.62), (0.86, 0.86)], false);
+            poly(s, &[(0.28, 0.42), (0.56, 0.42)], false);
+            poly(s, &[(0.42, 0.28), (0.42, 0.56)], false);
         }
         "xmark.circle.fill" => {
             dot(s, 0.5, 0.5, 0.48);
