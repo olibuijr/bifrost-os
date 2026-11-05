@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.17.1
+
+- Upstream designcraft v0.17.1.
+  ## What's Changed
+  * Assets: index placed files by content so importing many graphics stays linear by @dylanmtaylor in https://github.com/storytold/designcraft/pull/2181
+  * type.char: warn when the font family or style isn't available (#2189) by @JonRC in https://github.com/storytold/designcraft/pull/2190
+  * Space dotted paragraph border dots evenly by @Silvertree2010 in https://github.com/storytold/designcraft/pull/2176
+  * Keep style export tags and classes on IDML import and export by @Silvertree2010 in https://github.com/storytold/designcraft/pull/2174
+
 ## 0.17.0
 
 - Upstream designcraft v0.17.0.
