@@ -8,7 +8,8 @@ screenshot (OUT_DIR/shots/<app>.png, 1280 px), quit it. Then collect, for the sc
 lines at warning or worse and app/shell lines with error words (known lab-tool noise dropped), core dumps, slow
 frames per screen, and the shell's state. Writes OUT_DIR/digest.md (counts, top distinct messages, per-app notes)
 and OUT_DIR/journal.txt (the filtered lines). Triage reads the digest and the screenshots, not raw logs.
-Every call goes through tools/midget.py (bounded); nothing is typed into apps and no file is changed on Midget.
+Every call goes through tools/midget.py (bounded); nothing is typed into apps and no file is changed on Midget. Apps
+already running are sent TERM first, so no earlier window sits behind the scanned ones. The digest opens with Alerts.
 """
 import collections, os, re, subprocess, sys, time
 
@@ -78,6 +79,9 @@ def main(argv):
         apps = argv[argv.index("--apps") + 1].split(",")
     else:
         apps = [a for a in ssh("ls /var/lib/springboard/apps").split() if a and not SKIP.search(a)]
+    # start from a clean desk: windows left open before the scan sat behind every scanned app, so each quit exposed
+    # them and logged slow frames that looked like idle repaints (W1, 2026-11-05). TERM ends an app normally.
+    ssh("pkill -TERM -f '^/var/lib/springboard/apps/' ; sleep 2")
     notes = {}
     for app in apps:
         name = app.removeprefix("is.olibuijr.").removesuffix(".desktop")
