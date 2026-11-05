@@ -47,7 +47,7 @@ if Apple's behaviour cannot be matched yet (missing data, for example), say so e
 
 ## Skills (read the matching one before deciding)
 
-All skills below live in `~/.claude/skills/`. Pi sees `bifrost-pc` through a symlink at `~/.pi/agent/skills/bifrost-pc`; the others are read from `~/.claude/skills/` only.
+All skills live in Mímir, the skill server (load one with the mimir MCP tool `skill_get NAME`, find one with `skill_search`; CLI `mimir get NAME`). The paths below are the old file locations and are no longer read; `bifrost-pc` and `bifrost-agent-lead` hold the lead workflow.
 
 | Skill | Path | Use it for |
 |---|---|---|
@@ -72,7 +72,8 @@ Apple HIG and the Bifrost checklist are the design authority; cite the section (
   screenshot against the design rules below. Report the commands and their results.
 - Commit each finished change with a conventional message. If you are on `main`, create a feature branch first.
 - Commit every finished change and push `main` and `integration` to origin after each merge batch (owner, 2026-10-27), after a secrets, name and licence scan; agents commit on their own branch and never push.
-- Agent teams (owner, 2026-10-13): Haiku 5.5 agents only code and commit; they never build, test, run
+- Agent teams: models by complexity (owner, 2026-11-05): Haiku for small contained fixes, Sonnet for triage and
+  ordinary multi-file work, Opus for hard root causes. Agents only code and commit; they never build, test, run
   tools/check-names.py or touch Midget. Exception (owner, 2026-10-25): agents may run `tools/agent-check.sh`
   (cargo check only, memory-limited, one at a time) before committing. The lead reviews and merges, asks the owner before every build, runs one build
   at a time, and never builds while agents run.
