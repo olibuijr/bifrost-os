@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.18.1
+
+- Upstream pdfcraft v0.18.1.
+  ## What's Changed
+  * fix(ui): prevent wheel lockup at edge in non-continuous view (#5713) by @Combiler01 in https://github.com/storytold/pdfcraft/pull/5748
+  * fix(redact): rewritten form XObjects drop /PCAdded by @dylanmtaylor in https://github.com/storytold/pdfcraft/pull/5868
+  * fix(redact): structure titles go with the descriptions of removed content by @dylanmtaylor in https://github.com/storytold/pdfcraft/pull/5866
+  * fix(create): write a new document's page tree once by @dylanmtaylor in https://github.com/storytold/pdfcraft/pull/5865
+
 ## 0.18.0
 
 - Upstream pdfcraft v0.18.0.
