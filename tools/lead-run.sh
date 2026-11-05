@@ -6,6 +6,7 @@
 # Disk hygiene (2026-10, the target dir reached 1.3 TB and filled /home): a loud warning before and after the command
 # when /home is over LEAD_DISK_WARN percent (default 85), and tools/target-prune.sh after it (stale incremental
 # sessions, the unused debug profile). The command's exit status is returned.
+# Runs are serialised with a lock (out/autopilot/lead-run.lock); a second run waits for the first.
 # Usage: BIFROST_LEAD_BUILD=1 tools/lead-run.sh COMMAND [ARGS...]
 #        LEAD_MEM_HIGH=7G LEAD_MEM_MAX=9G (defaults) to change the limits.
 set -uo pipefail
@@ -19,11 +20,17 @@ disk_alert() {
             "$used" "${LEAD_DISK_WARN:-85}" >&2
     fi
 }
+# One lead run at a time, including its prune: a run started while another was still pruning lost its incremental
+# build state and failed (2026-11-05). The lock is held until this script exits.
+lock="$here/../out/autopilot/lead-run.lock"
+mkdir -p "$(dirname "$lock")"
+exec 9>"$lock"
+flock -n 9 || { echo "lead-run: waiting for the running lead command to finish" >&2; flock 9; }
 disk_alert
 systemd-run --user --scope --quiet --collect --unit="lead-build-$$" \
     -p MemoryHigh="${LEAD_MEM_HIGH:-7G}" -p MemoryMax="${LEAD_MEM_MAX:-9G}" \
-    nice -n 19 ionice -c3 "$@"
+    nice -n 19 ionice -c3 "$@" 9>&-
 rc=$?
-nice -n 19 ionice -c3 "$here/target-prune.sh" || true
+nice -n 19 ionice -c3 "$here/target-prune.sh" 9>&- || true
 disk_alert
 exit $rc
